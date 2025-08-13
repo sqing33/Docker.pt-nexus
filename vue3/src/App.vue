@@ -3,6 +3,7 @@
   <el-menu :default-active="activeRoute" class="main-nav" mode="horizontal" router>
     <el-menu-item index="/">下载统计</el-menu-item>
     <el-menu-item index="/torrents">种子查询</el-menu-item>
+    <el-menu-item index="/sites">站点信息</el-menu-item>
   </el-menu>
 
   <main class="main-content">
