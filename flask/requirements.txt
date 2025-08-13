@@ -1,0 +1,8 @@
+# requirements.txt
+Flask
+flask-cors
+python-dotenv
+qbittorrent-api
+gunicorn
+transmission-rpc
+mysql-connector-python
