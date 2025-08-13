@@ -169,7 +169,8 @@ class DatabaseManager:
                     size BIGINT,
                     progress FLOAT,
                     state VARCHAR(50),
-                    sites JSON,
+                    sites VARCHAR(255),
+                    details TEXT,
                     qb_uploaded BIGINT DEFAULT 0,
                     tr_uploaded BIGINT DEFAULT 0,
                     last_seen DATETIME NOT NULL
@@ -185,6 +186,7 @@ class DatabaseManager:
                     progress REAL,
                     state TEXT,
                     sites TEXT,
+                    details TEXT,
                     qb_uploaded INTEGER DEFAULT 0,
                     tr_uploaded INTEGER DEFAULT 0,
                     last_seen TEXT NOT NULL
@@ -533,7 +535,38 @@ class DataTracker(Thread):
                 last_tr_dl, last_tr_ul = data_point['tr_dl'], data_point[
                     'tr_ul']
 
-            sql_insert = 'INSERT INTO traffic_stats (stat_datetime, qb_downloaded, qb_uploaded, tr_downloaded, tr_uploaded, qb_download_speed, qb_upload_speed, tr_download_speed, tr_upload_speed) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)' if is_mysql else 'INSERT INTO traffic_stats (stat_datetime, qb_downloaded, qb_uploaded, tr_downloaded, tr_uploaded, qb_download_speed, qb_upload_speed, tr_download_speed, tr_upload_speed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            if is_mysql:
+                sql_insert = '''
+                    INSERT INTO traffic_stats (
+                        stat_datetime, qb_downloaded, qb_uploaded, tr_downloaded, tr_uploaded, 
+                        qb_download_speed, qb_upload_speed, tr_download_speed, tr_upload_speed
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE
+                        qb_downloaded = VALUES(qb_downloaded),
+                        qb_uploaded = VALUES(qb_uploaded),
+                        tr_downloaded = VALUES(tr_downloaded),
+                        tr_uploaded = VALUES(tr_uploaded),
+                        qb_download_speed = VALUES(qb_download_speed),
+                        qb_upload_speed = VALUES(qb_upload_speed),
+                        tr_download_speed = VALUES(tr_download_speed),
+                        tr_upload_speed = VALUES(tr_upload_speed)
+                '''
+            else:  # SQLite 的写法 (ON CONFLICT)
+                sql_insert = '''
+                    INSERT INTO traffic_stats (
+                        stat_datetime, qb_downloaded, qb_uploaded, tr_downloaded, tr_uploaded, 
+                        qb_download_speed, qb_upload_speed, tr_download_speed, tr_upload_speed
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(stat_datetime) DO UPDATE SET
+                        qb_downloaded = excluded.qb_downloaded,
+                        qb_uploaded = excluded.qb_uploaded,
+                        tr_downloaded = excluded.tr_downloaded,
+                        tr_uploaded = excluded.tr_uploaded,
+                        qb_download_speed = excluded.qb_download_speed,
+                        qb_upload_speed = excluded.qb_upload_speed,
+                        tr_download_speed = excluded.tr_download_speed,
+                        tr_upload_speed = excluded.tr_upload_speed
+                '''
             cursor.executemany(sql_insert, params_to_insert)
 
             final_data_point = buffer[-1]
@@ -592,7 +625,9 @@ class DataTracker(Thread):
 
                     for t in qb_torrents:
                         all_current_hashes.add(t.hash)
-                        sites = {}
+
+                        site_nickname = None
+                        site_detail_url = None
                         if t.trackers:
                             for tracker_entry in t.trackers:
                                 hostname = _parse_hostname_from_url(
@@ -601,31 +636,29 @@ class DataTracker(Thread):
                                 if core_domain in core_domain_map:
                                     site_nickname = core_domain_map[
                                         core_domain]
-                                    sites[
-                                        site_nickname] = _extract_url_from_comment(
-                                            t.comment)
+                                    site_detail_url = _extract_url_from_comment(
+                                        t.comment)
                                     break
 
                         params = (t.hash, t.name, t.save_path, t.size,
-                                  round(t.progress * 100,
-                                        1), self.format_state(t.state),
-                                  json.dumps(sites, ensure_ascii=False),
-                                  t.uploaded, now_str)
+                                  round(t.progress * 100, 1),
+                                  self.format_state(t.state), site_nickname,
+                                  site_detail_url, t.uploaded, now_str)
 
                         if is_mysql:
-                            sql = '''INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, qb_uploaded, last_seen)
-                                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            sql = '''INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, qb_uploaded, last_seen)
+                                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                                      ON DUPLICATE KEY UPDATE
                                      name=VALUES(name), save_path=VALUES(save_path), size=VALUES(size), progress=VALUES(progress),
-                                     state=VALUES(state), sites=VALUES(sites),
+                                     state=VALUES(state), sites=VALUES(sites), details=VALUES(details),
                                      qb_uploaded=GREATEST(VALUES(qb_uploaded), torrents.qb_uploaded),
                                      last_seen=VALUES(last_seen)'''
                         else:
-                            sql = '''INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, qb_uploaded, last_seen)
-                                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            sql = '''INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, qb_uploaded, last_seen)
+                                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                                      ON CONFLICT(hash) DO UPDATE SET
                                      name=excluded.name, save_path=excluded.save_path, size=excluded.size, progress=excluded.progress,
-                                     state=excluded.state, sites=excluded.sites,
+                                     state=excluded.state, sites=excluded.sites, details=excluded.details,
                                      qb_uploaded=max(excluded.qb_uploaded, torrents.qb_uploaded),
                                      last_seen=excluded.last_seen'''
                         cursor.execute(sql, params)
@@ -654,7 +687,9 @@ class DataTracker(Thread):
 
                     for t in tr_torrents:
                         all_current_hashes.add(t.hash_string)
-                        sites = {}
+
+                        site_nickname = None
+                        site_detail_url = None
                         if t.trackers:
                             for tracker_info in t.trackers:
                                 hostname = _parse_hostname_from_url(
@@ -663,31 +698,29 @@ class DataTracker(Thread):
                                 if core_domain in core_domain_map:
                                     site_nickname = core_domain_map[
                                         core_domain]
-                                    sites[
-                                        site_nickname] = _extract_url_from_comment(
-                                            t.comment)
+                                    site_detail_url = _extract_url_from_comment(
+                                        t.comment)
                                     break
 
                         params = (t.hash_string, t.name, t.download_dir,
                                   t.total_size, round(t.percent_done * 100, 1),
-                                  self.format_state(t.status),
-                                  json.dumps(sites, ensure_ascii=False),
-                                  t.uploaded_ever, now_str)
+                                  self.format_state(t.status), site_nickname,
+                                  site_detail_url, t.uploaded_ever, now_str)
 
                         if is_mysql:
-                            sql = '''INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, tr_uploaded, last_seen)
-                                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            sql = '''INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, tr_uploaded, last_seen)
+                                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                                      ON DUPLICATE KEY UPDATE
                                      name=VALUES(name), save_path=VALUES(save_path), size=VALUES(size), progress=VALUES(progress),
-                                     state=VALUES(state), sites=VALUES(sites),
+                                     state=VALUES(state), sites=VALUES(sites), details=VALUES(details),
                                      tr_uploaded=GREATEST(VALUES(tr_uploaded), torrents.tr_uploaded),
                                      last_seen=VALUES(last_seen)'''
                         else:
-                            sql = '''INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, tr_uploaded, last_seen)
-                                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            sql = '''INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, tr_uploaded, last_seen)
+                                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                                      ON CONFLICT(hash) DO UPDATE SET
                                      name=excluded.name, save_path=excluded.save_path, size=excluded.size, progress=excluded.progress,
-                                     state=excluded.state, sites=excluded.sites,
+                                     state=excluded.state, sites=excluded.sites, details=excluded.details,
                                      tr_uploaded=max(excluded.tr_uploaded, torrents.tr_uploaded),
                                      last_seen=excluded.last_seen'''
                         cursor.execute(sql, params)
@@ -738,7 +771,7 @@ mysql_config = {
     'user': os.getenv('MYSQL_USER'),
     'password': os.getenv('MYSQL_PASSWORD'),
     'database': os.getenv('MYSQL_DATABASE'),
-    'port': int(os.getenv('MYSQL_PORT', 3306))  # 提供默认端口以防万一
+    'port': int(os.getenv('MYSQL_PORT', 3306))
 }
 
 # 2. 检查必要的环境变量是否存在
@@ -749,7 +782,6 @@ if not all([
     logging.error(
         "关键的 MySQL 环境变量 (HOST, USER, PASSWORD, DATABASE) 未设置！请检查你的 .env 文件或环境变量。"
     )
-    # 在这种情况下，可以退出或引发异常，因为没有数据库无法继续
     exit(1)
 
 # 3. 创建强制使用 MySQL 的配置
@@ -765,11 +797,6 @@ if data_tracker_thread is None:
     data_tracker_thread.start()
 
 # --- Web 服务及辅助函数 ---
-
-# 核心改动：移除旧的根路由。前端现在是独立的单页应用(SPA)。
-# @app.route('/')
-# def index_page():
-#     return render_template('index.html')
 
 
 def get_date_range_and_grouping(time_range_str, for_speed=False):
@@ -790,7 +817,6 @@ def get_date_range_and_grouping(time_range_str, for_speed=False):
         'last_6_months': (now - timedelta(days=180), '%Y-%m'),
         'this_year': (today_start.replace(month=1, day=1), '%Y-%m'),
         'all': (datetime(1970, 1, 2), '%Y-%m'),
-        # 修改点 1: 为 last_1_hour 添加一个特殊的标识符作为分组格式
         'last_1_hour': (now - timedelta(hours=1), 'CUSTOM_5_SEC_INTERVAL'),
         'last_12_hours': (now - timedelta(hours=12), None),
         'last_24_hours': (now - timedelta(hours=24), None)
@@ -805,13 +831,11 @@ def get_date_range_and_grouping(time_range_str, for_speed=False):
     if time_range_str == 'last_month': end_dt = today_start.replace(day=1)
 
     if for_speed:
-        # 修改点 2: 移除对 last_1_hour 的特殊处理，因为它已经在上面定义好了
         if time_range_str in [
                 'last_12_hours', 'last_24_hours', 'today', 'yesterday'
         ]:
             group_by_format = '%Y-%m-%d %H:%M'
         elif start_dt and (end_dt - start_dt).total_seconds() > 0:
-            # 对于较长的时间范围，保持动态调整分组精度的逻辑
             if group_by_format not in ['%Y-%m', 'CUSTOM_5_SEC_INTERVAL']:
                 interval_seconds = (end_dt - start_dt).total_seconds() / 600
                 if interval_seconds <= 5400: group_by_format = '%Y-%m-%d %H:00'
@@ -981,17 +1005,10 @@ def get_speed_chart_data_api():
         conn = db_manager._get_connection()
         cursor = conn.cursor(dictionary=is_mysql)
 
-        # 核心改动：移除了整个 if time_range == 'last_1_hour' 的分支，
-        # 所有逻辑现在统一处理。
-
-        # 1. 获取时间范围和分组格式（对于'last_1_hour'，会得到'CUSTOM_5_SEC_INTERVAL'）
         start_dt, end_dt, group_by_format = get_date_range_and_grouping(
             time_range, for_speed=True)
-
-        # 2. 根据分组格式生成对应的 SQL 函数
         time_group_fn = get_time_group_fn(db_manager.db_type, group_by_format)
 
-        # 3. 构建统一的 SQL 查询
         query = f"""
             SELECT 
                 {time_group_fn} AS time_group, 
@@ -1010,7 +1027,6 @@ def get_speed_chart_data_api():
 
         query += " GROUP BY time_group ORDER BY time_group"
 
-        # 4. 执行查询并返回结果
         cursor.execute(query, tuple(params))
         rows = cursor.fetchall()
 
@@ -1190,16 +1206,14 @@ def get_data_api():
             agg['state'].add(t.get('state', 'N/A'))
             agg['qb_uploaded'] += t.get('qb_uploaded', 0)
             agg['tr_uploaded'] += t.get('tr_uploaded', 0)
-            try:
-                sites_data = json.loads(
-                    t['sites']) if t.get('sites') and isinstance(
-                        t.get('sites'), str) else (t.get('sites') or {})
-                for site_name, comment in sites_data.items():
-                    agg['sites'][site_name]['qb_ul'] += t.get('qb_uploaded', 0)
-                    agg['sites'][site_name]['tr_ul'] += t.get('tr_uploaded', 0)
-                    agg['sites'][site_name]['comment'] = comment
-            except (json.JSONDecodeError, TypeError):
-                continue
+
+            site_name = t.get('sites')
+            detail_url = t.get('details')
+
+            if site_name:
+                agg['sites'][site_name]['qb_ul'] += t.get('qb_uploaded', 0)
+                agg['sites'][site_name]['tr_ul'] += t.get('tr_uploaded', 0)
+                agg['sites'][site_name]['comment'] = detail_url
 
         final_torrent_list = []
         for name, data in agg_torrents.items():
@@ -1271,12 +1285,15 @@ def get_data_api():
             all_states.add(row['state'])
         unique_states = sorted(list(all_states))
 
-        all_sites_set = set()
-        for t in final_torrent_list:
-            all_sites_set.update(t['sites'].keys())
+        # 新的、高效的方式：直接从数据库查询所有唯一的站点名称
+        cursor.execute(
+            "SELECT DISTINCT sites FROM torrents WHERE sites IS NOT NULL AND sites != ''"
+        )
+        # 将查询结果 (可能是元组列表) 转换为简单的字符串列表
+        all_discovered_sites = sorted(
+            [row['sites'] for row in cursor.fetchall()])
 
         _, site_link_rules_from_db = load_site_maps_from_db(db_manager)
-        all_discovered_sites = sorted(list(all_sites_set))
 
         return jsonify({
             'data':
@@ -1320,6 +1337,74 @@ def refresh_data_api():
         return jsonify({"error": "触发刷新失败"}), 500
 
 
+@app.route('/api/site_stats')
+def get_site_stats_api():
+    """
+    新增的 API 端点：按站点聚合种子体积。
+    *** 最终修正版：使用 SQL 直接进行精确的去重和聚合 ***
+    """
+    conn = None
+    try:
+        conn = db_manager._get_connection()
+        cursor = db_manager._get_cursor(conn)
+
+        # 核心修改：用一条 SQL 语句完成所有计算
+        # 1. (子查询部分) `SELECT DISTINCT name, size, sites FROM torrents ...`:
+        #    首先按种子名称去重，得到一个干净的、每个种子只出现一次的列表。
+        # 2. (主查询部分) `SELECT sites, SUM(size) as total_size ...`:
+        #    然后对这个干净的列表按站点进行分组，并计算体积总和。
+
+        is_mysql = db_manager.db_type == 'mysql'
+
+        # 为 MySQL 和 SQLite 准备不同的语法
+        if is_mysql:
+            query = """
+                SELECT 
+                    sites, 
+                    SUM(size) as total_size
+                FROM 
+                    (SELECT DISTINCT name, size, sites FROM torrents WHERE sites IS NOT NULL AND sites != '') AS unique_torrents
+                GROUP BY 
+                    sites;
+            """
+            cursor.execute(query)
+        else:  # SQLite
+            query = """
+                SELECT 
+                    sites, 
+                    SUM(size) as total_size
+                FROM 
+                    (SELECT name, size, sites FROM torrents WHERE sites IS NOT NULL AND sites != '' GROUP BY name) AS unique_torrents
+                GROUP BY 
+                    sites;
+            """
+            cursor.execute(query)
+
+        rows = cursor.fetchall()
+
+        # 直接从查询结果构建数据
+        sorted_sites = sorted(rows, key=lambda x: x['sites'])
+
+        labels = [row['sites'] for row in sorted_sites]
+        data = [int(row['total_size']) for row in sorted_sites]
+
+        return jsonify({
+            "labels": labels,
+            "datasets": [{
+                "label": "站点总体积",
+                "data": data
+            }]
+        })
+
+    except Exception as e:
+        logging.error(f"Error in get_site_stats_api: {e}", exc_info=True)
+        return jsonify({"error": "从数据库获取站点统计数据失败"}), 500
+    finally:
+        if conn:
+            cursor.close()
+            conn.close()
+
+
 @app.route('/api/save_filters', methods=['POST'])
 def save_filters_api():
     data = request.get_json()
@@ -1333,4 +1418,4 @@ def save_filters_api():
 
 if __name__ == '__main__':
     logging.info("Starting Flask development server as a pure API backend...")
-    app.run(host='0.0.0.0', port=15001, debug=False)
+    app.run(host='0.0.0.0', port=15001, debug=True)

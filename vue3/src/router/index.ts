@@ -1,7 +1,5 @@
 // src/router/index.ts
 import { createRouter, createWebHistory } from 'vue-router'
-import InfoView from '../views/InfoView.vue'
-import TorrentsView from '../views/TorrentsView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -9,12 +7,17 @@ const router = createRouter({
     {
       path: '/',
       name: 'info',
-      component: InfoView,
+      component: () => import('../views/InfoView.vue'),
     },
     {
       path: '/torrents',
       name: 'torrents',
-      component: TorrentsView,
+      component: () => import('../views/TorrentsView.vue'),
+    },
+    {
+      path: '/sites',
+      name: 'sites',
+      component: () => import('../views/SitesView.vue'),
     },
   ],
 })
