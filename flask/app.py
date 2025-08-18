@@ -265,24 +265,86 @@ def placeholder():
 
 
 def reconcile_historical_data(db_manager):
-    logging.info("Starting historical data reconciliation...")
+    """
+    修正后的函数：
+    1.  (仅一次) 如果需要，创建历史基线/创世记录。
+    2.  (每次启动) 强制与下载客户端同步当前状态，以防止重启后出现数据尖峰。
+    """
+    logging.info("Starting data reconciliation and state synchronization...")
     config = load_config()
     conn = db_manager._get_connection()
-    cursor = conn.cursor()
+    cursor = db_manager._get_cursor(conn)
+    is_mysql = db_manager.db_type == 'mysql'
     genesis_datetime = '1970-01-01 00:00:00'
 
-    sql = "SELECT COUNT(*) FROM traffic_stats WHERE stat_datetime = %s" if db_manager.db_type == 'mysql' else "SELECT COUNT(*) FROM traffic_stats WHERE stat_datetime = ?"
-    cursor.execute(sql, (genesis_datetime, ))
-    if cursor.fetchone()[0] > 0:
-        cursor.close(), conn.close()
-        return
+    # --- 步骤 1: 一次性的创世记录创建 ---
+    genesis_check_sql = "SELECT COUNT(*) FROM traffic_stats WHERE stat_datetime = %s" if is_mysql else "SELECT COUNT(*) FROM traffic_stats WHERE stat_datetime = ?"
+    cursor.execute(genesis_check_sql, (genesis_datetime, ))
+    result = cursor.fetchone()
+    genesis_exists = result['COUNT(*)'] > 0 if is_mysql else result[0] > 0
 
-    manual_hist = {'qb_ul': 0, 'qb_dl': 0}
-    initial_total = {'qb_ul': 0, 'qb_dl': 0, 'tr_ul': 0, 'tr_dl': 0}
-    dl_val, ul_val = None, None
-    if dl_val is not None and ul_val is not None:
-        manual_hist['qb_dl'], manual_hist['qb_ul'] = int(
-            dl_val * 1024**3), int(ul_val * 1024**3)
+    if not genesis_exists:
+        logging.info(
+            "Genesis record not found. Performing one-time data backfill.")
+        manual_hist = {'qb_ul': 0, 'qb_dl': 0}
+        initial_total = {'qb_ul': 0, 'qb_dl': 0, 'tr_ul': 0, 'tr_dl': 0}
+        dl_val, ul_val = None, None
+        if dl_val is not None and ul_val is not None:
+            manual_hist['qb_dl'], manual_hist['qb_ul'] = int(
+                dl_val * 1024**3), int(ul_val * 1024**3)
+
+        if config.get('qbittorrent', {}).get('enabled'):
+            try:
+                client = Client(
+                    **{
+                        k: v
+                        for k, v in config['qbittorrent'].items()
+                        if k != 'enabled'
+                    })
+                client.auth_log_in()
+                info = client.transfer_info()
+                initial_total['qb_dl'], initial_total['qb_ul'] = int(
+                    getattr(info, 'dl_info_data',
+                            0)), int(getattr(info, 'up_info_data', 0))
+            except Exception as e:
+                logging.error(
+                    f"[qB] Failed to get initial session data for genesis record: {e}"
+                )
+
+        if config.get('transmission', {}).get('enabled'):
+            try:
+                client = TrClient(
+                    **{
+                        k: v
+                        for k, v in config['transmission'].items()
+                        if k != 'enabled'
+                    })
+                stats = client.session_stats()
+                initial_total['tr_dl'], initial_total['tr_ul'] = int(
+                    stats.cumulative_stats.downloaded_bytes), int(
+                        stats.cumulative_stats.uploaded_bytes)
+            except Exception as e:
+                logging.error(
+                    f"[Tr] Failed to get initial cumulative data for genesis record: {e}"
+                )
+
+        final_qb_dl = manual_hist['qb_dl'] + initial_total['qb_dl']
+        final_qb_ul = manual_hist['qb_ul'] + initial_total['qb_ul']
+        final_tr_dl, final_tr_ul = initial_total['tr_dl'], initial_total[
+            'tr_ul']
+
+        if any(v > 0
+               for v in [final_qb_dl, final_qb_ul, final_tr_dl, final_tr_ul]):
+            insert_sql = 'INSERT INTO traffic_stats (stat_datetime, qb_uploaded, qb_downloaded, tr_uploaded, tr_downloaded) VALUES (%s, %s, %s, %s, %s)' if is_mysql else 'INSERT INTO traffic_stats (stat_datetime, qb_uploaded, qb_downloaded, tr_uploaded, tr_downloaded) VALUES (?, ?, ?, ?, ?)'
+            cursor.execute(insert_sql, (genesis_datetime, final_qb_ul,
+                                        final_qb_dl, final_tr_ul, final_tr_dl))
+
+        conn.commit()
+        logging.info("Genesis record creation finished.")
+
+    # --- 步骤 2: 每次启动时都执行的状态同步 ---
+    logging.info(
+        "Synchronizing downloader state with current client values...")
 
     if config.get('qbittorrent', {}).get('enabled'):
         try:
@@ -292,11 +354,19 @@ def reconcile_historical_data(db_manager):
             })
             client.auth_log_in()
             info = client.transfer_info()
-            initial_total['qb_dl'], initial_total['qb_ul'] = int(
-                getattr(info, 'dl_info_data',
-                        0)), int(getattr(info, 'up_info_data', 0))
+            current_session_dl = int(getattr(info, 'dl_info_data', 0))
+            current_session_ul = int(getattr(info, 'up_info_data', 0))
+
+            update_qb_sql = "UPDATE downloader_state SET last_session_dl = %s, last_session_ul = %s WHERE name = %s" if is_mysql else "UPDATE downloader_state SET last_session_dl = ?, last_session_ul = ? WHERE name = ?"
+            cursor.execute(
+                update_qb_sql,
+                (current_session_dl, current_session_ul, 'qbittorrent'))
+            logging.info(
+                f"qBittorrent state synchronized: last_session_dl set to {current_session_dl}, last_session_ul set to {current_session_ul}."
+            )
         except Exception as e:
-            logging.error(f"[qB] Failed to get initial session data: {e}")
+            logging.error(f"[qB] Failed to synchronize state at startup: {e}")
+
     if config.get('transmission', {}).get('enabled'):
         try:
             client = TrClient(**{
@@ -304,36 +374,24 @@ def reconcile_historical_data(db_manager):
                 for k, v in config['transmission'].items() if k != 'enabled'
             })
             stats = client.session_stats()
-            initial_total['tr_dl'], initial_total['tr_ul'] = int(
-                stats.cumulative_stats.downloaded_bytes), int(
-                    stats.cumulative_stats.uploaded_bytes)
+            current_cumulative_dl = int(
+                stats.cumulative_stats.downloaded_bytes)
+            current_cumulative_ul = int(stats.cumulative_stats.uploaded_bytes)
+
+            update_tr_sql = "UPDATE downloader_state SET last_cumulative_dl = %s, last_cumulative_ul = %s WHERE name = %s" if is_mysql else "UPDATE downloader_state SET last_cumulative_dl = ?, last_cumulative_ul = ? WHERE name = ?"
+            cursor.execute(
+                update_tr_sql,
+                (current_cumulative_dl, current_cumulative_ul, 'transmission'))
+            logging.info(
+                f"Transmission state synchronized: last_cumulative_dl set to {current_cumulative_dl}, last_cumulative_ul set to {current_cumulative_ul}."
+            )
         except Exception as e:
-            logging.error(f"[Tr] Failed to get initial cumulative data: {e}")
-
-    final_qb_dl, final_qb_ul = manual_hist['qb_dl'] + initial_total[
-        'qb_dl'], manual_hist['qb_ul'] + initial_total['qb_ul']
-    final_tr_dl, final_tr_ul = initial_total['tr_dl'], initial_total['tr_ul']
-
-    is_mysql = db_manager.db_type == 'mysql'
-    insert_sql = 'INSERT INTO traffic_stats (stat_datetime, qb_uploaded, qb_downloaded, tr_uploaded, tr_downloaded) VALUES (%s, %s, %s, %s, %s)' if is_mysql else 'INSERT INTO traffic_stats (stat_datetime, qb_uploaded, qb_downloaded, tr_uploaded, tr_downloaded) VALUES (?, ?, ?, ?, ?)'
-    update_qb_sql = "UPDATE downloader_state SET last_session_dl = %s, last_session_ul = %s WHERE name = %s" if is_mysql else "UPDATE downloader_state SET last_session_dl = ?, last_session_ul = ? WHERE name = ?"
-    update_tr_sql = "UPDATE downloader_state SET last_cumulative_dl = %s, last_cumulative_ul = %s WHERE name = %s" if is_mysql else "UPDATE downloader_state SET last_cumulative_dl = ?, last_cumulative_ul = ? WHERE name = ?"
-
-    if any(v > 0
-           for v in [final_qb_dl, final_qb_ul, final_tr_dl, final_tr_ul]):
-        cursor.execute(insert_sql, (genesis_datetime, final_qb_ul, final_qb_dl,
-                                    final_tr_ul, final_tr_dl))
-    cursor.execute(
-        update_qb_sql,
-        (initial_total['qb_dl'], initial_total['qb_ul'], 'qbittorrent'))
-    cursor.execute(
-        update_tr_sql,
-        (initial_total['tr_dl'], initial_total['tr_ul'], 'transmission'))
+            logging.error(f"[Tr] Failed to synchronize state at startup: {e}")
 
     conn.commit()
     cursor.close()
     conn.close()
-    logging.info("Historical data reconciliation finished.")
+    logging.info("Data reconciliation and state synchronization finished.")
 
 
 class DataTracker(Thread):
@@ -499,26 +557,43 @@ class DataTracker(Thread):
             f"Flushing {len(buffer)} traffic data points to the database...")
         conn = None
         try:
+            # --- 步骤 1: 获取连接和单个游标，开启事务 ---
             conn = self.db_manager._get_connection()
-            cursor = conn.cursor()
+            cursor = self.db_manager._get_cursor(conn)
             is_mysql = self.db_manager.db_type == 'mysql'
 
+            # --- 步骤 2: 在事务开始时，获取一次基准状态 ---
             qb_state_sql = 'SELECT last_session_dl, last_session_ul FROM downloader_state WHERE name = %s' if is_mysql else 'SELECT last_session_dl, last_session_ul FROM downloader_state WHERE name = ?'
             tr_state_sql = 'SELECT last_cumulative_dl, last_cumulative_ul FROM downloader_state WHERE name = %s' if is_mysql else 'SELECT last_cumulative_dl, last_cumulative_ul FROM downloader_state WHERE name = ?'
 
             cursor.execute(qb_state_sql, ('qbittorrent', ))
-            last_qb_dl, last_qb_ul = cursor.fetchone() or (0, 0)
+            qb_row = cursor.fetchone()
+            # 强制转换为 int，避免任何类型问题
+            last_qb_dl = int(qb_row['last_session_dl']) if qb_row else 0
+            last_qb_ul = int(qb_row['last_session_ul']) if qb_row else 0
 
             cursor.execute(tr_state_sql, ('transmission', ))
-            last_tr_dl, last_tr_ul = cursor.fetchone() or (0, 0)
+            tr_row = cursor.fetchone()
+            last_tr_dl = int(tr_row['last_cumulative_dl']) if tr_row else 0
+            last_tr_ul = int(tr_row['last_cumulative_ul']) if tr_row else 0
 
             params_to_insert = []
 
+            # --- 步骤 3: 循环计算所有增量 ---
             for data_point in buffer:
-                qb_dl_inc = data_point['qb_dl'] - last_qb_dl if data_point[
-                    'qb_dl'] >= last_qb_dl else data_point['qb_dl']
-                qb_ul_inc = data_point['qb_ul'] - last_qb_ul if data_point[
-                    'qb_ul'] >= last_qb_ul else data_point['qb_ul']
+                current_qb_dl = data_point['qb_dl']
+                current_qb_ul = data_point['qb_ul']
+
+                # 正确的增量计算逻辑
+                if current_qb_dl < last_qb_dl:
+                    qb_dl_inc = current_qb_dl
+                else:
+                    qb_dl_inc = current_qb_dl - last_qb_dl
+
+                if current_qb_ul < last_qb_ul:
+                    qb_ul_inc = current_qb_ul
+                else:
+                    qb_ul_inc = current_qb_ul - last_qb_ul
 
                 tr_dl_inc = data_point['tr_dl'] - last_tr_dl
                 tr_ul_inc = data_point['tr_ul'] - last_tr_ul
@@ -530,45 +605,37 @@ class DataTracker(Thread):
                      data_point['qb_ul_speed'], data_point['tr_dl_speed'],
                      data_point['tr_ul_speed']))
 
-                last_qb_dl, last_qb_ul = data_point['qb_dl'], data_point[
-                    'qb_ul']
-                last_tr_dl, last_tr_ul = data_point['tr_dl'], data_point[
-                    'tr_ul']
+                # 在循环内部更新基准值，为下一次迭代做准备
+                last_qb_dl = current_qb_dl
+                last_qb_ul = current_qb_ul
+                last_tr_dl = data_point['tr_dl']
+                last_tr_ul = data_point['tr_ul']
 
-            if is_mysql:
-                sql_insert = '''
-                    INSERT INTO traffic_stats (
-                        stat_datetime, qb_downloaded, qb_uploaded, tr_downloaded, tr_uploaded, 
-                        qb_download_speed, qb_upload_speed, tr_download_speed, tr_upload_speed
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    ON DUPLICATE KEY UPDATE
-                        qb_downloaded = VALUES(qb_downloaded),
-                        qb_uploaded = VALUES(qb_uploaded),
-                        tr_downloaded = VALUES(tr_downloaded),
-                        tr_uploaded = VALUES(tr_uploaded),
-                        qb_download_speed = VALUES(qb_download_speed),
-                        qb_upload_speed = VALUES(qb_upload_speed),
-                        tr_download_speed = VALUES(tr_download_speed),
-                        tr_upload_speed = VALUES(tr_upload_speed)
-                '''
-            else:  # SQLite 的写法 (ON CONFLICT)
-                sql_insert = '''
-                    INSERT INTO traffic_stats (
-                        stat_datetime, qb_downloaded, qb_uploaded, tr_downloaded, tr_uploaded, 
-                        qb_download_speed, qb_upload_speed, tr_download_speed, tr_upload_speed
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(stat_datetime) DO UPDATE SET
-                        qb_downloaded = excluded.qb_downloaded,
-                        qb_uploaded = excluded.qb_uploaded,
-                        tr_downloaded = excluded.tr_downloaded,
-                        tr_uploaded = excluded.tr_uploaded,
-                        qb_download_speed = excluded.qb_download_speed,
-                        qb_upload_speed = excluded.qb_upload_speed,
-                        tr_download_speed = excluded.tr_download_speed,
-                        tr_upload_speed = excluded.tr_upload_speed
-                '''
-            cursor.executemany(sql_insert, params_to_insert)
+            # --- 步骤 4: 批量写入所有计算出的增量 ---
+            if params_to_insert:
+                if is_mysql:
+                    sql_insert = '''
+                        INSERT INTO traffic_stats (stat_datetime, qb_downloaded, qb_uploaded, tr_downloaded, tr_uploaded, qb_download_speed, qb_upload_speed, tr_download_speed, tr_upload_speed)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        ON DUPLICATE KEY UPDATE
+                            qb_downloaded = VALUES(qb_downloaded), qb_uploaded = VALUES(qb_uploaded),
+                            tr_downloaded = VALUES(tr_downloaded), tr_uploaded = VALUES(tr_uploaded),
+                            qb_download_speed = VALUES(qb_download_speed), qb_upload_speed = VALUES(qb_upload_speed),
+                            tr_download_speed = VALUES(tr_download_speed), tr_upload_speed = VALUES(tr_upload_speed)
+                    '''
+                else:  # SQLite
+                    sql_insert = '''
+                        INSERT INTO traffic_stats (stat_datetime, qb_downloaded, qb_uploaded, tr_downloaded, tr_uploaded, qb_download_speed, qb_upload_speed, tr_download_speed, tr_upload_speed)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(stat_datetime) DO UPDATE SET
+                            qb_downloaded = excluded.qb_downloaded, qb_uploaded = excluded.qb_uploaded,
+                            tr_downloaded = excluded.tr_downloaded, tr_uploaded = excluded.tr_uploaded,
+                            qb_download_speed = excluded.qb_download_speed, qb_upload_speed = excluded.qb_upload_speed,
+                            tr_download_speed = excluded.tr_download_speed, tr_upload_speed = excluded.tr_upload_speed
+                    '''
+                cursor.executemany(sql_insert, params_to_insert)
 
+            # --- 步骤 5: 更新 downloader_state 为批次处理完后的最终状态 ---
             final_data_point = buffer[-1]
             update_qb_sql = "UPDATE downloader_state SET last_session_dl = %s, last_session_ul = %s WHERE name = %s" if is_mysql else "UPDATE downloader_state SET last_session_dl = ?, last_session_ul = ? WHERE name = ?"
             update_tr_sql = "UPDATE downloader_state SET last_cumulative_dl = %s, last_cumulative_ul = %s WHERE name = %s" if is_mysql else "UPDATE downloader_state SET last_cumulative_dl = ?, last_cumulative_ul = ? WHERE name = ?"
@@ -580,6 +647,7 @@ class DataTracker(Thread):
                            (final_data_point['tr_dl'],
                             final_data_point['tr_ul'], 'transmission'))
 
+            # --- 步骤 6: 提交整个事务 ---
             conn.commit()
             logging.info("Traffic data batch write successful.")
 
@@ -607,7 +675,7 @@ class DataTracker(Thread):
         conn = None
         try:
             conn = self.db_manager._get_connection()
-            cursor = conn.cursor()
+            cursor = self.db_manager._get_cursor(conn)  # 使用字典游标
             now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
             if config.get('qbittorrent', {}).get('enabled'):
@@ -734,13 +802,20 @@ class DataTracker(Thread):
                 placeholders = ', '.join(['%s' if is_mysql else '?'] *
                                          len(all_current_hashes))
                 sql_delete = f"DELETE FROM torrents WHERE hash NOT IN ({placeholders})"
-                cursor.execute(sql_delete, tuple(all_current_hashes))
+                # 再次获取非字典游标用于删除
+                non_dict_cursor = conn.cursor()
+                non_dict_cursor.execute(sql_delete, tuple(all_current_hashes))
                 logging.info(
-                    f"Removed {cursor.rowcount} stale torrents from DB.")
+                    f"Removed {non_dict_cursor.rowcount} stale torrents from DB."
+                )
+                non_dict_cursor.close()
+
             else:
-                cursor.execute("DELETE FROM torrents")
+                non_dict_cursor = conn.cursor()
+                non_dict_cursor.execute("DELETE FROM torrents")
                 logging.info(
                     "No torrents found in any client, cleared torrents table.")
+                non_dict_cursor.close()
 
             conn.commit()
             logging.info(
@@ -1010,13 +1085,13 @@ def get_speed_chart_data_api():
         time_group_fn = get_time_group_fn(db_manager.db_type, group_by_format)
 
         query = f"""
-            SELECT 
-                {time_group_fn} AS time_group, 
-                AVG(qb_upload_speed) AS qb_ul_speed, 
-                AVG(qb_download_speed) AS qb_dl_speed, 
-                AVG(tr_upload_speed) AS tr_ul_speed, 
-                AVG(tr_download_speed) AS tr_dl_speed 
-            FROM traffic_stats 
+            SELECT
+                {time_group_fn} AS time_group,
+                AVG(qb_upload_speed) AS qb_ul_speed,
+                AVG(qb_download_speed) AS qb_dl_speed,
+                AVG(tr_upload_speed) AS tr_ul_speed,
+                AVG(tr_download_speed) AS tr_dl_speed
+            FROM traffic_stats
             WHERE stat_datetime >= {ph}
         """
         params = [start_dt.strftime('%Y-%m-%d %H:%M:%S')]
@@ -1285,11 +1360,9 @@ def get_data_api():
             all_states.add(row['state'])
         unique_states = sorted(list(all_states))
 
-        # 新的、高效的方式：直接从数据库查询所有唯一的站点名称
         cursor.execute(
             "SELECT DISTINCT sites FROM torrents WHERE sites IS NOT NULL AND sites != ''"
         )
-        # 将查询结果 (可能是元组列表) 转换为简单的字符串列表
         all_discovered_sites = sorted(
             [row['sites'] for row in cursor.fetchall()])
 
@@ -1340,61 +1413,51 @@ def refresh_data_api():
 @app.route('/api/site_stats')
 def get_site_stats_api():
     """
-    新增的 API 端点：按站点聚合种子体积。
+    新增的 API 端点：按站点聚合种子体积和数量。
     *** 最终修正版：使用 SQL 直接进行精确的去重和聚合 ***
     """
     conn = None
     try:
         conn = db_manager._get_connection()
         cursor = db_manager._get_cursor(conn)
-
-        # 核心修改：用一条 SQL 语句完成所有计算
-        # 1. (子查询部分) `SELECT DISTINCT name, size, sites FROM torrents ...`:
-        #    首先按种子名称去重，得到一个干净的、每个种子只出现一次的列表。
-        # 2. (主查询部分) `SELECT sites, SUM(size) as total_size ...`:
-        #    然后对这个干净的列表按站点进行分组，并计算体积总和。
-
         is_mysql = db_manager.db_type == 'mysql'
 
-        # 为 MySQL 和 SQLite 准备不同的语法
         if is_mysql:
             query = """
-                SELECT 
-                    sites, 
-                    SUM(size) as total_size
-                FROM 
+                SELECT
+                    sites,
+                    SUM(size) as total_size,
+                    COUNT(name) as torrent_count
+                FROM
                     (SELECT DISTINCT name, size, sites FROM torrents WHERE sites IS NOT NULL AND sites != '') AS unique_torrents
-                GROUP BY 
+                GROUP BY
                     sites;
             """
             cursor.execute(query)
         else:  # SQLite
             query = """
-                SELECT 
-                    sites, 
-                    SUM(size) as total_size
-                FROM 
+                SELECT
+                    sites,
+                    SUM(size) as total_size,
+                    COUNT(name) as torrent_count
+                FROM
                     (SELECT name, size, sites FROM torrents WHERE sites IS NOT NULL AND sites != '' GROUP BY name) AS unique_torrents
-                GROUP BY 
+                GROUP BY
                     sites;
             """
             cursor.execute(query)
 
         rows = cursor.fetchall()
 
-        # 直接从查询结果构建数据
-        sorted_sites = sorted(rows, key=lambda x: x['sites'])
+        # 直接构建适合表格的JSON数组结构
+        results = sorted([{
+            "site_name": row['sites'],
+            "total_size": int(row['total_size'] or 0),
+            "torrent_count": int(row['torrent_count'] or 0)
+        } for row in rows],
+                         key=lambda x: x['site_name'])
 
-        labels = [row['sites'] for row in sorted_sites]
-        data = [int(row['total_size']) for row in sorted_sites]
-
-        return jsonify({
-            "labels": labels,
-            "datasets": [{
-                "label": "站点总体积",
-                "data": data
-            }]
-        })
+        return jsonify(results)  # <--- 关键：这里直接返回一个数组
 
     except Exception as e:
         logging.error(f"Error in get_site_stats_api: {e}", exc_info=True)
@@ -1418,4 +1481,5 @@ def save_filters_api():
 
 if __name__ == '__main__':
     logging.info("Starting Flask development server as a pure API backend...")
-    app.run(host='0.0.0.0', port=15001, debug=True)
+    # 添加 use_reloader=False 来防止调试模式下启动两个进程
+    app.run(host='0.0.0.0', port=15001, debug=True, use_reloader=False)

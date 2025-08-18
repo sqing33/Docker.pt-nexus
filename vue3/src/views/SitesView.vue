@@ -1,243 +1,181 @@
-<!-- src/views/SitesView.vue -->
 <template>
   <div class="sites-view-container">
-    <h2>站点信息 - 按总大小分布</h2>
+    <!-- 标题部分 -->
+    <h1 class="main-title">站点信息 - 按总大小与数量分布</h1>
 
-    <!-- Loading State -->
-    <div v-if="loading" class="message-box">正在加载数据...</div>
+    <!-- 
+      新增的布局包裹层 
+      - 它将作为表格定位的相对父容器
+      - flex-grow: 1 样式使其填充父容器所有剩余空间
+    -->
+    <div class="layout-wrapper">
+      <!-- 
+        Element Plus 表格
+        - 新增 class="top-left-table" 用于 CSS 定位
+        - 关键改动: :height="'100%'" 属性，让表格内容可滚动
+      -->
+      <el-table
+        v-loading="loading"
+        :data="siteStatsData"
+        class="top-left-table"
+        border
+        stripe
+        :height="'100%'"
+        :default-sort="{ prop: 'total_size', order: 'descending' }"
+      >
+        <template #empty>
+          <el-empty description="没有找到站点数据，或所有种子体积为零。" />
+        </template>
 
-    <!-- No Data State -->
-    <div v-if="!loading && chartData.length === 0" class="message-box">
-      没有找到站点数据，或所有种子体积为零。
+        <el-table-column prop="site_name" label="站点名称" sortable min-width="180" />
+
+        <el-table-column
+          prop="torrent_count"
+          label="种子数量"
+          sortable
+          align="right"
+          header-align="right"
+          width="150"
+        />
+
+        <el-table-column
+          prop="total_size"
+          label="种子总体积"
+          sortable
+          align="right"
+          header-align="right"
+          min-width="180"
+        >
+          <template #default="scope">
+            <span>{{ formatBytes(scope.row.total_size) }}</span>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <!-- 您可以在这里为其他象限添加内容 -->
+      <!-- <div class="top-right-placeholder">右上角</div> -->
+      <!-- <div class="bottom-left-placeholder">左下角</div> -->
+      <!-- <div class="bottom-right-placeholder">右下角</div> -->
     </div>
-
-    <!-- Chart Container -->
-    <div ref="chartRef" class="chart-container"></div>
   </div>
 </template>
 
-<script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, watchEffect } from 'vue'
+<script setup>
+import { ref, onMounted } from 'vue'
 
-// 1. Import ECharts core and required components
-import * as echarts from 'echarts/core'
-import { PieChart, PieSeriesOption } from 'echarts/charts'
-import {
-  TitleComponent,
-  TooltipComponent,
-  LegendComponent,
-  TitleComponentOption,
-  TooltipComponentOption,
-  LegendComponentOption,
-} from 'echarts/components'
-import { CanvasRenderer } from 'echarts/renderers'
-
-// Define the type for ECharts options for better TypeScript support
-type EChartsOption = echarts.ComposeOption<
-  PieSeriesOption | TitleComponentOption | TooltipComponentOption | LegendComponentOption
->
-
-// 2. Register the necessary components with ECharts
-echarts.use([TitleComponent, TooltipComponent, LegendComponent, PieChart, CanvasRenderer])
-
-// --- Component State ---
-
+// --- 响应式状态定义 ---
 const loading = ref(true)
-const chartRef = ref<HTMLDivElement>() // Ref to the DOM element for the chart
-let myChart: echarts.ECharts | null = null // Variable to hold the chart instance
+const siteStatsData = ref([])
 
-// Type for our fetched and processed data
-interface SiteDataPoint {
-  name: string
-  value: number
-}
-const chartData = ref<SiteDataPoint[]>([])
-
-// --- Helper Functions ---
-
-function formatBytes(bytes: number, decimals = 2): string {
-  if (bytes === 0) return '0 Bytes'
+// --- 工具函数 ---
+const formatBytes = (bytes, decimals = 2) => {
+  if (!+bytes) return '0 Bytes'
   const k = 1024
   const dm = decimals < 0 ? 0 : decimals
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
+  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB']
   const i = Math.floor(Math.log(bytes) / Math.log(k))
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`
 }
 
-// --- API Fetching ---
-
-async function fetchSiteStats() {
+// --- 数据获取逻辑 ---
+const fetchSiteStats = async () => {
   loading.value = true
   try {
-    const response = await fetch('http://192.168.1.100:15001/api/site_stats')
+    const response = await fetch('/api/site_stats')
     if (!response.ok) {
-      throw new Error(`Network response was not ok: ${response.statusText}`)
+      throw new Error(`网络响应错误，状态码: ${response.status}`)
     }
-    const apiResult = await response.json()
-
-    // Transform backend data {labels: [], datasets: [...]} into ECharts format [{name, value}, ...]
-    if (apiResult.labels && apiResult.datasets && apiResult.datasets[0]) {
-      chartData.value = apiResult.labels.map((label: string, index: number) => ({
-        name: label,
-        value: apiResult.datasets[0].data[index] || 0,
-      }))
+    const data = await response.json()
+    if (Array.isArray(data)) {
+      siteStatsData.value = data
+    } else {
+      console.error('API 返回的数据格式不正确，期望得到一个数组，但收到了:', data)
+      siteStatsData.value = []
     }
   } catch (error) {
-    console.error('Failed to fetch site statistics:', error)
-    chartData.value = [] // Clear data on error
+    console.error('获取站点统计数据失败:', error)
+    siteStatsData.value = []
   } finally {
     loading.value = false
   }
 }
 
-// --- ECharts Logic ---
-
-function initOrUpdateChart() {
-  if (chartRef.value && chartData.value.length > 0) {
-    if (!myChart) {
-      myChart = echarts.init(chartRef.value)
-    }
-
-    const option: EChartsOption = {
-      title: {
-        text: '各站点体积总和',
-        subtext: '数据来自所有种子',
-        left: 'center',
-      },
-      tooltip: {
-        trigger: 'item',
-        formatter: (params: any) => {
-          const data = params.data as SiteDataPoint
-          return `${data.name}<br/>${formatBytes(data.value)} (${params.percent}%)`
-        },
-      },
-      series: [
-        {
-          name: '站点体积',
-          type: 'pie',
-          radius: ['40%', '70%'],
-          center: ['50%', '50%'],
-          data: chartData.value,
-          emphasis: {
-            itemStyle: {
-              shadowBlur: 10,
-              shadowOffsetX: 0,
-              shadowColor: 'rgba(0, 0, 0, 0.5)',
-            },
-          },
-
-          // --- 核心修改部分：借鉴官方示例 ---
-
-          label: {
-            // 将标签的对齐方式设置为 'edge'，这样标签会紧贴引导线的末端
-            alignTo: 'edge',
-            // 使用 rich 文本格式化标签内容
-            formatter: (params: any) => {
-              const siteName = params.name
-              const formattedSize = formatBytes(params.value)
-              // {name|...} 和 {size|...} 对应下面 rich 对象中的样式
-              return `{name|${siteName}}\n{size|${formattedSize}}`
-            },
-            // 标签和引导线末端的最小间距
-            minMargin: 5,
-            // 标签离容器边缘的距离
-            edgeDistance: 10,
-            // 文本的行高
-            lineHeight: 15,
-            // 定义富文本样式
-            rich: {
-              name: {
-                // 站点名称的样式
-                fontSize: 14,
-                color: '#333', // 可以根据您的主题调整颜色
-              },
-              size: {
-                // 体积大小的样式
-                fontSize: 11,
-                color: '#999',
-              },
-            },
-          },
-          labelLine: {
-            // 第一段引导线的长度
-            length: 15,
-            // 第二段引导线的长度，设置为 0 使其成为一条直线
-            length2: 0,
-            // 平滑引导线的最大角度，防止过于尖锐的折角
-            maxSurfaceAngle: 80,
-          },
-          // 使用函数动态调整标签布局，实现“文字在线条上方”的效果
-          labelLayout: (params: any) => {
-            // 判断标签在图表的左侧还是右侧
-            const isLeft = params.labelRect.x < myChart!.getWidth() / 2
-            // 获取 ECharts 计算出的引导线路径点
-            const points = params.labelLinePoints
-            // 关键：更新引导线终点（第二段的结束点）的 x 坐标
-            // 如果在左侧，终点 x 就是标签矩形的左边界
-            // 如果在右侧，终点 x 就是标签矩形的右边界（x + width）
-            points[2][0] = isLeft ? params.labelRect.x : params.labelRect.x + params.labelRect.width
-
-            // 返回更新后的引导线路径，ECharts 会根据这个新路径来绘制
-            return {
-              labelLinePoints: points,
-            }
-          },
-        },
-      ],
-    }
-
-    myChart.setOption(option)
-  }
-}
-
-// Function to handle window resize
-function resizeChart() {
-  myChart?.resize()
-}
-
-// --- Lifecycle Hooks ---
-
+// --- Vue 生命周期钩子 ---
 onMounted(() => {
-  fetchSiteStats() // Fetch data when component mounts
-  window.addEventListener('resize', resizeChart)
-})
-
-onBeforeUnmount(() => {
-  // IMPORTANT: Clean up the chart instance and event listener to prevent memory leaks
-  window.removeEventListener('resize', resizeChart)
-  myChart?.dispose()
-})
-
-// Use watchEffect to reactively update the chart whenever the data or the ref changes.
-// This is the modern Vue 3 way to handle this.
-watchEffect(() => {
-  initOrUpdateChart()
+  fetchSiteStats()
 })
 </script>
 
 <style scoped>
+/* --- 关键布局样式 --- */
+
+/* 1. 主容器设置为 flex 布局，垂直排列，并撑满整个视口高度 */
 .sites-view-container {
-  padding: 20px;
-  max-width: 1200px;
-  margin: 20px auto;
+  display: flex;
+  flex-direction: column;
+  height: 100vh; /* 占满视口高度 */
+  padding: 25px;
+  box-sizing: border-box; /* 让 padding 不会撑大容器 */
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  overflow: hidden; /* 防止子元素溢出导致整个页面滚动 */
 }
 
-h2 {
-  text-align: center;
-  margin-bottom: 20px;
+/* 2. 标题样式，不拉伸 */
+.main-title {
+  font-size: 1.8em;
+  color: #333;
+  margin: 0 0 20px 0; /* 调整外边距 */
+  flex-shrink: 0; /* 防止容器缩小时标题被压缩 */
 }
 
-.chart-container {
-  /* IMPORTANT: ECharts needs a container with a defined height to render */
-  width: 1000px;
-  height: 70vh; /* Adjust height as needed */
-  min-height: 400px;
+/* 3. 布局包裹层，它将自动填充标题下方的所有剩余空间 */
+.layout-wrapper {
+  flex-grow: 1; /* 核心：占据所有可用的垂直空间 */
+  position: relative; /* 关键：为内部绝对定位的元素提供定位上下文 */
+  min-height: 0; /* flex 布局中的一个 hack，防止内容溢出 */
 }
 
-.message-box {
-  text-align: center;
-  font-size: 1.2em;
-  color: #888;
-  padding: 50px 0;
+/* 4. 将表格绝对定位在包裹层的左上角四分之一区域 */
+.top-left-table {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 50%;
+  height: 50%;
+}
+
+/* --- (可选) 为其他象限添加占位符样式，方便未来扩展 --- */
+
+.top-right-placeholder,
+.bottom-left-placeholder,
+.bottom-right-placeholder {
+  position: absolute;
+  border: 2px dashed #ccc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #aaa;
+  font-size: 1.5em;
+  box-sizing: border-box;
+}
+
+.top-right-placeholder {
+  top: 0;
+  left: 50%;
+  width: 50%;
+  height: 50%;
+}
+.bottom-left-placeholder {
+  top: 50%;
+  left: 0;
+  width: 50%;
+  height: 50%;
+}
+.bottom-right-placeholder {
+  top: 50%;
+  left: 50%;
+  width: 50%;
+  height: 50%;
 }
 </style>
