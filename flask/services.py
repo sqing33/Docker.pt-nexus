@@ -18,17 +18,15 @@ data_tracker_thread = None
 def load_site_maps_from_db(db_manager):
     """从数据库加载站点和发布组的映射关系。"""
     core_domain_map, link_rules, group_to_site_map_lower = {}, {}, {}
-    conn = None  # 在 try 块外部初始化 conn
+    conn = None  
     try:
         conn = db_manager._get_connection()
-        # --- 修正点：使用 db_manager._get_cursor 来创建游标 ---
         cursor = db_manager._get_cursor(conn)
 
         cursor.execute(
             "SELECT nickname, base_url, special_tracker_domain, `group` FROM sites"
         )
         for row in cursor.fetchall():
-            # sqlite3.Row 对象可以通过键名访问，就像字典一样
             nickname = row['nickname']
             base_url = row['base_url']
             special_tracker = row['special_tracker_domain']
@@ -65,7 +63,6 @@ def load_site_maps_from_db(db_manager):
     except Exception as e:
         logging.error(f"无法从数据库加载站点信息: {e}", exc_info=True)
     finally:
-        # 确保 conn 和 cursor 被关闭
         if conn:
             if 'cursor' in locals() and cursor:
                 cursor.close()
@@ -94,7 +91,6 @@ class DataTracker(Thread):
         self.recent_speeds_buffer = collections.deque(
             maxlen=self.TRAFFIC_BATCH_WRITE_SIZE)
         self.torrent_update_counter = 0
-        # 种子列表更新间隔硬编码为15分钟 (900秒)
         self.TORRENT_UPDATE_INTERVAL = 900
 
     def run(self):
@@ -300,16 +296,13 @@ class DataTracker(Thread):
             cursor = self.db_manager._get_cursor(conn)
             now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-            # 遍历配置中定义的所有客户端
             for client_name, cfg in config.items():
-                # 跳过非下载器配置或未启用的下载器
                 if client_name not in ['qbittorrent', 'transmission'
                                        ] or not cfg.get('enabled'):
                     continue
 
                 torrents_list = []
                 try:
-                    # --- qBittorrent 客户端逻辑 ---
                     if client_name == 'qbittorrent':
                         q = Client(**{
                             k: v
@@ -317,7 +310,6 @@ class DataTracker(Thread):
                         })
                         q.auth_log_in()
                         torrents_list = q.torrents_info(status_filter='all')
-                    # --- Transmission 客户端逻辑 ---
                     elif client_name == 'transmission':
                         tr = TrClient(**{
                             k: v
@@ -331,15 +323,12 @@ class DataTracker(Thread):
                         torrents_list = tr.get_torrents(arguments=fields)
                 except Exception as e:
                     logging.error(f"未能连接或从 {client_name} 获取数据: {e}")
-                    continue  # 如果一个客户端失败，继续处理下一个
+                    continue  
 
-                # 添加关键的诊断日志
                 logging.info(
                     f"从 {client_name} 成功获取到 {len(torrents_list)} 个种子。")
 
-                # 遍历从客户端获取的每一个种子
                 for t in torrents_list:
-                    # 将 qb 和 tr 的种子对象属性统一为字典格式
                     t_info = {
                         'name':
                         t.name,
@@ -371,7 +360,6 @@ class DataTracker(Thread):
 
                     all_current_hashes.add(t_info['hash'])
                     site_nickname = None
-                    # 根据 tracker URL 匹配站点
                     if t_info['trackers']:
                         for tracker_entry in t_info['trackers']:
                             hostname = _parse_hostname_from_url(
@@ -381,7 +369,6 @@ class DataTracker(Thread):
                                 site_nickname = core_domain_map[core_domain]
                                 break
 
-                    # 根据种子名称匹配官组
                     torrent_group = None
                     name_lower = t_info['name'].lower()
                     found_matches = [
@@ -390,12 +377,10 @@ class DataTracker(Thread):
                         if group_lower in name_lower
                     ]
                     if found_matches:
-                        # 选择最长的匹配项以避免误匹配 (例如 'MTeam' vs 'Team')
                         torrent_group = sorted(found_matches,
                                                key=len,
                                                reverse=True)[0]
 
-                    # 准备插入数据库的参数
                     params = (t_info['hash'], t_info['name'],
                               t_info['save_path'], t_info['size'],
                               round(t_info['progress'] * 100, 1),
@@ -404,7 +389,6 @@ class DataTracker(Thread):
                               torrent_group, t_info['uploaded'], now_str)
 
                     uploaded_col = 'qb_uploaded' if client_name == 'qbittorrent' else 'tr_uploaded'
-                    # 准备跨数据库兼容的 INSERT ... ON UPDATE 语句
                     if is_mysql:
                         sql = f'''INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, `group`, {uploaded_col}, last_seen) 
                                  VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) 
@@ -412,7 +396,7 @@ class DataTracker(Thread):
                                  progress=VALUES(progress), state=VALUES(state), sites=VALUES(sites), details=VALUES(details), 
                                  `group`=VALUES(`group`), {uploaded_col}=GREATEST(VALUES({uploaded_col}), torrents.{uploaded_col}), 
                                  last_seen=VALUES(last_seen)'''
-                    else:  # SQLite
+                    else: 
                         sql = f'''INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, `group`, {uploaded_col}, last_seen) 
                                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) 
                                  ON CONFLICT(hash) DO UPDATE SET name=excluded.name, save_path=excluded.save_path, 
@@ -421,18 +405,14 @@ class DataTracker(Thread):
                                  {uploaded_col}=max(excluded.{uploaded_col}, torrents.{uploaded_col}), last_seen=excluded.last_seen'''
                     cursor.execute(sql, params)
 
-            # --- 删除陈旧数据 ---
-            # 如果在所有客户端中至少找到了一个种子
             if all_current_hashes:
                 placeholders = ', '.join(['%s' if is_mysql else '?'] *
                                          len(all_current_hashes))
                 sql_delete = f"DELETE FROM torrents WHERE hash NOT IN ({placeholders})"
-                # 使用一个新的、非字典游标来执行删除，以获得更好的兼容性
                 non_dict_cursor = conn.cursor()
                 non_dict_cursor.execute(sql_delete, tuple(all_current_hashes))
                 logging.info(f"从数据库中移除了 {non_dict_cursor.rowcount} 个陈旧的种子。")
                 non_dict_cursor.close()
-            # 如果所有客户端都没有返回任何种子
             else:
                 non_dict_cursor = conn.cursor()
                 non_dict_cursor.execute("DELETE FROM torrents")

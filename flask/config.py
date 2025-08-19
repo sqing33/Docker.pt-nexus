@@ -6,19 +6,15 @@ import logging
 import sys
 from dotenv import load_dotenv
 
-# 从 .env 文件加载环境变量，主要用于本地开发
 load_dotenv()
 
-# SITES_DATA_FILE 仍然是必需的，用于初始化站点数据
 DATA_DIR = '.'
 SITES_DATA_FILE = os.path.join(DATA_DIR, 'sites_data.json')
-
 
 
 def load_config():
     """
     从环境变量动态构建配置字典。
-    不再读取 config.json 文件。
     """
     logging.debug("从环境变量加载配置。")
 
@@ -54,10 +50,7 @@ def load_config():
 def get_db_config():
     """
     根据环境变量 DB_TYPE 显式选择数据库。
-    - DB_TYPE=mysql: 必须提供所有 MYSQL_* 环境变量。
-    - DB_TYPE=sqlite (或未设置): 使用 SQLite。
     """
-    # 1. 读取数据库选择，默认为 'sqlite'，并转为小写
     db_choice = os.getenv('DB_TYPE', 'sqlite').lower()
 
     if db_choice == 'mysql':
@@ -70,15 +63,13 @@ def get_db_config():
             'port': os.getenv('MYSQL_PORT')
         }
 
-        # 2. 如果选择了 mysql，则所有 MYSQL_* 变量都必须存在
         if not all(mysql_config.values()):
             logging.error("关键错误: DB_TYPE 设置为 'mysql'，但一个或多个 MYSQL_* 环境变量缺失！")
             logging.error(
                 "请提供: MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE, MYSQL_PORT"
             )
-            sys.exit(1)  # 严重配置错误，退出程序
+            sys.exit(1)
 
-        # 3. 验证端口号
         try:
             mysql_config['port'] = int(mysql_config['port'])
         except (ValueError, TypeError):

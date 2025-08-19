@@ -26,7 +26,6 @@ def initialize_routes(manager):
     db_manager = manager
 
 
-# --- 路由辅助函数 ---
 def get_date_range_and_grouping(time_range_str, for_speed=False):
     now = datetime.now()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -78,7 +77,6 @@ def get_time_group_fn(db_type, format_str):
     return f"DATE_FORMAT(stat_datetime, '{format_str.replace('%M', '%i')}')" if db_type == 'mysql' else f"STRFTIME('{format_str}', stat_datetime)"
 
 
-# --- API 端点 ---
 @api_bp.route('/chart_data')
 def get_chart_data_api():
     time_range = request.args.get('range', 'this_week')
@@ -170,7 +168,6 @@ def get_recent_speed_data_api():
             rows = cursor.fetchall()
             for row in reversed(rows):
                 dt_obj = row['stat_datetime']
-                # 如果是 SQLite 的 TEXT 类型，则转换
                 if isinstance(dt_obj, str):
                     dt_obj = datetime.strptime(dt_obj, '%Y-%m-%d %H:%M:%S')
 
@@ -569,22 +566,15 @@ def get_group_stats_api():
         cursor = db_manager._get_cursor(conn)
         is_mysql = db_manager.db_type == 'mysql'
 
-        # --- 最终修正版本 ---
-
         if is_mysql:
             group_col_quoted = '`group`'
-            # MySQL 的 GROUP_CONCAT 功能完整，保持不变
             group_concat_expr = "GROUP_CONCAT(DISTINCT ut.`group` ORDER BY ut.`group` SEPARATOR ', ')"
             join_condition = "FIND_IN_SET(ut.`group`, s.`group`) > 0"
-        else:  # SQLite
+        else:  
             group_col_quoted = '"group"'
-            # --- 关键修正点 ---
-            # 为确保最大兼容性，SQLite 的 DISTINCT 聚合只使用一个参数。
-            # 这将使用默认的逗号(,)作为分隔符。
             group_concat_expr = 'GROUP_CONCAT(DISTINCT ut."group")'
             join_condition = "',' || s.\"group\" || ',' LIKE '%,' || ut.\"group\" || ',%'"
 
-        # 构建最终的查询语句
         query = f"""
             SELECT 
                 s.nickname AS site_name, 

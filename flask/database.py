@@ -50,7 +50,6 @@ class DatabaseManager:
         conn = self._get_connection()
         cursor = conn.cursor()
 
-        # --- Create table structures ---
         if self.db_type == 'mysql':
             cursor.execute(
                 '''CREATE TABLE IF NOT EXISTS traffic_stats (stat_datetime DATETIME PRIMARY KEY, qb_uploaded BIGINT DEFAULT 0, qb_downloaded BIGINT DEFAULT 0, tr_uploaded BIGINT DEFAULT 0, tr_downloaded BIGINT DEFAULT 0, qb_upload_speed BIGINT DEFAULT 0, qb_download_speed BIGINT DEFAULT 0, tr_upload_speed BIGINT DEFAULT 0, tr_download_speed BIGINT DEFAULT 0) ENGINE=InnoDB ROW_FORMAT=Dynamic'''
@@ -85,7 +84,7 @@ class DatabaseManager:
                     PRIMARY KEY (`id`)
                 ) ENGINE=InnoDB ROW_FORMAT=DYNAMIC
             ''')
-        else:  # SQLite
+        else:
             cursor.execute(
                 '''CREATE TABLE IF NOT EXISTS traffic_stats (stat_datetime TEXT PRIMARY KEY, qb_uploaded INTEGER DEFAULT 0, qb_downloaded INTEGER DEFAULT 0, tr_uploaded INTEGER DEFAULT 0, tr_downloaded INTEGER DEFAULT 0, qb_upload_speed INTEGER DEFAULT 0, qb_download_speed INTEGER DEFAULT 0, tr_upload_speed INTEGER DEFAULT 0, tr_download_speed INTEGER DEFAULT 0)'''
             )
@@ -121,11 +120,9 @@ class DatabaseManager:
 
         conn.commit()
 
-        # --- Seed sites table from JSON if it's empty ---
         try:
             cursor.execute("SELECT COUNT(*) FROM sites")
             result = cursor.fetchone()
-            # Handle different cursor return types
             count = result[0] if isinstance(result,
                                             tuple) else result['COUNT(*)']
 
@@ -166,7 +163,6 @@ class DatabaseManager:
                 exc_info=True)
             conn.rollback()
 
-        # --- Initialize downloader_state table ---
         for downloader in ['qbittorrent', 'transmission']:
             sql = 'INSERT IGNORE INTO downloader_state (name) VALUES (%s)' if self.db_type == 'mysql' else 'INSERT OR IGNORE INTO downloader_state (name) VALUES (?)'
             cursor.execute(sql, (downloader, ))
@@ -177,7 +173,6 @@ class DatabaseManager:
         logging.info("Database schemas verified.")
 
 
-# Keep the reconcile_historical_data function as it was in the original file
 def reconcile_historical_data(db_manager):
     """
     Corrected function:
@@ -191,7 +186,6 @@ def reconcile_historical_data(db_manager):
     is_mysql = db_manager.db_type == 'mysql'
     genesis_datetime = '1970-01-01 00:00:00'
 
-    # --- Step 1: One-time genesis record creation ---
     genesis_check_sql = "SELECT COUNT(*) FROM traffic_stats WHERE stat_datetime = %s" if is_mysql else "SELECT COUNT(*) FROM traffic_stats WHERE stat_datetime = ?"
     cursor.execute(genesis_check_sql, (genesis_datetime, ))
     result = cursor.fetchone()
@@ -256,7 +250,6 @@ def reconcile_historical_data(db_manager):
         conn.commit()
         logging.info("Genesis record creation finished.")
 
-    # --- Step 2: State synchronization executed on every startup ---
     logging.info(
         "Synchronizing downloader state with current client values...")
 
