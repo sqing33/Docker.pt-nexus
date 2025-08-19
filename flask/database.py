@@ -3,11 +3,14 @@
 import logging
 import sqlite3
 import mysql.connector
-from config import load_config
+import json
+import os
+
+from config import load_config, SITES_DATA_FILE
 from qbittorrentapi import Client
 from transmission_rpc import Client as TrClient
 
-DB_FILE = 'pt_stats.db'  # Used only if db_type were sqlite
+DB_FILE = 'pt_stats.db'
 
 
 class DatabaseManager:
@@ -43,15 +46,17 @@ class DatabaseManager:
         return '%s' if self.db_type == 'mysql' else '?'
 
     def init_db(self):
-        """Ensures all required database tables and initial data exist."""
+        """Ensures all required database tables exist and seeds the sites table if it's empty."""
         conn = self._get_connection()
         cursor = conn.cursor()
+
+        # --- Create table structures ---
         if self.db_type == 'mysql':
             cursor.execute(
-                '''CREATE TABLE IF NOT EXISTS traffic_stats (stat_datetime DATETIME PRIMARY KEY, qb_uploaded BIGINT DEFAULT 0, qb_downloaded BIGINT DEFAULT 0, tr_uploaded BIGINT DEFAULT 0, tr_downloaded BIGINT DEFAULT 0, qb_upload_speed BIGINT DEFAULT 0, qb_download_speed BIGINT DEFAULT 0, tr_upload_speed BIGINT DEFAULT 0, tr_download_speed BIGINT DEFAULT 0)'''
+                '''CREATE TABLE IF NOT EXISTS traffic_stats (stat_datetime DATETIME PRIMARY KEY, qb_uploaded BIGINT DEFAULT 0, qb_downloaded BIGINT DEFAULT 0, tr_uploaded BIGINT DEFAULT 0, tr_downloaded BIGINT DEFAULT 0, qb_upload_speed BIGINT DEFAULT 0, qb_download_speed BIGINT DEFAULT 0, tr_upload_speed BIGINT DEFAULT 0, tr_download_speed BIGINT DEFAULT 0) ENGINE=InnoDB ROW_FORMAT=Dynamic'''
             )
             cursor.execute(
-                '''CREATE TABLE IF NOT EXISTS downloader_state (name VARCHAR(255) PRIMARY KEY, last_session_dl BIGINT NOT NULL DEFAULT 0, last_session_ul BIGINT NOT NULL DEFAULT 0, last_cumulative_dl BIGINT NOT NULL DEFAULT 0, last_cumulative_ul BIGINT NOT NULL DEFAULT 0)'''
+                '''CREATE TABLE IF NOT EXISTS downloader_state (name VARCHAR(255) PRIMARY KEY, last_session_dl BIGINT NOT NULL DEFAULT 0, last_session_ul BIGINT NOT NULL DEFAULT 0, last_cumulative_dl BIGINT NOT NULL DEFAULT 0, last_cumulative_ul BIGINT NOT NULL DEFAULT 0) ENGINE=InnoDB ROW_FORMAT=Dynamic'''
             )
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS torrents (
@@ -62,19 +67,30 @@ class DatabaseManager:
                     progress FLOAT,
                     state VARCHAR(50),
                     sites VARCHAR(255),
-                    details TEXT,
                     `group` VARCHAR(255),
+                    details TEXT,
                     qb_uploaded BIGINT DEFAULT 0,
                     tr_uploaded BIGINT DEFAULT 0,
                     last_seen DATETIME NOT NULL
-                )
+                ) ENGINE=InnoDB ROW_FORMAT=Dynamic
+            ''')
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS `sites` (
+                    `id` mediumint NOT NULL AUTO_INCREMENT,
+                    `site` varchar(255) DEFAULT NULL,
+                    `nickname` varchar(255) DEFAULT NULL,
+                    `base_url` varchar(255) DEFAULT NULL,
+                    `special_tracker_domain` varchar(255) DEFAULT NULL,
+                    `group` varchar(255) DEFAULT NULL,
+                    PRIMARY KEY (`id`)
+                ) ENGINE=InnoDB ROW_FORMAT=DYNAMIC
             ''')
         else:  # SQLite
             cursor.execute(
                 '''CREATE TABLE IF NOT EXISTS traffic_stats (stat_datetime TEXT PRIMARY KEY, qb_uploaded INTEGER DEFAULT 0, qb_downloaded INTEGER DEFAULT 0, tr_uploaded INTEGER DEFAULT 0, tr_downloaded INTEGER DEFAULT 0, qb_upload_speed INTEGER DEFAULT 0, qb_download_speed INTEGER DEFAULT 0, tr_upload_speed INTEGER DEFAULT 0, tr_download_speed INTEGER DEFAULT 0)'''
             )
             cursor.execute(
-                '''CREATE TABLE IF NOT EXISTS downloader_state (name VARCHAR(255) PRIMARY KEY, last_session_dl BIGINT NOT NULL DEFAULT 0, last_session_ul BIGINT NOT NULL DEFAULT 0, last_cumulative_dl BIGINT NOT NULL DEFAULT 0, last_cumulative_ul BIGINT NOT NULL DEFAULT 0)'''
+                '''CREATE TABLE IF NOT EXISTS downloader_state (name TEXT PRIMARY KEY, last_session_dl INTEGER NOT NULL DEFAULT 0, last_session_ul INTEGER NOT NULL DEFAULT 0, last_cumulative_dl INTEGER NOT NULL DEFAULT 0, last_cumulative_ul INTEGER NOT NULL DEFAULT 0)'''
             )
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS torrents (
@@ -85,23 +101,83 @@ class DatabaseManager:
                     progress REAL,
                     state TEXT,
                     sites TEXT,
-                    details TEXT,
                     `group` TEXT,
+                    details TEXT,
                     qb_uploaded INTEGER DEFAULT 0,
                     tr_uploaded INTEGER DEFAULT 0,
                     last_seen TEXT NOT NULL
                 )
             ''')
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS sites (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    site TEXT,
+                    nickname TEXT,
+                    base_url TEXT,
+                    special_tracker_domain TEXT,
+                    `group` TEXT
+                )
+            ''')
 
+        conn.commit()
+
+        # --- Seed sites table from JSON if it's empty ---
+        try:
+            cursor.execute("SELECT COUNT(*) FROM sites")
+            result = cursor.fetchone()
+            # Handle different cursor return types
+            count = result[0] if isinstance(result,
+                                            tuple) else result['COUNT(*)']
+
+            if count == 0 and os.path.exists(SITES_DATA_FILE):
+                logging.info(
+                    "Sites table is empty. Seeding data from sites_data.json..."
+                )
+
+                with open(SITES_DATA_FILE, 'r', encoding='utf-8') as f:
+                    sites_data = json.load(f)
+
+                if not sites_data:
+                    logging.warning(
+                        "sites_data.json is empty. Skipping seeding.")
+                else:
+                    ph = self.get_placeholder()
+                    sql = f'''INSERT INTO sites (site, nickname, base_url, special_tracker_domain, `group`) 
+                              VALUES ({ph}, {ph}, {ph}, {ph}, {ph})'''
+
+                    params_to_insert = [
+                        (s.get('site'), s.get('nickname'), s.get('base_url'),
+                         s.get('special_tracker_domain'), s.get('group'))
+                        for s in sites_data
+                    ]
+
+                    cursor.executemany(sql, params_to_insert)
+                    conn.commit()
+                    logging.info(
+                        f"Successfully inserted {len(params_to_insert)} records into the sites table."
+                    )
+            elif count > 0:
+                logging.info(
+                    "Sites table already contains data. Skipping seeding.")
+
+        except Exception as e:
+            logging.error(
+                f"An error occurred while seeding the sites table: {e}",
+                exc_info=True)
+            conn.rollback()
+
+        # --- Initialize downloader_state table ---
         for downloader in ['qbittorrent', 'transmission']:
             sql = 'INSERT IGNORE INTO downloader_state (name) VALUES (%s)' if self.db_type == 'mysql' else 'INSERT OR IGNORE INTO downloader_state (name) VALUES (?)'
             cursor.execute(sql, (downloader, ))
         conn.commit()
+
         cursor.close()
         conn.close()
         logging.info("Database schemas verified.")
 
 
+# Keep the reconcile_historical_data function as it was in the original file
 def reconcile_historical_data(db_manager):
     """
     Corrected function:

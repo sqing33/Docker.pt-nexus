@@ -6,3 +6,4 @@ qbittorrent-api
 gunicorn
 transmission-rpc
 mysql-connector-python
+PyYAML

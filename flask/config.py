@@ -3,81 +3,96 @@
 import os
 import json
 import logging
+import sys
 from dotenv import load_dotenv
 
-# Load environment variables from a .env file
+# 从 .env 文件加载环境变量，主要用于本地开发
 load_dotenv()
 
+# SITES_DATA_FILE 仍然是必需的，用于初始化站点数据
 DATA_DIR = '.'
-CONFIG_FILE = os.path.join(DATA_DIR, 'config.json')
+SITES_DATA_FILE = os.path.join(DATA_DIR, 'sites_data.json')
 
-
-def save_config(config_data):
-    """Saves the configuration data to the config.json file."""
-    os.makedirs(DATA_DIR, exist_ok=True)
-    with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
-        json.dump(config_data, f, indent=4, ensure_ascii=False)
-
-
-def initialize_app_files():
-    """If the config file doesn't exist, create a default one."""
-    if not os.path.exists(CONFIG_FILE):
-        logging.warning(
-            f"Config file not found. Creating a default one at {CONFIG_FILE}")
-        save_config({
-            "qbittorrent": {
-                "enabled": False,
-                "host": "192.1168.1.100:8080",
-                "username": "",
-                "password": ""
-            },
-            "transmission": {
-                "enabled": False,
-                "host": "192.168.1.100",
-                "port": 9091,
-                "username": "",
-                "password": ""
-            },
-            "ui_settings": {
-                "active_path_filters": [],
-                "page_size": 50,
-                "torrent_update_interval_seconds": 3600
-            }
-        })
 
 
 def load_config():
-    """Loads the JSON configuration file."""
-    if not os.path.exists(CONFIG_FILE):
-        initialize_app_files()
+    """
+    从环境变量动态构建配置字典。
+    不再读取 config.json 文件。
+    """
+    logging.debug("从环境变量加载配置。")
+
+    # --- qBittorrent 配置 ---
+    qb_enabled = os.getenv('QB_ENABLED', 'false').lower() in ('true', '1', 't')
+    qb_config = {
+        "enabled": qb_enabled,
+        "host": os.getenv('QB_HOST', ''),
+        "username": os.getenv('QB_USERNAME', ''),
+        "password": os.getenv('QB_PASSWORD', '')
+    }
+
+    # --- Transmission 配置 ---
+    tr_enabled = os.getenv('TR_ENABLED', 'false').lower() in ('true', '1', 't')
+    tr_port = 9091
     try:
-        with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except (json.JSONDecodeError, FileNotFoundError) as e:
-        logging.error(
-            f"Failed to load or create config file due to {e}. Using default empty config."
-        )
-        return {"qbittorrent": {}, "transmission": {}, "ui_settings": {}}
+        tr_port = int(os.getenv('TR_PORT', '9091'))
+    except (ValueError, TypeError):
+        logging.warning(
+            f"无效的 TR_PORT 值 '{os.getenv('TR_PORT')}'。正在使用默认端口 9091。")
+
+    tr_config = {
+        "enabled": tr_enabled,
+        "host": os.getenv('TR_HOST', ''),
+        "port": tr_port,
+        "username": os.getenv('TR_USERNAME', ''),
+        "password": os.getenv('TR_PASSWORD', '')
+    }
+
+    return {"qbittorrent": qb_config, "transmission": tr_config}
 
 
 def get_db_config():
-    """Builds and returns the database configuration from environment variables."""
-    mysql_config = {
-        'host': os.getenv('MYSQL_HOST'),
-        'user': os.getenv('MYSQL_USER'),
-        'password': os.getenv('MYSQL_PASSWORD'),
-        'database': os.getenv('MYSQL_DATABASE'),
-        'port': int(os.getenv('MYSQL_PORT', 3306))
-    }
+    """
+    根据环境变量 DB_TYPE 显式选择数据库。
+    - DB_TYPE=mysql: 必须提供所有 MYSQL_* 环境变量。
+    - DB_TYPE=sqlite (或未设置): 使用 SQLite。
+    """
+    # 1. 读取数据库选择，默认为 'sqlite'，并转为小写
+    db_choice = os.getenv('DB_TYPE', 'sqlite').lower()
 
-    if not all([
-            mysql_config['host'], mysql_config['user'],
-            mysql_config['password'], mysql_config['database']
-    ]):
-        logging.error(
-            "Critical MySQL environment variables (HOST, USER, PASSWORD, DATABASE) are not set! Check your .env file or environment variables."
-        )
-        exit(1)
+    if db_choice == 'mysql':
+        logging.info("数据库类型选择为 MySQL。正在检查相关环境变量...")
+        mysql_config = {
+            'host': os.getenv('MYSQL_HOST'),
+            'user': os.getenv('MYSQL_USER'),
+            'password': os.getenv('MYSQL_PASSWORD'),
+            'database': os.getenv('MYSQL_DATABASE'),
+            'port': os.getenv('MYSQL_PORT')
+        }
 
-    # This application is configured to exclusively use MySQL.
-    return {'db_type': 'mysql', 'mysql': mysql_config}
+        # 2. 如果选择了 mysql，则所有 MYSQL_* 变量都必须存在
+        if not all(mysql_config.values()):
+            logging.error("关键错误: DB_TYPE 设置为 'mysql'，但一个或多个 MYSQL_* 环境变量缺失！")
+            logging.error(
+                "请提供: MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE, MYSQL_PORT"
+            )
+            sys.exit(1)  # 严重配置错误，退出程序
+
+        # 3. 验证端口号
+        try:
+            mysql_config['port'] = int(mysql_config['port'])
+        except (ValueError, TypeError):
+            logging.error(
+                f"关键错误: MYSQL_PORT ('{mysql_config['port']}') 不是一个有效的整数！")
+            sys.exit(1)
+
+        logging.info("MySQL 配置验证通过。")
+        return {'db_type': 'mysql', 'mysql': mysql_config}
+
+    elif db_choice == 'sqlite':
+        logging.info("数据库类型选择为 SQLite。")
+        return {'db_type': 'sqlite'}
+
+    else:
+        logging.warning(f"无效的 DB_TYPE 值: '{db_choice}'。将回退到使用 SQLite。")
+        return {'db_type': 'sqlite'}

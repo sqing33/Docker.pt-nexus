@@ -1,1 +1,3 @@
 .env
+pt_stats.db
+__pycache__/*
