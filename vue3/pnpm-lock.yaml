@@ -14,6 +14,9 @@ importers:
       element-plus:
         specifier: ^2.10.7
         version: 2.10.7(vue@3.5.18(typescript@5.8.3))
+      mitt:
+        specifier: ^3.0.1
+        version: 3.0.1
       vue:
         specifier: ^3.5.18
         version: 3.5.18(typescript@5.8.3)

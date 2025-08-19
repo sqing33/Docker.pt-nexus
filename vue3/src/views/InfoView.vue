@@ -138,7 +138,6 @@ import { LineChart, BarChart, type LineSeriesOption, type BarSeriesOption } from
 import { UniversalTransition } from 'echarts/features'
 import { SVGRenderer } from 'echarts/renderers'
 
-// ECharts 类型组合
 type ECOption = echarts.ComposeOption<
   | TitleComponentOption
   | TooltipComponentOption
@@ -150,7 +149,6 @@ type ECOption = echarts.ComposeOption<
   | BarSeriesOption
 >
 
-// 注册 ECharts 组件
 echarts.use([
   TitleComponent,
   TooltipComponent,
@@ -164,7 +162,6 @@ echarts.use([
   UniversalTransition,
 ])
 
-// --- 类型定义 ---
 interface SpeedData {
   qb_ul: number
   qb_dl: number
@@ -190,7 +187,6 @@ interface DownloaderStatus {
   tr: boolean
 }
 
-// --- 状态与引用 ---
 const speedChartRef = ref<HTMLElement | null>(null)
 const chartRef = ref<HTMLElement | null>(null)
 let speedChart: echarts.ECharts | null = null
@@ -212,12 +208,10 @@ const speedHistory = ref<SpeedHistoryPoint[]>([])
 const totalChartUpload = ref<string>('0 B')
 const totalChartDownload = ref<string>('0 B')
 
-// 定时器 ID
 let liveSpeedTimerId: number | null = null
 let realtimeChartTimerId: number | null = null
 let trafficChartTimerId: number | null = null
 
-// 格式化单位
 const formatBytesForSpeed = (b: number | null): string => {
   if (b == null || b < 0) return '0 B/s'
   const s = ['B/s', 'KB/s', 'MB/s', 'GB/s', 'TB/s']
@@ -234,7 +228,6 @@ const formatBytes = (b: number | null, unit: string = ''): string => {
   return `${(b / Math.pow(1024, i)).toFixed(2)} ${s[i]}`
 }
 
-// --- ECharts 逻辑 ---
 const initCharts = () => {
   if (speedChartRef.value && !speedChart) {
     speedChart = echarts.init(speedChartRef.value, 'light', { renderer: 'svg' })
@@ -265,7 +258,6 @@ const manageTimers = (start: boolean) => {
   }
 }
 
-// --- 速度图表逻辑 ---
 const fetchHistoricalSpeedChart = async () => {
   if (realtimeChartTimerId) clearInterval(realtimeChartTimerId)
   realtimeChartTimerId = null
@@ -381,8 +373,6 @@ const updateRealtimeSpeedChart = (isInitial = false) => {
   const option: ECOption = {
     tooltip: {
       trigger: 'axis',
-      // ★★★ 修正点 1：Tooltip Formatter 改回最简单的形式 ★★★
-      // 因为 series.name 将变回静态的 "qB上传" 等
       formatter: (params: any) => {
         let tooltipHtml = `${params[0].axisValue}<br/>`
         params.forEach((p) => {
@@ -391,12 +381,9 @@ const updateRealtimeSpeedChart = (isInitial = false) => {
         return tooltipHtml
       },
     },
-    // ★★★ 核心改动：使用 legend.formatter ★★★
     legend: {
-      // 1. data 使用静态、不变的名称
       data: ['qB上传', 'qB下载', 'Tr上传', 'Tr下载'],
       top: 0,
-      // 2. formatter 函数根据静态名称返回动态文本
       formatter: (name) => {
         if (name === 'qB上传') {
           return `qB上传: ${formatBytesForSpeed(currentSpeeds.value.qb_ul)}`
@@ -424,10 +411,9 @@ const updateRealtimeSpeedChart = (isInitial = false) => {
     animationEasingUpdate: 'cubicInOut',
     xAxis: { data: speedHistory.value.map((p) => p.time) },
     yAxis: { type: 'value', axisLabel: { formatter: (v: number) => formatBytesForSpeed(v) } },
-    // ★★★ 修正点 2：series 的 name 也必须改回静态名称 ★★★
     series: [
       {
-        name: 'qB上传', // 使用静态名称
+        name: 'qB上传',
         type: 'line',
         smooth: true,
         symbol: 'none',
@@ -435,7 +421,7 @@ const updateRealtimeSpeedChart = (isInitial = false) => {
         itemStyle: { color: '#67C23A' },
       },
       {
-        name: 'qB下载', // 使用静态名称
+        name: 'qB下载',
         type: 'line',
         smooth: true,
         symbol: 'none',
@@ -443,7 +429,7 @@ const updateRealtimeSpeedChart = (isInitial = false) => {
         itemStyle: { color: '#409EFF' },
       },
       {
-        name: 'Tr上传', // 使用静态名称
+        name: 'Tr上传',
         type: 'line',
         smooth: true,
         symbol: 'none',
@@ -451,7 +437,7 @@ const updateRealtimeSpeedChart = (isInitial = false) => {
         itemStyle: { color: '#F56C6C' },
       },
       {
-        name: 'Tr下载', // 使用静态名称
+        name: 'Tr下载',
         type: 'line',
         smooth: true,
         symbol: 'none',
@@ -466,8 +452,6 @@ const updateRealtimeSpeedChart = (isInitial = false) => {
     speedChart?.setOption(option, true)
     toggleSpeedDisplayMode(true)
   } else {
-    // ★★★ 修正点 3：改回默认的 setOption 调用方式 ★★★
-    // ECharts 会智能地只更新变化的部分（数据和图例文本），并保持 tooltip 状态
     speedChart?.setOption(option)
   }
 
@@ -496,7 +480,6 @@ const updateLiveSpeedDisplay = async () => {
   }
 }
 
-// --- 数据量图表逻辑 ---
 const fetchTrafficChartData = async (isAutoRefresh = false) => {
   if (!isAutoRefresh) chartLoading.value = true
   try {
@@ -513,7 +496,6 @@ const fetchTrafficChartData = async (isAutoRefresh = false) => {
       result.datasets.reduce((acc, cur) => acc + cur.qb_dl + cur.tr_dl, 0),
     )
 
-    // 1. 预先计算好每个堆叠的总量数据 (此步骤保持不变)
     const uploadTotals = result.datasets.map((d) => d.qb_ul + d.tr_ul)
     const downloadTotals = result.datasets.map((d) => d.qb_dl + d.tr_dl)
 
@@ -547,7 +529,6 @@ const fetchTrafficChartData = async (isAutoRefresh = false) => {
       xAxis: { type: 'category', data: result.labels },
       yAxis: { type: 'value', axisLabel: { formatter: (v: number) => formatBytes(v) } },
       series: [
-        // --- 可见的数据系列 (保持不变) ---
         {
           name: 'qB上传',
           type: 'bar',
@@ -581,7 +562,6 @@ const fetchTrafficChartData = async (isAutoRefresh = false) => {
           itemStyle: { color: '#E6A23C' },
         },
 
-        // --- 修正后的辅助系列 ---
         {
           name: '上传总和',
           type: 'bar',
@@ -589,7 +569,6 @@ const fetchTrafficChartData = async (isAutoRefresh = false) => {
           label: {
             show: true,
             position: 'top',
-            // 关键改动： formatter 利用 dataIndex 从外部数组获取真正的总和
             formatter: (params: any) => {
               const total = uploadTotals[params.dataIndex]
               return total > 0 ? formatBytes(total) : ''
@@ -598,7 +577,6 @@ const fetchTrafficChartData = async (isAutoRefresh = false) => {
             fontSize: 12,
             fontWeight: 'bold',
           },
-          // 关键改动：数据应为 0，这样它才不会占用堆叠的高度
           data: result.labels.map(() => 0),
           itemStyle: { color: 'transparent' },
           tooltip: { show: false },
@@ -637,7 +615,6 @@ const fetchTrafficChartData = async (isAutoRefresh = false) => {
   }
 }
 
-// --- UI 事件处理 ---
 const setSpeedTimeRange = (range: string) => (activeSpeedTimeRange.value = range)
 const setTimeRange = (range: string) => (activeTimeRange.value = range)
 
@@ -691,7 +668,6 @@ const trafficDisplayModeButtonText = computed(() =>
       : '仅下载',
 )
 
-// --- 生命周期 ---
 onMounted(() => {
   const resizeHandler = () => {
     speedChart?.resize()
