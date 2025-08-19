@@ -1,127 +1,97 @@
-# <img width="50" height="50" alt="image" src="https://github.com/user-attachments/assets/8edcccf8-a4ca-4fcb-8224-8d25f15642eb" /> PT Nexus
+# <img width="55" height="50" alt="image" src="https://minio.916337.xyz/icons/icons/8cfd5342-2085-4bba-9b9a-dc163f4676ff_b13c7358-4d9a-4990-a423-c1983c5491f3-favicon.ico" /> PT Nexus
 
 ## 一、项目概述
 
-PT Torrent Hub 是专为 PT 用户设计的多功能聚合管理平台，旨在统一整合和分析来自 **qBittorrent** 与 **Transmission** 两大下载器的种子数据与流量信息，打造一站式 PT 管理中心。
+**PT Nexus** 是一款 PT 种子聚合查看平台，分析来自 **qBittorrent** 与 **Transmission** 下载器的种子数据与流量信息。
 
-### 1. 下载器流量分析
+## 二、功能特性
 
-- **流量统计**：后台自动以分钟为单位，精确记录每个下载器的上传 / 下载增量。
-- **图表分析**：通过 ECharts 可视化图表展示流量变化，支持查看`近 1/6/12 小时、今日、本周、本月、半年`的上传下载数据。
-- **历史流量**：通过环境变量自定义 qBittorrent 历史总流量；Transmission 历史数据自动从客户端获取并校准。
+### 1. 流量统计与分析
+
+- **实时与历史速度监控**：记录下载器的实时上/下行速度，并支持查看历史速度曲线图。
+- **多维度流量图表**：通过图表展示多种时间范围的流量数据变化。
 
 ### 2. 聚合种子管理
 
-- **跨下载器种子聚合**：将 qBittorrent 与 Transmission 中的所有 PT 种子整合到统一列表，实现一站式查看与管理。
-- **站点存在性查询**：配合 MoviePilot 的插件`下载器助手`工具为种子打上站点标签后，可查看每个种子已铺种的站点。
-- **一键跳转详情页**：自动提取种子注释中的详情页 ID 或链接，结合自定义规则生成种子详情对应链接。
+- **跨客户端种子聚合**：将来自 qBittorrent 和 Transmission 的所有种子聚合到统一视图中，方便查看每个种子在已有站点的做种信息，进行统一的筛选、排序和查询。
+- **详情页一键跳转**：自动提取种子注释中的 URL 或 ID，并结合预设的站点规则，生成可直接点击的种子详情页链接。
 
-## 二、Docker 部署
+### 3. 站点与发布组统计
+
+- **站点做种统计**：自动统计每个 PT 站点的做种数量和总体积。
+- **发布组做种统计**：根据种子名称自动识别所属的发布组（官组或压制组），并对各组的做种数量和体积进行统计。
+
+### 4. 现代化技术栈
+
+- **数据库支持**：支持 **SQLite**（默认，零配置）和 **MySQL** 两种数据库后端。
+- **全功能 API**：前后端分离架构，所有数据均通过 API 交互，方便二次开发或集成。
+- **容器化部署**：提供开箱即用的 Docker Compose 配置，实现简单快速的部署与管理。
+
+## 三、Docker 部署
 
 ### 环境变量
 
-|     参数      |                            说明                            |        示例        |
-| :-----------: | :--------------------------------------------------------: | :----------------: |
-|      TZ       |                 设置容器时区，确保时间同步                 |   Asia/Shanghai    |
-| QB_HIST_DL_GB | qBittorrent 历史总下载量（GB），用于首次启动时校准累计数据 |        800         |
-| QB_HIST_UL_GB | qBittorrent 历史总上传量（GB），用于首次启动时校准累计数据 |        150         |
-|    QB_HOST    |               qBittorrent 主机地址（含端口）               | 192.168.1.100:8080 |
-|  QB_USERNAME  |                   qBittorrent 登录用户名                   |      username      |
-|  QB_PASSWORD  |                    qBittorrent 登录密码                    |      password      |
-|    TR_HOST    |                   Transmission 主机地址                    |   192.168.1.100    |
-|    TR_PORT    |                     Transmission 端口                      |        9091        |
-|  TR_USERNAME  |                  Transmission 登录用户名                   |      username      |
-|  TR_PASSWORD  |                   Transmission 登录密码                    |      password      |
+新版本完全通过环境变量进行配置，无需手动修改配置文件。
 
-**注**：若不使用某一下载器，可将对应 QB_HOST 或 TR_HOST 留空，或在 `config.json `中设置 enabled 为 false。
-
-### Docker Run 示例
-
-```bash
-docker run -d \
-  --name pt-torrent-hub \
-  -p 5272:5000 \
-  -e TZ=Asia/Shanghai \
-  -e QB_HIST_DL_GB=800 \
-  -e QB_HIST_UL_GB=150 \
-  -e QB_HOST=192.168.1.100:8080 \
-  -e QB_USERNAME=username \
-  -e QB_PASSWORD=password \
-  -e TR_HOST=192.168.1.100 \
-  -e TR_PORT=9091 \
-  -e TR_USERNAME=username \
-  -e TR_PASSWORD=password \
-  -v $(pwd)/config:/data \
-  --restart always \
-  sqing33/pt-torrent-hub
-```
+| 分类             | 参数             | 说明                                                          | 示例                        |
+| :--------------- | :--------------- | :------------------------------------------------------------ | :-------------------------- |
+| **通用**         | `TZ`             | 设置容器时区，确保时间与日志准确。                            | `Asia/Shanghai`             |
+| **数据库**       | `DB_TYPE`        | 选择数据库类型。`sqlite` (默认) 或 `mysql`。                  | `mysql`                     |
+|                  | `MYSQL_HOST`     | **(MySQL 专用)** 数据库主机地址。                             | `192.168.1.100`             |
+|                  | `MYSQL_PORT`     | **(MySQL 专用)** 数据库端口。                                 | `3306`                      |
+|                  | `MYSQL_DATABASE` | **(MySQL 专用)** 数据库名称。                                 | `pt_nexus`                  |
+|                  | `MYSQL_USER`     | **(MySQL 专用)** 数据库用户名。                               | `root`                      |
+|                  | `MYSQL_PASSWORD` | **(MySQL 专用)** 数据库密码。                                 | `your_password`             |
+| **qBittorrent**  | `QB_ENABLED`     | 是否启用 qBittorrent。`true` 或 `false`。                     | `true`                      |
+|                  | `QB_HOST`        | qBittorrent 的 WebUI 地址，必须包含 `http://` 或 `https://`。 | `http://192.168.1.100:8080` |
+|                  | `QB_USERNAME`    | qBittorrent 登录用户名。                                      | `admin`                     |
+|                  | `QB_PASSWORD`    | qBittorrent 登录密码。                                        | `adminadmin`                |
+| **Transmission** | `TR_ENABLED`     | 是否启用 Transmission。`true` 或 `false`。                    | `true`                      |
+|                  | `TR_HOST`        | Transmission 主机地址。                                       | `192.168.1.100`             |
+|                  | `TR_PORT`        | Transmission RPC 端口。                                       | `9091`                      |
+|                  | `TR_USERNAME`    | Transmission 登录用户名。                                     | `transmission`              |
+|                  | `TR_PASSWORD`    | Transmission 登录密码。                                       | `your_password`             |
 
 ### Docker Compose 示例
 
-```yaml
-services:
-  pt-torrent-hub:
-    image: sqing33/pt-torrent-hub
-    container_name: pt-torrent-hub
-    ports:
-      - "5272:5000"
-    environment:
-      - TZ=Asia/Shanghai
-      - QB_HIST_DL_GB=800 # qBittorrent 历史总下载量（GB）
-      - QB_HIST_UL_GB=150 # qBittorrent 历史总上传量（GB）
-      - QB_HOST=192.168.1.100:8080
-      - QB_USERNAME=username
-      - QB_PASSWORD=password
-      - TR_HOST=192.168.1.100
-      - TR_PORT=9091
-      - TR_USERNAME=username
-      - TR_PASSWORD=password
-    volumes:
-      - ./config:/data # 持久化配置文件与数据库至当前目录的 config 文件夹
-    restart: always
-```
+建议使用 Docker Compose 进行部署，这是最简单且最可靠的方式。
 
-## 三、配置文件说明
+1.  创建一个 `docker-compose.yml` 文件：
 
-### 1. 配置文件位置
+    ```yaml
+    services:
+      pt-nexus:
+        image: ghcr.io/sqing33/pt-nexus # sqing33/pt-nexus
+        container_name: pt-nexus
+        ports:
+          - "5272:5272"
+        volumes:
+          - ./data:/app/data
+        environment:
+          - TZ=Asia/Shanghai
+          # --- 数据库配置 (使用 MySQL) ---
+          - DB_TYPE=mysql
+          - MYSQL_HOST=192.168.1.100
+          - MYSQL_PORT=3306
+          - MYSQL_DATABASE=pt_nexus
+          - MYSQL_USER=root
+          - MYSQL_PASSWORD=
+          # --- qBittorrent 配置 ---
+          - QB_ENABLED=true
+          - QB_HOST=http://192.168.1.100:8080
+          - QB_USERNAME=
+          - QB_PASSWORD=
+          # --- Transmission 配置 ---
+          - TR_ENABLED=true
+          - TR_HOST=192.168.1.100
+          - TR_PORT=9091
+          - TR_USERNAME=
+          - TR_PASSWORD=
+        restart: always
+    ```
 
-配置文件为 `config.json`，位于挂载的 `/data` 目录下。首次启动时若文件不存在，程序会根据环境变量自动生成。
-
-### 2. 配置项说明
-
-```json
-{
-  "qbittorrent": {
-    "enabled": true,
-    "host": "192.168.1.100:8080",
-    "username": "username",
-    "password": "password"
-  },
-  "transmission": {
-    "enabled": true,
-    "host": "192.168.1.100",
-    "port": 9091,
-    "username": "username",
-    "password": "password"
-  },
-  "site_link_rules": {
-    "一站": {
-      "base_url": "https://a.com/detail/"
-    }
-  },
-  "site_alias_mapping": {
-    "a": "一站"
-  },
-  "ui_settings": {
-    "active_path_filters": [],
-    "active_downloader_filters": []
-  }
-}
-```
-
-- **qbittorrent / transmission**：
-  - `enabled`：手动设置 `true`/`false` 启用 / 禁用对应下载器，优先级高于环境变量。
-  - 其他字段为下载器的连接信息（主机、端口、用户名密码等）。
-- **site_link_rules**：当种子注释中仅包含种子 ID 时，用于拼接生成完整的站点详情页 URL（如 `base_url + 种子ID`）。
-- **site_alias_mapping**：用于合并同一站点的不同标签名称（例如将 “site-a”“站点 A” 统一映射为 “一站”）。
-- **ui_settings**：自动保存前端 “种子查询” 页面的筛选条件，无需手动修改。
+2.  在与 `docker-compose.yml` 相同的目录下，运行以下命令启动服务：
+    ```bash
+    docker-compose up -d
+    ```
+3.  服务启动后，通过 `http://<你的服务器IP>:5272` 访问 PT Nexus 界面。
