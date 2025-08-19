@@ -19,7 +19,7 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
 
-COPY --from=builder /app/vue3/dist ./flask/dist
+COPY --from=builder /app/vue3/dist ./dist
 
 COPY ./flask/requirements.txt .
 
@@ -29,4 +29,4 @@ COPY ./flask .
 
 EXPOSE 5272
 
-CMD ["gunicorn", "--workers", "4", "--bind", "0.0.0.0:5272", "app:create_app()"]
+CMD ["python", "app.py"]

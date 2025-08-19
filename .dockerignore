@@ -1,0 +1,32 @@
+# Git
+.git
+.gitignore
+
+# Docker
+Dockerfile
+.dockerignore
+
+# IDE and OS files
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+
+# Python cache and venv
+**/__pycache__
+**/*.pyc
+.venv/
+venv/
+
+# Node modules
+vue3/node_modules
+vue3/dist
+
+# Backend specific
+flask/.env
+flask/pt_stats.db
+flask/pt_stats.db-journal
+
+# Logs
+*.log

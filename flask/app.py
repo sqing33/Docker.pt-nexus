@@ -4,7 +4,7 @@ import logging
 from flask import Flask
 from flask_cors import CORS
 
-from config import  get_db_config
+from config import get_db_config
 from database import DatabaseManager, reconcile_historical_data
 from services import start_data_tracker
 from routes import api_bp, initialize_routes
@@ -21,7 +21,6 @@ def create_app():
 
     # Enable CORS for all API routes
     CORS(app, resources={r"/api/*": {"origins": "*"}})
-
 
     # 1. Configure and initialize the database
     db_config = get_db_config()
