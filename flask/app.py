@@ -4,7 +4,7 @@ import logging
 from flask import Flask
 from flask_cors import CORS
 
-from config import initialize_app_files, get_db_config
+from config import  get_db_config
 from database import DatabaseManager, reconcile_historical_data
 from services import start_data_tracker
 from routes import api_bp, initialize_routes
@@ -22,8 +22,6 @@ def create_app():
     # Enable CORS for all API routes
     CORS(app, resources={r"/api/*": {"origins": "*"}})
 
-    # --- Application Initialization ---
-    initialize_app_files()
 
     # 1. Configure and initialize the database
     db_config = get_db_config()
@@ -47,4 +45,4 @@ if __name__ == '__main__':
     logging.info("Starting Flask development server as a pure API backend...")
 
     # use_reloader=False prevents the app from initializing twice in debug mode
-    flask_app.run(host='0.0.0.0', port=15003, debug=True, use_reloader=False)
+    flask_app.run(host='0.0.0.0', port=5272, debug=True, use_reloader=False)

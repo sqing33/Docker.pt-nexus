@@ -1,33 +1,32 @@
 # routes.py
 
 import json
+import logging
 from flask import Blueprint, jsonify, request
 from threading import Thread
 from datetime import datetime, timedelta
 from collections import defaultdict
 from functools import cmp_to_key
 
-from config import load_config, save_config
-# --- CHANGE 1: Import the 'services' module itself ---
+from config import load_config
 import services
 from services import CACHE_LOCK, load_site_maps_from_db
-# -----------------------------------------------------
 from utils import custom_sort_compare, format_bytes
 from qbittorrentapi import Client
 from transmission_rpc import Client as TrClient
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 
-db_manager = None  # This will be injected from run.py
+db_manager = None
 
 
 def initialize_routes(manager):
-    """Injects the DatabaseManager instance for use by the routes."""
+    """注入 DatabaseManager 实例以供路由使用。"""
     global db_manager
     db_manager = manager
 
 
-# --- Route Helper Functions ---
+# --- 路由辅助函数 ---
 def get_date_range_and_grouping(time_range_str, for_speed=False):
     now = datetime.now()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -79,24 +78,25 @@ def get_time_group_fn(db_type, format_str):
     return f"DATE_FORMAT(stat_datetime, '{format_str.replace('%M', '%i')}')" if db_type == 'mysql' else f"STRFTIME('{format_str}', stat_datetime)"
 
 
-# --- API Endpoints ---
+# --- API 端点 ---
 @api_bp.route('/chart_data')
 def get_chart_data_api():
     time_range = request.args.get('range', 'this_week')
     start_dt, end_dt, group_by_format = get_date_range_and_grouping(time_range)
     time_group_fn = get_time_group_fn(db_manager.db_type, group_by_format)
     ph = db_manager.get_placeholder()
-    is_mysql = db_manager.db_type == 'mysql'
     query = f"SELECT {time_group_fn} AS time_group, SUM(qb_uploaded) AS qb_ul, SUM(qb_downloaded) AS qb_dl, SUM(tr_uploaded) AS tr_ul, SUM(tr_downloaded) AS tr_dl FROM traffic_stats WHERE stat_datetime >= {ph}"
     params = [start_dt.strftime('%Y-%m-%d %H:%M:%S')]
     if end_dt:
         query += f" AND stat_datetime < {ph}"
         params.append(end_dt.strftime('%Y-%m-%d %H:%M:%S'))
     query += " GROUP BY time_group ORDER BY time_group"
+
     conn = None
+    cursor = None
     try:
         conn = db_manager._get_connection()
-        cursor = conn.cursor(dictionary=is_mysql)
+        cursor = db_manager._get_cursor(conn)
         cursor.execute(query, tuple(params))
         rows = cursor.fetchall()
         labels = [r['time_group'] for r in rows]
@@ -109,20 +109,17 @@ def get_chart_data_api():
         } for r in rows]
         return jsonify({"labels": labels, "datasets": datasets})
     except Exception as e:
-        logging.error(f"Error in get_chart_data_api: {e}", exc_info=True)
-        return jsonify({"error": "Failed to fetch chart data"}), 500
+        logging.error(f"get_chart_data_api 出错: {e}", exc_info=True)
+        return jsonify({"error": "获取图表数据失败"}), 500
     finally:
-        if conn:
-            cursor.close()
-            conn.close()
+        if cursor: cursor.close()
+        if conn: conn.close()
 
 
 @api_bp.route('/speed_data')
 def get_speed_data_api():
     with CACHE_LOCK:
-        # --- CHANGE 2: Access the variable through the module ---
         speeds = services.data_tracker_thread.latest_speeds
-        # --------------------------------------------------------
     cfg = load_config()
     return jsonify({
         'qbittorrent': {
@@ -143,12 +140,10 @@ def get_recent_speed_data_api():
     try:
         seconds_to_fetch = int(request.args.get('seconds', '60'))
     except ValueError:
-        return jsonify({"error": "Invalid seconds parameter"}), 400
+        return jsonify({"error": "无效的秒数参数"}), 400
 
     with CACHE_LOCK:
-        # --- CHANGE 3: Access the variable through the module ---
         buffer_data = list(services.data_tracker_thread.recent_speeds_buffer)
-        # --------------------------------------------------------
 
     results = [{
         "time": r['timestamp'].strftime('%H:%M:%S'),
@@ -162,10 +157,10 @@ def get_recent_speed_data_api():
     db_data = []
     if seconds_missing > 0:
         conn = None
+        cursor = None
         try:
             end_dt = buffer_data[0][
                 'timestamp'] if buffer_data else datetime.now()
-            is_mysql = db_manager.db_type == 'mysql'
             ph = db_manager.get_placeholder()
             conn = db_manager._get_connection()
             cursor = db_manager._get_cursor(conn)
@@ -174,9 +169,11 @@ def get_recent_speed_data_api():
             cursor.execute(query, tuple(params))
             rows = cursor.fetchall()
             for row in reversed(rows):
-                dt_obj = row[
-                    'stat_datetime'] if is_mysql else datetime.strptime(
-                        row['stat_datetime'], '%Y-%m-%d %H:%M:%S')
+                dt_obj = row['stat_datetime']
+                # 如果是 SQLite 的 TEXT 类型，则转换
+                if isinstance(dt_obj, str):
+                    dt_obj = datetime.strptime(dt_obj, '%Y-%m-%d %H:%M:%S')
+
                 db_data.append({
                     "time": dt_obj.strftime('%H:%M:%S'),
                     "qb_ul_speed": row['qb_upload_speed'] or 0,
@@ -185,13 +182,10 @@ def get_recent_speed_data_api():
                     "tr_dl_speed": row['tr_download_speed'] or 0
                 })
         except Exception as e:
-            logging.error(
-                f"Failed to fetch historical speed data for pre-fill: {e}",
-                exc_info=True)
+            logging.error(f"获取历史速度数据失败: {e}", exc_info=True)
         finally:
-            if conn:
-                cursor.close()
-                conn.close()
+            if cursor: cursor.close()
+            if conn: conn.close()
 
     final_results = db_data + results
     if (pad_count := seconds_to_fetch - len(final_results)) > 0:
@@ -215,7 +209,6 @@ def get_recent_speed_data_api():
     tr_enabled = cfg.get('transmission', {}).get('enabled', False)
     for r in final_results:
         r['qb_enabled'], r['tr_enabled'] = qb_enabled, tr_enabled
-
     return jsonify(final_results[-seconds_to_fetch:])
 
 
@@ -223,11 +216,11 @@ def get_recent_speed_data_api():
 def get_speed_chart_data_api():
     time_range = request.args.get('range', 'last_12_hours')
     conn = None
+    cursor = None
     try:
-        is_mysql = db_manager.db_type == 'mysql'
         ph = db_manager.get_placeholder()
         conn = db_manager._get_connection()
-        cursor = conn.cursor(dictionary=is_mysql)
+        cursor = db_manager._get_cursor(conn)
         start_dt, end_dt, group_by_format = get_date_range_and_grouping(
             time_range, for_speed=True)
         time_group_fn = get_time_group_fn(db_manager.db_type, group_by_format)
@@ -249,12 +242,11 @@ def get_speed_chart_data_api():
         } for r in rows]
         return jsonify({"labels": labels, "datasets": datasets})
     except Exception as e:
-        logging.error(f"Error in get_speed_chart_data_api: {e}", exc_info=True)
-        return jsonify({"error": "Failed to fetch speed chart data"}), 500
+        logging.error(f"get_speed_chart_data_api 出错: {e}", exc_info=True)
+        return jsonify({"error": "获取速度图表数据失败"}), 500
     finally:
-        if conn:
-            cursor.close()
-            conn.close()
+        if cursor: cursor.close()
+        if conn: conn.close()
 
 
 @api_bp.route('/downloader_info')
@@ -272,29 +264,36 @@ def get_downloader_info_api():
             'details': {}
         }
     }
-    conn = db_manager._get_connection()
-    is_mysql = db_manager.db_type == 'mysql'
-    cursor = conn.cursor(dictionary=is_mysql)
-    cursor.execute(
-        'SELECT SUM(qb_downloaded) as qb_dl, SUM(qb_uploaded) as qb_ul, SUM(tr_downloaded) as tr_dl, SUM(tr_uploaded) as tr_ul FROM traffic_stats'
-    )
-    totals = cursor.fetchone() or {
-        'qb_dl': 0,
-        'qb_ul': 0,
-        'tr_dl': 0,
-        'tr_ul': 0
-    }
-    today_query = f"SELECT SUM(qb_downloaded) as qb_dl, SUM(qb_uploaded) as qb_ul, SUM(tr_downloaded) as tr_dl, SUM(tr_uploaded) as tr_ul FROM traffic_stats WHERE stat_datetime >= {db_manager.get_placeholder()}"
-    cursor.execute(today_query,
-                   (datetime.now().strftime('%Y-%m-%d 00:00:00'), ))
-    today_stats = cursor.fetchone() or {
-        'qb_dl': 0,
-        'qb_ul': 0,
-        'tr_dl': 0,
-        'tr_ul': 0
-    }
-    cursor.close()
-    conn.close()
+
+    conn = None
+    cursor = None
+    try:
+        conn = db_manager._get_connection()
+        cursor = db_manager._get_cursor(conn)
+        cursor.execute(
+            'SELECT SUM(qb_downloaded) as qb_dl, SUM(qb_uploaded) as qb_ul, SUM(tr_downloaded) as tr_dl, SUM(tr_uploaded) as tr_ul FROM traffic_stats'
+        )
+        totals = cursor.fetchone() or {
+            'qb_dl': 0,
+            'qb_ul': 0,
+            'tr_dl': 0,
+            'tr_ul': 0
+        }
+        today_query = f"SELECT SUM(qb_downloaded) as qb_dl, SUM(qb_uploaded) as qb_ul, SUM(tr_downloaded) as tr_dl, SUM(tr_uploaded) as tr_ul FROM traffic_stats WHERE stat_datetime >= {db_manager.get_placeholder()}"
+        cursor.execute(today_query,
+                       (datetime.now().strftime('%Y-%m-%d 00:00:00'), ))
+        today_stats = cursor.fetchone() or {
+            'qb_dl': 0,
+            'qb_ul': 0,
+            'tr_dl': 0,
+            'tr_ul': 0
+        }
+    except Exception as e:
+        logging.error(f"获取下载器统计信息时数据库出错: {e}", exc_info=True)
+        totals, today_stats = {}, {}
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
 
     if info['qbittorrent']['enabled']:
         details = {
@@ -315,6 +314,7 @@ def get_downloader_info_api():
             info['qbittorrent']['status'] = '连接失败'
             details['错误信息'] = str(e)
         info['qbittorrent']['details'] = details
+
     if info['transmission']['enabled']:
         details = {
             '今日下载量': format_bytes(today_stats.get('tr_dl')),
@@ -333,30 +333,24 @@ def get_downloader_info_api():
             info['transmission']['status'] = '连接失败'
             details['错误信息'] = str(e)
         info['transmission']['details'] = details
+
     return jsonify(info)
 
 
 @api_bp.route('/data')
 def get_data_api():
-    cfg_local = load_config()
-    ui_settings = cfg_local.setdefault('ui_settings', {})
     try:
         page = int(request.args.get('page', 1))
         page_size_req = request.args.get('pageSize')
     except (TypeError, ValueError):
         page, page_size_req = 1, None
 
-    page_size_config = ui_settings.get('page_size', 50)
+    page_size = 50
     if page_size_req:
         try:
             page_size = int(page_size_req)
-            if page_size != page_size_config:
-                ui_settings['page_size'] = page_size
-                save_config(cfg_local)
         except (TypeError, ValueError):
-            page_size = page_size_config
-    else:
-        page_size = page_size_config
+            pass
 
     try:
         path_filters = json.loads(request.args.get('path_filters', '[]'))
@@ -371,6 +365,7 @@ def get_data_api():
     sort_order = request.args.get('sortOrder')
 
     conn = None
+    cursor = None
     try:
         conn = db_manager._get_connection()
         cursor = db_manager._get_cursor(conn)
@@ -415,7 +410,7 @@ def get_data_api():
             agg['name'] = name
             if not agg['save_path']: agg['save_path'] = t.get('save_path', '')
             if not agg['size']: agg['size'] = t.get('size', 0)
-            agg['progress'] = max(agg['progress'], t.get('progress', 0))
+            agg['progress'] = max(agg.get('progress', 0), t.get('progress', 0))
             agg['state'].add(t.get('state', 'N/A'))
             agg['qb_uploaded'] += t.get('qb_uploaded', 0)
             agg['tr_uploaded'] += t.get('tr_uploaded', 0)
@@ -429,13 +424,16 @@ def get_data_api():
         final_torrent_list = []
         for name, data in agg_torrents.items():
             data['state'] = ', '.join(sorted(list(data['state'])))
-            data['size_formatted'] = format_bytes(data['size'])
-            data['qb_uploaded_formatted'] = format_bytes(data['qb_uploaded'])
-            data['tr_uploaded_formatted'] = format_bytes(data['tr_uploaded'])
-            data['total_uploaded'] = data['qb_uploaded'] + data['tr_uploaded']
+            data['size_formatted'] = format_bytes(data.get('size', 0))
+            data['qb_uploaded_formatted'] = format_bytes(
+                data.get('qb_uploaded', 0))
+            data['tr_uploaded_formatted'] = format_bytes(
+                data.get('tr_uploaded', 0))
+            data['total_uploaded'] = data.get('qb_uploaded', 0) + data.get(
+                'tr_uploaded', 0)
             data['total_uploaded_formatted'] = format_bytes(
                 data['total_uploaded'])
-            data['site_count'] = len(data['sites'])
+            data['site_count'] = len(data.get('sites', {}))
             data['total_site_count'] = total_site_count
             final_torrent_list.append(data)
 
@@ -489,72 +487,63 @@ def get_data_api():
         paginated_data = filtered_list[(page - 1) * page_size:page * page_size]
         unique_paths = sorted(
             list(
-                set(row['save_path'] for row in torrents_raw
-                    if row['save_path'])))
-        unique_states = sorted(list(set(row['state'] for row in torrents_raw)))
+                set(
+                    row.get('save_path') for row in torrents_raw
+                    if row.get('save_path'))))
+        unique_states = sorted(
+            list(
+                set(
+                    row.get('state') for row in torrents_raw
+                    if row.get('state'))))
 
         _, site_link_rules_from_db, _ = load_site_maps_from_db(db_manager)
 
         return jsonify({
-            'data':
-            paginated_data,
-            'total':
-            total_items,
-            'page':
-            page,
-            'pageSize':
-            page_size,
-            'unique_paths':
-            unique_paths,
-            'unique_states':
-            unique_states,
-            'all_discovered_sites':
-            all_discovered_sites,
-            'site_link_rules':
-            site_link_rules_from_db,
-            'active_path_filters':
-            ui_settings.get('active_path_filters', []),
-            'error':
-            None
+            'data': paginated_data,
+            'total': total_items,
+            'page': page,
+            'pageSize': page_size,
+            'unique_paths': unique_paths,
+            'unique_states': unique_states,
+            'all_discovered_sites': all_discovered_sites,
+            'site_link_rules': site_link_rules_from_db,
+            'active_path_filters': [],
+            'error': None
         })
     except Exception as e:
-        logging.error(f"Error in get_data_api: {e}", exc_info=True)
-        return jsonify(
-            {"error":
-             "Failed to retrieve torrent data from the database"}), 500
+        logging.error(f"get_data_api 出错: {e}", exc_info=True)
+        return jsonify({"error": "从数据库检索种子数据失败"}), 500
     finally:
-        if conn:
-            cursor.close()
-            conn.close()
+        if cursor: cursor.close()
+        if conn: conn.close()
 
 
 @api_bp.route('/refresh_data', methods=['POST'])
 def refresh_data_api():
     try:
-        # --- CHANGE 4: Access the variable through the module ---
         Thread(target=services.data_tracker_thread._update_torrents_in_db
                ).start()
-        # --------------------------------------------------------
-        return jsonify({"message":
-                        "Background refresh has been triggered"}), 202
+        return jsonify({"message": "后台刷新已触发"}), 202
     except Exception as e:
-        logging.error(f"Failed to trigger refresh: {e}")
-        return jsonify({"error": "Failed to trigger refresh"}), 500
+        logging.error(f"触发刷新失败: {e}")
+        return jsonify({"error": "触发刷新失败"}), 500
 
 
 @api_bp.route('/site_stats')
 def get_site_stats_api():
     conn = None
+    cursor = None
     try:
         conn = db_manager._get_connection()
         cursor = db_manager._get_cursor(conn)
-        is_mysql = db_manager.db_type == 'mysql'
-        if is_mysql:
-            query = "SELECT sites, SUM(size) as total_size, COUNT(name) as torrent_count FROM (SELECT DISTINCT name, size, sites FROM torrents WHERE sites IS NOT NULL AND sites != '') AS unique_torrents GROUP BY sites;"
-            cursor.execute(query)
-        else:  # SQLite
-            query = "SELECT sites, SUM(size) as total_size, COUNT(name) as torrent_count FROM (SELECT name, size, sites FROM torrents WHERE sites IS NOT NULL AND sites != '' GROUP BY name) AS unique_torrents GROUP BY sites;"
-            cursor.execute(query)
+
+        query = """
+            SELECT sites, SUM(size) as total_size, COUNT(name) as torrent_count 
+            FROM (SELECT DISTINCT name, size, sites FROM torrents WHERE sites IS NOT NULL AND sites != '') AS unique_torrents 
+            GROUP BY sites;
+        """
+        cursor.execute(query)
+
         rows = cursor.fetchall()
         results = sorted([{
             "site_name": row['sites'],
@@ -564,34 +553,58 @@ def get_site_stats_api():
                          key=lambda x: x['site_name'])
         return jsonify(results)
     except Exception as e:
-        logging.error(f"Error in get_site_stats_api: {e}", exc_info=True)
-        return jsonify(
-            {"error": "Failed to get site statistics from the database"}), 500
+        logging.error(f"get_site_stats_api 出错: {e}", exc_info=True)
+        return jsonify({"error": "从数据库获取站点统计信息失败"}), 500
     finally:
-        if conn:
-            cursor.close()
-            conn.close()
+        if cursor: cursor.close()
+        if conn: conn.close()
 
 
 @api_bp.route('/group_stats')
 def get_group_stats_api():
     conn = None
+    cursor = None
     try:
         conn = db_manager._get_connection()
         cursor = db_manager._get_cursor(conn)
         is_mysql = db_manager.db_type == 'mysql'
-        if not is_mysql:
-            return jsonify({
-                "error":
-                "This feature is only supported for MySQL databases."
-            }), 501
 
-        query = """
-            SELECT s.nickname AS site_name, GROUP_CONCAT(DISTINCT ut.group ORDER BY ut.group SEPARATOR ', ') AS group_suffix, COUNT(ut.name) AS torrent_count, SUM(ut.size) AS total_size
-            FROM (SELECT name, `group`, MAX(size) AS size FROM torrents WHERE `group` IS NOT NULL AND `group` != '' GROUP BY name, `group`) AS ut
-            JOIN sites AS s ON FIND_IN_SET(ut.group, s.group) > 0
-            GROUP BY s.nickname ORDER BY s.nickname;
+        # --- 最终修正版本 ---
+
+        if is_mysql:
+            group_col_quoted = '`group`'
+            # MySQL 的 GROUP_CONCAT 功能完整，保持不变
+            group_concat_expr = "GROUP_CONCAT(DISTINCT ut.`group` ORDER BY ut.`group` SEPARATOR ', ')"
+            join_condition = "FIND_IN_SET(ut.`group`, s.`group`) > 0"
+        else:  # SQLite
+            group_col_quoted = '"group"'
+            # --- 关键修正点 ---
+            # 为确保最大兼容性，SQLite 的 DISTINCT 聚合只使用一个参数。
+            # 这将使用默认的逗号(,)作为分隔符。
+            group_concat_expr = 'GROUP_CONCAT(DISTINCT ut."group")'
+            join_condition = "',' || s.\"group\" || ',' LIKE '%,' || ut.\"group\" || ',%'"
+
+        # 构建最终的查询语句
+        query = f"""
+            SELECT 
+                s.nickname AS site_name, 
+                {group_concat_expr} AS group_suffix, 
+                COUNT(ut.name) AS torrent_count, 
+                SUM(ut.size) AS total_size
+            FROM (
+                SELECT 
+                    name, 
+                    {group_col_quoted} AS "group", 
+                    MAX(size) AS size 
+                FROM torrents 
+                WHERE {group_col_quoted} IS NOT NULL AND {group_col_quoted} != '' 
+                GROUP BY name, {group_col_quoted}
+            ) AS ut
+            JOIN sites AS s ON {join_condition}
+            GROUP BY s.nickname 
+            ORDER BY s.nickname;
         """
+
         cursor.execute(query)
         rows = cursor.fetchall()
         results = [{
@@ -602,23 +615,8 @@ def get_group_stats_api():
         } for row in rows]
         return jsonify(results)
     except Exception as e:
-        logging.error(f"Error in get_group_stats_api: {e}", exc_info=True)
-        return jsonify({
-            "error":
-            "Failed to get release group statistics from the database"
-        }), 500
+        logging.error(f"get_group_stats_api 出错: {e}", exc_info=True)
+        return jsonify({"error": "从数据库获取发布组统计信息失败"}), 500
     finally:
-        if conn:
-            cursor.close()
-            conn.close()
-
-
-@api_bp.route('/save_filters', methods=['POST'])
-def save_filters_api():
-    data = request.get_json()
-    cfg_local = load_config()
-    cfg_local.setdefault('ui_settings', {})
-    if 'paths' in data:
-        cfg_local['ui_settings']['active_path_filters'] = data['paths']
-    save_config(cfg_local)
-    return jsonify({"message": "Settings saved"})
+        if cursor: cursor.close()
+        if conn: conn.close()
