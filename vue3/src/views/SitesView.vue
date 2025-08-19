@@ -89,15 +89,15 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, defineEmits } from 'vue'
 
-// --- 响应式状态定义 ---
+const emits = defineEmits(['ready'])
+
 const siteStatsLoading = ref(true)
 const groupStatsLoading = ref(true)
 const siteStatsData = ref([])
 const groupStatsData = ref([])
 
-// --- 工具函数 ---
 const formatBytes = (bytes, decimals = 2) => {
   if (!+bytes) return '0 Bytes'
   const k = 1024
@@ -107,7 +107,6 @@ const formatBytes = (bytes, decimals = 2) => {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`
 }
 
-// --- 数据获取逻辑 ---
 // 获取站点统计数据
 const fetchSiteStats = async () => {
   siteStatsLoading.value = true
@@ -124,7 +123,7 @@ const fetchSiteStats = async () => {
   }
 }
 
-// 获取官组统计数据 (新)
+// 获取官组统计数据
 const fetchGroupStats = async () => {
   groupStatsLoading.value = true
   try {
@@ -140,16 +139,17 @@ const fetchGroupStats = async () => {
   }
 }
 
-// --- Vue 生命周期钩子 ---
+const refreshAllData = async () => {
+  await Promise.all([fetchSiteStats(), fetchGroupStats()])
+}
+
 onMounted(() => {
-  // 同时并行获取两个表格的数据
-  fetchSiteStats()
-  fetchGroupStats()
+  refreshAllData()
+  emits('ready', refreshAllData)
 })
 </script>
 
 <style scoped>
-/* --- 主体布局样式 --- */
 .sites-view-container {
   display: flex;
   flex-direction: column;
@@ -169,15 +169,13 @@ onMounted(() => {
   flex-shrink: 0;
 }
 
-/* --- 布局容器 --- */
 .layout-wrapper {
   flex-grow: 1;
   position: relative;
   display: grid;
-  /* 由 2x2 修改为 1x3 布局 (一行三列) */
-  grid-template-columns: 1fr 1fr 1fr; /* 三列，等宽 */
-  grid-template-rows: 1fr; /* 一行，占据所有可用高度 */
-  gap: 20px; /* 模块之间的间距 */
+  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-rows: 1fr;
+  gap: 20px;
   min-height: 0;
 }
 
@@ -189,7 +187,7 @@ onMounted(() => {
   border-radius: 8px;
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.06);
   padding: 15px;
-  overflow: hidden; /* 确保内容不会溢出圆角 */
+  overflow: hidden;
 }
 
 .quadrant-title {
@@ -200,13 +198,11 @@ onMounted(() => {
   flex-shrink: 0;
 }
 
-/* 表格需要占据象限内的剩余空间 */
 .stats-table {
   width: 100%;
   flex-grow: 1;
 }
 
-/* 覆盖 Element Plus 默认样式，使其更贴合容器 */
 :deep(.el-table) {
   height: 100% !important;
 }

@@ -67,12 +67,10 @@
               placeholder="搜索名称..."
               clearable
               class="search-input"
+              @click.stop
             />
-            <span>
+            <span @click.stop>
               <el-button type="primary" @click="openFilterDialog" plain>筛选</el-button>
-              <el-button type="success" @click="forceRefresh" :loading="isRefreshing" plain
-                >刷新</el-button
-              >
             </span>
           </div>
         </template>
@@ -204,11 +202,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, reactive, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ref, onMounted, reactive, watch, defineEmits } from 'vue'
 import type { TableInstance, Sort } from 'element-plus'
 
-// --- 类型定义 ---
+const emits = defineEmits(['ready'])
+
 interface SiteData {
   qb_ul: number
   tr_ul: number
@@ -236,14 +234,11 @@ interface ActiveFilters {
   siteName: string | null
 }
 
-// --- 表格与数据状态 ---
 const tableRef = ref<TableInstance | null>(null)
 const loading = ref<boolean>(true)
-const isRefreshing = ref<boolean>(false)
 const allData = ref<Torrent[]>([])
 const error = ref<string | null>(null)
 
-// --- 筛选与排序状态 ---
 const nameSearch = ref<string>('')
 const currentSort = ref<Sort>({ prop: 'name', order: 'ascending' })
 const activeFilters = reactive<ActiveFilters>({
@@ -255,12 +250,10 @@ const activeFilters = reactive<ActiveFilters>({
 const tempFilters = reactive<ActiveFilters>({ ...activeFilters })
 const filterDialogVisible = ref<boolean>(false)
 
-// --- 分页状态 ---
 const currentPage = ref<number>(1)
 const pageSize = ref<number>(50)
 const totalTorrents = ref<number>(0)
 
-// --- 静态数据与UI ---
 const unique_paths = ref<string[]>([])
 const unique_states = ref<string[]>([])
 const all_sites = ref<string[]>([])
@@ -272,9 +265,9 @@ const progressColors = [
   { color: '#67c23a', percentage: 100 },
 ]
 
-// --- 核心方法：数据获取 ---
-const fetchData = async (isRefresh = false) => {
-  if (!isRefresh) loading.value = true
+// 数据获取
+const fetchData = async () => {
+  loading.value = true
   error.value = null
   try {
     const params = new URLSearchParams({
@@ -298,41 +291,18 @@ const fetchData = async (isRefresh = false) => {
     totalTorrents.value = result.total
     if (pageSize.value !== result.pageSize) pageSize.value = result.pageSize
 
-    // 首次加载或强制刷新时，更新筛选选项
-    if (unique_paths.value.length === 0 || isRefresh) {
-      unique_paths.value = result.unique_paths
-      unique_states.value = result.unique_states
-      all_sites.value = result.all_discovered_sites
-      site_link_rules.value = result.site_link_rules
-      activeFilters.paths = result.active_path_filters
-    }
+    unique_paths.value = result.unique_paths
+    unique_states.value = result.unique_states
+    all_sites.value = result.all_discovered_sites
+    site_link_rules.value = result.site_link_rules
+    activeFilters.paths = result.active_path_filters
   } catch (e: any) {
     error.value = e.message
   } finally {
     loading.value = false
-    if (isRefresh) isRefreshing.value = false
   }
 }
 
-const forceRefresh = async () => {
-  isRefreshing.value = true
-  ElMessage.info('后台正在刷新缓存...')
-  try {
-    const response = await fetch('/api/refresh_data', { method: 'POST' })
-    if (!response.ok) throw new Error('触发刷新失败')
-    // 等待一小段时间让后端处理
-    setTimeout(() => {
-      ElMessage.success('数据已刷新！')
-      currentPage.value = 1
-      fetchData(true)
-    }, 2500)
-  } catch (e: any) {
-    ElMessage.error(e.message)
-    isRefreshing.value = false
-  }
-}
-
-// --- 事件处理器 ---
 const handleSizeChange = (val: number) => {
   pageSize.value = val
   currentPage.value = 1
@@ -348,7 +318,7 @@ const handleSortChange = (sort: Sort) => {
   fetchData()
 }
 
-// --- 筛选逻辑 ---
+// 筛选逻辑
 const openFilterDialog = () => {
   Object.assign(tempFilters, activeFilters)
   filterDialogVisible.value = true
@@ -369,7 +339,6 @@ const applyFilters = async () => {
   }
 }
 
-// --- UI 辅助函数 ---
 const formatBytes = (b: number | null): string => {
   if (b == null || b <= 0) return '0 B'
   const s = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
@@ -414,9 +383,9 @@ const tableRowClassName = ({ row }: { row: Torrent }) => {
   return expandedRows.value.includes(row.name) ? 'expanded-row' : ''
 }
 
-// --- 生命周期与侦听器 ---
 onMounted(() => {
   fetchData()
+  emits('ready', fetchData)
 })
 
 watch(nameSearch, () => {
@@ -502,5 +471,14 @@ watch(
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+:deep(.el-pagination) {
+  margin: 8px 0 !important;
+  padding-right: 10px;
+}
+
+:deep(.el-tag) {
+  width: 120px;
 }
 </style>
