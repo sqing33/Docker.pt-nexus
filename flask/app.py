@@ -5,7 +5,7 @@ import os
 from flask import Flask, send_from_directory
 from flask_cors import CORS
 
-from config import initialize_app_files, get_db_config
+from config import get_db_config
 from database import DatabaseManager, reconcile_historical_data
 from services import start_data_tracker
 from routes import api_bp, initialize_routes
@@ -32,22 +32,20 @@ def create_app():
     CORS(app, resources={r"/api/*": {"origins": "*"}})
 
     # --- 应用初始化序列 ---
-    # 1. 确保配置文件存在 (如果逻辑需要)
-    initialize_app_files()
 
-    # 2. 获取数据库配置并初始化数据库连接和表结构
+    # 1. 获取数据库配置并初始化数据库连接和表结构
     db_config = get_db_config()
     db_manager = DatabaseManager(db_config)
     db_manager.init_db()
 
-    # 3. 同步历史数据和下载器状态 (此操作只应执行一次)
+    # 2. 同步历史数据和下载器状态 (此操作只应执行一次)
     reconcile_historical_data(db_manager)
 
-    # 4. 初始化 API 路由并注册蓝图
+    # 3. 初始化 API 路由并注册蓝图
     initialize_routes(db_manager)
     app.register_blueprint(api_bp)
 
-    # 5. 启动后台数据采集线程
+    # 4. 启动后台数据采集线程
     start_data_tracker(db_manager)
 
     # --- 托管 Vue.js 单页应用 (SPA) 的关键路由 ---
