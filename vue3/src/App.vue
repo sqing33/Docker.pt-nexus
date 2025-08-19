@@ -42,7 +42,6 @@ const handleComponentReady = (refreshMethod: () => Promise<void>) => {
   activeComponentRefresher.value = refreshMethod
 }
 
-// 刷新
 const handleGlobalRefresh = async () => {
   if (isRefreshing.value) return
 
@@ -52,7 +51,6 @@ const handleGlobalRefresh = async () => {
     ElMessage.info('后台正在刷新缓存...')
 
     try {
-      // 触发后端刷新操作
       const response = await fetch('/api/refresh_data', { method: 'POST' })
       if (!response.ok) {
         throw new Error('触发刷新失败')
