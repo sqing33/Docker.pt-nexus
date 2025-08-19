@@ -12,11 +12,6 @@
               >近1分钟</el-button
             >
             <el-button
-              :type="activeSpeedTimeRange === 'last_1_hour' ? 'primary' : ''"
-              @click="setSpeedTimeRange('last_1_hour')"
-              >近1小时</el-button
-            >
-            <el-button
               :type="activeSpeedTimeRange === 'last_12_hours' ? 'primary' : ''"
               @click="setSpeedTimeRange('last_12_hours')"
               >近12小时</el-button

@@ -202,24 +202,42 @@ class DatabaseManager:
         logging.info("Database schemas verified.")
 
 
+# app.py (替换此函数)
+
+
 def load_site_maps_from_db(db_manager):
-    core_domain_map, link_rules = {}, {}
+    core_domain_map, link_rules, group_to_site_map_lower = {}, {}, {}  # 关键变化
     if db_manager.db_type != 'mysql':
         logging.warning("Site mapping is only supported for MySQL backend.")
-        return core_domain_map, link_rules
+        return core_domain_map, link_rules, group_to_site_map_lower
 
     try:
         conn = db_manager._get_connection()
         cursor = conn.cursor(dictionary=True)
         cursor.execute(
-            "SELECT nickname, base_url, special_tracker_domain FROM sites")
+            "SELECT nickname, base_url, special_tracker_domain, `group` FROM sites"
+        )
         for row in cursor.fetchall():
             nickname = row.get('nickname')
             base_url = row.get('base_url')
             special_tracker = row.get('special_tracker_domain')
+            groups_str = row.get('group')
 
             if nickname and base_url:
                 link_rules[nickname] = {"base_url": base_url.strip()}
+
+                # --- 核心改动：创建 group(小写) -> {原始大小写, 站点} 的反向映射 ---
+                if groups_str:
+                    for group_name in groups_str.split(','):
+                        clean_group_name = group_name.strip()
+                        if clean_group_name:
+                            # 键是小写，值包含原始大小写和归属站点
+                            group_to_site_map_lower[
+                                clean_group_name.lower()] = {
+                                    'original_case': clean_group_name,
+                                    'site': nickname
+                                }
+                # --- 逻辑结束 ---
 
                 base_hostname = _parse_hostname_from_url(f"http://{base_url}")
                 base_core = _extract_core_domain(base_hostname)
@@ -236,12 +254,12 @@ def load_site_maps_from_db(db_manager):
         cursor.close()
         conn.close()
         logging.info(
-            f"Loaded {len(link_rules)} sites, created {len(core_domain_map)} core domain mappings."
+            f"Loaded {len(link_rules)} sites, created {len(core_domain_map)} core domain mappings and a global map of {len(group_to_site_map_lower)} release groups (keys are lowercased)."
         )
     except Exception as e:
         logging.error(f"Could not load site info from DB: {e}", exc_info=True)
 
-    return core_domain_map, link_rules
+    return core_domain_map, link_rules, group_to_site_map_lower  # 返回新的 map
 
 
 def _parse_hostname_from_url(url_string):
@@ -660,14 +678,13 @@ class DataTracker(Thread):
                 cursor.close()
                 conn.close()
 
+# app.py (替换此函数)
+
     def _update_torrents_in_db(self):
         logging.info("Starting to update torrents in the database...")
         config = load_config()
-        core_domain_map, _ = load_site_maps_from_db(self.db_manager)
-        if not core_domain_map:
-            logging.warning(
-                "Core domain map is empty. Site identification will likely fail."
-            )
+        core_domain_map, _, group_to_site_map_lower = load_site_maps_from_db(
+            self.db_manager)
 
         all_current_hashes = set()
         is_mysql = self.db_manager.db_type == 'mysql'
@@ -675,141 +692,132 @@ class DataTracker(Thread):
         conn = None
         try:
             conn = self.db_manager._get_connection()
-            cursor = self.db_manager._get_cursor(conn)  # 使用字典游标
+            cursor = self.db_manager._get_cursor(conn)
             now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-            if config.get('qbittorrent', {}).get('enabled'):
+            clients_config = {
+                'qbittorrent': config.get('qbittorrent', {}),
+                'transmission': config.get('transmission', {}),
+            }
+
+            for client_name, cfg in clients_config.items():
+                if not cfg.get('enabled'):
+                    continue
+
+                torrents_list = []
                 try:
-                    q = Client(
-                        **{
+                    if client_name == 'qbittorrent':
+                        q = Client(**{
                             k: v
-                            for k, v in config['qbittorrent'].items()
-                            if k != 'enabled'
+                            for k, v in cfg.items() if k != 'enabled'
                         })
-                    q.auth_log_in()
-                    qb_torrents = q.torrents_info(status_filter='all')
-                    logging.info(
-                        f"Found {len(qb_torrents)} torrents in qBittorrent.")
-
-                    for t in qb_torrents:
-                        all_current_hashes.add(t.hash)
-
-                        site_nickname = None
-                        site_detail_url = None
-                        if t.trackers:
-                            for tracker_entry in t.trackers:
-                                hostname = _parse_hostname_from_url(
-                                    tracker_entry.get('url'))
-                                core_domain = _extract_core_domain(hostname)
-                                if core_domain in core_domain_map:
-                                    site_nickname = core_domain_map[
-                                        core_domain]
-                                    site_detail_url = _extract_url_from_comment(
-                                        t.comment)
-                                    break
-
-                        params = (t.hash, t.name, t.save_path, t.size,
-                                  round(t.progress * 100, 1),
-                                  self.format_state(t.state), site_nickname,
-                                  site_detail_url, t.uploaded, now_str)
-
-                        if is_mysql:
-                            sql = '''INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, qb_uploaded, last_seen)
-                                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                                     ON DUPLICATE KEY UPDATE
-                                     name=VALUES(name), save_path=VALUES(save_path), size=VALUES(size), progress=VALUES(progress),
-                                     state=VALUES(state), sites=VALUES(sites), details=VALUES(details),
-                                     qb_uploaded=GREATEST(VALUES(qb_uploaded), torrents.qb_uploaded),
-                                     last_seen=VALUES(last_seen)'''
-                        else:
-                            sql = '''INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, qb_uploaded, last_seen)
-                                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                                     ON CONFLICT(hash) DO UPDATE SET
-                                     name=excluded.name, save_path=excluded.save_path, size=excluded.size, progress=excluded.progress,
-                                     state=excluded.state, sites=excluded.sites, details=excluded.details,
-                                     qb_uploaded=max(excluded.qb_uploaded, torrents.qb_uploaded),
-                                     last_seen=excluded.last_seen'''
-                        cursor.execute(sql, params)
-
+                        q.auth_log_in()
+                        torrents_list = q.torrents_info(status_filter='all')
+                    elif client_name == 'transmission':
+                        tr = TrClient(**{
+                            k: v
+                            for k, v in cfg.items() if k != 'enabled'
+                        })
+                        fields = [
+                            'id', 'name', 'hashString', 'downloadDir',
+                            'totalSize', 'status', 'comment', 'trackers',
+                            'percentDone', 'uploadedEver'
+                        ]
+                        torrents_list = tr.get_torrents(arguments=fields)
                 except Exception as e:
                     logging.error(
-                        f"Failed to get or update torrents from qB: {e}",
-                        exc_info=True)
+                        f"Failed to connect or fetch from {client_name}: {e}")
+                    continue
 
-            if config.get('transmission', {}).get('enabled'):
-                try:
-                    tr = TrClient(
-                        **{
-                            k: v
-                            for k, v in config['transmission'].items()
-                            if k != 'enabled'
-                        })
-                    fields = [
-                        'id', 'name', 'hashString', 'downloadDir', 'totalSize',
-                        'status', 'comment', 'trackers', 'percentDone',
-                        'uploadedEver'
-                    ]
-                    tr_torrents = tr.get_torrents(arguments=fields)
-                    logging.info(
-                        f"Found {len(tr_torrents)} torrents in Transmission.")
+                logging.info(
+                    f"Found {len(torrents_list)} torrents in {client_name}.")
+                for t in torrents_list:
+                    t_info = {
+                        'name':
+                        t.name,
+                        'hash':
+                        t.hash
+                        if client_name == 'qbittorrent' else t.hash_string,
+                        'save_path':
+                        t.save_path
+                        if client_name == 'qbittorrent' else t.download_dir,
+                        'size':
+                        t.size
+                        if client_name == 'qbittorrent' else t.total_size,
+                        'progress':
+                        t.progress
+                        if client_name == 'qbittorrent' else t.percent_done,
+                        'state':
+                        t.state if client_name == 'qbittorrent' else t.status,
+                        'comment':
+                        t.comment,
+                        'trackers':
+                        t.trackers if client_name == 'qbittorrent' else [{
+                            'url':
+                            tracker.get('announce')
+                        } for tracker in t.trackers],
+                        'uploaded':
+                        t.uploaded
+                        if client_name == 'qbittorrent' else t.uploaded_ever
+                    }
 
-                    for t in tr_torrents:
-                        all_current_hashes.add(t.hash_string)
+                    all_current_hashes.add(t_info['hash'])
 
-                        site_nickname = None
-                        site_detail_url = None
-                        if t.trackers:
-                            for tracker_info in t.trackers:
-                                hostname = _parse_hostname_from_url(
-                                    tracker_info.get('announce'))
-                                core_domain = _extract_core_domain(hostname)
-                                if core_domain in core_domain_map:
-                                    site_nickname = core_domain_map[
-                                        core_domain]
-                                    site_detail_url = _extract_url_from_comment(
-                                        t.comment)
-                                    break
+                    # 1. 识别下载位置 (Location)
+                    site_nickname = None
+                    if t_info['trackers']:
+                        for tracker_entry in t_info['trackers']:
+                            hostname = _parse_hostname_from_url(
+                                tracker_entry.get('url'))
+                            core_domain = _extract_core_domain(hostname)
+                            if core_domain in core_domain_map:
+                                site_nickname = core_domain_map[core_domain]
+                                break
 
-                        params = (t.hash_string, t.name, t.download_dir,
-                                  t.total_size, round(t.percent_done * 100, 1),
-                                  self.format_state(t.status), site_nickname,
-                                  site_detail_url, t.uploaded_ever, now_str)
+                    # 2. 识别官组 (Release Group)
+                    torrent_group = None
+                    name_lower = t_info['name'].lower()
+                    found_matches = []
+                    for group_lower, group_info in group_to_site_map_lower.items(
+                    ):
+                        if group_lower in name_lower:
+                            found_matches.append(group_info['original_case'])
 
-                        if is_mysql:
-                            sql = '''INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, tr_uploaded, last_seen)
-                                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                                     ON DUPLICATE KEY UPDATE
-                                     name=VALUES(name), save_path=VALUES(save_path), size=VALUES(size), progress=VALUES(progress),
-                                     state=VALUES(state), sites=VALUES(sites), details=VALUES(details),
-                                     tr_uploaded=GREATEST(VALUES(tr_uploaded), torrents.tr_uploaded),
-                                     last_seen=VALUES(last_seen)'''
-                        else:
-                            sql = '''INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, tr_uploaded, last_seen)
-                                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                                     ON CONFLICT(hash) DO UPDATE SET
-                                     name=excluded.name, save_path=excluded.save_path, size=excluded.size, progress=excluded.progress,
-                                     state=excluded.state, sites=excluded.sites, details=excluded.details,
-                                     tr_uploaded=max(excluded.tr_uploaded, torrents.tr_uploaded),
-                                     last_seen=excluded.last_seen'''
-                        cursor.execute(sql, params)
+                    if found_matches:
+                        # 按长度降序排序，选择最长的那个作为最终匹配
+                        torrent_group = sorted(found_matches,
+                                               key=len,
+                                               reverse=True)[0]
 
-                except Exception as e:
-                    logging.error(
-                        f"Failed to get or update torrents from Tr: {e}",
-                        exc_info=True)
+                    params = (t_info['hash'], t_info['name'],
+                              t_info['save_path'], t_info['size'],
+                              round(t_info['progress'] * 100,
+                                    1), self.format_state(t_info['state']),
+                              site_nickname,
+                              _extract_url_from_comment(t_info['comment']),
+                              torrent_group, t_info['uploaded'], now_str)
+
+                    uploaded_col = 'qb_uploaded' if client_name == 'qbittorrent' else 'tr_uploaded'
+                    if is_mysql:
+                        sql = f'''INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, `group`, {uploaded_col}, last_seen)
+                                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                 ON DUPLICATE KEY UPDATE name=VALUES(name), save_path=VALUES(save_path), size=VALUES(size), progress=VALUES(progress), state=VALUES(state), sites=VALUES(sites), details=VALUES(details), `group`=VALUES(`group`), {uploaded_col}=GREATEST(VALUES({uploaded_col}), torrents.{uploaded_col}), last_seen=VALUES(last_seen)'''
+                    else:
+                        sql = f'''INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, `group`, {uploaded_col}, last_seen)
+                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                 ON CONFLICT(hash) DO UPDATE SET name=excluded.name, save_path=excluded.save_path, size=excluded.size, progress=excluded.progress, state=excluded.state, sites=excluded.sites, details=excluded.details, `group`=excluded.`group`, {uploaded_col}=max(excluded.{uploaded_col}, torrents.{uploaded_col}), last_seen=excluded.last_seen'''
+                    cursor.execute(sql, params)
 
             if all_current_hashes:
                 placeholders = ', '.join(['%s' if is_mysql else '?'] *
                                          len(all_current_hashes))
                 sql_delete = f"DELETE FROM torrents WHERE hash NOT IN ({placeholders})"
-                # 再次获取非字典游标用于删除
                 non_dict_cursor = conn.cursor()
                 non_dict_cursor.execute(sql_delete, tuple(all_current_hashes))
                 logging.info(
                     f"Removed {non_dict_cursor.rowcount} stale torrents from DB."
                 )
                 non_dict_cursor.close()
-
             else:
                 non_dict_cursor = conn.cursor()
                 non_dict_cursor.execute("DELETE FROM torrents")
@@ -892,7 +900,6 @@ def get_date_range_and_grouping(time_range_str, for_speed=False):
         'last_6_months': (now - timedelta(days=180), '%Y-%m'),
         'this_year': (today_start.replace(month=1, day=1), '%Y-%m'),
         'all': (datetime(1970, 1, 2), '%Y-%m'),
-        'last_1_hour': (now - timedelta(hours=1), 'CUSTOM_5_SEC_INTERVAL'),
         'last_12_hours': (now - timedelta(hours=12), None),
         'last_24_hours': (now - timedelta(hours=24), None)
     }
@@ -1072,7 +1079,7 @@ def get_recent_speed_data_api():
 
 @app.route('/api/speed_chart_data')
 def get_speed_chart_data_api():
-    time_range = request.args.get('range', 'last_1_hour')
+    time_range = request.args.get('range', 'last_12_hour')
     conn = None
     try:
         is_mysql = db_manager.db_type == 'mysql'
@@ -1206,6 +1213,9 @@ def get_downloader_info_api():
     return jsonify(info)
 
 
+# app.py (替换此函数)
+
+
 @app.route('/api/data')
 def get_data_api():
     cfg_local = load_config()
@@ -1244,6 +1254,15 @@ def get_data_api():
     try:
         conn = db_manager._get_connection()
         cursor = db_manager._get_cursor(conn)
+
+        # --- 核心改动 1: 从 torrents 表中获取当前存在的站点列表和总数 ---
+        cursor.execute(
+            "SELECT DISTINCT sites FROM torrents WHERE sites IS NOT NULL AND sites != ''"
+        )
+        all_discovered_sites = sorted(
+            [row['sites'] for row in cursor.fetchall()])
+        total_site_count = len(all_discovered_sites)  # 分母现在是实际存在种子的站点数
+
         cursor.execute("SELECT * FROM torrents")
         torrents_raw = [dict(row) for row in cursor.fetchall()]
 
@@ -1301,6 +1320,10 @@ def get_data_api():
             data['total_uploaded'] = data['qb_uploaded'] + data['tr_uploaded']
             data['total_uploaded_formatted'] = DataTracker.format_bytes(
                 data['total_uploaded'])
+
+            data['site_count'] = len(data['sites'])
+            data['total_site_count'] = total_site_count  # 使用新的总数
+
             final_torrent_list.append(data)
 
         filtered_list = final_torrent_list
@@ -1336,7 +1359,8 @@ def get_data_api():
                 'progress': 'progress',
                 'qb_uploaded_formatted': 'qb_uploaded',
                 'tr_uploaded_formatted': 'tr_uploaded',
-                'total_uploaded_formatted': 'total_uploaded'
+                'total_uploaded_formatted': 'total_uploaded',
+                'site_count': 'site_count'
             }
             sort_key = sort_key_map.get(sort_prop)
             if sort_key:
@@ -1360,13 +1384,9 @@ def get_data_api():
             all_states.add(row['state'])
         unique_states = sorted(list(all_states))
 
-        cursor.execute(
-            "SELECT DISTINCT sites FROM torrents WHERE sites IS NOT NULL AND sites != ''"
-        )
-        all_discovered_sites = sorted(
-            [row['sites'] for row in cursor.fetchall()])
+        # (我们已经在前面获取过 all_discovered_sites，所以这里无需重复查询)
 
-        _, site_link_rules_from_db = load_site_maps_from_db(db_manager)
+        _, site_link_rules_from_db, _ = load_site_maps_from_db(db_manager)
 
         return jsonify({
             'data':
@@ -1468,6 +1488,72 @@ def get_site_stats_api():
             conn.close()
 
 
+@app.route('/api/group_stats')
+def get_group_stats_api():
+    """
+    *** 最终版：按站点聚合所有官组信息，后端完成合并 ***
+    """
+    conn = None
+    try:
+        conn = db_manager._get_connection()
+        cursor = db_manager._get_cursor(conn)
+        is_mysql = db_manager.db_type == 'mysql'
+
+        if not is_mysql:
+            return jsonify({"error": "此功能仅支持 MySQL 数据库。"}), 501
+
+        # --- 核心改动：使用 GROUP_CONCAT 将官组名合并，并按站点进行最终聚合 ---
+        # 1. 内层子查询 (ut) 仍然负责按种子名称去重。
+        # 2. 外层查询 GROUP BY s.nickname，按站点名聚合。
+        # 3. GROUP_CONCAT(DISTINCT ut.group...) 将所有官组名合并成一个字段。
+        # 4. SUM() 和 COUNT() 在站点级别进行最终统计。
+        query = """
+            SELECT
+                s.nickname AS site_name,
+                GROUP_CONCAT(DISTINCT ut.group ORDER BY ut.group SEPARATOR ', ') AS group_suffix,
+                COUNT(ut.name) AS torrent_count,
+                SUM(ut.size) AS total_size
+            FROM
+                (
+                    SELECT
+                        name,
+                        `group`,
+                        MAX(size) AS size
+                    FROM
+                        torrents
+                    WHERE
+                        `group` IS NOT NULL AND `group` != ''
+                    GROUP BY
+                        name, `group`
+                ) AS ut
+            JOIN
+                sites AS s ON FIND_IN_SET(ut.group, s.group) > 0
+            GROUP BY
+                s.nickname
+            ORDER BY
+                s.nickname;
+        """
+        cursor.execute(query)
+        rows = cursor.fetchall()
+
+        results = [{
+            "site_name": row['site_name'],
+            "group_suffix": row['group_suffix'],
+            "torrent_count": int(row['torrent_count'] or 0),
+            "total_size": int(row['total_size'] or 0)
+        } for row in rows]
+
+        return jsonify(results)
+
+    except Exception as e:
+        logging.error(f"Error in get_group_stats_api: {e}", exc_info=True)
+        return jsonify({"error": "从数据库获取官组统计数据失败"}), 500
+    finally:
+        if conn:
+            cursor.close()
+            conn.close()
+
+
 @app.route('/api/save_filters', methods=['POST'])
 def save_filters_api():
     data = request.get_json()
@@ -1482,4 +1568,4 @@ def save_filters_api():
 if __name__ == '__main__':
     logging.info("Starting Flask development server as a pure API backend...")
     # 添加 use_reloader=False 来防止调试模式下启动两个进程
-    app.run(host='0.0.0.0', port=15001, debug=True, use_reloader=False)
+    app.run(host='0.0.0.0', port=15003, debug=True, use_reloader=False)

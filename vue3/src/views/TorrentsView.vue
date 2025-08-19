@@ -34,7 +34,7 @@
                   v-if="hasLink(props.row.sites[siteName], siteName)"
                   :href="getLink(props.row.sites[siteName], siteName)!"
                   target="_blank"
-                  style="text-decoration: none;"
+                  style="text-decoration: none"
                 >
                   <el-tag effect="dark" :type="getTagType(props.row.sites[siteName])">
                     {{ siteName }} ({{
@@ -51,14 +51,14 @@
                 </el-tag>
               </template>
               <template v-else>
-                <el-tag type="info" effect="plain" >{{ siteName }}</el-tag>
+                <el-tag type="info" effect="plain">{{ siteName }}</el-tag>
               </template>
             </template>
           </div>
         </template>
       </el-table-column>
 
-      <el-table-column prop="name" min-width="350" sortable="custom">
+      <el-table-column prop="name" min-width="450" sortable="custom">
         <template #header>
           <div class="name-header-container">
             <div>种子名称</div>
@@ -78,6 +78,21 @@
         </template>
         <template #default="scope">
           <span style="white-space: normal">{{ scope.row.name }}</span>
+        </template>
+      </el-table-column>
+
+      <el-table-column
+        prop="site_count"
+        label="做种站点数"
+        sortable="custom"
+        width="120"
+        align="center"
+        header-align="center"
+      >
+        <template #default="scope">
+          <span style="display: inline-block; width: 100%; text-align: center">
+            {{ scope.row.site_count }} / {{ scope.row.total_site_count }}
+          </span>
         </template>
       </el-table-column>
 
@@ -110,7 +125,7 @@
         align="center"
         sortable="custom"
       />
-      <el-table-column label="进度" prop="progress" width="140" align="center" sortable="custom">
+      <el-table-column label="进度" prop="progress" width="90" align="center" sortable="custom">
         <template #default="scope">
           <el-progress
             :percentage="scope.row.progress"
@@ -119,7 +134,7 @@
           />
         </template>
       </el-table-column>
-      <el-table-column label="状态" prop="state" width="110" align="center">
+      <el-table-column label="状态" prop="state" width="90" align="center">
         <template #default="scope">
           <el-tag :type="getStateTagType(scope.row.state)" size="large">{{
             scope.row.state
