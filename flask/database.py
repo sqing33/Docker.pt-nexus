@@ -6,7 +6,7 @@ import mysql.connector
 import json
 import os
 
-from config import load_config, SITES_DATA_FILE
+from config import SITES_DATA_FILE
 from qbittorrentapi import Client
 from transmission_rpc import Client as TrClient
 
@@ -31,7 +31,8 @@ class DatabaseManager:
             return mysql.connector.connect(**self.mysql_config,
                                            autocommit=False)
         else:
-            return sqlite3.connect(self.sqlite_path)
+            # 增加 timeout 参数以减少 "database is locked" 错误
+            return sqlite3.connect(self.sqlite_path, timeout=20)
 
     def _get_cursor(self, conn):
         """Returns a cursor from a connection."""
@@ -173,14 +174,13 @@ class DatabaseManager:
         logging.info("Database schemas verified.")
 
 
-def reconcile_historical_data(db_manager):
+def reconcile_historical_data(db_manager, config):
     """
     Corrected function:
     1. (One-time only) If needed, create a historical baseline/genesis record.
     2. (On every start) Force synchronization of current state with download clients to prevent data spikes after a restart.
     """
     logging.info("Starting data reconciliation and state synchronization...")
-    config = load_config()
     conn = db_manager._get_connection()
     cursor = db_manager._get_cursor(conn)
     is_mysql = db_manager.db_type == 'mysql'

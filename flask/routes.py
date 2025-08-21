@@ -2,28 +2,99 @@
 
 import json
 import logging
+import copy  # <--- 1. 引入 copy 模块
 from flask import Blueprint, jsonify, request
 from threading import Thread
 from datetime import datetime, timedelta
 from collections import defaultdict
 from functools import cmp_to_key
 
-from config import load_config
 import services
-from services import CACHE_LOCK, load_site_maps_from_db
+from services import CACHE_LOCK, load_site_maps_from_db, start_data_tracker, stop_data_tracker
 from utils import custom_sort_compare, format_bytes
-from qbittorrentapi import Client
-from transmission_rpc import Client as TrClient
+from qbittorrentapi import Client, APIConnectionError
+from transmission_rpc import Client as TrClient, TransmissionError
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 
 db_manager = None
+config_manager = None
 
 
-def initialize_routes(manager):
-    """注入 DatabaseManager 实例以供路由使用。"""
-    global db_manager
+def initialize_routes(manager, conf_manager):
+    """注入实例以供路由使用。"""
+    global db_manager, config_manager
     db_manager = manager
+    config_manager = conf_manager
+
+
+@api_bp.route('/settings', methods=['GET'])
+def get_settings():
+    """获取当前下载器配置（不含密码）。"""
+    # --- 2. 使用深拷贝（deepcopy）来创建一个完全独立的副本 ---
+    config = copy.deepcopy(config_manager.get())
+
+    if 'qbittorrent' in config and 'password' in config['qbittorrent']:
+        config['qbittorrent']['password'] = ''
+    if 'transmission' in config and 'password' in config['transmission']:
+        config['transmission']['password'] = ''
+    return jsonify(config)
+
+
+@api_bp.route('/settings', methods=['POST'])
+def update_settings():
+    """更新并保存下载器配置。"""
+    new_config = request.json
+    current_config = config_manager.get()
+
+    for client in ['qbittorrent', 'transmission']:
+        if client in new_config:
+            # 如果新配置中密码为空，并且旧配置中存在该客户端，则保留旧密码
+            if not new_config[client].get('password') and current_config.get(
+                    client):
+                new_config[client]['password'] = current_config[client].get(
+                    'password', '')
+
+    if config_manager.save(new_config):
+        stop_data_tracker()
+        start_data_tracker(db_manager, config_manager)
+        return jsonify({"message": "配置已成功保存和应用。"}), 200
+    else:
+        return jsonify({"error": "无法保存配置到文件。"}), 500
+
+
+@api_bp.route('/test_connection', methods=['POST'])
+def test_connection():
+    """测试与下载器的连接。"""
+    client_config = request.json
+    client_type = client_config.get('type')
+    try:
+        if client_type == 'qbittorrent':
+            client = Client(**client_config.get('config', {}))
+            client.auth_log_in()
+            version = client.app.version
+            return jsonify({"success": True, "message": f"连接成功！版本: {version}"})
+        elif client_type == 'transmission':
+            client = TrClient(**client_config.get('config', {}))
+            version = client.get_session().version
+            return jsonify({"success": True, "message": f"连接成功！版本: {version}"})
+        else:
+            return jsonify({"success": False, "message": "无效的客户端类型。"}), 400
+    except APIConnectionError as e:
+        return jsonify({
+            "success": False,
+            "message": f"连接失败: 无法连接到主机。 {e}"
+        }), 200
+    except TransmissionError as e:
+        return jsonify({
+            "success": False,
+            "message": f"连接失败: {e.message}"
+        }), 200
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": f"连接失败: 发生未知错误 - {str(e)}"
+        }), 200
 
 
 def get_date_range_and_grouping(time_range_str, for_speed=False):
@@ -116,19 +187,21 @@ def get_chart_data_api():
 
 @api_bp.route('/speed_data')
 def get_speed_data_api():
-    with CACHE_LOCK:
-        speeds = services.data_tracker_thread.latest_speeds
-    cfg = load_config()
+    speeds = {}
+    if services.data_tracker_thread:
+        with CACHE_LOCK:
+            speeds = services.data_tracker_thread.latest_speeds
+    cfg = config_manager.get()
     return jsonify({
         'qbittorrent': {
             'enabled': cfg.get('qbittorrent', {}).get('enabled', False),
-            'upload_speed': speeds['qb_ul_speed'],
-            'download_speed': speeds['qb_dl_speed']
+            'upload_speed': speeds.get('qb_ul_speed', 0),
+            'download_speed': speeds.get('qb_dl_speed', 0)
         },
         'transmission': {
             'enabled': cfg.get('transmission', {}).get('enabled', False),
-            'upload_speed': speeds['tr_ul_speed'],
-            'download_speed': speeds['tr_dl_speed']
+            'upload_speed': speeds.get('tr_ul_speed', 0),
+            'download_speed': speeds.get('tr_dl_speed', 0)
         }
     })
 
@@ -140,8 +213,11 @@ def get_recent_speed_data_api():
     except ValueError:
         return jsonify({"error": "无效的秒数参数"}), 400
 
-    with CACHE_LOCK:
-        buffer_data = list(services.data_tracker_thread.recent_speeds_buffer)
+    buffer_data = []
+    if services.data_tracker_thread:
+        with CACHE_LOCK:
+            buffer_data = list(
+                services.data_tracker_thread.recent_speeds_buffer)
 
     results = [{
         "time": r['timestamp'].strftime('%H:%M:%S'),
@@ -170,7 +246,6 @@ def get_recent_speed_data_api():
                 dt_obj = row['stat_datetime']
                 if isinstance(dt_obj, str):
                     dt_obj = datetime.strptime(dt_obj, '%Y-%m-%d %H:%M:%S')
-
                 db_data.append({
                     "time": dt_obj.strftime('%H:%M:%S'),
                     "qb_ul_speed": row['qb_upload_speed'] or 0,
@@ -201,7 +276,7 @@ def get_recent_speed_data_api():
         } for i in range(pad_count)]
         final_results = padding + final_results
 
-    cfg = load_config()
+    cfg = config_manager.get()
     qb_enabled = cfg.get('qbittorrent', {}).get('enabled', False)
     tr_enabled = cfg.get('transmission', {}).get('enabled', False)
     for r in final_results:
@@ -248,7 +323,7 @@ def get_speed_chart_data_api():
 
 @api_bp.route('/downloader_info')
 def get_downloader_info_api():
-    cfg = load_config()
+    cfg = config_manager.get()
     info = {
         'qbittorrent': {
             'enabled': cfg.get('qbittorrent', {}).get('enabled', False),
@@ -492,7 +567,6 @@ def get_data_api():
                 set(
                     row.get('state') for row in torrents_raw
                     if row.get('state'))))
-
         _, site_link_rules_from_db, _ = load_site_maps_from_db(db_manager)
 
         return jsonify({
@@ -518,9 +592,12 @@ def get_data_api():
 @api_bp.route('/refresh_data', methods=['POST'])
 def refresh_data_api():
     try:
-        Thread(target=services.data_tracker_thread._update_torrents_in_db
-               ).start()
-        return jsonify({"message": "后台刷新已触发"}), 202
+        if services.data_tracker_thread:
+            Thread(target=services.data_tracker_thread._update_torrents_in_db
+                   ).start()
+            return jsonify({"message": "后台刷新已触发"}), 202
+        else:
+            return jsonify({"message": "数据追踪服务未运行，无法刷新。"}), 400
     except Exception as e:
         logging.error(f"触发刷新失败: {e}")
         return jsonify({"error": "触发刷新失败"}), 500
@@ -533,14 +610,8 @@ def get_site_stats_api():
     try:
         conn = db_manager._get_connection()
         cursor = db_manager._get_cursor(conn)
-
-        query = """
-            SELECT sites, SUM(size) as total_size, COUNT(name) as torrent_count 
-            FROM (SELECT DISTINCT name, size, sites FROM torrents WHERE sites IS NOT NULL AND sites != '') AS unique_torrents 
-            GROUP BY sites;
-        """
+        query = "SELECT sites, SUM(size) as total_size, COUNT(name) as torrent_count FROM (SELECT DISTINCT name, size, sites FROM torrents WHERE sites IS NOT NULL AND sites != '') AS unique_torrents GROUP BY sites;"
         cursor.execute(query)
-
         rows = cursor.fetchall()
         results = sorted([{
             "site_name": row['sites'],
@@ -565,36 +636,11 @@ def get_group_stats_api():
         conn = db_manager._get_connection()
         cursor = db_manager._get_cursor(conn)
         is_mysql = db_manager.db_type == 'mysql'
-
         if is_mysql:
-            group_col_quoted = '`group`'
-            group_concat_expr = "GROUP_CONCAT(DISTINCT ut.`group` ORDER BY ut.`group` SEPARATOR ', ')"
-            join_condition = "FIND_IN_SET(ut.`group`, s.`group`) > 0"
-        else:  
-            group_col_quoted = '"group"'
-            group_concat_expr = 'GROUP_CONCAT(DISTINCT ut."group")'
-            join_condition = "',' || s.\"group\" || ',' LIKE '%,' || ut.\"group\" || ',%'"
-
-        query = f"""
-            SELECT 
-                s.nickname AS site_name, 
-                {group_concat_expr} AS group_suffix, 
-                COUNT(ut.name) AS torrent_count, 
-                SUM(ut.size) AS total_size
-            FROM (
-                SELECT 
-                    name, 
-                    {group_col_quoted} AS "group", 
-                    MAX(size) AS size 
-                FROM torrents 
-                WHERE {group_col_quoted} IS NOT NULL AND {group_col_quoted} != '' 
-                GROUP BY name, {group_col_quoted}
-            ) AS ut
-            JOIN sites AS s ON {join_condition}
-            GROUP BY s.nickname 
-            ORDER BY s.nickname;
-        """
-
+            group_col_quoted, group_concat_expr, join_condition = '`group`', "GROUP_CONCAT(DISTINCT ut.`group` ORDER BY ut.`group` SEPARATOR ', ')", "FIND_IN_SET(ut.`group`, s.`group`) > 0"
+        else:
+            group_col_quoted, group_concat_expr, join_condition = '"group"', 'GROUP_CONCAT(DISTINCT ut."group")', "',' || s.\"group\" || ',' LIKE '%,' || ut.\"group\" || ',%'"
+        query = f"""SELECT s.nickname AS site_name, {group_concat_expr} AS group_suffix, COUNT(ut.name) AS torrent_count, SUM(ut.size) AS total_size FROM (SELECT name, {group_col_quoted} AS "group", MAX(size) AS size FROM torrents WHERE {group_col_quoted} IS NOT NULL AND {group_col_quoted} != '' GROUP BY name, {group_col_quoted}) AS ut JOIN sites AS s ON {join_condition} GROUP BY s.nickname ORDER BY s.nickname;"""
         cursor.execute(query)
         rows = cursor.fetchall()
         results = [{

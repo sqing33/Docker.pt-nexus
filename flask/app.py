@@ -5,7 +5,7 @@ import os
 from flask import Flask, send_from_directory
 from flask_cors import CORS
 
-from config import get_db_config
+from config import get_db_config, config_manager
 from database import DatabaseManager, reconcile_historical_data
 from services import start_data_tracker
 from routes import api_bp, initialize_routes
@@ -28,12 +28,14 @@ def create_app():
     db_manager = DatabaseManager(db_config)
     db_manager.init_db()
 
-    reconcile_historical_data(db_manager)
+    # 传递加载好的配置
+    reconcile_historical_data(db_manager, config_manager.get())
 
-    initialize_routes(db_manager)
+    # 将依赖注入到路由和后台服务
+    initialize_routes(db_manager, config_manager)
     app.register_blueprint(api_bp)
 
-    start_data_tracker(db_manager)
+    start_data_tracker(db_manager, config_manager)
 
     @app.route('/', defaults={'path': ''})
     @app.route('/<path:path>')
@@ -52,7 +54,7 @@ def create_app():
 if __name__ == '__main__':
     flask_app = create_app()
 
-    port = int(os.getenv("PORT", 5272))
+    port = int(os.getenv("PORT", 15272))
 
     logging.info(f"以开发模式启动 Flask 服务器，监听端口 {port}...")
 
