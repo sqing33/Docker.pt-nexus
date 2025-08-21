@@ -19,47 +19,41 @@ class ConfigManager:
         self._config = {}
         self.load()
 
-    def _load_config_from_env(self):
-        """从环境变量构建配置字典（作为备用方案）。"""
-        logging.debug("从环境变量加载配置。")
-        qb_enabled = os.getenv('QB_ENABLED',
-                               'false').lower() in ('true', '1', 't')
-        qb_config = {
-            "enabled": qb_enabled,
-            "host": os.getenv('QB_HOST', ''),
-            "username": os.getenv('QB_USERNAME', ''),
-            "password": os.getenv('QB_PASSWORD', '')
+    def _get_default_config(self):
+        """返回一个包含两个下载器都已禁用的默认配置结构。"""
+        return {
+            "qbittorrent": {
+                "enabled": False,
+                "host": "",
+                "username": "",
+                "password": ""
+            },
+            "transmission": {
+                "enabled": False,
+                "host": "",
+                "port": 9091,
+                "username": "",
+                "password": ""
+            }
         }
-        tr_enabled = os.getenv('TR_ENABLED',
-                               'false').lower() in ('true', '1', 't')
-        tr_port = 9091
-        try:
-            tr_port = int(os.getenv('TR_PORT', '9091'))
-        except (ValueError, TypeError):
-            logging.warning(
-                f"无效的 TR_PORT 值 '{os.getenv('TR_PORT')}'。正在使用默认端口 9091。")
-        tr_config = {
-            "enabled": tr_enabled,
-            "host": os.getenv('TR_HOST', ''),
-            "port": tr_port,
-            "username": os.getenv('TR_USERNAME', ''),
-            "password": os.getenv('TR_PASSWORD', '')
-        }
-        return {"qbittorrent": qb_config, "transmission": tr_config}
 
     def load(self):
-        """优先从 config.json 加载配置，如果文件不存在，则从环境变量加载。"""
+        """
+        仅从 config.json 加载配置。
+        如果文件不存在，则创建一个包含禁用客户端的默认配置文件。
+        """
         if os.path.exists(CONFIG_FILE):
             logging.info(f"从 {CONFIG_FILE} 加载配置。")
             try:
                 with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
                     self._config = json.load(f)
             except (json.JSONDecodeError, IOError) as e:
-                logging.error(f"无法读取或解析 {CONFIG_FILE}: {e}。将回退到环境变量。")
-                self._config = self._load_config_from_env()
+                logging.error(f"无法读取或解析 {CONFIG_FILE}: {e}。将加载一个安全的默认配置。")
+                self._config = self._get_default_config()
         else:
-            logging.info("未找到 config.json，将从环境变量加载配置。")
-            self._config = self._load_config_from_env()
+            logging.info(f"未找到 {CONFIG_FILE}，将创建一个新的默认配置文件。")
+            default_config = self._get_default_config()
+            self.save(default_config)  # 保存到磁盘并更新缓存
 
     def get(self):
         """返回缓存的配置。"""
@@ -79,7 +73,7 @@ class ConfigManager:
 
 
 def get_db_config():
-    """根据环境变量 DB_TYPE 显式选择数据库。"""
+    """根据环境变量 DB_TYPE 显式选择数据库。这部分保持不变。"""
     db_choice = os.getenv('DB_TYPE', 'sqlite').lower()
     if db_choice == 'mysql':
         logging.info("数据库类型选择为 MySQL。正在检查相关环境变量...")
