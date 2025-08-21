@@ -2,7 +2,7 @@
 
 import json
 import logging
-import copy  # <--- 1. 引入 copy 模块
+import copy
 from flask import Blueprint, jsonify, request
 from threading import Thread
 from datetime import datetime, timedelta
@@ -31,9 +31,7 @@ def initialize_routes(manager, conf_manager):
 @api_bp.route('/settings', methods=['GET'])
 def get_settings():
     """获取当前下载器配置（不含密码）。"""
-    # --- 2. 使用深拷贝（deepcopy）来创建一个完全独立的副本 ---
     config = copy.deepcopy(config_manager.get())
-
     if 'qbittorrent' in config and 'password' in config['qbittorrent']:
         config['qbittorrent']['password'] = ''
     if 'transmission' in config and 'password' in config['transmission']:
@@ -43,26 +41,42 @@ def get_settings():
 
 @api_bp.route('/settings', methods=['POST'])
 def update_settings():
-    """更新并保存下载器配置。"""
-    new_config = request.json
-    current_config = config_manager.get()
+    """
+    更新并保存单个下载器的配置。
+    请求体应为: {'qbittorrent': {...}} 或 {'transmission': {...}}
+    """
+    partial_config = request.json
+    if not partial_config or len(partial_config) != 1:
+        return jsonify({"error": "无效的请求格式。"}), 400
 
-    for client in ['qbittorrent', 'transmission']:
-        if client in new_config:
-            # 如果新配置中密码为空，并且旧配置中存在该客户端，则保留旧密码
-            if not new_config[client].get('password') and current_config.get(
-                    client):
-                new_config[client]['password'] = current_config[client].get(
-                    'password', '')
+    client_type = list(partial_config.keys())[0]
+    if client_type not in ['qbittorrent', 'transmission']:
+        return jsonify({"error": f"无效的客户端类型: {client_type}"}), 400
 
-    if config_manager.save(new_config):
+    new_client_data = partial_config[client_type]
+
+    # 获取当前完整配置以进行更新
+    full_config = copy.deepcopy(config_manager.get())
+
+    # 如果密码字段为空，则保留旧密码
+    if not new_client_data.get('password') and full_config.get(client_type):
+        new_client_data['password'] = full_config[client_type].get(
+            'password', '')
+
+    # 更新完整配置中的特定客户端部分
+    full_config[client_type] = new_client_data
+
+    if config_manager.save(full_config):
         stop_data_tracker()
         start_data_tracker(db_manager, config_manager)
-        return jsonify({"message": "配置已成功保存和应用。"}), 200
+        return jsonify({"message":
+                        f"{client_type.capitalize()} 的配置已成功保存和应用。"}), 200
     else:
         return jsonify({"error": "无法保存配置到文件。"}), 500
 
 
+# ... [从 test_connection 到文件末尾的所有其他路由代码保持不变] ...
+# ... [为了简洁，这里省略了它们，您不需要修改这些部分] ...
 @api_bp.route('/test_connection', methods=['POST'])
 def test_connection():
     """测试与下载器的连接。"""

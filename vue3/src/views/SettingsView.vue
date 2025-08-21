@@ -3,7 +3,7 @@
     <el-alert
       title="设置说明"
       type="info"
-      description="在此处配置您的 qBittorrent 和 Transmission 客户端。密码字段留空则表示不更改现有密码。保存后，系统将自动重新连接。"
+      description="在此处配置您的下载客户端。密码字段留空则表示不更改现有密码。每个客户端的设置需要单独应用。"
       show-icon
       :closable="false"
       class="info-alert"
@@ -17,19 +17,18 @@
           <el-switch v-model="config.qbittorrent.enabled" active-text="启用" inactive-text="禁用" />
         </div>
       </template>
-      <el-form
-        :model="config.qbittorrent"
-        label-width="120px"
-        :disabled="!config.qbittorrent.enabled"
-      >
+      <!-- 移除了这里的 :disabled 属性 -->
+      <el-form :model="config.qbittorrent" label-width="120px">
         <el-form-item label="主机地址">
+          <!-- 将 :disabled 属性移到了具体的输入组件上 -->
           <el-input
             v-model="config.qbittorrent.host"
             placeholder="例如: http://192.168.1.10:8080"
+            :disabled="!config.qbittorrent.enabled"
           />
         </el-form-item>
         <el-form-item label="用户名">
-          <el-input v-model="config.qbittorrent.username" />
+          <el-input v-model="config.qbittorrent.username" :disabled="!config.qbittorrent.enabled" />
         </el-form-item>
         <el-form-item label="密码">
           <el-input
@@ -37,10 +36,24 @@
             type="password"
             show-password
             placeholder="留空以保持不变"
+            :disabled="!config.qbittorrent.enabled"
           />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="testConnection('qbittorrent')">测试连接</el-button>
+          <el-button
+            type="primary"
+            @click="testConnection('qbittorrent')"
+            :disabled="!config.qbittorrent.enabled"
+            >测试连接</el-button
+          >
+          <!-- 这个按钮现在只受 loading 状态影响，不再被表单禁用 -->
+          <el-button
+            type="success"
+            @click="saveClientSettings('qbittorrent')"
+            :loading="isSaving.qbittorrent"
+          >
+            <i class="fas fa-save"></i>&nbsp;应用 qBittorrent 设置
+          </el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -57,19 +70,29 @@
           />
         </div>
       </template>
-      <el-form
-        :model="config.transmission"
-        label-width="120px"
-        :disabled="!config.transmission.enabled"
-      >
+      <!-- 移除了这里的 :disabled 属性 -->
+      <el-form :model="config.transmission" label-width="120px">
         <el-form-item label="主机地址">
-          <el-input v-model="config.transmission.host" placeholder="例如: 192.168.1.11" />
+          <!-- 将 :disabled 属性移到了具体的输入组件上 -->
+          <el-input
+            v-model="config.transmission.host"
+            placeholder="例如: 192.168.1.11"
+            :disabled="!config.transmission.enabled"
+          />
         </el-form-item>
         <el-form-item label="端口">
-          <el-input-number v-model="config.transmission.port" :min="1" :max="65535" />
+          <el-input-number
+            v-model="config.transmission.port"
+            :min="1"
+            :max="65535"
+            :disabled="!config.transmission.enabled"
+          />
         </el-form-item>
         <el-form-item label="用户名">
-          <el-input v-model="config.transmission.username" />
+          <el-input
+            v-model="config.transmission.username"
+            :disabled="!config.transmission.enabled"
+          />
         </el-form-item>
         <el-form-item label="密码">
           <el-input
@@ -77,28 +100,40 @@
             type="password"
             show-password
             placeholder="留空以保持不变"
+            :disabled="!config.transmission.enabled"
           />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="testConnection('transmission')">测试连接</el-button>
+          <el-button
+            type="primary"
+            @click="testConnection('transmission')"
+            :disabled="!config.transmission.enabled"
+            >测试连接</el-button
+          >
+          <!-- 这个按钮现在只受 loading 状态影响，不再被表单禁用 -->
+          <el-button
+            type="success"
+            @click="saveClientSettings('transmission')"
+            :loading="isSaving.transmission"
+          >
+            <i class="fas fa-save"></i>&nbsp;应用 Transmission 设置
+          </el-button>
         </el-form-item>
       </el-form>
     </el-card>
-
-    <div class="save-button-container">
-      <el-button type="success" size="large" @click="saveSettings" :loading="isSaving">
-        <i class="fas fa-save"></i>&nbsp;保存所有设置
-      </el-button>
-    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import axios from 'axios'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 
-const isSaving = ref(false)
+const isSaving = reactive({
+  qbittorrent: false,
+  transmission: false,
+})
+
 const config = ref({
   qbittorrent: {
     enabled: false,
@@ -118,7 +153,6 @@ const config = ref({
 const fetchSettings = async () => {
   try {
     const response = await axios.get('/api/settings')
-    // 如果返回的数据不完整，用默认值填充
     if (response.data.qbittorrent) {
       config.value.qbittorrent = { ...config.value.qbittorrent, ...response.data.qbittorrent }
     }
@@ -165,16 +199,20 @@ const testConnection = async (clientType) => {
   }
 }
 
-const saveSettings = async () => {
-  isSaving.value = true
+const saveClientSettings = async (clientType) => {
+  isSaving[clientType] = true
+  const payload = {
+    [clientType]: config.value[clientType],
+  }
+
   try {
-    const response = await axios.post('/api/settings', config.value)
+    const response = await axios.post('/api/settings', payload)
     ElMessage.success(response.data.message || '设置已保存！')
   } catch (error) {
     ElMessage.error(error.response?.data?.error || '保存设置失败！')
     console.error(error)
   } finally {
-    isSaving.value = false
+    isSaving[clientType] = false
   }
 }
 
@@ -201,9 +239,5 @@ onMounted(() => {
 }
 .info-alert {
   margin-bottom: 20px;
-}
-.save-button-container {
-  text-align: center;
-  margin-top: 30px;
 }
 </style>
