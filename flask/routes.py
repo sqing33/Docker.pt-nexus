@@ -146,7 +146,7 @@ def get_date_range_and_grouping(time_range_str, for_speed=False):
          '%Y-%m-%d'),
         'last_6_months': (now - timedelta(days=180), '%Y-%m'),
         'this_year': (today_start.replace(month=1, day=1), '%Y-%m'),
-        'all': (datetime(1970, 1, 2), '%Y-%m'),
+        'all': (datetime(1970, 1, 1), '%Y-%m'),
         'last_12_hours': (now - timedelta(hours=12), None),
         'last_24_hours': (now - timedelta(hours=24), None)
     }
@@ -250,16 +250,12 @@ def get_recent_speed_data_api():
             buffer_data = list(
                 services.data_tracker_thread.recent_speeds_buffer)
 
-    # 1. 处理内存缓冲中的数据
     results_from_buffer = []
     for r in sorted(buffer_data, key=lambda x: x['timestamp']):
-        # --- MODIFICATION START: 使用更安全的方式重构 speeds 字典 ---
         renamed_speeds = {}
         for d in enabled_downloaders:
-            # 从原始速度数据中获取对应下载器的数据，如果不存在则为空字典
             original_speed_data = r['speeds'].get(d['id'], {})
             renamed_speeds[d['id']] = {
-                # 安全地获取每个速度值，如果键不存在则默认为 0
                 'ul_speed': original_speed_data.get('upload_speed', 0),
                 'dl_speed': original_speed_data.get('download_speed', 0)
             }
@@ -268,9 +264,7 @@ def get_recent_speed_data_api():
             "time": r['timestamp'].strftime('%H:%M:%S'),
             "speeds": renamed_speeds
         })
-        # --- MODIFICATION END ---
 
-    # 2. 如果缓冲数据不够，从数据库获取
     seconds_missing = seconds_to_fetch - len(results_from_buffer)
     results_from_db = []
     if seconds_missing > 0:
@@ -284,11 +278,10 @@ def get_recent_speed_data_api():
             cursor = db_manager._get_cursor(conn)
 
             query = f"SELECT stat_datetime, downloader_id, upload_speed, download_speed FROM traffic_stats WHERE stat_datetime < {ph} ORDER BY stat_datetime DESC LIMIT {ph}"
-            params = [
-                end_dt.strftime('%Y-%m-%d %H:%M:%S'),
-                seconds_missing * len(enabled_downloaders)
-                if enabled_downloaders else seconds_missing
-            ]
+            limit = seconds_missing * len(
+                enabled_downloaders
+            ) if enabled_downloaders else seconds_missing
+            params = [end_dt.strftime('%Y-%m-%d %H:%M:%S'), limit]
             cursor.execute(query, tuple(params))
 
             db_rows_by_time = defaultdict(dict)
@@ -307,7 +300,7 @@ def get_recent_speed_data_api():
                     'dl_speed': row['download_speed'] or 0
                 }
 
-            for time_str, speeds_dict in db_rows_by_time.items():
+            for time_str, speeds_dict in sorted(db_rows_by_time.items()):
                 results_from_db.append({
                     "time": time_str,
                     "speeds": speeds_dict
@@ -319,7 +312,6 @@ def get_recent_speed_data_api():
             if cursor: cursor.close()
             if conn: conn.close()
 
-    # 3. 合并并返回
     final_results = (results_from_db + results_from_buffer)[-seconds_to_fetch:]
     labels = [r['time'] for r in final_results]
 
