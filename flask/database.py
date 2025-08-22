@@ -5,10 +5,15 @@ import sqlite3
 import mysql.connector
 import json
 import os
+from datetime import datetime
 
 from config import SITES_DATA_FILE, config_manager
 from qbittorrentapi import Client
 from transmission_rpc import Client as TrClient
+
+# --- MODIFICATION START: 从 services.py 导入辅助函数 ---
+from services import _prepare_api_config
+# --- MODIFICATION END ---
 
 DB_FILE = 'pt_stats.db'
 
@@ -31,7 +36,6 @@ class DatabaseManager:
             return mysql.connector.connect(**self.mysql_config,
                                            autocommit=False)
         else:
-            # 增加 timeout 参数以减少 "database is locked" 错误
             return sqlite3.connect(self.sqlite_path, timeout=20)
 
     def _get_cursor(self, conn):
@@ -49,11 +53,9 @@ class DatabaseManager:
     def init_db(self):
         """确保所有必需的数据库表都存在，并根据需要填充站点表。"""
         conn = self._get_connection()
-        # [FIXED] 始终使用 _get_cursor 来确保 row_factory 被设置
         cursor = self._get_cursor(conn)
 
         if self.db_type == 'mysql':
-            # 流量统计表 (新)
             cursor.execute('''CREATE TABLE IF NOT EXISTS traffic_stats (
                     stat_datetime DATETIME NOT NULL,
                     downloader_id VARCHAR(36) NOT NULL,
@@ -63,7 +65,6 @@ class DatabaseManager:
                     download_speed BIGINT DEFAULT 0,
                     PRIMARY KEY (stat_datetime, downloader_id)
                 ) ENGINE=InnoDB ROW_FORMAT=Dynamic''')
-            # 下载器客户端状态表 (新)
             cursor.execute('''CREATE TABLE IF NOT EXISTS downloader_clients (
                     id VARCHAR(36) PRIMARY KEY,
                     name VARCHAR(255) NOT NULL,
@@ -73,7 +74,6 @@ class DatabaseManager:
                     last_cumulative_dl BIGINT NOT NULL DEFAULT 0,
                     last_cumulative_ul BIGINT NOT NULL DEFAULT 0
                 ) ENGINE=InnoDB ROW_FORMAT=Dynamic''')
-            # 种子主信息表 (修改)
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS torrents (
                     hash VARCHAR(40) PRIMARY KEY,
@@ -88,7 +88,6 @@ class DatabaseManager:
                     last_seen DATETIME NOT NULL
                 ) ENGINE=InnoDB ROW_FORMAT=Dynamic
             ''')
-            # 种子上传量统计表 (新)
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS torrent_upload_stats (
                     hash VARCHAR(40) NOT NULL,
@@ -97,7 +96,6 @@ class DatabaseManager:
                     PRIMARY KEY (hash, downloader_id)
                 ) ENGINE=InnoDB ROW_FORMAT=Dynamic
             ''')
-            # 站点信息表
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS `sites` (
                     `id` mediumint NOT NULL AUTO_INCREMENT,
@@ -161,16 +159,12 @@ class DatabaseManager:
                 )
             ''')
 
-        # 迁移旧数据
         self._migrate_legacy_data(cursor)
-
         conn.commit()
 
-        # 填充站点表逻辑 (不变)
         try:
             cursor.execute("SELECT COUNT(*) FROM sites")
             result = cursor.fetchone()
-            # 适配 sqlite3.Row 和 dict
             count = result[0] if isinstance(
                 result, (tuple, sqlite3.Row)) else result['COUNT(*)']
 
@@ -205,7 +199,6 @@ class DatabaseManager:
                 exc_info=True)
             conn.rollback()
 
-        # 同步配置文件中的下载器到数据库
         self._sync_downloaders_from_config(cursor)
         conn.commit()
 
@@ -227,18 +220,14 @@ class DatabaseManager:
 
         config_ids = {d['id'] for d in downloaders}
 
-        # 添加或更新
         for d in downloaders:
             if d['id'] in db_ids:
-                # 更新名称和类型
                 sql = "UPDATE downloader_clients SET name = %s, type = %s WHERE id = %s" if self.db_type == 'mysql' else "UPDATE downloader_clients SET name = ?, type = ? WHERE id = ?"
                 cursor.execute(sql, (d['name'], d['type'], d['id']))
             else:
-                # 插入新的
                 sql = 'INSERT INTO downloader_clients (id, name, type) VALUES (%s, %s, %s)' if self.db_type == 'mysql' else 'INSERT INTO downloader_clients (id, name, type) VALUES (?, ?, ?)'
                 cursor.execute(sql, (d['id'], d['name'], d['type']))
 
-        # 删除不存在于配置文件的
         ids_to_delete = db_ids - config_ids
         if ids_to_delete:
             placeholders = ', '.join([self.get_placeholder()] *
@@ -252,13 +241,12 @@ class DatabaseManager:
     def _migrate_legacy_data(self, cursor):
         """检查并迁移旧的数据库表结构数据到新结构。"""
         try:
-            # 检查旧的 downloader_state 表是否存在
             cursor.execute(
                 "SELECT name FROM sqlite_master WHERE type='table' AND name='downloader_state'"
             ) if self.db_type != 'mysql' else cursor.execute(
                 "SHOW TABLES LIKE 'downloader_state'")
             if not cursor.fetchone():
-                return  # 不是旧版本，无需迁移
+                return
 
             logging.warning(
                 "Legacy tables detected. Attempting to migrate data to the new schema. This is a one-time operation."
@@ -270,7 +258,6 @@ class DatabaseManager:
             tr_downloader = next((d for d in config.get('downloaders', [])
                                   if d.get('type') == 'transmission'), None)
 
-            # 1. 迁移 downloader_state
             if qb_downloader:
                 cursor.execute(
                     "SELECT * FROM downloader_state WHERE name = 'qbittorrent'"
@@ -282,7 +269,6 @@ class DatabaseManager:
                                    (qb_downloader['id'], qb_downloader['name'],
                                     'qbittorrent', row['last_session_dl'],
                                     row['last_session_ul']))
-
             if tr_downloader:
                 cursor.execute(
                     "SELECT * FROM downloader_state WHERE name = 'transmission'"
@@ -294,8 +280,6 @@ class DatabaseManager:
                                    (tr_downloader['id'], tr_downloader['name'],
                                     'transmission', row['last_cumulative_dl'],
                                     row['last_cumulative_ul']))
-
-            # 2. 迁移 torrents 表中的上传量
             if qb_downloader:
                 cursor.execute(
                     "SELECT hash, qb_uploaded FROM torrents WHERE qb_uploaded > 0"
@@ -305,7 +289,6 @@ class DatabaseManager:
                 if params:
                     sql = "INSERT INTO torrent_upload_stats (hash, downloader_id, uploaded) VALUES (%s, %s, %s) ON DUPLICATE KEY UPDATE uploaded=VALUES(uploaded)" if self.db_type == 'mysql' else "INSERT INTO torrent_upload_stats (hash, downloader_id, uploaded) VALUES (?, ?, ?) ON CONFLICT(hash, downloader_id) DO UPDATE SET uploaded=excluded.uploaded"
                     cursor.executemany(sql, params)
-
             if tr_downloader:
                 cursor.execute(
                     "SELECT hash, tr_uploaded FROM torrents WHERE tr_uploaded > 0"
@@ -316,7 +299,6 @@ class DatabaseManager:
                     sql = "INSERT INTO torrent_upload_stats (hash, downloader_id, uploaded) VALUES (%s, %s, %s) ON DUPLICATE KEY UPDATE uploaded=VALUES(uploaded)" if self.db_type == 'mysql' else "INSERT INTO torrent_upload_stats (hash, downloader_id, uploaded) VALUES (?, ?, ?) ON CONFLICT(hash, downloader_id) DO UPDATE SET uploaded=excluded.uploaded"
                     cursor.executemany(sql, params)
 
-            # 3. 删除旧表和旧列 (仅限SQLite，MySQL需要手动ALTER)
             if self.db_type != 'mysql':
                 logging.info(
                     "Dropping legacy 'downloader_state' table for SQLite.")
@@ -343,79 +325,118 @@ class DatabaseManager:
 
             logging.info("Data migration completed successfully.")
         except Exception as e:
-            # 如果迁移失败，可能是因为列/表不存在，这不是一个严重错误
             logging.debug(
                 f"Could not perform legacy data migration. This is expected on new installs. Details: {e}"
             )
-            pass  # 忽略错误，因为这很可能意味着它是一个新的安装
+            pass
 
 
 def reconcile_historical_data(db_manager, config):
     """
-    在每次启动时，强制与下载客户端同步当前状态，以防止重启后出现数据峰值。
-    不再创建创世纪录，因为新的增量逻辑不再需要它。
+    在每次启动时，与下载客户端同步状态，将当前状态设为后续增量计算的“零点基线”，
+    并立即在 traffic_stats 表中为每个客户端写入一条初始的零值记录。
+    这确保所有统计都从应用启动这一刻的零开始。
     """
-    logging.info("Starting downloader state synchronization...")
+    logging.info(
+        "Synchronizing downloader states to establish a new baseline and writing initial zero-point records..."
+    )
     conn = db_manager._get_connection()
     cursor = db_manager._get_cursor(conn)
-    is_mysql = db_manager.db_type == 'mysql'
+    ph = db_manager.get_placeholder()
+
+    # 准备一个列表来存储要插入的零点记录
+    zero_point_records = []
+    current_timestamp_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
     downloaders = config.get('downloaders', [])
     for client_config in downloaders:
+        # 只处理启用的下载器
         if not client_config.get('enabled'):
             continue
 
         client_id = client_config['id']
         client_type = client_config['type']
 
-        # 剥离我们自己添加的元数据字段
-        api_config = {
-            k: v
-            for k, v in client_config.items()
-            if k not in ['id', 'name', 'type', 'enabled']
-        }
-
-        if client_type == 'qbittorrent':
-            try:
+        try:
+            if client_type == 'qbittorrent':
+                # 准备 API 配置
+                api_config = {
+                    k: v
+                    for k, v in client_config.items()
+                    if k not in ['id', 'name', 'type', 'enabled']
+                }
                 client = Client(**api_config)
                 client.auth_log_in()
                 info = client.transfer_info()
+                # 获取当前会话数据作为基线
                 current_session_dl = int(getattr(info, 'dl_info_data', 0))
                 current_session_ul = int(getattr(info, 'up_info_data', 0))
 
-                sql = "UPDATE downloader_clients SET last_session_dl = %s, last_session_ul = %s WHERE id = %s" if is_mysql else "UPDATE downloader_clients SET last_session_dl = ?, last_session_ul = ? WHERE id = ?"
+                # 更新 downloader_clients 表中的基线值
+                sql = f"UPDATE downloader_clients SET last_session_dl = {ph}, last_session_ul = {ph} WHERE id = {ph}"
                 cursor.execute(
                     sql, (current_session_dl, current_session_ul, client_id))
                 logging.info(
-                    f"qBittorrent client '{client_config['name']}' state synchronized: last_session_dl set to {current_session_dl}, last_session_ul set to {current_session_ul}."
-                )
-            except Exception as e:
-                logging.error(
-                    f"[{client_config['name']}] Failed to synchronize state at startup: {e}"
+                    f"qBittorrent client '{client_config['name']}' baseline set for future calculations."
                 )
 
-        elif client_type == 'transmission':
-            try:
+            elif client_type == 'transmission':
+                # --- MODIFICATION START: 使用辅助函数来准备API配置，修复连接问题 ---
+                api_config = _prepare_api_config(client_config)
+                # --- MODIFICATION END ---
+
                 client = TrClient(**api_config)
                 stats = client.session_stats()
+                # 获取当前累计数据作为基线
                 current_cumulative_dl = int(
                     stats.cumulative_stats.downloaded_bytes)
                 current_cumulative_ul = int(
                     stats.cumulative_stats.uploaded_bytes)
 
-                sql = "UPDATE downloader_clients SET last_cumulative_dl = %s, last_cumulative_ul = %s WHERE id = %s" if is_mysql else "UPDATE downloader_clients SET last_cumulative_dl = ?, last_cumulative_ul = ? WHERE id = ?"
+                # 更新 downloader_clients 表中的基线值
+                sql_update_baseline = f"UPDATE downloader_clients SET last_cumulative_dl = {ph}, last_cumulative_ul = {ph} WHERE id = {ph}"
                 cursor.execute(
-                    sql,
+                    sql_update_baseline,
                     (current_cumulative_dl, current_cumulative_ul, client_id))
                 logging.info(
-                    f"Transmission client '{client_config['name']}' state synchronized: last_cumulative_dl set to {current_cumulative_dl}, last_cumulative_ul set to {current_cumulative_ul}."
+                    f"Transmission client '{client_config['name']}' baseline set for future calculations."
                 )
-            except Exception as e:
-                logging.error(
-                    f"[{client_config['name']}] Failed to synchronize state at startup: {e}"
-                )
+
+            # 为这个客户端准备一条零点记录
+            # (时间, downloader_id, uploaded, downloaded, upload_speed, download_speed)
+            zero_point_records.append(
+                (current_timestamp_str, client_id, 0, 0, 0, 0))
+
+        except Exception as e:
+            logging.error(
+                f"[{client_config['name']}] Failed to set baseline at startup: {e}"
+            )
+
+    # 如果有任何成功的基线设置，就批量插入零点记录
+    if zero_point_records:
+        try:
+            if db_manager.db_type == 'mysql':
+                sql_insert_zero = '''
+                    INSERT INTO traffic_stats (stat_datetime, downloader_id, uploaded, downloaded, upload_speed, download_speed) 
+                    VALUES (%s, %s, %s, %s, %s, %s) 
+                    ON DUPLICATE KEY UPDATE uploaded = VALUES(uploaded), downloaded = VALUES(downloaded)
+                '''
+            else:  # SQLite
+                sql_insert_zero = '''
+                    INSERT INTO traffic_stats (stat_datetime, downloader_id, uploaded, downloaded, upload_speed, download_speed) 
+                    VALUES (?, ?, ?, ?, ?, ?) 
+                    ON CONFLICT(stat_datetime, downloader_id) DO UPDATE SET uploaded = excluded.uploaded, downloaded = excluded.downloaded
+                '''
+            cursor.executemany(sql_insert_zero, zero_point_records)
+            logging.info(
+                f"Successfully inserted {len(zero_point_records)} zero-point records into traffic_stats."
+            )
+        except Exception as e:
+            logging.error(f"Failed to insert zero-point records: {e}")
+            conn.rollback()
 
     conn.commit()
     cursor.close()
     conn.close()
-    logging.info("State synchronization finished.")
+    logging.info(
+        "All client baselines synchronized and initial zero-points recorded.")
