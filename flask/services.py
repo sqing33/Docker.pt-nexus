@@ -154,14 +154,11 @@ class DataTracker(Thread):
 
         current_timestamp = datetime.now()
 
-        total_ul_speed = 0
-        total_dl_speed = 0
         data_points = []
         latest_speeds_update = {}
 
         for downloader in enabled_downloaders:
             downloader_id = downloader['id']
-            # [CHANGED] 使用新的辅助函数准备配置
             api_config = _prepare_api_config(downloader)
 
             data_point = {
@@ -201,8 +198,6 @@ class DataTracker(Thread):
                         int(stats.cumulative_stats.uploaded_bytes)
                     })
 
-                total_dl_speed += data_point['dl_speed']
-                total_ul_speed += data_point['ul_speed']
                 latest_speeds_update[downloader_id] = {
                     'name': downloader['name'],
                     'type': downloader['type'],
@@ -224,11 +219,20 @@ class DataTracker(Thread):
 
         with CACHE_LOCK:
             self.latest_speeds = latest_speeds_update
+            # --- MODIFICATION START ---
+            # 不再缓存总速度，而是缓存每个客户端的速度
+            speeds_for_buffer = {
+                downloader_id: {
+                    'upload_speed': data.get('upload_speed', 0),
+                    'download_speed': data.get('download_speed', 0)
+                }
+                for downloader_id, data in latest_speeds_update.items()
+            }
             self.recent_speeds_buffer.append({
                 'timestamp': current_timestamp,
-                'total_ul_speed': total_ul_speed,
-                'total_dl_speed': total_dl_speed
+                'speeds': speeds_for_buffer,
             })
+            # --- MODIFICATION END ---
 
         buffer_to_flush = []
         with self.traffic_buffer_lock:
@@ -343,7 +347,6 @@ class DataTracker(Thread):
         for downloader in enabled_downloaders:
             downloader_id = downloader['id']
             client_name = downloader['name']
-            # [CHANGED] 使用新的辅助函数准备配置
             api_config = _prepare_api_config(downloader)
             torrents_list = []
             try:
@@ -451,7 +454,6 @@ class DataTracker(Thread):
                 'size': t.size,
                 'progress': t.progress,
                 'state': t.state,
-                # [FIXED] 安全地获取 comment
                 'comment': t.get('comment', ''),
                 'trackers': t.trackers,
                 'uploaded': t.uploaded
@@ -470,7 +472,6 @@ class DataTracker(Thread):
                 t.percent_done,
                 'state':
                 t.status,
-                # [FIXED] 安全地获取 comment
                 'comment':
                 getattr(t, 'comment', ''),
                 'trackers': [{
