@@ -37,17 +37,13 @@
                   style="text-decoration: none"
                 >
                   <el-tag effect="dark" :type="getTagType(props.row.sites[siteName])">
-                    {{ siteName }} ({{
-                      formatBytes(
-                        props.row.sites[siteName].qb_ul + props.row.sites[siteName].tr_ul,
-                      )
-                    }})
+                    <!-- [FIXED] 使用 'uploaded' 字段显示总上传量 -->
+                    {{ siteName }} ({{ formatBytes(props.row.sites[siteName].uploaded) }})
                   </el-tag>
                 </a>
                 <el-tag v-else effect="dark" :type="getTagType(props.row.sites[siteName])">
-                  {{ siteName }} ({{
-                    formatBytes(props.row.sites[siteName].qb_ul + props.row.sites[siteName].tr_ul)
-                  }})
+                  <!-- [FIXED] 使用 'uploaded' 字段显示总上传量 -->
+                  {{ siteName }} ({{ formatBytes(props.row.sites[siteName].uploaded) }})
                 </el-tag>
               </template>
               <template v-else>
@@ -102,20 +98,9 @@
         align="center"
         sortable="custom"
       />
-      <el-table-column
-        label="qB 上传量"
-        prop="qb_uploaded_formatted"
-        width="130"
-        align="center"
-        sortable="custom"
-      />
-      <el-table-column
-        label="Tr 上传量"
-        prop="tr_uploaded_formatted"
-        width="130"
-        align="center"
-        sortable="custom"
-      />
+
+      <!-- [REMOVED] qB 和 Tr 上传量列已被移除 -->
+
       <el-table-column
         label="总上传量"
         prop="total_uploaded_formatted"
@@ -207,9 +192,9 @@ import type { TableInstance, Sort } from 'element-plus'
 
 const emits = defineEmits(['ready'])
 
+// [CHANGED] 更新接口定义
 interface SiteData {
-  qb_ul: number
-  tr_ul: number
+  uploaded: number // 替换 qb_ul 和 tr_ul
   comment: string
 }
 interface Torrent {
@@ -220,12 +205,9 @@ interface Torrent {
   progress: number
   state: string
   sites: Record<string, SiteData>
-  qb_uploaded: number
-  qb_uploaded_formatted: string
-  tr_uploaded: number
-  tr_uploaded_formatted: string
   total_uploaded: number
   total_uploaded_formatted: string
+  // 移除 qb_uploaded, qb_uploaded_formatted, tr_uploaded, tr_uploaded_formatted
 }
 interface ActiveFilters {
   paths: string[]
@@ -335,7 +317,7 @@ const applyFilters = async () => {
       body: JSON.stringify({ paths: activeFilters.paths }),
     })
   } catch (e: any) {
-    ElMessage.error(`保存路径筛选器设置失败: ${e.message}`)
+    console.error(`保存路径筛选器设置失败: ${e.message}`)
   }
 }
 
@@ -476,9 +458,5 @@ watch(
 :deep(.el-pagination) {
   margin: 8px 0 !important;
   padding-right: 10px;
-}
-
-:deep(.el-tag) {
-  width: 120px;
 }
 </style>
