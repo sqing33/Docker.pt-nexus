@@ -5,6 +5,7 @@ import logging
 import time
 from datetime import datetime
 from threading import Thread, Lock
+from urllib.parse import urlparse
 from qbittorrentapi import Client
 from transmission_rpc import Client as TrClient
 
@@ -56,7 +57,6 @@ def load_site_maps_from_db(db_manager):
                     if special_core:
                         core_domain_map[special_core] = nickname
 
-        # 不再在此处记录日志，避免日志刷屏
     except Exception as e:
         logging.error(f"无法从数据库加载站点信息: {e}", exc_info=True)
     finally:
@@ -68,8 +68,35 @@ def load_site_maps_from_db(db_manager):
     return core_domain_map, link_rules, group_to_site_map_lower
 
 
+def _prepare_api_config(downloader_config):
+    """
+    [NEW] 准备用于API客户端的配置字典，智能处理host和port。
+    """
+    # 移除我们自己的元数据字段
+    api_config = {
+        k: v
+        for k, v in downloader_config.items()
+        if k not in ['id', 'name', 'type', 'enabled']
+    }
+
+    if downloader_config['type'] == 'transmission':
+        # 从 host 字段解析出 ip 和 port
+        if api_config.get('host'):
+            # 为 urlparse 添加一个临时的 scheme
+            parsed_url = urlparse(f"http://{api_config['host']}")
+            api_config['host'] = parsed_url.hostname
+            api_config['port'] = parsed_url.port or 9091  # 如果未指定端口，使用默认值
+
+    elif downloader_config['type'] == 'qbittorrent':
+        # qb 的 host 字段应为 ip:port，库会自己处理。我们只需确保不传递多余的 port 字段。
+        if 'port' in api_config:
+            del api_config['port']
+
+    return api_config
+
+
 class DataTracker(Thread):
-    """一个后台线程，定期从客户端获取统计信息和种子。"""
+    """一个后台线程，定期从所有已配置的客户端获取统计信息和种子。"""
 
     def __init__(self, db_manager, config_manager, interval=1):
         super().__init__(daemon=True, name="DataTracker")
@@ -80,12 +107,7 @@ class DataTracker(Thread):
         self.TRAFFIC_BATCH_WRITE_SIZE = 60
         self.traffic_buffer = []
         self.traffic_buffer_lock = Lock()
-        self.latest_speeds = {
-            'qb_ul_speed': 0,
-            'qb_dl_speed': 0,
-            'tr_ul_speed': 0,
-            'tr_dl_speed': 0
-        }
+        self.latest_speeds = {}
         self.recent_speeds_buffer = collections.deque(
             maxlen=self.TRAFFIC_BATCH_WRITE_SIZE)
         self.torrent_update_counter = 0
@@ -99,8 +121,7 @@ class DataTracker(Thread):
         time.sleep(5)
         try:
             config = self.config_manager.get()
-            if config.get('qbittorrent', {}).get('enabled') or config.get(
-                    'transmission', {}).get('enabled'):
+            if any(d.get('enabled') for d in config.get('downloaders', [])):
                 self._update_torrents_in_db()
             else:
                 logging.info("所有下载器均未启用，跳过初始种子更新。")
@@ -121,81 +142,100 @@ class DataTracker(Thread):
             time.sleep(max(0, self.interval - elapsed))
 
     def _fetch_and_buffer_stats(self):
-        """从客户端获取速度和会话数据并进行缓冲。"""
+        """从所有启用的客户端获取速度和会话数据并进行缓冲。"""
         config = self.config_manager.get()
-        current_data = {
-            'timestamp': datetime.now(),
-            'qb_dl': 0,
-            'qb_ul': 0,
-            'qb_dl_speed': 0,
-            'qb_ul_speed': 0,
-            'tr_dl': 0,
-            'tr_ul': 0,
-            'tr_dl_speed': 0,
-            'tr_ul_speed': 0
-        }
+        enabled_downloaders = [
+            d for d in config.get('downloaders', []) if d.get('enabled')
+        ]
 
-        qb_enabled = config.get('qbittorrent', {}).get('enabled', False)
-        tr_enabled = config.get('transmission', {}).get('enabled', False)
-
-        if not qb_enabled and not tr_enabled:
+        if not enabled_downloaders:
             time.sleep(self.interval)
             return
 
-        if qb_enabled:
+        current_timestamp = datetime.now()
+
+        total_ul_speed = 0
+        total_dl_speed = 0
+        data_points = []
+        latest_speeds_update = {}
+
+        for downloader in enabled_downloaders:
+            downloader_id = downloader['id']
+            # [CHANGED] 使用新的辅助函数准备配置
+            api_config = _prepare_api_config(downloader)
+
+            data_point = {
+                'downloader_id': downloader_id,
+                'session_dl': 0,
+                'session_ul': 0,
+                'dl_speed': 0,
+                'ul_speed': 0
+            }
+
             try:
-                client = Client(
-                    **{
-                        k: v
-                        for k, v in config['qbittorrent'].items()
-                        if k != 'enabled'
+                if downloader['type'] == 'qbittorrent':
+                    client = Client(**api_config)
+                    client.auth_log_in()
+                    info = client.transfer_info()
+                    data_point.update({
+                        'dl_speed':
+                        int(getattr(info, 'dl_info_speed', 0)),
+                        'ul_speed':
+                        int(getattr(info, 'up_info_speed', 0)),
+                        'session_dl':
+                        int(getattr(info, 'dl_info_data', 0)),
+                        'session_ul':
+                        int(getattr(info, 'up_info_data', 0))
                     })
-                client.auth_log_in()
-                info = client.transfer_info()
-                current_data.update({
-                    'qb_dl_speed':
-                    int(getattr(info, 'dl_info_speed', 0)),
-                    'qb_ul_speed':
-                    int(getattr(info, 'up_info_speed', 0)),
-                    'qb_dl':
-                    int(getattr(info, 'dl_info_data', 0)),
-                    'qb_ul':
-                    int(getattr(info, 'up_info_data', 0))
-                })
-            except Exception as e:
-                logging.warning(f"无法获取 qB 统计信息: {e}")
-        if tr_enabled:
-            try:
-                client = TrClient(
-                    **{
-                        k: v
-                        for k, v in config['transmission'].items()
-                        if k != 'enabled'
+                elif downloader['type'] == 'transmission':
+                    client = TrClient(**api_config)
+                    stats = client.session_stats()
+                    data_point.update({
+                        'dl_speed':
+                        int(getattr(stats, 'download_speed', 0)),
+                        'ul_speed':
+                        int(getattr(stats, 'upload_speed', 0)),
+                        'session_dl':
+                        int(stats.cumulative_stats.downloaded_bytes),
+                        'session_ul':
+                        int(stats.cumulative_stats.uploaded_bytes)
                     })
-                stats = client.session_stats()
-                current_data.update({
-                    'tr_dl_speed':
-                    int(getattr(stats, 'download_speed', 0)),
-                    'tr_ul_speed':
-                    int(getattr(stats, 'upload_speed', 0)),
-                    'tr_dl':
-                    int(stats.cumulative_stats.downloaded_bytes),
-                    'tr_ul':
-                    int(stats.cumulative_stats.uploaded_bytes)
-                })
+
+                total_dl_speed += data_point['dl_speed']
+                total_ul_speed += data_point['ul_speed']
+                latest_speeds_update[downloader_id] = {
+                    'name': downloader['name'],
+                    'type': downloader['type'],
+                    'enabled': True,
+                    'upload_speed': data_point['ul_speed'],
+                    'download_speed': data_point['dl_speed']
+                }
+                data_points.append(data_point)
+
             except Exception as e:
-                logging.warning(f"无法获取 Tr 统计信息: {e}")
+                logging.warning(f"无法从客户端 '{downloader['name']}' 获取统计信息: {e}")
+                latest_speeds_update[downloader_id] = {
+                    'name': downloader['name'],
+                    'type': downloader['type'],
+                    'enabled': True,
+                    'upload_speed': 0,
+                    'download_speed': 0
+                }
 
         with CACHE_LOCK:
-            self.latest_speeds = {
-                k: v
-                for k, v in current_data.items() if 'speed' in k
-            }
-            self.recent_speeds_buffer.append(current_data)
+            self.latest_speeds = latest_speeds_update
+            self.recent_speeds_buffer.append({
+                'timestamp': current_timestamp,
+                'total_ul_speed': total_ul_speed,
+                'total_dl_speed': total_dl_speed
+            })
 
         buffer_to_flush = []
         with self.traffic_buffer_lock:
-            self.traffic_buffer.append(current_data)
+            self.traffic_buffer.append({
+                'timestamp': current_timestamp,
+                'points': data_points
+            })
             if len(self.traffic_buffer) >= self.TRAFFIC_BATCH_WRITE_SIZE:
                 buffer_to_flush = self.traffic_buffer
                 self.traffic_buffer = []
@@ -213,53 +253,64 @@ class DataTracker(Thread):
             cursor = self.db_manager._get_cursor(conn)
             is_mysql = self.db_manager.db_type == 'mysql'
 
-            qb_state_sql = 'SELECT last_session_dl, last_session_ul FROM downloader_state WHERE name = %s' if is_mysql else 'SELECT last_session_dl, last_session_ul FROM downloader_state WHERE name = ?'
-            tr_state_sql = 'SELECT last_cumulative_dl, last_cumulative_ul FROM downloader_state WHERE name = %s' if is_mysql else 'SELECT last_cumulative_dl, last_cumulative_ul FROM downloader_state WHERE name = ?'
-
-            cursor.execute(qb_state_sql, ('qbittorrent', ))
-            qb_row = cursor.fetchone()
-            last_qb_dl = int(qb_row['last_session_dl']) if qb_row else 0
-            last_qb_ul = int(qb_row['last_session_ul']) if qb_row else 0
-
-            cursor.execute(tr_state_sql, ('transmission', ))
-            tr_row = cursor.fetchone()
-            last_tr_dl = int(tr_row['last_cumulative_dl']) if tr_row else 0
-            last_tr_ul = int(tr_row['last_cumulative_ul']) if tr_row else 0
+            cursor.execute(
+                'SELECT id, type, last_session_dl, last_session_ul, last_cumulative_dl, last_cumulative_ul FROM downloader_clients'
+            )
+            last_states = {row['id']: dict(row) for row in cursor.fetchall()}
 
             params_to_insert = []
-            for data_point in buffer:
-                current_qb_dl, current_qb_ul = data_point['qb_dl'], data_point[
-                    'qb_ul']
-                qb_dl_inc = current_qb_dl if current_qb_dl < last_qb_dl else current_qb_dl - last_qb_dl
-                qb_ul_inc = current_qb_ul if current_qb_ul < last_qb_ul else current_qb_ul - last_qb_ul
-                tr_dl_inc = data_point['tr_dl'] - last_tr_dl
-                tr_ul_inc = data_point['tr_ul'] - last_tr_ul
-                params_to_insert.append(
-                    (data_point['timestamp'].strftime('%Y-%m-%d %H:%M:%S'),
-                     max(0, qb_dl_inc), max(0, qb_ul_inc), max(0, tr_dl_inc),
-                     max(0, tr_ul_inc), data_point['qb_dl_speed'],
-                     data_point['qb_ul_speed'], data_point['tr_dl_speed'],
-                     data_point['tr_ul_speed']))
-                last_qb_dl, last_qb_ul = current_qb_dl, current_qb_ul
-                last_tr_dl, last_tr_ul = data_point['tr_dl'], data_point[
-                    'tr_ul']
+            for entry in buffer:
+                timestamp_str = entry['timestamp'].strftime(
+                    '%Y-%m-%d %H:%M:%S')
+                for data_point in entry['points']:
+                    client_id = data_point['downloader_id']
+                    last_state = last_states.get(client_id)
+                    if not last_state: continue
+
+                    dl_inc, ul_inc = 0, 0
+                    if last_state['type'] == 'qbittorrent':
+                        last_dl, last_ul = int(
+                            last_state['last_session_dl']), int(
+                                last_state['last_session_ul'])
+                        current_dl, current_ul = data_point[
+                            'session_dl'], data_point['session_ul']
+                        dl_inc = current_dl if current_dl < last_dl else current_dl - last_dl
+                        ul_inc = current_ul if current_ul < last_ul else current_ul - last_ul
+                        last_state['last_session_dl'], last_state[
+                            'last_session_ul'] = current_dl, current_ul
+                    elif last_state['type'] == 'transmission':
+                        last_dl, last_ul = int(
+                            last_state['last_cumulative_dl']), int(
+                                last_state['last_cumulative_ul'])
+                        current_dl, current_ul = data_point[
+                            'session_dl'], data_point['session_ul']
+                        dl_inc = current_dl - last_dl
+                        ul_inc = current_ul - last_ul
+                        last_state['last_cumulative_dl'], last_state[
+                            'last_cumulative_ul'] = current_dl, current_ul
+
+                    params_to_insert.append(
+                        (timestamp_str, client_id, max(0,
+                                                       ul_inc), max(0, dl_inc),
+                         data_point['ul_speed'], data_point['dl_speed']))
 
             if params_to_insert:
                 if is_mysql:
-                    sql_insert = '''INSERT INTO traffic_stats (stat_datetime, qb_downloaded, qb_uploaded, tr_downloaded, tr_uploaded, qb_download_speed, qb_upload_speed, tr_download_speed, tr_upload_speed) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE qb_downloaded = VALUES(qb_downloaded), qb_uploaded = VALUES(qb_uploaded), tr_downloaded = VALUES(tr_downloaded), tr_uploaded = VALUES(tr_uploaded), qb_download_speed = VALUES(qb_download_speed), qb_upload_speed = VALUES(qb_upload_speed), tr_download_speed = VALUES(tr_download_speed), tr_upload_speed = VALUES(tr_upload_speed)'''
+                    sql_insert = '''INSERT INTO traffic_stats (stat_datetime, downloader_id, uploaded, downloaded, upload_speed, download_speed) VALUES (%s, %s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE uploaded = VALUES(uploaded), downloaded = VALUES(downloaded), upload_speed = VALUES(upload_speed), download_speed = VALUES(download_speed)'''
                 else:
-                    sql_insert = '''INSERT INTO traffic_stats (stat_datetime, qb_downloaded, qb_uploaded, tr_downloaded, tr_uploaded, qb_download_speed, qb_upload_speed, tr_download_speed, tr_upload_speed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(stat_datetime) DO UPDATE SET qb_downloaded = excluded.qb_downloaded, qb_uploaded = excluded.qb_uploaded, tr_downloaded = excluded.tr_downloaded, tr_uploaded = excluded.tr_uploaded, qb_download_speed = excluded.qb_download_speed, qb_upload_speed = excluded.qb_upload_speed, tr_download_speed = excluded.tr_download_speed, tr_upload_speed = excluded.tr_upload_speed'''
+                    sql_insert = '''INSERT INTO traffic_stats (stat_datetime, downloader_id, uploaded, downloaded, upload_speed, download_speed) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(stat_datetime, downloader_id) DO UPDATE SET uploaded = excluded.uploaded, downloaded = excluded.downloaded, upload_speed = excluded.upload_speed, download_speed = excluded.download_speed'''
                 cursor.executemany(sql_insert, params_to_insert)
 
-            final_data_point = buffer[-1]
-            update_qb_sql = "UPDATE downloader_state SET last_session_dl = %s, last_session_ul = %s WHERE name = %s" if is_mysql else "UPDATE downloader_state SET last_session_dl = ?, last_session_ul = ? WHERE name = ?"
-            update_tr_sql = "UPDATE downloader_state SET last_cumulative_dl = %s, last_cumulative_ul = %s WHERE name = %s" if is_mysql else "UPDATE downloader_state SET last_cumulative_dl = ?, last_cumulative_ul = ? WHERE name = ?"
-            cursor.execute(update_qb_sql,
-                           (final_data_point['qb_dl'],
-                            final_data_point['qb_ul'], 'qbittorrent'))
-            cursor.execute(update_tr_sql,
-                           (final_data_point['tr_dl'],
-                            final_data_point['tr_ul'], 'transmission'))
+            for client_id, state in last_states.items():
+                if state['type'] == 'qbittorrent':
+                    sql = "UPDATE downloader_clients SET last_session_dl = %s, last_session_ul = %s WHERE id = %s" if is_mysql else "UPDATE downloader_clients SET last_session_dl = ?, last_session_ul = ? WHERE id = ?"
+                    cursor.execute(sql, (state['last_session_dl'],
+                                         state['last_session_ul'], client_id))
+                elif state['type'] == 'transmission':
+                    sql = "UPDATE downloader_clients SET last_cumulative_dl = %s, last_cumulative_ul = %s WHERE id = %s" if is_mysql else "UPDATE downloader_clients SET last_cumulative_dl = ?, last_cumulative_ul = ? WHERE id = ?"
+                    cursor.execute(sql,
+                                   (state['last_cumulative_dl'],
+                                    state['last_cumulative_ul'], client_id))
 
             conn.commit()
         except Exception as e:
@@ -271,151 +322,114 @@ class DataTracker(Thread):
                 conn.close()
 
     def _update_torrents_in_db(self):
-        """从客户端获取完整的种子列表并批量更新数据库。"""
+        """从所有启用的客户端获取完整的种子列表并批量更新数据库。"""
         logging.info("开始更新数据库中的种子...")
         config = self.config_manager.get()
+        enabled_downloaders = [
+            d for d in config.get('downloaders', []) if d.get('enabled')
+        ]
+        if not enabled_downloaders:
+            logging.info("没有启用的下载器，跳过种子更新。")
+            return
+
         core_domain_map, _, group_to_site_map_lower = load_site_maps_from_db(
             self.db_manager)
 
         all_current_hashes = set()
+        torrents_to_upsert = {}
+        upload_stats_to_upsert = []
         is_mysql = self.db_manager.db_type == 'mysql'
-        conn = None
 
+        for downloader in enabled_downloaders:
+            downloader_id = downloader['id']
+            client_name = downloader['name']
+            # [CHANGED] 使用新的辅助函数准备配置
+            api_config = _prepare_api_config(downloader)
+            torrents_list = []
+            try:
+                if downloader['type'] == 'qbittorrent':
+                    q = Client(**api_config)
+                    q.auth_log_in()
+                    torrents_list = q.torrents_info(status_filter='all')
+                elif downloader['type'] == 'transmission':
+                    tr = TrClient(**api_config)
+                    fields = [
+                        'id', 'name', 'hashString', 'downloadDir', 'totalSize',
+                        'status', 'comment', 'trackers', 'percentDone',
+                        'uploadedEver'
+                    ]
+                    torrents_list = tr.get_torrents(arguments=fields)
+            except Exception as e:
+                logging.error(f"未能从 '{client_name}' 获取数据: {e}")
+                continue
+
+            logging.info(f"从 '{client_name}' 成功获取到 {len(torrents_list)} 个种子。")
+
+            for t in torrents_list:
+                t_info = self._normalize_torrent_info(t, downloader['type'])
+                all_current_hashes.add(t_info['hash'])
+
+                site_nickname = self._find_site_nickname(
+                    t_info['trackers'], core_domain_map)
+                torrent_group = self._find_torrent_group(
+                    t_info['name'], group_to_site_map_lower)
+
+                if t_info['hash'] not in torrents_to_upsert or t_info[
+                        'progress'] > torrents_to_upsert[
+                            t_info['hash']]['progress']:
+                    torrents_to_upsert[t_info['hash']] = {
+                        'hash': t_info['hash'],
+                        'name': t_info['name'],
+                        'save_path': t_info['save_path'],
+                        'size': t_info['size'],
+                        'progress': round(t_info['progress'] * 100, 1),
+                        'state': format_state(t_info['state']),
+                        'sites': site_nickname,
+                        'details':
+                        _extract_url_from_comment(t_info['comment']),
+                        'group': torrent_group
+                    }
+
+                if t_info['uploaded'] > 0:
+                    upload_stats_to_upsert.append(
+                        (t_info['hash'], downloader_id, t_info['uploaded']))
+
+        conn = None
         try:
             conn = self.db_manager._get_connection()
             cursor = self.db_manager._get_cursor(conn)
             now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-            params_to_update_qb = []
-            params_to_update_tr = []
-
-            for client_name, cfg in config.items():
-                if client_name not in ['qbittorrent', 'transmission'
-                                       ] or not cfg.get('enabled'):
-                    continue
-
-                torrents_list = []
-                try:
-                    if client_name == 'qbittorrent':
-                        q = Client(**{
-                            k: v
-                            for k, v in cfg.items() if k != 'enabled'
-                        })
-                        q.auth_log_in()
-                        torrents_list = q.torrents_info(status_filter='all')
-                    elif client_name == 'transmission':
-                        tr = TrClient(**{
-                            k: v
-                            for k, v in cfg.items() if k != 'enabled'
-                        })
-                        fields = [
-                            'id', 'name', 'hashString', 'downloadDir',
-                            'totalSize', 'status', 'comment', 'trackers',
-                            'percentDone', 'uploadedEver'
-                        ]
-                        torrents_list = tr.get_torrents(arguments=fields)
-                except Exception as e:
-                    logging.error(f"未能连接或从 {client_name} 获取数据: {e}")
-                    continue
-
-                logging.info(
-                    f"从 {client_name} 成功获取到 {len(torrents_list)} 个种子。")
-
-                for t in torrents_list:
-                    t_info = {
-                        'name':
-                        t.name,
-                        'hash':
-                        t.hash
-                        if client_name == 'qbittorrent' else t.hash_string,
-                        'save_path':
-                        t.save_path
-                        if client_name == 'qbittorrent' else t.download_dir,
-                        'size':
-                        t.size
-                        if client_name == 'qbittorrent' else t.total_size,
-                        'progress':
-                        t.progress
-                        if client_name == 'qbittorrent' else t.percent_done,
-                        'state':
-                        t.state if client_name == 'qbittorrent' else t.status,
-                        'comment':
-                        t.comment,
-                        'trackers':
-                        t.trackers if client_name == 'qbittorrent' else [{
-                            'url':
-                            tracker.get('announce')
-                        } for tracker in t.trackers],
-                        'uploaded':
-                        t.uploaded
-                        if client_name == 'qbittorrent' else t.uploaded_ever
-                    }
-                    all_current_hashes.add(t_info['hash'])
-
-                    site_nickname = None
-                    if t_info['trackers']:
-                        for tracker_entry in t_info['trackers']:
-                            hostname = _parse_hostname_from_url(
-                                tracker_entry.get('url'))
-                            core_domain = _extract_core_domain(hostname)
-                            if core_domain in core_domain_map:
-                                site_nickname = core_domain_map[core_domain]
-                                break
-
-                    torrent_group = None
-                    name_lower = t_info['name'].lower()
-                    found_matches = [
-                        group_info['original_case'] for group_lower, group_info
-                        in group_to_site_map_lower.items()
-                        if group_lower in name_lower
-                    ]
-                    if found_matches:
-                        torrent_group = sorted(found_matches,
-                                               key=len,
-                                               reverse=True)[0]
-
-                    params = (t_info['hash'], t_info['name'],
-                              t_info['save_path'], t_info['size'],
-                              round(t_info['progress'] * 100, 1),
-                              format_state(t_info['state']), site_nickname,
-                              _extract_url_from_comment(t_info['comment']),
-                              torrent_group, t_info['uploaded'], now_str)
-                    if client_name == 'qbittorrent':
-                        params_to_update_qb.append(params)
-                    else:  # transmission
-                        params_to_update_tr.append(params)
-
-            # --- 批量更新 ---
-            if params_to_update_qb:
+            if torrents_to_upsert:
+                params = [(*d.values(), now_str)
+                          for d in torrents_to_upsert.values()]
                 if is_mysql:
-                    sql_qb = '''INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, `group`, qb_uploaded, last_seen) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE name=VALUES(name), save_path=VALUES(save_path), size=VALUES(size), progress=VALUES(progress), state=VALUES(state), sites=VALUES(sites), details=VALUES(details), `group`=VALUES(`group`), qb_uploaded=GREATEST(VALUES(qb_uploaded), torrents.qb_uploaded), last_seen=VALUES(last_seen)'''
+                    sql = '''INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, `group`, last_seen) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE name=VALUES(name), save_path=VALUES(save_path), size=VALUES(size), progress=VALUES(progress), state=VALUES(state), sites=VALUES(sites), details=VALUES(details), `group`=VALUES(`group`), last_seen=VALUES(last_seen)'''
                 else:
-                    sql_qb = '''INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, `group`, qb_uploaded, last_seen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(hash) DO UPDATE SET name=excluded.name, save_path=excluded.save_path, size=excluded.size, progress=excluded.progress, state=excluded.state, sites=excluded.sites, details=excluded.details, `group`=excluded.`group`, qb_uploaded=max(excluded.qb_uploaded, torrents.qb_uploaded), last_seen=excluded.last_seen'''
-                cursor.executemany(sql_qb, params_to_update_qb)
-                logging.info(
-                    f"已批量处理 {len(params_to_update_qb)} 个 qBittorrent 种子。")
+                    sql = '''INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, `group`, last_seen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(hash) DO UPDATE SET name=excluded.name, save_path=excluded.save_path, size=excluded.size, progress=excluded.progress, state=excluded.state, sites=excluded.sites, details=excluded.details, `group`=excluded.`group`, last_seen=excluded.last_seen'''
+                cursor.executemany(sql, params)
+                logging.info(f"已批量处理 {len(params)} 条种子主信息。")
 
-            if params_to_update_tr:
+            if upload_stats_to_upsert:
                 if is_mysql:
-                    sql_tr = '''INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, `group`, tr_uploaded, last_seen) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE name=VALUES(name), save_path=VALUES(save_path), size=VALUES(size), progress=VALUES(progress), state=VALUES(state), sites=VALUES(sites), details=VALUES(details), `group`=VALUES(`group`), tr_uploaded=GREATEST(VALUES(tr_uploaded), torrents.tr_uploaded), last_seen=VALUES(last_seen)'''
+                    sql_upload = '''INSERT INTO torrent_upload_stats (hash, downloader_id, uploaded) VALUES (%s, %s, %s) ON DUPLICATE KEY UPDATE uploaded=VALUES(uploaded)'''
                 else:
-                    sql_tr = '''INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, `group`, tr_uploaded, last_seen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(hash) DO UPDATE SET name=excluded.name, save_path=excluded.save_path, size=excluded.size, progress=excluded.progress, state=excluded.state, sites=excluded.sites, details=excluded.details, `group`=excluded.`group`, tr_uploaded=max(excluded.tr_uploaded, torrents.tr_uploaded), last_seen=excluded.last_seen'''
-                cursor.executemany(sql_tr, params_to_update_tr)
-                logging.info(
-                    f"已批量处理 {len(params_to_update_tr)} 个 Transmission 种子。")
+                    sql_upload = '''INSERT INTO torrent_upload_stats (hash, downloader_id, uploaded) VALUES (?, ?, ?) ON CONFLICT(hash, downloader_id) DO UPDATE SET uploaded=excluded.uploaded'''
+                cursor.executemany(sql_upload, upload_stats_to_upsert)
+                logging.info(f"已批量处理 {len(upload_stats_to_upsert)} 条种子上传数据。")
 
             if all_current_hashes:
                 placeholders = ', '.join(['%s' if is_mysql else '?'] *
                                          len(all_current_hashes))
                 sql_delete = f"DELETE FROM torrents WHERE hash NOT IN ({placeholders})"
-                # 使用不带字典的游标进行删除操作以获取正确的 rowcount
                 non_dict_cursor = conn.cursor()
                 non_dict_cursor.execute(sql_delete, tuple(all_current_hashes))
-                logging.info(f"从数据库中移除了 {non_dict_cursor.rowcount} 个陈旧的种子。")
+                logging.info(
+                    f"从 torrents 表中移除了 {non_dict_cursor.rowcount} 个陈旧的种子。")
                 non_dict_cursor.close()
             else:
                 cursor.execute("DELETE FROM torrents")
-                logging.info("在任何客户端中都未找到种子，已清空 torrents 表。")
+                logging.info("在任何启用的客户端中都未找到种子，已清空 torrents 表。")
 
             conn.commit()
             logging.info("种子数据库更新周期成功完成。")
@@ -424,9 +438,70 @@ class DataTracker(Thread):
             if conn: conn.rollback()
         finally:
             if conn:
-                if 'cursor' in locals() and cursor:
-                    cursor.close()
+                if 'cursor' in locals() and cursor: cursor.close()
                 conn.close()
+
+    def _normalize_torrent_info(self, t, client_type):
+        """将不同客户端的种子对象标准化为统一的字典格式。"""
+        if client_type == 'qbittorrent':
+            return {
+                'name': t.name,
+                'hash': t.hash,
+                'save_path': t.save_path,
+                'size': t.size,
+                'progress': t.progress,
+                'state': t.state,
+                # [FIXED] 安全地获取 comment
+                'comment': t.get('comment', ''),
+                'trackers': t.trackers,
+                'uploaded': t.uploaded
+            }
+        elif client_type == 'transmission':
+            return {
+                'name':
+                t.name,
+                'hash':
+                t.hash_string,
+                'save_path':
+                t.download_dir,
+                'size':
+                t.total_size,
+                'progress':
+                t.percent_done,
+                'state':
+                t.status,
+                # [FIXED] 安全地获取 comment
+                'comment':
+                getattr(t, 'comment', ''),
+                'trackers': [{
+                    'url': tracker.get('announce')
+                } for tracker in t.trackers],
+                'uploaded':
+                t.uploaded_ever
+            }
+        return {}
+
+    def _find_site_nickname(self, trackers, core_domain_map):
+        """根据 tracker 列表确定站点昵称。"""
+        if trackers:
+            for tracker_entry in trackers:
+                hostname = _parse_hostname_from_url(tracker_entry.get('url'))
+                core_domain = _extract_core_domain(hostname)
+                if core_domain in core_domain_map:
+                    return core_domain_map[core_domain]
+        return None
+
+    def _find_torrent_group(self, name, group_to_site_map_lower):
+        """根据种子名称确定发布组。"""
+        name_lower = name.lower()
+        found_matches = [
+            group_info['original_case']
+            for group_lower, group_info in group_to_site_map_lower.items()
+            if group_lower in name_lower
+        ]
+        if found_matches:
+            return sorted(found_matches, key=len, reverse=True)[0]
+        return None
 
     def stop(self):
         """停止线程并刷新所有剩余数据。"""

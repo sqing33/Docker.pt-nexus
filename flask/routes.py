@@ -3,6 +3,7 @@
 import json
 import logging
 import copy
+import uuid
 from flask import Blueprint, jsonify, request
 from threading import Thread
 from datetime import datetime, timedelta
@@ -30,66 +31,83 @@ def initialize_routes(manager, conf_manager):
 
 @api_bp.route('/settings', methods=['GET'])
 def get_settings():
-    """获取当前下载器配置（不含密码）。"""
+    """获取当前配置，包括所有下载器（不含密码）。"""
     config = copy.deepcopy(config_manager.get())
-    if 'qbittorrent' in config and 'password' in config['qbittorrent']:
-        config['qbittorrent']['password'] = ''
-    if 'transmission' in config and 'password' in config['transmission']:
-        config['transmission']['password'] = ''
+    if 'downloaders' in config:
+        for downloader in config['downloaders']:
+            if 'password' in downloader:
+                downloader['password'] = ''
     return jsonify(config)
 
 
 @api_bp.route('/settings', methods=['POST'])
 def update_settings():
     """
-    更新并保存单个下载器的配置。
-    请求体应为: {'qbittorrent': {...}} 或 {'transmission': {...}}
+    更新并保存整个下载器列表。
+    请求体应为: {'downloaders': [{...}, {...}]}
     """
-    partial_config = request.json
-    if not partial_config or len(partial_config) != 1:
-        return jsonify({"error": "无效的请求格式。"}), 400
+    new_config_data = request.json
+    if 'downloaders' not in new_config_data:
+        return jsonify({"error": "请求体必须包含 'downloaders' 列表。"}), 400
 
-    client_type = list(partial_config.keys())[0]
-    if client_type not in ['qbittorrent', 'transmission']:
-        return jsonify({"error": f"无效的客户端类型: {client_type}"}), 400
+    current_config = config_manager.get()
+    current_downloaders = {
+        d['id']: d
+        for d in current_config.get('downloaders', [])
+    }
 
-    new_client_data = partial_config[client_type]
+    final_downloaders = []
+    for new_downloader in new_config_data['downloaders']:
+        downloader_id = new_downloader.get('id')
+        if downloader_id and not new_downloader.get('password'):
+            if downloader_id in current_downloaders:
+                new_downloader['password'] = current_downloaders[
+                    downloader_id].get('password', '')
 
-    # 获取当前完整配置以进行更新
-    full_config = copy.deepcopy(config_manager.get())
+        if not downloader_id:
+            new_downloader['id'] = str(uuid.uuid4())
 
-    # 如果密码字段为空，则保留旧密码
-    if not new_client_data.get('password') and full_config.get(client_type):
-        new_client_data['password'] = full_config[client_type].get(
-            'password', '')
+        final_downloaders.append(new_downloader)
 
-    # 更新完整配置中的特定客户端部分
-    full_config[client_type] = new_client_data
+    full_config = {"downloaders": final_downloaders}
 
     if config_manager.save(full_config):
         stop_data_tracker()
-        start_data_tracker(db_manager, config_manager)
-        return jsonify({"message":
-                        f"{client_type.capitalize()} 的配置已成功保存和应用。"}), 200
+        db_manager.init_db()
+        reconcile_and_start_tracker()
+        return jsonify({"message": "配置已成功保存和应用。"}), 200
     else:
         return jsonify({"error": "无法保存配置到文件。"}), 500
 
 
-# ... [从 test_connection 到文件末尾的所有其他路由代码保持不变] ...
-# ... [为了简洁，这里省略了它们，您不需要修改这些部分] ...
+def reconcile_and_start_tracker():
+    """一个辅助函数，用于协调数据并启动追踪器，通常在配置更改后调用。"""
+    from database import reconcile_historical_data
+    reconcile_historical_data(db_manager, config_manager.get())
+    start_data_tracker(db_manager, config_manager)
+
+
 @api_bp.route('/test_connection', methods=['POST'])
 def test_connection():
-    """测试与下载器的连接。"""
+    """测试与单个下载器的连接。"""
     client_config = request.json
     client_type = client_config.get('type')
+    api_config = {
+        k: v
+        for k, v in client_config.items()
+        if k not in ['id', 'name', 'type', 'enabled']
+    }
+
     try:
         if client_type == 'qbittorrent':
-            client = Client(**client_config.get('config', {}))
+            client = Client(**api_config)
             client.auth_log_in()
             version = client.app.version
             return jsonify({"success": True, "message": f"连接成功！版本: {version}"})
         elif client_type == 'transmission':
-            client = TrClient(**client_config.get('config', {}))
+            from services import _prepare_api_config
+            tr_api_config = _prepare_api_config(client_config)
+            client = TrClient(**tr_api_config)
             version = client.get_session().version
             return jsonify({"success": True, "message": f"连接成功！版本: {version}"})
         else:
@@ -111,6 +129,7 @@ def test_connection():
         }), 200
 
 
+# ... [时间范围和分组函数保持不变] ...
 def get_date_range_and_grouping(time_range_str, for_speed=False):
     now = datetime.now()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -168,7 +187,8 @@ def get_chart_data_api():
     start_dt, end_dt, group_by_format = get_date_range_and_grouping(time_range)
     time_group_fn = get_time_group_fn(db_manager.db_type, group_by_format)
     ph = db_manager.get_placeholder()
-    query = f"SELECT {time_group_fn} AS time_group, SUM(qb_uploaded) AS qb_ul, SUM(qb_downloaded) AS qb_dl, SUM(tr_uploaded) AS tr_ul, SUM(tr_downloaded) AS tr_dl FROM traffic_stats WHERE stat_datetime >= {ph}"
+    # [COMPATIBILITY FIX] 查询总和，但为了前端兼容性，仍然使用旧的别名
+    query = f"SELECT {time_group_fn} AS time_group, SUM(uploaded) AS qb_ul, SUM(downloaded) AS qb_dl FROM traffic_stats WHERE stat_datetime >= {ph}"
     params = [start_dt.strftime('%Y-%m-%d %H:%M:%S')]
     if end_dt:
         query += f" AND stat_datetime < {ph}"
@@ -183,13 +203,16 @@ def get_chart_data_api():
         cursor.execute(query, tuple(params))
         rows = cursor.fetchall()
         labels = [r['time_group'] for r in rows]
-        datasets = [{
-            "time": r['time_group'],
-            "qb_ul": int(r['qb_ul'] or 0),
-            "qb_dl": int(r['qb_dl'] or 0),
-            "tr_ul": int(r['tr_ul'] or 0),
-            "tr_dl": int(r['tr_dl'] or 0)
-        } for r in rows]
+        # [COMPATIBILITY FIX] 返回旧的前端期望的数据结构
+        datasets = [
+            {
+                "time": r['time_group'],
+                "qb_ul": int(r['qb_ul'] or 0),
+                "qb_dl": int(r['qb_dl'] or 0),
+                "tr_ul": 0,  # 将 tr 数据设为0
+                "tr_dl": 0,  # 将 tr 数据设为0
+            } for r in rows
+        ]
         return jsonify({"labels": labels, "datasets": datasets})
     except Exception as e:
         logging.error(f"get_chart_data_api 出错: {e}", exc_info=True)
@@ -201,21 +224,32 @@ def get_chart_data_api():
 
 @api_bp.route('/speed_data')
 def get_speed_data_api():
-    speeds = {}
+    speeds_by_client = {}
     if services.data_tracker_thread:
         with CACHE_LOCK:
-            speeds = services.data_tracker_thread.latest_speeds
-    cfg = config_manager.get()
+            speeds_by_client = services.data_tracker_thread.latest_speeds
+
+    total_upload_speed = sum(
+        s.get('upload_speed', 0) for s in speeds_by_client.values())
+    total_download_speed = sum(
+        s.get('download_speed', 0) for s in speeds_by_client.values())
+
+    # [COMPATIBILITY FIX] 伪装成旧的数据结构返回
     return jsonify({
         'qbittorrent': {
-            'enabled': cfg.get('qbittorrent', {}).get('enabled', False),
-            'upload_speed': speeds.get('qb_ul_speed', 0),
-            'download_speed': speeds.get('qb_dl_speed', 0)
+            'enabled':
+            any(
+                d.get('enabled')
+                for d in config_manager.get().get('downloaders', [])),
+            'upload_speed':
+            total_upload_speed,
+            'download_speed':
+            total_download_speed
         },
         'transmission': {
-            'enabled': cfg.get('transmission', {}).get('enabled', False),
-            'upload_speed': speeds.get('tr_ul_speed', 0),
-            'download_speed': speeds.get('tr_dl_speed', 0)
+            'enabled': False,  # 假装 transmission 未启用
+            'upload_speed': 0,
+            'download_speed': 0
         }
     })
 
@@ -233,12 +267,13 @@ def get_recent_speed_data_api():
             buffer_data = list(
                 services.data_tracker_thread.recent_speeds_buffer)
 
+    # [COMPATIBILITY FIX] 适配旧前端的键名
     results = [{
         "time": r['timestamp'].strftime('%H:%M:%S'),
-        "qb_ul_speed": r['qb_ul_speed'],
-        "qb_dl_speed": r['qb_dl_speed'],
-        "tr_ul_speed": r['tr_ul_speed'],
-        "tr_dl_speed": r['tr_dl_speed']
+        "qb_ul_speed": r['total_ul_speed'],
+        "qb_dl_speed": r['total_dl_speed'],
+        "tr_ul_speed": 0,
+        "tr_dl_speed": 0,
     } for r in sorted(buffer_data, key=lambda x: x['timestamp'])]
 
     seconds_missing = seconds_to_fetch - len(results)
@@ -252,20 +287,20 @@ def get_recent_speed_data_api():
             ph = db_manager.get_placeholder()
             conn = db_manager._get_connection()
             cursor = db_manager._get_cursor(conn)
-            query = f"SELECT stat_datetime, qb_upload_speed, qb_download_speed, tr_upload_speed, tr_download_speed FROM traffic_stats WHERE stat_datetime < {ph} ORDER BY stat_datetime DESC LIMIT {ph}"
+            query = f"SELECT stat_datetime, SUM(upload_speed) as ul_speed, SUM(download_speed) as dl_speed FROM traffic_stats WHERE stat_datetime < {ph} GROUP BY stat_datetime ORDER BY stat_datetime DESC LIMIT {ph}"
             params = [end_dt.strftime('%Y-%m-%d %H:%M:%S'), seconds_missing]
             cursor.execute(query, tuple(params))
-            rows = cursor.fetchall()
-            for row in reversed(rows):
+            for row in reversed(cursor.fetchall()):
                 dt_obj = row['stat_datetime']
                 if isinstance(dt_obj, str):
                     dt_obj = datetime.strptime(dt_obj, '%Y-%m-%d %H:%M:%S')
+                # [COMPATIBILITY FIX] 适配旧前端的键名
                 db_data.append({
                     "time": dt_obj.strftime('%H:%M:%S'),
-                    "qb_ul_speed": row['qb_upload_speed'] or 0,
-                    "qb_dl_speed": row['qb_download_speed'] or 0,
-                    "tr_ul_speed": row['tr_upload_speed'] or 0,
-                    "tr_dl_speed": row['tr_download_speed'] or 0
+                    "qb_ul_speed": row['ul_speed'] or 0,
+                    "qb_dl_speed": row['dl_speed'] or 0,
+                    "tr_ul_speed": 0,
+                    "tr_dl_speed": 0
                 })
         except Exception as e:
             logging.error(f"获取历史速度数据失败: {e}", exc_info=True)
@@ -274,27 +309,6 @@ def get_recent_speed_data_api():
             if conn: conn.close()
 
     final_results = db_data + results
-    if (pad_count := seconds_to_fetch - len(final_results)) > 0:
-        last_time = datetime.now() - timedelta(seconds=len(final_results))
-        padding = [{
-            "time":
-            (last_time - timedelta(seconds=i + 1)).strftime('%H:%M:%S'),
-            "qb_ul_speed":
-            0,
-            "qb_dl_speed":
-            0,
-            "tr_ul_speed":
-            0,
-            "tr_dl_speed":
-            0
-        } for i in range(pad_count)]
-        final_results = padding + final_results
-
-    cfg = config_manager.get()
-    qb_enabled = cfg.get('qbittorrent', {}).get('enabled', False)
-    tr_enabled = cfg.get('transmission', {}).get('enabled', False)
-    for r in final_results:
-        r['qb_enabled'], r['tr_enabled'] = qb_enabled, tr_enabled
     return jsonify(final_results[-seconds_to_fetch:])
 
 
@@ -304,27 +318,30 @@ def get_speed_chart_data_api():
     conn = None
     cursor = None
     try:
-        ph = db_manager.get_placeholder()
         conn = db_manager._get_connection()
         cursor = db_manager._get_cursor(conn)
         start_dt, end_dt, group_by_format = get_date_range_and_grouping(
             time_range, for_speed=True)
         time_group_fn = get_time_group_fn(db_manager.db_type, group_by_format)
-        query = f"SELECT {time_group_fn} AS time_group, AVG(qb_upload_speed) AS qb_ul_speed, AVG(qb_download_speed) AS qb_dl_speed, AVG(tr_upload_speed) AS tr_ul_speed, AVG(tr_download_speed) AS tr_dl_speed FROM traffic_stats WHERE stat_datetime >= {ph}"
+
+        # [COMPATIBILITY FIX] 查询总和，但为了前端兼容性，仍然使用旧的别名
+        query = f"SELECT {time_group_fn} AS time_group, AVG(total_ul_speed) AS qb_ul_speed, AVG(total_dl_speed) AS qb_dl_speed FROM (SELECT stat_datetime, SUM(upload_speed) AS total_ul_speed, SUM(download_speed) AS total_dl_speed FROM traffic_stats GROUP BY stat_datetime) AS aggregated_speeds WHERE stat_datetime >= {db_manager.get_placeholder()}"
         params = [start_dt.strftime('%Y-%m-%d %H:%M:%S')]
         if end_dt:
-            query += f" AND stat_datetime < {ph}"
+            query += f" AND stat_datetime < {db_manager.get_placeholder()}"
             params.append(end_dt.strftime('%Y-%m-%d %H:%M:%S'))
         query += " GROUP BY time_group ORDER BY time_group"
+
         cursor.execute(query, tuple(params))
         rows = cursor.fetchall()
         labels = [r['time_group'] for r in rows]
+        # [COMPATIBILITY FIX] 返回旧的前端期望的数据结构
         datasets = [{
             "time": r['time_group'],
             "qb_ul_speed": float(r['qb_ul_speed'] or 0),
             "qb_dl_speed": float(r['qb_dl_speed'] or 0),
-            "tr_ul_speed": float(r['tr_ul_speed'] or 0),
-            "tr_dl_speed": float(r['tr_dl_speed'] or 0)
+            "tr_ul_speed": 0,
+            "tr_dl_speed": 0,
         } for r in rows]
         return jsonify({"labels": labels, "datasets": datasets})
     except Exception as e:
@@ -337,18 +354,16 @@ def get_speed_chart_data_api():
 
 @api_bp.route('/downloader_info')
 def get_downloader_info_api():
-    cfg = config_manager.get()
+    cfg_downloaders = config_manager.get().get('downloaders', [])
     info = {
-        'qbittorrent': {
-            'enabled': cfg.get('qbittorrent', {}).get('enabled', False),
-            'status': '未配置',
-            'details': {}
-        },
-        'transmission': {
-            'enabled': cfg.get('transmission', {}).get('enabled', False),
+        d['id']: {
+            'name': d['name'],
+            'type': d['type'],
+            'enabled': d.get('enabled', False),
             'status': '未配置',
             'details': {}
         }
+        for d in cfg_downloaders
     }
 
     conn = None
@@ -356,24 +371,17 @@ def get_downloader_info_api():
     try:
         conn = db_manager._get_connection()
         cursor = db_manager._get_cursor(conn)
+
         cursor.execute(
-            'SELECT SUM(qb_downloaded) as qb_dl, SUM(qb_uploaded) as qb_ul, SUM(tr_downloaded) as tr_dl, SUM(tr_uploaded) as tr_ul FROM traffic_stats'
+            'SELECT downloader_id, SUM(downloaded) as total_dl, SUM(uploaded) as total_ul FROM traffic_stats GROUP BY downloader_id'
         )
-        totals = cursor.fetchone() or {
-            'qb_dl': 0,
-            'qb_ul': 0,
-            'tr_dl': 0,
-            'tr_ul': 0
-        }
-        today_query = f"SELECT SUM(qb_downloaded) as qb_dl, SUM(qb_uploaded) as qb_ul, SUM(tr_downloaded) as tr_dl, SUM(tr_uploaded) as tr_ul FROM traffic_stats WHERE stat_datetime >= {db_manager.get_placeholder()}"
+        totals = {r['downloader_id']: r for r in cursor.fetchall()}
+
+        today_query = f"SELECT downloader_id, SUM(downloaded) as today_dl, SUM(uploaded) as today_ul FROM traffic_stats WHERE stat_datetime >= {db_manager.get_placeholder()} GROUP BY downloader_id"
         cursor.execute(today_query,
                        (datetime.now().strftime('%Y-%m-%d 00:00:00'), ))
-        today_stats = cursor.fetchone() or {
-            'qb_dl': 0,
-            'qb_ul': 0,
-            'tr_dl': 0,
-            'tr_ul': 0
-        }
+        today_stats = {r['downloader_id']: r for r in cursor.fetchall()}
+
     except Exception as e:
         logging.error(f"获取下载器统计信息时数据库出错: {e}", exc_info=True)
         totals, today_stats = {}, {}
@@ -381,68 +389,65 @@ def get_downloader_info_api():
         if cursor: cursor.close()
         if conn: conn.close()
 
-    if info['qbittorrent']['enabled']:
-        details = {
-            '今日下载量': format_bytes(today_stats.get('qb_dl')),
-            '今日上传量': format_bytes(today_stats.get('qb_ul')),
-            '累计下载量': format_bytes(totals.get('qb_dl')),
-            '累计上传量': format_bytes(totals.get('qb_ul'))
-        }
-        try:
-            client = Client(**{
-                k: v
-                for k, v in cfg['qbittorrent'].items() if k != 'enabled'
-            })
-            client.auth_log_in()
-            details['版本'] = client.app.version
-            info['qbittorrent']['status'] = '已连接'
-        except Exception as e:
-            info['qbittorrent']['status'] = '连接失败'
-            details['错误信息'] = str(e)
-        info['qbittorrent']['details'] = details
+    for d_id, d_info in info.items():
+        if not d_info['enabled']: continue
 
-    if info['transmission']['enabled']:
-        details = {
-            '今日下载量': format_bytes(today_stats.get('tr_dl')),
-            '今日上传量': format_bytes(today_stats.get('tr_ul')),
-            '累计下载量': format_bytes(totals.get('tr_dl')),
-            '累计上传量': format_bytes(totals.get('tr_ul'))
-        }
-        try:
-            client = TrClient(**{
-                k: v
-                for k, v in cfg['transmission'].items() if k != 'enabled'
-            })
-            details['版本'] = client.get_session().version
-            info['transmission']['status'] = '已连接'
-        except Exception as e:
-            info['transmission']['status'] = '连接失败'
-            details['错误信息'] = str(e)
-        info['transmission']['details'] = details
+        total_dl = totals.get(d_id, {}).get('total_dl', 0)
+        total_ul = totals.get(d_id, {}).get('total_ul', 0)
+        today_dl = today_stats.get(d_id, {}).get('today_dl', 0)
+        today_ul = today_stats.get(d_id, {}).get('today_ul', 0)
 
-    return jsonify(info)
+        details = {
+            '今日下载量': format_bytes(today_dl),
+            '今日上传量': format_bytes(today_ul),
+            '累计下载量': format_bytes(total_dl),
+            '累计上传量': format_bytes(total_ul)
+        }
+
+        client_config = next(
+            (item for item in cfg_downloaders if item["id"] == d_id), None)
+        api_config = {
+            k: v
+            for k, v in client_config.items()
+            if k not in ['id', 'name', 'type', 'enabled']
+        }
+
+        try:
+            if d_info['type'] == 'qbittorrent':
+                client = Client(**api_config)
+                client.auth_log_in()
+                details['版本'] = client.app.version
+            elif d_info['type'] == 'transmission':
+                from services import _prepare_api_config
+                tr_api_config = _prepare_api_config(client_config)
+                client = TrClient(**tr_api_config)
+                details['版本'] = client.get_session().version
+            d_info['status'] = '已连接'
+        except Exception as e:
+            d_info['status'] = '连接失败'
+            details['错误信息'] = str(e)
+        d_info['details'] = details
+
+    return jsonify(list(info.values()))
 
 
 @api_bp.route('/data')
 def get_data_api():
-    try:
-        page = int(request.args.get('page', 1))
-        page_size_req = request.args.get('pageSize')
-    except (TypeError, ValueError):
-        page, page_size_req = 1, None
-
-    page_size = 50
-    if page_size_req:
-        try:
-            page_size = int(page_size_req)
-        except (TypeError, ValueError):
-            pass
+    page = int(request.args.get('page', 1))
+    page_size = int(request.args.get('pageSize', 50))
 
     try:
-        path_filters = json.loads(request.args.get('path_filters', '[]'))
-        state_filters = json.loads(request.args.get('state_filters', '[]'))
+        path_filters_str = request.args.get('path_filters', '[]')
+        path_filters = json.loads(path_filters_str) if path_filters_str else []
     except json.JSONDecodeError:
-        path_filters, state_filters = [], []
+        path_filters = []
+
+    try:
+        state_filters_str = request.args.get('state_filters', '[]')
+        state_filters = json.loads(
+            state_filters_str) if state_filters_str else []
+    except json.JSONDecodeError:
+        state_filters = []
 
     site_filter_existence = request.args.get('siteFilterExistence', 'all')
     site_filter_name = request.args.get('siteFilterName')
@@ -461,66 +466,60 @@ def get_data_api():
         )
         all_discovered_sites = sorted(
             [row['sites'] for row in cursor.fetchall()])
-        total_site_count = len(all_discovered_sites)
 
         cursor.execute("SELECT * FROM torrents")
         torrents_raw = [dict(row) for row in cursor.fetchall()]
 
+        cursor.execute(
+            "SELECT hash, SUM(uploaded) as total_uploaded FROM torrent_upload_stats GROUP BY hash"
+        )
+        uploads_by_hash = {
+            row['hash']: row['total_uploaded']
+            for row in cursor.fetchall()
+        }
+
         agg_torrents = defaultdict(
             lambda: {
-                'name':
-                '',
-                'save_path':
-                '',
-                'size':
-                0,
-                'progress':
-                0,
-                'state':
-                set(),
-                'sites':
-                defaultdict(lambda: {
-                    'qb_ul': 0,
-                    'tr_ul': 0,
-                    'comment': ''
+                'name': '',
+                'save_path': '',
+                'size': 0,
+                'progress': 0,
+                'state': set(),
+                'sites': defaultdict(lambda: {
+                    'comment': '',
+                    'uploaded': 0
                 }),
-                'qb_uploaded':
-                0,
-                'tr_uploaded':
-                0
+                'total_uploaded': 0
             })
 
         for t in torrents_raw:
             name = t['name']
             agg = agg_torrents[name]
-            agg['name'] = name
-            if not agg['save_path']: agg['save_path'] = t.get('save_path', '')
-            if not agg['size']: agg['size'] = t.get('size', 0)
+
+            if not agg['name']:
+                agg['name'] = name
+                agg['save_path'] = t.get('save_path', '')
+                agg['size'] = t.get('size', 0)
+
             agg['progress'] = max(agg.get('progress', 0), t.get('progress', 0))
             agg['state'].add(t.get('state', 'N/A'))
-            agg['qb_uploaded'] += t.get('qb_uploaded', 0)
-            agg['tr_uploaded'] += t.get('tr_uploaded', 0)
+
+            upload_for_this_hash = uploads_by_hash.get(t['hash'], 0)
+            agg['total_uploaded'] += upload_for_this_hash
+
             site_name = t.get('sites')
-            detail_url = t.get('details')
             if site_name:
-                agg['sites'][site_name]['qb_ul'] += t.get('qb_uploaded', 0)
-                agg['sites'][site_name]['tr_ul'] += t.get('tr_uploaded', 0)
-                agg['sites'][site_name]['comment'] = detail_url
+                agg['sites'][site_name]['uploaded'] += upload_for_this_hash
+                agg['sites'][site_name]['comment'] = t.get('details')
 
         final_torrent_list = []
         for name, data in agg_torrents.items():
             data['state'] = ', '.join(sorted(list(data['state'])))
-            data['size_formatted'] = format_bytes(data.get('size', 0))
-            data['qb_uploaded_formatted'] = format_bytes(
-                data.get('qb_uploaded', 0))
-            data['tr_uploaded_formatted'] = format_bytes(
-                data.get('tr_uploaded', 0))
-            data['total_uploaded'] = data.get('qb_uploaded', 0) + data.get(
-                'tr_uploaded', 0)
+            data['size_formatted'] = format_bytes(data['size'])
             data['total_uploaded_formatted'] = format_bytes(
                 data['total_uploaded'])
             data['site_count'] = len(data.get('sites', {}))
-            data['total_site_count'] = total_site_count
+            data['total_site_count'] = len(all_discovered_sites)
             final_torrent_list.append(data)
 
         filtered_list = final_torrent_list
@@ -554,8 +553,6 @@ def get_data_api():
             sort_key_map = {
                 'size_formatted': 'size',
                 'progress': 'progress',
-                'qb_uploaded_formatted': 'qb_uploaded',
-                'tr_uploaded_formatted': 'tr_uploaded',
                 'total_uploaded_formatted': 'total_uploaded',
                 'site_count': 'site_count'
             }
@@ -564,13 +561,15 @@ def get_data_api():
                 filtered_list.sort(key=lambda x: x.get(sort_key, 0),
                                    reverse=reverse)
             else:
-                filtered_list.sort(key=cmp_to_key(custom_sort_compare),
-                                   reverse=reverse)
+                filtered_list.sort(
+                    key=cmp_to_key(lambda a, b: custom_sort_compare(a, b)),
+                    reverse=reverse)
         else:
             filtered_list.sort(key=cmp_to_key(custom_sort_compare))
 
         total_items = len(filtered_list)
         paginated_data = filtered_list[(page - 1) * page_size:page * page_size]
+
         unique_paths = sorted(
             list(
                 set(
@@ -592,9 +591,10 @@ def get_data_api():
             'unique_states': unique_states,
             'all_discovered_sites': all_discovered_sites,
             'site_link_rules': site_link_rules_from_db,
-            'active_path_filters': [],
+            'active_path_filters': path_filters,
             'error': None
         })
+
     except Exception as e:
         logging.error(f"get_data_api 出错: {e}", exc_info=True)
         return jsonify({"error": "从数据库检索种子数据失败"}), 500

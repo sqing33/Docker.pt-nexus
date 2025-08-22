@@ -20,33 +20,26 @@ class ConfigManager:
         self.load()
 
     def _get_default_config(self):
-        """返回一个包含两个下载器都已禁用的默认配置结构。"""
-        return {
-            "qbittorrent": {
-                "enabled": False,
-                "host": "",
-                "username": "",
-                "password": ""
-            },
-            "transmission": {
-                "enabled": False,
-                "host": "",
-                "port": 9091,
-                "username": "",
-                "password": ""
-            }
-        }
+        """返回一个包含空下载器列表的默认配置结构。"""
+        return {"downloaders": []}
 
     def load(self):
         """
         仅从 config.json 加载配置。
-        如果文件不存在，则创建一个包含禁用客户端的默认配置文件。
+        如果文件不存在，则创建一个包含空下载器列表的默认配置文件。
         """
         if os.path.exists(CONFIG_FILE):
             logging.info(f"从 {CONFIG_FILE} 加载配置。")
             try:
                 with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
                     self._config = json.load(f)
+                    # 兼容性检查：如果还是旧格式，则转换
+                    if 'qbittorrent' in self._config or 'transmission' in self._config:
+                        logging.warning("检测到旧版配置文件格式，正在转换为新版格式...")
+                        self._config = self._convert_legacy_config(
+                            self._config)
+                        self.save(self._config)
+
             except (json.JSONDecodeError, IOError) as e:
                 logging.error(f"无法读取或解析 {CONFIG_FILE}: {e}。将加载一个安全的默认配置。")
                 self._config = self._get_default_config()
@@ -54,6 +47,30 @@ class ConfigManager:
             logging.info(f"未找到 {CONFIG_FILE}，将创建一个新的默认配置文件。")
             default_config = self._get_default_config()
             self.save(default_config)  # 保存到磁盘并更新缓存
+
+    def _convert_legacy_config(self, legacy_config):
+        """将旧的配置文件格式转换为新的基于列表的格式。"""
+        import uuid
+        new_downloaders = []
+        if legacy_config.get('qbittorrent', {}).get('host'):
+            qb_conf = legacy_config['qbittorrent']
+            qb_conf.update({
+                "id": str(uuid.uuid4()),
+                "name": "qBittorrent",
+                "type": "qbittorrent"
+            })
+            new_downloaders.append(qb_conf)
+
+        if legacy_config.get('transmission', {}).get('host'):
+            tr_conf = legacy_config['transmission']
+            tr_conf.update({
+                "id": str(uuid.uuid4()),
+                "name": "Transmission",
+                "type": "transmission"
+            })
+            new_downloaders.append(tr_conf)
+
+        return {"downloaders": new_downloaders}
 
     def get(self):
         """返回缓存的配置。"""

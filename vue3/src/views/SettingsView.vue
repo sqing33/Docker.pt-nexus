@@ -1,243 +1,269 @@
 <template>
-  <div class="settings-container">
-    <el-alert
-      title="设置说明"
-      type="info"
-      description="在此处配置您的下载客户端。密码字段留空则表示不更改现有密码。每个客户端的设置需要单独应用。"
-      show-icon
-      :closable="false"
-      class="info-alert"
-    />
+  <div class="settings-view" v-loading="isLoading">
+    <div class="header">
+      <h1>下载器设置</h1>
+      <p>在此处添加和管理您的下载客户端。所有更改都需要点击底部的按钮进行保存。</p>
+    </div>
 
-    <!-- qBittorrent 设置 -->
-    <el-card class="box-card">
-      <template #header>
-        <div class="card-header">
-          <span><i class="fas fa-cube"></i> qBittorrent</span>
-          <el-switch v-model="config.qbittorrent.enabled" active-text="启用" inactive-text="禁用" />
-        </div>
-      </template>
-      <!-- 移除了这里的 :disabled 属性 -->
-      <el-form :model="config.qbittorrent" label-width="120px">
-        <el-form-item label="主机地址">
-          <!-- 将 :disabled 属性移到了具体的输入组件上 -->
-          <el-input
-            v-model="config.qbittorrent.host"
-            placeholder="例如: http://192.168.1.10:8080"
-            :disabled="!config.qbittorrent.enabled"
-          />
-        </el-form-item>
-        <el-form-item label="用户名">
-          <el-input v-model="config.qbittorrent.username" :disabled="!config.qbittorrent.enabled" />
-        </el-form-item>
-        <el-form-item label="密码">
-          <el-input
-            v-model="config.qbittorrent.password"
-            type="password"
-            show-password
-            placeholder="留空以保持不变"
-            :disabled="!config.qbittorrent.enabled"
-          />
-        </el-form-item>
-        <el-form-item>
-          <el-button
-            type="primary"
-            @click="testConnection('qbittorrent')"
-            :disabled="!config.qbittorrent.enabled"
-            >测试连接</el-button
-          >
-          <!-- 这个按钮现在只受 loading 状态影响，不再被表单禁用 -->
-          <el-button
-            type="success"
-            @click="saveClientSettings('qbittorrent')"
-            :loading="isSaving.qbittorrent"
-          >
-            <i class="fas fa-save"></i>&nbsp;应用 qBittorrent 设置
-          </el-button>
-        </el-form-item>
-      </el-form>
-    </el-card>
+    <div class="downloader-grid">
+      <el-card
+        v-for="downloader in settings.downloaders"
+        :key="downloader.id"
+        class="downloader-card"
+      >
+        <template #header>
+          <div class="card-header">
+            <span>{{ downloader.name || '新下载器' }}</span>
+            <el-button
+              type="danger"
+              :icon="Delete"
+              circle
+              @click="confirmDeleteDownloader(downloader.id)"
+            />
+          </div>
+        </template>
 
-    <!-- Transmission 设置 -->
-    <el-card class="box-card">
-      <template #header>
-        <div class="card-header">
-          <span><i class="fas fa-circle-nodes"></i> Transmission</span>
-          <el-switch
-            v-model="config.transmission.enabled"
-            active-text="启用"
-            inactive-text="禁用"
-          />
-        </div>
-      </template>
-      <!-- 移除了这里的 :disabled 属性 -->
-      <el-form :model="config.transmission" label-width="120px">
-        <el-form-item label="主机地址">
-          <!-- 将 :disabled 属性移到了具体的输入组件上 -->
-          <el-input
-            v-model="config.transmission.host"
-            placeholder="例如: 192.168.1.11"
-            :disabled="!config.transmission.enabled"
-          />
-        </el-form-item>
-        <el-form-item label="端口">
-          <el-input-number
-            v-model="config.transmission.port"
-            :min="1"
-            :max="65535"
-            :disabled="!config.transmission.enabled"
-          />
-        </el-form-item>
-        <el-form-item label="用户名">
-          <el-input
-            v-model="config.transmission.username"
-            :disabled="!config.transmission.enabled"
-          />
-        </el-form-item>
-        <el-form-item label="密码">
-          <el-input
-            v-model="config.transmission.password"
-            type="password"
-            show-password
-            placeholder="留空以保持不变"
-            :disabled="!config.transmission.enabled"
-          />
-        </el-form-item>
-        <el-form-item>
-          <el-button
-            type="primary"
-            @click="testConnection('transmission')"
-            :disabled="!config.transmission.enabled"
-            >测试连接</el-button
-          >
-          <!-- 这个按钮现在只受 loading 状态影响，不再被表单禁用 -->
-          <el-button
-            type="success"
-            @click="saveClientSettings('transmission')"
-            :loading="isSaving.transmission"
-          >
-            <i class="fas fa-save"></i>&nbsp;应用 Transmission 设置
+        <el-form :model="downloader" label-position="top">
+          <el-form-item label="启用此下载器">
+            <el-switch v-model="downloader.enabled" />
+          </el-form-item>
+
+          <el-form-item label="自定义名称">
+            <el-input v-model="downloader.name" placeholder="例如：家庭服务器 qB"></el-input>
+          </el-form-item>
+
+          <el-form-item label="客户端类型">
+            <el-select v-model="downloader.type" placeholder="请选择类型" style="width: 100%">
+              <el-option label="qBittorrent" value="qbittorrent"></el-option>
+              <el-option label="Transmission" value="transmission"></el-option>
+            </el-select>
+          </el-form-item>
+
+          <el-form-item label="主机地址">
+            <el-input v-model="downloader.host" placeholder="例如：192.168.1.10:8080"></el-input>
+          </el-form-item>
+
+          <!-- [REMOVED] 独立的端口设置区域已被移除 -->
+
+          <el-form-item label="用户名">
+            <el-input v-model="downloader.username" placeholder="登录用户名"></el-input>
+          </el-form-item>
+
+          <el-form-item label="密码">
+            <el-input
+              v-model="downloader.password"
+              type="password"
+              show-password
+              placeholder="登录密码（未修改则留空）"
+            ></el-input>
+          </el-form-item>
+        </el-form>
+
+        <div class="card-footer">
+          <el-button type="primary" plain @click="testConnection(downloader)">
+            <el-icon><Connection /></el-icon>
+            测试连接
           </el-button>
-        </el-form-item>
-      </el-form>
-    </el-card>
+          <div v-if="testResults[downloader.id]" class="test-result">
+            <el-text :type="testResults[downloader.id].success ? 'success' : 'danger'">
+              {{ testResults[downloader.id].message }}
+            </el-text>
+          </div>
+        </div>
+      </el-card>
+
+      <div class="add-card-container">
+        <el-button class="add-button" type="primary" dashed @click="addDownloader">
+          <el-icon><Plus /></el-icon>
+          <span>添加下载器</span>
+        </el-button>
+      </div>
+    </div>
+
+    <div class="save-footer">
+      <el-button type="success" size="large" @click="saveSettings" :loading="isSaving">
+        <el-icon><Select /></el-icon>
+        保存所有设置
+      </el-button>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import axios from 'axios'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Plus, Delete, Connection, Select } from '@element-plus/icons-vue'
 
-const isSaving = reactive({
-  qbittorrent: false,
-  transmission: false,
-})
+// --- 状态管理 ---
+const settings = ref({ downloaders: [] })
+const isLoading = ref(true)
+const isSaving = ref(false)
+const testResults = ref({})
 
-const config = ref({
-  qbittorrent: {
-    enabled: false,
-    host: '',
-    username: '',
-    password: '',
-  },
-  transmission: {
-    enabled: false,
-    host: '',
-    port: 9091,
-    username: '',
-    password: '',
-  },
-})
+// --- API 基础 URL ---
+const API_BASE_URL = '/api'
 
-const fetchSettings = async () => {
-  try {
-    const response = await axios.get('/api/settings')
-    if (response.data.qbittorrent) {
-      config.value.qbittorrent = { ...config.value.qbittorrent, ...response.data.qbittorrent }
-    }
-    if (response.data.transmission) {
-      config.value.transmission = { ...config.value.transmission, ...response.data.transmission }
-    }
-  } catch (error) {
-    ElMessage.error('获取设置失败！')
-    console.error(error)
-  }
-}
-
-const testConnection = async (clientType) => {
-  let payload
-  if (clientType === 'qbittorrent') {
-    payload = {
-      type: 'qbittorrent',
-      config: config.value.qbittorrent,
-    }
-  } else if (clientType === 'transmission') {
-    payload = {
-      type: 'transmission',
-      config: {
-        host: config.value.transmission.host,
-        port: config.value.transmission.port,
-        username: config.value.transmission.username,
-        password: config.value.transmission.password,
-      },
-    }
-  } else {
-    return
-  }
-
-  try {
-    const response = await axios.post('/api/test_connection', payload)
-    if (response.data.success) {
-      ElMessage.success(`[${clientType}] ${response.data.message}`)
-    } else {
-      ElMessage.error(`[${clientType}] ${response.data.message}`)
-    }
-  } catch (error) {
-    ElMessage.error(`[${clientType}] 测试请求失败: ${error.message}`)
-    console.error(error)
-  }
-}
-
-const saveClientSettings = async (clientType) => {
-  isSaving[clientType] = true
-  const payload = {
-    [clientType]: config.value[clientType],
-  }
-
-  try {
-    const response = await axios.post('/api/settings', payload)
-    ElMessage.success(response.data.message || '设置已保存！')
-  } catch (error) {
-    ElMessage.error(error.response?.data?.error || '保存设置失败！')
-    console.error(error)
-  } finally {
-    isSaving[clientType] = false
-  }
-}
-
+// --- 生命周期钩子 ---
 onMounted(() => {
   fetchSettings()
 })
+
+// --- 方法 ---
+const fetchSettings = async () => {
+  isLoading.value = true
+  try {
+    const response = await axios.get(`${API_BASE_URL}/settings`)
+    response.data.downloaders.forEach((d) => {
+      if (!d.id) d.id = `client_${Date.now()}_${Math.random()}`
+    })
+    settings.value = response.data
+  } catch (error) {
+    ElMessage.error('加载设置失败！')
+    console.error(error)
+  } finally {
+    isLoading.value = false
+  }
+}
+
+const addDownloader = () => {
+  settings.value.downloaders.push({
+    id: `new_${Date.now()}`,
+    enabled: true,
+    name: '新下载器',
+    type: 'qbittorrent',
+    host: '',
+    // [REMOVED] 不再默认设置 port
+    username: '',
+    password: '',
+  })
+}
+
+const confirmDeleteDownloader = (downloaderId) => {
+  ElMessageBox.confirm('您确定要删除这个下载器配置吗？此操作不可撤销。', '警告', {
+    confirmButtonText: '确定删除',
+    cancelButtonText: '取消',
+    type: 'warning',
+  })
+    .then(() => {
+      deleteDownloader(downloaderId)
+      ElMessage({
+        type: 'success',
+        message: '下载器已删除（尚未保存）。',
+      })
+    })
+    .catch(() => {
+      // 用户取消操作
+    })
+}
+
+const deleteDownloader = (downloaderId) => {
+  settings.value.downloaders = settings.value.downloaders.filter((d) => d.id !== downloaderId)
+}
+
+const testConnection = async (downloader) => {
+  testResults.value[downloader.id] = { message: '正在测试...' }
+
+  try {
+    const response = await axios.post(`${API_BASE_URL}/test_connection`, downloader)
+    testResults.value[downloader.id] = response.data
+  } catch (error) {
+    testResults.value[downloader.id] = {
+      success: false,
+      message: '测试请求失败，请检查网络或后端服务。',
+    }
+    console.error(error)
+  }
+}
+
+const saveSettings = async () => {
+  isSaving.value = true
+  try {
+    await axios.post(`${API_BASE_URL}/settings`, settings.value)
+    ElMessage.success('设置已成功保存并应用！')
+    fetchSettings()
+  } catch (error) {
+    ElMessage.error('保存设置失败！')
+    console.error(error)
+  } finally {
+    isSaving.value = false
+  }
+}
 </script>
 
 <style scoped>
-.settings-container {
-  padding: 20px;
+.settings-view {
+  padding: 24px;
 }
-.box-card {
-  margin-bottom: 20px;
+
+.header {
+  margin-bottom: 24px;
 }
+
+.header h1 {
+  margin-bottom: 8px;
+}
+
+.downloader-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 24px;
+}
+
+.downloader-card {
+  display: flex;
+  flex-direction: column;
+}
+
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-weight: bold;
 }
-.card-header span i {
-  margin-right: 8px;
+
+.el-form {
+  margin-bottom: auto; /* 让表单占据空间，将页脚推到底部 */
 }
-.info-alert {
-  margin-bottom: 20px;
+
+.card-footer {
+  margin-top: 20px;
+  border-top: 1px solid var(--el-border-color-lighter);
+  padding-top: 15px;
+}
+
+.test-result {
+  margin-top: 10px;
+  word-break: break-all;
+}
+
+.add-card-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 400px; /* 与卡片高度保持一致 */
+  border: 2px dashed var(--el-border-color);
+  border-radius: 4px;
+  cursor: pointer;
+  transition:
+    border-color 0.3s,
+    background-color 0.3s;
+}
+
+.add-card-container:hover {
+  border-color: var(--el-color-primary);
+  background-color: var(--el-color-primary-light-9);
+}
+
+.add-button {
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 16px;
+}
+
+.save-footer {
+  margin-top: 32px;
+  text-align: center;
 }
 </style>
