@@ -129,7 +129,6 @@ def test_connection():
         }), 200
 
 
-# ... [时间范围和分组函数保持不变] ...
 def get_date_range_and_grouping(time_range_str, for_speed=False):
     now = datetime.now()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -183,12 +182,13 @@ def get_time_group_fn(db_type, format_str):
 
 @api_bp.route('/chart_data')
 def get_chart_data_api():
+    """获取聚合后的总数据量图表数据。"""
     time_range = request.args.get('range', 'this_week')
     start_dt, end_dt, group_by_format = get_date_range_and_grouping(time_range)
     time_group_fn = get_time_group_fn(db_manager.db_type, group_by_format)
     ph = db_manager.get_placeholder()
-    # [COMPATIBILITY FIX] 查询总和，但为了前端兼容性，仍然使用旧的别名
-    query = f"SELECT {time_group_fn} AS time_group, SUM(uploaded) AS qb_ul, SUM(downloaded) AS qb_dl FROM traffic_stats WHERE stat_datetime >= {ph}"
+
+    query = f"SELECT {time_group_fn} AS time_group, SUM(uploaded) AS total_ul, SUM(downloaded) AS total_dl FROM traffic_stats WHERE stat_datetime >= {ph}"
     params = [start_dt.strftime('%Y-%m-%d %H:%M:%S')]
     if end_dt:
         query += f" AND stat_datetime < {ph}"
@@ -202,17 +202,13 @@ def get_chart_data_api():
         cursor = db_manager._get_cursor(conn)
         cursor.execute(query, tuple(params))
         rows = cursor.fetchall()
+
         labels = [r['time_group'] for r in rows]
-        # [COMPATIBILITY FIX] 返回旧的前端期望的数据结构
-        datasets = [
-            {
-                "time": r['time_group'],
-                "qb_ul": int(r['qb_ul'] or 0),
-                "qb_dl": int(r['qb_dl'] or 0),
-                "tr_ul": 0,  # 将 tr 数据设为0
-                "tr_dl": 0,  # 将 tr 数据设为0
-            } for r in rows
-        ]
+        datasets = [{
+            "time": r['time_group'],
+            "uploaded": int(r['total_ul'] or 0),
+            "downloaded": int(r['total_dl'] or 0),
+        } for r in rows]
         return jsonify({"labels": labels, "datasets": datasets})
     except Exception as e:
         logging.error(f"get_chart_data_api 出错: {e}", exc_info=True)
@@ -224,42 +220,29 @@ def get_chart_data_api():
 
 @api_bp.route('/speed_data')
 def get_speed_data_api():
+    """获取每个下载器当前的实时速度。"""
     speeds_by_client = {}
     if services.data_tracker_thread:
         with CACHE_LOCK:
-            speeds_by_client = services.data_tracker_thread.latest_speeds
+            speeds_by_client = copy.deepcopy(
+                services.data_tracker_thread.latest_speeds)
 
-    total_upload_speed = sum(
-        s.get('upload_speed', 0) for s in speeds_by_client.values())
-    total_download_speed = sum(
-        s.get('download_speed', 0) for s in speeds_by_client.values())
-
-    # [COMPATIBILITY FIX] 伪装成旧的数据结构返回
-    return jsonify({
-        'qbittorrent': {
-            'enabled':
-            any(
-                d.get('enabled')
-                for d in config_manager.get().get('downloaders', [])),
-            'upload_speed':
-            total_upload_speed,
-            'download_speed':
-            total_download_speed
-        },
-        'transmission': {
-            'enabled': False,  # 假装 transmission 未启用
-            'upload_speed': 0,
-            'download_speed': 0
-        }
-    })
+    return jsonify(speeds_by_client)
 
 
 @api_bp.route('/recent_speed_data')
 def get_recent_speed_data_api():
+    """获取近期的、按下载器区分的速度数据。"""
     try:
         seconds_to_fetch = int(request.args.get('seconds', '60'))
     except ValueError:
         return jsonify({"error": "无效的秒数参数"}), 400
+
+    cfg_downloaders = config_manager.get().get('downloaders', [])
+    enabled_downloaders = [{
+        "id": d["id"],
+        "name": d["name"]
+    } for d in cfg_downloaders if d.get('enabled')]
 
     buffer_data = []
     if services.data_tracker_thread:
@@ -267,17 +250,29 @@ def get_recent_speed_data_api():
             buffer_data = list(
                 services.data_tracker_thread.recent_speeds_buffer)
 
-    # [COMPATIBILITY FIX] 适配旧前端的键名
-    results = [{
-        "time": r['timestamp'].strftime('%H:%M:%S'),
-        "qb_ul_speed": r['total_ul_speed'],
-        "qb_dl_speed": r['total_dl_speed'],
-        "tr_ul_speed": 0,
-        "tr_dl_speed": 0,
-    } for r in sorted(buffer_data, key=lambda x: x['timestamp'])]
+    # 1. 处理内存缓冲中的数据
+    results_from_buffer = []
+    for r in sorted(buffer_data, key=lambda x: x['timestamp']):
+        # --- MODIFICATION START: 使用更安全的方式重构 speeds 字典 ---
+        renamed_speeds = {}
+        for d in enabled_downloaders:
+            # 从原始速度数据中获取对应下载器的数据，如果不存在则为空字典
+            original_speed_data = r['speeds'].get(d['id'], {})
+            renamed_speeds[d['id']] = {
+                # 安全地获取每个速度值，如果键不存在则默认为 0
+                'ul_speed': original_speed_data.get('upload_speed', 0),
+                'dl_speed': original_speed_data.get('download_speed', 0)
+            }
 
-    seconds_missing = seconds_to_fetch - len(results)
-    db_data = []
+        results_from_buffer.append({
+            "time": r['timestamp'].strftime('%H:%M:%S'),
+            "speeds": renamed_speeds
+        })
+        # --- MODIFICATION END ---
+
+    # 2. 如果缓冲数据不够，从数据库获取
+    seconds_missing = seconds_to_fetch - len(results_from_buffer)
+    results_from_db = []
     if seconds_missing > 0:
         conn = None
         cursor = None
@@ -287,36 +282,67 @@ def get_recent_speed_data_api():
             ph = db_manager.get_placeholder()
             conn = db_manager._get_connection()
             cursor = db_manager._get_cursor(conn)
-            query = f"SELECT stat_datetime, SUM(upload_speed) as ul_speed, SUM(download_speed) as dl_speed FROM traffic_stats WHERE stat_datetime < {ph} GROUP BY stat_datetime ORDER BY stat_datetime DESC LIMIT {ph}"
-            params = [end_dt.strftime('%Y-%m-%d %H:%M:%S'), seconds_missing]
+
+            query = f"SELECT stat_datetime, downloader_id, upload_speed, download_speed FROM traffic_stats WHERE stat_datetime < {ph} ORDER BY stat_datetime DESC LIMIT {ph}"
+            params = [
+                end_dt.strftime('%Y-%m-%d %H:%M:%S'),
+                seconds_missing * len(enabled_downloaders)
+                if enabled_downloaders else seconds_missing
+            ]
             cursor.execute(query, tuple(params))
+
+            db_rows_by_time = defaultdict(dict)
             for row in reversed(cursor.fetchall()):
                 dt_obj = row['stat_datetime']
                 if isinstance(dt_obj, str):
-                    dt_obj = datetime.strptime(dt_obj, '%Y-%m-%d %H:%M:%S')
-                # [COMPATIBILITY FIX] 适配旧前端的键名
-                db_data.append({
-                    "time": dt_obj.strftime('%H:%M:%S'),
-                    "qb_ul_speed": row['ul_speed'] or 0,
-                    "qb_dl_speed": row['dl_speed'] or 0,
-                    "tr_ul_speed": 0,
-                    "tr_dl_speed": 0
+                    try:
+                        dt_obj = datetime.strptime(dt_obj,
+                                                   '%Y-%m-%d %H:%M:%S.%f')
+                    except ValueError:
+                        dt_obj = datetime.strptime(dt_obj, '%Y-%m-%d %H:%M:%S')
+
+                time_str = dt_obj.strftime('%H:%M:%S')
+                db_rows_by_time[time_str][row['downloader_id']] = {
+                    'ul_speed': row['upload_speed'] or 0,
+                    'dl_speed': row['download_speed'] or 0
+                }
+
+            for time_str, speeds_dict in db_rows_by_time.items():
+                results_from_db.append({
+                    "time": time_str,
+                    "speeds": speeds_dict
                 })
+
         except Exception as e:
             logging.error(f"获取历史速度数据失败: {e}", exc_info=True)
         finally:
             if cursor: cursor.close()
             if conn: conn.close()
 
-    final_results = db_data + results
-    return jsonify(final_results[-seconds_to_fetch:])
+    # 3. 合并并返回
+    final_results = (results_from_db + results_from_buffer)[-seconds_to_fetch:]
+    labels = [r['time'] for r in final_results]
+
+    return jsonify({
+        "labels": labels,
+        "datasets": final_results,
+        "downloaders": enabled_downloaders
+    })
 
 
 @api_bp.route('/speed_chart_data')
 def get_speed_chart_data_api():
+    """获取历史的、按下载器区分的速度图表数据。"""
     time_range = request.args.get('range', 'last_12_hours')
     conn = None
     cursor = None
+
+    cfg_downloaders = config_manager.get().get('downloaders', [])
+    enabled_downloaders = [{
+        "id": d["id"],
+        "name": d["name"]
+    } for d in cfg_downloaders if d.get('enabled')]
+
     try:
         conn = db_manager._get_connection()
         cursor = db_manager._get_cursor(conn)
@@ -324,26 +350,35 @@ def get_speed_chart_data_api():
             time_range, for_speed=True)
         time_group_fn = get_time_group_fn(db_manager.db_type, group_by_format)
 
-        # [COMPATIBILITY FIX] 查询总和，但为了前端兼容性，仍然使用旧的别名
-        query = f"SELECT {time_group_fn} AS time_group, AVG(total_ul_speed) AS qb_ul_speed, AVG(total_dl_speed) AS qb_dl_speed FROM (SELECT stat_datetime, SUM(upload_speed) AS total_ul_speed, SUM(download_speed) AS total_dl_speed FROM traffic_stats GROUP BY stat_datetime) AS aggregated_speeds WHERE stat_datetime >= {db_manager.get_placeholder()}"
+        query = f"SELECT {time_group_fn} AS time_group, downloader_id, AVG(upload_speed) AS ul_speed, AVG(download_speed) AS dl_speed FROM traffic_stats WHERE stat_datetime >= {db_manager.get_placeholder()}"
         params = [start_dt.strftime('%Y-%m-%d %H:%M:%S')]
         if end_dt:
             query += f" AND stat_datetime < {db_manager.get_placeholder()}"
             params.append(end_dt.strftime('%Y-%m-%d %H:%M:%S'))
-        query += " GROUP BY time_group ORDER BY time_group"
+        query += " GROUP BY time_group, downloader_id ORDER BY time_group"
 
         cursor.execute(query, tuple(params))
         rows = cursor.fetchall()
-        labels = [r['time_group'] for r in rows]
-        # [COMPATIBILITY FIX] 返回旧的前端期望的数据结构
-        datasets = [{
-            "time": r['time_group'],
-            "qb_ul_speed": float(r['qb_ul_speed'] or 0),
-            "qb_dl_speed": float(r['qb_dl_speed'] or 0),
-            "tr_ul_speed": 0,
-            "tr_dl_speed": 0,
-        } for r in rows]
-        return jsonify({"labels": labels, "datasets": datasets})
+
+        results_by_time = defaultdict(lambda: {'time': '', 'speeds': {}})
+        for r in rows:
+            time_group = r['time_group']
+            entry = results_by_time[time_group]
+            entry['time'] = time_group
+            entry['speeds'][r['downloader_id']] = {
+                "ul_speed": float(r['ul_speed'] or 0),
+                "dl_speed": float(r['dl_speed'] or 0)
+            }
+
+        sorted_datasets = sorted(results_by_time.values(),
+                                 key=lambda x: x['time'])
+        labels = [d['time'] for d in sorted_datasets]
+
+        return jsonify({
+            "labels": labels,
+            "datasets": sorted_datasets,
+            "downloaders": enabled_downloaders
+        })
     except Exception as e:
         logging.error(f"get_speed_chart_data_api 出错: {e}", exc_info=True)
         return jsonify({"error": "获取速度图表数据失败"}), 500
