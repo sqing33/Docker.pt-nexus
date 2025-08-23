@@ -8,9 +8,18 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DATA_DIR = '.'
-SITES_DATA_FILE = os.path.join(DATA_DIR, 'sites_data.json')
+# --- MODIFICATION START ---
+# 为需要持久化的数据（如配置和数据库）定义一个专门的目录
+DATA_DIR = 'data'
+# 确保这个持久化数据目录存在
+os.makedirs(DATA_DIR, exist_ok=True)
+
+# config.json 和 SQLite 数据库将位于 'data/' 目录中
 CONFIG_FILE = os.path.join(DATA_DIR, 'config.json')
+
+# sites_data.json 将保留在应用根目录（与 app.py 同级），不放入 data 目录
+SITES_DATA_FILE = 'sites_data.json'
+# --- MODIFICATION END ---
 
 
 class ConfigManager:
@@ -90,7 +99,7 @@ class ConfigManager:
 
 
 def get_db_config():
-    """根据环境变量 DB_TYPE 显式选择数据库。这部分保持不变。"""
+    """根据环境变量 DB_TYPE 显式选择数据库。"""
     db_choice = os.getenv('DB_TYPE', 'sqlite').lower()
     if db_choice == 'mysql':
         logging.info("数据库类型选择为 MySQL。正在检查相关环境变量...")
@@ -117,10 +126,14 @@ def get_db_config():
         return {'db_type': 'mysql', 'mysql': mysql_config}
     elif db_choice == 'sqlite':
         logging.info("数据库类型选择为 SQLite。")
-        return {'db_type': 'sqlite'}
+        # SQLite 数据库文件路径也指向 data 目录
+        db_path = os.path.join(DATA_DIR, 'pt_stats.db')
+        return {'db_type': 'sqlite', 'path': db_path}
     else:
         logging.warning(f"无效的 DB_TYPE 值: '{db_choice}'。将回退到使用 SQLite。")
-        return {'db_type': 'sqlite'}
+        # SQLite 数据库文件路径也指向 data 目录
+        db_path = os.path.join(DATA_DIR, 'pt_stats.db')
+        return {'db_type': 'sqlite', 'path': db_path}
 
 
 # 创建一个全局实例供整个应用使用

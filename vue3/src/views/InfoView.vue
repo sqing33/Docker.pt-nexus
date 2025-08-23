@@ -37,6 +37,21 @@
         </div>
         <div class="chart-title">速率 {{ speedDisplayModeButtonText }}</div>
       </div>
+
+      <!-- 自定义的可换行图例容器 -->
+      <div class="custom-legend-container">
+        <span
+          v-for="item in speedChartLegendItems"
+          :key="item.name"
+          class="legend-item"
+          :class="{ disabled: item.disabled }"
+          @click="toggleSeries(item.name)"
+        >
+          <span class="legend-color-box" :style="{ backgroundColor: item.color }"></span>
+          <span class="legend-text">{{ item.name }}</span>
+        </span>
+      </div>
+
       <div ref="speedChart" class="chart-body"></div>
     </div>
 
@@ -102,9 +117,6 @@
         <div class="chart-title">数据量 {{ trafficDisplayModeButtonText }}</div>
       </div>
       <div ref="trafficChart" class="chart-body"></div>
-      <div class="chart-summary">
-        总上传: {{ totalChartUpload }} | 总下载: {{ totalChartDownload }}
-      </div>
     </div>
   </div>
 </template>
@@ -126,9 +138,8 @@ let lastTooltipDataIndex = null
 const speedDisplayMode = ref('last_1_min')
 const trafficDisplayMode = ref('today')
 
-const totalChartUpload = ref('0 B')
-const totalChartDownload = ref('0 B')
 const speedChartDownloaders = ref([])
+const speedChartLegendItems = ref([])
 
 const displayModeTextMap = {
   last_1_min: '近1分钟',
@@ -176,52 +187,79 @@ const initSpeedChart = () => {
           }
           return [newX, point[1] - 20]
         },
-
-        // --- MODIFICATION START: 更新 Tooltip 逻辑以适应新的 Series 结构 ---
         formatter: (params) => {
           if (!params || params.length === 0) return ''
 
-          // 创建一个从 downloaderId 到其名称的映射，方便查找
           const downloadersMap = new Map(speedChartDownloaders.value.map((d) => [d.id, d.name]))
-
           let tooltipContent = `${params[0].axisValueLabel}<br/>`
           const dataByDownloaderId = {}
 
           params.forEach((param) => {
             const { seriesIndex } = param
             const series = speedChartInstance.getOption().series[seriesIndex]
-            const { downloaderId, dataType } = series // 使用我们附加的自定义属性
 
+            const seriesName = series.name
+            const isUpload = seriesName.includes('↑')
+            const isDownload = seriesName.includes('↓')
+            if (!isUpload && !isDownload) return
+
+            const arrowIndex = isUpload ? seriesName.indexOf('↑') : seriesName.indexOf('↓')
+            const baseName = seriesName.substring(0, arrowIndex).trim()
+
+            const downloader = speedChartDownloaders.value.find((d) => d.name === baseName)
+            if (!downloader) return
+
+            const downloaderId = downloader.id
             if (!dataByDownloaderId[downloaderId]) {
               dataByDownloaderId[downloaderId] = {}
             }
-            dataByDownloaderId[downloaderId][dataType] = {
-              value: param.value,
-              color: param.color,
+
+            if (isUpload) {
+              dataByDownloaderId[downloaderId]['上传'] = {
+                value: param.value,
+                color: param.color,
+              }
+            } else if (isDownload) {
+              dataByDownloaderId[downloaderId]['下载'] = {
+                value: param.value,
+                color: param.color,
+              }
             }
           })
 
           for (const id in dataByDownloaderId) {
             const data = dataByDownloaderId[id]
-            const name = downloadersMap.get(id) || '未知下载器' // 通过ID查找名称
+            const name = downloadersMap.get(id) || '未知下载器'
             tooltipContent += `<div style="margin-top: 8px; font-weight: bold;">${name}</div>`
-            if (data.upload)
-              tooltipContent += `<div><span style="display:inline-block;margin-right:5px;border-radius:10px;width:10px;height:10px;background-color:${data.upload.color};"></span>上传: ${formatSpeed(data.upload.value)}</div>`
-            if (data.download)
-              tooltipContent += `<div><span style="display:inline-block;margin-right:5px;border-radius:10px;width:10px;height:10px;background-color:${data.download.color};"></span>下载: ${formatSpeed(data.download.value)}</div>`
+            if (data['上传'])
+              tooltipContent += `<div><span style="display:inline-block;margin-right:5px;border-radius:10px;width:10px;height:10px;background-color:${data['上传'].color};"></span>上传: ${formatSpeed(data['上传'].value)}</div>`
+            if (data['下载'])
+              tooltipContent += `<div><span style="display:inline-block;margin-right:5px;border-radius:10px;width:10px;height:10px;background-color:${data['下载'].color};"></span>下载: ${formatSpeed(data['下载'].value)}</div>`
           }
           return tooltipContent
         },
-        // --- MODIFICATION END ---
       },
       xAxis: { type: 'category', data: [], boundaryGap: false },
       yAxis: { type: 'value', axisLabel: { formatter: (value) => formatSpeed(value) } },
       series: [],
-      grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-      legend: { data: [], top: 'top' },
+      grid: {
+        top: 85,
+        left: '3%',
+        right: '4%',
+        bottom: '3%',
+        containLabel: true,
+      },
+      legend: { show: false },
       dataZoom: [{ type: 'inside' }],
     })
 
+    speedChartInstance.on('legendselectchanged', (params) => {
+      const selected = params.selected
+      speedChartLegendItems.value = speedChartLegendItems.value.map((item) => ({
+        ...item,
+        disabled: !selected[item.name],
+      }))
+    })
     speedChartInstance.on('mouseover', () => {
       isMouseOverChart = true
     })
@@ -250,6 +288,7 @@ const initTrafficChart = () => {
           params.forEach((param) => {
             const value = param.value || 0
             total += value
+            // 提示框内依然显示完整的 series.name，例如 "上传量 (12.5 GB)"
             tooltipContent += `<div><span style="display:inline-block;margin-right:5px;border-radius:10px;width:10px;height:10px;background-color:${param.color};"></span>${param.seriesName}: ${formatBytes(value)}</div>`
           })
           tooltipContent += `<div style="margin-top: 8px; font-weight: bold;">总计: ${formatBytes(total)}</div>`
@@ -267,12 +306,7 @@ const initTrafficChart = () => {
           label: {
             show: true,
             position: 'top',
-            formatter: (params) => {
-              if (params.value > 0) {
-                return formatBytes(params.value)
-              }
-              return ''
-            },
+            formatter: (params) => (params.value > 0 ? formatBytes(params.value) : ''),
             color: '#464646',
             fontSize: 10,
           },
@@ -285,18 +319,19 @@ const initTrafficChart = () => {
           label: {
             show: true,
             position: 'top',
-            formatter: (params) => {
-              if (params.value > 0) {
-                return formatBytes(params.value)
-              }
-              return ''
-            },
+            formatter: (params) => (params.value > 0 ? formatBytes(params.value) : ''),
             color: '#464646',
             fontSize: 10,
           },
         },
       ],
-      grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+      grid: {
+        top: 60,
+        left: '3%',
+        right: '4%',
+        bottom: '3%',
+        containLabel: true,
+      },
       legend: { data: ['上传量', '下载量'], top: 'top' },
       dataZoom: [{ type: 'inside' }],
     })
@@ -307,78 +342,58 @@ const initTrafficChart = () => {
 const fetchSpeedData = async (mode, isPeriodicUpdate = false) => {
   if (!speedChartInstance) return
   if (!isPeriodicUpdate) speedChartInstance.showLoading()
-
   try {
     const endpoint = mode === 'last_1_min' ? '/api/recent_speed_data' : '/api/speed_chart_data'
     const params = mode === 'last_1_min' ? { seconds: 60 } : { range: mode }
     const { data } = await axios.get(endpoint, { params })
-
     speedChartDownloaders.value = data.downloaders || []
     const labels = data.labels || []
     const datasets = data.datasets || []
     const series = []
-    const legendData = []
-
-    // --- MODIFICATION START: 定义颜色并为上传下载创建独立的图例 ---
-    // 定义颜色方案，您可以根据喜好修改这些颜色
+    const newLegendItems = []
     const uploadColors = ['#F56C6C', '#E6A23C', '#D98A6F', '#FAB6B6', '#F7D0A3']
     const downloadColors = ['#409EFF', '#67C23A', '#8A2BE2', '#A0CFFF', '#B3E19D']
-
     const lastDataPoint =
       mode === 'last_1_min' && datasets.length > 0 ? datasets[datasets.length - 1] : null
-
     speedChartDownloaders.value.forEach((downloader, index) => {
-      let baseName = downloader.name
-      let uploadLegendName = `${baseName} - 上传`
-      let downloadLegendName = `${baseName} - 下载`
-
+      const baseName = downloader.name
+      let uploadLegendName = `${baseName} ↑`
+      let downloadLegendName = `${baseName} ↓`
       if (lastDataPoint && lastDataPoint.speeds) {
         const currentSpeeds = lastDataPoint.speeds[downloader.id]
         if (currentSpeeds) {
           const ulSpeed = formatSpeed(currentSpeeds.ul_speed || 0)
           const dlSpeed = formatSpeed(currentSpeeds.dl_speed || 0)
-          // 实时模式下，为图例添加速率信息
-          uploadLegendName = `${baseName} - 上传 ↑ ${ulSpeed}`
-          downloadLegendName = `${baseName} - 下载 ↓ ${dlSpeed}`
+          uploadLegendName = `${baseName} ↑ ${ulSpeed}`
+          downloadLegendName = `${baseName} ↓ ${dlSpeed}`
         }
       }
-
-      legendData.push(uploadLegendName, downloadLegendName)
-
-      // 上传 Series
+      const uploadColor = uploadColors[index % uploadColors.length]
+      const downloadColor = downloadColors[index % downloadColors.length]
+      newLegendItems.push({ name: uploadLegendName, color: uploadColor, disabled: false })
+      newLegendItems.push({ name: downloadLegendName, color: downloadColor, disabled: false })
       series.push({
         name: uploadLegendName,
         type: 'line',
         smooth: true,
         showSymbol: false,
         data: datasets.map((d) => d.speeds[downloader.id]?.ul_speed || 0),
-        downloaderId: downloader.id,
-        dataType: 'upload',
-        // 分配颜色
-        color: uploadColors[index % uploadColors.length],
+        color: uploadColor,
       })
-
-      // 下载 Series
       series.push({
         name: downloadLegendName,
         type: 'line',
         smooth: true,
         showSymbol: false,
         data: datasets.map((d) => d.speeds[downloader.id]?.dl_speed || 0),
-        downloaderId: downloader.id,
-        dataType: 'download',
-        // 分配颜色
-        color: downloadColors[index % downloadColors.length],
+        color: downloadColor,
       })
     })
-    // --- MODIFICATION END ---
-
+    speedChartLegendItems.value = newLegendItems
     speedChartInstance.setOption({
       xAxis: { data: labels },
       series: series,
-      legend: { data: legendData },
     })
-
     if (isPeriodicUpdate && isMouseOverChart && lastTooltipDataIndex !== null) {
       speedChartInstance.dispatchAction({
         type: 'showTip',
@@ -402,17 +417,48 @@ const fetchTrafficData = async (range) => {
     const datasets = data.datasets || []
     const uploadData = datasets.map((item) => item.uploaded)
     const downloadData = datasets.map((item) => item.downloaded)
+
+    const totalUpload = uploadData.reduce((acc, val) => acc + val, 0)
+    const totalDownload = downloadData.reduce((acc, val) => acc + val, 0)
+
+    const uploadLegendName = `上传量 (${formatBytes(totalUpload)})`
+    const downloadLegendName = `下载量 (${formatBytes(totalDownload)})`
+
     trafficChartInstance.setOption({
       xAxis: { data: labels },
       series: [
-        { name: '上传量', data: uploadData },
-        { name: '下载量', data: downloadData },
+        {
+          name: uploadLegendName,
+          data: uploadData,
+          type: 'bar',
+          emphasis: { focus: 'series' },
+          label: {
+            show: true,
+            position: 'top',
+            formatter: (params) => (params.value > 0 ? formatBytes(params.value) : ''),
+            color: '#464646',
+            fontSize: 10,
+          },
+        },
+        {
+          name: downloadLegendName,
+          data: downloadData,
+          type: 'bar',
+          emphasis: { focus: 'series' },
+          label: {
+            show: true,
+            position: 'top',
+            formatter: (params) => (params.value > 0 ? formatBytes(params.value) : ''),
+            color: '#464646',
+            fontSize: 10,
+          },
+        },
       ],
+      legend: {
+        data: [uploadLegendName, downloadLegendName],
+        top: 'top',
+      },
     })
-    const totalUpload = uploadData.reduce((acc, val) => acc + val, 0)
-    const totalDownload = downloadData.reduce((acc, val) => acc + val, 0)
-    totalChartUpload.value = formatBytes(totalUpload)
-    totalChartDownload.value = formatBytes(totalDownload)
   } catch (error) {
     console.error('获取数据量数据失败:', error)
   } finally {
@@ -440,6 +486,15 @@ const changeTrafficMode = (range) => {
   fetchTrafficData(range)
 }
 
+const toggleSeries = (name) => {
+  if (speedChartInstance) {
+    speedChartInstance.dispatchAction({
+      type: 'legendToggleSelect',
+      name: name,
+    })
+  }
+}
+
 // --- Lifecycle ---
 onMounted(() => {
   nextTick(() => {
@@ -463,25 +518,39 @@ onUnmounted(() => {
 
 <style scoped>
 .info-view-container {
+  height: 100%;
   padding: 20px;
   display: flex;
   flex-direction: column;
   gap: 20px;
+  box-sizing: border-box;
 }
+
 .chart-card {
   border: 1px solid #e0e0e0;
   border-radius: 8px;
   padding: 16px;
   background-color: #fff;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
 }
+
+.chart-body {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+}
+
 .chart-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 16px;
+  gap: 10px 20px;
 }
 .chart-title {
   font-size: 16px;
@@ -514,15 +583,44 @@ onUnmounted(() => {
   color: white;
   border-color: #007bff;
 }
-.chart-body {
-  width: 100%;
-  height: 350px;
+
+.custom-legend-container {
+  position: absolute;
+  top: 55px;
+  left: 16px;
+  right: 16px;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 16px;
 }
-.chart-summary {
-  text-align: right;
-  margin-top: 10px;
-  font-size: 14px;
-  color: #555;
-  font-weight: bold;
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-size: 13px;
+  transition: color 0.2s;
+}
+.legend-item.disabled .legend-text {
+  color: #ccc;
+  text-decoration: line-through;
+}
+.legend-item.disabled .legend-color-box {
+  background-color: #ccc !important;
+}
+.legend-color-box {
+  width: 25px;
+  height: 14px;
+  margin-right: 8px;
+  border-radius: 3px;
+}
+.legend-text {
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 120px;
 }
 </style>
