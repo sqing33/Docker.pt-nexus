@@ -12,23 +12,47 @@ from qbittorrentapi import Client
 from transmission_rpc import Client as TrClient
 
 # --- MODIFICATION START: 从 services.py 导入辅助函数 ---
-from services import _prepare_api_config
+try:
+    from services import _prepare_api_config
+except ImportError:
+    # Fallback in case of circular dependency or if the function is not available
+    def _prepare_api_config(downloader_config):
+        logging.warning(
+            "Could not import '_prepare_api_config' from services. Using a placeholder."
+        )
+        # Replicate the essential logic here if needed, or just return the config
+        api_config = {
+            k: v
+            for k, v in downloader_config.items()
+            if k not in ['id', 'name', 'type', 'enabled']
+        }
+        return api_config
+
+
 # --- MODIFICATION END ---
 
-DB_FILE = 'pt_stats.db'
+# 移除: 不再需要硬编码的全局数据库文件名
+# DB_FILE = 'pt_stats.db'
 
 
 class DatabaseManager:
     """Handles all interactions with the configured database (MySQL or SQLite)."""
 
     def __init__(self, config):
+        """
+        Initializes the DatabaseManager based on the provided configuration.
+        """
         self.db_type = config.get('db_type', 'sqlite')
         if self.db_type == 'mysql':
             self.mysql_config = config.get('mysql', {})
             logging.info("Database backend set to MySQL.")
         else:
-            self.sqlite_path = DB_FILE
-            logging.info("Database backend set to SQLite.")
+            # 修改: 从配置中获取 SQLite 的路径，而不是使用硬编码的变量。
+            # 这与 config.py 中的 get_db_config() 函数返回的结构相匹配。
+            self.sqlite_path = config.get(
+                'path', 'data/pt_stats.db')  # Fallback for safety
+            logging.info(
+                f"Database backend set to SQLite. Path: {self.sqlite_path}")
 
     def _get_connection(self):
         """Returns a new database connection."""
@@ -36,6 +60,7 @@ class DatabaseManager:
             return mysql.connector.connect(**self.mysql_config,
                                            autocommit=False)
         else:
+            # self.sqlite_path 现在是正确的、可配置的路径
             return sqlite3.connect(self.sqlite_path, timeout=20)
 
     def _get_cursor(self, conn):

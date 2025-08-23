@@ -36,14 +36,25 @@
                   target="_blank"
                   style="text-decoration: none"
                 >
-                  <el-tag effect="dark" :type="getTagType(props.row.sites[siteName])">
+                  <el-tag
+                    effect="dark"
+                    :type="getTagType(props.row.sites[siteName])"
+                    style="text-align: center"
+                  >
                     <!-- [FIXED] 使用 'uploaded' 字段显示总上传量 -->
-                    {{ siteName }} ({{ formatBytes(props.row.sites[siteName].uploaded) }})
+                    {{ siteName }}
+                    <div>({{ formatBytes(props.row.sites[siteName].uploaded) }})</div>
                   </el-tag>
                 </a>
-                <el-tag v-else effect="dark" :type="getTagType(props.row.sites[siteName])">
+                <el-tag
+                  v-else
+                  effect="dark"
+                  :type="getTagType(props.row.sites[siteName])"
+                  style="text-align: center"
+                >
                   <!-- [FIXED] 使用 'uploaded' 字段显示总上传量 -->
-                  {{ siteName }} ({{ formatBytes(props.row.sites[siteName].uploaded) }})
+                  {{ siteName }}
+                  <div>({{ formatBytes(props.row.sites[siteName].uploaded) }})</div>
                 </el-tag>
               </template>
               <template v-else>
@@ -387,7 +398,6 @@ watch(
   height: 100%;
   display: flex;
   flex-direction: column;
-
   box-sizing: border-box;
 }
 
@@ -410,13 +420,28 @@ watch(
   margin: 0 15px;
 }
 
+/* --- 使用 CSS Grid 完美实现您的需求 --- */
 .expand-content {
   padding: 10px 20px;
   background-color: #fafcff;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+  gap: 5px;
 }
 
-.expand-content .el-tag {
-  margin: 0 5px 5px 0;
+/* --- 简化 el-tag 的样式 --- */
+.expand-content :deep(.el-tag) {
+  height: 35px; /* 保留您的高度设置 */
+  width: 100%; /* 让标签宽度完全由 Grid 容器控制 */
+
+  /* 优化内部文字显示 */
+  white-space: normal;
+  text-align: center;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0 8px;
+  line-height: 1.2;
 }
 
 .el-table__row,

@@ -17,7 +17,6 @@
       </el-button>
     </div>
   </el-menu>
-
   <main class="main-content">
     <router-view v-slot="{ Component }">
       <keep-alive>
@@ -26,59 +25,18 @@
     </router-view>
   </main>
 </template>
-
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { computed, ref, provide } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import axios from 'axios'
 
 const route = useRoute()
 const activeRoute = computed(() => route.path)
+
 const isRefreshing = ref(false)
+
 const activeComponentRefresher = ref<(() => Promise<void>) | null>(null)
 
-// --- 背景设置逻辑 ---
-const applyBackgroundSettings = async () => {
-  try {
-    const response = await axios.get('/api/settings')
-    const background = response.data?.background
-
-    if (background) {
-      // 清理旧样式
-      document.body.style.backgroundColor = ''
-      document.body.style.backgroundImage = ''
-      document.body.style.backgroundSize = ''
-      document.body.style.backgroundRepeat = ''
-      document.body.style.backgroundAttachment = ''
-
-      if (background.type === 'color' && background.value) {
-        document.body.style.backgroundColor = background.value
-      } else if (background.type === 'image' && background.value) {
-        document.body.style.backgroundImage = `url(${background.value})`
-        // 可以根据需要添加更多样式
-        document.body.style.backgroundSize = 'cover'
-        document.body.style.backgroundRepeat = 'no-repeat'
-        document.body.style.backgroundAttachment = 'fixed'
-      }
-    }
-  } catch (error) {
-    console.error('应用背景设置失败', error)
-  }
-}
-
-// 在组件挂载时应用背景并监听设置更新
-onMounted(() => {
-  applyBackgroundSettings()
-  window.addEventListener('settings-updated', applyBackgroundSettings)
-})
-
-// 在组件卸载时移除监听器
-onUnmounted(() => {
-  window.removeEventListener('settings-updated', applyBackgroundSettings)
-})
-
-// --- 原有逻辑 ---
 const handleComponentReady = (refreshMethod: () => Promise<void>) => {
   activeComponentRefresher.value = refreshMethod
 }
@@ -118,7 +76,6 @@ const handleGlobalRefresh = async () => {
   }
 }
 </script>
-
 <style>
 #app {
   height: 100vh;
@@ -127,11 +84,8 @@ const handleGlobalRefresh = async () => {
 body {
   margin: 0;
   padding: 0;
-  /* 添加过渡效果，使背景切换更平滑 */
-  transition: background 0.5s ease;
 }
 </style>
-
 <style scoped>
 .main-nav {
   border-bottom: solid 1px var(--el-menu-border-color);

@@ -1,3 +1,4 @@
 .env
 pt_stats.db
 __pycache__/*
+config.json
