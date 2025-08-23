@@ -1,4 +1,4 @@
-# <img width="52" height="50" alt="image" src="https://minio.916337.xyz/icons/icons/8cfd5342-2085-4bba-9b9a-dc163f4676ff_b13c7358-4d9a-4990-a423-c1983c5491f3-favicon.ico" /> PT Nexus
+# <img width="52" height="50" alt="image" src="https://github.com/user-attachments/assets/d4c7835c-0de6-4d28-9b56-68fb473cfb2f" /> PT Nexus
 
 ## 一、项目概述
 
