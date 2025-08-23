@@ -11,28 +11,20 @@ from config import SITES_DATA_FILE, config_manager
 from qbittorrentapi import Client
 from transmission_rpc import Client as TrClient
 
-# --- MODIFICATION START: 从 services.py 导入辅助函数 ---
 try:
     from services import _prepare_api_config
 except ImportError:
-    # Fallback in case of circular dependency or if the function is not available
+
     def _prepare_api_config(downloader_config):
         logging.warning(
             "Could not import '_prepare_api_config' from services. Using a placeholder."
         )
-        # Replicate the essential logic here if needed, or just return the config
         api_config = {
             k: v
             for k, v in downloader_config.items()
             if k not in ['id', 'name', 'type', 'enabled']
         }
         return api_config
-
-
-# --- MODIFICATION END ---
-
-# 移除: 不再需要硬编码的全局数据库文件名
-# DB_FILE = 'pt_stats.db'
 
 
 class DatabaseManager:
@@ -47,10 +39,7 @@ class DatabaseManager:
             self.mysql_config = config.get('mysql', {})
             logging.info("Database backend set to MySQL.")
         else:
-            # 修改: 从配置中获取 SQLite 的路径，而不是使用硬编码的变量。
-            # 这与 config.py 中的 get_db_config() 函数返回的结构相匹配。
-            self.sqlite_path = config.get(
-                'path', 'data/pt_stats.db')  # Fallback for safety
+            self.sqlite_path = config.get('path', 'data/pt_stats.db')
             logging.info(
                 f"Database backend set to SQLite. Path: {self.sqlite_path}")
 
@@ -60,7 +49,6 @@ class DatabaseManager:
             return mysql.connector.connect(**self.mysql_config,
                                            autocommit=False)
         else:
-            # self.sqlite_path 现在是正确的、可配置的路径
             return sqlite3.connect(self.sqlite_path, timeout=20)
 
     def _get_cursor(self, conn):
@@ -183,8 +171,6 @@ class DatabaseManager:
                     `group` TEXT
                 )
             ''')
-
-        self._migrate_legacy_data(cursor)
         conn.commit()
 
         try:
@@ -263,98 +249,6 @@ class DatabaseManager:
                 f"Removed {len(ids_to_delete)} downloader(s) from DB that are no longer in config."
             )
 
-    def _migrate_legacy_data(self, cursor):
-        """检查并迁移旧的数据库表结构数据到新结构。"""
-        try:
-            cursor.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='downloader_state'"
-            ) if self.db_type != 'mysql' else cursor.execute(
-                "SHOW TABLES LIKE 'downloader_state'")
-            if not cursor.fetchone():
-                return
-
-            logging.warning(
-                "Legacy tables detected. Attempting to migrate data to the new schema. This is a one-time operation."
-            )
-
-            config = config_manager.get()
-            qb_downloader = next((d for d in config.get('downloaders', [])
-                                  if d.get('type') == 'qbittorrent'), None)
-            tr_downloader = next((d for d in config.get('downloaders', [])
-                                  if d.get('type') == 'transmission'), None)
-
-            if qb_downloader:
-                cursor.execute(
-                    "SELECT * FROM downloader_state WHERE name = 'qbittorrent'"
-                )
-                row = cursor.fetchone()
-                if row:
-                    sql = "INSERT INTO downloader_clients (id, name, type, last_session_dl, last_session_ul) VALUES (%s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE last_session_dl=VALUES(last_session_dl), last_session_ul=VALUES(last_session_ul)" if self.db_type == 'mysql' else "INSERT INTO downloader_clients (id, name, type, last_session_dl, last_session_ul) VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET last_session_dl=excluded.last_session_dl, last_session_ul=excluded.last_session_ul"
-                    cursor.execute(sql,
-                                   (qb_downloader['id'], qb_downloader['name'],
-                                    'qbittorrent', row['last_session_dl'],
-                                    row['last_session_ul']))
-            if tr_downloader:
-                cursor.execute(
-                    "SELECT * FROM downloader_state WHERE name = 'transmission'"
-                )
-                row = cursor.fetchone()
-                if row:
-                    sql = "INSERT INTO downloader_clients (id, name, type, last_cumulative_dl, last_cumulative_ul) VALUES (%s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE last_cumulative_dl=VALUES(last_cumulative_dl), last_cumulative_ul=VALUES(last_cumulative_ul)" if self.db_type == 'mysql' else "INSERT INTO downloader_clients (id, name, type, last_cumulative_dl, last_cumulative_ul) VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET last_cumulative_dl=excluded.last_cumulative_dl, last_cumulative_ul=excluded.last_cumulative_ul"
-                    cursor.execute(sql,
-                                   (tr_downloader['id'], tr_downloader['name'],
-                                    'transmission', row['last_cumulative_dl'],
-                                    row['last_cumulative_ul']))
-            if qb_downloader:
-                cursor.execute(
-                    "SELECT hash, qb_uploaded FROM torrents WHERE qb_uploaded > 0"
-                )
-                params = [(row['hash'], qb_downloader['id'],
-                           row['qb_uploaded']) for row in cursor.fetchall()]
-                if params:
-                    sql = "INSERT INTO torrent_upload_stats (hash, downloader_id, uploaded) VALUES (%s, %s, %s) ON DUPLICATE KEY UPDATE uploaded=VALUES(uploaded)" if self.db_type == 'mysql' else "INSERT INTO torrent_upload_stats (hash, downloader_id, uploaded) VALUES (?, ?, ?) ON CONFLICT(hash, downloader_id) DO UPDATE SET uploaded=excluded.uploaded"
-                    cursor.executemany(sql, params)
-            if tr_downloader:
-                cursor.execute(
-                    "SELECT hash, tr_uploaded FROM torrents WHERE tr_uploaded > 0"
-                )
-                params = [(row['hash'], tr_downloader['id'],
-                           row['tr_uploaded']) for row in cursor.fetchall()]
-                if params:
-                    sql = "INSERT INTO torrent_upload_stats (hash, downloader_id, uploaded) VALUES (%s, %s, %s) ON DUPLICATE KEY UPDATE uploaded=VALUES(uploaded)" if self.db_type == 'mysql' else "INSERT INTO torrent_upload_stats (hash, downloader_id, uploaded) VALUES (?, ?, ?) ON CONFLICT(hash, downloader_id) DO UPDATE SET uploaded=excluded.uploaded"
-                    cursor.executemany(sql, params)
-
-            if self.db_type != 'mysql':
-                logging.info(
-                    "Dropping legacy 'downloader_state' table for SQLite.")
-                cursor.execute("DROP TABLE IF EXISTS downloader_state")
-                logging.info(
-                    "Recreating 'torrents' table to remove legacy columns for SQLite."
-                )
-                cursor.execute("ALTER TABLE torrents RENAME TO torrents_old")
-                cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS torrents (
-                        hash TEXT PRIMARY KEY, name TEXT NOT NULL, save_path TEXT, size INTEGER, progress REAL,
-                        state TEXT, sites TEXT, `group` TEXT, details TEXT, last_seen TEXT NOT NULL
-                    )
-                ''')
-                cursor.execute('''
-                    INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, `group`, details, last_seen)
-                    SELECT hash, name, save_path, size, progress, state, sites, `group`, details, last_seen FROM torrents_old
-                ''')
-                cursor.execute("DROP TABLE torrents_old")
-            else:
-                logging.warning(
-                    "For MySQL, please manually drop the 'downloader_state' table and the 'qb_uploaded', 'tr_uploaded' columns from the 'torrents' table after migration is confirmed."
-                )
-
-            logging.info("Data migration completed successfully.")
-        except Exception as e:
-            logging.debug(
-                f"Could not perform legacy data migration. This is expected on new installs. Details: {e}"
-            )
-            pass
-
 
 def reconcile_historical_data(db_manager, config):
     """
@@ -369,13 +263,11 @@ def reconcile_historical_data(db_manager, config):
     cursor = db_manager._get_cursor(conn)
     ph = db_manager.get_placeholder()
 
-    # 准备一个列表来存储要插入的零点记录
     zero_point_records = []
     current_timestamp_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
     downloaders = config.get('downloaders', [])
     for client_config in downloaders:
-        # 只处理启用的下载器
         if not client_config.get('enabled'):
             continue
 
@@ -384,7 +276,6 @@ def reconcile_historical_data(db_manager, config):
 
         try:
             if client_type == 'qbittorrent':
-                # 准备 API 配置
                 api_config = {
                     k: v
                     for k, v in client_config.items()
@@ -393,11 +284,9 @@ def reconcile_historical_data(db_manager, config):
                 client = Client(**api_config)
                 client.auth_log_in()
                 info = client.transfer_info()
-                # 获取当前会话数据作为基线
                 current_session_dl = int(getattr(info, 'dl_info_data', 0))
                 current_session_ul = int(getattr(info, 'up_info_data', 0))
 
-                # 更新 downloader_clients 表中的基线值
                 sql = f"UPDATE downloader_clients SET last_session_dl = {ph}, last_session_ul = {ph} WHERE id = {ph}"
                 cursor.execute(
                     sql, (current_session_dl, current_session_ul, client_id))
@@ -406,19 +295,14 @@ def reconcile_historical_data(db_manager, config):
                 )
 
             elif client_type == 'transmission':
-                # --- MODIFICATION START: 使用辅助函数来准备API配置，修复连接问题 ---
                 api_config = _prepare_api_config(client_config)
-                # --- MODIFICATION END ---
-
                 client = TrClient(**api_config)
                 stats = client.session_stats()
-                # 获取当前累计数据作为基线
                 current_cumulative_dl = int(
                     stats.cumulative_stats.downloaded_bytes)
                 current_cumulative_ul = int(
                     stats.cumulative_stats.uploaded_bytes)
 
-                # 更新 downloader_clients 表中的基线值
                 sql_update_baseline = f"UPDATE downloader_clients SET last_cumulative_dl = {ph}, last_cumulative_ul = {ph} WHERE id = {ph}"
                 cursor.execute(
                     sql_update_baseline,
@@ -427,8 +311,6 @@ def reconcile_historical_data(db_manager, config):
                     f"Transmission client '{client_config['name']}' baseline set for future calculations."
                 )
 
-            # 为这个客户端准备一条零点记录
-            # (时间, downloader_id, uploaded, downloaded, upload_speed, download_speed)
             zero_point_records.append(
                 (current_timestamp_str, client_id, 0, 0, 0, 0))
 
@@ -437,7 +319,6 @@ def reconcile_historical_data(db_manager, config):
                 f"[{client_config['name']}] Failed to set baseline at startup: {e}"
             )
 
-    # 如果有任何成功的基线设置，就批量插入零点记录
     if zero_point_records:
         try:
             if db_manager.db_type == 'mysql':
