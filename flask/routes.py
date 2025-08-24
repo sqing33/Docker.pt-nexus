@@ -43,37 +43,47 @@ def get_settings():
 @api_bp.route('/settings', methods=['POST'])
 def update_settings():
     """
-    更新并保存整个下载器列表。
-    请求体应为: {'downloaders': [{...}, {...}]}
+    [修改] 更新并保存配置。
+    现在可以同时更新 'downloaders' 列表和 'realtime_speed_enabled' 开关。
+    请求体示例: {'downloaders': [{...}], 'realtime_speed_enabled': false}
     """
     new_config_data = request.json
-    if 'downloaders' not in new_config_data:
-        return jsonify({"error": "请求体必须包含 'downloaders' 列表。"}), 400
 
-    current_config = config_manager.get()
-    current_downloaders = {
-        d['id']: d
-        for d in current_config.get('downloaders', [])
-    }
+    # [修改] 不再创建新配置，而是在现有配置上修改
+    current_config = config_manager.get().copy()
 
-    final_downloaders = []
-    for new_downloader in new_config_data['downloaders']:
-        downloader_id = new_downloader.get('id')
-        if downloader_id and not new_downloader.get('password'):
-            if downloader_id in current_downloaders:
-                new_downloader['password'] = current_downloaders[
-                    downloader_id].get('password', '')
+    # 如果请求中包含下载器列表，则处理下载器
+    if 'downloaders' in new_config_data:
+        current_downloaders = {
+            d['id']: d
+            for d in current_config.get('downloaders', [])
+        }
 
-        if not downloader_id:
-            new_downloader['id'] = str(uuid.uuid4())
+        final_downloaders = []
+        for new_downloader in new_config_data['downloaders']:
+            downloader_id = new_downloader.get('id')
+            if downloader_id and not new_downloader.get('password'):
+                if downloader_id in current_downloaders:
+                    new_downloader['password'] = current_downloaders[
+                        downloader_id].get('password', '')
 
-        final_downloaders.append(new_downloader)
+            if not downloader_id:
+                new_downloader['id'] = str(uuid.uuid4())
 
-    full_config = {"downloaders": final_downloaders}
+            final_downloaders.append(new_downloader)
 
-    if config_manager.save(full_config):
+        current_config['downloaders'] = final_downloaders
+
+    # [新增] 如果请求中包含实时速率开关，则更新它
+    if 'realtime_speed_enabled' in new_config_data:
+        current_config['realtime_speed_enabled'] = bool(
+            new_config_data['realtime_speed_enabled'])
+
+    # 将修改后的完整配置保存
+    if config_manager.save(current_config):
+        logging.info("配置已更新，将重启数据追踪服务以应用更改...")
         stop_data_tracker()
-        db_manager.init_db()
+        db_manager.init_db()  # 同步下载器列表
         reconcile_and_start_tracker()
         return jsonify({"message": "配置已成功保存和应用。"}), 200
     else:
@@ -87,6 +97,9 @@ def reconcile_and_start_tracker():
     start_data_tracker(db_manager, config_manager)
 
 
+# ... [文件其余部分保持不变] ...
+# [为了简洁，省略了 routes.py 中其他未作修改的函数]
+# [请只替换上面已修改的 update_settings 函数，其他函数保留原样]
 @api_bp.route('/test_connection', methods=['POST'])
 def test_connection():
     """

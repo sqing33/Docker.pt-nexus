@@ -25,6 +25,25 @@
           <el-icon><Select /></el-icon>
           保存所有设置
         </el-button>
+
+        <!-- [新增] 实时速率开关 -->
+        <div class="realtime-switch-container">
+          <el-tooltip
+            content="开启后，图表页将每秒获取一次数据以显示“近1分钟”实时速率。关闭后将每分钟获取一次，以降低系统负载。"
+            placement="bottom"
+            :hide-after="0"
+          >
+            <el-form-item label="开启实时速率" class="switch-form-item">
+              <el-switch
+                v-model="settings.realtime_speed_enabled"
+                size="large"
+                inline-prompt
+                active-text="是"
+                inactive-text="否"
+              />
+            </el-form-item>
+          </el-tooltip>
+        </div>
       </div>
 
       <!-- 下载器设置视图 -->
@@ -120,11 +139,9 @@
       <!-- 一键引爆视图 -->
       <div v-if="activeMenu === 'indexer'" class="settings-view">
         <h1>一键引爆</h1>
-        <div>待办</div>
+        <div>BUG</div>
         <ul>
-          <li>路径筛选改成下拉框或者树状</li>
-          <li>请求间隔时间</li>
-          <li>上传下载显示开关</li>
+          <li>站点信息页面表格在窗口变窄的情况下数据会移动到表格外面</li>
         </ul>
       </div>
     </el-main>
@@ -138,12 +155,15 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Delete, Select, Download, User, Link } from '@element-plus/icons-vue'
 
 // --- 状态管理 ---
-const settings = ref({ downloaders: [] })
+// [修改] 为 settings ref 提供一个包含所有字段的初始结构
+const settings = ref({
+  downloaders: [],
+  realtime_speed_enabled: true,
+})
 const isLoading = ref(true)
 const isSaving = ref(false)
 const activeMenu = ref('downloader')
 const testingConnectionId = ref(null)
-// [新增] 用于存储每个下载器的连接测试结果 ('success' | 'error')
 const connectionTestResults = ref({})
 
 // --- API 基础 URL ---
@@ -164,18 +184,23 @@ const fetchSettings = async () => {
   isLoading.value = true
   try {
     const response = await axios.get(`${API_BASE_URL}/settings`)
-    if (response.data && response.data.downloaders) {
+    // [修改] 确保响应数据被完整地赋值
+    if (response.data) {
+      if (!response.data.downloaders) {
+        response.data.downloaders = []
+      }
+      // 确保 realtime_speed_enabled 字段存在，以防旧配置
+      if (typeof response.data.realtime_speed_enabled !== 'boolean') {
+        response.data.realtime_speed_enabled = true
+      }
       response.data.downloaders.forEach((d) => {
         if (!d.id) d.id = `client_${Date.now()}_${Math.random()}`
       })
       settings.value = response.data
-    } else {
-      settings.value = { downloaders: [] }
     }
   } catch (error) {
     ElMessage.error('加载设置失败！')
     console.error(error)
-    settings.value = { downloaders: [] }
   } finally {
     isLoading.value = false
   }
@@ -218,6 +243,7 @@ const deleteDownloader = (downloaderId) => {
 const saveSettings = async () => {
   isSaving.value = true
   try {
+    // [修改] 发送完整的 settings 对象，包含了下载器和实时速率开关的状态
     await axios.post(`${API_BASE_URL}/settings`, settings.value)
     ElMessage.success('设置已成功保存并应用！')
     fetchSettings()
@@ -229,7 +255,6 @@ const saveSettings = async () => {
   }
 }
 
-// [新增] 当用户修改输入时，重置连接状态
 const resetConnectionStatus = (downloaderId) => {
   if (connectionTestResults.value[downloaderId]) {
     delete connectionTestResults.value[downloaderId]
@@ -237,34 +262,31 @@ const resetConnectionStatus = (downloaderId) => {
 }
 
 const testConnection = async (downloader) => {
-  resetConnectionStatus(downloader.id) // 开始测试前先重置状态
-  testingConnectionId.value = downloader.id // 开始加载状态
+  resetConnectionStatus(downloader.id)
+  testingConnectionId.value = downloader.id
   try {
     const response = await axios.post(`${API_BASE_URL}/test_connection`, downloader)
     const result = response.data
     if (result.success) {
       ElMessage.success(result.message)
-      // [修改] 保存成功状态
       connectionTestResults.value[downloader.id] = 'success'
     } else {
       ElMessage.error(result.message)
-      // [修改] 保存失败状态
       connectionTestResults.value[downloader.id] = 'error'
     }
   } catch (error) {
     ElMessage.error('测试连接请求失败，请检查网络或后端服务。')
     console.error('Test connection error:', error)
-    // [修改] 保存失败状态
     connectionTestResults.value[downloader.id] = 'error'
   } finally {
-    testingConnectionId.value = null // 结束加载状态
+    testingConnectionId.value = null
   }
 }
 </script>
 
 <style scoped>
 .settings-container {
-  height: 100vh; /* 使布局占满整个视口高度 */
+  height: 100vh;
 }
 
 .settings-aside {
@@ -273,7 +295,7 @@ const testConnection = async (downloader) => {
 
 .settings-menu {
   height: 100%;
-  border-right: none; /* 移除菜单自身的右边框 */
+  border-right: none;
 }
 
 .settings-main {
@@ -290,7 +312,19 @@ const testConnection = async (downloader) => {
   border-bottom: 1px solid var(--el-border-color);
   display: flex;
   justify-content: flex-start;
+  align-items: center; /* [修改] 垂直居中对齐所有项 */
   gap: 16px;
+}
+
+/* [新增] 开关容器样式 */
+.realtime-switch-container {
+  display: flex;
+  align-items: center;
+}
+/* [新增] el-form-item 在 flex 布局下有时需要重置 margin */
+.switch-form-item {
+  margin-bottom: 0;
+  margin-left: 8px; /* 与保存按钮的间距 */
 }
 
 .settings-view {

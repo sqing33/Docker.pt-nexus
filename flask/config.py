@@ -27,19 +27,26 @@ class ConfigManager:
         self.load()
 
     def _get_default_config(self):
-        """返回一个包含空下载器列表的默认配置结构。"""
-        return {"downloaders": []}
+        """[修改] 返回包含默认值的配置结构。"""
+        return {
+            "downloaders": [],
+            "realtime_speed_enabled": True  # [新增] 默认开启实时速率
+        }
 
     def load(self):
         """
-        仅从 config.json 加载配置。
-        如果文件不存在，则创建一个包含空下载器列表的默认配置文件。
+        [修改] 从 config.json 加载配置，并确保新配置项存在。
         """
         if os.path.exists(CONFIG_FILE):
             logging.info(f"从 {CONFIG_FILE} 加载配置。")
             try:
                 with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
                     self._config = json.load(f)
+
+                # [新增] 优雅地处理旧配置文件，为其添加新的默认配置项
+                if 'realtime_speed_enabled' not in self._config:
+                    self._config['realtime_speed_enabled'] = True
+
             except (json.JSONDecodeError, IOError) as e:
                 logging.error(f"无法读取或解析 {CONFIG_FILE}: {e}。将加载一个安全的默认配置。")
                 self._config = self._get_default_config()

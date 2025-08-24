@@ -70,9 +70,8 @@ def load_site_maps_from_db(db_manager):
 
 def _prepare_api_config(downloader_config):
     """
-    [NEW] 准备用于API客户端的配置字典，智能处理host和port。
+    准备用于API客户端的配置字典，智能处理host和port。
     """
-    # 移除我们自己的元数据字段
     api_config = {
         k: v
         for k, v in downloader_config.items()
@@ -80,15 +79,12 @@ def _prepare_api_config(downloader_config):
     }
 
     if downloader_config['type'] == 'transmission':
-        # 从 host 字段解析出 ip 和 port
         if api_config.get('host'):
-            # 为 urlparse 添加一个临时的 scheme
             parsed_url = urlparse(f"http://{api_config['host']}")
             api_config['host'] = parsed_url.hostname
-            api_config['port'] = parsed_url.port or 9091  # 如果未指定端口，使用默认值
+            api_config['port'] = parsed_url.port or 9091
 
     elif downloader_config['type'] == 'qbittorrent':
-        # qb 的 host 字段应为 ip:port，库会自己处理。我们只需确保不传递多余的 port 字段。
         if 'port' in api_config:
             del api_config['port']
 
@@ -98,16 +94,35 @@ def _prepare_api_config(downloader_config):
 class DataTracker(Thread):
     """一个后台线程，定期从所有已配置的客户端获取统计信息和种子。"""
 
-    def __init__(self, db_manager, config_manager, interval=1):
+    def __init__(self, db_manager, config_manager):
         super().__init__(daemon=True, name="DataTracker")
         self.db_manager = db_manager
         self.config_manager = config_manager
-        self.interval = interval
+
+        config = self.config_manager.get()
+        is_realtime_enabled = config.get('realtime_speed_enabled', True)
+        self.interval = 1 if is_realtime_enabled else 60
+        logging.info(
+            f"实时速率显示已 {'启用' if is_realtime_enabled else '禁用'}。数据获取间隔设置为 {self.interval} 秒。"
+        )
+
         self._is_running = True
-        self.TRAFFIC_BATCH_WRITE_SIZE = 60
+
+        # --- [关键修改] ---
+        # 动态计算批量写入大小，确保数据大约每分钟写入一次数据库
+        # 目标写入周期为60秒
+        TARGET_WRITE_PERIOD_SECONDS = 60
+        # self.interval 是每次请求的间隔秒数
+        # 计算需要多少次请求才能凑够一个写入周期
+        self.TRAFFIC_BATCH_WRITE_SIZE = max(
+            1, TARGET_WRITE_PERIOD_SECONDS // self.interval)
+        logging.info(f"数据库批量写入大小设置为 {self.TRAFFIC_BATCH_WRITE_SIZE} 条记录。")
+        # --- 修改结束 ---
+
         self.traffic_buffer = []
         self.traffic_buffer_lock = Lock()
         self.latest_speeds = {}
+        # 近期速率缓冲区的长度也应该与批量大小挂钩，以便UI能正确显示
         self.recent_speeds_buffer = collections.deque(
             maxlen=self.TRAFFIC_BATCH_WRITE_SIZE)
         self.torrent_update_counter = 0
@@ -219,8 +234,6 @@ class DataTracker(Thread):
 
         with CACHE_LOCK:
             self.latest_speeds = latest_speeds_update
-            # --- MODIFICATION START ---
-            # 不再缓存总速度，而是缓存每个客户端的速度
             speeds_for_buffer = {
                 downloader_id: {
                     'upload_speed': data.get('upload_speed', 0),
@@ -232,7 +245,6 @@ class DataTracker(Thread):
                 'timestamp': current_timestamp,
                 'speeds': speeds_for_buffer,
             })
-            # --- MODIFICATION END ---
 
         buffer_to_flush = []
         with self.traffic_buffer_lock:
