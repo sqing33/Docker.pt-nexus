@@ -64,11 +64,16 @@ class DatabaseManager:
         return '%s' if self.db_type == 'mysql' else '?'
 
     def init_db(self):
-        """确保所有必需的数据库表都存在，并根据需要填充站点表。"""
+        """
+        [MODIFIED] 确保数据库表存在，并根据 sites_data.json 同步站点数据。
+        这个函数现在是幂等的，并且会在每次启动时执行更新和插入操作。
+        """
         conn = self._get_connection()
         cursor = self._get_cursor(conn)
 
+        # --- 步骤 1: 确保所有表结构都已创建 ---
         if self.db_type == 'mysql':
+            # [修正] 恢复完整的建表语句
             cursor.execute('''CREATE TABLE IF NOT EXISTS traffic_stats (
                     stat_datetime DATETIME NOT NULL,
                     downloader_id VARCHAR(36) NOT NULL,
@@ -112,7 +117,7 @@ class DatabaseManager:
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS `sites` (
                     `id` mediumint NOT NULL AUTO_INCREMENT,
-                    `site` varchar(255) DEFAULT NULL,
+                    `site` varchar(255) UNIQUE DEFAULT NULL,
                     `nickname` varchar(255) DEFAULT NULL,
                     `base_url` varchar(255) DEFAULT NULL,
                     `special_tracker_domain` varchar(255) DEFAULT NULL,
@@ -121,6 +126,7 @@ class DatabaseManager:
                 ) ENGINE=InnoDB ROW_FORMAT=DYNAMIC
             ''')
         else:  # SQLite
+            # [修正] 恢复完整的建表语句
             cursor.execute('''CREATE TABLE IF NOT EXISTS traffic_stats (
                     stat_datetime TEXT NOT NULL,
                     downloader_id TEXT NOT NULL,
@@ -164,7 +170,7 @@ class DatabaseManager:
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS sites (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    site TEXT,
+                    site TEXT UNIQUE,
                     nickname TEXT,
                     base_url TEXT,
                     special_tracker_domain TEXT,
@@ -173,49 +179,85 @@ class DatabaseManager:
             ''')
         conn.commit()
 
+        # --- 步骤 2: [新逻辑] 同步 sites_data.json 到数据库 ---
         try:
-            cursor.execute("SELECT COUNT(*) FROM sites")
-            result = cursor.fetchone()
-            count = result[0] if isinstance(
-                result, (tuple, sqlite3.Row)) else result['COUNT(*)']
+            if not os.path.exists(SITES_DATA_FILE):
+                logging.warning(f"{SITES_DATA_FILE} 未找到，跳过站点数据同步。")
+            else:
+                logging.info(f"正在从 {SITES_DATA_FILE} 同步站点数据...")
 
-            if count == 0 and os.path.exists(SITES_DATA_FILE):
-                logging.info(
-                    "Sites table is empty. Seeding data from sites_data.json..."
-                )
                 with open(SITES_DATA_FILE, 'r', encoding='utf-8') as f:
-                    sites_data = json.load(f)
-                if not sites_data:
-                    logging.warning(
-                        "sites_data.json is empty. Skipping seeding.")
+                    sites_from_json = json.load(f)
+
+                if not sites_from_json:
+                    logging.info("sites_data.json 为空，无需同步。")
                 else:
-                    ph = self.get_placeholder()
-                    sql = f'''INSERT INTO sites (site, nickname, base_url, special_tracker_domain, `group`) VALUES ({ph}, {ph}, {ph}, {ph}, {ph})'''
-                    params_to_insert = [
-                        (s.get('site'), s.get('nickname'), s.get('base_url'),
-                         s.get('special_tracker_domain'), s.get('group'))
-                        for s in sites_data
-                    ]
-                    cursor.executemany(sql, params_to_insert)
-                    conn.commit()
-                    logging.info(
-                        f"Successfully inserted {len(params_to_insert)} records into the sites table."
+                    cursor.execute(
+                        "SELECT site, nickname, base_url, special_tracker_domain, `group` FROM sites"
                     )
-            elif count > 0:
-                logging.info(
-                    "Sites table already contains data. Skipping seeding.")
+                    sites_in_db = {
+                        row['site']: row
+                        for row in cursor.fetchall()
+                    }
+                    logging.info(f"数据库中目前存在 {len(sites_in_db)} 条站点记录。")
+
+                    sites_to_insert = []
+                    sites_to_update = []
+
+                    for site_data in sites_from_json:
+                        site_name = site_data.get('site')
+                        if not site_name:
+                            continue
+
+                        db_entry = sites_in_db.get(site_name)
+                        json_tuple = (site_data.get('site'),
+                                      site_data.get('nickname'),
+                                      site_data.get('base_url'),
+                                      site_data.get('special_tracker_domain'),
+                                      site_data.get('group'))
+
+                        if db_entry is None:
+                            sites_to_insert.append(json_tuple)
+                        else:
+                            update_params = (
+                                json_tuple[1],  # nickname
+                                json_tuple[2],  # base_url
+                                json_tuple[3],  # special_tracker_domain
+                                json_tuple[4],  # group
+                                json_tuple[0]  # where site = ?
+                            )
+                            sites_to_update.append(update_params)
+
+                    ph = self.get_placeholder()
+
+                    if sites_to_insert:
+                        logging.info(f"发现 {len(sites_to_insert)} 个新站点，将插入数据库。")
+                        sql_insert = f"INSERT INTO sites (site, nickname, base_url, special_tracker_domain, `group`) VALUES ({ph}, {ph}, {ph}, {ph}, {ph})"
+                        cursor.executemany(sql_insert, sites_to_insert)
+
+                    if sites_to_update:
+                        logging.info(
+                            f"发现 {len(sites_to_update)} 个已有站点，将更新其信息。")
+                        sql_update = f"UPDATE sites SET nickname = {ph}, base_url = {ph}, special_tracker_domain = {ph}, `group` = {ph} WHERE site = {ph}"
+                        cursor.executemany(sql_update, sites_to_update)
+
+                    if not sites_to_insert and not sites_to_update:
+                        logging.info("站点数据已是最新，无需改动。")
+
+                    conn.commit()
+                    logging.info("站点数据同步完成。")
+
         except Exception as e:
-            logging.error(
-                f"An error occurred while seeding the sites table: {e}",
-                exc_info=True)
+            logging.error(f"同步站点数据时发生错误: {e}", exc_info=True)
             conn.rollback()
 
+        # --- 步骤 3: 同步下载器配置 (逻辑保持不变) ---
         self._sync_downloaders_from_config(cursor)
         conn.commit()
 
         cursor.close()
         conn.close()
-        logging.info("Database schemas verified.")
+        logging.info("数据库初始化和同步流程完成。")
 
     def _sync_downloaders_from_config(self, cursor):
         """从配置文件同步下载器列表到 downloader_clients 表。"""
