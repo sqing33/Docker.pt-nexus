@@ -95,6 +95,7 @@ def test_connection():
     """
     client_config = request.json
     downloader_id = client_config.get('id')
+    downloader_name = client_config.get('name', '下载器')  # 获取下载器名称用于消息提示
 
     # [新增逻辑]：如果密码为空，则尝试从现有配置中加载
     if downloader_id and not client_config.get('password'):
@@ -123,20 +124,25 @@ def test_connection():
         if client_type == 'qbittorrent':
             client = Client(**api_config)
             client.auth_log_in()
-            version = client.app.version
-            return jsonify({"success": True, "message": f"连接成功！版本: {version}"})
+            return jsonify({
+                "success": True,
+                "message": f"下载器 '{downloader_name}' 连接测试成功"
+            })
         elif client_type == 'transmission':
             from services import _prepare_api_config
             tr_api_config = _prepare_api_config(client_config)
             client = TrClient(**tr_api_config)
-            version = client.get_session().version
-            return jsonify({"success": True, "message": f"连接成功！版本: {version}"})
+            client.get_session()
+            return jsonify({
+                "success": True,
+                "message": f"下载器 '{downloader_name}' 连接测试成功"
+            })
         else:
             return jsonify({"success": False, "message": "无效的客户端类型。"}), 400
     except APIConnectionError as e:
         return jsonify({
             "success": False,
-            "message": f"连接失败: 无法连接到主机。 {e}"
+            "message": f"下载器 '{downloader_name}' 连接失败: 无法连接到主机。 {e}"
         }), 200
     except TransmissionError as e:
         # 尝试提供更具体的错误信息
@@ -145,7 +151,7 @@ def test_connection():
             error_message = "认证失败，请检查用户名和密码。"
         return jsonify({
             "success": False,
-            "message": f"连接失败: {error_message}"
+            "message": f"'{downloader_name}' 连接失败: {error_message}"
         }), 200
     except Exception as e:
         # 捕获 qbittorrent 的认证错误
@@ -154,7 +160,7 @@ def test_connection():
             error_message = "认证失败，请检查用户名和密码。"
         return jsonify({
             "success": False,
-            "message": f"连接失败: {error_message}"
+            "message": f"'{downloader_name}' 连接失败: {error_message}"
         }), 200
 
 
@@ -505,8 +511,15 @@ def get_data_api():
     except json.JSONDecodeError:
         state_filters = []
 
+    # [修改] 从 'siteFilterName' 改为 'siteFilterNames' 并解析 JSON 数组
     site_filter_existence = request.args.get('siteFilterExistence', 'all')
-    site_filter_name = request.args.get('siteFilterName')
+    try:
+        site_filters_str = request.args.get('siteFilterNames', '[]')
+        site_filter_names = json.loads(
+            site_filters_str) if site_filters_str else []
+    except json.JSONDecodeError:
+        site_filter_names = []
+
     name_search = request.args.get('nameSearch', '').lower()
     sort_prop = request.args.get('sortProp')
     sort_order = request.args.get('sortOrder')
@@ -592,16 +605,23 @@ def get_data_api():
                 t for t in filtered_list
                 for s in t.get('state', '').split(', ') if s in state_filters
             ]
-        if site_filter_existence != 'all' and site_filter_name:
+
+        # [新逻辑] 更新站点筛选逻辑以处理站点名称列表
+        if site_filter_existence != 'all' and site_filter_names:
+            site_filter_set = set(site_filter_names)
+
             if site_filter_existence == 'exists':
+                # 保留那些至少有一个站点在筛选列表中的种子
                 filtered_list = [
                     t for t in filtered_list
-                    if site_filter_name in t.get('sites', {})
+                    if site_filter_set.intersection(t.get('sites', {}).keys())
                 ]
             elif site_filter_existence == 'not-exists':
+                # 保留那些没有任何站点在筛选列表中的种子
                 filtered_list = [
                     t for t in filtered_list
-                    if site_filter_name not in t.get('sites', {})
+                    if not site_filter_set.intersection(
+                        t.get('sites', {}).keys())
                 ]
 
         if sort_prop and sort_order:

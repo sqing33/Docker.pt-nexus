@@ -41,8 +41,14 @@
                 <div class="header-controls">
                   <el-switch v-model="downloader.enabled" style="margin-right: 12px" />
                   <el-button
-                    type="info"
-                    plain
+                    :type="
+                      connectionTestResults[downloader.id] === 'success'
+                        ? 'success'
+                        : connectionTestResults[downloader.id] === 'error'
+                          ? 'danger'
+                          : 'info'
+                    "
+                    :plain="!connectionTestResults[downloader.id]"
                     style="width: 100%"
                     @click="testConnection(downloader)"
                     :loading="testingConnectionId === downloader.id"
@@ -62,11 +68,20 @@
 
             <el-form :model="downloader" label-position="left" label-width="auto">
               <el-form-item label="自定义名称">
-                <el-input v-model="downloader.name" placeholder="例如：家庭服务器 qB"></el-input>
+                <el-input
+                  v-model="downloader.name"
+                  placeholder="例如：家庭服务器 qB"
+                  @input="resetConnectionStatus(downloader.id)"
+                ></el-input>
               </el-form-item>
 
               <el-form-item label="客户端类型">
-                <el-select v-model="downloader.type" placeholder="请选择类型" style="width: 100%">
+                <el-select
+                  v-model="downloader.type"
+                  placeholder="请选择类型"
+                  style="width: 100%"
+                  @change="resetConnectionStatus(downloader.id)"
+                >
                   <el-option label="qBittorrent" value="qbittorrent"></el-option>
                   <el-option label="Transmission" value="transmission"></el-option>
                 </el-select>
@@ -76,11 +91,16 @@
                 <el-input
                   v-model="downloader.host"
                   placeholder="例如：http://192.168.1.10:8080"
+                  @input="resetConnectionStatus(downloader.id)"
                 ></el-input>
               </el-form-item>
 
               <el-form-item label="用户名">
-                <el-input v-model="downloader.username" placeholder="登录用户名"></el-input>
+                <el-input
+                  v-model="downloader.username"
+                  placeholder="登录用户名"
+                  @input="resetConnectionStatus(downloader.id)"
+                ></el-input>
               </el-form-item>
 
               <el-form-item label="密码">
@@ -89,6 +109,7 @@
                   type="password"
                   show-password
                   placeholder="登录密码（未修改则留空）"
+                  @input="resetConnectionStatus(downloader.id)"
                 ></el-input>
               </el-form-item>
             </el-form>
@@ -114,7 +135,6 @@
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
-// [新增] 导入 Link 图标
 import { Plus, Delete, Select, Download, User, Link } from '@element-plus/icons-vue'
 
 // --- 状态管理 ---
@@ -122,8 +142,9 @@ const settings = ref({ downloaders: [] })
 const isLoading = ref(true)
 const isSaving = ref(false)
 const activeMenu = ref('downloader')
-// [新增] 用于跟踪正在测试的下载器
 const testingConnectionId = ref(null)
+// [新增] 用于存储每个下载器的连接测试结果 ('success' | 'error')
+const connectionTestResults = ref({})
 
 // --- API 基础 URL ---
 const API_BASE_URL = '/api'
@@ -208,20 +229,33 @@ const saveSettings = async () => {
   }
 }
 
-// [新增] 测试连接方法
+// [新增] 当用户修改输入时，重置连接状态
+const resetConnectionStatus = (downloaderId) => {
+  if (connectionTestResults.value[downloaderId]) {
+    delete connectionTestResults.value[downloaderId]
+  }
+}
+
 const testConnection = async (downloader) => {
+  resetConnectionStatus(downloader.id) // 开始测试前先重置状态
   testingConnectionId.value = downloader.id // 开始加载状态
   try {
     const response = await axios.post(`${API_BASE_URL}/test_connection`, downloader)
     const result = response.data
     if (result.success) {
       ElMessage.success(result.message)
+      // [修改] 保存成功状态
+      connectionTestResults.value[downloader.id] = 'success'
     } else {
       ElMessage.error(result.message)
+      // [修改] 保存失败状态
+      connectionTestResults.value[downloader.id] = 'error'
     }
   } catch (error) {
     ElMessage.error('测试连接请求失败，请检查网络或后端服务。')
     console.error('Test connection error:', error)
+    // [修改] 保存失败状态
+    connectionTestResults.value[downloader.id] = 'error'
   } finally {
     testingConnectionId.value = null // 结束加载状态
   }

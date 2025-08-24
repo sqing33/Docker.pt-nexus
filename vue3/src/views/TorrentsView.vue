@@ -28,7 +28,8 @@
       <el-table-column type="expand" width="1">
         <template #default="props">
           <div class="expand-content">
-            <template v-for="siteName in all_sites" :key="siteName">
+            <!-- [修改] 使用按中文拼音排序的 sorted_all_sites -->
+            <template v-for="siteName in sorted_all_sites" :key="siteName">
               <template v-if="props.row.sites[siteName]">
                 <a
                   v-if="hasLink(props.row.sites[siteName], siteName)"
@@ -41,7 +42,6 @@
                     :type="getTagType(props.row.sites[siteName])"
                     style="text-align: center"
                   >
-                    <!-- [FIXED] 使用 'uploaded' 字段显示总上传量 -->
                     {{ siteName }}
                     <div>({{ formatBytes(props.row.sites[siteName].uploaded) }})</div>
                   </el-tag>
@@ -52,7 +52,6 @@
                   :type="getTagType(props.row.sites[siteName])"
                   style="text-align: center"
                 >
-                  <!-- [FIXED] 使用 'uploaded' 字段显示总上传量 -->
                   {{ siteName }}
                   <div>({{ formatBytes(props.row.sites[siteName].uploaded) }})</div>
                 </el-tag>
@@ -110,8 +109,6 @@
         sortable="custom"
       />
 
-      <!-- [REMOVED] qB 和 Tr 上传量列已被移除 -->
-
       <el-table-column
         label="总上传量"
         prop="total_uploaded_formatted"
@@ -153,40 +150,45 @@
     <el-dialog v-model="filterDialogVisible" title="筛选选项" width="800px" class="filter-dialog">
       <el-divider content-position="left">站点筛选</el-divider>
       <div class="site-filter-container">
-        <el-radio-group v-model="tempFilters.siteExistence">
+        <el-radio-group v-model="tempFilters.siteExistence" style="margin-bottom: 10px">
           <el-radio label="all">不过滤</el-radio>
           <el-radio label="exists">存在于</el-radio>
           <el-radio label="not-exists">不存在于</el-radio>
         </el-radio-group>
-        <el-select
-          v-model="tempFilters.siteName"
-          :disabled="tempFilters.siteExistence === 'all'"
-          clearable
-          filterable
-          placeholder="请选择站点"
-          style="width: 200px"
-        >
-          <el-option v-for="site in all_sites" :key="site" :label="site" :value="site" />
-        </el-select>
+
+        <div class="site-checkbox-container">
+          <el-checkbox-group
+            v-model="tempFilters.siteNames"
+            :disabled="tempFilters.siteExistence === 'all'"
+          >
+            <!-- [修改] 使用按中文拼音排序的 sorted_all_sites -->
+            <el-checkbox v-for="site in sorted_all_sites" :key="site" :label="site">{{
+              site
+            }}</el-checkbox>
+          </el-checkbox-group>
+        </div>
       </div>
+
       <el-divider content-position="left">保存路径</el-divider>
-      <el-checkbox-group v-model="tempFilters.paths">
-        <el-tooltip
-          v-for="path in unique_paths"
-          :key="path"
-          :content="path"
-          placement="top"
-          class="path-tooltip"
-        >
-          <el-checkbox :label="path">{{ truncatePath(path, 50) }}</el-checkbox>
-        </el-tooltip>
-      </el-checkbox-group>
+      <div class="path-tree-container">
+        <el-tree
+          ref="pathTreeRef"
+          :data="pathTreeData"
+          show-checkbox
+          node-key="path"
+          default-expand-all
+          check-on-click-node
+          :props="{ class: 'path-tree-node' }"
+        />
+      </div>
+
       <el-divider content-position="left">状态</el-divider>
       <el-checkbox-group v-model="tempFilters.states">
         <el-checkbox v-for="state in unique_states" :key="state" :label="state">{{
           state
         }}</el-checkbox>
       </el-checkbox-group>
+
       <template #footer>
         <span class="dialog-footer">
           <el-button @click="filterDialogVisible = false">取消</el-button>
@@ -198,14 +200,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, reactive, watch, defineEmits } from 'vue'
+// [新增] 引入 computed
+import { ref, onMounted, reactive, watch, defineEmits, nextTick, computed } from 'vue'
 import type { TableInstance, Sort } from 'element-plus'
+import type { ElTree } from 'element-plus'
 
 const emits = defineEmits(['ready'])
 
-// [CHANGED] 更新接口定义
 interface SiteData {
-  uploaded: number // 替换 qb_ul 和 tr_ul
+  uploaded: number
   comment: string
 }
 interface Torrent {
@@ -218,13 +221,18 @@ interface Torrent {
   sites: Record<string, SiteData>
   total_uploaded: number
   total_uploaded_formatted: string
-  // 移除 qb_uploaded, qb_uploaded_formatted, tr_uploaded, tr_uploaded_formatted
 }
+
 interface ActiveFilters {
   paths: string[]
   states: string[]
   siteExistence: 'all' | 'exists' | 'not-exists'
-  siteName: string | null
+  siteNames: string[]
+}
+interface PathNode {
+  path: string
+  label: string
+  children?: PathNode[]
 }
 
 const tableRef = ref<TableInstance | null>(null)
@@ -234,11 +242,12 @@ const error = ref<string | null>(null)
 
 const nameSearch = ref<string>('')
 const currentSort = ref<Sort>({ prop: 'name', order: 'ascending' })
+
 const activeFilters = reactive<ActiveFilters>({
   paths: [],
   states: [],
   siteExistence: 'all',
-  siteName: null,
+  siteNames: [],
 })
 const tempFilters = reactive<ActiveFilters>({ ...activeFilters })
 const filterDialogVisible = ref<boolean>(false)
@@ -252,13 +261,54 @@ const unique_states = ref<string[]>([])
 const all_sites = ref<string[]>([])
 const site_link_rules = ref<Record<string, { base_url: string }>>({})
 const expandedRows = ref<string[]>([])
+
+const pathTreeRef = ref<InstanceType<typeof ElTree> | null>(null)
+const pathTreeData = ref<PathNode[]>([])
+
+// [新增] 创建一个计算属性，它会自动按中文拼音对 all_sites 进行排序
+const sorted_all_sites = computed(() => {
+  // Intl.Collator 是专门用于处理特定语言排序的 API
+  const collator = new Intl.Collator('zh-CN', { numeric: true })
+  // 创建一个 all_sites 的副本并进行排序
+  return [...all_sites.value].sort(collator.compare)
+})
+
 const progressColors = [
   { color: '#f56c6c', percentage: 80 },
   { color: '#e6a23c', percentage: 99 },
   { color: '#67c23a', percentage: 100 },
 ]
 
-// 数据获取
+const buildPathTree = (paths: string[]): PathNode[] => {
+  const root: PathNode[] = []
+  const nodeMap = new Map<string, PathNode>()
+  paths.sort().forEach((fullPath) => {
+    const parts = fullPath.replace(/^\/|\/$/g, '').split('/')
+    let currentPath = ''
+    let parentChildren = root
+    parts.forEach((part, index) => {
+      currentPath = index === 0 ? `/${part}` : `${currentPath}/${part}`
+      if (!nodeMap.has(currentPath)) {
+        const newNode: PathNode = {
+          path: index === parts.length - 1 ? fullPath : currentPath,
+          label: part,
+          children: [],
+        }
+        nodeMap.set(currentPath, newNode)
+        parentChildren.push(newNode)
+      }
+      const currentNode = nodeMap.get(currentPath)!
+      parentChildren = currentNode.children!
+    })
+  })
+  nodeMap.forEach((node) => {
+    if (node.children && node.children.length === 0) {
+      delete node.children
+    }
+  })
+  return root
+}
+
 const fetchData = async () => {
   loading.value = true
   error.value = null
@@ -270,7 +320,7 @@ const fetchData = async () => {
       sortProp: currentSort.value.prop || 'name',
       sortOrder: currentSort.value.order || 'ascending',
       siteFilterExistence: activeFilters.siteExistence,
-      siteFilterName: activeFilters.siteName || '',
+      siteFilterNames: JSON.stringify(activeFilters.siteNames),
       path_filters: JSON.stringify(activeFilters.paths),
       state_filters: JSON.stringify(activeFilters.states),
     })
@@ -289,6 +339,8 @@ const fetchData = async () => {
     all_sites.value = result.all_discovered_sites
     site_link_rules.value = result.site_link_rules
     activeFilters.paths = result.active_path_filters
+
+    pathTreeData.value = buildPathTree(result.unique_paths)
   } catch (e: any) {
     error.value = e.message
   } finally {
@@ -311,12 +363,21 @@ const handleSortChange = (sort: Sort) => {
   fetchData()
 }
 
-// 筛选逻辑
 const openFilterDialog = () => {
   Object.assign(tempFilters, activeFilters)
   filterDialogVisible.value = true
+  nextTick(() => {
+    if (pathTreeRef.value) {
+      pathTreeRef.value.setCheckedKeys(activeFilters.paths, false)
+    }
+  })
 }
 const applyFilters = async () => {
+  if (pathTreeRef.value) {
+    const selectedPaths = pathTreeRef.value.getCheckedKeys(true)
+    tempFilters.paths = selectedPaths
+  }
+
   Object.assign(activeFilters, tempFilters)
   filterDialogVisible.value = false
   currentPage.value = 1
@@ -363,11 +424,7 @@ const getStateTagType = (state: string) => {
   if (state.includes('错误') || state.includes('丢失')) return 'danger'
   return 'info'
 }
-const truncatePath = (text: string, maxLength: number): string => {
-  if (text.length <= maxLength) return text
-  const segLen = Math.floor((maxLength - 3) / 2)
-  return `${text.substring(0, segLen)}...${text.substring(text.length - segLen)}`
-}
+
 const handleRowClick = (row: Torrent) => tableRef.value?.toggleRowExpansion(row)
 const handleExpandChange = (row: Torrent, expanded: Torrent[]) => {
   expandedRows.value = expanded.map((r) => r.name)
@@ -388,7 +445,9 @@ watch(nameSearch, () => {
 watch(
   () => tempFilters.siteExistence,
   (val) => {
-    if (val === 'all') tempFilters.siteName = null
+    if (val === 'all') {
+      tempFilters.siteNames = []
+    }
   },
 )
 </script>
@@ -420,7 +479,6 @@ watch(
   margin: 0 15px;
 }
 
-/* --- 使用 CSS Grid 完美实现您的需求 --- */
 .expand-content {
   padding: 10px 20px;
   background-color: #fafcff;
@@ -429,12 +487,9 @@ watch(
   gap: 5px;
 }
 
-/* --- 简化 el-tag 的样式 --- */
 .expand-content :deep(.el-tag) {
-  height: 35px; /* 保留您的高度设置 */
-  width: 100%; /* 让标签宽度完全由 Grid 容器控制 */
-
-  /* 优化内部文字显示 */
+  height: 35px;
+  width: 100%;
   white-space: normal;
   text-align: center;
   display: inline-flex;
@@ -469,15 +524,45 @@ watch(
   margin-right: 15px !important;
 }
 
-.path-tooltip {
-  display: inline-block;
-  margin-bottom: 10px;
+.path-tree-container {
+  max-height: 250px;
+  overflow-y: auto;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  padding: 5px;
+}
+
+:deep(.path-tree-node .el-tree-node__content) {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .site-filter-container {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.site-checkbox-container {
+  width: 100%;
+  max-height: 160px;
+  overflow-y: auto;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  padding: 10px;
+  margin-top: 10px;
+  box-sizing: border-box;
+}
+
+:deep(.site-checkbox-container .el-checkbox-group) {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+:deep(.site-checkbox-container .el-checkbox) {
+  margin-right: 0 !important;
 }
 
 :deep(.el-pagination) {
