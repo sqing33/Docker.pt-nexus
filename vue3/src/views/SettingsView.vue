@@ -109,7 +109,7 @@
               <el-form-item label="主机地址">
                 <el-input
                   v-model="downloader.host"
-                  placeholder="例如：http://192.168.1.10:8080"
+                  placeholder="例如：192.168.1.10:8080"
                   @input="resetConnectionStatus(downloader.id)"
                 ></el-input>
               </el-form-item>
