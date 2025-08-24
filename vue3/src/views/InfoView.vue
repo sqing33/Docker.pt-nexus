@@ -42,13 +42,17 @@
       <div class="custom-legend-container">
         <span
           v-for="item in speedChartLegendItems"
-          :key="item.name"
+          :key="item.fullName"
           class="legend-item"
           :class="{ disabled: item.disabled }"
-          @click="toggleSeries(item.name)"
+          @click="toggleSeries(item.fullName)"
         >
           <span class="legend-color-box" :style="{ backgroundColor: item.color }"></span>
-          <span class="legend-text">{{ item.name }}</span>
+          <!-- Flexbox布局，分离名称和速率 -->
+          <span class="legend-item-content">
+            <span class="legend-base-name" :title="item.baseName">{{ item.baseName }}</span>
+            <span class="legend-speed-info">{{ item.arrow }} {{ item.speed }}</span>
+          </span>
         </span>
       </div>
 
@@ -198,13 +202,15 @@ const initSpeedChart = () => {
             const { seriesIndex } = param
             const series = speedChartInstance.getOption().series[seriesIndex]
 
+            // series.name 格式为 "下载器名称 ↑/↓ 速率"
             const seriesName = series.name
             const isUpload = seriesName.includes('↑')
             const isDownload = seriesName.includes('↓')
             if (!isUpload && !isDownload) return
 
             const arrowIndex = isUpload ? seriesName.indexOf('↑') : seriesName.indexOf('↓')
-            const baseName = seriesName.substring(0, arrowIndex).trim()
+            // 根据箭头前的空格来分割基础名称
+            const baseName = seriesName.substring(0, seriesName.lastIndexOf(' ', arrowIndex)).trim()
 
             const downloader = speedChartDownloaders.value.find((d) => d.name === baseName)
             if (!downloader) return
@@ -229,7 +235,7 @@ const initSpeedChart = () => {
 
           for (const id in dataByDownloaderId) {
             const data = dataByDownloaderId[id]
-            const name = downloadersMap.get(id) || '未知下载器'
+            const name = downloadersMap.get(parseInt(id, 10)) || '未知下载器'
             tooltipContent += `<div style="margin-top: 8px; font-weight: bold;">${name}</div>`
             if (data['上传'])
               tooltipContent += `<div><span style="display:inline-block;margin-right:5px;border-radius:10px;width:10px;height:10px;background-color:${data['上传'].color};"></span>上传: ${formatSpeed(data['上传'].value)}</div>`
@@ -249,7 +255,7 @@ const initSpeedChart = () => {
         bottom: '3%',
         containLabel: true,
       },
-      legend: { show: false },
+      legend: { show: false }, // 使用自定义图例
       dataZoom: [{ type: 'inside' }],
     })
 
@@ -257,7 +263,7 @@ const initSpeedChart = () => {
       const selected = params.selected
       speedChartLegendItems.value = speedChartLegendItems.value.map((item) => ({
         ...item,
-        disabled: !selected[item.name],
+        disabled: !selected[item.fullName],
       }))
     })
     speedChartInstance.on('mouseover', () => {
@@ -280,20 +286,7 @@ const initTrafficChart = () => {
     trafficChartInstance = echarts.init(trafficChart.value)
     trafficChartInstance.setOption({
       tooltip: {
-        trigger: 'axis',
-        formatter: (params) => {
-          if (!params || params.length === 0) return ''
-          let tooltipContent = `${params[0].axisValueLabel}<br/>`
-          let total = 0
-          params.forEach((param) => {
-            const value = param.value || 0
-            total += value
-            // 提示框内依然显示完整的 series.name，例如 "上传量 (12.5 GB)"
-            tooltipContent += `<div><span style="display:inline-block;margin-right:5px;border-radius:10px;width:10px;height:10px;background-color:${param.color};"></span>${param.seriesName}: ${formatBytes(value)}</div>`
-          })
-          tooltipContent += `<div style="margin-top: 8px; font-weight: bold;">总计: ${formatBytes(total)}</div>`
-          return tooltipContent
-        },
+        show: false,
       },
       xAxis: { type: 'category', data: [] },
       yAxis: { type: 'value', axisLabel: { formatter: (value) => formatBytes(value) } },
@@ -353,35 +346,58 @@ const fetchSpeedData = async (mode, isPeriodicUpdate = false) => {
     const newLegendItems = []
     const uploadColors = ['#F56C6C', '#E6A23C', '#D98A6F', '#FAB6B6', '#F7D0A3']
     const downloadColors = ['#409EFF', '#67C23A', '#8A2BE2', '#A0CFFF', '#B3E19D']
-    const lastDataPoint =
-      mode === 'last_1_min' && datasets.length > 0 ? datasets[datasets.length - 1] : null
+
+    // 获取最后一个数据点用于实时速率显示
+    const lastDataPoint = datasets.length > 0 ? datasets[datasets.length - 1] : null
+
     speedChartDownloaders.value.forEach((downloader, index) => {
       const baseName = downloader.name
-      let uploadLegendName = `${baseName} ↑`
-      let downloadLegendName = `${baseName} ↓`
-      if (lastDataPoint && lastDataPoint.speeds) {
-        const currentSpeeds = lastDataPoint.speeds[downloader.id]
-        if (currentSpeeds) {
-          const ulSpeed = formatSpeed(currentSpeeds.ul_speed || 0)
-          const dlSpeed = formatSpeed(currentSpeeds.dl_speed || 0)
-          uploadLegendName = `${baseName} ↑ ${ulSpeed}`
-          downloadLegendName = `${baseName} ↓ ${dlSpeed}`
-        }
+      const currentSpeeds = lastDataPoint?.speeds?.[downloader.id] || {
+        ul_speed: 0,
+        dl_speed: 0,
       }
+
+      // 上传数据
+      const ulSpeedValue = currentSpeeds.ul_speed || 0
+      const ulSpeedText = formatSpeed(ulSpeedValue)
+      const uploadLegendFullName = `${baseName} ↑ ${ulSpeedText}`
       const uploadColor = uploadColors[index % uploadColors.length]
-      const downloadColor = downloadColors[index % downloadColors.length]
-      newLegendItems.push({ name: uploadLegendName, color: uploadColor, disabled: false })
-      newLegendItems.push({ name: downloadLegendName, color: downloadColor, disabled: false })
+
+      newLegendItems.push({
+        fullName: uploadLegendFullName, // 用于 ECharts 内部和点击事件的唯一标识
+        baseName: baseName,
+        arrow: '↑',
+        speed: ulSpeedText,
+        color: uploadColor,
+        disabled: false,
+      })
+
       series.push({
-        name: uploadLegendName,
+        name: uploadLegendFullName, // series的name必须与图例的唯一标识符匹配
         type: 'line',
         smooth: true,
         showSymbol: false,
         data: datasets.map((d) => d.speeds[downloader.id]?.ul_speed || 0),
         color: uploadColor,
       })
+
+      // 下载数据
+      const dlSpeedValue = currentSpeeds.dl_speed || 0
+      const dlSpeedText = formatSpeed(dlSpeedValue)
+      const downloadLegendFullName = `${baseName} ↓ ${dlSpeedText}`
+      const downloadColor = downloadColors[index % downloadColors.length]
+
+      newLegendItems.push({
+        fullName: downloadLegendFullName,
+        baseName: baseName,
+        arrow: '↓',
+        speed: dlSpeedText,
+        color: downloadColor,
+        disabled: false,
+      })
+
       series.push({
-        name: downloadLegendName,
+        name: downloadLegendFullName,
         type: 'line',
         smooth: true,
         showSymbol: false,
@@ -389,11 +405,48 @@ const fetchSpeedData = async (mode, isPeriodicUpdate = false) => {
         color: downloadColor,
       })
     })
+
+    // 保留更新前的图例选中状态
+    const oldSelectedState = speedChartLegendItems.value.reduce((acc, item) => {
+      if (item.disabled) {
+        // 由于速率变化，fullName会变，所以我们只通过baseName和arrow来匹配
+        const key = `${item.baseName} ${item.arrow}`
+        acc[key] = true
+      }
+      return acc
+    }, {})
+
+    newLegendItems.forEach((item) => {
+      const key = `${item.baseName} ${item.arrow}`
+      if (oldSelectedState[key]) {
+        item.disabled = true
+      }
+    })
+
     speedChartLegendItems.value = newLegendItems
+
+    // 更新 ECharts 实例
+    const currentOption = speedChartInstance.getOption()
+    const currentSelected = currentOption.legend?.[0]?.selected || {}
+
+    newLegendItems.forEach((item) => {
+      if (item.disabled) {
+        currentSelected[item.fullName] = false
+      } else {
+        currentSelected[item.fullName] = true
+      }
+    })
+
     speedChartInstance.setOption({
       xAxis: { data: labels },
       series: series,
+      legend: {
+        show: false, // 仍然不显示 ECharts 自带的图例
+        data: newLegendItems.map((i) => i.fullName), // 但需要更新 legend.data
+        selected: currentSelected, // 并且同步选中状态
+      },
     })
+
     if (isPeriodicUpdate && isMouseOverChart && lastTooltipDataIndex !== null) {
       speedChartInstance.dispatchAction({
         type: 'showTip',
@@ -601,26 +654,57 @@ onUnmounted(() => {
   align-items: center;
   cursor: pointer;
   font-size: 13px;
-  transition: color 0.2s;
+  transition: opacity 0.2s;
 }
-.legend-item.disabled .legend-text {
-  color: #ccc;
+.legend-item.disabled {
+  opacity: 0.5;
+}
+.legend-item.disabled .legend-item-content {
   text-decoration: line-through;
-}
-.legend-item.disabled .legend-color-box {
-  background-color: #ccc !important;
 }
 .legend-color-box {
   width: 25px;
   height: 14px;
   margin-right: 8px;
   border-radius: 3px;
+  flex-shrink: 0; /* 防止颜色块被压缩 */
 }
-.legend-text {
+
+/* Flex布局的容器 */
+.legend-item-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  /* 设置一个最大和最小宽度来稳定布局 */
+  min-width: 50px;
+  max-width: 150px;
+  overflow: hidden;
+}
+
+/* 下载器名称样式 */
+.legend-base-name {
   color: #333;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  width: 120px;
+  margin-right: 4px; /* 与速率之间增加一点间距 */
+
+  /* 关键：允许这个元素收缩 */
+  flex: 1 1 auto;
+  min-width: 0; /* Flex布局下实现 ellipsis 的关键属性 */
+}
+
+/* 速率信息样式 */
+.legend-speed-info {
+  color: #666;
+  white-space: nowrap;
+  /* 关键：不允许这个元素收缩 */
+  flex-shrink: 0;
+}
+
+/* 禁用状态下的文本颜色 */
+.legend-item.disabled .legend-base-name,
+.legend-item.disabled .legend-speed-info {
+  color: #999;
 }
 </style>

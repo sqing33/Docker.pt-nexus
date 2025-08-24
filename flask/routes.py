@@ -89,8 +89,29 @@ def reconcile_and_start_tracker():
 
 @api_bp.route('/test_connection', methods=['POST'])
 def test_connection():
-    """测试与单个下载器的连接。"""
+    """
+    测试与单个下载器的连接。
+    [增强] 如果密码为空，会尝试使用已保存的密码进行测试。
+    """
     client_config = request.json
+    downloader_id = client_config.get('id')
+
+    # [新增逻辑]：如果密码为空，则尝试从现有配置中加载
+    if downloader_id and not client_config.get('password'):
+        logging.info(f"正在为 '{downloader_id}' 测试连接，密码为空，尝试使用已保存的密码。")
+        current_config = config_manager.get()
+        current_downloaders = {
+            d['id']: d
+            for d in current_config.get('downloaders', [])
+        }
+
+        if downloader_id in current_downloaders:
+            saved_password = current_downloaders[downloader_id].get(
+                'password', '')
+            if saved_password:
+                client_config['password'] = saved_password
+                logging.info(f"已为 '{downloader_id}' 找到并加载了已保存的密码。")
+
     client_type = client_config.get('type')
     api_config = {
         k: v
@@ -118,14 +139,22 @@ def test_connection():
             "message": f"连接失败: 无法连接到主机。 {e}"
         }), 200
     except TransmissionError as e:
+        # 尝试提供更具体的错误信息
+        error_message = str(e)
+        if '401: Unauthorized' in error_message:
+            error_message = "认证失败，请检查用户名和密码。"
         return jsonify({
             "success": False,
-            "message": f"连接失败: {e.message}"
+            "message": f"连接失败: {error_message}"
         }), 200
     except Exception as e:
+        # 捕获 qbittorrent 的认证错误
+        error_message = str(e)
+        if 'Unauthorized' in error_message or '401' in error_message or '403' in error_message:
+            error_message = "认证失败，请检查用户名和密码。"
         return jsonify({
             "success": False,
-            "message": f"连接失败: 发生未知错误 - {str(e)}"
+            "message": f"连接失败: {error_message}"
         }), 200
 
 
