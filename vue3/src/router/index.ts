@@ -24,6 +24,11 @@ const router = createRouter({
       name: 'settings',
       component: () => import('../views/SettingsView.vue'),
     },
+    {
+      path: '/cross_seed',
+      name: 'cross_seed',
+      component: () => import('../views/CrossSeedView.vue'),
+    },
   ],
 })
 
