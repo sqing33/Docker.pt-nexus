@@ -139,10 +139,7 @@
       <!-- 一键引爆视图 -->
       <div v-if="activeMenu === 'indexer'" class="settings-view">
         <h1>一键引爆</h1>
-        <div>BUG</div>
-        <ul>
-          <li>站点信息页面表格在窗口变窄的情况下数据会移动到表格外面</li>
-        </ul>
+        <div>Boom！</div>
       </div>
     </el-main>
   </el-container>

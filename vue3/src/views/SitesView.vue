@@ -163,8 +163,7 @@ onMounted(() => {
   flex-direction: column;
   /* 在小屏幕上，高度需要自适应，而不是固定为 100vh */
   min-height: 100vh;
-  padding: 10px;
-
+  padding: 10px 10px 50px 10px;
   box-sizing: border-box;
   font-family:
     -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;

@@ -556,7 +556,7 @@ def get_data_api():
             "SELECT hash, SUM(uploaded) as total_uploaded FROM torrent_upload_stats GROUP BY hash"
         )
         uploads_by_hash = {
-            row['hash']: row['total_uploaded']
+            row['hash']: int(row['total_uploaded'] or 0)
             for row in cursor.fetchall()
         }
 
@@ -746,12 +746,14 @@ def get_group_stats_api():
         query = f"""SELECT s.nickname AS site_name, {group_concat_expr} AS group_suffix, COUNT(ut.name) AS torrent_count, SUM(ut.size) AS total_size FROM (SELECT name, {group_col_quoted} AS "group", MAX(size) AS size FROM torrents WHERE {group_col_quoted} IS NOT NULL AND {group_col_quoted} != '' GROUP BY name, {group_col_quoted}) AS ut JOIN sites AS s ON {join_condition} GROUP BY s.nickname ORDER BY s.nickname;"""
         cursor.execute(query)
         rows = cursor.fetchall()
+        
         results = [{
             "site_name": row['site_name'],
-            "group_suffix": row['group_suffix'],
+            "group_suffix": row['group_suffix'].replace('-', '') if row['group_suffix'] else row['group_suffix'],
             "torrent_count": int(row['torrent_count'] or 0),
             "total_size": int(row['total_size'] or 0)
         } for row in rows]
+        
         return jsonify(results)
     except Exception as e:
         logging.error(f"get_group_stats_api 出错: {e}", exc_info=True)
