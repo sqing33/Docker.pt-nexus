@@ -495,8 +495,8 @@ watch(
   display: inline-flex;
   justify-content: center;
   align-items: center;
-  padding: 0 8px;
   line-height: 1.2;
+  padding: 0;
 }
 
 .el-table__row,
