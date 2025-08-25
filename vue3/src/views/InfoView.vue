@@ -88,8 +88,10 @@
         >
           <span class="legend-color-box" :style="{ backgroundColor: item.color }"></span>
           <span class="legend-item-content">
-            <span class="legend-base-name" :title="item.baseName">{{ item.baseName }}</span>
-            <span class="legend-speed-info">{{ item.arrow }} {{ item.speed }}</span>
+            <span class="legend-base-name" :title="item.baseName"
+              >{{ item.baseName }}{{ item.arrow }}</span
+            >
+            <span class="legend-speed-info"> {{ item.speed }}</span>
           </span>
         </span>
       </div>
@@ -756,6 +758,8 @@ onUnmounted(() => {
   color: #666;
   white-space: nowrap;
   flex-shrink: 0;
+  width: 60px;
+  text-align: right;
 }
 .legend-item.disabled .legend-base-name,
 .legend-item.disabled .legend-speed-info {
