@@ -6,3 +6,7 @@ qbittorrent-api
 transmission-rpc
 mysql-connector-python
 PyYAML
+cloudscraper
+beautifulsoup4
+loguru
+bencoder
