@@ -6,19 +6,19 @@
       <div class="form-grid">
         <!-- 源站点选择 -->
         <div class="form-item">
-          <label for="source-site">源站点</label>
+          <label for="source-site">源站点 (需配置Cookie)</label>
           <select id="source-site" v-model="sourceSite">
             <option disabled value="">请选择源站点</option>
-            <option v-for="site in sitesList" :key="site" :value="site">{{ site }}</option>
+            <option v-for="site in sourceSitesList" :key="site" :value="site">{{ site }}</option>
           </select>
         </div>
 
         <!-- 目标站点选择 -->
         <div class="form-item">
-          <label for="target-site">目标站点</label>
+          <label for="target-site">目标站点 (需配置Passkey)</label>
           <select id="target-site" v-model="targetSite">
             <option disabled value="">请选择目标站点</option>
-            <option v-for="site in sitesList" :key="site" :value="site">{{ site }}</option>
+            <option v-for="site in targetSitesList" :key="site" :value="site">{{ site }}</option>
           </select>
         </div>
 
@@ -55,7 +55,8 @@ import { ref, onMounted } from 'vue'
 import axios from 'axios' // 确保你项目中安装了axios
 
 // --- 响应式状态定义 ---
-const sitesList = ref([])
+const sourceSitesList = ref([])
+const targetSitesList = ref([])
 const sourceSite = ref('')
 const targetSite = ref('')
 const searchTerm = ref('')
@@ -70,7 +71,8 @@ const logOutput = ref('')
 const fetchSitesList = async () => {
   try {
     const response = await axios.get('/api/sites_list')
-    sitesList.value = response.data
+    sourceSitesList.value = response.data.source_sites
+    targetSitesList.value = response.data.target_sites
   } catch (error) {
     console.error('获取站点列表失败:', error)
     logOutput.value = '错误：无法从服务器获取站点列表。请检查后端服务是否正常运行。'
