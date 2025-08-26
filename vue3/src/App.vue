@@ -26,13 +26,20 @@
     </router-view>
   </main>
 </template>
+
 <script setup lang="ts">
-import { computed, ref, provide } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 
 const route = useRoute()
-const activeRoute = computed(() => route.path)
+
+const activeRoute = computed(() => {
+  if (route.matched.length > 0) {
+    return route.matched[0].path
+  }
+  return route.path
+})
 
 const isRefreshing = ref(false)
 
@@ -45,8 +52,9 @@ const handleComponentReady = (refreshMethod: () => Promise<void>) => {
 const handleGlobalRefresh = async () => {
   if (isRefreshing.value) return
 
-  const currentPath = route.path
-  if (currentPath === '/torrents' || currentPath === '/sites') {
+  const topLevelPath = route.matched.length > 0 ? route.matched[0].path : ''
+
+  if (topLevelPath === '/torrents' || topLevelPath === '/sites') {
     isRefreshing.value = true
     ElMessage.info('后台正在刷新缓存...')
 
@@ -77,6 +85,7 @@ const handleGlobalRefresh = async () => {
   }
 }
 </script>
+
 <style>
 #app {
   height: 100vh;

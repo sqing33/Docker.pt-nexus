@@ -1,0 +1,37 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python 后端",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/flask/app.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}/flask"
+    },
+    {
+      "command": "npm run dev -- --host 0.0.0.0",
+      "name": "Vue3 前端",
+      "request": "launch",
+      "type": "node-terminal",
+      "cwd": "${workspaceFolder}/vue3"
+    },
+    {
+      "name": "Launch Edge",
+      "request": "launch",
+      "type": "node-terminal",
+      "command": "start msedge http://localhost:5173",
+      "cwd": "${workspaceFolder}"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "原神启动！",
+      "configurations": [
+        "Python 后端",
+        "Vue3 前端",
+        "Launch Edge"
+      ]
+    }
+  ]
+}

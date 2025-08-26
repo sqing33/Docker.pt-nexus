@@ -58,26 +58,43 @@ def get_sites_list():
             conn.close()
 
 
-# --- 获取站点详细信息的 API (CookieCloud 同步用) ---
+# --- [修改] 获取站点详细信息的 API ---
 @api_bp.route("/sites", methods=["GET"])
 def get_sites():
-    """获取所有站点的详细列表，包括 Cookie 和 Passkey 是否存在。"""
+    """获取所有站点的完整详细列表，可根据种子存在情况进行筛选。"""
+    # 新增：从请求参数获取筛选条件，默认为 'all'
+    filter_by_torrents = request.args.get("filter_by_torrents", "all")
+
     conn = None
     cursor = None
     try:
         conn = db_manager._get_connection()
         cursor = db_manager._get_cursor(conn)
-        # [修改] 同时查询 Passkey 的存在状态
-        sql = """
-            SELECT 
-                nickname, 
-                site, 
-                base_url, 
-                CASE WHEN cookie IS NOT NULL AND cookie != '' THEN 1 ELSE 0 END as has_cookie,
-                CASE WHEN passkey IS NOT NULL AND passkey != '' THEN 1 ELSE 0 END as has_passkey
-            FROM sites 
-            ORDER BY nickname
+
+        # 基础查询字段
+        select_fields = """
+            s.id, s.nickname, s.site, s.base_url, s.special_tracker_domain, s.`group`,
+            CASE WHEN s.cookie IS NOT NULL AND s.cookie != '' THEN 1 ELSE 0 END as has_cookie,
+            CASE WHEN s.passkey IS NOT NULL AND s.passkey != '' THEN 1 ELSE 0 END as has_passkey,
+            s.cookie, s.passkey
         """
+
+        if filter_by_torrents == "active":
+            # [修正] 使用 LOWER() 函数进行大小写不敏感的 JOIN
+            sql = f"""
+                SELECT DISTINCT {select_fields}
+                FROM sites s
+                JOIN torrents t ON LOWER(s.nickname) = LOWER(t.sites)
+                ORDER BY s.nickname
+            """
+        else:
+            # 默认情况，获取所有站点
+            sql = f"""
+                SELECT {select_fields}
+                FROM sites s
+                ORDER BY s.nickname
+            """
+
         cursor.execute(sql)
         sites = [dict(row) for row in cursor.fetchall()]
         return jsonify(sites)
@@ -91,29 +108,51 @@ def get_sites():
             conn.close()
 
 
-# --- [新增] 更新站点凭据 (Cookie 和 Passkey) 的 API ---
-@api_bp.route("/sites/update_details", methods=["POST"])
+# --- [新增] 添加新站点的 API ---
+@api_bp.route("/sites/add", methods=["POST"])
+def add_site():
+    """添加一个新站点。"""
+    site_data = request.json
+    if not site_data.get("nickname") or not site_data.get("site"):
+        return jsonify({"success": False, "message": "站点昵称和站点域名不能为空。"}), 400
+    if db_manager.add_site(site_data):
+        return jsonify({"success": True, "message": "站点已成功添加。"})
+    else:
+        return jsonify({"success": False, "message": "添加站点失败，可能是站点域名已存在。"}), 500
+
+
+# --- [修改] 更新站点详情的 API ---
+@api_bp.route("/sites/update", methods=["POST"])
 def update_site_details():
-    """根据站点昵称更新其 Cookie 和 Passkey。"""
+    """更新一个已有站点的所有信息。"""
+    site_data = request.json
+    if not site_data.get("id"):
+        return jsonify({"success": False, "message": "必须提供站点ID。"}), 400
+    if db_manager.update_site_details(site_data):
+        return jsonify(
+            {"success": True, "message": f"站点 '{site_data.get('nickname')}' 的信息已成功更新。"}
+        )
+    else:
+        return (
+            jsonify(
+                {"success": False, "message": f"未找到站点ID '{site_data.get('id')}' 或更新失败。"}
+            ),
+            404,
+        )
+
+
+# --- [新增] 删除站点的 API ---
+@api_bp.route("/sites/delete", methods=["POST"])
+def delete_site():
+    """根据 ID 删除一个站点。"""
     data = request.json
-    nickname = data.get("nickname")
-    cookie = data.get("cookie", "")  # 提供默认值
-    passkey = data.get("passkey", "")  # 提供默认值
-
-    if not nickname:
-        return jsonify({"success": False, "message": "必须提供站点昵称。"}), 400
-
-    try:
-        if db_manager.update_site_credentials(nickname, cookie, passkey):
-            return jsonify({"success": True, "message": f"站点 '{nickname}' 的凭据已成功更新。"})
-        else:
-            return (
-                jsonify({"success": False, "message": f"未找到站点 '{nickname}' 或更新失败。"}),
-                404,
-            )
-    except Exception as e:
-        logging.error(f"update_site_details 发生意外错误: {e}", exc_info=True)
-        return jsonify({"success": False, "message": "服务器内部错误。"}), 500
+    site_id = data.get("id")
+    if not site_id:
+        return jsonify({"success": False, "message": "必须提供站点ID。"}), 400
+    if db_manager.delete_site(site_id):
+        return jsonify({"success": True, "message": "站点已成功删除。"})
+    else:
+        return jsonify({"success": False, "message": f"删除站点ID '{site_id}' 失败。"}), 404
 
 
 # --- 更新站点 Cookie 的 API (由CookieCloud专用) ---
@@ -146,8 +185,7 @@ def update_site_cookie():
 @api_bp.route("/cookiecloud/sync", methods=["POST"])
 def cookiecloud_sync():
     """
-    [重构 v2] 连接到 CookieCloud，获取所有 Cookies，与本地数据库中的站点进行匹配，并自动更新所有匹配成功的站点的 Cookie。
-    新增：处理 Cookie 值为列表的情况。
+    连接到 CookieCloud，获取所有 Cookies，并更新匹配站点的 Cookie。
     """
     data = request.json
     cc_url = data.get("url")
@@ -157,7 +195,6 @@ def cookiecloud_sync():
     if not cc_url or not cc_key:
         return jsonify({"success": False, "message": "CookieCloud URL 和 KEY 不能为空。"}), 400
 
-    # --- 步骤 1: 从数据库获取所有需要匹配的站点信息 ---
     try:
         conn = db_manager._get_connection()
         cursor = db_manager._get_cursor(conn)
@@ -172,7 +209,6 @@ def cookiecloud_sync():
                 cursor.close()
             conn.close()
 
-    # --- 步骤 2: 从 CookieCloud 获取 Cookies ---
     try:
         target_url = f"{cc_url.rstrip('/')}/get/{cc_key}"
         payload = {}
@@ -184,24 +220,18 @@ def cookiecloud_sync():
         response.raise_for_status()
         response_data = response.json()
 
-        cookie_data_dict = None
-        if isinstance(response_data, dict) and "cookie_data" in response_data:
-            if isinstance(response_data["cookie_data"], dict):
-                cookie_data_dict = response_data["cookie_data"]
-            else:
-                raise TypeError("CookieCloud 返回的 'cookie_data' 格式不是预期的字典。")
-        elif isinstance(response_data, dict) and "encrypted" in response_data:
-            return (
-                jsonify(
-                    {
-                        "success": False,
-                        "message": "获取到加密数据。请确保端对端加密密码已填写并正确。",
-                    }
-                ),
-                400,
-            )
-
-        if not cookie_data_dict:
+        cookie_data_dict = response_data.get("cookie_data")
+        if not isinstance(cookie_data_dict, dict):
+            if "encrypted" in response_data:
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "message": "获取到加密数据。请确保端对端加密密码已填写并正确。",
+                        }
+                    ),
+                    400,
+                )
             raise ValueError("从 CookieCloud 返回的数据格式不正确或为空。")
 
     except Exception as e:
@@ -214,9 +244,7 @@ def cookiecloud_sync():
             500,
         )
 
-    # --- 步骤 3: 在后端进行匹配和更新 ---
     updated_count = 0
-    updated_nicknames = []
     matched_cc_domains = set()
 
     for site_in_app in app_sites:
@@ -224,11 +252,7 @@ def cookiecloud_sync():
         if not nickname:
             continue
 
-        identifiers = set()
-        if site_in_app.get("nickname"):
-            identifiers.add(site_in_app["nickname"].lower())
-        if site_in_app.get("site"):
-            identifiers.add(site_in_app["site"].lower())
+        identifiers = {site_in_app["nickname"].lower(), site_in_app["site"].lower()}
         if site_in_app.get("base_url"):
             try:
                 hostname = urlparse(f'http://{site_in_app["base_url"]}').hostname
@@ -240,38 +264,17 @@ def cookiecloud_sync():
         for cc_domain, cookie_value in cookie_data_dict.items():
             cleaned_cc_domain = cc_domain.lstrip(".").lower()
             if cleaned_cc_domain in identifiers:
-
-                # --- [关键修复] ---
-                # 在这里处理 cookie_value 的格式
-                cookie_to_save = ""
-                if isinstance(cookie_value, list):
-                    # 如果是列表，将其转换为 "name=value; name2=value2" 格式的字符串
-                    cookie_to_save = "; ".join(
-                        [
-                            f"{c.get('name')}={c.get('value')}"
-                            for c in cookie_value
-                            if c.get("name") and c.get("value") is not None
-                        ]
-                    )
-                elif isinstance(cookie_value, str):
-                    # 如果已经是字符串，直接使用
-                    cookie_to_save = cookie_value
-                else:
-                    # 如果是其他不支持的类型，则跳过
-                    logging.warning(
-                        f"跳过站点 '{nickname}' 的 Cookie 更新，因为格式无法识别: {type(cookie_value)}"
-                    )
-                    continue
-                # --- 修复结束 ---
-
+                cookie_to_save = (
+                    "; ".join([f"{c.get('name')}={c.get('value')}" for c in cookie_value])
+                    if isinstance(cookie_value, list)
+                    else cookie_value
+                )
                 if db_manager.update_site_cookie(nickname, cookie_to_save):
                     updated_count += 1
-                    updated_nicknames.append(nickname)
                     matched_cc_domains.add(cc_domain)
                 break
 
-    total_cc_cookies = len(cookie_data_dict)
-    unmatched_count = total_cc_cookies - len(matched_cc_domains)
+    unmatched_count = len(cookie_data_dict) - len(matched_cc_domains)
     message = f"同步完成！成功更新 {updated_count} 个站点的 Cookie。在 CookieCloud 中另有 {unmatched_count} 个未匹配的 Cookie。"
 
     return jsonify(
@@ -415,15 +418,10 @@ def test_connection():
     downloader_name = client_config.get("name", "下载器")
 
     if downloader_id and not client_config.get("password"):
-        logging.info(f"正在为 '{downloader_id}' 测试连接，密码为空，尝试使用已保存的密码。")
         current_config = config_manager.get()
         current_downloaders = {d["id"]: d for d in current_config.get("downloaders", [])}
-
         if downloader_id in current_downloaders:
-            saved_password = current_downloaders[downloader_id].get("password", "")
-            if saved_password:
-                client_config["password"] = saved_password
-                logging.info(f"已为 '{downloader_id}' 找到并加载了已保存的密码。")
+            client_config["password"] = current_downloaders[downloader_id].get("password", "")
 
     client_type = client_config.get("type")
     api_config = {
@@ -448,30 +446,12 @@ def test_connection():
             )
         else:
             return jsonify({"success": False, "message": "无效的客户端类型。"}), 400
-    except APIConnectionError as e:
-        return (
-            jsonify(
-                {
-                    "success": False,
-                    "message": f"下载器 '{downloader_name}' 连接失败: 无法连接到主机。 {e}",
-                }
-            ),
-            200,
-        )
-    except TransmissionError as e:
-        error_message = str(e)
-        if "401: Unauthorized" in error_message:
-            error_message = "认证失败，请检查用户名和密码。"
-        return (
-            jsonify(
-                {"success": False, "message": f"'{downloader_name}' 连接失败: {error_message}"}
-            ),
-            200,
-        )
     except Exception as e:
         error_message = str(e)
-        if "Unauthorized" in error_message or "401" in error_message or "403" in error_message:
+        if "401" in error_message or "Unauthorized" in error_message:
             error_message = "认证失败，请检查用户名和密码。"
+        elif "403" in error_message:
+            error_message = "禁止访问，请检查权限设置。"
         return (
             jsonify(
                 {"success": False, "message": f"'{downloader_name}' 连接失败: {error_message}"}
