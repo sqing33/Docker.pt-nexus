@@ -77,8 +77,27 @@ class DatabaseManager:
             cursor.close()
             conn.close()
 
+    # [修改] 创建一个更通用的方法来更新站点的凭据
+    def update_site_credentials(self, nickname, cookie, passkey):
+        """按昵称更新指定站点的 Cookie 和 Passkey。"""
+        conn = self._get_connection()
+        cursor = self._get_cursor(conn)
+        ph = self.get_placeholder()
+        try:
+            sql = f"UPDATE sites SET cookie = {ph}, passkey = {ph} WHERE nickname = {ph}"
+            cursor.execute(sql, (cookie, passkey, nickname))
+            conn.commit()
+            return cursor.rowcount > 0
+        except Exception as e:
+            logging.error(f"更新站点 '{nickname}' 的凭据失败: {e}", exc_info=True)
+            conn.rollback()
+            return False
+        finally:
+            cursor.close()
+            conn.close()
+
     def update_site_cookie(self, nickname, cookie):
-        """[新增] 按昵称更新指定站点的 Cookie。"""
+        """[保留] 按昵称更新指定站点的 Cookie (主要由CookieCloud使用)。"""
         conn = self._get_connection()
         cursor = self._get_cursor(conn)
         ph = self.get_placeholder()
@@ -268,8 +287,7 @@ class DatabaseManager:
         logging.info("基本表结构验证完成。")
         conn.commit()
 
-        # --- 步骤 2: [新逻辑] 自动迁移数据库，添加缺失的列 ---
-        # [关键修复] 将 conn 对象传递进去
+        # --- 步骤 2: 自动迁移数据库，添加缺失的列 ---
         self._add_missing_columns(conn, cursor)
         conn.commit()
 
@@ -286,6 +304,7 @@ class DatabaseManager:
                 if not sites_from_json:
                     logging.info("sites_data.json 为空，无需同步。")
                 else:
+                    # [关键修改] 从数据库中获取完整的站点信息，包括 cookie 和 passkey
                     cursor.execute(
                         "SELECT site, nickname, base_url, special_tracker_domain, `group`, cookie, passkey FROM sites"
                     )
@@ -301,27 +320,29 @@ class DatabaseManager:
                             continue
 
                         db_entry = sites_in_db.get(site_name)
-                        json_tuple = (
-                            site_data.get("site"),
-                            site_data.get("nickname"),
-                            site_data.get("base_url"),
-                            site_data.get("special_tracker_domain"),
-                            site_data.get("group"),
-                            site_data.get("cookie"),
-                            site_data.get("passkey"),
-                        )
 
                         if db_entry is None:
-                            sites_to_insert.append(json_tuple)
+                            # --- 逻辑不变: 对于新站点，直接插入 ---
+                            # 如果 json 文件中碰巧有 cookie/passkey，也会被一并插入
+                            insert_tuple = (
+                                site_data.get("site"),
+                                site_data.get("nickname"),
+                                site_data.get("base_url"),
+                                site_data.get("special_tracker_domain"),
+                                site_data.get("group"),
+                                site_data.get("cookie"),
+                                site_data.get("passkey"),
+                            )
+                            sites_to_insert.append(insert_tuple)
                         else:
+                            # --- [核心修正逻辑]: 对于已存在的站点 ---
+                            # 仅从 JSON 更新描述性字段，保留数据库中的 cookie 和 passkey
                             update_params = (
-                                json_tuple[1],  # nickname
-                                json_tuple[2],  # base_url
-                                json_tuple[3],  # special_tracker_domain
-                                json_tuple[4],  # group
-                                json_tuple[5],  # cookie
-                                json_tuple[6],  # passkey
-                                json_tuple[0],  # where site = ?
+                                site_data.get("nickname"),  # 从 JSON 更新
+                                site_data.get("base_url"),  # 从 JSON 更新
+                                site_data.get("special_tracker_domain"),  # 从 JSON 更新
+                                site_data.get("group"),  # 从 JSON 更新
+                                site_name,  # WHERE 条件
                             )
                             sites_to_update.append(update_params)
 
@@ -333,8 +354,11 @@ class DatabaseManager:
                         cursor.executemany(sql_insert, sites_to_insert)
 
                     if sites_to_update:
-                        logging.info(f"发现 {len(sites_to_update)} 个已有站点，将更新其信息。")
-                        sql_update = f"UPDATE sites SET nickname = {ph}, base_url = {ph}, special_tracker_domain = {ph}, `group` = {ph}, cookie = {ph}, passkey = {ph} WHERE site = {ph}"
+                        logging.info(
+                            f"发现 {len(sites_to_update)} 个已有站点，将更新其信息（凭据将保留）。"
+                        )
+                        # [核心修正逻辑] UPDATE 语句不再包含 cookie 和 passkey
+                        sql_update = f"UPDATE sites SET nickname = {ph}, base_url = {ph}, special_tracker_domain = {ph}, `group` = {ph} WHERE site = {ph}"
                         cursor.executemany(sql_update, sites_to_update)
 
                     if not sites_to_insert and not sites_to_update:

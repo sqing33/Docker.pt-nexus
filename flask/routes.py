@@ -61,13 +61,23 @@ def get_sites_list():
 # --- 获取站点详细信息的 API (CookieCloud 同步用) ---
 @api_bp.route("/sites", methods=["GET"])
 def get_sites():
-    """获取所有站点的详细列表，包括 Cookie 是否存在。"""
+    """获取所有站点的详细列表，包括 Cookie 和 Passkey 是否存在。"""
     conn = None
     cursor = None
     try:
         conn = db_manager._get_connection()
         cursor = db_manager._get_cursor(conn)
-        sql = "SELECT nickname, site, base_url, CASE WHEN cookie IS NOT NULL AND cookie != '' THEN 1 ELSE 0 END as has_cookie FROM sites ORDER BY nickname"
+        # [修改] 同时查询 Passkey 的存在状态
+        sql = """
+            SELECT 
+                nickname, 
+                site, 
+                base_url, 
+                CASE WHEN cookie IS NOT NULL AND cookie != '' THEN 1 ELSE 0 END as has_cookie,
+                CASE WHEN passkey IS NOT NULL AND passkey != '' THEN 1 ELSE 0 END as has_passkey
+            FROM sites 
+            ORDER BY nickname
+        """
         cursor.execute(sql)
         sites = [dict(row) for row in cursor.fetchall()]
         return jsonify(sites)
@@ -81,7 +91,32 @@ def get_sites():
             conn.close()
 
 
-# --- 更新站点 Cookie 的 API ---
+# --- [新增] 更新站点凭据 (Cookie 和 Passkey) 的 API ---
+@api_bp.route("/sites/update_details", methods=["POST"])
+def update_site_details():
+    """根据站点昵称更新其 Cookie 和 Passkey。"""
+    data = request.json
+    nickname = data.get("nickname")
+    cookie = data.get("cookie", "")  # 提供默认值
+    passkey = data.get("passkey", "")  # 提供默认值
+
+    if not nickname:
+        return jsonify({"success": False, "message": "必须提供站点昵称。"}), 400
+
+    try:
+        if db_manager.update_site_credentials(nickname, cookie, passkey):
+            return jsonify({"success": True, "message": f"站点 '{nickname}' 的凭据已成功更新。"})
+        else:
+            return (
+                jsonify({"success": False, "message": f"未找到站点 '{nickname}' 或更新失败。"}),
+                404,
+            )
+    except Exception as e:
+        logging.error(f"update_site_details 发生意外错误: {e}", exc_info=True)
+        return jsonify({"success": False, "message": "服务器内部错误。"}), 500
+
+
+# --- 更新站点 Cookie 的 API (由CookieCloud专用) ---
 @api_bp.route("/sites/update_cookie", methods=["POST"])
 def update_site_cookie():
     """根据站点昵称更新其 Cookie。"""
