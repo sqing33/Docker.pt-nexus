@@ -77,6 +77,25 @@ class DatabaseManager:
             cursor.close()
             conn.close()
 
+    def update_site_cookie(self, nickname, cookie):
+        """[新增] 按昵称更新指定站点的 Cookie。"""
+        conn = self._get_connection()
+        cursor = self._get_cursor(conn)
+        ph = self.get_placeholder()
+        try:
+            sql = f"UPDATE sites SET cookie = {ph} WHERE nickname = {ph}"
+            cursor.execute(sql, (cookie, nickname))
+            conn.commit()
+            # 检查是否有行被更新
+            return cursor.rowcount > 0
+        except Exception as e:
+            logging.error(f"更新站点 '{nickname}' 的 Cookie 失败: {e}", exc_info=True)
+            conn.rollback()
+            return False
+        finally:
+            cursor.close()
+            conn.close()
+
     def _add_missing_columns(self, conn, cursor):
         """
         [修正] 检查并向 sites 表添加缺失的列，实现自动化的数据库迁移。

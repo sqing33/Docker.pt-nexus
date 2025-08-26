@@ -4,6 +4,7 @@ import os
 import json
 import logging
 import sys
+import copy  # [修正] 添加此行导入语句
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -28,7 +29,11 @@ class ConfigManager:
 
     def _get_default_config(self):
         """[修改] 返回包含默认值的配置结构。"""
-        return {"downloaders": [], "realtime_speed_enabled": True}  # [新增] 默认开启实时速率
+        return {
+            "downloaders": [],
+            "realtime_speed_enabled": True,
+            "cookiecloud": {"url": "", "key": "", "e2e_password": ""},
+        }
 
     def load(self):
         """
@@ -43,6 +48,11 @@ class ConfigManager:
                 # [新增] 优雅地处理旧配置文件，为其添加新的默认配置项
                 if "realtime_speed_enabled" not in self._config:
                     self._config["realtime_speed_enabled"] = True
+                if "cookiecloud" not in self._config:
+                    self._config["cookiecloud"] = {"url": "", "key": "", "e2e_password": ""}
+                # [新增] 确保 e2e_password 字段存在于旧配置中
+                elif "e2e_password" not in self._config.get("cookiecloud", {}):
+                    self._config["cookiecloud"]["e2e_password"] = ""
 
             except (json.JSONDecodeError, IOError) as e:
                 logging.error(f"无法读取或解析 {CONFIG_FILE}: {e}。将加载一个安全的默认配置。")
@@ -60,9 +70,15 @@ class ConfigManager:
         """将配置字典保存到 config.json 文件并更新缓存。"""
         logging.info(f"正在将新配置保存到 {CONFIG_FILE}。")
         try:
+            # [修改] 不保存端对端加密密码到 config.json
+            config_to_save = copy.deepcopy(config_data)
+            if "cookiecloud" in config_to_save and "e2e_password" in config_to_save["cookiecloud"]:
+                config_to_save["cookiecloud"]["e2e_password"] = ""  # 清空密码，不保存
+
             with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-                json.dump(config_data, f, ensure_ascii=False, indent=4)
-            self._config = config_data  # 更新内存中的缓存
+                json.dump(config_to_save, f, ensure_ascii=False, indent=4)
+
+            self._config = config_data  # 内存中仍然保留密码
             return True
         except IOError as e:
             logging.error(f"无法写入配置到 {CONFIG_FILE}: {e}")
