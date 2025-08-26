@@ -1,60 +1,140 @@
 <template>
-  <div class="cross-seed-container">
-    <h1 class="title">种子迁移工具</h1>
-
-    <div class="form-card">
-      <div class="form-grid">
-        <!-- 源站点选择 -->
-        <div class="form-item">
-          <label for="source-site">源站点 (需配置Cookie)</label>
-          <select id="source-site" v-model="sourceSite">
-            <option disabled value="">请选择源站点</option>
-            <option v-for="site in sourceSitesList" :key="site" :value="site">{{ site }}</option>
-          </select>
+  <div class="migration-container">
+    <!-- ========================== -->
+    <!--          左侧面板          -->
+    <!-- ========================== -->
+    <div class="left-panel">
+      <!-- 左上角: 操作表单 -->
+      <div class="form-card">
+        <div class="form-grid">
+          <div class="form-item">
+            <label for="source-site">源站点 (需配置Cookie)</label>
+            <select id="source-site" v-model="sourceSite" :disabled="isLoading">
+              <option disabled value="">请选择源站点</option>
+              <option v-for="site in sourceSitesList" :key="site" :value="site">{{ site }}</option>
+            </select>
+          </div>
+          <div class="form-item">
+            <label for="target-site">目标站点 (需配置Passkey)</label>
+            <select id="target-site" v-model="targetSite" :disabled="isLoading">
+              <option disabled value="">请选择目标站点</option>
+              <option v-for="site in targetSitesList" :key="site" :value="site">{{ site }}</option>
+            </select>
+          </div>
+          <div class="form-item full-width">
+            <label for="search-term">种子名称 或 源站ID</label>
+            <input
+              type="text"
+              id="search-term"
+              v-model="searchTerm"
+              placeholder="输入完整的种子名称或其在源站的ID"
+              :disabled="isLoading"
+            />
+          </div>
         </div>
-
-        <!-- 目标站点选择 -->
-        <div class="form-item">
-          <label for="target-site">目标站点 (需配置Passkey)</label>
-          <select id="target-site" v-model="targetSite">
-            <option disabled value="">请选择目标站点</option>
-            <option v-for="site in targetSitesList" :key="site" :value="site">{{ site }}</option>
-          </select>
-        </div>
-
-        <!-- 种子名称/ID输入 -->
-        <div class="form-item full-width">
-          <label for="search-term">种子名称 或 源站ID</label>
-          <input
-            type="text"
-            id="search-term"
-            v-model="searchTerm"
-            placeholder="输入完整的种子名称或其在源站的ID"
-          />
+        <div class="actions">
+          <button @click="fetchTorrentInfo" :disabled="isLoading" class="migrate-button">
+            {{ isLoading && migrationStep === 'form' ? '正在获取...' : '获取种子信息' }}
+          </button>
+          <button
+            @click="publishTorrent"
+            :disabled="migrationStep !== 'review' || isLoading"
+            class="migrate-button publish-button"
+          >
+            {{ isLoading && migrationStep === 'review' ? '正在发布...' : '确认并发布' }}
+          </button>
         </div>
       </div>
 
-      <!-- 操作按钮 -->
-      <div class="actions">
-        <button @click="startMigration" :disabled="isLoading" class="migrate-button">
-          {{ isLoading ? '正在迁移中...' : '开始迁移' }}
-        </button>
+      <!-- 左下角: 日志输出 -->
+      <div class="log-card">
+        <h2 class="log-title">迁移日志</h2>
+        <pre class="log-output" ref="logContainer">{{ logOutput || '此处将显示操作日志...' }}</pre>
       </div>
     </div>
 
-    <!-- 日志输出区域 -->
-    <div v-if="logOutput" class="log-card">
-      <h2 class="log-title">迁移日志</h2>
-      <pre class="log-output">{{ logOutput }}</pre>
+    <!-- ========================== -->
+    <!--          右侧面板          -->
+    <!-- ========================== -->
+    <div class="right-panel">
+      <!-- 种子信息预览/编辑 -->
+      <div v-if="migrationStep !== 'result'" class="review-card">
+        <h2 class="review-title">种子发布信息预览</h2>
+        <div class="review-grid">
+          <div class="review-item full-span">
+            <label>主标题</label>
+            <input type="text" v-model="torrentData.main_title" />
+          </div>
+          <div class="review-item full-span">
+            <label>副标题</label>
+            <input type="text" v-model="torrentData.subtitle" />
+          </div>
+          <div class="review-item full-span">
+            <label>IMDb链接</label>
+            <input type="text" v-model="torrentData.imdb_link" />
+          </div>
+          <div class="review-item full-span">
+            <label>简介 - 声明</label>
+            <textarea rows="4" v-model="torrentData.intro.statement"></textarea>
+          </div>
+          <div class="review-item">
+            <label>简介 - 海报</label>
+            <textarea rows="4" v-model="torrentData.intro.poster"></textarea>
+          </div>
+          <div class="review-item">
+            <label>简介 - 截图</label>
+            <textarea rows="4" v-model="torrentData.intro.screenshots"></textarea>
+          </div>
+          <div class="review-item full-span">
+            <label>简介 - 正文</label>
+            <textarea rows="6" v-model="torrentData.intro.body"></textarea>
+          </div>
+          <div class="review-item full-span">
+            <label>Mediainfo</label>
+            <textarea class="code-font" rows="10" v-model="torrentData.mediainfo"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- 最终结果显示 -->
+      <div v-if="migrationStep === 'result'" class="result-card">
+        <h2 v-if="finalTorrentUrl" class="success-title">🎉 发布成功！</h2>
+        <h2 v-else class="error-title">发布失败</h2>
+        <p v-if="finalTorrentUrl">
+          已成功将种子发布到目标站点，点击下方链接查看：<br />
+          <a :href="finalTorrentUrl" target="_blank" rel="noopener noreferrer">{{
+            finalTorrentUrl
+          }}</a>
+        </p>
+        <p v-else>种子发布失败，请检查左侧日志获取详细信息。</p>
+        <div class="actions">
+          <button @click="resetMigration" class="migrate-button">开始新的迁移</button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import axios from 'axios' // 确保你项目中安装了axios
+import { ref, onMounted, nextTick, watch } from 'vue'
+import axios from 'axios'
 
-// --- 响应式状态定义 ---
+// --- Helper Functions ---
+const getInitialTorrentData = () => ({
+  main_title: '',
+  subtitle: '',
+  imdb_link: '',
+  intro: {
+    statement: '',
+    poster: '',
+    body: '',
+    screenshots: '',
+  },
+  mediainfo: '',
+  source_params: {},
+})
+
+// --- Component State ---
 const sourceSitesList = ref([])
 const targetSitesList = ref([])
 const sourceSite = ref('')
@@ -62,28 +142,32 @@ const targetSite = ref('')
 const searchTerm = ref('')
 const isLoading = ref(false)
 const logOutput = ref('')
+const migrationStep = ref('form') // 'form', 'review', 'result'
+const torrentData = ref(getInitialTorrentData())
+const taskId = ref(null)
+const finalTorrentUrl = ref(null)
+const logContainer = ref(null)
 
-// --- API 函数 ---
+// --- Watchers ---
+watch(logOutput, async () => {
+  await nextTick()
+  if (logContainer.value) {
+    logContainer.value.scrollTop = logContainer.value.scrollHeight
+  }
+})
 
-/**
- * 从后端获取已配置的站点列表
- */
+// --- API Functions ---
 const fetchSitesList = async () => {
   try {
     const response = await axios.get('/api/sites_list')
     sourceSitesList.value = response.data.source_sites
     targetSitesList.value = response.data.target_sites
   } catch (error) {
-    console.error('获取站点列表失败:', error)
-    logOutput.value = '错误：无法从服务器获取站点列表。请检查后端服务是否正常运行。'
+    logOutput.value = '错误：无法从服务器获取站点列表。'
   }
 }
 
-/**
- * 开始迁移任务
- */
-const startMigration = async () => {
-  // 基本校验
+const fetchTorrentInfo = async () => {
   if (!sourceSite.value || !targetSite.value || !searchTerm.value.trim()) {
     logOutput.value = '请填写所有必填项：源站点、目标站点和种子名称/ID。'
     return
@@ -94,90 +178,165 @@ const startMigration = async () => {
   }
 
   isLoading.value = true
-  logOutput.value = '正在初始化迁移任务，请稍候...'
+  migrationStep.value = 'form'
+  logOutput.value = '正在初始化任务，请稍候...'
 
   try {
-    const response = await axios.post('/api/migrate_torrent', {
+    const response = await axios.post('/api/migrate/fetch_info', {
       sourceSite: sourceSite.value,
       targetSite: targetSite.value,
       searchTerm: searchTerm.value.trim(),
     })
-    // 将后端的日志直接显示出来
+
     logOutput.value = response.data.logs
-  } catch (error) {
-    console.error('迁移任务失败:', error)
-    if (error.response && error.response.data && error.response.data.logs) {
-      logOutput.value = `请求失败:\n${error.response.data.logs}`
-    } else {
-      logOutput.value = `发生未知网络错误: ${error.message}`
+
+    if (response.data.success) {
+      torrentData.value = response.data.data
+      taskId.value = response.data.task_id
+      migrationStep.value = 'review'
     }
+  } catch (error) {
+    handleApiError(error, '获取种子信息失败')
   } finally {
     isLoading.value = false
   }
 }
 
-// --- 生命周期钩子 ---
+const publishTorrent = async () => {
+  isLoading.value = true
+  migrationStep.value = 'review' // Keep step as review while loading
+  logOutput.value += '\n\n====================\n\n正在发布种子，请稍候...'
 
-// 组件挂载后，自动获取站点列表
+  try {
+    const response = await axios.post('/api/migrate/publish', {
+      task_id: taskId.value,
+      upload_data: torrentData.value,
+    })
+
+    logOutput.value = response.data.logs
+
+    if (response.data.success) {
+      finalTorrentUrl.value = response.data.url
+    }
+    migrationStep.value = 'result'
+  } catch (error) {
+    handleApiError(error, '发布种子失败')
+    migrationStep.value = 'result'
+  } finally {
+    isLoading.value = false
+  }
+}
+
+const resetMigration = () => {
+  sourceSite.value = ''
+  targetSite.value = ''
+  searchTerm.value = ''
+  logOutput.value = ''
+  migrationStep.value = 'form'
+  torrentData.value = getInitialTorrentData()
+  taskId.value = null
+  finalTorrentUrl.value = null
+  fetchSitesList()
+}
+
+const handleApiError = (error, defaultMessage) => {
+  console.error(`${defaultMessage}:`, error)
+  if (error.response && error.response.data && error.response.data.logs) {
+    logOutput.value = error.response.data.logs
+  } else {
+    logOutput.value = `发生未知网络错误: ${error.message}`
+  }
+}
+
 onMounted(() => {
   fetchSitesList()
 })
 </script>
 
 <style scoped>
-.cross-seed-container {
+/* Main Layout */
+.migration-container {
+  display: grid;
+  grid-template-columns: 3fr 7fr; /* 左3右7 */
+  gap: 24px;
   padding: 24px;
-  font-family:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  max-width: 900px;
-  margin: 0 auto;
+  height: calc(100vh - 48px); /* 适应视窗高度 */
+  box-sizing: border-box;
 }
 
-.title {
-  text-align: center;
-  color: #333;
-  margin-bottom: 24px;
+.left-panel,
+.right-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  overflow-y: auto; /* 超出内容可滚动 */
 }
 
+/* Card Styles */
 .form-card,
-.log-card {
+.log-card,
+.review-card,
+.result-card {
   background-color: #ffffff;
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   padding: 24px;
-  margin-bottom: 24px;
-}
-
-.form-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-}
-
-.form-item {
   display: flex;
   flex-direction: column;
 }
 
+/* Left Panel Specifics */
+.left-panel .form-card {
+  flex-shrink: 0; /* 不收缩 */
+}
+.left-panel .log-card {
+  flex-grow: 1; /* 占据剩余空间 */
+  min-height: 200px;
+}
+.log-output {
+  flex-grow: 1;
+  background-color: #f5f5f5;
+  color: #333;
+  padding: 16px;
+  border-radius: 6px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-y: auto;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 13px;
+}
+
+/* Right Panel Specifics */
+.right-panel .review-card,
+.right-panel .result-card {
+  flex-grow: 1;
+}
+
+/* Form Grid */
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
 .form-item.full-width {
   grid-column: 1 / -1;
 }
-
-.form-item label {
+.form-item label,
+.review-item label {
   margin-bottom: 8px;
   font-weight: 600;
   color: #555;
+  font-size: 14px;
 }
-
 .form-item select,
 .form-item input {
   padding: 10px 12px;
   border: 1px solid #ccc;
   border-radius: 6px;
-  font-size: 16px;
+  font-size: 14px;
   width: 100%;
+  box-sizing: border-box;
 }
-
 .form-item input:focus,
 .form-item select:focus {
   outline: none;
@@ -185,17 +344,52 @@ onMounted(() => {
   box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
 }
 
-.actions {
-  margin-top: 24px;
-  text-align: center;
+/* Review Grid */
+.review-card .review-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+.review-item {
+  display: flex;
+  flex-direction: column;
+}
+.review-item.full-span {
+  grid-column: 1 / -1;
+}
+.review-item input,
+.review-item textarea {
+  padding: 10px 12px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 14px;
+  width: 100%;
+  box-sizing: border-box;
+}
+.review-item textarea {
+  font-family: inherit;
+  line-height: 1.5;
+  resize: vertical;
+}
+.review-item textarea.code-font {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 13px;
+  background-color: #f8f9fa;
 }
 
+/* Actions & Buttons */
+.actions {
+  margin-top: 24px;
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+}
 .migrate-button {
   background-color: #007bff;
   color: white;
   border: none;
-  padding: 12px 24px;
-  font-size: 16px;
+  padding: 10px 20px;
+  font-size: 15px;
   font-weight: bold;
   border-radius: 6px;
   cursor: pointer;
@@ -203,36 +397,54 @@ onMounted(() => {
     background-color 0.2s,
     transform 0.1s;
 }
-
 .migrate-button:hover:not(:disabled) {
   background-color: #0056b3;
 }
-
 .migrate-button:active:not(:disabled) {
   transform: scale(0.98);
 }
-
 .migrate-button:disabled {
   background-color: #a0a0a0;
   cursor: not-allowed;
+  opacity: 0.7;
+}
+.publish-button {
+  background-color: #28a745;
+}
+.publish-button:hover:not(:disabled) {
+  background-color: #218838;
 }
 
-.log-title {
+/* Titles and Result */
+.log-title,
+.review-title,
+.success-title,
+.error-title {
   color: #333;
   border-bottom: 1px solid #eee;
   padding-bottom: 12px;
-  margin-bottom: 12px;
+  margin-top: 0;
+  margin-bottom: 18px;
+}
+.success-title {
+  color: #28a745;
+}
+.error-title {
+  color: #dc3545;
 }
 
-.log-output {
-  background-color: #f5f5f5;
-  color: #333;
-  padding: 16px;
-  border-radius: 6px;
-  white-space: pre-wrap; /* 自动换行 */
-  word-wrap: break-word;
-  max-height: 400px;
-  overflow-y: auto;
-  font-family: 'Courier New', Courier, monospace;
+.result-card {
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+.result-card p {
+  font-size: 16px;
+  line-height: 1.6;
+}
+.result-card a {
+  color: #007bff;
+  font-weight: bold;
+  word-break: break-all;
 }
 </style>

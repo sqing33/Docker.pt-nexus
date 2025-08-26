@@ -25,6 +25,7 @@ api_bp = Blueprint("api", __name__, url_prefix="/api")
 
 db_manager = None
 config_manager = None
+MIGRATION_CACHE = {}  # 用于在迁移步骤之间存储上下文
 
 
 def initialize_routes(manager, conf_manager):
@@ -34,7 +35,7 @@ def initialize_routes(manager, conf_manager):
     config_manager = conf_manager
 
 
-# --- [修改] 获取站点列表的 API (迁移工具用) ---
+# --- 获取站点列表的 API (迁移工具用) ---
 @api_bp.route("/sites_list", methods=["GET"])
 def get_sites_list():
     """获取可用于迁移的源站点和目标站点列表。"""
@@ -43,19 +44,14 @@ def get_sites_list():
     try:
         conn = db_manager._get_connection()
         cursor = db_manager._get_cursor(conn)
-
-        # 获取源站点 (必须有Cookie)
         cursor.execute(
             "SELECT nickname FROM sites WHERE cookie IS NOT NULL AND cookie != '' ORDER BY nickname"
         )
         source_sites = [row["nickname"] for row in cursor.fetchall()]
-
-        # 获取目标站点 (必须有Passkey)
         cursor.execute(
             "SELECT nickname FROM sites WHERE passkey IS NOT NULL AND passkey != '' ORDER BY nickname"
         )
         target_sites = [row["nickname"] for row in cursor.fetchall()]
-
         return jsonify({"source_sites": source_sites, "target_sites": target_sites})
     except Exception as e:
         logging.error(f"get_sites_list 出错: {e}", exc_info=True)
@@ -65,6 +61,86 @@ def get_sites_list():
             cursor.close()
         if conn:
             conn.close()
+
+
+# --- [新增] 迁移种子 - 步骤1: 获取信息 ---
+@api_bp.route("/migrate/fetch_info", methods=["POST"])
+def migrate_fetch_info():
+    data = request.json
+    source_site_name = data.get("sourceSite")
+    target_site_name = data.get("targetSite")
+    search_term = data.get("searchTerm")
+
+    if not all([source_site_name, target_site_name, search_term]):
+        return jsonify({"success": False, "logs": "错误：源站点、目标站点和搜索词不能为空。"}), 400
+
+    try:
+        source_info = db_manager.get_site_by_nickname(source_site_name)
+        target_info = db_manager.get_site_by_nickname(target_site_name)
+
+        if not source_info or not source_info.get("cookie"):
+            return (
+                jsonify(
+                    {"success": False, "logs": f"错误：源站点 '{source_site_name}' 配置不完整。"}
+                ),
+                404,
+            )
+        if not target_info or not target_info.get("passkey"):
+            return (
+                jsonify(
+                    {"success": False, "logs": f"错误：目标站点 '{target_site_name}' 配置不完整。"}
+                ),
+                404,
+            )
+
+        migrator = TorrentMigrator(source_info, target_info, search_term)
+        result = migrator.prepare_for_upload()
+
+        if "review_data" in result:
+            task_id = str(uuid.uuid4())
+            MIGRATION_CACHE[task_id] = {
+                "migrator": migrator,
+                "modified_torrent_path": result["modified_torrent_path"],
+            }
+            return jsonify(
+                {
+                    "success": True,
+                    "task_id": task_id,
+                    "data": result["review_data"],
+                    "logs": result["logs"],
+                }
+            )
+        else:
+            return jsonify({"success": False, "logs": result.get("logs", "未知错误")})
+
+    except Exception as e:
+        logging.error(f"migrate_fetch_info 发生意外错误: {e}", exc_info=True)
+        return jsonify({"success": False, "logs": f"服务器内部错误: {e}"}), 500
+
+
+# --- [新增] 迁移种子 - 步骤2: 发布 ---
+@api_bp.route("/migrate/publish", methods=["POST"])
+def migrate_publish():
+    data = request.json
+    task_id = data.get("task_id")
+    upload_data = data.get("upload_data")
+
+    if not task_id or task_id not in MIGRATION_CACHE:
+        return jsonify({"success": False, "logs": "错误：无效或已过期的任务ID。"}), 400
+
+    context = MIGRATION_CACHE[task_id]
+    migrator = context["migrator"]
+    modified_torrent_path = context["modified_torrent_path"]
+
+    try:
+        result = migrator.publish_prepared_torrent(upload_data, modified_torrent_path)
+        return jsonify(result)
+    except Exception as e:
+        logging.error(f"migrate_publish 发生意外错误: {e}", exc_info=True)
+        return jsonify({"success": False, "logs": f"服务器内部错误: {e}", "url": None}), 500
+    finally:
+        migrator.cleanup()
+        del MIGRATION_CACHE[task_id]
 
 
 # --- [修改] 获取站点详细信息的 API ---
