@@ -20,128 +20,121 @@
 
     <!-- 主内容区 -->
     <el-main class="settings-main">
-      <!-- 顶部操作栏 -->
-      <div v-if="activeMenu === 'downloader'" class="top-actions">
-        <el-button type="primary" size="large" @click="addDownloader" :icon="Plus">
-          添加下载器
-        </el-button>
-        <el-button type="success" size="large" @click="saveSettings" :loading="isSaving">
-          <el-icon><Select /></el-icon>
-          保存所有设置
-        </el-button>
-
-        <div class="realtime-switch-container">
-          <el-tooltip
-            content="开启后，图表页将每秒获取一次数据以显示“近1分钟”实时速率。关闭后将每分钟获取一次，以降低系统负载。"
-            placement="bottom"
-            :hide-after="0"
-          >
-            <el-form-item label="开启实时速率" class="switch-form-item">
-              <el-switch
-                v-model="settings.realtime_speed_enabled"
-                size="large"
-                inline-prompt
-                active-text="是"
-                inactive-text="否"
-              />
-            </el-form-item>
-          </el-tooltip>
+      <!-- 下载器设置 -->
+      <template v-if="activeMenu === 'downloader'">
+        <div class="top-actions">
+          <el-button type="primary" size="large" @click="addDownloader" :icon="Plus">
+            添加下载器
+          </el-button>
+          <el-button type="success" size="large" @click="saveSettings" :loading="isSaving">
+            <el-icon><Select /></el-icon>
+            保存所有设置
+          </el-button>
+          <div class="realtime-switch-container">
+            <el-tooltip
+              content="开启后，图表页将每秒获取一次数据以显示“近1分钟”实时速率。关闭后将每分钟获取一次，以降低系统负载。"
+              placement="bottom"
+              :hide-after="0"
+            >
+              <el-form-item label="开启实时速率" class="switch-form-item">
+                <el-switch
+                  v-model="settings.realtime_speed_enabled"
+                  size="large"
+                  inline-prompt
+                  active-text="是"
+                  inactive-text="否"
+                />
+              </el-form-item>
+            </el-tooltip>
+          </div>
         </div>
-      </div>
-
-      <!-- 下载器设置视图 -->
-      <div v-if="activeMenu === 'downloader'" class="settings-view" v-loading="isLoading">
-        <div class="downloader-grid">
-          <el-card
-            v-for="downloader in settings.downloaders"
-            :key="downloader.id"
-            class="downloader-card"
-          >
-            <template #header>
-              <div class="card-header">
-                <span>{{ downloader.name || '新下载器' }}</span>
-                <div class="header-controls">
-                  <el-switch v-model="downloader.enabled" style="margin-right: 12px" />
-                  <el-button
-                    :type="
-                      connectionTestResults[downloader.id] === 'success'
-                        ? 'success'
-                        : connectionTestResults[downloader.id] === 'error'
-                          ? 'danger'
-                          : 'info'
-                    "
-                    :plain="!connectionTestResults[downloader.id]"
-                    style="width: 100%"
-                    @click="testConnection(downloader)"
-                    :loading="testingConnectionId === downloader.id"
-                    :icon="Link"
-                  >
-                    测试连接
-                  </el-button>
-                  <el-button
-                    type="danger"
-                    :icon="Delete"
-                    circle
-                    @click="confirmDeleteDownloader(downloader.id)"
-                  />
+        <div class="settings-view" v-loading="isLoading">
+          <div class="downloader-grid">
+            <el-card
+              v-for="downloader in settings.downloaders"
+              :key="downloader.id"
+              class="downloader-card"
+            >
+              <template #header>
+                <div class="card-header">
+                  <span>{{ downloader.name || '新下载器' }}</span>
+                  <div class="header-controls">
+                    <el-switch v-model="downloader.enabled" style="margin-right: 12px" />
+                    <el-button
+                      :type="
+                        connectionTestResults[downloader.id] === 'success'
+                          ? 'success'
+                          : connectionTestResults[downloader.id] === 'error'
+                            ? 'danger'
+                            : 'info'
+                      "
+                      :plain="!connectionTestResults[downloader.id]"
+                      style="width: 100%"
+                      @click="testConnection(downloader)"
+                      :loading="testingConnectionId === downloader.id"
+                      :icon="Link"
+                    >
+                      测试连接
+                    </el-button>
+                    <el-button
+                      type="danger"
+                      :icon="Delete"
+                      circle
+                      @click="confirmDeleteDownloader(downloader.id)"
+                    />
+                  </div>
                 </div>
-              </div>
-            </template>
-
-            <el-form :model="downloader" label-position="left" label-width="auto">
-              <el-form-item label="自定义名称">
-                <el-input
-                  v-model="downloader.name"
-                  placeholder="例如：家庭服务器 qB"
-                  @input="resetConnectionStatus(downloader.id)"
-                ></el-input>
-              </el-form-item>
-
-              <el-form-item label="客户端类型">
-                <el-select
-                  v-model="downloader.type"
-                  placeholder="请选择类型"
-                  style="width: 100%"
-                  @change="resetConnectionStatus(downloader.id)"
-                >
-                  <el-option label="qBittorrent" value="qbittorrent"></el-option>
-                  <el-option label="Transmission" value="transmission"></el-option>
-                </el-select>
-              </el-form-item>
-
-              <el-form-item label="主机地址">
-                <el-input
-                  v-model="downloader.host"
-                  placeholder="例如：192.168.1.10:8080"
-                  @input="resetConnectionStatus(downloader.id)"
-                ></el-input>
-              </el-form-item>
-
-              <el-form-item label="用户名">
-                <el-input
-                  v-model="downloader.username"
-                  placeholder="登录用户名"
-                  @input="resetConnectionStatus(downloader.id)"
-                ></el-input>
-              </el-form-item>
-
-              <el-form-item label="密码">
-                <el-input
-                  v-model="downloader.password"
-                  type="password"
-                  show-password
-                  placeholder="登录密码（未修改则留空）"
-                  @input="resetConnectionStatus(downloader.id)"
-                ></el-input>
-              </el-form-item>
-            </el-form>
-          </el-card>
+              </template>
+              <el-form :model="downloader" label-position="left" label-width="auto">
+                <el-form-item label="自定义名称">
+                  <el-input
+                    v-model="downloader.name"
+                    placeholder="例如：家庭服务器 qB"
+                    @input="resetConnectionStatus(downloader.id)"
+                  ></el-input>
+                </el-form-item>
+                <el-form-item label="客户端类型">
+                  <el-select
+                    v-model="downloader.type"
+                    placeholder="请选择类型"
+                    style="width: 100%"
+                    @change="resetConnectionStatus(downloader.id)"
+                  >
+                    <el-option label="qBittorrent" value="qbittorrent"></el-option>
+                    <el-option label="Transmission" value="transmission"></el-option>
+                  </el-select>
+                </el-form-item>
+                <el-form-item label="主机地址">
+                  <el-input
+                    v-model="downloader.host"
+                    placeholder="例如：192.168.1.10:8080"
+                    @input="resetConnectionStatus(downloader.id)"
+                  ></el-input>
+                </el-form-item>
+                <el-form-item label="用户名">
+                  <el-input
+                    v-model="downloader.username"
+                    placeholder="登录用户名"
+                    @input="resetConnectionStatus(downloader.id)"
+                  ></el-input>
+                </el-form-item>
+                <el-form-item label="密码">
+                  <el-input
+                    v-model="downloader.password"
+                    type="password"
+                    show-password
+                    placeholder="登录密码（未修改则留空）"
+                    @input="resetConnectionStatus(downloader.id)"
+                  ></el-input>
+                </el-form-item>
+              </el-form>
+            </el-card>
+          </div>
         </div>
-      </div>
+      </template>
 
-      <!-- [新增] 站点Cookie设置视图 -->
-      <div v-if="activeMenu === 'cookie'">
-        <!-- 顶部操作栏 -->
+      <!-- [修改] 站点Cookie设置视图 -->
+      <template v-if="activeMenu === 'cookie'">
         <div class="top-actions cookie-actions">
           <el-form :model="cookieCloudForm" inline class="cookie-cloud-form">
             <el-form-item label="CookieCloud URL">
@@ -188,13 +181,10 @@
             </el-form-item>
           </el-form>
         </div>
-
-        <!-- 站点列表 -->
         <div class="settings-view" v-loading="isSitesLoading">
           <el-table :data="sitesList" stripe style="width: 100%" max-height="calc(100vh - 160px)">
             <el-table-column prop="nickname" label="站点昵称" width="180" sortable />
-            <el-table-column prop="site" label="站点域名" width="250" />
-            <el-table-column prop="base_url" label="基础URL" show-overflow-tooltip />
+            <el-table-column prop="site" label="站点域名" show-overflow-tooltip />
             <el-table-column label="Cookie 状态" width="150" align="center">
               <template #default="scope">
                 <el-tag :type="scope.row.has_cookie ? 'success' : 'warning'">
@@ -202,14 +192,24 @@
                 </el-tag>
               </template>
             </el-table-column>
+            <!-- [新增] Passkey 状态列 -->
+            <el-table-column label="Passkey 状态" width="150" align="center">
+              <template #default="scope">
+                <el-tag :type="scope.row.has_passkey ? 'success' : 'warning'">
+                  {{ scope.row.has_passkey ? '已配置' : '未配置' }}
+                </el-tag>
+              </template>
+            </el-table-column>
             <el-table-column label="操作" width="150" align="center">
               <template #default="scope">
-                <el-button type="primary" link @click="editCookie(scope.row)"> 手动更新 </el-button>
+                <el-button type="primary" :icon="Edit" link @click="openEditDialog(scope.row)">
+                  手动更新
+                </el-button>
               </template>
             </el-table-column>
           </el-table>
         </div>
-      </div>
+      </template>
 
       <!-- 一键引爆视图 -->
       <div v-if="activeMenu === 'indexer'" class="settings-view">
@@ -217,11 +217,41 @@
         <div>Boom！</div>
       </div>
     </el-main>
+
+    <!-- [新增] 编辑站点凭据对话框 -->
+    <el-dialog
+      v-model="editDialogVisible"
+      :title="'编辑站点: ' + editingSite.nickname"
+      width="600px"
+      @closed="editingSite = {}"
+    >
+      <el-form :model="editingSite" label-width="100px" label-position="left">
+        <el-form-item label="Cookie">
+          <el-input
+            v-model="editingSite.cookie"
+            type="textarea"
+            :rows="4"
+            placeholder="请在此处粘贴完整的 Cookie 字符串"
+          ></el-input>
+        </el-form-item>
+        <el-form-item label="Passkey">
+          <el-input v-model="editingSite.passkey" placeholder="请输入该站点的 Passkey"></el-input>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="editDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="handleUpdateSite" :loading="isUpdatingSite">
+            保存
+          </el-button>
+        </span>
+      </template>
+    </el-dialog>
   </el-container>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, reactive } from 'vue'
 import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -233,13 +263,14 @@ import {
   Link,
   Tickets,
   Refresh,
+  Edit,
 } from '@element-plus/icons-vue'
 
 // --- 状态管理 ---
 const settings = ref({
   downloaders: [],
   realtime_speed_enabled: true,
-  cookiecloud: { url: '', key: '', e2e_password: '' }, // 确保初始结构存在
+  cookiecloud: { url: '', key: '', e2e_password: '' },
 })
 const isLoading = ref(true)
 const isSaving = ref(false)
@@ -247,7 +278,7 @@ const activeMenu = ref('downloader')
 const testingConnectionId = ref(null)
 const connectionTestResults = ref({})
 
-// --- [新增] Cookie 管理状态 ---
+// --- Cookie 管理状态 ---
 const sitesList = ref([])
 const isSitesLoading = ref(false)
 const isSyncing = ref(false)
@@ -256,6 +287,11 @@ const cookieCloudForm = ref({
   key: '',
   e2e_password: '',
 })
+
+// --- [新增] 编辑对话框状态 ---
+const editDialogVisible = ref(false)
+const editingSite = ref({})
+const isUpdatingSite = ref(false)
 
 // --- API 基础 URL ---
 const API_BASE_URL = '/api'
@@ -267,9 +303,11 @@ onMounted(() => {
 })
 
 // --- 方法 ---
-
 const handleMenuSelect = (index) => {
   activeMenu.value = index
+  if (index === 'cookie') {
+    fetchSites()
+  }
 }
 
 const fetchSettings = async () => {
@@ -277,23 +315,17 @@ const fetchSettings = async () => {
   try {
     const response = await axios.get(`${API_BASE_URL}/settings`)
     if (response.data) {
-      if (!response.data.downloaders) {
-        response.data.downloaders = []
-      }
-      if (typeof response.data.realtime_speed_enabled !== 'boolean') {
+      if (!response.data.downloaders) response.data.downloaders = []
+      if (typeof response.data.realtime_speed_enabled !== 'boolean')
         response.data.realtime_speed_enabled = true
-      }
       response.data.downloaders.forEach((d) => {
         if (!d.id) d.id = `client_${Date.now()}_${Math.random()}`
       })
-
-      // [新增] 填充 CookieCloud 表单
       if (response.data.cookiecloud) {
         cookieCloudForm.value.url = response.data.cookiecloud.url || ''
         cookieCloudForm.value.key = response.data.cookiecloud.key || ''
-        cookieCloudForm.value.e2e_password = '' // 密码不回显
+        cookieCloudForm.value.e2e_password = ''
       }
-
       settings.value = response.data
     }
   } catch (error) {
@@ -304,8 +336,7 @@ const fetchSettings = async () => {
   }
 }
 
-// --- [新增] Cookie 管理方法 ---
-
+// --- Cookie 管理方法 ---
 const fetchSites = async () => {
   isSitesLoading.value = true
   try {
@@ -329,7 +360,7 @@ const syncFromCookieCloud = async () => {
     const response = await axios.post(`${API_BASE_URL}/cookiecloud/sync`, cookieCloudForm.value)
     if (response.data.success) {
       ElMessage.success(response.data.message)
-      await fetchSites() // 同步成功后刷新列表
+      await fetchSites()
     } else {
       ElMessage.error(response.data.message || '同步失败！')
     }
@@ -342,43 +373,39 @@ const syncFromCookieCloud = async () => {
   }
 }
 
-const editCookie = (site) => {
-  ElMessageBox.prompt(`请输入站点 "${site.nickname}" 的新 Cookie:`, '手动更新 Cookie', {
-    confirmButtonText: '保存',
-    cancelButtonText: '取消',
-    inputType: 'textarea',
-    inputPlaceholder: '请在此处粘贴完整的 Cookie 字符串',
-  })
-    .then(async ({ value }) => {
-      if (!value || value.trim() === '') {
-        // 用户可能点击了确定但没有输入内容
-        ElMessage.info('未输入内容，操作已取消。')
-        return
-      }
-      try {
-        const response = await axios.post(`${API_BASE_URL}/sites/update_cookie`, {
-          nickname: site.nickname,
-          cookie: value,
-        })
-        if (response.data.success) {
-          ElMessage.success(response.data.message)
-          await fetchSites() // 更新成功后刷新列表
-        } else {
-          ElMessage.error(response.data.message || '更新失败！')
-        }
-      } catch (error) {
-        const errorMessage = error.response?.data?.message || '更新 Cookie 请求失败。'
-        ElMessage.error(errorMessage)
-        console.error('Update cookie error:', error)
-      }
-    })
-    .catch(() => {
-      ElMessage.info('操作已取消。')
-    })
+// [修改] 打开编辑对话框的方法
+const openEditDialog = (site) => {
+  // 注意：我们不获取旧的 cookie/passkey，而是让用户输入新的
+  editingSite.value = {
+    nickname: site.nickname,
+    cookie: '',
+    passkey: '',
+  }
+  editDialogVisible.value = true
+}
+
+// [新增] 处理站点凭据更新的方法
+const handleUpdateSite = async () => {
+  isUpdatingSite.value = true
+  try {
+    const response = await axios.post(`${API_BASE_URL}/sites/update_details`, editingSite.value)
+    if (response.data.success) {
+      ElMessage.success(response.data.message)
+      editDialogVisible.value = false
+      await fetchSites() // 更新成功后刷新列表
+    } else {
+      ElMessage.error(response.data.message || '更新失败！')
+    }
+  } catch (error) {
+    const errorMessage = error.response?.data?.message || '更新凭据请求失败。'
+    ElMessage.error(errorMessage)
+    console.error('Update site details error:', error)
+  } finally {
+    isUpdatingSite.value = false
+  }
 }
 
 // --- 下载器方法 & 通用方法 ---
-
 const addDownloader = () => {
   settings.value.downloaders.push({
     id: `new_${Date.now()}`,
@@ -411,9 +438,7 @@ const deleteDownloader = (downloaderId) => {
 const saveSettings = async () => {
   isSaving.value = true
   try {
-    // [修改] 在保存前，从表单更新 settings 对象中的 cookiecloud 部分
     settings.value.cookiecloud = cookieCloudForm.value
-
     await axios.post(`${API_BASE_URL}/settings`, settings.value)
     ElMessage.success('设置已成功保存并应用！')
     fetchSettings()
@@ -458,23 +483,19 @@ const testConnection = async (downloader) => {
 .settings-container {
   height: 100vh;
 }
-
 .settings-aside {
   border-right: 1px solid var(--el-border-color);
 }
-
 .settings-menu {
   height: 100%;
   border-right: none;
 }
-
 .settings-main {
   padding: 0;
   position: relative;
   display: flex;
   flex-direction: column;
 }
-
 .top-actions {
   position: sticky;
   top: 0;
@@ -487,7 +508,6 @@ const testConnection = async (downloader) => {
   align-items: center;
   gap: 16px;
 }
-
 .realtime-switch-container {
   display: flex;
   align-items: center;
@@ -496,40 +516,32 @@ const testConnection = async (downloader) => {
   margin-bottom: 0;
   margin-left: 8px;
 }
-
 .settings-view {
   padding: 24px;
-  overflow-y: auto; /* 允许内容区滚动 */
+  overflow-y: auto;
   flex-grow: 1;
 }
-
 .downloader-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
   gap: 24px;
 }
-
 .downloader-card {
   display: flex;
   flex-direction: column;
 }
-
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
-
 .header-controls {
   display: flex;
   align-items: center;
 }
-
 .el-form {
   padding-top: 10px;
 }
-
-/* [新增] CookieCloud 表单样式 */
 .cookie-cloud-form {
   display: flex;
   flex-wrap: wrap;
