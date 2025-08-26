@@ -34,20 +34,29 @@ def initialize_routes(manager, conf_manager):
     config_manager = conf_manager
 
 
-# --- 获取站点列表的 API (迁移工具用) ---
+# --- [修改] 获取站点列表的 API (迁移工具用) ---
 @api_bp.route("/sites_list", methods=["GET"])
 def get_sites_list():
-    """获取所有已配置站点的昵称列表。"""
+    """获取可用于迁移的源站点和目标站点列表。"""
     conn = None
     cursor = None
     try:
         conn = db_manager._get_connection()
         cursor = db_manager._get_cursor(conn)
+
+        # 获取源站点 (必须有Cookie)
         cursor.execute(
             "SELECT nickname FROM sites WHERE cookie IS NOT NULL AND cookie != '' ORDER BY nickname"
         )
-        sites = [row["nickname"] for row in cursor.fetchall()]
-        return jsonify(sites)
+        source_sites = [row["nickname"] for row in cursor.fetchall()]
+
+        # 获取目标站点 (必须有Passkey)
+        cursor.execute(
+            "SELECT nickname FROM sites WHERE passkey IS NOT NULL AND passkey != '' ORDER BY nickname"
+        )
+        target_sites = [row["nickname"] for row in cursor.fetchall()]
+
+        return jsonify({"source_sites": source_sites, "target_sites": target_sites})
     except Exception as e:
         logging.error(f"get_sites_list 出错: {e}", exc_info=True)
         return jsonify({"error": "获取站点列表失败"}), 500

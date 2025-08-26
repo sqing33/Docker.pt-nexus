@@ -66,7 +66,9 @@ class TorrentMigrator:
         self.TARGET_COOKIE = self.target_site["cookie"]
         self.TARGET_PASSKEY = self.target_site["passkey"]
 
-        self.TARGET_UPLOAD_MODULE = self.target_site["nickname"]
+        # [修正] 使用 'site' 字段（唯一标识）而不是 'nickname' 来确定上传模块的名称
+        self.TARGET_UPLOAD_MODULE = self.target_site["site"]
+
         # [关键修改] 移除强制替换，确保 tracker URL 的协议与 base_url 一致
         self.TARGET_TRACKER_URL = f"{self.TARGET_BASE_URL}/announce.php"
 
@@ -87,8 +89,9 @@ class TorrentMigrator:
         self.log_handler = LoguruHandler()
         self.logger = logger
         self.logger.remove()
+        # [修改] 将日志级别设置为 DEBUG 以捕获所有信息
         self.logger.add(
-            self.log_handler, format="{time:HH:mm:ss} - {level} - {message}", level="INFO"
+            self.log_handler, format="{time:HH:mm:ss} - {level} - {message}", level="DEBUG"
         )
 
     def cleanup(self):
@@ -255,10 +258,29 @@ class TorrentMigrator:
                 "标签": self.tags,
             }
 
-            # --- 下载种子文件 ---
-            download_link_tag = soup.select_one(f'a.index[href^="download.php?id={torrent_id}"]')
+            # --- [修改] 增强下载链接查找和日志记录 ---
+            self.logger.info("正在尝试定位种子下载链接...")
+            selector = f'a.index[href^="download.php?id={torrent_id}"]'
+            self.logger.debug(f"正在使用CSS选择器: '{selector}'")
+            download_link_tag = soup.select_one(selector)
+
             if not download_link_tag:
-                self.logger.error("在详情页未找到种子下载链接。")
+                self.logger.error("在详情页未找到种子下载链接。页面结构可能已更改或Cookie已失效。")
+
+                # 记录所有疑似下载链接以供调试
+                all_possible_links = soup.select('a[href*="download.php"]')
+                if all_possible_links:
+                    self.logger.info("在页面上找到了以下疑似下载链接，但它们不匹配预期的格式:")
+                    for link in all_possible_links:
+                        self.logger.info(
+                            f"  - 找到的链接: href='{link.get('href')}', 文本='{link.get_text(strip=True)}'"
+                        )
+                else:
+                    self.logger.warning("页面上未找到任何包含 'download.php' 的链接。")
+
+                # 记录完整的页面HTML到DEBUG日志
+                self.logger.debug("页面HTML内容如下 (用于技术调试):")
+                self.logger.debug(f"\n{soup.prettify()}")
                 return None
 
             torrent_download_url = f"{self.SOURCE_BASE_URL}/{download_link_tag['href']}"
