@@ -28,29 +28,29 @@ except ImportError:
 
 
 class DatabaseManager:
-    """Handles all interactions with the configured database (MySQL or SQLite)."""
+    """处理与配置的数据库（MySQL 或 SQLite）的所有交互。"""
 
     def __init__(self, config):
         """
-        Initializes the DatabaseManager based on the provided configuration.
+        根据提供的配置初始化 DatabaseManager。
         """
         self.db_type = config.get("db_type", "sqlite")
         if self.db_type == "mysql":
             self.mysql_config = config.get("mysql", {})
-            logging.info("Database backend set to MySQL.")
+            logging.info("数据库后端设置为 MySQL。")
         else:
             self.sqlite_path = config.get("path", "data/pt_stats.db")
-            logging.info(f"Database backend set to SQLite. Path: {self.sqlite_path}")
+            logging.info(f"数据库后端设置为 SQLite。路径: {self.sqlite_path}")
 
     def _get_connection(self):
-        """Returns a new database connection."""
+        """返回一个新的数据库连接。"""
         if self.db_type == "mysql":
             return mysql.connector.connect(**self.mysql_config, autocommit=False)
         else:
             return sqlite3.connect(self.sqlite_path, timeout=20)
 
     def _get_cursor(self, conn):
-        """Returns a cursor from a connection."""
+        """从连接中返回一个游标。"""
         if self.db_type == "mysql":
             return conn.cursor(dictionary=True, buffered=True)
         else:
@@ -58,7 +58,7 @@ class DatabaseManager:
             return conn.cursor()
 
     def get_placeholder(self):
-        """Returns the correct parameter placeholder for the database type."""
+        """返回数据库类型对应的正确参数占位符。"""
         return "%s" if self.db_type == "mysql" else "?"
 
     def get_site_by_nickname(self, nickname):
@@ -77,19 +77,87 @@ class DatabaseManager:
             cursor.close()
             conn.close()
 
-    # [修改] 创建一个更通用的方法来更新站点的凭据
-    def update_site_credentials(self, nickname, cookie, passkey):
-        """按昵称更新指定站点的 Cookie 和 Passkey。"""
+    # [新增] 添加一个新站点
+    def add_site(self, site_data):
+        """向数据库中添加一个新站点。"""
         conn = self._get_connection()
         cursor = self._get_cursor(conn)
         ph = self.get_placeholder()
         try:
-            sql = f"UPDATE sites SET cookie = {ph}, passkey = {ph} WHERE nickname = {ph}"
-            cursor.execute(sql, (cookie, passkey, nickname))
+            sql = f"""
+                INSERT INTO sites (site, nickname, base_url, special_tracker_domain, `group`, cookie, passkey) 
+                VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+            """
+            params = (
+                site_data.get("site"),
+                site_data.get("nickname"),
+                site_data.get("base_url"),
+                site_data.get("special_tracker_domain"),
+                site_data.get("group"),
+                site_data.get("cookie"),
+                site_data.get("passkey"),
+            )
+            cursor.execute(sql, params)
+            conn.commit()
+            return True
+        except Exception as e:
+            # 捕获并处理唯一性约束冲突
+            if "UNIQUE constraint failed" in str(e) or "Duplicate entry" in str(e):
+                logging.error(f"添加站点失败：站点域名 '{site_data.get('site')}' 已存在。")
+            else:
+                logging.error(f"添加站点 '{site_data.get('nickname')}' 失败: {e}", exc_info=True)
+            conn.rollback()
+            return False
+        finally:
+            cursor.close()
+            conn.close()
+
+    # [修改] 更新站点所有可编辑字段
+    def update_site_details(self, site_data):
+        """根据站点 ID 更新其所有可编辑的详细信息。"""
+        conn = self._get_connection()
+        cursor = self._get_cursor(conn)
+        ph = self.get_placeholder()
+        try:
+            sql = f"""
+                UPDATE sites SET 
+                    nickname = {ph}, base_url = {ph}, special_tracker_domain = {ph}, 
+                    `group` = {ph}, cookie = {ph}, passkey = {ph}
+                WHERE id = {ph}
+            """
+            params = (
+                site_data.get("nickname"),
+                site_data.get("base_url"),
+                site_data.get("special_tracker_domain"),
+                site_data.get("group"),
+                site_data.get("cookie"),
+                site_data.get("passkey"),
+                site_data.get("id"),
+            )
+            cursor.execute(sql, params)
             conn.commit()
             return cursor.rowcount > 0
         except Exception as e:
-            logging.error(f"更新站点 '{nickname}' 的凭据失败: {e}", exc_info=True)
+            logging.error(f"更新站点ID '{site_data.get('id')}' 失败: {e}", exc_info=True)
+            conn.rollback()
+            return False
+        finally:
+            cursor.close()
+            conn.close()
+
+    # [新增] 根据 ID 删除一个站点
+    def delete_site(self, site_id):
+        """根据站点 ID 从数据库中删除一个站点。"""
+        conn = self._get_connection()
+        cursor = self._get_cursor(conn)
+        ph = self.get_placeholder()
+        try:
+            sql = f"DELETE FROM sites WHERE id = {ph}"
+            cursor.execute(sql, (site_id,))
+            conn.commit()
+            return cursor.rowcount > 0
+        except Exception as e:
+            logging.error(f"删除站点ID '{site_id}' 失败: {e}", exc_info=True)
             conn.rollback()
             return False
         finally:
@@ -97,7 +165,7 @@ class DatabaseManager:
             conn.close()
 
     def update_site_cookie(self, nickname, cookie):
-        """[保留] 按昵称更新指定站点的 Cookie (主要由CookieCloud使用)。"""
+        """按昵称更新指定站点的 Cookie (主要由CookieCloud使用)。"""
         conn = self._get_connection()
         cursor = self._get_cursor(conn)
         ph = self.get_placeholder()
@@ -116,16 +184,12 @@ class DatabaseManager:
             conn.close()
 
     def _add_missing_columns(self, conn, cursor):
-        """
-        [修正] 检查并向 sites 表添加缺失的列，实现自动化的数据库迁移。
-        现在接收 conn 对象以创建新的游标。
-        """
+        """检查并向 sites 表添加缺失的列，实现自动化的数据库迁移。"""
         logging.info("正在检查 'sites' 表的结构完整性...")
         columns_to_add = [("cookie", "TEXT", "TEXT"), ("passkey", "TEXT", "VARCHAR(255)")]
 
         if self.db_type == "mysql":
             db_name = self.mysql_config.get("database")
-            # [关键修复] 直接从 conn 对象创建新的、非字典型游标
             meta_cursor = conn.cursor()
             meta_cursor.execute(
                 "SELECT column_name FROM INFORMATION_SCHEMA.COLUMNS WHERE table_schema = %s AND table_name = 'sites'",
@@ -137,7 +201,6 @@ class DatabaseManager:
             for col_name, _, mysql_type in columns_to_add:
                 if col_name.lower() not in existing_columns:
                     logging.info(f"在 MySQL 'sites' 表中发现缺失列: '{col_name}'。正在添加...")
-                    # 使用主游标执行修改操作
                     cursor.execute(f"ALTER TABLE `sites` ADD COLUMN `{col_name}` {mysql_type}")
                     logging.info(f"成功添加列: '{col_name}'。")
 
@@ -153,7 +216,7 @@ class DatabaseManager:
 
     def init_db(self):
         """
-        [MODIFIED] 确保数据库表存在，自动迁移表结构，并根据 sites_data.json 同步站点数据。
+        [MODIFIED] 确保数据库表存在，并根据 sites_data.json 仅添加新站点，不覆盖已有数据。
         """
         conn = self._get_connection()
         cursor = self._get_cursor(conn)
@@ -291,81 +354,48 @@ class DatabaseManager:
         self._add_missing_columns(conn, cursor)
         conn.commit()
 
-        # --- 步骤 3: 同步 sites_data.json 到数据库 ---
+        # --- [核心修改] 步骤 3: 仅当数据库中不存在时，才从 sites_data.json 添加新站点 ---
         try:
             if not os.path.exists(SITES_DATA_FILE):
                 logging.warning(f"{SITES_DATA_FILE} 未找到，跳过站点数据同步。")
             else:
-                logging.info(f"正在从 {SITES_DATA_FILE} 同步站点数据...")
-
+                logging.info(f"正在从 {SITES_DATA_FILE} 检查并添加新站点...")
                 with open(SITES_DATA_FILE, "r", encoding="utf-8") as f:
                     sites_from_json = json.load(f)
 
-                if not sites_from_json:
-                    logging.info("sites_data.json 为空，无需同步。")
-                else:
-                    # [关键修改] 从数据库中获取完整的站点信息，包括 cookie 和 passkey
-                    cursor.execute(
-                        "SELECT site, nickname, base_url, special_tracker_domain, `group`, cookie, passkey FROM sites"
-                    )
-                    sites_in_db = {row["site"]: row for row in cursor.fetchall()}
-                    logging.info(f"数据库中目前存在 {len(sites_in_db)} 条站点记录。")
+                if sites_from_json:
+                    cursor.execute("SELECT site FROM sites")
+                    # 使用 set 以提高查找效率
+                    sites_in_db = {row["site"] for row in cursor.fetchall()}
 
                     sites_to_insert = []
-                    sites_to_update = []
-
                     for site_data in sites_from_json:
                         site_name = site_data.get("site")
-                        if not site_name:
-                            continue
-
-                        db_entry = sites_in_db.get(site_name)
-
-                        if db_entry is None:
-                            # --- 逻辑不变: 对于新站点，直接插入 ---
-                            # 如果 json 文件中碰巧有 cookie/passkey，也会被一并插入
-                            insert_tuple = (
-                                site_data.get("site"),
-                                site_data.get("nickname"),
-                                site_data.get("base_url"),
-                                site_data.get("special_tracker_domain"),
-                                site_data.get("group"),
-                                site_data.get("cookie"),
-                                site_data.get("passkey"),
+                        # 如果站点在JSON中但不在数据库中，则准备插入
+                        if site_name and site_name not in sites_in_db:
+                            sites_to_insert.append(
+                                (
+                                    site_data.get("site"),
+                                    site_data.get("nickname"),
+                                    site_data.get("base_url"),
+                                    site_data.get("special_tracker_domain"),
+                                    site_data.get("group"),
+                                )
                             )
-                            sites_to_insert.append(insert_tuple)
-                        else:
-                            # --- [核心修正逻辑]: 对于已存在的站点 ---
-                            # 仅从 JSON 更新描述性字段，保留数据库中的 cookie 和 passkey
-                            update_params = (
-                                site_data.get("nickname"),  # 从 JSON 更新
-                                site_data.get("base_url"),  # 从 JSON 更新
-                                site_data.get("special_tracker_domain"),  # 从 JSON 更新
-                                site_data.get("group"),  # 从 JSON 更新
-                                site_name,  # WHERE 条件
-                            )
-                            sites_to_update.append(update_params)
-
-                    ph = self.get_placeholder()
 
                     if sites_to_insert:
-                        logging.info(f"发现 {len(sites_to_insert)} 个新站点，将插入数据库。")
-                        sql_insert = f"INSERT INTO sites (site, nickname, base_url, special_tracker_domain, `group`, cookie, passkey) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})"
-                        cursor.executemany(sql_insert, sites_to_insert)
-
-                    if sites_to_update:
                         logging.info(
-                            f"发现 {len(sites_to_update)} 个已有站点，将更新其信息（凭据将保留）。"
+                            f"发现 {len(sites_to_insert)} 个新站点，将从 {SITES_DATA_FILE} 插入数据库。"
                         )
-                        # [核心修正逻辑] UPDATE 语句不再包含 cookie 和 passkey
-                        sql_update = f"UPDATE sites SET nickname = {ph}, base_url = {ph}, special_tracker_domain = {ph}, `group` = {ph} WHERE site = {ph}"
-                        cursor.executemany(sql_update, sites_to_update)
-
-                    if not sites_to_insert and not sites_to_update:
-                        logging.info("站点数据已是最新，无需改动。")
-
-                    conn.commit()
-                    logging.info("站点数据同步完成。")
+                        ph = self.get_placeholder()
+                        sql_insert = f"INSERT INTO sites (site, nickname, base_url, special_tracker_domain, `group`) VALUES ({ph}, {ph}, {ph}, {ph}, {ph})"
+                        cursor.executemany(sql_insert, sites_to_insert)
+                        conn.commit()
+                        logging.info("新站点数据同步完成。")
+                    else:
+                        logging.info(
+                            f"未发现需要从 {SITES_DATA_FILE} 添加的新站点。数据库中的现有站点信息将被保留。"
+                        )
 
         except Exception as e:
             logging.error(f"同步站点数据时发生错误: {e}", exc_info=True)

@@ -23,6 +23,24 @@ const router = createRouter({
       path: '/settings',
       name: 'settings',
       component: () => import('../views/SettingsView.vue'),
+      redirect: '/settings/downloader',
+      children: [
+        {
+          path: 'downloader',
+          name: 'settings-downloader',
+          component: () => import('../components/settings/DownloaderSettings.vue'),
+        },
+        {
+          path: 'cookie',
+          name: 'settings-cookie',
+          component: () => import('../components/settings/SitesSettings.vue'),
+        },
+        {
+          path: 'indexer',
+          name: 'settings-indexer',
+          component: () => import('../components/settings/IndexerSettings.vue'),
+        },
+      ],
     },
     {
       path: '/cross_seed',
