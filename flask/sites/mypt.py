@@ -1,4 +1,4 @@
-# sites/lucky.py
+# sites/mypt.py
 
 import os
 import traceback
@@ -7,10 +7,12 @@ from loguru import logger
 from utils import cookies_raw2jar, ensure_scheme
 
 
-class LuckyUploader:
+class MyptUploader:
 
     def __init__(self, site_info: dict, upload_data: dict):
         """
+        初始化 Uploader。
+
         :param site_info: 包含站点URL、Cookie等基本信息的字典。
         :param upload_data: 包含待上传种子所有详细信息的字典 (即 upload_payload)。
         """
@@ -18,6 +20,8 @@ class LuckyUploader:
         self.upload_data = upload_data
         self.scraper = cloudscraper.create_scraper()
 
+        # --- [关键修复] ---
+        # 在使用 base_url 之前，先用 ensure_scheme 函数处理它
         base_url = ensure_scheme(self.site_info.get("base_url"))
 
         self.post_url = f"{base_url}/takeupload.php"
@@ -27,70 +31,64 @@ class LuckyUploader:
             "referer": f"{base_url}/upload.php",
             "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
         }
+        # --- 修复结束 ---
 
     def _map_parameters(self) -> dict:
+        # ... 此方法保持您上一版的健壮性代码，无需改动 ...
         """
-        将源站点的参数映射为 lucky 站点所需的表单值。
+        [已重构] 将源站点的参数映射为 mypt 站点所需的表单值。
+        此方法现在能健壮地处理源站信息缺失或值为 None 的情况。
+        :return: 包含映射后选择器值的字典。
         """
         params = self.upload_data.get("source_params", {})
         mapped = {}
         tags = []
 
-        # 类型
+        # 使用 `params.get("键") or "默认值"` 的模式来处理所有可能为 None 的情况
+
+        # 类型 (如果不存在、为None或为空，默认为电影)
         source_type = params.get("类型") or "电影"
         mapped["type"] = "401" if "电影" in source_type else "405"
 
-        # 媒介
+        # 媒介 (如果不存在、为None或为空，默认为 Blu-ray)
         medium_lower = (params.get("媒介") or "bluray").lower()
         if "web" in medium_lower and "dl" in medium_lower:
-            mapped["medium_sel[4]"] = "11"
+            mapped["medium_sel[4]"] = "10"
         elif "blu" in medium_lower:
             mapped["medium_sel[4]"] = "1"
         else:
             mapped["medium_sel[4]"] = "7"  # Remux
 
-        # 编码
-        codec_lower = (params.get("编码") or "H.264").lower()
+        # 编码 (如果不存在、为None或为空，默认为 H.265)
+        codec_lower = (params.get("编码") or "H.265").lower()
         if "264" in codec_lower:
             mapped["codec_sel[4]"] = "1"
         elif "265" in codec_lower:
-            mapped["codec_sel[4]"] = "6"
+            mapped["codec_sel[4]"] = "2"
         else:
-            mapped["codec_sel[4]"] = "1"
+            mapped["codec_sel[4]"] = "7"  # Other
 
-        # 音频编码
-        audio_upper = (params.get("音频编码") or "DTS").upper()
-        if "AAC" in audio_upper:
-            mapped["audiocodec_sel[4]"] = "6"
-        elif "DDP" in audio_upper:
-            mapped["audiocodec_sel[4]"] = "12"
-        else:
-            mapped["audiocodec_sel[4]"] = "7"  # DTS
-
-        # 分辨率
+        # 分辨率 (如果不存在、为None或为空，默认为 1080p)
         resolution = params.get("分辨率") or "1080p"
         if "8K" in resolution:
-            mapped["standard_sel[4]"] = "7"
-        elif "2160" in resolution:
             mapped["standard_sel[4]"] = "6"
+        elif "2160" in resolution:
+            mapped["standard_sel[4]"] = "5"
         elif "1080" in resolution:
-            mapped["standard_sel[4]"] = "1"
+            mapped["standard_sel[4]"] = "2"
         elif "720" in resolution:
             mapped["standard_sel[4]"] = "3"
         elif "480" in resolution:
-            mapped["standard_sel[4]"] = "4"
+            mapped["standard_sel[4]"] = "8"
         else:
-            mapped["standard_sel[4]"] = "8"  # Other
+            mapped["standard_sel[4]"] = "1"  # Other
 
-        # 制作组
-        source_team = params.get("制作组")
-        if source_team and "MTeam" in source_team:
-            mapped["team_sel[4]"] = "1"
-        else:
-            mapped["team_sel[4]"] = "5"
+        # 制作组 (确保有默认值)
+        source_team = params.get("制作组")  # 这个值可能是 None
+        mapped["team_sel[4]"] = "5"
 
         # 标签
-        source_tags = params.get("标签") or []
+        source_tags = params.get("标签") or []  # 确保 source_tags 是一个列表
         if "国语" in source_tags:
             tags.append(5)
         if "中字" in source_type:
@@ -102,9 +100,11 @@ class LuckyUploader:
 
         return mapped
 
+    # ... execute_upload 和 _build_description 方法保持不变 ...
     def _build_description(self) -> str:
         """
         根据 intro 数据构建完整的 BBCode 描述。
+        :return: BBCode 格式的描述字符串。
         """
         intro = self.upload_data.get("intro", {})
         return (
@@ -117,8 +117,9 @@ class LuckyUploader:
     def execute_upload(self):
         """
         执行上传的核心逻辑。
+        :return: 一个元组 (bool, str)，表示成功与否和相关消息。
         """
-        logger.info("正在为 lucky 站点适配上传参数...")
+        logger.info("正在为 mypt 站点适配上传参数...")
 
         try:
             mapped_params = self._map_parameters()
@@ -156,7 +157,7 @@ class LuckyUploader:
 
                 cookie_jar = cookies_raw2jar(cleaned_cookie_str)
 
-                logger.info("正在向 lucky 站点提交发布请求...")
+                logger.info("正在向 mypt 站点提交发布请求...")
                 response = self.scraper.post(
                     self.post_url,
                     headers=self.headers,
@@ -180,11 +181,11 @@ class LuckyUploader:
                 return False, f"发布失败，请检查站点返回信息。 URL: {response.url}"
 
         except Exception as e:
-            logger.error(f"发布到 lucky 站点时发生错误: {e}")
+            logger.error(f"发布到 mypt 站点时发生错误: {e}")
             logger.error(traceback.format_exc())
             return False, f"请求异常: {e}"
 
 
 def upload(site_info: dict, upload_payload: dict):
-    uploader = LuckyUploader(site_info, upload_payload)
+    uploader = MyptUploader(site_info, upload_payload)
     return uploader.execute_upload()

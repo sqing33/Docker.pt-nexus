@@ -14,7 +14,7 @@ import urllib3
 import traceback
 import importlib
 from io import StringIO
-
+from utils import ensure_scheme
 
 # --- 禁用 InsecureRequestWarning 警告 ---
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -32,18 +32,6 @@ class LoguruHandler(StringIO):
         return "\n".join(self.records)
 
 
-def _ensure_scheme(url):
-    """
-    智能处理 URL 字符串，如果缺少协议头则添加 https:// 作为安全默认值。
-    如果 URL 已包含 http:// 或 https://，则保持不变。
-    """
-    if not url:
-        return ""
-    if url.startswith("http://") or url.startswith("https://"):
-        return url
-    return f"https://{url}"
-
-
 class TorrentMigrator:
     """
     一个用于将种子从一个PT站点迁移到另一个站点的工具类。
@@ -54,8 +42,8 @@ class TorrentMigrator:
         self.target_site = target_site_info
         self.search_term = search_term
 
-        self.SOURCE_BASE_URL = _ensure_scheme(self.source_site.get("base_url"))
-        self.TARGET_BASE_URL = _ensure_scheme(self.target_site.get("base_url"))
+        self.SOURCE_BASE_URL = ensure_scheme(self.source_site.get("base_url"))
+        self.TARGET_BASE_URL = ensure_scheme(self.target_site.get("base_url"))
 
         self.SOURCE_NAME = self.source_site["nickname"]
         self.SOURCE_COOKIE = self.source_site["cookie"]
@@ -348,29 +336,26 @@ class TorrentMigrator:
         try:
             self.logger.info("--- [步骤2] 开始发布种子 ---")
 
-            # 从前端接收的数据构造上传所需的参数
-            main_title = upload_data.get("main_title")
-            subtitle = upload_data.get("subtitle")
-            imdb_link = upload_data.get("imdb_link")
-            intro = upload_data.get("intro")
-            mediainfo = upload_data.get("mediainfo")
-            source_params = upload_data.get("source_params")
+            # --- [核心修改] ---
+            # 1. 复制从前端接收的、可编辑的数据。
+            upload_payload = upload_data.copy()
+            # 2. 将后端生成的、不可编辑的种子路径添加到这个 payload 中。
+            upload_payload["modified_torrent_path"] = modified_torrent_path
+            # --- 修改结束 ---
 
             self.logger.info(f"正在加载目标站点上传模块: sites.{self.TARGET_UPLOAD_MODULE}")
             upload_module = importlib.import_module(f"sites.{self.TARGET_UPLOAD_MODULE}")
             self.logger.success("上传模块加载成功！")
 
-            # 调用站点专属的上传函数
+            # --- [核心修改] ---
+            # 调用站点专属的上传函数，现在只传递两个结构化的参数：
+            # 1. site_info: 包含目标站点的配置信息 (URL, Cookie, Passkey等)。
+            # 2. upload_payload: 包含待发布种子的所有信息 (标题, 简介, 种子文件路径等)。
             result, message = upload_module.upload(
                 site_info=self.target_site,
-                source_params=source_params,
-                modified_torrent_path=modified_torrent_path,
-                main_title=main_title,
-                subtitle=subtitle,
-                imdb_link=imdb_link,
-                intro=intro,
-                mediainfo=mediainfo,
+                upload_payload=upload_payload,
             )
+            # --- 修改结束 ---
 
             if result:
                 self.logger.success(f"发布成功！站点消息: {message}")

@@ -1,5 +1,5 @@
 .env
 pt_stats.db
 __pycache__/*
-flask/sites/__pycache__/*
+sites/__pycache__/*
 config.json
