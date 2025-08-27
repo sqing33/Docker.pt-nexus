@@ -1,6 +1,9 @@
 .env
 pt_stats.db
-__pycache__/*
-sites/__pycache__/*
 config.json
 MediaInfo
+__pycache__
+sites/__pycache__
+api/__pycache__
+core/__pycache__
+utils/__pycache__
