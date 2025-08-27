@@ -107,6 +107,7 @@ class XygUploader:
         根据 intro 数据构建完整的 BBCode 描述。
         """
         intro = self.upload_data.get("intro", {})
+
         return (
             f"{intro.get('statement', '')}\n"
             f"{intro.get('poster', '')}\n"
@@ -137,6 +138,9 @@ class XygUploader:
                 "uplver": "yes",
                 **mapped_params,
             }
+
+            with open("output.txt", "w", encoding="utf-8") as file:
+                file.write(self.upload_data.get("mediainfo", ""))
 
             torrent_path = self.upload_data["modified_torrent_path"]
             with open(torrent_path, "rb") as torrent_file:

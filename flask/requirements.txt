@@ -10,3 +10,4 @@ cloudscraper
 beautifulsoup4
 loguru
 bencoder
+pymediainfo

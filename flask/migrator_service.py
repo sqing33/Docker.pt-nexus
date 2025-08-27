@@ -14,7 +14,7 @@ import urllib3
 import traceback
 import importlib
 from io import StringIO
-from utils import ensure_scheme
+from utils import ensure_scheme, upload_data_mediaInfo
 
 # --- 禁用 InsecureRequestWarning 警告 ---
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -252,7 +252,9 @@ class TorrentMigrator:
                 }
 
             mediainfo_pre = soup.select_one("div.spoiler-content pre")
-            mediainfo = mediainfo_pre.get_text(strip=True) if mediainfo_pre else "未找到Mediainfo"
+            mediainfo = upload_data_mediaInfo(
+                mediainfo_pre.get_text(strip=True) if mediainfo_pre else "未找到Mediainfo"
+            )
 
             basic_info_header = soup.find("td", string="基本信息")
             basic_info_dict = {}
