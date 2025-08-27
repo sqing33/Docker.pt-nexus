@@ -5,6 +5,7 @@ import math
 from urllib.parse import urlparse
 from functools import cmp_to_key
 from http.cookies import SimpleCookie
+from pymediainfo import MediaInfo
 
 
 def get_char_type(c):
@@ -110,3 +111,51 @@ def ensure_scheme(url: str, default_scheme: str = "https://") -> str:
     if url.startswith("http://") or url.startswith("https://"):
         return url
     return f"{default_scheme}{url.lstrip('/')}"
+
+
+def upload_data_mediaInfo(mediaInfo: str):
+    """
+    检查 MediaInfo 格式是否符合要求。
+    如果不符合，则尝试使用 MediaInfo 工具从提供的文件路径重新提取。
+    """
+    print("开始检查 MediaInfo 格式")
+
+    # 1. 定义判断格式是否正确的标准
+    required_sections = ["General", "Video", "Audio"]
+    required_keywords = [
+        "Complete name",
+        "Format",
+        "File size",
+        "Duration",
+        "Width",
+        "Height",
+        "Codec ID",
+        "Bit rate",
+        "Channel(s)",
+        "Frame rate",
+    ]
+
+    # 2. 判断格式是否正确
+
+    is_valid = all(section in mediaInfo for section in required_sections) and all(
+        keyword in mediaInfo for keyword in required_keywords
+    )
+
+    if is_valid:
+        print("格式符合要求，验证通过。")
+        return mediaInfo
+
+    else:
+        print(
+            "格式不完整或不正确，尝试使用 MediaInfo 工具从提供的文件路径重新提取 MediaInfo 格式。"
+        )
+        try:
+            file_path = "D:/Code/Docker.pt-nexus/flask/a.mkv"
+            mediainfo_dll_path = "D:/Code/Docker.pt-nexus/flask/MediaInfo/MediaInfo.dll"
+            media_info = MediaInfo.parse(
+                file_path, library_file=mediainfo_dll_path, output="text", full=False
+            )
+            return media_info
+        except Exception as e:
+            print(f"处理文件时出错: {e}")
+            return None
