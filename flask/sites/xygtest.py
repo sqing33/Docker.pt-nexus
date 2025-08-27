@@ -1,4 +1,4 @@
-# sites/lucky.py
+# sites/星陨阁.py
 
 import os
 import traceback
@@ -7,7 +7,7 @@ from loguru import logger
 from utils import cookies_raw2jar, ensure_scheme
 
 
-class LuckyUploader:
+class XygUploader:
 
     def __init__(self, site_info: dict, upload_data: dict):
         """
@@ -30,7 +30,7 @@ class LuckyUploader:
 
     def _map_parameters(self) -> dict:
         """
-        将源站点的参数映射为 lucky 站点所需的表单值。
+        将源站点的参数映射为 星陨阁 站点所需的表单值。
         """
         params = self.upload_data.get("source_params", {})
         mapped = {}
@@ -118,7 +118,7 @@ class LuckyUploader:
         """
         执行上传的核心逻辑。
         """
-        logger.info("正在为 lucky 站点适配上传参数...")
+        logger.info("正在为 星陨阁 站点适配上传参数...")
 
         try:
             mapped_params = self._map_parameters()
@@ -156,7 +156,7 @@ class LuckyUploader:
 
                 cookie_jar = cookies_raw2jar(cleaned_cookie_str)
 
-                logger.info("正在向 lucky 站点提交发布请求...")
+                logger.info("正在向 星陨阁 站点提交发布请求...")
                 response = self.scraper.post(
                     self.post_url,
                     headers=self.headers,
@@ -180,11 +180,11 @@ class LuckyUploader:
                 return False, f"发布失败，请检查站点返回信息。 URL: {response.url}"
 
         except Exception as e:
-            logger.error(f"发布到 lucky 站点时发生错误: {e}")
+            logger.error(f"发布到 星陨阁 站点时发生错误: {e}")
             logger.error(traceback.format_exc())
             return False, f"请求异常: {e}"
 
 
 def upload(site_info: dict, upload_payload: dict):
-    uploader = LuckyUploader(site_info, upload_payload)
+    uploader = XygUploader(site_info, upload_payload)
     return uploader.execute_upload()
