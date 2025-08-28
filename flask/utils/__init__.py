@@ -12,4 +12,4 @@ from .formatters import (
     cookies_raw2jar,
     ensure_scheme,
 )
-from .media_helper import upload_data_mediaInfo
+from .media_helper import upload_data_mediaInfo, upload_data_title

@@ -15,10 +15,8 @@ import traceback
 import importlib
 from io import StringIO
 
-# 从项目根目录的 utils 包导入工具函数
-from utils import ensure_scheme, upload_data_mediaInfo
+from utils import ensure_scheme, upload_data_mediaInfo, upload_data_title
 
-# --- 禁用 InsecureRequestWarning 警告 ---
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
@@ -207,7 +205,16 @@ class TorrentMigrator:
             soup = BeautifulSoup(response.text, "html.parser")
 
             h1_top = soup.select_one("h1#top")
-            main_title = list(h1_top.stripped_strings)[0] if h1_top else "未找到标题"
+            original_main_title = list(h1_top.stripped_strings)[0] if h1_top else "未找到标题"
+            self.logger.info(f"获取到原始主标题: {original_main_title}")
+
+            title_components = upload_data_title(original_main_title)
+            if not title_components:
+                self.logger.warning("主标题解析失败，将使用原始标题作为回退。")
+                title_components = {"主标题": original_main_title, "无法识别": "解析失败"}
+            else:
+                self.logger.success("主标题成功解析为参数。")
+
             subtitle_td = soup.find("td", class_="rowhead", string="副标题")
             subtitle = (
                 subtitle_td.find_next_sibling("td").get_text(strip=True)
@@ -242,10 +249,7 @@ class TorrentMigrator:
                     "screenshots": "\n".join(images[1:]),
                 }
 
-            # --- [核心修改] 智能解析两种 MediaInfo/BDInfo 结构 ---
-            # 1. 首先尝试解析常规的折叠框内的 MediaInfo
             mediainfo_pre = soup.select_one("div.spoiler-content pre")
-            # 2. 如果找不到，则尝试解析另一种直接暴露的 BDInfo 结构
             if not mediainfo_pre:
                 self.logger.info("未找到常规 MediaInfo 结构，尝试解析 BDInfo 结构...")
                 mediainfo_pre = soup.select_one("div.nexus-media-info-raw > pre")
@@ -255,7 +259,6 @@ class TorrentMigrator:
                 if mediainfo_pre
                 else "未找到 Mediainfo 或 BDInfo"
             )
-            # --- 修改结束 ---
 
             basic_info_td = soup.find("td", string="基本信息")
             basic_info_dict = {}
@@ -296,20 +299,23 @@ class TorrentMigrator:
             )
             torrent_response.raise_for_status()
 
-            safe_filename = re.sub(r'[\\/*?:"<>|]', "_", main_title)[:150]
+            safe_filename = re.sub(r'[\\/*?:"<>|]', "_", original_main_title)[:150]
             original_torrent_path = f"{safe_filename}.original.torrent"
             with open(original_torrent_path, "wb") as f:
                 f.write(torrent_response.content)
             self.temp_files.append(original_torrent_path)
 
-            modified_torrent_path = self.modify_torrent_file(original_torrent_path, main_title)
+            modified_torrent_path = self.modify_torrent_file(
+                original_torrent_path, original_main_title
+            )
             if not modified_torrent_path:
                 raise Exception("修改种子文件失败。")
 
             self.logger.info("--- [步骤1] 种子信息获取和解析完成 ---")
             return {
                 "review_data": {
-                    "main_title": main_title,
+                    "original_main_title": original_main_title,
+                    "title_components": title_components,
                     "subtitle": subtitle,
                     "imdb_link": imdb_link,
                     "intro": intro,

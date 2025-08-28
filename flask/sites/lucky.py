@@ -5,6 +5,7 @@ import traceback
 import cloudscraper
 from loguru import logger
 from utils import cookies_raw2jar, ensure_scheme
+import re
 
 
 class LuckyUploader:
@@ -47,7 +48,7 @@ class LuckyUploader:
         elif "blu" in medium_lower:
             mapped["medium_sel[4]"] = "1"
         else:
-            mapped["medium_sel[4]"] = "7"  # Remux
+            mapped["medium_sel[4]"] = "7" 
 
         # 编码
         codec_lower = (params.get("编码") or "H.264").lower()
@@ -65,7 +66,7 @@ class LuckyUploader:
         elif "DDP" in audio_upper:
             mapped["audiocodec_sel[4]"] = "12"
         else:
-            mapped["audiocodec_sel[4]"] = "7"  # DTS
+            mapped["audiocodec_sel[4]"] = "7" 
 
         # 分辨率
         resolution = params.get("分辨率") or "1080p"
@@ -114,6 +115,55 @@ class LuckyUploader:
             f"{intro.get('screenshots', '')}"
         )
 
+    def _build_title(self) -> str:
+        """
+        根据 title_components 参数，按照 lucky 的规则拼接主标题。
+        """
+        components_list = self.upload_data.get("title_components", [])
+        components = {item["key"]: item["value"] for item in components_list if item.get("value")}
+        logger.info(f"开始拼接主标题，源参数: {components}")
+
+        # 主标题拼接顺序
+        order = [
+            "主标题",
+            "年份",
+            "季集",
+            "剧集状态",
+            "发布版本",
+            "分辨率",
+            "媒介",
+            "片源平台",
+            "视频编码",
+            "视频格式",
+            "HDR格式",
+            "色深",
+            "帧率",
+            "音频编码",
+            "无法识别",
+        ]
+
+        title_parts = []
+        for key in order:
+            value = components.get(key)
+            if value:
+                if isinstance(value, list):
+                    title_parts.append(" ".join(map(str, value)))
+                else:
+                    title_parts.append(str(value))
+
+        main_part = ".".join(filter(None, title_parts)).replace(" ", ".")
+
+        release_group = components.get("制作组", "NOGROUP")
+        if "N/A" in release_group:
+            release_group = "NOGROUP"
+
+        final_title = f"{main_part}-{release_group}"
+
+        final_title = re.sub(r"\.{2,}", ".", final_title).strip()
+
+        logger.info(f"拼接完成的主标题: {final_title}")
+        return final_title
+
     def execute_upload(self):
         """
         执行上传的核心逻辑。
@@ -123,10 +173,11 @@ class LuckyUploader:
         try:
             mapped_params = self._map_parameters()
             description = self._build_description()
+            final_main_title = self._build_title()
             logger.info("参数适配完成。")
 
             form_data = {
-                "name": self.upload_data.get("main_title", ""),
+                "name": final_main_title,
                 "small_descr": self.upload_data.get("subtitle", ""),
                 "url": self.upload_data.get("imdb_link", "") or "",
                 "color": "0",

@@ -6,9 +6,7 @@
       <el-step title="核对种子详情" :icon="DocumentChecked" />
       <el-step title="完成发布" :icon="UploadFilled" />
     </el-steps>
-
     <div class="content-card" :class="{ 'narrow-card': activeStep === 0 || activeStep === 2 }">
-      <!-- ... 您现有的 v-if 内容保持不变 ... -->
       <div v-if="activeStep === 0" class="form-container">
         <el-form label-position="top" label-width="100px">
           <el-row :gutter="20">
@@ -68,37 +66,56 @@
             <div class="main-info-container">
               <div class="form-column">
                 <el-form label-position="top" class="fill-height-form">
-                  <el-form-item label="主标题">
-                    <el-input v-model="torrentData.main_title" />
+                  <el-form-item label="原始/待解析标题">
+                    <el-input v-model="torrentData.original_main_title">
+                      <template #append>
+                        <el-button :icon="Refresh" @click="reparseTitle" :loading="isReparsing">
+                          重新解析
+                        </el-button>
+                      </template>
+                    </el-input>
                   </el-form-item>
+
+                  <div class="title-components-grid">
+                    <el-form-item
+                      v-for="param in torrentData.title_components"
+                      :key="param.key"
+                      :label="param.key"
+                    >
+                      <el-input v-model="param.value" />
+                    </el-form-item>
+                  </div>
+
                   <el-form-item label="副标题">
                     <el-input v-model="torrentData.subtitle" />
                   </el-form-item>
                   <el-form-item label="IMDb链接">
                     <el-input v-model="torrentData.imdb_link" />
                   </el-form-item>
-                  <el-form-item label="海报" class="is-flexible">
-                    <el-input type="textarea" v-model="torrentData.intro.poster" :rows="2" />
-                  </el-form-item>
-                  <el-form-item label="声明" class="is-flexible">
-                    <el-input type="textarea" v-model="torrentData.intro.statement" :rows="5" />
+                  <el-form-item label="海报">
+                    <el-input type="textarea" v-model="torrentData.intro.poster" :rows="1" />
                   </el-form-item>
                 </el-form>
               </div>
               <div class="preview-column">
-                <div class="image-preview-pane">
-                  <template v-if="posterImages.length">
-                    <img
-                      v-for="(url, index) in posterImages"
-                      :key="'poster-' + index"
-                      :src="url"
-                      alt="海报预览"
-                      class="preview-image"
-                      style="width: 300px; margin: 0 auto"
-                    />
-                  </template>
-                  <div v-else class="preview-placeholder">海报预览</div>
-                </div>
+                <el-form label-position="top" class="fill-height-form">
+                  <el-form-item label="声明">
+                    <el-input type="textarea" v-model="torrentData.intro.statement" :rows="7" />
+                  </el-form-item>
+                  <div class="image-preview-pane" style="max-height: 400px">
+                    <template v-if="posterImages.length">
+                      <img
+                        v-for="(url, index) in posterImages"
+                        :key="'poster-' + index"
+                        :src="url"
+                        alt="海报预览"
+                        class="preview-image"
+                        style="width: 280px; margin: 0 auto"
+                      />
+                    </template>
+                    <div v-else class="preview-placeholder">海报预览</div>
+                  </div>
+                </el-form>
               </div>
             </div>
           </el-tab-pane>
@@ -115,7 +132,7 @@
               <div class="preview-column">
                 <div class="image-preview-pane">
                   <template v-if="screenshotImages.length"
-                    ><el-scrollbar style="height: 55vh">
+                    ><el-scrollbar style="height: 525px">
                       <img
                         v-for="(url, index) in screenshotImages"
                         :key="'ss-' + index"
@@ -129,7 +146,6 @@
               </div>
             </div>
           </el-tab-pane>
-
           <el-tab-pane label="简介详情" name="intro">
             <el-form label-position="top" class="fill-height-form">
               <el-form-item label="正文" class="is-flexible">
@@ -137,7 +153,6 @@
               </el-form-item>
             </el-form>
           </el-tab-pane>
-
           <el-tab-pane label="媒体信息" name="mediainfo">
             <el-form label-position="top" class="fill-height-form">
               <el-form-item label="Mediainfo" class="is-flexible">
@@ -150,7 +165,6 @@
               </el-form-item>
             </el-form>
           </el-tab-pane>
-
           <el-tab-pane label="源站参数" name="params" class="params-pane">
             <pre class="code-block fill-height-pre">{{
               JSON.stringify(torrentData.source_params, null, 2)
@@ -164,7 +178,6 @@
           </el-button>
         </div>
       </div>
-
       <div v-if="activeStep === 2" class="form-container">
         <el-result
           :icon="finalResult.success ? 'success' : 'error'"
@@ -188,7 +201,6 @@
         </el-result>
       </div>
     </div>
-
     <div v-if="showLogCard" class="log-card-overlay" @click="hideLog"></div>
     <el-card v-if="showLogCard" class="log-card" shadow="xl">
       <template #header>
@@ -206,10 +218,11 @@
 import { ref, onMounted, computed } from 'vue'
 import { ElNotification, ElMessageBox } from 'element-plus'
 import axios from 'axios'
-import { Edit, DocumentChecked, UploadFilled, Close } from '@element-plus/icons-vue'
+import { Edit, DocumentChecked, UploadFilled, Close, Refresh } from '@element-plus/icons-vue'
 
 const getInitialTorrentData = () => ({
-  main_title: '',
+  title_components: [],
+  original_main_title: '',
   subtitle: '',
   imdb_link: '',
   intro: { statement: '', poster: '', body: '', screenshots: '' },
@@ -236,12 +249,37 @@ const torrentData = ref(getInitialTorrentData())
 const taskId = ref(null)
 const finalResult = ref({ success: false, url: '', message: '' })
 const logContent = ref('')
-
 const showLogCard = ref(false)
+const isReparsing = ref(false)
 
 const posterImages = computed(() => parseImageUrls(torrentData.value.intro.poster))
 const screenshotImages = computed(() => parseImageUrls(torrentData.value.intro.screenshots))
 
+// reparseTitle 函数现在接收并赋值一个数组，逻辑本身无需改变
+const reparseTitle = async () => {
+  if (!torrentData.value.original_main_title.trim()) {
+    ElNotification.warning({ title: '提示', message: '标题不能为空' })
+    return
+  }
+  isReparsing.value = true
+  try {
+    const response = await axios.post('/api/utils/parse_title', {
+      title: torrentData.value.original_main_title.trim(),
+    })
+    if (response.data.success) {
+      torrentData.value.title_components = response.data.components
+      ElNotification.success({ title: '成功', message: '标题参数已更新' })
+    } else {
+      ElNotification.error({ title: '解析失败', message: '后端未能解析此标题，请检查格式。' })
+    }
+  } catch (error) {
+    handleApiError(error, '重新解析标题时发生网络错误')
+  } finally {
+    isReparsing.value = false
+  }
+}
+
+// ... (所有其他 script 方法，如 fetchSitesList, handleNextStep, handlePublish 等，都保持不变) ...
 const fetchSitesList = async () => {
   try {
     const response = await axios.get('/api/sites_list')
@@ -576,5 +614,15 @@ onMounted(fetchSitesList)
   font-family: 'Courier New', Courier, monospace;
   font-size: 13px;
   color: #606266;
+}
+
+.title-components-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0 16px;
+}
+
+:deep(.el-form-item) {
+  margin-bottom: 8px;
 }
 </style>
