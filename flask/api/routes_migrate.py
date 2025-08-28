@@ -3,22 +3,14 @@
 import logging
 import uuid
 from flask import Blueprint, jsonify, request
-
-# 从项目根目录导入核心模块
+from utils import upload_data_title
 from core.migrator import TorrentMigrator
 
-# --- Blueprint Setup ---
 migrate_bp = Blueprint("migrate_api", __name__, url_prefix="/api")
 
-# --- 依赖注入占位符 ---
-# db_manager = None
-# config_manager = None
-
-# 用于在迁移步骤之间存储上下文
 MIGRATION_CACHE = {}
 
 
-# --- [新增] 迁移种子 - 步骤1: 获取信息 ---
 @migrate_bp.route("/migrate/fetch_info", methods=["POST"])
 def migrate_fetch_info():
     db_manager = migrate_bp.db_manager
@@ -75,7 +67,6 @@ def migrate_fetch_info():
         return jsonify({"success": False, "logs": f"服务器内部错误: {e}"}), 500
 
 
-# --- [新增] 迁移种子 - 步骤2: 发布 ---
 @migrate_bp.route("/migrate/publish", methods=["POST"])
 def migrate_publish():
     data = request.json
@@ -98,7 +89,6 @@ def migrate_publish():
         del MIGRATION_CACHE[task_id]
 
 
-# --- [旧版] 一步式迁移 API (保留以备兼容) ---
 @migrate_bp.route("/migrate_torrent", methods=["POST"])
 def migrate_torrent():
     """执行一步式种子迁移任务 (不推荐使用)。"""
@@ -140,10 +130,7 @@ def migrate_torrent():
                 404,
             )
 
-        # 注意：旧版的 run() 方法可能不存在于新的 migrator.py 中，这里假设它存在
-        # 如果不存在，这个路由将报错，应引导用户使用新版两步式 API
         migrator = TorrentMigrator(source_info, target_info, search_term)
-        # 假设 migrator 有一个 run() 方法可以一步完成所有事情
         if hasattr(migrator, "run"):
             result = migrator.run()
             return jsonify(result)
@@ -161,3 +148,34 @@ def migrate_torrent():
     except Exception as e:
         logging.error(f"migrate_torrent 发生意外错误: {e}", exc_info=True)
         return jsonify({"success": False, "logs": f"服务器内部错误: {e}"}), 500
+
+
+@migrate_bp.route("/utils/parse_title", methods=["POST"])
+def parse_title_utility():
+    """接收一个标题字符串，返回解析后的参数字典。"""
+    data = request.json
+    title_to_parse = data.get("title")
+
+    if not title_to_parse:
+        return jsonify({"success": False, "error": "标题不能为空。"}), 400
+
+    try:
+        parsed_components = upload_data_title(title_to_parse)
+
+        if not parsed_components:
+            return jsonify(
+                {
+                    "success": False,
+                    "message": "未能从此标题中解析出有效参数。",
+                    "components": {
+                        "主标题": title_to_parse,
+                        "无法识别": "解析失败",
+                    },
+                }
+            )
+
+        return jsonify({"success": True, "components": parsed_components})
+
+    except Exception as e:
+        logging.error(f"parse_title_utility 发生意外错误: {e}", exc_info=True)
+        return jsonify({"success": False, "error": f"服务器内部错误: {e}"}), 500
