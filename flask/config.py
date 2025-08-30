@@ -9,14 +9,14 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# --- 文件和目录路径定义 ---
-# 持久化数据（配置、数据库）的目录
-DATA_DIR = "data"
-os.makedirs(DATA_DIR, exist_ok=True)  # 确保目录存在
-
 # 配置文件路径
+DATA_DIR = "data"
+os.makedirs(DATA_DIR, exist_ok=True)
+
+TEMP_DIR = os.path.join(DATA_DIR, "tmp")
+os.makedirs(TEMP_DIR, exist_ok=True)
+
 CONFIG_FILE = os.path.join(DATA_DIR, "config.json")
-# 站点初始数据文件路径（保留在根目录）
 SITES_DATA_FILE = "sites_data.json"
 
 
@@ -32,7 +32,11 @@ class ConfigManager:
         return {
             "downloaders": [],
             "realtime_speed_enabled": True,
-            "cookiecloud": {"url": "", "key": "", "e2e_password": ""},
+            "cookiecloud": {
+                "url": "",
+                "key": "",
+                "e2e_password": ""
+            },
         }
 
     def load(self):
@@ -47,10 +51,10 @@ class ConfigManager:
                 with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                     self._config = json.load(f)
 
-                # 优雅地处理旧配置文件，为其添加新的默认配置项
                 default_conf = self._get_default_config()
                 if "realtime_speed_enabled" not in self._config:
-                    self._config["realtime_speed_enabled"] = default_conf["realtime_speed_enabled"]
+                    self._config["realtime_speed_enabled"] = default_conf[
+                        "realtime_speed_enabled"]
                 if "cookiecloud" not in self._config:
                     self._config["cookiecloud"] = default_conf["cookiecloud"]
                 elif "e2e_password" not in self._config.get("cookiecloud", {}):
@@ -71,16 +75,14 @@ class ConfigManager:
         """将配置字典保存到 config.json 文件并更新缓存。"""
         logging.info(f"正在将新配置保存到 {CONFIG_FILE}。")
         try:
-            # 创建一个副本，用于保存到文件，以避免修改内存中的配置
             config_to_save = copy.deepcopy(config_data)
-            # 不将端到端加密密码明文保存到 config.json
-            if "cookiecloud" in config_to_save and "e2e_password" in config_to_save["cookiecloud"]:
+            if "cookiecloud" in config_to_save and "e2e_password" in config_to_save[
+                    "cookiecloud"]:
                 config_to_save["cookiecloud"]["e2e_password"] = ""
 
             with open(CONFIG_FILE, "w", encoding="utf-8") as f:
                 json.dump(config_to_save, f, ensure_ascii=False, indent=4)
 
-            # 更新内存中的配置（包含密码等敏感信息）
             self._config = config_data
             return True
         except IOError as e:
@@ -107,7 +109,8 @@ def get_db_config():
         try:
             mysql_config["port"] = int(mysql_config["port"])
         except (ValueError, TypeError):
-            logging.error(f"关键错误: MYSQL_PORT ('{mysql_config['port']}') 不是一个有效的整数！")
+            logging.error(
+                f"关键错误: MYSQL_PORT ('{mysql_config['port']}') 不是一个有效的整数！")
             sys.exit(1)
         logging.info("MySQL 配置验证通过。")
         return {"db_type": "mysql", "mysql": mysql_config}
@@ -123,5 +126,4 @@ def get_db_config():
         return {"db_type": "sqlite", "path": db_path}
 
 
-# 创建一个全局实例供整个应用使用
 config_manager = ConfigManager()

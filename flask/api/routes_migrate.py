@@ -3,7 +3,7 @@
 import logging
 import uuid
 from flask import Blueprint, jsonify, request
-from utils import upload_data_title
+from utils import upload_data_title, upload_data_screenshot
 from core.migrator import TorrentMigrator
 
 migrate_bp = Blueprint("migrate_api", __name__, url_prefix="/api")
@@ -30,16 +30,18 @@ def migrate_fetch_info():
 
         if not source_info or not source_info.get("cookie"):
             return (
-                jsonify(
-                    {"success": False, "logs": f"错误：源站点 '{source_site_name}' 配置不完整。"}
-                ),
+                jsonify({
+                    "success": False,
+                    "logs": f"错误：源站点 '{source_site_name}' 配置不完整。"
+                }),
                 404,
             )
         if not target_info or not target_info.get("passkey"):
             return (
-                jsonify(
-                    {"success": False, "logs": f"错误：目标站点 '{target_site_name}' 配置不完整。"}
-                ),
+                jsonify({
+                    "success": False,
+                    "logs": f"错误：目标站点 '{target_site_name}' 配置不完整。"
+                }),
                 404,
             )
 
@@ -52,16 +54,17 @@ def migrate_fetch_info():
                 "migrator": migrator,
                 "modified_torrent_path": result["modified_torrent_path"],
             }
-            return jsonify(
-                {
-                    "success": True,
-                    "task_id": task_id,
-                    "data": result["review_data"],
-                    "logs": result["logs"],
-                }
-            )
+            return jsonify({
+                "success": True,
+                "task_id": task_id,
+                "data": result["review_data"],
+                "logs": result["logs"],
+            })
         else:
-            return jsonify({"success": False, "logs": result.get("logs", "未知错误")})
+            return jsonify({
+                "success": False,
+                "logs": result.get("logs", "未知错误")
+            })
     except Exception as e:
         logging.error(f"migrate_fetch_info 发生意外错误: {e}", exc_info=True)
         return jsonify({"success": False, "logs": f"服务器内部错误: {e}"}), 500
@@ -76,14 +79,20 @@ def migrate_publish():
         return jsonify({"success": False, "logs": "错误：无效或已过期的任务ID。"}), 400
 
     context = MIGRATION_CACHE[task_id]
-    migrator, modified_torrent_path = context["migrator"], context["modified_torrent_path"]
+    migrator, modified_torrent_path = context["migrator"], context[
+        "modified_torrent_path"]
 
     try:
-        result = migrator.publish_prepared_torrent(upload_data, modified_torrent_path)
+        result = migrator.publish_prepared_torrent(upload_data,
+                                                   modified_torrent_path)
         return jsonify(result)
     except Exception as e:
         logging.error(f"migrate_publish 发生意外错误: {e}", exc_info=True)
-        return jsonify({"success": False, "logs": f"服务器内部错误: {e}", "url": None}), 500
+        return jsonify({
+            "success": False,
+            "logs": f"服务器内部错误: {e}",
+            "url": None
+        }), 500
     finally:
         migrator.cleanup()
         del MIGRATION_CACHE[task_id]
@@ -111,22 +120,23 @@ def migrate_torrent():
 
         if not source_info or not source_info.get("cookie"):
             return (
-                jsonify(
-                    {
-                        "success": False,
-                        "logs": f"错误：未找到源站点 '{source_site_name}' 或其缺少 Cookie 配置。",
-                    }
-                ),
+                jsonify({
+                    "success":
+                    False,
+                    "logs":
+                    f"错误：未找到源站点 '{source_site_name}' 或其缺少 Cookie 配置。",
+                }),
                 404,
             )
-        if not target_info or not target_info.get("cookie") or not target_info.get("passkey"):
+        if not target_info or not target_info.get(
+                "cookie") or not target_info.get("passkey"):
             return (
-                jsonify(
-                    {
-                        "success": False,
-                        "logs": f"错误：未找到目标站点 '{target_site_name}' 或其缺少 Cookie/Passkey 配置。",
-                    }
-                ),
+                jsonify({
+                    "success":
+                    False,
+                    "logs":
+                    f"错误：未找到目标站点 '{target_site_name}' 或其缺少 Cookie/Passkey 配置。",
+                }),
                 404,
             )
 
@@ -136,12 +146,10 @@ def migrate_torrent():
             return jsonify(result)
         else:
             return (
-                jsonify(
-                    {
-                        "success": False,
-                        "logs": "错误：此服务器不支持一步式迁移，请使用新版迁移工具。",
-                    }
-                ),
+                jsonify({
+                    "success": False,
+                    "logs": "错误：此服务器不支持一步式迁移，请使用新版迁移工具。",
+                }),
                 501,
             )
 
@@ -163,19 +171,39 @@ def parse_title_utility():
         parsed_components = upload_data_title(title_to_parse)
 
         if not parsed_components:
-            return jsonify(
-                {
-                    "success": False,
-                    "message": "未能从此标题中解析出有效参数。",
-                    "components": {
-                        "主标题": title_to_parse,
-                        "无法识别": "解析失败",
-                    },
-                }
-            )
+            return jsonify({
+                "success": False,
+                "message": "未能从此标题中解析出有效参数。",
+                "components": {
+                    "主标题": title_to_parse,
+                    "无法识别": "解析失败",
+                },
+            })
 
         return jsonify({"success": True, "components": parsed_components})
 
     except Exception as e:
         logging.error(f"parse_title_utility 发生意外错误: {e}", exc_info=True)
         return jsonify({"success": False, "error": f"服务器内部错误: {e}"}), 500
+
+
+@migrate_bp.route("/media/validate", methods=["POST"])
+def validate_media():
+    """接收前端发送的失效图片信息。"""
+    if not request.is_json:
+        return jsonify({"success": False, "message": "请求格式错误，需要JSON。"}), 400
+
+    data = request.get_json()
+
+    image_type = data.get("type")  # e.g., 'poster', 'screenshot_batch'
+    source_info = data.get("source_info")
+
+    # 记录日志，方便调试
+    logging.warning(f"收到失效图片报告 - 类型: {image_type}, "
+                    f"来源信息: {source_info}")
+    if image_type == "screenshot":
+        screenshots = upload_data_screenshot(image_type, source_info)
+        return jsonify({"success": True, "screenshots": screenshots}), 200
+    else:
+        print("上传海报功能尚未实现。")
+        return jsonify({"success": False, "message": "上传海报功能尚未实现。"}), 501

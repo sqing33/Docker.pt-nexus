@@ -14,7 +14,7 @@ import urllib3
 import traceback
 import importlib
 from io import StringIO
-
+from config import TEMP_DIR
 from utils import ensure_scheme, upload_data_mediaInfo, upload_data_title
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -61,9 +61,9 @@ class TorrentMigrator:
         self.log_handler = LoguruHandler()
         self.logger = logger
         self.logger.remove()
-        self.logger.add(
-            self.log_handler, format="{time:HH:mm:ss} - {level} - {message}", level="DEBUG"
-        )
+        self.logger.add(self.log_handler,
+                        format="{time:HH:mm:ss} - {level} - {message}",
+                        level="DEBUG")
 
     def cleanup(self):
         """清理所有临时文件"""
@@ -84,7 +84,8 @@ class TorrentMigrator:
             elif child.name == "br":
                 content.append("\n")
             elif child.name == "fieldset":
-                content.append(f"[quote]{self._html_to_bbcode(child).strip()}[/quote]")
+                content.append(
+                    f"[quote]{self._html_to_bbcode(child).strip()}[/quote]")
             elif child.name == "legend":
                 continue
             elif child.name == "b":
@@ -92,17 +93,18 @@ class TorrentMigrator:
             elif child.name == "img" and child.get("src"):
                 content.append(f"[img]{child['src']}[/img]")
             elif child.name == "a" and child.get("href"):
-                content.append(f"[url={child['href']}]{self._html_to_bbcode(child)}[/url]")
-            elif (
-                child.name == "span"
-                and child.get("style")
-                and (match := re.search(r"color:\s*([^;]+)", child["style"]))
-            ):
+                content.append(
+                    f"[url={child['href']}]{self._html_to_bbcode(child)}[/url]"
+                )
+            elif (child.name == "span" and child.get("style") and
+                  (match := re.search(r"color:\s*([^;]+)", child["style"]))):
                 content.append(
                     f"[color={match.group(1).strip()}]{self._html_to_bbcode(child)}[/color]"
                 )
             elif child.name == "font" and child.get("size"):
-                content.append(f"[size={child['size']}]{self._html_to_bbcode(child)}[/size]")
+                content.append(
+                    f"[size={child['size']}]{self._html_to_bbcode(child)}[/size]"
+                )
             else:
                 content.append(self._html_to_bbcode(child))
         return "".join(content)
@@ -112,22 +114,19 @@ class TorrentMigrator:
         params = {"incldead": "1", "search": torrent_name, "search_area": "0"}
         self.logger.info(f"正在源站 '{self.SOURCE_NAME}' 搜索种子: '{torrent_name}'")
         try:
-            response = self.scraper.get(
-                search_url, headers={"Cookie": self.SOURCE_COOKIE}, params=params, timeout=60
-            )
+            response = self.scraper.get(search_url,
+                                        headers={"Cookie": self.SOURCE_COOKIE},
+                                        params=params,
+                                        timeout=60)
             response.raise_for_status()
             response.encoding = "utf-8"
             self.logger.success("搜索请求成功！")
             soup = BeautifulSoup(response.text, "html.parser")
             link = soup.find("a", title=torrent_name) or soup.select_one(
-                'table.torrentname a[href*="details.php?id="]'
-            )
-            if (
-                isinstance(link, Tag)
-                and (href := link.get("href"))
-                and isinstance(href, str)
-                and (match := re.search(r"id=(\d+)", href))
-            ):
+                'table.torrentname a[href*="details.php?id="]')
+            if (isinstance(link, Tag) and (href := link.get("href"))
+                    and isinstance(href, str)
+                    and (match := re.search(r"id=(\d+)", href))):
                 torrent_id = match.group(1)
                 self.logger.success(f"成功找到种子ID: {torrent_id}")
                 return torrent_id
@@ -147,12 +146,12 @@ class TorrentMigrator:
             decoded_torrent[b"announce"] = new_tracker_url_str.encode("utf-8")
             self.logger.info(f"将设置新的 Tracker URL 为: {new_tracker_url_str}")
             for key in [
-                b"announce-list",
-                b"comment",
-                b"publisher",
-                b"publisher.utf-8",
-                b"publisher-url",
-                b"publisher-url.utf-8",
+                    b"announce-list",
+                    b"comment",
+                    b"publisher",
+                    b"publisher.utf-8",
+                    b"publisher-url",
+                    b"publisher-url.utf-8",
             ]:
                 if key in decoded_torrent:
                     del decoded_torrent[key]
@@ -168,14 +167,16 @@ class TorrentMigrator:
                 return None
             modified_content = bencoder.encode(decoded_torrent)
             safe_filename = re.sub(r'[\\/*?:"<>|]', "_", main_title)[:150]
-            modified_path = f"{safe_filename}.modified.torrent"
+            modified_path = os.path.join(TEMP_DIR,
+                                         f"{safe_filename}.modified.torrent")
             with open(modified_path, "wb") as f:
                 f.write(modified_content)
             self.logger.success(f"已成功生成新的种子文件: {modified_path}")
             self.temp_files.append(modified_path)
             return modified_path
         except Exception as e:
-            self.logger.opt(exception=True).error(f"修改 .torrent 文件时发生严重错误: {e}")
+            self.logger.opt(
+                exception=True).error(f"修改 .torrent 文件时发生严重错误: {e}")
             return None
 
     def prepare_for_upload(self):
@@ -184,11 +185,8 @@ class TorrentMigrator:
             self.logger.info(
                 f"--- [步骤1] 开始获取种子信息 (源: {self.SOURCE_NAME}, 目标: {self.target_site['nickname']}) ---"
             )
-            torrent_id = (
-                self.search_term
-                if self.search_term.isdigit()
-                else self.search_and_get_torrent_id(self.search_term)
-            )
+            torrent_id = (self.search_term if self.search_term.isdigit() else
+                          self.search_and_get_torrent_id(self.search_term))
             if not torrent_id:
                 raise Exception("未能获取到种子ID，请检查种子名称或ID是否正确。")
 
@@ -196,16 +194,22 @@ class TorrentMigrator:
             response = self.scraper.get(
                 f"{self.SOURCE_BASE_URL}/details.php",
                 headers={"Cookie": self.SOURCE_COOKIE},
-                params={"id": torrent_id, "hit": "1"},
+                params={
+                    "id": torrent_id,
+                    "hit": "1"
+                },
                 timeout=60,
             )
             response.raise_for_status()
             response.encoding = "utf-8"
+
             self.logger.success("详情页请求成功！")
+
             soup = BeautifulSoup(response.text, "html.parser")
 
             h1_top = soup.select_one("h1#top")
-            original_main_title = list(h1_top.stripped_strings)[0] if h1_top else "未找到标题"
+            original_main_title = list(
+                h1_top.stripped_strings)[0] if h1_top else "未找到标题"
             self.logger.info(f"获取到原始主标题: {original_main_title}")
 
             title_components = upload_data_title(original_main_title)
@@ -215,33 +219,37 @@ class TorrentMigrator:
             else:
                 self.logger.success("主标题成功解析为参数。")
 
-            subtitle_td = soup.find("td", class_="rowhead", string="副标题")
-            subtitle = (
-                subtitle_td.find_next_sibling("td").get_text(strip=True)
-                if subtitle_td and subtitle_td.find_next_sibling("td")
-                else ""
-            )
+            subtitle_td = soup.find(
+                lambda tag: tag.name == 'td' and '副标题' in tag.get_text())
+            subtitle = (subtitle_td.find_next_sibling("td").get_text(
+                strip=True) if subtitle_td
+                        and subtitle_td.find_next_sibling("td") else "")
             descr_container = soup.select_one("div#kdescr")
+
             imdb_link = ""
-            if descr_container and (
-                imdb_match := re.search(
-                    r"(https?://www\.imdb\.com/title/tt\d+)", descr_container.get_text()
-                )
-            ):
+            if descr_container and (imdb_match := re.search(
+                    r"(https?://www\.imdb\.com/title/tt\d+)",
+                    descr_container.get_text())):
                 imdb_link = imdb_match.group(1)
 
             intro = {}
             if descr_container:
+                descr_html_string = str(descr_container)
+
+                corrected_descr_html = re.sub(r'(<img[^>]*[^/])>', r'\1 />',
+                                              descr_html_string)
+
+                descr_container = BeautifulSoup(corrected_descr_html,
+                                                "html.parser")
+
                 bbcode = self._html_to_bbcode(descr_container)
-                quotes = re.findall(r"\[quote\].*?\[/quote\]", bbcode, re.DOTALL)
+                quotes = re.findall(r"\[quote\].*?\[/quote\]", bbcode,
+                                    re.DOTALL)
                 images = re.findall(r"\[img\].*?\[/img\]", bbcode)
-                body = (
-                    re.sub(
-                        r"\[quote\].*?\[/quote\]|\[img\].*?\[/img\]", "", bbcode, flags=re.DOTALL
-                    )
-                    .replace("\r", "")
-                    .strip()
-                )
+                body = (re.sub(r"\[quote\].*?\[/quote\]|\[img\].*?\[/img\]",
+                               "",
+                               bbcode,
+                               flags=re.DOTALL).replace("\r", "").strip())
                 intro = {
                     "statement": "\n".join(quotes),
                     "poster": images[0] if images else "",
@@ -252,18 +260,18 @@ class TorrentMigrator:
             mediainfo_pre = soup.select_one("div.spoiler-content pre")
             if not mediainfo_pre:
                 self.logger.info("未找到常规 MediaInfo 结构，尝试解析 BDInfo 结构...")
-                mediainfo_pre = soup.select_one("div.nexus-media-info-raw > pre")
+                mediainfo_pre = soup.select_one(
+                    "div.nexus-media-info-raw > pre")
 
             mediainfo = upload_data_mediaInfo(
-                mediainfo_pre.get_text(strip=True)
-                if mediainfo_pre
-                else "未找到 Mediainfo 或 BDInfo"
-            )
+                mediainfo_pre.get_text(
+                    strip=True) if mediainfo_pre else "未找到 Mediainfo 或 BDInfo")
 
             basic_info_td = soup.find("td", string="基本信息")
             basic_info_dict = {}
             if basic_info_td and basic_info_td.find_next_sibling("td"):
-                strings = list(basic_info_td.find_next_sibling("td").stripped_strings)
+                strings = list(
+                    basic_info_td.find_next_sibling("td").stripped_strings)
                 basic_info_dict = {
                     s.replace(":", "").strip(): strings[i + 1]
                     for i, s in enumerate(strings)
@@ -271,25 +279,33 @@ class TorrentMigrator:
                 }
 
             tags_td = soup.find("td", string="标签")
-            tags = (
-                [s.get_text(strip=True) for s in tags_td.find_next_sibling("td").find_all("span")]
-                if tags_td and tags_td.find_next_sibling("td")
-                else []
-            )
+            tags = ([
+                s.get_text(strip=True)
+                for s in tags_td.find_next_sibling("td").find_all("span")
+            ] if tags_td and tags_td.find_next_sibling("td") else [])
 
             type_text = basic_info_dict.get("类型", "")
             type_match = re.search(r"[\(（](.*?)[\)）]", type_text)
             source_params = {
-                "类型": type_match.group(1) if type_match else type_text.split("/")[-1],
-                "媒介": basic_info_dict.get("媒介"),
-                "编码": basic_info_dict.get("编码"),
-                "音频编码": basic_info_dict.get("音频编码"),
-                "分辨率": basic_info_dict.get("分辨率"),
-                "制作组": basic_info_dict.get("制作组"),
-                "标签": tags,
+                "类型":
+                type_match.group(1)
+                if type_match else type_text.split("/")[-1],
+                "媒介":
+                basic_info_dict.get("媒介"),
+                "编码":
+                basic_info_dict.get("编码"),
+                "音频编码":
+                basic_info_dict.get("音频编码"),
+                "分辨率":
+                basic_info_dict.get("分辨率"),
+                "制作组":
+                basic_info_dict.get("制作组"),
+                "标签":
+                tags,
             }
 
-            download_link_tag = soup.select_one(f'a.index[href^="download.php?id={torrent_id}"]')
+            download_link_tag = soup.select_one(
+                f'a.index[href^="download.php?id={torrent_id}"]')
             if not download_link_tag:
                 raise Exception("在详情页未找到种子下载链接。")
             torrent_response = self.scraper.get(
@@ -299,15 +315,15 @@ class TorrentMigrator:
             )
             torrent_response.raise_for_status()
 
-            safe_filename = re.sub(r'[\\/*?:"<>|]', "_", original_main_title)[:150]
+            safe_filename = re.sub(r'[\\/*?:"<>|]', "_",
+                                   original_main_title)[:150]
             original_torrent_path = f"{safe_filename}.original.torrent"
             with open(original_torrent_path, "wb") as f:
                 f.write(torrent_response.content)
             self.temp_files.append(original_torrent_path)
 
             modified_torrent_path = self.modify_torrent_file(
-                original_torrent_path, original_main_title
-            )
+                original_torrent_path, original_main_title)
             if not modified_torrent_path:
                 raise Exception("修改种子文件失败。")
 
@@ -338,13 +354,14 @@ class TorrentMigrator:
             upload_payload = upload_data.copy()
             upload_payload["modified_torrent_path"] = modified_torrent_path
 
-            self.logger.info(f"正在加载目标站点上传模块: sites.{self.TARGET_UPLOAD_MODULE}")
-            upload_module = importlib.import_module(f"sites.{self.TARGET_UPLOAD_MODULE}")
+            self.logger.info(
+                f"正在加载目标站点上传模块: sites.{self.TARGET_UPLOAD_MODULE}")
+            upload_module = importlib.import_module(
+                f"sites.{self.TARGET_UPLOAD_MODULE}")
             self.logger.success("上传模块加载成功！")
 
             result, message = upload_module.upload(
-                site_info=self.target_site, upload_payload=upload_payload
-            )
+                site_info=self.target_site, upload_payload=upload_payload)
             if result:
                 self.logger.success(f"发布成功！站点消息: {message}")
             else:
@@ -352,11 +369,20 @@ class TorrentMigrator:
 
             self.logger.info("--- [步骤2] 任务执行完毕 ---")
             final_url = None
-            if url_match := re.search(r"(https?://[^\s]+details\.php\?id=\d+)", str(message)):
+            if url_match := re.search(r"(https?://[^\s]+details\.php\?id=\d+)",
+                                      str(message)):
                 final_url = url_match.group(1)
 
-            return {"success": result, "logs": self.log_handler.get_logs(), "url": final_url}
+            return {
+                "success": result,
+                "logs": self.log_handler.get_logs(),
+                "url": final_url
+            }
         except Exception as e:
             self.logger.error(f"发布过程中发生致命错误: {e}")
             self.logger.debug(traceback.format_exc())
-            return {"success": False, "logs": self.log_handler.get_logs(), "url": None}
+            return {
+                "success": False,
+                "logs": self.log_handler.get_logs(),
+                "url": None
+            }

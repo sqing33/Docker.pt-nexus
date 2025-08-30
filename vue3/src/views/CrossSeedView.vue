@@ -111,6 +111,7 @@
                         alt="海报预览"
                         class="preview-image"
                         style="width: 280px; margin: 0 auto"
+                        @error="handleImageError(url, 'poster', index)"
                       />
                     </template>
                     <div v-else class="preview-placeholder">海报预览</div>
@@ -139,6 +140,7 @@
                         :src="url"
                         alt="截图预览"
                         class="preview-image"
+                        @error="handleImageError(url, 'screenshot', index)"
                     /></el-scrollbar>
                   </template>
                   <div v-else class="preview-placeholder">截图预览</div>
@@ -230,7 +232,7 @@ const getInitialTorrentData = () => ({
   source_params: {},
 })
 
-const parseImageUrls = (text) => {
+const parseImageUrls = (text: string) => {
   if (!text || typeof text !== 'string') return []
   const regex = /\[img\](https?:\/\/[^\s[\]]+)\[\/img\]/gi
   const matches = [...text.matchAll(regex)]
@@ -241,9 +243,9 @@ const activeStep = ref(0)
 const activeTab = ref('main')
 const sourceSitesList = ref([])
 const targetSitesList = ref([])
-const sourceSite = ref('铂金学院')
+const sourceSite = ref('财神')
 const targetSite = ref('星陨阁-测试站')
-const searchTerm = ref('Sunset Boulevard 1950 2160p UHD BluRay x265 DV HDR TrueHD 5.1 mUHD-FRDS')
+const searchTerm = ref('Peggy Sue Got Married 1986 1080p FRA BluRay REMUX AVC DTS-HD MA 5.1-Mist@Sunny')
 const isLoading = ref(false)
 const torrentData = ref(getInitialTorrentData())
 const taskId = ref(null)
@@ -251,31 +253,51 @@ const finalResult = ref({ success: false, url: '', message: '' })
 const logContent = ref('')
 const showLogCard = ref(false)
 const isReparsing = ref(false)
-
+const reportedFailedScreenshots = ref(false)
 const posterImages = computed(() => parseImageUrls(torrentData.value.intro.poster))
 const screenshotImages = computed(() => parseImageUrls(torrentData.value.intro.screenshots))
 
-// reparseTitle 函数现在接收并赋值一个数组，逻辑本身无需改变
-const reparseTitle = async () => {
-  if (!torrentData.value.original_main_title.trim()) {
-    ElNotification.warning({ title: '提示', message: '标题不能为空' })
+const handleImageError = async (url: string, type: 'poster' | 'screenshot', index: number) => {
+  if (type === 'screenshot' && reportedFailedScreenshots.value) {
     return
   }
-  isReparsing.value = true
-  try {
-    const response = await axios.post('/api/utils/parse_title', {
-      title: torrentData.value.original_main_title.trim(),
+
+  console.error(`图片加载失败: 类型=${type}, URL=${url}, 索引=${index}`)
+
+  if (type === 'screenshot') {
+    reportedFailedScreenshots.value = true
+    ElNotification.warning({
+      title: '截图失效',
+      message: '检测到截图链接失效，正在尝试从视频重新生成...',
     })
-    if (response.data.success) {
-      torrentData.value.title_components = response.data.components
-      ElNotification.success({ title: '成功', message: '标题参数已更新' })
+  }
+
+  const payload = {
+    type: type === 'screenshot' ? 'screenshot' : 'poster',
+    source_info: {
+      main_title: torrentData.value.original_main_title,
+      source_site: sourceSite.value,
+    },
+  }
+
+  try {
+    // --- [核心修改] ---
+    const response = await axios.post('/api/media/validate', payload)
+    
+    // 如果请求成功，并且是截图失效的请求，并且后端返回了新的截图链接
+    if (response.data.success && type === 'screenshot' && response.data.screenshots) {
+      console.log('成功从后端获取了新的截图链接。');
+      // 用后端返回的新链接更新前端的数据模型
+      torrentData.value.intro.screenshots = response.data.screenshots;
+      ElNotification.success({
+        title: '截图已更新',
+        message: '已成功生成并加载了新的截图。',
+      });
     } else {
-      ElNotification.error({ title: '解析失败', message: '后端未能解析此标题，请检查格式。' })
+      console.log(`已成功将失效 ${type} 信息报告给后端。`)
     }
   } catch (error) {
-    handleApiError(error, '重新解析标题时发生网络错误')
-  } finally {
-    isReparsing.value = false
+    console.error('发送失效图片信息请求时发生网络错误:', error)
   }
 }
 
@@ -291,6 +313,8 @@ const fetchSitesList = async () => {
 }
 
 const handleNextStep = async () => {
+  reportedFailedScreenshots.value = false
+
   if (!sourceSite.value || !targetSite.value || !searchTerm.value.trim()) {
     ElNotification.warning({ title: '提示', message: '请填写所有必填项' })
     return
