@@ -15,18 +15,16 @@ MIGRATION_CACHE = {}
 def migrate_fetch_info():
     db_manager = migrate_bp.db_manager
     data = request.json
-    source_site_name, target_site_name, search_term = (
+    source_site_name, search_term = (
         data.get("sourceSite"),
-        data.get("targetSite"),
         data.get("searchTerm"),
     )
 
-    if not all([source_site_name, target_site_name, search_term]):
-        return jsonify({"success": False, "logs": "错误：源站点、目标站点和搜索词不能为空。"}), 400
+    if not all([source_site_name, search_term]):
+        return jsonify({"success": False, "logs": "错误：源站点和搜索词不能为空。"}), 400
 
     try:
         source_info = db_manager.get_site_by_nickname(source_site_name)
-        target_info = db_manager.get_site_by_nickname(target_site_name)
 
         if not source_info or not source_info.get("cookie"):
             return (
@@ -36,17 +34,8 @@ def migrate_fetch_info():
                 }),
                 404,
             )
-        if not target_info or not target_info.get("passkey"):
-            return (
-                jsonify({
-                    "success": False,
-                    "logs": f"错误：目标站点 '{target_site_name}' 配置不完整。"
-                }),
-                404,
-            )
 
         source_role = source_info.get("migration", 0)
-        target_role = target_info.get("migration", 0)
 
         if source_role not in [1, 3]:
             return (
@@ -54,26 +43,23 @@ def migrate_fetch_info():
                     "success": False,
                     "logs": f"错误：站点 '{source_site_name}' 不允许作为源站点进行迁移。"
                 }),
-                403, 
+                403,
             )
 
-        if target_role not in [2, 3]:
-            return (
-                jsonify({
-                    "success": False,
-                    "logs": f"错误：站点 '{target_site_name}' 不允许作为目标站点进行迁移。"
-                }),
-                403, 
-            )
-
-        migrator = TorrentMigrator(source_info, target_info, search_term)
-        result = migrator.prepare_for_upload()
+        # 初始化 Migrator 时不传入目标站点信息
+        migrator = TorrentMigrator(source_site_info=source_info,
+                                   target_site_info=None,
+                                   search_term=search_term)
+        # 调用只获取信息和原始种子的方法
+        result = migrator.prepare_review_data()
 
         if "review_data" in result:
             task_id = str(uuid.uuid4())
+            # 缓存必要信息，而不是整个 migrator 实例
             MIGRATION_CACHE[task_id] = {
-                "migrator": migrator,
-                "modified_torrent_path": result["modified_torrent_path"],
+                "source_info": source_info,
+                "original_torrent_path": result["original_torrent_path"],
+                "review_data": result["review_data"],
             }
             return jsonify({
                 "success": True,
@@ -93,30 +79,60 @@ def migrate_fetch_info():
 
 @migrate_bp.route("/migrate/publish", methods=["POST"])
 def migrate_publish():
+    db_manager = migrate_bp.db_manager
     data = request.json
-    task_id, upload_data = data.get("task_id"), data.get("upload_data")
+    task_id, upload_data, target_site_name = (data.get("task_id"),
+                                              data.get("upload_data"),
+                                              data.get("targetSite"))
 
     if not task_id or task_id not in MIGRATION_CACHE:
         return jsonify({"success": False, "logs": "错误：无效或已过期的任务ID。"}), 400
 
+    if not target_site_name:
+        return jsonify({"success": False, "logs": "错误：必须提供目标站点名称。"}), 400
+
     context = MIGRATION_CACHE[task_id]
-    migrator, modified_torrent_path = context["migrator"], context[
-        "modified_torrent_path"]
+    migrator = None  # 确保在 finally 中可用
 
     try:
+        target_info = db_manager.get_site_by_nickname(target_site_name)
+        if not target_info or not target_info.get("passkey"):
+            return jsonify({
+                "success": False,
+                "logs": f"错误: 目标站点 '{target_site_name}' 配置不完整。"
+            }), 404
+
+        source_info = context["source_info"]
+        original_torrent_path = context["original_torrent_path"]
+
+        # 动态创建针对本次发布的 Migrator 实例
+        migrator = TorrentMigrator(source_info, target_info)
+
+        # 1. 修改种子文件
+        main_title = upload_data.get("original_main_title", "torrent")
+        modified_torrent_path = migrator.modify_torrent_file(
+            original_torrent_path, main_title)
+        if not modified_torrent_path:
+            raise Exception("修改种子文件失败。")
+
+        # 2. 发布
         result = migrator.publish_prepared_torrent(upload_data,
                                                    modified_torrent_path)
         return jsonify(result)
+
     except Exception as e:
-        logging.error(f"migrate_publish 发生意外错误: {e}", exc_info=True)
+        logging.error(f"migrate_publish to {target_site_name} 发生意外错误: {e}",
+                      exc_info=True)
         return jsonify({
             "success": False,
             "logs": f"服务器内部错误: {e}",
             "url": None
         }), 500
     finally:
-        migrator.cleanup()
-        del MIGRATION_CACHE[task_id]
+        if migrator:
+            migrator.cleanup()
+        # 注意：此处不删除 MIGRATION_CACHE[task_id]，因为它可能被用于发布到其他站点。
+        # 建议设置一个独立的定时任务来清理过期的缓存。
 
 
 @migrate_bp.route("/migrate_torrent", methods=["POST"])

@@ -43,15 +43,17 @@ class TorrentMigrator:
         self.search_term = search_term
 
         self.SOURCE_BASE_URL = ensure_scheme(self.source_site.get("base_url"))
-        self.TARGET_BASE_URL = ensure_scheme(self.target_site.get("base_url"))
-
         self.SOURCE_NAME = self.source_site["nickname"]
         self.SOURCE_COOKIE = self.source_site["cookie"]
-        self.TARGET_COOKIE = self.target_site.get("cookie")
-        self.TARGET_PASSKEY = self.target_site.get("passkey")
-        self.TARGET_UPLOAD_MODULE = self.target_site["site"]
 
-        self.TARGET_TRACKER_URL = f"{self.TARGET_BASE_URL}/announce.php"
+        # 只有在 target_site_info 存在时才初始化目标相关属性
+        if self.target_site:
+            self.TARGET_BASE_URL = ensure_scheme(
+                self.target_site.get("base_url"))
+            self.TARGET_COOKIE = self.target_site.get("cookie")
+            self.TARGET_PASSKEY = self.target_site.get("passkey")
+            self.TARGET_UPLOAD_MODULE = self.target_site["site"]
+            self.TARGET_TRACKER_URL = f"{self.TARGET_BASE_URL}/announce.php"
 
         self.temp_files = []
         session = requests.Session()
@@ -167,8 +169,8 @@ class TorrentMigrator:
                 return None
             modified_content = bencoder.encode(decoded_torrent)
             safe_filename = re.sub(r'[\\/*?:"<>|]', "_", main_title)[:150]
-            modified_path = os.path.join(TEMP_DIR,
-                                         f"{safe_filename}.modified.torrent")
+            modified_path = os.path.join(
+                TEMP_DIR, f"{safe_filename}.modified.{time.time()}.torrent")
             with open(modified_path, "wb") as f:
                 f.write(modified_content)
             self.logger.success(f"已成功生成新的种子文件: {modified_path}")
@@ -179,12 +181,10 @@ class TorrentMigrator:
                 exception=True).error(f"修改 .torrent 文件时发生严重错误: {e}")
             return None
 
-    def prepare_for_upload(self):
-        """第一步：获取、解析和准备所有信息，但不上传。"""
+    def prepare_review_data(self):
+        """第一步(新)：获取、解析信息，并下载原始种子文件，但不进行修改。"""
         try:
-            self.logger.info(
-                f"--- [步骤1] 开始获取种子信息 (源: {self.SOURCE_NAME}, 目标: {self.target_site['nickname']}) ---"
-            )
+            self.logger.info(f"--- [步骤1] 开始获取种子信息 (源: {self.SOURCE_NAME}) ---")
             torrent_id = (self.search_term if self.search_term.isdigit() else
                           self.search_and_get_torrent_id(self.search_term))
             if not torrent_id:
@@ -235,13 +235,10 @@ class TorrentMigrator:
             intro = {}
             if descr_container:
                 descr_html_string = str(descr_container)
-
                 corrected_descr_html = re.sub(r'(<img[^>]*[^/])>', r'\1 />',
                                               descr_html_string)
-
                 descr_container = BeautifulSoup(corrected_descr_html,
                                                 "html.parser")
-
                 bbcode = self._html_to_bbcode(descr_container)
                 quotes = re.findall(r"\[quote\].*?\[/quote\]", bbcode,
                                     re.DOTALL)
@@ -317,15 +314,11 @@ class TorrentMigrator:
 
             safe_filename = re.sub(r'[\\/*?:"<>|]', "_",
                                    original_main_title)[:150]
-            original_torrent_path = f"{safe_filename}.original.torrent"
+            original_torrent_path = os.path.join(
+                TEMP_DIR, f"{safe_filename}.original.torrent")
             with open(original_torrent_path, "wb") as f:
                 f.write(torrent_response.content)
             self.temp_files.append(original_torrent_path)
-
-            modified_torrent_path = self.modify_torrent_file(
-                original_torrent_path, original_main_title)
-            if not modified_torrent_path:
-                raise Exception("修改种子文件失败。")
 
             self.logger.info("--- [步骤1] 种子信息获取和解析完成 ---")
             return {
@@ -338,19 +331,20 @@ class TorrentMigrator:
                     "mediainfo": mediainfo,
                     "source_params": source_params,
                 },
-                "modified_torrent_path": modified_torrent_path,
+                "original_torrent_path": original_torrent_path,
                 "logs": self.log_handler.get_logs(),
             }
         except Exception as e:
             self.logger.error(f"获取信息过程中发生错误: {e}")
             self.logger.debug(traceback.format_exc())
-            self.cleanup()
+            # self.cleanup() # 此处不清理，因为原始种子文件需要被缓存
             return {"logs": self.log_handler.get_logs()}
 
     def publish_prepared_torrent(self, upload_data, modified_torrent_path):
         """第二步：使用准备好的信息和文件执行上传。"""
         try:
-            self.logger.info("--- [步骤2] 开始发布种子 ---")
+            self.logger.info(
+                f"--- [步骤2] 开始发布种子到 {self.target_site['nickname']} ---")
             upload_payload = upload_data.copy()
             upload_payload["modified_torrent_path"] = modified_torrent_path
 
