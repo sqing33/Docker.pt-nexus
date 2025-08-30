@@ -4,888 +4,1015 @@
     "nickname": "朋友",
     "base_url": "pt.keepfrds.com",
     "special_tracker_domain": null,
-    "group": "FRDS"
+    "group": "FRDS",
+    "migration": 1
   },
   {
     "site": "pthome",
     "nickname": "铂金家",
     "base_url": "pthome.net",
     "special_tracker_domain": null,
-    "group": "PTHome,PTH,PTHtv"
+    "group": "PTHome,PTH,PTHtv",
+    "migration": 1
   },
   {
     "site": "m-team",
     "nickname": "馒头",
     "base_url": "kp.m-team.cc",
     "special_tracker_domain": "manfuz",
-    "group": "MWeb,MTeam,PTTV"
+    "group": "MWeb,MTeam,PTTV",
+    "migration": 1
   },
   {
     "site": "hdsky",
     "nickname": "天空",
     "base_url": "hdsky.me",
     "special_tracker_domain": null,
-    "group": "HDSky"
+    "group": "HDSky",
+    "migration": 1
   },
   {
     "site": "tjupt",
     "nickname": "北洋",
     "base_url": "tjupt.org",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "pter",
     "nickname": "猫站",
     "base_url": "pterclub.com",
     "special_tracker_domain": null,
-    "group": "PTerWEB"
+    "group": "PTerWEB",
+    "migration": 1
   },
   {
     "site": "hdhome",
     "nickname": "家园",
     "base_url": "hdhome.org",
     "special_tracker_domain": null,
-    "group": "HDHome"
+    "group": "HDHome",
+    "migration": 1
   },
   {
     "site": "btschool",
     "nickname": "学校",
     "base_url": "pt.btschool.club",
     "special_tracker_domain": null,
-    "group": "BtsHD,BTSCHOOL,BtsTV"
+    "group": "BtsHD,BTSCHOOL,BtsTV",
+    "migration": 1
   },
   {
     "site": "ourbits",
     "nickname": "我堡",
     "base_url": "ourbits.club",
     "special_tracker_domain": null,
-    "group": "OurBits "
+    "group": "OurBits ",
+    "migration": 1
   },
   {
     "site": "torrentccf",
     "nickname": "他吹吹风",
     "base_url": "et8.org",
     "special_tracker_domain": null,
-    "group": "BMDru"
+    "group": "BMDru",
+    "migration": 1
   },
   {
     "site": "ttg",
     "nickname": "听听歌",
     "base_url": "totheglory.im",
     "special_tracker_domain": null,
-    "group": "WiKi"
+    "group": "WiKi",
+    "migration": 1
   },
   {
     "site": "nanyangpt",
     "nickname": "南洋",
     "base_url": "nanyangpt.com",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "hdcity",
     "nickname": "城市",
     "base_url": "hdcity.city",
     "special_tracker_domain": "leniter",
-    "group": "-NoVA"
+    "group": "-NoVA",
+    "migration": 1
   },
   {
     "site": "nicept",
     "nickname": "老师",
     "base_url": "www.nicept.net",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "52pt",
     "nickname": "52pt",
     "base_url": "52pt.site",
     "special_tracker_domain": null,
-    "group": "52pt"
+    "group": "52pt",
+    "migration": 1
   },
   {
     "site": "eastgame",
     "nickname": "吐鲁番",
     "base_url": "pt.eastgame.org",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "ssd",
     "nickname": "不可说",
     "base_url": "springsunday.net",
     "special_tracker_domain": null,
-    "group": "CMCT,CMCTV,7³ACG,Telesto,-shadow610"
+    "group": "CMCT,CMCTV,7³ACG,Telesto,-shadow610",
+    "migration": 1
   },
   {
     "site": "soulvoice",
     "nickname": "聆音",
     "base_url": "pt.soulvoice.club",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "chdbits",
     "nickname": "彩虹岛",
     "base_url": "ptchdbits.co",
     "special_tracker_domain": null,
-    "group": "CHDBits,CHDWEB,-CHD"
+    "group": "CHDBits,CHDWEB,-CHD",
+    "migration": 1
   },
   {
     "site": "ptsbao",
     "nickname": "烧包",
     "base_url": "ptsbao.club",
     "special_tracker_domain": null,
-    "group": "FFansDIY,FFans,OPS,FHDMv"
+    "group": "FFansDIY,FFans,OPS,FHDMv",
+    "migration": 1
   },
   {
     "site": "hdarea",
     "nickname": "好大",
     "base_url": "hdarea.club",
     "special_tracker_domain": null,
-    "group": "HDArea,EPiC,HDATV,HDApad"
+    "group": "HDArea,EPiC,HDATV,HDApad",
+    "migration": 1
   },
   {
     "site": "hdtime",
     "nickname": "时光HDT",
     "base_url": "hdtime.org",
     "special_tracker_domain": null,
-    "group": "HDtime"
+    "group": "HDtime",
+    "migration": 1
   },
   {
     "site": "1ptba",
     "nickname": "1ptba",
     "base_url": "1ptba.com",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "hd4fans",
     "nickname": "兽",
     "base_url": "pt.hd4fans.org",
     "special_tracker_domain": null,
-    "group": "-beAst"
+    "group": "-beAst",
+    "migration": 1
   },
   {
     "site": "opencd",
     "nickname": "皇后",
     "base_url": "open.cd",
     "special_tracker_domain": null,
-    "group": "OpenCD"
+    "group": "OpenCD",
+    "migration": 1
   },
   {
     "site": "joyhd",
     "nickname": "开心",
     "base_url": "www.joyhd.net",
     "special_tracker_domain": null,
-    "group": "JoyHD"
+    "group": "JoyHD",
+    "migration": 1
   },
   {
     "site": "dmhy",
     "nickname": "幼儿园",
     "base_url": "u2.dmhy.org",
     "special_tracker_domain": null,
-    "group": "U2"
+    "group": "U2",
+    "migration": 1
   },
   {
     "site": "upxin",
     "nickname": "好多油",
     "base_url": "pt.upxin.net",
     "special_tracker_domain": null,
-    "group": "HDU"
+    "group": "HDU",
+    "migration": 1
   },
   {
     "site": "oshen",
     "nickname": "奥申",
     "base_url": "www.oshen.win",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "discfan",
     "nickname": "蝶粉",
     "base_url": "discfan.net",
     "special_tracker_domain": null,
-    "group": "discfan,DiscFan"
+    "group": "discfan,DiscFan",
+    "migration": 1
   },
   {
     "site": "byr",
     "nickname": "北邮人",
     "base_url": "byr.pt",
     "special_tracker_domain": null,
-    "group": "BYRHD"
+    "group": "BYRHD",
+    "migration": 1
   },
   {
     "site": "dicmusic",
     "nickname": "海豚",
     "base_url": "dicmusic.com",
     "special_tracker_domain": "52dic",
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "skyeysnow",
     "nickname": "天雪",
     "base_url": "skyey2.com",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "pt",
     "nickname": "葡萄",
     "base_url": "pt.sjtu.edu.cn",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "hdroute",
     "nickname": "路",
     "base_url": "www.hdroute.org",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "haidan",
     "nickname": "海胆",
     "base_url": "www.haidan.video",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "hdfans",
     "nickname": "红豆饭",
     "base_url": "hdfans.org",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "dragonhd",
     "nickname": "龙之家",
     "base_url": "www.dragonhd.xyz",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "hitpt",
     "nickname": "百川",
     "base_url": "www.hitpt.com",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "greatposterwall",
     "nickname": "海豹",
     "base_url": "greatposterwall.com",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "hdpost",
     "nickname": "普斯特",
     "base_url": "pt.hdpost.top",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "hudbt",
     "nickname": "蝴蝶",
     "base_url": "hudbt.hust.edu.cn",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "audiences",
     "nickname": "人人",
     "base_url": "audiences.me",
     "special_tracker_domain": null,
-    "group": "ADE,Audies,ADWeb"
+    "group": "ADE,Audies,ADWeb",
+    "migration": 1
   },
   {
     "site": "piggo",
     "nickname": "猪猪",
     "base_url": "piggo.me",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "wintersakura",
     "nickname": "冬樱",
     "base_url": "wintersakura.net",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "hhanclub",
     "nickname": "憨憨",
     "base_url": "hhanclub.top",
     "special_tracker_domain": null,
-    "group": "HHWEB"
+    "group": "HHWEB",
+    "migration": 1
   },
   {
     "site": "pt0ffcc",
     "nickname": "自由农场",
     "base_url": "pt.0ff.cc",
     "special_tracker_domain": null,
-    "group": "FFweb"
+    "group": "FFweb",
+    "migration": 1
   },
   {
     "site": "redleaves",
     "nickname": "红叶",
     "base_url": "leaves.red",
     "special_tracker_domain": null,
-    "group": "-RL"
+    "group": "-RL",
+    "migration": 1
   },
   {
     "site": "ptchina",
     "nickname": "铂金学院",
     "base_url": "ptchina.org",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "zhuque",
     "nickname": "朱雀",
     "base_url": "zhuque.in",
     "special_tracker_domain": null,
-    "group": "ZWEX"
+    "group": "ZWEX",
+    "migration": 1
   },
   {
     "site": "zmpt",
     "nickname": "织梦",
     "base_url": "zmpt.cc",
     "special_tracker_domain": null,
-    "group": "ZmWeb,ZmAudio,ZmPT"
+    "group": "ZmWeb,ZmAudio,ZmPT",
+    "migration": 1
   },
   {
     "site": "rousi",
     "nickname": "肉丝",
     "base_url": "rousi.zip",
     "special_tracker_domain": "rousipt",
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "monikadesign",
     "nickname": "莫妮卡",
     "base_url": "monikadesign.uk",
     "special_tracker_domain": "anime-no-index",
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "cyanbug",
     "nickname": "大青虫",
     "base_url": "cyanbug.net",
     "special_tracker_domain": null,
-    "group": "BUG"
+    "group": "BUG",
+    "migration": 1
   },
   {
     "site": "ubits",
     "nickname": "UBits",
     "base_url": "ubits.club",
     "special_tracker_domain": null,
-    "group": "UBits,UBWEB,UBTV"
+    "group": "UBits,UBWEB,UBTV",
+    "migration": 1
   },
   {
     "site": "pandapt",
     "nickname": "熊猫",
     "base_url": "pandapt.net",
     "special_tracker_domain": null,
-    "group": "AilMWeb,Panda,AilME,AilMTV,AilMUpscale"
+    "group": "AilMWeb,Panda,AilME,AilMTV,AilMUpscale",
+    "migration": 1
   },
   {
     "site": "carpt",
     "nickname": "车站",
     "base_url": "carpt.net",
     "special_tracker_domain": null,
-    "group": "CarPT"
+    "group": "CarPT",
+    "migration": 1
   },
   {
     "site": "dajiao",
     "nickname": "打胶",
     "base_url": "dajiao.cyou",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "shadowflow",
     "nickname": "影",
     "base_url": "star-space.net",
     "special_tracker_domain": null,
-    "group": "-YingWEB"
+    "group": "-YingWEB",
+    "migration": 1
   },
   {
     "site": "agsvpt",
     "nickname": "末日",
     "base_url": "www.agsvpt.com",
     "special_tracker_domain": null,
-    "group": "AGSVWEB,AGSVMUS,AGSVPT,AGSVMUSIC"
+    "group": "AGSVWEB,AGSVMUS,AGSVPT,AGSVMUSIC",
+    "migration": 1
   },
   {
     "site": "ptvicomo",
     "nickname": "象岛",
     "base_url": "ptvicomo.net",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "qingwapt",
     "nickname": "青蛙",
     "base_url": "www.qingwapt.com",
     "special_tracker_domain": null,
-    "group": "FROGE,FROGWeb"
+    "group": "FROGE,FROGWeb",
+    "migration": 1
   },
   {
     "site": "xingtan",
     "nickname": "杏坛",
     "base_url": "xingtan.one",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "hdkyl",
     "nickname": "麒麟",
     "base_url": "www.hdkyl.in",
     "special_tracker_domain": null,
-    "group": "Kylin,HDKWEB,HDKylinWeb,HDKTV"
+    "group": "Kylin,HDKWEB,HDKylinWeb,HDKTV",
+    "migration": 1
   },
   {
     "site": "ilolicon",
     "nickname": "爱萝莉",
     "base_url": "share.ilolicon.com",
     "special_tracker_domain": null,
-    "group": "LoliHouse"
+    "group": "LoliHouse",
+    "migration": 1
   },
   {
     "site": "gtkpw",
     "nickname": "GTK",
     "base_url": "pt.gtk.pw",
     "special_tracker_domain": "gtkpw",
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "wukongwendao",
     "nickname": "悟空",
     "base_url": "wukongwendao.top",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "okpt",
     "nickname": "okpt",
     "base_url": "www.okpt.net",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "crabpt",
     "nickname": "蟹黄堡",
     "base_url": "crabpt.vip",
     "special_tracker_domain": null,
-    "group": "crab"
+    "group": "crab",
+    "migration": 1
   },
   {
     "site": "icc2022",
     "nickname": "冰淇淋",
     "base_url": "www.icc2022.com",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "hddolby",
     "nickname": "杜比",
     "base_url": "www.hddolby.com",
     "special_tracker_domain": null,
-    "group": "QHstudIo,-Dream,DBTV,CornerMV"
+    "group": "QHstudIo,-Dream,DBTV,CornerMV",
+    "migration": 1
   },
   {
     "site": "kamept",
     "nickname": "龟站",
     "base_url": "kamept.com",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "ptcafe",
     "nickname": "咖啡",
     "base_url": "ptcafe.club",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "tosky",
     "nickname": "ToSky",
     "base_url": "t.tosky.club",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "yemapt",
     "nickname": "YemaPT",
     "base_url": "www.yemapt.org",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "ptlgs",
     "nickname": "劳改所",
     "base_url": "ptlgs.org",
     "special_tracker_domain": "ptl",
-    "group": "DYZ-Movie,DYZ-WEB,DYZ-TV,DJWEB"
+    "group": "DYZ-Movie,DYZ-WEB,DYZ-TV,DJWEB",
+    "migration": 1
   },
   {
     "site": "lemonhd",
     "nickname": "柠檬不酸",
     "base_url": "lemonhd.club",
     "special_tracker_domain": "ilovelemonhd.me",
-    "group": "-LHD"
+    "group": "-LHD",
+    "migration": 1
   },
   {
     "site": "njtupt",
     "nickname": "浦园",
     "base_url": "njtupt.top",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "ptzone",
     "nickname": "PTzone",
     "base_url": "ptzone.xyz",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "hdclone",
     "nickname": "HDClone",
     "base_url": "pt.hdclone.org",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "kufei",
     "nickname": "库非",
     "base_url": "kufei.org",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "ptlover",
     "nickname": "AFun",
     "base_url": "www.ptlover.cc",
     "special_tracker_domain": null,
-    "group": "AFWEB"
+    "group": "AFWEB",
+    "migration": 1
   },
   {
     "site": "hspt",
     "nickname": "回声",
     "base_url": "hspt.club",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "sanpro",
     "nickname": "伞",
     "base_url": "sanpro.pw",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "htpt",
     "nickname": "海棠",
     "base_url": "www.htpt.cc",
     "special_tracker_domain": null,
-    "group": "HTPT"
+    "group": "HTPT",
+    "migration": 1
   },
   {
     "site": "sewerpt",
     "nickname": "下水道",
     "base_url": "sewerpt.com",
     "special_tracker_domain": null,
-    "group": "SewageWeb"
+    "group": "SewageWeb",
+    "migration": 1
   },
   {
     "site": "bilibili",
     "nickname": "RailgunPT",
     "base_url": "bilibili.download",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "gamegamept",
     "nickname": "GGPT",
     "base_url": "www.gamegamept.com",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "raingfh",
     "nickname": "雨",
     "base_url": "raingfh.top",
     "special_tracker_domain": null,
-    "group": "rainweb,-rain"
+    "group": "rainweb,-rain",
+    "migration": 1
   },
   {
     "site": "xingyunge",
     "nickname": "星陨阁",
     "base_url": "pt.xingyungept.org",
     "special_tracker_domain": null,
-    "group": "StarfallWeb"
+    "group": "StarfallWeb",
+    "migration": 3
   },
   {
     "site": "cspt",
     "nickname": "财神",
     "base_url": "cspt.top",
     "special_tracker_domain": null,
-    "group": "CSWEB,CSPT,HSWEB,HSPT"
+    "group": "CSWEB,CSPT,HSWEB,HSPT",
+    "migration": 3
   },
   {
     "site": "tmpt",
     "nickname": "唐门",
     "base_url": "tmpt.top",
     "special_tracker_domain": null,
-    "group": "TangPT,Tangweb"
+    "group": "TangPT,Tangweb",
+    "migration": 1
   },
   {
     "site": "mypt",
     "nickname": "我的PT",
     "base_url": "cc.mypt.cc",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 0
   },
   {
     "site": "pttime",
     "nickname": "时间ptt",
     "base_url": "www.pttime.org",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 0
   },
   {
     "site": "lemon",
     "nickname": "柠檬不甜",
     "base_url": "lemonhd.net",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "13city",
     "nickname": "13city",
     "base_url": "13city.org",
     "special_tracker_domain": null,
-    "group": "13City"
+    "group": "13City",
+    "migration": 1
   },
   {
     "site": "luckpt",
     "nickname": "幸运",
     "base_url": "pt.luckpt.de",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 3
   },
   {
     "site": "siqi",
     "nickname": "思齐",
     "base_url": "si-qi.xyz",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "hxpt",
     "nickname": "好学",
     "base_url": "www.hxpt.org",
     "special_tracker_domain": null,
-    "group": "HXWEB,- HX"
+    "group": "HXWEB,- HX",
+    "migration": 1
   },
   {
     "site": "PTSkit",
     "nickname": "PTSkit",
     "base_url": "www.ptskit.org",
     "special_tracker_domain": "kqbhek",
-    "group": "[PTS]"
+    "group": "[PTS]",
+    "migration": 1
   },
   {
     "site": "CBG",
     "nickname": "藏宝阁",
     "base_url": "cangbao.ge",
     "special_tracker_domain": null,
-    "group": "CBGWT"
+    "group": "CBGWT",
+    "migration": 1
   },
   {
     "site": "Tokyo",
     "nickname": "东京",
     "base_url": "www.tokyopt.xyz",
     "special_tracker_domain": null,
-    "group": "EastWeb"
+    "group": "EastWeb",
+    "migration": 1
   },
   {
     "site": "Lajidui",
     "nickname": "垃圾堆",
     "base_url": "pt.lajidui.top",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "VCB-Studio",
     "nickname": "VCB-Studio",
     "base_url": "VCB-Studio",
     "special_tracker_domain": null,
-    "group": "VCB-Studio"
+    "group": "VCB-Studio",
+    "migration": 1
   },
   {
     "site": "BeiTai",
     "nickname": "备胎",
     "base_url": "BeiTai",
     "special_tracker_domain": null,
-    "group": "-BeiTai"
+    "group": "-BeiTai",
+    "migration": 1
   },
   {
     "site": "azusa",
     "nickname": "喵",
     "base_url": "azusa.wiki",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "JPop",
     "nickname": "鸡婆婆",
     "base_url": "jpopsuki.eu",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "playletpt",
     "nickname": "playlet",
     "base_url": "playletpt.xyz",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "duckboobee",
     "nickname": "三月传媒",
     "base_url": "duckboobee.org",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "HDBao",
     "nickname": "红豆包",
     "base_url": "hdbao.cc",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "LongPT",
     "nickname": "龙PT",
     "base_url": "longpt.org",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "Aling",
     "nickname": "爱玲",
     "base_url": "pt.aling.de",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "CD",
     "nickname": "CD",
     "base_url": "pt.cdfile.org",
     "special_tracker_domain": null,
-    "group": "cdfile"
+    "group": "cdfile",
+    "migration": 1
   },
   {
     "site": "TU88",
     "nickname": "TU88",
     "base_url": "pt.tu88.men",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "UltraHD",
     "nickname": "UltraHD",
     "base_url": "ultrahd.net",
     "special_tracker_domain": null,
-    "group": "UltraHD, AHDBits, UltraTV"
+    "group": "UltraHD, AHDBits, UltraTV",
+    "migration": 1
   },
   {
     "site": "52movie",
     "nickname": "52movie",
     "base_url": "www.52movie.top",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "PTFans",
     "nickname": "PTFans",
     "base_url": "ptfans.cc",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "tey",
     "nickname": "太乙",
     "base_url": "pt.tey.cc",
     "special_tracker_domain": null,
-    "group": "Tey"
+    "group": "Tey",
+    "migration": 1
   },
   {
     "site": "itzmx",
     "nickname": "itzmx",
     "base_url": "pt.itzmx.com",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "Sunny",
     "nickname": "Sunny",
     "base_url": "sunnypt.top",
     "special_tracker_domain": "sunnytk",
-    "group": "Sunny"
+    "group": "Sunny",
+    "migration": 1
   },
   {
     "site": "ying",
     "nickname": "樱花",
     "base_url": "pt.ying.us.kg",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "NovaHD",
     "nickname": "NovaHD",
     "base_url": "pt.novahd.top",
     "special_tracker_domain": null,
-    "group": "NHDWeb"
+    "group": "NHDWeb",
+    "migration": 1
   },
   {
     "site": "SBPT",
     "nickname": "SBPT",
     "base_url": "sbpt.link",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "jivon",
     "nickname": "未来幻境",
     "base_url": "nex.jivon.de",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "YHPP",
     "nickname": "YHPP",
     "base_url": "www.yhpp.cc",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "ASMR",
     "nickname": "ASMR",
     "base_url": "www.asmrpt.org",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   },
   {
     "site": "TorrentHub",
     "nickname": "TorrentHub",
     "base_url": "torrenthub.club",
     "special_tracker_domain": null,
-    "group": null
+    "group": null,
+    "migration": 1
   }
 ]

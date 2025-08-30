@@ -45,6 +45,27 @@ def migrate_fetch_info():
                 404,
             )
 
+        source_role = source_info.get("migration", 0)
+        target_role = target_info.get("migration", 0)
+
+        if source_role not in [1, 3]:
+            return (
+                jsonify({
+                    "success": False,
+                    "logs": f"错误：站点 '{source_site_name}' 不允许作为源站点进行迁移。"
+                }),
+                403, 
+            )
+
+        if target_role not in [2, 3]:
+            return (
+                jsonify({
+                    "success": False,
+                    "logs": f"错误：站点 '{target_site_name}' 不允许作为目标站点进行迁移。"
+                }),
+                403, 
+            )
+
         migrator = TorrentMigrator(source_info, target_info, search_term)
         result = migrator.prepare_for_upload()
 

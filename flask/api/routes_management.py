@@ -44,15 +44,30 @@ def get_sites_list():
     try:
         conn = db_manager._get_connection()
         cursor = db_manager._get_cursor(conn)
-        cursor.execute(
-            "SELECT nickname FROM sites WHERE cookie IS NOT NULL AND cookie != '' ORDER BY nickname"
-        )
+
+        # --- 修改后的逻辑 ---
+        # 获取源站点 (migration 为 1 或 3，且必须有 cookie)
+        cursor.execute("""
+            SELECT nickname FROM sites 
+            WHERE (migration = 1 OR migration = 3) 
+            AND cookie IS NOT NULL AND cookie != '' 
+            ORDER BY nickname
+            """)
         source_sites = [row["nickname"] for row in cursor.fetchall()]
-        cursor.execute(
-            "SELECT nickname FROM sites WHERE passkey IS NOT NULL AND passkey != '' ORDER BY nickname"
-        )
+
+        # 获取目标站点 (migration 为 2 或 3，且必须有 passkey)
+        cursor.execute("""
+            SELECT nickname FROM sites 
+            WHERE (migration = 2 OR migration = 3) 
+            AND passkey IS NOT NULL AND passkey != '' 
+            ORDER BY nickname
+            """)
         target_sites = [row["nickname"] for row in cursor.fetchall()]
-        return jsonify({"source_sites": source_sites, "target_sites": target_sites})
+
+        return jsonify({
+            "source_sites": source_sites,
+            "target_sites": target_sites
+        })
     except Exception as e:
         logging.error(f"get_sites_list 出错: {e}", exc_info=True)
         return jsonify({"error": "获取站点列表失败"}), 500
@@ -110,7 +125,10 @@ def add_site():
     if db_manager.add_site(site_data):
         return jsonify({"success": True, "message": "站点已成功添加。"})
     else:
-        return jsonify({"success": False, "message": "添加站点失败，可能是站点域名已存在。"}), 500
+        return jsonify({
+            "success": False,
+            "message": "添加站点失败，可能是站点域名已存在。"
+        }), 500
 
 
 @management_bp.route("/sites/update", methods=["POST"])
@@ -121,14 +139,16 @@ def update_site_details():
     if not site_data.get("id"):
         return jsonify({"success": False, "message": "必须提供站点ID。"}), 400
     if db_manager.update_site_details(site_data):
-        return jsonify(
-            {"success": True, "message": f"站点 '{site_data.get('nickname')}' 的信息已成功更新。"}
-        )
+        return jsonify({
+            "success": True,
+            "message": f"站点 '{site_data.get('nickname')}' 的信息已成功更新。"
+        })
     else:
         return (
-            jsonify(
-                {"success": False, "message": f"未找到站点ID '{site_data.get('id')}' 或更新失败。"}
-            ),
+            jsonify({
+                "success": False,
+                "message": f"未找到站点ID '{site_data.get('id')}' 或更新失败。"
+            }),
             404,
         )
 
@@ -143,7 +163,10 @@ def delete_site():
     if db_manager.delete_site(site_id):
         return jsonify({"success": True, "message": "站点已成功删除。"})
     else:
-        return jsonify({"success": False, "message": f"删除站点ID '{site_id}' 失败。"}), 404
+        return jsonify({
+            "success": False,
+            "message": f"删除站点ID '{site_id}' 失败。"
+        }), 404
 
 
 @management_bp.route("/sites/update_cookie", methods=["POST"])
@@ -156,12 +179,16 @@ def update_site_cookie():
         return jsonify({"success": False, "message": "必须提供站点昵称和 Cookie。"}), 400
     try:
         if db_manager.update_site_cookie(nickname, cookie):
-            return jsonify(
-                {"success": True, "message": f"站点 '{nickname}' 的 Cookie 已成功更新。"}
-            )
+            return jsonify({
+                "success": True,
+                "message": f"站点 '{nickname}' 的 Cookie 已成功更新。"
+            })
         else:
             return (
-                jsonify({"success": False, "message": f"未找到站点 '{nickname}' 或更新失败。"}),
+                jsonify({
+                    "success": False,
+                    "message": f"未找到站点 '{nickname}' 或更新失败。"
+                }),
                 404,
             )
     except Exception as e:
@@ -177,9 +204,13 @@ def cookiecloud_sync():
     """连接到 CookieCloud，获取所有 Cookies，并更新匹配站点的 Cookie。"""
     db_manager = management_bp.db_manager
     data = request.json
-    cc_url, cc_key, e2e_password = data.get("url"), data.get("key"), data.get("e2e_password")
+    cc_url, cc_key, e2e_password = data.get("url"), data.get("key"), data.get(
+        "e2e_password")
     if not cc_url or not cc_key:
-        return jsonify({"success": False, "message": "CookieCloud URL 和 KEY 不能为空。"}), 400
+        return jsonify({
+            "success": False,
+            "message": "CookieCloud URL 和 KEY 不能为空。"
+        }), 400
 
     try:
         conn = db_manager._get_connection()
@@ -198,19 +229,19 @@ def cookiecloud_sync():
     try:
         target_url = f"{cc_url.rstrip('/')}/get/{cc_key}"
         payload = {"password": e2e_password} if e2e_password else {}
-        response = cloudscraper.create_scraper().post(target_url, json=payload, timeout=20)
+        response = cloudscraper.create_scraper().post(target_url,
+                                                      json=payload,
+                                                      timeout=20)
         response.raise_for_status()
         response_data = response.json()
         cookie_data_dict = response_data.get("cookie_data")
         if not isinstance(cookie_data_dict, dict):
             if "encrypted" in response_data:
                 return (
-                    jsonify(
-                        {
-                            "success": False,
-                            "message": "获取到加密数据。请确保端对端加密密码已填写并正确。",
-                        }
-                    ),
+                    jsonify({
+                        "success": False,
+                        "message": "获取到加密数据。请确保端对端加密密码已填写并正确。",
+                    }),
                     400,
                 )
             raise ValueError("从 CookieCloud 返回的数据格式不正确或为空。")
@@ -220,7 +251,10 @@ def cookiecloud_sync():
             error_message = "连接成功，但未找到资源 (404)。请检查 KEY (UUID) 是否正确。"
         logging.error(f"CookieCloud 同步失败: {e}", exc_info=True)
         return (
-            jsonify({"success": False, "message": f"请求 CookieCloud 时出错: {error_message}"}),
+            jsonify({
+                "success": False,
+                "message": f"请求 CookieCloud 时出错: {error_message}"
+            }),
             500,
         )
 
@@ -228,34 +262,35 @@ def cookiecloud_sync():
     for site_in_app in app_sites:
         if not site_in_app.get("nickname"):
             continue
-        identifiers = {site_in_app["nickname"].lower(), site_in_app["site"].lower()}
+        identifiers = {
+            site_in_app["nickname"].lower(), site_in_app["site"].lower()
+        }
         if site_in_app.get("base_url"):
             try:
-                identifiers.add(urlparse(f'http://{site_in_app["base_url"]}').hostname.lower())
+                identifiers.add(
+                    urlparse(
+                        f'http://{site_in_app["base_url"]}').hostname.lower())
             except Exception:
                 pass
         for cc_domain, cookie_value in cookie_data_dict.items():
             if cc_domain.lstrip(".").lower() in identifiers:
-                cookie_str = (
-                    "; ".join([f"{c['name']}={c['value']}" for c in cookie_value])
-                    if isinstance(cookie_value, list)
-                    else cookie_value
-                )
-                if db_manager.update_site_cookie(site_in_app["nickname"], cookie_str):
+                cookie_str = ("; ".join([
+                    f"{c['name']}={c['value']}" for c in cookie_value
+                ]) if isinstance(cookie_value, list) else cookie_value)
+                if db_manager.update_site_cookie(site_in_app["nickname"],
+                                                 cookie_str):
                     updated_count += 1
                     matched_cc_domains.add(cc_domain)
                 break
 
     unmatched_count = len(cookie_data_dict) - len(matched_cc_domains)
     message = f"同步完成！成功更新 {updated_count} 个站点的 Cookie。在 CookieCloud 中另有 {unmatched_count} 个未匹配的 Cookie。"
-    return jsonify(
-        {
-            "success": True,
-            "message": message,
-            "updated_count": updated_count,
-            "unmatched_count": unmatched_count,
-        }
-    )
+    return jsonify({
+        "success": True,
+        "message": message,
+        "updated_count": updated_count,
+        "unmatched_count": unmatched_count,
+    })
 
 
 # --- 应用与下载器设置 ---
@@ -284,7 +319,8 @@ def update_settings():
     if "downloaders" in new_config:
         restart_needed = True
         current_passwords = {
-            d["id"]: d.get("password", "") for d in current_config.get("downloaders", [])
+            d["id"]: d.get("password", "")
+            for d in current_config.get("downloaders", [])
         }
         for d in new_config["downloaders"]:
             if not d.get("id"):
@@ -294,10 +330,11 @@ def update_settings():
         current_config["downloaders"] = new_config["downloaders"]
 
     if "realtime_speed_enabled" in new_config and current_config.get(
-        "realtime_speed_enabled"
-    ) != bool(new_config["realtime_speed_enabled"]):
+            "realtime_speed_enabled") != bool(
+                new_config["realtime_speed_enabled"]):
         restart_needed = True
-        current_config["realtime_speed_enabled"] = bool(new_config["realtime_speed_enabled"])
+        current_config["realtime_speed_enabled"] = bool(
+            new_config["realtime_speed_enabled"])
 
     if "cookiecloud" in new_config:
         current_config["cookiecloud"] = new_config["cookiecloud"]
@@ -322,11 +359,8 @@ def test_connection():
     client_config = request.json
     if client_config.get("id") and not client_config.get("password"):
         current_dl = next(
-            (
-                d
-                for d in config_manager.get().get("downloaders", [])
-                if d["id"] == client_config["id"]
-            ),
+            (d for d in config_manager.get().get("downloaders", [])
+             if d["id"] == client_config["id"]),
             None,
         )
         if current_dl:
@@ -355,7 +389,10 @@ def test_connection():
             error_msg = "认证失败，请检查用户名和密码。"
         elif "403" in error_msg:
             error_msg = "禁止访问，请检查权限设置。"
-        return jsonify({"success": False, "message": f"'{name}' 连接失败: {error_msg}"}), 200
+        return jsonify({
+            "success": False,
+            "message": f"'{name}' 连接失败: {error_msg}"
+        }), 200
 
 
 @management_bp.route("/downloader_info")
@@ -386,7 +423,8 @@ def get_downloader_info_api():
         today_query = f"SELECT downloader_id, SUM(downloaded) as today_dl, SUM(uploaded) as today_ul FROM traffic_stats WHERE stat_datetime >= {db_manager.get_placeholder()} GROUP BY downloader_id"
         from datetime import datetime
 
-        cursor.execute(today_query, (datetime.now().strftime("%Y-%m-%d 00:00:00"),))
+        cursor.execute(today_query,
+                       (datetime.now().strftime("%Y-%m-%d 00:00:00"), ))
         today_stats = {r["downloader_id"]: r for r in cursor.fetchall()}
     except Exception as e:
         logging.error(f"获取下载器统计信息时数据库出错: {e}", exc_info=True)
@@ -402,10 +440,13 @@ def get_downloader_info_api():
     for d_id, d_info in info.items():
         if not d_info["enabled"]:
             continue
-        client_config = next((item for item in cfg_downloaders if item["id"] == d_id), None)
+        client_config = next(
+            (item for item in cfg_downloaders if item["id"] == d_id), None)
         d_info["details"] = {
-            "今日下载量": format_bytes(today_stats.get(d_id, {}).get("today_dl", 0)),
-            "今日上传量": format_bytes(today_stats.get(d_id, {}).get("today_ul", 0)),
+            "今日下载量":
+            format_bytes(today_stats.get(d_id, {}).get("today_dl", 0)),
+            "今日上传量":
+            format_bytes(today_stats.get(d_id, {}).get("today_ul", 0)),
             "累计下载量": format_bytes(totals.get(d_id, {}).get("total_dl", 0)),
             "累计上传量": format_bytes(totals.get(d_id, {}).get("total_ul", 0)),
         }
