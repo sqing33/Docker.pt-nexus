@@ -35,7 +35,8 @@ class DatabaseManager:
     def _get_connection(self):
         """返回一个新的数据库连接。"""
         if self.db_type == "mysql":
-            return mysql.connector.connect(**self.mysql_config, autocommit=False)
+            return mysql.connector.connect(**self.mysql_config,
+                                           autocommit=False)
         else:
             return sqlite3.connect(self.sqlite_path, timeout=20)
 
@@ -57,8 +58,8 @@ class DatabaseManager:
         cursor = self._get_cursor(conn)
         try:
             cursor.execute(
-                f"SELECT * FROM sites WHERE nickname = {self.get_placeholder()}", (nickname,)
-            )
+                f"SELECT * FROM sites WHERE nickname = {self.get_placeholder()}",
+                (nickname, ))
             site_data = cursor.fetchone()
             return dict(site_data) if site_data else None
         except Exception as e:
@@ -88,10 +89,12 @@ class DatabaseManager:
             conn.commit()
             return True
         except Exception as e:
-            if "UNIQUE constraint failed" in str(e) or "Duplicate entry" in str(e):
+            if "UNIQUE constraint failed" in str(
+                    e) or "Duplicate entry" in str(e):
                 logging.error(f"添加站点失败：站点域名 '{site_data.get('site')}' 已存在。")
             else:
-                logging.error(f"添加站点 '{site_data.get('nickname')}' 失败: {e}", exc_info=True)
+                logging.error(f"添加站点 '{site_data.get('nickname')}' 失败: {e}",
+                              exc_info=True)
             conn.rollback()
             return False
         finally:
@@ -118,7 +121,8 @@ class DatabaseManager:
             conn.commit()
             return cursor.rowcount > 0
         except Exception as e:
-            logging.error(f"更新站点ID '{site_data.get('id')}' 失败: {e}", exc_info=True)
+            logging.error(f"更新站点ID '{site_data.get('id')}' 失败: {e}",
+                          exc_info=True)
             conn.rollback()
             return False
         finally:
@@ -130,7 +134,9 @@ class DatabaseManager:
         conn = self._get_connection()
         cursor = self._get_cursor(conn)
         try:
-            cursor.execute(f"DELETE FROM sites WHERE id = {self.get_placeholder()}", (site_id,))
+            cursor.execute(
+                f"DELETE FROM sites WHERE id = {self.get_placeholder()}",
+                (site_id, ))
             conn.commit()
             return cursor.rowcount > 0
         except Exception as e:
@@ -163,27 +169,42 @@ class DatabaseManager:
     def _add_missing_columns(self, conn, cursor):
         """检查并向 sites 表添加缺失的列，实现自动化的数据库迁移。"""
         logging.info("正在检查 'sites' 表的结构完整性...")
-        columns_to_add = [("cookie", "TEXT", "TEXT"), ("passkey", "TEXT", "VARCHAR(255)")]
+        columns_to_add = [("cookie", "TEXT", "TEXT"),
+                          ("passkey", "TEXT", "VARCHAR(255)"),
+                          ("migration", "INTEGER DEFAULT 0",
+                           "TINYINT DEFAULT 0")]
 
         if self.db_type == "mysql":
             meta_cursor = conn.cursor()
             meta_cursor.execute(
                 "SELECT column_name FROM INFORMATION_SCHEMA.COLUMNS WHERE table_schema = %s AND table_name = 'sites'",
-                (self.mysql_config.get("database"),),
+                (self.mysql_config.get("database"), ),
             )
-            existing_columns = {row[0].lower() for row in meta_cursor.fetchall()}
+            existing_columns = {
+                row[0].lower()
+                for row in meta_cursor.fetchall()
+            }
             meta_cursor.close()
             for col_name, _, mysql_type in columns_to_add:
                 if col_name.lower() not in existing_columns:
-                    logging.info(f"在 MySQL 'sites' 表中发现缺失列: '{col_name}'。正在添加...")
-                    cursor.execute(f"ALTER TABLE `sites` ADD COLUMN `{col_name}` {mysql_type}")
+                    logging.info(
+                        f"在 MySQL 'sites' 表中发现缺失列: '{col_name}'。正在添加...")
+                    cursor.execute(
+                        f"ALTER TABLE `sites` ADD COLUMN `{col_name}` {mysql_type} NOT NULL"
+                    )
         else:  # SQLite
             cursor.execute("PRAGMA table_info(sites)")
-            existing_columns = {row["name"].lower() for row in cursor.fetchall()}
+            existing_columns = {
+                row["name"].lower()
+                for row in cursor.fetchall()
+            }
             for col_name, sqlite_type, _ in columns_to_add:
                 if col_name.lower() not in existing_columns:
-                    logging.info(f"在 SQLite 'sites' 表中发现缺失列: '{col_name}'。正在添加...")
-                    cursor.execute(f"ALTER TABLE sites ADD COLUMN {col_name} {sqlite_type}")
+                    logging.info(
+                        f"在 SQLite 'sites' 表中发现缺失列: '{col_name}'。正在添加...")
+                    cursor.execute(
+                        f"ALTER TABLE sites ADD COLUMN {col_name} {sqlite_type}"
+                    )
 
     def init_db(self):
         """确保数据库表存在，并根据 sites_data.json 仅添加新站点，不覆盖已有数据。"""
@@ -206,7 +227,7 @@ class DatabaseManager:
                 "CREATE TABLE IF NOT EXISTS torrent_upload_stats (hash VARCHAR(40) NOT NULL, downloader_id VARCHAR(36) NOT NULL, uploaded BIGINT DEFAULT 0, PRIMARY KEY (hash, downloader_id)) ENGINE=InnoDB ROW_FORMAT=Dynamic"
             )
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS `sites` (`id` mediumint NOT NULL AUTO_INCREMENT, `site` varchar(255) UNIQUE DEFAULT NULL, `nickname` varchar(255) DEFAULT NULL, `base_url` varchar(255) DEFAULT NULL, `special_tracker_domain` varchar(255) DEFAULT NULL, `group` varchar(255) DEFAULT NULL, PRIMARY KEY (`id`)) ENGINE=InnoDB ROW_FORMAT=DYNAMIC"
+                "CREATE TABLE IF NOT EXISTS `sites` (`id` mediumint NOT NULL AUTO_INCREMENT, `site` varchar(255) UNIQUE DEFAULT NULL, `nickname` varchar(255) DEFAULT NULL, `base_url` varchar(255) DEFAULT NULL, `special_tracker_domain` varchar(255) DEFAULT NULL, `group` varchar(255) DEFAULT NULL, `cookie` TEXT DEFAULT NULL,`passkey` varchar(255) DEFAULT NULL,`migration` int(11) NOT NULL DEFAULT 1, PRIMARY KEY (`id`)) ENGINE=InnoDB ROW_FORMAT=DYNAMIC"
             )
         # 表创建逻辑 (SQLite)
         else:
@@ -223,7 +244,7 @@ class DatabaseManager:
                 "CREATE TABLE IF NOT EXISTS torrent_upload_stats (hash TEXT NOT NULL, downloader_id TEXT NOT NULL, uploaded INTEGER DEFAULT 0, PRIMARY KEY (hash, downloader_id))"
             )
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS sites (id INTEGER PRIMARY KEY AUTOINCREMENT, site TEXT UNIQUE, nickname TEXT, base_url TEXT, special_tracker_domain TEXT, `group` TEXT)"
+                "CREATE TABLE IF NOT EXISTS sites (id INTEGER PRIMARY KEY AUTOINCREMENT, site TEXT UNIQUE, nickname TEXT, base_url TEXT, special_tracker_domain TEXT, `group` TEXT, cookie TEXT, passkey TEXT, migration INTEGER NOT NULL DEFAULT 1)"
             )
 
         conn.commit()
@@ -239,10 +260,10 @@ class DatabaseManager:
             sites_in_db = {row["site"] for row in cursor.fetchall()}
             sites_to_insert = [
                 tuple(
-                    s.get(k)
-                    for k in ["site", "nickname", "base_url", "special_tracker_domain", "group"]
-                )
-                for s in sites_from_json
+                    s.get(k) for k in [
+                        "site", "nickname", "base_url",
+                        "special_tracker_domain", "group", "migration"
+                    ]) for s in sites_from_json
                 if s.get("site") not in sites_in_db
             ]
 
@@ -251,7 +272,7 @@ class DatabaseManager:
                     f"发现 {len(sites_to_insert)} 个新站点，将从 {SITES_DATA_FILE} 插入数据库。"
                 )
                 ph = self.get_placeholder()
-                sql_insert = f"INSERT INTO sites (site, nickname, base_url, special_tracker_domain, `group`) VALUES ({ph}, {ph}, {ph}, {ph}, {ph})"
+                sql_insert = f"INSERT INTO sites (site, nickname, base_url, special_tracker_domain, `group`, migration) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph})"
                 cursor.executemany(sql_insert, sites_to_insert)
                 conn.commit()
 
@@ -316,9 +337,9 @@ def reconcile_historical_data(db_manager, config):
                 client = Client(**api_config)
                 client.auth_log_in()
                 info = client.transfer_info()
-                session_dl, session_ul = int(getattr(info, "dl_info_data", 0)), int(
-                    getattr(info, "up_info_data", 0)
-                )
+                session_dl, session_ul = int(
+                    getattr(info, "dl_info_data",
+                            0)), int(getattr(info, "up_info_data", 0))
                 cursor.execute(
                     f"UPDATE downloader_clients SET last_session_dl = {ph}, last_session_ul = {ph} WHERE id = {ph}",
                     (session_dl, session_ul, client_id),
@@ -329,15 +350,16 @@ def reconcile_historical_data(db_manager, config):
                 api_config = _prepare_api_config(client_config)
                 client = TrClient(**api_config)
                 stats = client.session_stats()
-                cumulative_dl, cumulative_ul = int(stats.cumulative_stats.downloaded_bytes), int(
-                    stats.cumulative_stats.uploaded_bytes
-                )
+                cumulative_dl, cumulative_ul = int(
+                    stats.cumulative_stats.downloaded_bytes), int(
+                        stats.cumulative_stats.uploaded_bytes)
                 cursor.execute(
                     f"UPDATE downloader_clients SET last_cumulative_dl = {ph}, last_cumulative_ul = {ph} WHERE id = {ph}",
                     (cumulative_dl, cumulative_ul, client_id),
                 )
 
-            zero_point_records.append((current_timestamp_str, client_id, 0, 0, 0, 0))
+            zero_point_records.append(
+                (current_timestamp_str, client_id, 0, 0, 0, 0))
             logging.info(f"客户端 '{client_config['name']}' 的基线已成功设置。")
         except Exception as e:
             logging.error(f"[{client_config['name']}] 启动时设置基线失败: {e}")
@@ -346,11 +368,12 @@ def reconcile_historical_data(db_manager, config):
         try:
             sql_insert_zero = (
                 f"INSERT INTO traffic_stats (stat_datetime, downloader_id, uploaded, downloaded, upload_speed, download_speed) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}) ON DUPLICATE KEY UPDATE uploaded = VALUES(uploaded), downloaded = VALUES(downloaded)"
-                if db_manager.db_type == "mysql"
-                else f"INSERT INTO traffic_stats (stat_datetime, downloader_id, uploaded, downloaded, upload_speed, download_speed) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(stat_datetime, downloader_id) DO UPDATE SET uploaded = excluded.uploaded, downloaded = excluded.downloaded"
+                if db_manager.db_type == "mysql" else
+                f"INSERT INTO traffic_stats (stat_datetime, downloader_id, uploaded, downloaded, upload_speed, download_speed) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(stat_datetime, downloader_id) DO UPDATE SET uploaded = excluded.uploaded, downloaded = excluded.downloaded"
             )
             cursor.executemany(sql_insert_zero, zero_point_records)
-            logging.info(f"已成功插入 {len(zero_point_records)} 条零点记录到 traffic_stats。")
+            logging.info(
+                f"已成功插入 {len(zero_point_records)} 条零点记录到 traffic_stats。")
         except Exception as e:
             logging.error(f"插入零点记录失败: {e}")
             conn.rollback()
