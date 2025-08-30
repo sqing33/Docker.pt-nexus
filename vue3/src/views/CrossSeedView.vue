@@ -4,9 +4,11 @@
     <el-steps :active="activeStep" finish-status="success" align-center>
       <el-step title="填写基本信息" :icon="Edit" />
       <el-step title="核对种子详情" :icon="DocumentChecked" />
+      <el-step title="选择发布站点" :icon="Promotion" />
       <el-step title="完成发布" :icon="UploadFilled" />
     </el-steps>
-    <div class="content-card" :class="{ 'narrow-card': activeStep === 0 || activeStep === 2 }">
+    <div class="content-card" :class="{ 'narrow-card': activeStep === 0 || activeStep === 2 || activeStep === 3 }">
+      <!-- 步骤 0: 填写基本信息 -->
       <div v-if="activeStep === 0" class="form-container">
         <el-form label-position="top" label-width="100px">
           <el-row :gutter="20">
@@ -20,23 +22,6 @@
                 >
                   <el-option
                     v-for="site in sourceSitesList"
-                    :key="site"
-                    :label="site"
-                    :value="site"
-                  />
-                </el-select>
-              </el-form-item>
-            </el-col>
-            <el-col>
-              <el-form-item label="目标站点 (需配置Passkey)">
-                <el-select
-                  v-model="targetSite"
-                  placeholder="请选择目标站点"
-                  style="width: 100%"
-                  :disabled="isLoading"
-                >
-                  <el-option
-                    v-for="site in targetSitesList"
                     :key="site"
                     :label="site"
                     :value="site"
@@ -60,9 +45,10 @@
         </div>
       </div>
 
+      <!-- 步骤 1: 核对种子详情 -->
       <div v-if="activeStep === 1" class="details-container">
         <el-tabs v-model="activeTab" type="border-card" class="details-tabs">
-          <el-tab-pane label="主要信息" name="main">
+           <el-tab-pane label="主要信息" name="main">
             <div class="main-info-container">
               <div class="form-column">
                 <el-form label-position="top" class="fill-height-form">
@@ -175,33 +161,62 @@
         </el-tabs>
         <div class="button-group">
           <el-button @click="handlePreviousStep" :disabled="isLoading">上一步</el-button>
-          <el-button type="success" @click="handlePublish" :loading="isLoading">
-            确认并发布种子
+          <el-button type="primary" @click="goToSelectSiteStep" :disabled="isLoading">
+            下一步：选择发布站点
           </el-button>
         </div>
       </div>
+      
+      <!-- 步骤 2: 选择发布站点 -->
       <div v-if="activeStep === 2" class="form-container">
-        <el-result
-          :icon="finalResult.success ? 'success' : 'error'"
-          :title="finalResult.success ? '发布成功' : '发布失败'"
-          :sub-title="finalResult.message"
-        >
-          <template #extra>
-            <el-link
-              v-if="finalResult.url"
-              :href="finalResult.url"
-              type="primary"
-              target="_blank"
-              :underline="false"
+        <div class="site-selection-container">
+            <h3 class="selection-title">请选择要发布的目标站点 (可多选)</h3>
+            <div class="site-buttons-group">
+            <el-button
+                v-for="site in targetSitesList"
+                :key="site"
+                :type="selectedTargetSites.includes(site) ? 'primary' : 'default'"
+                @click="toggleSiteSelection(site)"
+                class="site-button"
             >
-              点击此处跳转到新种子页面
-            </el-link>
-            <div class="button-group">
-              <el-button type="primary" @click="resetMigration">开始新的迁移</el-button>
+                {{ site }}
+            </el-button>
             </div>
-          </template>
-        </el-result>
+        </div>
+        <div class="button-group">
+            <el-button @click="handlePreviousStep" :disabled="isLoading">上一步</el-button>
+            <el-button type="success" @click="handlePublish" :loading="isLoading" :disabled="selectedTargetSites.length === 0">
+              确认并发布种子
+            </el-button>
+        </div>
       </div>
+      
+      <!-- 步骤 3: 完成发布 -->
+      <div v-if="activeStep === 3" class="form-container">
+        <div v-for="(result, index) in finalResultsList" :key="index" class="result-item">
+            <el-result
+              :icon="result.success ? 'success' : 'error'"
+              :title="`${result.siteName}: ${result.success ? '发布成功' : '发布失败'}`"
+              :sub-title="result.message || (result.success ? '种子已成功发布！' : '发布失败，请检查日志。')"
+            >
+              <template #extra>
+                <el-link
+                  v-if="result.url"
+                  :href="result.url"
+                  type="primary"
+                  target="_blank"
+                  :underline="false"
+                >
+                  点击此处跳转到新种子页面
+                </el-link>
+              </template>
+            </el-result>
+        </div>
+        <div class="button-group">
+          <el-button type="primary" @click="resetMigration">开始新的迁移</el-button>
+        </div>
+      </div>
+
     </div>
     <div v-if="showLogCard" class="log-card-overlay" @click="hideLog"></div>
     <el-card v-if="showLogCard" class="log-card" shadow="xl">
@@ -220,7 +235,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { ElNotification, ElMessageBox } from 'element-plus'
 import axios from 'axios'
-import { Edit, DocumentChecked, UploadFilled, Close, Refresh } from '@element-plus/icons-vue'
+import { Edit, DocumentChecked, UploadFilled, Close, Refresh, Promotion } from '@element-plus/icons-vue'
 
 const getInitialTorrentData = () => ({
   title_components: [],
@@ -243,13 +258,13 @@ const activeStep = ref(0)
 const activeTab = ref('main')
 const sourceSitesList = ref([])
 const targetSitesList = ref([])
-const sourceSite = ref('财神')
-const targetSite = ref('星陨阁-测试站')
-const searchTerm = ref('Peggy Sue Got Married 1986 1080p FRA BluRay REMUX AVC DTS-HD MA 5.1-Mist@Sunny')
+const sourceSite = ref('')
+const selectedTargetSites = ref<string[]>([])
+const searchTerm = ref('')
 const isLoading = ref(false)
 const torrentData = ref(getInitialTorrentData())
 const taskId = ref(null)
-const finalResult = ref({ success: false, url: '', message: '' })
+const finalResultsList = ref<any[]>([])
 const logContent = ref('')
 const showLogCard = ref(false)
 const isReparsing = ref(false)
@@ -281,13 +296,10 @@ const handleImageError = async (url: string, type: 'poster' | 'screenshot', inde
   }
 
   try {
-    // --- [核心修改] ---
     const response = await axios.post('/api/media/validate', payload)
     
-    // 如果请求成功，并且是截图失效的请求，并且后端返回了新的截图链接
     if (response.data.success && type === 'screenshot' && response.data.screenshots) {
       console.log('成功从后端获取了新的截图链接。');
-      // 用后端返回的新链接更新前端的数据模型
       torrentData.value.intro.screenshots = response.data.screenshots;
       ElNotification.success({
         title: '截图已更新',
@@ -301,7 +313,6 @@ const handleImageError = async (url: string, type: 'poster' | 'screenshot', inde
   }
 }
 
-// ... (所有其他 script 方法，如 fetchSitesList, handleNextStep, handlePublish 等，都保持不变) ...
 const fetchSitesList = async () => {
   try {
     const response = await axios.get('/api/sites_list')
@@ -315,7 +326,7 @@ const fetchSitesList = async () => {
 const handleNextStep = async () => {
   reportedFailedScreenshots.value = false
 
-  if (!sourceSite.value || !targetSite.value || !searchTerm.value.trim()) {
+  if (!sourceSite.value || !searchTerm.value.trim()) {
     ElNotification.warning({ title: '提示', message: '请填写所有必填项' })
     return
   }
@@ -330,7 +341,6 @@ const handleNextStep = async () => {
   try {
     const response = await axios.post('/api/migrate/fetch_info', {
       sourceSite: sourceSite.value,
-      targetSite: targetSite.value,
       searchTerm: searchTerm.value.trim(),
     })
 
@@ -361,56 +371,83 @@ const handleNextStep = async () => {
   }
 }
 
+const goToSelectSiteStep = () => {
+    activeStep.value = 2;
+}
+
+const toggleSiteSelection = (siteName: string) => {
+  const index = selectedTargetSites.value.indexOf(siteName)
+  if (index > -1) {
+    selectedTargetSites.value.splice(index, 1)
+  } else {
+    selectedTargetSites.value.push(siteName)
+  }
+}
+
 const handlePublish = async () => {
   isLoading.value = true
+  finalResultsList.value = []
   ElNotification({
     title: '正在发布',
-    message: '正在将种子发布到目标站点...',
+    message: `准备向 ${selectedTargetSites.value.length} 个站点发布种子...`,
     type: 'info',
     duration: 0,
   })
 
-  try {
-    const response = await axios.post('/api/migrate/publish', {
+  const publishPromises = selectedTargetSites.value.map(siteName => {
+    return axios.post('/api/migrate/publish', {
       task_id: taskId.value,
       upload_data: torrentData.value,
-    })
+      targetSite: siteName,
+    }).then(response => ({
+        siteName,
+        ...response.data
+    })).catch(error => ({
+        siteName,
+        success: false,
+        logs: error.response?.data?.logs || error.message,
+        url: null,
+        message: `发布到 ${siteName} 时发生网络错误。`
+    }));
+  });
 
-    if (response.data.logs) {
-      logContent.value = response.data.logs
-    }
-
+  try {
+    const results = await Promise.all(publishPromises)
+    finalResultsList.value = results
+    
     ElNotification.closeAll()
+    const successCount = results.filter(r => r.success).length
+    ElNotification.success({
+        title: '发布完成',
+        message: `成功发布到 ${successCount} / ${selectedTargetSites.value.length} 个站点。`
+    })
+    
+    logContent.value = results.map(r => `--- Log for ${r.siteName} ---\n${r.logs || 'No logs available.'}`).join('\n\n')
 
-    finalResult.value = {
-      success: response.data.success,
-      url: response.data.url,
-      message: response.data.success ? '种子已成功发布！' : '发布失败，请检查相关配置。',
-    }
-    activeStep.value = 2
   } catch (error) {
     ElNotification.closeAll()
-    handleApiError(error, '发布种子时发生网络错误')
-    finalResult.value = { success: false, url: '', message: '发布过程中发生未知网络错误。' }
-    activeStep.value = 2
+    handleApiError(error, '发布种子时发生严重错误')
   } finally {
+    activeStep.value = 3
     isLoading.value = false
   }
 }
 
 const handlePreviousStep = () => {
-  activeStep.value = 0
+    if (activeStep.value > 0) {
+        activeStep.value--
+    }
 }
 
 const resetMigration = () => {
   activeStep.value = 0
   sourceSite.value = ''
-  targetSite.value = ''
+  selectedTargetSites.value = []
   searchTerm.value = ''
   isLoading.value = false
   torrentData.value = getInitialTorrentData()
   taskId.value = null
-  finalResult.value = { success: false, url: '', message: '' }
+  finalResultsList.value = []
   logContent.value = ''
   fetchSitesList()
 }
@@ -458,8 +495,8 @@ onMounted(fetchSitesList)
 }
 
 .content-card.narrow-card {
-  width: 500px;
-  margin: 20vh auto;
+  max-width: 600px;
+  margin: 15vh auto;
 }
 
 .form-container {
@@ -648,5 +685,38 @@ onMounted(fetchSitesList)
 
 :deep(.el-form-item) {
   margin-bottom: 8px;
+}
+
+.site-selection-container {
+  padding: 20px;
+  text-align: center;
+}
+
+.selection-title {
+  margin-bottom: 24px;
+  color: #303133;
+  font-weight: 500;
+}
+
+.site-buttons-group {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+}
+
+.site-button {
+  min-width: 120px;
+  transition: all 0.2s;
+}
+
+.result-item {
+    border-bottom: 1px solid #e4e7ed;
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+}
+.result-item:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
 }
 </style>
