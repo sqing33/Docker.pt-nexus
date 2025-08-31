@@ -24,76 +24,170 @@ class LuckyUploader:
         self.post_url = f"{base_url}/takeupload.php"
         self.timeout = 40
         self.headers = {
-            "origin": base_url,
-            "referer": f"{base_url}/upload.php",
-            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+            "origin":
+            base_url,
+            "referer":
+            f"{base_url}/upload.php",
+            "user-agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
         }
 
     def _map_parameters(self) -> dict:
         """
-        将源站点的参数映射为 lucky 站点所需的表单值。
+        将参数映射为 lucky 站点所需的表单值。
+        - 新逻辑：优先从主标题解析出的参数 (title_components) 获取技术规格。
+        - 类型和标签: 继续从源站的原始参数 (source_params) 获取。
         """
-        params = self.upload_data.get("source_params", {})
+        # 从源站原始参数中获取
+        source_params = self.upload_data.get("source_params", {})
+
+        # 从主标题解析结果中获取，并转换为更易于访问的字典
+        title_components_list = self.upload_data.get("title_components", [])
+        title_params = {
+            item["key"]: item["value"]
+            for item in title_components_list if item.get("value")
+        }
+
         mapped = {}
         tags = []
 
-        # 类型
-        source_type = params.get("类型") or "电影"
-        mapped["type"] = "401" if "电影" in source_type else "405"
-
-        # 媒介
-        medium_lower = (params.get("媒介") or "bluray").lower()
-        if "web" in medium_lower and "dl" in medium_lower:
-            mapped["medium_sel[4]"] = "11"
-        elif "blu" in medium_lower:
-            mapped["medium_sel[4]"] = "1"
+        # 1. 类型
+        source_type = source_params.get("类型") or "电影"
+        if "电影" in source_type:
+            mapped["type"] = "401"
+        elif "电视剧" in source_type:
+            mapped["type"] = "402"
+        elif "动画" in source_type or "动漫" in source_type or "Anime" in source_type:
+            mapped["type"] = "405"
+        elif "MV" in source_type:
+            mapped["type"] = "406"
+        elif "音乐" in source_type:
+            mapped["type"] = "406"
+        elif "综艺" in source_type:
+            mapped["type"] = "410"
+        elif "纪录片" in source_type:
+            mapped["type"] = "411"
+        elif "体育" in source_type:
+            mapped["type"] = "412"
+        elif "短剧" in source_type:
+            mapped["type"] = "413"
         else:
-            mapped["medium_sel[4]"] = "7" 
+            mapped["type"] = "409"
 
-        # 编码
-        codec_lower = (params.get("编码") or "H.264").lower()
-        if "264" in codec_lower:
-            mapped["codec_sel[4]"] = "1"
-        elif "265" in codec_lower:
-            mapped["codec_sel[4]"] = "6"
+        # 2. 媒介
+        medium_str = title_params.get("媒介", "bluray").lower()
+        if "web" in medium_str:
+            mapped["medium_sel[4]"] = "11"  # WEB-DL
+        elif "uhd" in medium_str and "blu" in medium_str:
+            mapped["medium_sel[4]"] = "10"  # UHD Blu-ray
+        elif "blu" in medium_str:
+            mapped["medium_sel[4]"] = "1"  # Blu-ray
+        elif "remux" in medium_str:
+            mapped["medium_sel[4]"] = "3"  # Remux
+        elif "minibd" in medium_str:
+            mapped["medium_sel[4]"] = "4"  # MiniBD
+        elif "hdtv" in medium_str:
+            mapped["medium_sel[4]"] = "5"  # HDTV
+        elif "dvd" in medium_str:
+            mapped["medium_sel[4]"] = "6"  # DVD
+        elif "cd" in medium_str:
+            mapped["medium_sel[4]"] = "8"  # CD
+        elif "track" in medium_str:
+            mapped["medium_sel[4]"] = "9"  # Track
+        elif "encode" in medium_str:
+            mapped["medium_sel[4]"] = "7"  # Encode
         else:
-            mapped["codec_sel[4]"] = "1"
+            mapped["medium_sel[4]"] = "13"  # Other
 
-        # 音频编码
-        audio_upper = (params.get("音频编码") or "DTS").upper()
-        if "AAC" in audio_upper:
+        # 3. 视频编码
+        codec_str = title_params.get("视频编码", "H.264").lower()
+        if "264" in codec_str:
+            mapped["codec_sel[4]"] = "1"  # H.264/AVC
+        elif "av1" in codec_str:
+            mapped["codec_sel[4]"] = "2"  # AV1
+        elif "vc-1" in codec_str or "vc1" in codec_str:
+            mapped["codec_sel[4]"] = "3"  # VC-1
+        elif "mpeg-2" in codec_str or "mpeg2" in codec_str:
+            mapped["codec_sel[4]"] = "4"  # MPEG-2
+        elif "hevc" in codec_str or "265" in codec_str:
+            mapped["codec_sel[4]"] = "6"  # H.265/HEVC
+        elif "mpeg-4" in codec_str or "mpeg4" in codec_str or "xvid" in codec_str:
+            mapped["codec_sel[4]"] = "12"  # MPEG-4/XviD
+        elif "other" in codec_str:
+            mapped["codec_sel[4]"] = "5"  # Other
+        else:
+            mapped["codec_sel[4]"] = "1"  # 默认 H.264/AVC
+
+        # 4. 音频编码 (使用 title_params)
+        audio_str = str(title_params.get("音频编码", "DTS")).upper()
+        if "FLAC" in audio_str:
+            mapped["audiocodec_sel[4]"] = "1"
+        elif "APE" in audio_str:
+            mapped["audiocodec_sel[4]"] = "2"
+        elif "DTS:X" in audio_str:
+            mapped["audiocodec_sel[4]"] = "15"
+        elif "DTS-HD MA" in audio_str:
+            mapped["audiocodec_sel[4]"] = "16"
+        elif "DTS" in audio_str:
+            mapped["audiocodec_sel[4]"] = "3"
+        elif "AAC" in audio_str:
             mapped["audiocodec_sel[4]"] = "6"
-        elif "DDP" in audio_upper:
+        elif "DDP" in audio_str or "E-AC3" in audio_str:
             mapped["audiocodec_sel[4]"] = "12"
+        elif "TRUEHD ATMOS" in audio_str:
+            mapped["audiocodec_sel[4]"] = "11"
+        elif "TRUEHD" in audio_str:
+            mapped["audiocodec_sel[4]"] = "14"
+        elif "LPCM" in audio_str:
+            mapped["audiocodec_sel[4]"] = "13"
+        elif "OGG" in audio_str:
+            mapped["audiocodec_sel[4]"] = "5"
+        elif "MP3" in audio_str:
+            mapped["audiocodec_sel[4]"] = "4"
+        elif "AC3" in audio_str or "DD" in audio_str:
+            mapped["audiocodec_sel[4]"] = "8"
+        elif "M4A" in audio_str:
+            mapped["audiocodec_sel[4]"] = "17"
+        elif "WAV" in audio_str:
+            mapped["audiocodec_sel[4]"] = "18"
         else:
-            mapped["audiocodec_sel[4]"] = "7" 
+            mapped["audiocodec_sel[4]"] = "7"  # Other
 
-        # 分辨率
-        resolution = params.get("分辨率") or "1080p"
-        if "8K" in resolution:
+        # 5. 分辨率 (使用 title_params)
+        resolution_str = str(title_params.get("分辨率", "1080p")).upper()
+        if "8K" in resolution_str or "4320" in resolution_str:
             mapped["standard_sel[4]"] = "7"
-        elif "2160" in resolution:
+        elif "2160" in resolution_str or "4K" in resolution_str:
             mapped["standard_sel[4]"] = "6"
-        elif "1080" in resolution:
+        elif "2K" in resolution_str or "1440" in resolution_str:
+            mapped["standard_sel[4]"] = "5"
+        elif "1080" in resolution_str:
             mapped["standard_sel[4]"] = "1"
-        elif "720" in resolution:
+        elif "720" in resolution_str:
             mapped["standard_sel[4]"] = "3"
-        elif "480" in resolution:
+        elif "480" in resolution_str:
             mapped["standard_sel[4]"] = "4"
         else:
             mapped["standard_sel[4]"] = "8"  # Other
 
-        # 制作组
-        source_team = params.get("制作组")
-        if source_team and "MTeam" in source_team:
-            mapped["team_sel[4]"] = "1"
+        # 6. 制作组 (使用 title_params)
+        release_group_str = str(title_params.get("制作组", "")).upper()
+        if "LUCKWEB" in release_group_str:
+            mapped["team_sel[4]"] = "7"
+        elif "LUCKMUSIC" in release_group_str:
+            mapped["team_sel[4]"] = "8"
+        elif "FRDS" in release_group_str:
+            mapped["team_sel[4]"] = "9"
+        elif "STARFALLWEB" in release_group_str:
+            mapped["team_sel[4]"] = "10"
         else:
-            mapped["team_sel[4]"] = "5"
+            mapped["team_sel[4]"] = "5"  # Other
 
-        # 标签
-        source_tags = params.get("标签") or []
+        # 7. 标签 (继续使用 source_params)
+        source_tags = source_params.get("标签") or []
         if "国语" in source_tags:
             tags.append(5)
+        # 同时检查类型中是否包含“中字”信息
         if "中字" in source_type:
             tags.append(6)
 
@@ -108,19 +202,20 @@ class LuckyUploader:
         根据 intro 数据构建完整的 BBCode 描述。
         """
         intro = self.upload_data.get("intro", {})
-        return (
-            f"{intro.get('statement', '')}\n"
-            f"{intro.get('poster', '')}\n"
-            f"{intro.get('body', '')}\n"
-            f"{intro.get('screenshots', '')}"
-        )
+        return (f"{intro.get('statement', '')}\n"
+                f"{intro.get('poster', '')}\n"
+                f"{intro.get('body', '')}\n"
+                f"{intro.get('screenshots', '')}")
 
     def _build_title(self) -> str:
         """
         根据 title_components 参数，按照 lucky 的规则拼接主标题。
         """
         components_list = self.upload_data.get("title_components", [])
-        components = {item["key"]: item["value"] for item in components_list if item.get("value")}
+        components = {
+            item["key"]: item["value"]
+            for item in components_list if item.get("value")
+        }
         logger.info(f"开始拼接主标题，源参数: {components}")
 
         # 主标题拼接顺序
