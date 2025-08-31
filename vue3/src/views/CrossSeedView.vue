@@ -14,28 +14,14 @@
           <el-row :gutter="20">
             <el-col>
               <el-form-item label="源站点 (需配置Cookie)">
-                <el-select
-                  v-model="sourceSite"
-                  placeholder="请选择源站点"
-                  style="width: 100%"
-                  :disabled="isLoading"
-                >
-                  <el-option
-                    v-for="site in sourceSitesList"
-                    :key="site"
-                    :label="site"
-                    :value="site"
-                  />
+                <el-select v-model="sourceSite" placeholder="请选择源站点" style="width: 100%" :disabled="isLoading">
+                  <el-option v-for="site in sourceSitesList" :key="site" :label="site" :value="site" />
                 </el-select>
               </el-form-item>
             </el-col>
           </el-row>
           <el-form-item label="种子名称 或 源站ID">
-            <el-input
-              v-model="searchTerm"
-              placeholder="输入完整的种子名称或其在源站的ID"
-              :disabled="isLoading"
-            />
+            <el-input v-model="searchTerm" placeholder="输入完整的种子名称或其在源站的ID" :disabled="isLoading" />
           </el-form-item>
         </el-form>
         <div class="button-group">
@@ -48,7 +34,7 @@
       <!-- 步骤 1: 核对种子详情 -->
       <div v-if="activeStep === 1" class="details-container">
         <el-tabs v-model="activeTab" type="border-card" class="details-tabs">
-           <el-tab-pane label="主要信息" name="main">
+          <el-tab-pane label="主要信息" name="main">
             <div class="main-info-container">
               <div class="form-column">
                 <el-form label-position="top" class="fill-height-form">
@@ -63,11 +49,7 @@
                   </el-form-item>
 
                   <div class="title-components-grid">
-                    <el-form-item
-                      v-for="param in torrentData.title_components"
-                      :key="param.key"
-                      :label="param.key"
-                    >
+                    <el-form-item v-for="param in torrentData.title_components" :key="param.key" :label="param.key">
                       <el-input v-model="param.value" />
                     </el-form-item>
                   </div>
@@ -90,15 +72,9 @@
                   </el-form-item>
                   <div class="image-preview-pane" style="max-height: 400px">
                     <template v-if="posterImages.length">
-                      <img
-                        v-for="(url, index) in posterImages"
-                        :key="'poster-' + index"
-                        :src="url"
-                        alt="海报预览"
-                        class="preview-image"
-                        style="width: 280px; margin: 0 auto"
-                        @error="handleImageError(url, 'poster', index)"
-                      />
+                      <img v-for="(url, index) in posterImages" :key="'poster-' + index" :src="url" alt="海报预览"
+                        class="preview-image" style="width: 280px; margin: 0 auto"
+                        @error="handleImageError(url, 'poster', index)" />
                     </template>
                     <div v-else class="preview-placeholder">海报预览</div>
                   </div>
@@ -118,16 +94,9 @@
               </div>
               <div class="preview-column">
                 <div class="image-preview-pane">
-                  <template v-if="screenshotImages.length"
-                    ><el-scrollbar style="height: 525px">
-                      <img
-                        v-for="(url, index) in screenshotImages"
-                        :key="'ss-' + index"
-                        :src="url"
-                        alt="截图预览"
-                        class="preview-image"
-                        @error="handleImageError(url, 'screenshot', index)"
-                    /></el-scrollbar>
+                  <template v-if="screenshotImages.length"><el-scrollbar style="height: 525px">
+                      <img v-for="(url, index) in screenshotImages" :key="'ss-' + index" :src="url" alt="截图预览"
+                        class="preview-image" @error="handleImageError(url, 'screenshot', index)" /></el-scrollbar>
                   </template>
                   <div v-else class="preview-placeholder">截图预览</div>
                 </div>
@@ -144,12 +113,7 @@
           <el-tab-pane label="媒体信息" name="mediainfo">
             <el-form label-position="top" class="fill-height-form">
               <el-form-item label="Mediainfo" class="is-flexible">
-                <el-input
-                  type="textarea"
-                  class="code-font"
-                  v-model="torrentData.mediainfo"
-                  :rows="25"
-                />
+                <el-input type="textarea" class="code-font" v-model="torrentData.mediainfo" :rows="25" />
               </el-form-item>
             </el-form>
           </el-tab-pane>
@@ -166,51 +130,40 @@
           </el-button>
         </div>
       </div>
-      
+
       <!-- 步骤 2: 选择发布站点 -->
       <div v-if="activeStep === 2" class="form-container">
         <div class="site-selection-container">
-            <h3 class="selection-title">请选择要发布的目标站点 (可多选)</h3>
-            <div class="site-buttons-group">
-            <el-button
-                v-for="site in targetSitesList"
-                :key="site"
-                :type="selectedTargetSites.includes(site) ? 'primary' : 'default'"
-                @click="toggleSiteSelection(site)"
-                class="site-button"
-            >
-                {{ site }}
+          <h3 class="selection-title">请选择要发布的目标站点 (可多选)</h3>
+          <div class="site-buttons-group">
+            <el-button v-for="site in targetSitesList" :key="site"
+              :type="selectedTargetSites.includes(site) ? 'primary' : 'default'" @click="toggleSiteSelection(site)"
+              class="site-button">
+              {{ site }}
             </el-button>
-            </div>
+          </div>
         </div>
         <div class="button-group">
-            <el-button @click="handlePreviousStep" :disabled="isLoading">上一步</el-button>
-            <el-button type="success" @click="handlePublish" :loading="isLoading" :disabled="selectedTargetSites.length === 0">
-              确认并发布种子
-            </el-button>
+          <el-button @click="handlePreviousStep" :disabled="isLoading">上一步</el-button>
+          <el-button type="success" @click="handlePublish" :loading="isLoading"
+            :disabled="selectedTargetSites.length === 0">
+            确认并发布种子
+          </el-button>
         </div>
       </div>
-      
+
       <!-- 步骤 3: 完成发布 -->
       <div v-if="activeStep === 3" class="form-container">
         <div v-for="(result, index) in finalResultsList" :key="index" class="result-item">
-            <el-result
-              :icon="result.success ? 'success' : 'error'"
-              :title="`${result.siteName}: ${result.success ? '发布成功' : '发布失败'}`"
-              :sub-title="result.message || (result.success ? '种子已成功发布！' : '发布失败，请检查日志。')"
-            >
-              <template #extra>
-                <el-link
-                  v-if="result.url"
-                  :href="result.url"
-                  type="primary"
-                  target="_blank"
-                  :underline="false"
-                >
-                  点击此处跳转到新种子页面
-                </el-link>
-              </template>
-            </el-result>
+          <el-result :icon="result.success ? 'success' : 'error'"
+            :title="`${result.siteName}: ${result.success ? '发布成功' : '发布失败'}`"
+            :sub-title="result.message || (result.success ? '种子已成功发布！' : '发布失败，请检查日志。')">
+            <template #extra>
+              <el-link v-if="result.url" :href="result.url" type="primary" target="_blank" :underline="false">
+                点击此处跳转到新种子页面
+              </el-link>
+            </template>
+          </el-result>
         </div>
         <div class="button-group">
           <el-button type="primary" @click="resetMigration">开始新的迁移</el-button>
@@ -232,7 +185,9 @@
 </template>
 
 <script setup lang="ts">
+// [修改] 引入 onMounted, computed, 和 useRoute
 import { ref, onMounted, computed } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElNotification, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import { Edit, DocumentChecked, UploadFilled, Close, Refresh, Promotion } from '@element-plus/icons-vue'
@@ -271,6 +226,10 @@ const isReparsing = ref(false)
 const reportedFailedScreenshots = ref(false)
 const posterImages = computed(() => parseImageUrls(torrentData.value.intro.poster))
 const screenshotImages = computed(() => parseImageUrls(torrentData.value.intro.screenshots))
+const savePath = ref('')
+
+// [新增] 获取当前路由信息
+const route = useRoute();
 
 const handleImageError = async (url: string, type: 'poster' | 'screenshot', index: number) => {
   if (type === 'screenshot' && reportedFailedScreenshots.value) {
@@ -293,11 +252,12 @@ const handleImageError = async (url: string, type: 'poster' | 'screenshot', inde
       main_title: torrentData.value.original_main_title,
       source_site: sourceSite.value,
     },
+    savePath: savePath.value,
   }
 
   try {
     const response = await axios.post('/api/media/validate', payload)
-    
+
     if (response.data.success && type === 'screenshot' && response.data.screenshots) {
       console.log('成功从后端获取了新的截图链接。');
       torrentData.value.intro.screenshots = response.data.screenshots;
@@ -342,6 +302,7 @@ const handleNextStep = async () => {
     const response = await axios.post('/api/migrate/fetch_info', {
       sourceSite: sourceSite.value,
       searchTerm: searchTerm.value.trim(),
+      savePath: savePath.value,
     })
 
     if (response.data.logs) {
@@ -372,7 +333,7 @@ const handleNextStep = async () => {
 }
 
 const goToSelectSiteStep = () => {
-    activeStep.value = 2;
+  activeStep.value = 2;
 }
 
 const toggleSiteSelection = (siteName: string) => {
@@ -400,28 +361,28 @@ const handlePublish = async () => {
       upload_data: torrentData.value,
       targetSite: siteName,
     }).then(response => ({
-        siteName,
-        ...response.data
+      siteName,
+      ...response.data
     })).catch(error => ({
-        siteName,
-        success: false,
-        logs: error.response?.data?.logs || error.message,
-        url: null,
-        message: `发布到 ${siteName} 时发生网络错误。`
+      siteName,
+      success: false,
+      logs: error.response?.data?.logs || error.message,
+      url: null,
+      message: `发布到 ${siteName} 时发生网络错误。`
     }));
   });
 
   try {
     const results = await Promise.all(publishPromises)
     finalResultsList.value = results
-    
+
     ElNotification.closeAll()
     const successCount = results.filter(r => r.success).length
     ElNotification.success({
-        title: '发布完成',
-        message: `成功发布到 ${successCount} / ${selectedTargetSites.value.length} 个站点。`
+      title: '发布完成',
+      message: `成功发布到 ${successCount} / ${selectedTargetSites.value.length} 个站点。`
     })
-    
+
     logContent.value = results.map(r => `--- Log for ${r.siteName} ---\n${r.logs || 'No logs available.'}`).join('\n\n')
 
   } catch (error) {
@@ -434,9 +395,9 @@ const handlePublish = async () => {
 }
 
 const handlePreviousStep = () => {
-    if (activeStep.value > 0) {
-        activeStep.value--
-    }
+  if (activeStep.value > 0) {
+    activeStep.value--
+  }
 }
 
 const resetMigration = () => {
@@ -474,7 +435,29 @@ const hideLog = () => {
   showLogCard.value = false
 }
 
-onMounted(fetchSitesList)
+// [修改] 将 fetchSitesList 调用移到 onMounted 钩子内
+onMounted(() => {
+  // 先获取站点列表
+  fetchSitesList();
+
+  // 然后检查URL参数
+  const querySourceSite = route.query.sourceSite;
+  const querySearchTerm = route.query.searchTerm;
+  const querySavePath = route.query.savePath;
+
+  if (querySourceSite && querySearchTerm) {
+    console.log('通过URL参数自动填充转种信息。');
+
+    // 将参数填充到页面的 ref 变量中
+    sourceSite.value = String(querySourceSite);
+    searchTerm.value = String(querySearchTerm);
+    savePath.value = String(querySavePath);
+
+    // 自动触发第一步操作
+    handleNextStep();
+  }
+});
+
 </script>
 
 <style scoped>
@@ -549,6 +532,7 @@ onMounted(fetchSitesList)
 .is-flexible :deep(.el-textarea) {
   flex: 1;
 }
+
 .is-flexible :deep(.el-textarea__inner) {
   height: 100%;
   resize: none;
@@ -572,6 +556,7 @@ onMounted(fetchSitesList)
 .screenshot-container .form-column {
   flex: 5;
 }
+
 .screenshot-container .preview-column {
   flex: 5;
 }
@@ -711,12 +696,13 @@ onMounted(fetchSitesList)
 }
 
 .result-item {
-    border-bottom: 1px solid #e4e7ed;
-    margin-bottom: 16px;
-    padding-bottom: 16px;
+  border-bottom: 1px solid #e4e7ed;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
 }
+
 .result-item:last-child {
-    border-bottom: none;
-    margin-bottom: 0;
+  border-bottom: none;
+  margin-bottom: 0;
 }
 </style>

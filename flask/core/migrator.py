@@ -37,10 +37,15 @@ class LoguruHandler(StringIO):
 class TorrentMigrator:
     """一个用于将种子从一个PT站点迁移到另一个站点的工具类。"""
 
-    def __init__(self, source_site_info, target_site_info, search_term=""):
+    def __init__(self,
+                 source_site_info,
+                 target_site_info,
+                 search_term="",
+                 save_path=""):
         self.source_site = source_site_info
         self.target_site = target_site_info
         self.search_term = search_term
+        self.save_path = save_path
 
         self.SOURCE_BASE_URL = ensure_scheme(self.source_site.get("base_url"))
         self.SOURCE_NAME = self.source_site["nickname"]
@@ -220,10 +225,11 @@ class TorrentMigrator:
                 self.logger.success("主标题成功解析为参数。")
 
             subtitle_td = soup.find("td", string=re.compile(r"\s*副标题\s*"))
-            
+
             # 检查是否找到了标签，并且其后紧跟着一个 td 兄弟节点
             if subtitle_td and subtitle_td.find_next_sibling("td"):
-                subtitle = subtitle_td.find_next_sibling("td").get_text(strip=True)
+                subtitle = subtitle_td.find_next_sibling("td").get_text(
+                    strip=True)
             else:
                 subtitle = ""
             descr_container = soup.select_one("div#kdescr")
@@ -234,14 +240,31 @@ class TorrentMigrator:
                     descr_container.get_text())):
                 imdb_link = imdb_match.group(1)
 
+            # --- [核心修改] MediaInfo 提取逻辑 ---
+
+            # 1. 首先尝试从标准位置提取 MediaInfo
+            mediainfo_pre = soup.select_one("div.spoiler-content pre")
+            if not mediainfo_pre:
+                self.logger.info("未找到常规 MediaInfo 结构，尝试解析 BDInfo 结构...")
+                mediainfo_pre = soup.select_one(
+                    "div.nexus-media-info-raw > pre")
+
+            mediainfo_text = mediainfo_pre.get_text(
+                strip=True) if mediainfo_pre else ""
+
+            # 2. 解析简介内容，并准备提取简介中的元素
             intro = {}
+            quotes = []
+            images = []
+            body = ""
+
             if descr_container:
                 descr_html_string = str(descr_container)
                 corrected_descr_html = re.sub(r'(<img[^>]*[^/])>', r'\1 />',
                                               descr_html_string)
-                descr_container = BeautifulSoup(corrected_descr_html,
-                                                "html.parser")
-                bbcode = self._html_to_bbcode(descr_container)
+                descr_container_soup = BeautifulSoup(corrected_descr_html,
+                                                     "html.parser")
+                bbcode = self._html_to_bbcode(descr_container_soup)
                 quotes = re.findall(r"\[quote\].*?\[/quote\]", bbcode,
                                     re.DOTALL)
                 images = re.findall(r"\[img\].*?\[/img\]", bbcode)
@@ -249,22 +272,45 @@ class TorrentMigrator:
                                "",
                                bbcode,
                                flags=re.DOTALL).replace("\r", "").strip())
-                intro = {
-                    "statement": "\n".join(quotes),
-                    "poster": images[0] if images else "",
-                    "body": re.sub(r"\n{2,}", "\n", body),
-                    "screenshots": "\n".join(images[1:]),
-                }
 
-            mediainfo_pre = soup.select_one("div.spoiler-content pre")
-            if not mediainfo_pre:
-                self.logger.info("未找到常规 MediaInfo 结构，尝试解析 BDInfo 结构...")
-                mediainfo_pre = soup.select_one(
-                    "div.nexus-media-info-raw > pre")
+            # 3. 如果标准位置没有 MediaInfo，则在简介的引用中查找
+            if not mediainfo_text and quotes:
+                self.logger.info("标准位置未找到 MediaInfo，正在尝试从简介的 [quote] 区块中提取...")
+                remaining_quotes = []
+                found_mediainfo_in_quote = False
+                for quote in quotes:
+                    # 检查 quote 内容是否符合 MediaInfo 或 BDInfo 的特征
+                    is_mediainfo = ("General" in quote and "Video" in quote
+                                    and "Audio" in quote)
+                    is_bdinfo = ("DISC INFO" in quote
+                                 and "PLAYLIST REPORT" in quote)
 
+                    if not found_mediainfo_in_quote and (is_mediainfo
+                                                         or is_bdinfo):
+                        # 去掉 [quote] 和 [/quote] 标签
+                        mediainfo_text = re.sub(r"\[/?quote\]", "",
+                                                quote).strip()
+                        self.logger.success("成功在简介中提取到 MediaInfo/BDInfo。")
+                        found_mediainfo_in_quote = True  # 确保只提取第一个匹配项
+                    else:
+                        remaining_quotes.append(quote)
+
+                # 更新 quotes 列表，移除已作为 mediainfo 的内容
+                quotes = remaining_quotes
+
+            # 4. 组装最终的 intro 字典
+            intro = {
+                "statement": "\n".join(quotes),
+                "poster": images[0] if images else "",
+                "body": re.sub(r"\n{2,}", "\n", body),
+                "screenshots": "\n".join(images[1:]),
+            }
+
+            # 5. 最后调用验证函数处理 mediainfo_text
             mediainfo = upload_data_mediaInfo(
-                mediainfo_pre.get_text(
-                    strip=True) if mediainfo_pre else "未找到 Mediainfo 或 BDInfo")
+                mediainfo_text if mediainfo_text else "未找到 Mediainfo 或 BDInfo",
+                self.save_path)
+            # --- [核心修改结束] ---
 
             basic_info_td = soup.find("td", string="基本信息")
             basic_info_dict = {}

@@ -58,17 +58,89 @@ def _upload_to_pixhost(image_path: str):
         return None
 
 
-def upload_data_mediaInfo(mediaInfo: str):
+def _find_target_video_file(path: str) -> str | None:
+    """
+    根据路径智能查找目标视频文件。
+    - 如果是电影目录，返回最大的视频文件。
+    - 如果是剧集目录，返回按名称排序的第一个视频文件。
+
+    :param path: 要搜索的目录或文件路径。
+    :return: 目标视频文件的完整路径，如果找不到则返回 None。
+    """
+    print(f"开始在路径 '{path}' 中查找目标视频文件...")
+    VIDEO_EXTENSIONS = {
+        ".mkv", ".mp4", ".ts", ".avi", ".wmv", ".mov", ".flv", ".m2ts"
+    }
+
+    if not os.path.exists(path):
+        print(f"错误：提供的路径不存在: {path}")
+        return None
+
+    # 如果提供的路径本身就是一个视频文件，直接返回
+    if os.path.isfile(path) and os.path.splitext(
+            path)[1].lower() in VIDEO_EXTENSIONS:
+        print(f"路径直接指向一个视频文件，将使用: {path}")
+        return path
+
+    if not os.path.isdir(path):
+        print(f"错误：路径不是一个有效的目录或视频文件: {path}")
+        return None
+
+    video_files = []
+    for root, _, files in os.walk(path):
+        for file in files:
+            if os.path.splitext(file)[1].lower() in VIDEO_EXTENSIONS:
+                video_files.append(os.path.join(root, file))
+
+    if not video_files:
+        print(f"在目录 '{path}' 中未找到任何视频文件。")
+        return None
+
+    # --- 智能判断是剧集还是电影 ---
+    # 匹配 S01E01, s01e01, season 1 episode 1 等格式
+    series_pattern = re.compile(
+        r'[._\s-](S\d{1,2}E\d{1,3}|Season[._\s-]?\d{1,2}|E\d{1,3})[._\s-]',
+        re.IGNORECASE)
+    is_series = any(series_pattern.search(f) for f in video_files)
+
+    if is_series:
+        print("检测到剧集命名格式，将选择第一集。")
+        # 按文件名排序，通常第一集会在最前面
+        video_files.sort()
+        target_file = video_files[0]
+        print(f"已选择剧集文件: {target_file}")
+        return target_file
+    else:
+        print("未检测到剧集格式，将按电影处理（选择最大文件）。")
+        largest_file = ""
+        max_size = -1
+        for f in video_files:
+            try:
+                size = os.path.getsize(f)
+                if size > max_size:
+                    max_size = size
+                    largest_file = f
+            except OSError as e:
+                print(f"无法获取文件大小 '{f}': {e}")
+                continue
+
+        if largest_file:
+            print(f"已选择最大文件 ({(max_size / 1024**3):.2f} GB): {largest_file}")
+            return largest_file
+        else:
+            print("无法确定最大的文件。")
+            return None
+
+
+# --- [修改] 主函数，整合了新的文件查找逻辑 ---
+def upload_data_mediaInfo(mediaInfo: str, save_path: str):
     """
     检查传入的文本是有效的 MediaInfo 还是 BDInfo 格式。
-    如果两种格式都不是，则认为其不完整或无法识别。
+    如果没有 MediaInfo 或 BDInfo 则尝试从 save_path 查找视频文件提取 MediaInfo。
     """
     print("开始检查 MediaInfo/BDInfo 格式")
 
-    # --- [核心修改] 定义两种不同格式的验证标准 ---
-
     # 1. 标准 MediaInfo 格式的关键字
-    #    这种格式通常由 MediaInfo 工具直接生成，包含 General/Video/Audio 等区块。
     standard_mediainfo_keywords = [
         "General",
         "Video",
@@ -81,7 +153,6 @@ def upload_data_mediaInfo(mediaInfo: str):
     ]
 
     # 2. BDInfo 格式的关键字
-    #    这种格式通常由 BDInfo 工具生成，用于描述蓝光原盘，包含 DISC INFO 等区块。
     bdinfo_keywords = [
         "DISC INFO",
         "PLAYLIST REPORT",
@@ -92,13 +163,8 @@ def upload_data_mediaInfo(mediaInfo: str):
         "Disc Size",
     ]
 
-    # --- [核心修改] 依次进行格式检查 ---
-
-    # 检查是否为标准 MediaInfo 格式
     is_standard_mediainfo = all(keyword in mediaInfo
                                 for keyword in standard_mediainfo_keywords)
-
-    # 检查是否为 BDInfo 格式
     is_bdinfo = all(keyword in mediaInfo for keyword in bdinfo_keywords)
 
     if is_standard_mediainfo:
@@ -108,8 +174,29 @@ def upload_data_mediaInfo(mediaInfo: str):
         print("检测到 BDInfo 格式，验证通过。")
         return mediaInfo
     else:
-        print("格式不完整或无法识别，将返回原始信息。")
-        return mediaInfo
+        print("提供的文本不是有效的 MediaInfo/BDInfo，将尝试从本地文件提取。")
+        if not save_path:
+            print("错误：未提供 save_path，无法从文件提取 MediaInfo。")
+            return mediaInfo
+
+        target_video_file = _find_target_video_file(save_path)
+
+        if not target_video_file:
+            print("未能在指定路径中找到合适的视频文件，提取失败。")
+            return mediaInfo
+
+        try:
+            print(f"准备使用 MediaInfo 工具从 '{target_video_file}' 提取...")
+
+            media_info_parsed = MediaInfo.parse(target_video_file,
+                                                output="text",
+                                                full=False)
+
+            print("从文件重新提取 MediaInfo 成功。")
+            return str(media_info_parsed)
+        except Exception as e:
+            print(f"从文件 '{target_video_file}' 处理时出错: {e}。将返回原始 mediainfo。")
+            return mediaInfo
 
 
 def upload_data_title(title: str):
@@ -192,7 +279,7 @@ def upload_data_title(title: str):
     # 4. 技术标签提取
     tech_patterns_definitions = {
         "medium":
-        r"UHDTV|UHD\s*Blu-?ray|Blu-ray|WEB-DL|WEBrip|TVrip|DVDRip|HDTV|DVD9",
+        r"UHDTV|UHD\s*Blu-?ray|Blu-ray|BluRay|WEB-DL|WEBrip|TVrip|DVDRip|HDTV|DVD9",
         "audio":
         r"DTS-HD(?:\s*MA)?(?:\s*\d\.\d)?|(?:Dolby\s*)?TrueHD(?:\s*Atmos)?(?:\s*\d\.\d)?|Atmos(?:\s*TrueHD)?(?:\s*\d\.\d)?|DTS(?:\s*\d\.\d)?|DDP(?:\s*\d\.\d)?|DD\+(?:\s*\d\.\d)?|DD(?:\s*\d\.\d)?|AC3(?:\s*\d\.\d)?|FLAC(?:\s*\d\.\d)?|AAC(?:\s*\d\.\d)?|LPCM(?:\s*\d\.\d)?|AV3A\s*\d\.\d|\d+\s*Audios?|MP2|DUAL",
         "hdr_format":
@@ -404,30 +491,25 @@ def upload_data_title(title: str):
     return final_components_list
 
 
-def upload_data_screenshot(image_type, source_info):
+def upload_data_screenshot(image_type, source_info, save_path):
     """
     使用ffmpeg从指定的视频文件中截取5张图片，上传到Pixhost图床，
     并返回一个包含所有图片BBCode链接的字符串。
     """
     print("开始执行截图和上传任务...")
 
+    target_video_file = _find_target_video_file(save_path)
+
     # --- 1. 配置和环境检查 ---
-
-    video_path = "/app/Code/Dockerfile/Docker.pt-nexus/flask/tmp/Voices.of.a.Distant.Star.2002.1080p.BluRay.FLAC.2.0.x264-ZmPT.mkv"
-
     if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
         print("错误：找不到 ffmpeg 或 ffprobe。请确保它们已安装并已添加到系统环境变量 PATH 中。")
-        return ""
-
-    if not os.path.isfile(video_path):
-        print(f"错误：视频文件不存在于指定路径: {video_path}")
         return ""
 
     try:
         print("正在获取视频时长...")
         cmd_duration = [
             "ffprobe", "-v", "error", "-show_entries", "format=duration",
-            "-of", "default=noprint_wrappers=1:nokey=1", video_path
+            "-of", "default=noprint_wrappers=1:nokey=1", target_video_file
         ]
         result = subprocess.run(cmd_duration,
                                 capture_output=True,
@@ -457,7 +539,7 @@ def upload_data_screenshot(image_type, source_info):
 
             cmd_screenshot = [
                 "ffmpeg", "-ss",
-                str(screenshot_time), "-i", video_path, "-vframes", "1",
+                str(screenshot_time), "-i", target_video_file, "-vframes", "1",
                 "-q:v", "2", "-y", output_filename
             ]
 
@@ -507,7 +589,3 @@ def upload_data_screenshot(image_type, source_info):
 
 def upload_data_poster():
     pass
-
-
-if __name__ == "__main__":
-    upload_data_screenshot("aaa", "1231")

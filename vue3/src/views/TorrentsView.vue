@@ -1,57 +1,26 @@
 <!-- src/views/TorrentsView.vue -->
 <template>
   <div class="torrents-view">
-    <el-alert
-      v-if="error"
-      :title="error"
-      type="error"
-      show-icon
-      :closable="false"
-      center
-      style="margin-bottom: 15px"
-    ></el-alert>
+    <el-alert v-if="error" :title="error" type="error" show-icon :closable="false" center
+      style="margin-bottom: 15px"></el-alert>
 
-    <el-table
-      :data="allData"
-      v-loading="loading"
-      border
-      height="100%"
-      ref="tableRef"
-      row-key="name"
-      :row-class-name="tableRowClassName"
-      @row-click="handleRowClick"
-      @expand-change="handleExpandChange"
-      @sort-change="handleSortChange"
-      :default-sort="currentSort"
-      empty-text="无数据或当前筛选条件下无结果"
-    >
+    <el-table :data="allData" v-loading="loading" border height="100%" ref="tableRef" row-key="name"
+      :row-class-name="tableRowClassName" @row-click="handleRowClick" @expand-change="handleExpandChange"
+      @sort-change="handleSortChange" :default-sort="currentSort" empty-text="无数据或当前筛选条件下无结果">
       <el-table-column type="expand" width="1">
         <template #default="props">
           <div class="expand-content">
             <!-- [修改] 使用按中文拼音排序的 sorted_all_sites -->
             <template v-for="siteName in sorted_all_sites" :key="siteName">
               <template v-if="props.row.sites[siteName]">
-                <a
-                  v-if="hasLink(props.row.sites[siteName], siteName)"
-                  :href="getLink(props.row.sites[siteName], siteName)!"
-                  target="_blank"
-                  style="text-decoration: none"
-                >
-                  <el-tag
-                    effect="dark"
-                    :type="getTagType(props.row.sites[siteName])"
-                    style="text-align: center"
-                  >
+                <a v-if="hasLink(props.row.sites[siteName], siteName)"
+                  :href="getLink(props.row.sites[siteName], siteName)!" target="_blank" style="text-decoration: none">
+                  <el-tag effect="dark" :type="getTagType(props.row.sites[siteName])" style="text-align: center">
                     {{ siteName }}
                     <div>({{ formatBytes(props.row.sites[siteName].uploaded) }})</div>
                   </el-tag>
                 </a>
-                <el-tag
-                  v-else
-                  effect="dark"
-                  :type="getTagType(props.row.sites[siteName])"
-                  style="text-align: center"
-                >
+                <el-tag v-else effect="dark" :type="getTagType(props.row.sites[siteName])" style="text-align: center">
                   {{ siteName }}
                   <div>({{ formatBytes(props.row.sites[siteName].uploaded) }})</div>
                 </el-tag>
@@ -68,13 +37,7 @@
         <template #header>
           <div class="name-header-container">
             <div>种子名称</div>
-            <el-input
-              v-model="nameSearch"
-              placeholder="搜索名称..."
-              clearable
-              class="search-input"
-              @click.stop
-            />
+            <el-input v-model="nameSearch" placeholder="搜索名称..." clearable class="search-input" @click.stop />
             <span @click.stop>
               <el-button type="primary" @click="openFilterDialog" plain>筛选</el-button>
             </span>
@@ -85,14 +48,8 @@
         </template>
       </el-table-column>
 
-      <el-table-column
-        prop="site_count"
-        label="做种站点数"
-        sortable="custom"
-        width="120"
-        align="center"
-        header-align="center"
-      >
+      <el-table-column prop="site_count" label="做种站点数" sortable="custom" width="120" align="center"
+        header-align="center">
         <template #default="scope">
           <span style="display: inline-block; width: 100%; text-align: center">
             {{ scope.row.site_count }} / {{ scope.row.total_site_count }}
@@ -101,28 +58,12 @@
       </el-table-column>
 
       <el-table-column prop="save_path" label="保存路径" width="250" show-overflow-tooltip />
-      <el-table-column
-        label="大小"
-        prop="size_formatted"
-        width="110"
-        align="center"
-        sortable="custom"
-      />
+      <el-table-column label="大小" prop="size_formatted" width="110" align="center" sortable="custom" />
 
-      <el-table-column
-        label="总上传量"
-        prop="total_uploaded_formatted"
-        width="130"
-        align="center"
-        sortable="custom"
-      />
+      <el-table-column label="总上传量" prop="total_uploaded_formatted" width="130" align="center" sortable="custom" />
       <el-table-column label="进度" prop="progress" width="90" align="center" sortable="custom">
         <template #default="scope">
-          <el-progress
-            :percentage="scope.row.progress"
-            :stroke-width="10"
-            :color="progressColors"
-          />
+          <el-progress :percentage="scope.row.progress" :stroke-width="10" :color="progressColors" />
         </template>
       </el-table-column>
       <el-table-column label="状态" prop="state" width="90" align="center">
@@ -132,20 +73,21 @@
           }}</el-tag>
         </template>
       </el-table-column>
+
+      <!-- [修改] 此处是之前版本已添加的，代码保持不变 -->
+      <el-table-column label="操作" width="100" align="center">
+        <template #default="scope">
+          <el-button type="primary" size="small" @click.stop="startCrossSeed(scope.row)">
+            转种
+          </el-button>
+        </template>
+      </el-table-column>
     </el-table>
 
-    <el-pagination
-      v-if="totalTorrents > 0"
-      style="margin-top: 15px; justify-content: flex-end"
-      v-model:current-page="currentPage"
-      v-model:page-size="pageSize"
-      :page-sizes="[20, 50, 100, 200, 500]"
-      :total="totalTorrents"
-      layout="total, sizes, prev, pager, next, jumper"
-      @size-change="handleSizeChange"
-      @current-change="handleCurrentChange"
-      background
-    />
+    <el-pagination v-if="totalTorrents > 0" style="margin-top: 15px; justify-content: flex-end"
+      v-model:current-page="currentPage" v-model:page-size="pageSize" :page-sizes="[20, 50, 100, 200, 500]"
+      :total="totalTorrents" layout="total, sizes, prev, pager, next, jumper" @size-change="handleSizeChange"
+      @current-change="handleCurrentChange" background />
 
     <el-dialog v-model="filterDialogVisible" title="筛选选项" width="800px" class="filter-dialog">
       <el-divider content-position="left">站点筛选</el-divider>
@@ -157,10 +99,7 @@
         </el-radio-group>
 
         <div class="site-checkbox-container">
-          <el-checkbox-group
-            v-model="tempFilters.siteNames"
-            :disabled="tempFilters.siteExistence === 'all'"
-          >
+          <el-checkbox-group v-model="tempFilters.siteNames" :disabled="tempFilters.siteExistence === 'all'">
             <!-- [修改] 使用按中文拼音排序的 sorted_all_sites -->
             <el-checkbox v-for="site in sorted_all_sites" :key="site" :label="site">{{
               site
@@ -171,15 +110,8 @@
 
       <el-divider content-position="left">保存路径</el-divider>
       <div class="path-tree-container">
-        <el-tree
-          ref="pathTreeRef"
-          :data="pathTreeData"
-          show-checkbox
-          node-key="path"
-          default-expand-all
-          check-on-click-node
-          :props="{ class: 'path-tree-node' }"
-        />
+        <el-tree ref="pathTreeRef" :data="pathTreeData" show-checkbox node-key="path" default-expand-all
+          check-on-click-node :props="{ class: 'path-tree-node' }" />
       </div>
 
       <el-divider content-position="left">状态</el-divider>
@@ -200,8 +132,10 @@
 </template>
 
 <script setup lang="ts">
-// [新增] 引入 computed
+// [修改] 引入 computed, useRouter, ElMessage
 import { ref, onMounted, reactive, watch, defineEmits, nextTick, computed } from 'vue'
+import { useRouter } from 'vue-router';
+import { ElMessage } from 'element-plus';
 import type { TableInstance, Sort } from 'element-plus'
 import type { ElTree } from 'element-plus'
 
@@ -210,6 +144,8 @@ const emits = defineEmits(['ready'])
 interface SiteData {
   uploaded: number
   comment: string
+  // [新增] 为 SiteData 接口添加 migration 字段
+  migration: number
 }
 interface Torrent {
   name: string
@@ -234,6 +170,9 @@ interface PathNode {
   label: string
   children?: PathNode[]
 }
+
+// [新增] 初始化 useRouter
+const router = useRouter();
 
 const tableRef = ref<TableInstance | null>(null)
 const loading = ref<boolean>(true)
@@ -265,11 +204,8 @@ const expandedRows = ref<string[]>([])
 const pathTreeRef = ref<InstanceType<typeof ElTree> | null>(null)
 const pathTreeData = ref<PathNode[]>([])
 
-// [新增] 创建一个计算属性，它会自动按中文拼音对 all_sites 进行排序
 const sorted_all_sites = computed(() => {
-  // Intl.Collator 是专门用于处理特定语言排序的 API
   const collator = new Intl.Collator('zh-CN', { numeric: true })
-  // 创建一个 all_sites 的副本并进行排序
   return [...all_sites.value].sort(collator.compare)
 })
 
@@ -347,6 +283,53 @@ const fetchData = async () => {
     loading.value = false
   }
 }
+
+// [新增] 开始: “一键转种”按钮的点击处理函数
+const startCrossSeed = (row: Torrent) => {
+  // 1. 筛选出所有可用的源站点
+  const availableSources = Object.entries(row.sites)
+    .map(([siteName, siteDetails]) => ({ siteName, ...siteDetails }))
+    .filter(site => {
+      // 条件1: 必须有详情页链接 (显示为绿色)
+      const hasDetailsLink = site.comment && site.comment.includes('details.php?id=');
+      // 条件2: 站点必须被配置为可作为源站 (migration 为 1 或 3)
+      const isSourceSite = site.migration === 1 || site.migration === 3;
+      return hasDetailsLink && isSourceSite;
+    });
+
+  // 2. 根据筛选结果进行处理
+  if (availableSources.length === 0) {
+    ElMessage.error('该种子没有找到可用的源站点进行迁移。');
+    return;
+  }
+
+  // 假设我们只使用找到的第一个可用源站
+  // 如果希望用户在有多个可用源站时进行选择，可以在此弹出一个对话框
+  const sourceSite = availableSources[0];
+
+  // 3. 从详情页链接中提取种子 ID
+  const idMatch = sourceSite.comment.match(/id=(\d+)/);
+  if (!idMatch || !idMatch[1]) {
+    ElMessage.error(`无法从源站点 ${sourceSite.siteName} 的链接中提取种子ID。`);
+    return;
+  }
+  const torrentId = idMatch[1];
+  const sourceSiteName = sourceSite.siteName;
+
+  ElMessage.success(`准备从站点 [${sourceSiteName}] 开始迁移种子...`);
+  const finalSavePath = `${row.save_path.replace(/[/\\]$/, '')}/${row.name}`;
+
+  // 4. 跳转到转种页面，并携带参数
+  router.push({
+    path: '/cross_seed',
+    query: {
+      sourceSite: sourceSiteName,
+      searchTerm: torrentId,
+      savePath: finalSavePath,
+    },
+  });
+};
+// [新增] 结束
 
 const handleSizeChange = (val: number) => {
   pageSize.value = val
