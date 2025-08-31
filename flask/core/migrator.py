@@ -219,11 +219,13 @@ class TorrentMigrator:
             else:
                 self.logger.success("主标题成功解析为参数。")
 
-            subtitle_td = soup.find(
-                lambda tag: tag.name == 'td' and '副标题' in tag.get_text())
-            subtitle = (subtitle_td.find_next_sibling("td").get_text(
-                strip=True) if subtitle_td
-                        and subtitle_td.find_next_sibling("td") else "")
+            subtitle_td = soup.find("td", string=re.compile(r"\s*副标题\s*"))
+            
+            # 检查是否找到了标签，并且其后紧跟着一个 td 兄弟节点
+            if subtitle_td and subtitle_td.find_next_sibling("td"):
+                subtitle = subtitle_td.find_next_sibling("td").get_text(strip=True)
+            else:
+                subtitle = ""
             descr_container = soup.select_one("div#kdescr")
 
             imdb_link = ""

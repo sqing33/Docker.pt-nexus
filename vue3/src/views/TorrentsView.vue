@@ -321,7 +321,7 @@ const fetchData = async () => {
       sortOrder: currentSort.value.order || 'ascending',
       siteFilterExistence: activeFilters.siteExistence,
       siteFilterNames: JSON.stringify(activeFilters.siteNames),
-      path_filters: JSON.stringify(activeFilters.paths),
+      path_filters: JSON.stringify(activeFilters.paths || []),
       state_filters: JSON.stringify(activeFilters.states),
     })
 
