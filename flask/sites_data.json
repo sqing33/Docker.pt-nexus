@@ -5,7 +5,7 @@
     "base_url": "pt.keepfrds.com",
     "special_tracker_domain": null,
     "group": "FRDS",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "pthome",
@@ -13,7 +13,7 @@
     "base_url": "pthome.net",
     "special_tracker_domain": null,
     "group": "PTHome,PTH,PTHtv",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "m-team",
@@ -21,7 +21,7 @@
     "base_url": "kp.m-team.cc",
     "special_tracker_domain": "manfuz",
     "group": "MWeb,MTeam,PTTV",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "hdsky",
@@ -29,7 +29,7 @@
     "base_url": "hdsky.me",
     "special_tracker_domain": null,
     "group": "HDSky",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "tjupt",
@@ -37,7 +37,7 @@
     "base_url": "tjupt.org",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "pter",
@@ -45,7 +45,7 @@
     "base_url": "pterclub.com",
     "special_tracker_domain": null,
     "group": "PTerWEB",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "hdhome",
@@ -53,7 +53,7 @@
     "base_url": "hdhome.org",
     "special_tracker_domain": null,
     "group": "HDHome",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "btschool",
@@ -61,7 +61,7 @@
     "base_url": "pt.btschool.club",
     "special_tracker_domain": null,
     "group": "BtsHD,BTSCHOOL,BtsTV",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "ourbits",
@@ -69,7 +69,7 @@
     "base_url": "ourbits.club",
     "special_tracker_domain": null,
     "group": "OurBits ",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "torrentccf",
@@ -77,7 +77,7 @@
     "base_url": "et8.org",
     "special_tracker_domain": null,
     "group": "BMDru",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "ttg",
@@ -85,7 +85,7 @@
     "base_url": "totheglory.im",
     "special_tracker_domain": null,
     "group": "WiKi",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "nanyangpt",
@@ -93,7 +93,7 @@
     "base_url": "nanyangpt.com",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "hdcity",
@@ -101,7 +101,7 @@
     "base_url": "hdcity.city",
     "special_tracker_domain": "leniter",
     "group": "-NoVA",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "nicept",
@@ -109,7 +109,7 @@
     "base_url": "www.nicept.net",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "52pt",
@@ -117,7 +117,7 @@
     "base_url": "52pt.site",
     "special_tracker_domain": null,
     "group": "52pt",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "eastgame",
@@ -125,7 +125,7 @@
     "base_url": "pt.eastgame.org",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "ssd",
@@ -133,7 +133,7 @@
     "base_url": "springsunday.net",
     "special_tracker_domain": null,
     "group": "CMCT,CMCTV,7³ACG,Telesto,-shadow610",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "soulvoice",
@@ -141,7 +141,7 @@
     "base_url": "pt.soulvoice.club",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "chdbits",
@@ -149,7 +149,7 @@
     "base_url": "ptchdbits.co",
     "special_tracker_domain": null,
     "group": "CHDBits,CHDWEB,-CHD",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "ptsbao",
@@ -157,7 +157,7 @@
     "base_url": "ptsbao.club",
     "special_tracker_domain": null,
     "group": "FFansDIY,FFans,OPS,FHDMv",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "hdarea",
@@ -165,7 +165,7 @@
     "base_url": "hdarea.club",
     "special_tracker_domain": null,
     "group": "HDArea,EPiC,HDATV,HDApad",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "hdtime",
@@ -173,7 +173,7 @@
     "base_url": "hdtime.org",
     "special_tracker_domain": null,
     "group": "HDtime",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "1ptba",
@@ -181,7 +181,7 @@
     "base_url": "1ptba.com",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "hd4fans",
@@ -189,7 +189,7 @@
     "base_url": "pt.hd4fans.org",
     "special_tracker_domain": null,
     "group": "-beAst",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "opencd",
@@ -197,7 +197,7 @@
     "base_url": "open.cd",
     "special_tracker_domain": null,
     "group": "OpenCD",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "joyhd",
@@ -205,7 +205,7 @@
     "base_url": "www.joyhd.net",
     "special_tracker_domain": null,
     "group": "JoyHD",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "dmhy",
@@ -213,7 +213,7 @@
     "base_url": "u2.dmhy.org",
     "special_tracker_domain": null,
     "group": "U2",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "upxin",
@@ -221,7 +221,7 @@
     "base_url": "pt.upxin.net",
     "special_tracker_domain": null,
     "group": "HDU",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "oshen",
@@ -229,7 +229,7 @@
     "base_url": "www.oshen.win",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "discfan",
@@ -237,7 +237,7 @@
     "base_url": "discfan.net",
     "special_tracker_domain": null,
     "group": "discfan,DiscFan",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "byr",
@@ -245,7 +245,7 @@
     "base_url": "byr.pt",
     "special_tracker_domain": null,
     "group": "BYRHD",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "dicmusic",
@@ -253,7 +253,7 @@
     "base_url": "dicmusic.com",
     "special_tracker_domain": "52dic",
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "skyeysnow",
@@ -261,7 +261,7 @@
     "base_url": "skyey2.com",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "pt",
@@ -269,7 +269,7 @@
     "base_url": "pt.sjtu.edu.cn",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "hdroute",
@@ -277,7 +277,7 @@
     "base_url": "www.hdroute.org",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "haidan",
@@ -285,7 +285,7 @@
     "base_url": "www.haidan.video",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "hdfans",
@@ -293,7 +293,7 @@
     "base_url": "hdfans.org",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "dragonhd",
@@ -301,7 +301,7 @@
     "base_url": "www.dragonhd.xyz",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "hitpt",
@@ -309,7 +309,7 @@
     "base_url": "www.hitpt.com",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "greatposterwall",
@@ -317,7 +317,7 @@
     "base_url": "greatposterwall.com",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "hdpost",
@@ -325,7 +325,7 @@
     "base_url": "pt.hdpost.top",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "hudbt",
@@ -333,7 +333,7 @@
     "base_url": "hudbt.hust.edu.cn",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "audiences",
@@ -341,7 +341,7 @@
     "base_url": "audiences.me",
     "special_tracker_domain": null,
     "group": "ADE,Audies,ADWeb",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "piggo",
@@ -349,7 +349,7 @@
     "base_url": "piggo.me",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "wintersakura",
@@ -357,7 +357,7 @@
     "base_url": "wintersakura.net",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "hhanclub",
@@ -365,7 +365,7 @@
     "base_url": "hhanclub.top",
     "special_tracker_domain": null,
     "group": "HHWEB",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "pt0ffcc",
@@ -373,7 +373,7 @@
     "base_url": "pt.0ff.cc",
     "special_tracker_domain": null,
     "group": "FFweb",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "redleaves",
@@ -381,7 +381,7 @@
     "base_url": "leaves.red",
     "special_tracker_domain": null,
     "group": "-RL",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "ptchina",
@@ -389,7 +389,7 @@
     "base_url": "ptchina.org",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "zhuque",
@@ -397,7 +397,7 @@
     "base_url": "zhuque.in",
     "special_tracker_domain": null,
     "group": "ZWEX",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "zmpt",
@@ -405,7 +405,7 @@
     "base_url": "zmpt.cc",
     "special_tracker_domain": null,
     "group": "ZmWeb,ZmAudio,ZmPT",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "rousi",
@@ -413,7 +413,7 @@
     "base_url": "rousi.zip",
     "special_tracker_domain": "rousipt",
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "monikadesign",
@@ -421,7 +421,7 @@
     "base_url": "monikadesign.uk",
     "special_tracker_domain": "anime-no-index",
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "cyanbug",
@@ -429,7 +429,7 @@
     "base_url": "cyanbug.net",
     "special_tracker_domain": null,
     "group": "BUG",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "ubits",
@@ -437,7 +437,7 @@
     "base_url": "ubits.club",
     "special_tracker_domain": null,
     "group": "UBits,UBWEB,UBTV",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "pandapt",
@@ -445,7 +445,7 @@
     "base_url": "pandapt.net",
     "special_tracker_domain": null,
     "group": "AilMWeb,Panda,AilME,AilMTV,AilMUpscale",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "carpt",
@@ -453,7 +453,7 @@
     "base_url": "carpt.net",
     "special_tracker_domain": null,
     "group": "CarPT",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "dajiao",
@@ -461,7 +461,7 @@
     "base_url": "dajiao.cyou",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "shadowflow",
@@ -469,7 +469,7 @@
     "base_url": "star-space.net",
     "special_tracker_domain": null,
     "group": "-YingWEB",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "agsvpt",
@@ -477,7 +477,7 @@
     "base_url": "www.agsvpt.com",
     "special_tracker_domain": null,
     "group": "AGSVWEB,AGSVMUS,AGSVPT,AGSVMUSIC",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "ptvicomo",
@@ -485,7 +485,7 @@
     "base_url": "ptvicomo.net",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "qingwapt",
@@ -493,7 +493,7 @@
     "base_url": "www.qingwapt.com",
     "special_tracker_domain": null,
     "group": "FROGE,FROGWeb",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "xingtan",
@@ -501,7 +501,7 @@
     "base_url": "xingtan.one",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "hdkyl",
@@ -509,7 +509,7 @@
     "base_url": "www.hdkyl.in",
     "special_tracker_domain": null,
     "group": "Kylin,HDKWEB,HDKylinWeb,HDKTV",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "ilolicon",
@@ -517,7 +517,7 @@
     "base_url": "share.ilolicon.com",
     "special_tracker_domain": null,
     "group": "LoliHouse",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "gtkpw",
@@ -525,7 +525,7 @@
     "base_url": "pt.gtk.pw",
     "special_tracker_domain": "gtkpw",
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "wukongwendao",
@@ -533,7 +533,7 @@
     "base_url": "wukongwendao.top",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "okpt",
@@ -541,7 +541,7 @@
     "base_url": "www.okpt.net",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "crabpt",
@@ -549,7 +549,7 @@
     "base_url": "crabpt.vip",
     "special_tracker_domain": null,
     "group": "crab",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "icc2022",
@@ -557,7 +557,7 @@
     "base_url": "www.icc2022.com",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "hddolby",
@@ -565,7 +565,7 @@
     "base_url": "www.hddolby.com",
     "special_tracker_domain": null,
     "group": "QHstudIo,-Dream,DBTV,CornerMV",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "kamept",
@@ -573,7 +573,7 @@
     "base_url": "kamept.com",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "ptcafe",
@@ -581,7 +581,7 @@
     "base_url": "ptcafe.club",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "tosky",
@@ -589,7 +589,7 @@
     "base_url": "t.tosky.club",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "yemapt",
@@ -597,7 +597,7 @@
     "base_url": "www.yemapt.org",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "ptlgs",
@@ -605,7 +605,7 @@
     "base_url": "ptlgs.org",
     "special_tracker_domain": "ptl",
     "group": "DYZ-Movie,DYZ-WEB,DYZ-TV,DJWEB",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "lemonhd",
@@ -613,7 +613,7 @@
     "base_url": "lemonhd.club",
     "special_tracker_domain": "ilovelemonhd.me",
     "group": "-LHD",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "njtupt",
@@ -621,7 +621,7 @@
     "base_url": "njtupt.top",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "ptzone",
@@ -629,7 +629,7 @@
     "base_url": "ptzone.xyz",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "hdclone",
@@ -637,7 +637,7 @@
     "base_url": "pt.hdclone.org",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "kufei",
@@ -645,7 +645,7 @@
     "base_url": "kufei.org",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "ptlover",
@@ -653,7 +653,7 @@
     "base_url": "www.ptlover.cc",
     "special_tracker_domain": null,
     "group": "AFWEB",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "hspt",
@@ -661,7 +661,7 @@
     "base_url": "hspt.club",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "sanpro",
@@ -669,7 +669,7 @@
     "base_url": "sanpro.pw",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "htpt",
@@ -677,7 +677,7 @@
     "base_url": "www.htpt.cc",
     "special_tracker_domain": null,
     "group": "HTPT",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "sewerpt",
@@ -685,7 +685,7 @@
     "base_url": "sewerpt.com",
     "special_tracker_domain": null,
     "group": "SewageWeb",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "bilibili",
@@ -693,7 +693,7 @@
     "base_url": "bilibili.download",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "gamegamept",
@@ -701,7 +701,7 @@
     "base_url": "www.gamegamept.com",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "raingfh",
@@ -709,7 +709,7 @@
     "base_url": "raingfh.top",
     "special_tracker_domain": null,
     "group": "rainweb,-rain",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "xingyunge",
@@ -733,7 +733,7 @@
     "base_url": "tmpt.top",
     "special_tracker_domain": null,
     "group": "TangPT,Tangweb",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "mypt",
@@ -757,7 +757,7 @@
     "base_url": "lemonhd.net",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "13city",
@@ -765,7 +765,7 @@
     "base_url": "13city.org",
     "special_tracker_domain": null,
     "group": "13City",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "luckpt",
@@ -781,7 +781,7 @@
     "base_url": "si-qi.xyz",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "hxpt",
@@ -789,7 +789,7 @@
     "base_url": "www.hxpt.org",
     "special_tracker_domain": null,
     "group": "HXWEB,- HX",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "PTSkit",
@@ -797,7 +797,7 @@
     "base_url": "www.ptskit.org",
     "special_tracker_domain": "kqbhek",
     "group": "[PTS]",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "CBG",
@@ -805,7 +805,7 @@
     "base_url": "cangbao.ge",
     "special_tracker_domain": null,
     "group": "CBGWT",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "Tokyo",
@@ -813,7 +813,7 @@
     "base_url": "www.tokyopt.xyz",
     "special_tracker_domain": null,
     "group": "EastWeb",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "Lajidui",
@@ -821,7 +821,7 @@
     "base_url": "pt.lajidui.top",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "VCB-Studio",
@@ -829,7 +829,7 @@
     "base_url": "VCB-Studio",
     "special_tracker_domain": null,
     "group": "VCB-Studio",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "BeiTai",
@@ -837,7 +837,7 @@
     "base_url": "BeiTai",
     "special_tracker_domain": null,
     "group": "-BeiTai",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "azusa",
@@ -845,7 +845,7 @@
     "base_url": "azusa.wiki",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "JPop",
@@ -853,7 +853,7 @@
     "base_url": "jpopsuki.eu",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "playletpt",
@@ -861,7 +861,7 @@
     "base_url": "playletpt.xyz",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "duckboobee",
@@ -869,7 +869,7 @@
     "base_url": "duckboobee.org",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "HDBao",
@@ -877,7 +877,7 @@
     "base_url": "hdbao.cc",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "LongPT",
@@ -885,7 +885,7 @@
     "base_url": "longpt.org",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "Aling",
@@ -893,7 +893,7 @@
     "base_url": "pt.aling.de",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "CD",
@@ -901,7 +901,7 @@
     "base_url": "pt.cdfile.org",
     "special_tracker_domain": null,
     "group": "cdfile",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "TU88",
@@ -909,7 +909,7 @@
     "base_url": "pt.tu88.men",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "UltraHD",
@@ -917,7 +917,7 @@
     "base_url": "ultrahd.net",
     "special_tracker_domain": null,
     "group": "UltraHD, AHDBits, UltraTV",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "52movie",
@@ -925,7 +925,7 @@
     "base_url": "www.52movie.top",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "PTFans",
@@ -933,7 +933,7 @@
     "base_url": "ptfans.cc",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "tey",
@@ -941,7 +941,7 @@
     "base_url": "pt.tey.cc",
     "special_tracker_domain": null,
     "group": "Tey",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "itzmx",
@@ -949,7 +949,7 @@
     "base_url": "pt.itzmx.com",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "Sunny",
@@ -957,7 +957,7 @@
     "base_url": "sunnypt.top",
     "special_tracker_domain": "sunnytk",
     "group": "Sunny",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "ying",
@@ -965,7 +965,7 @@
     "base_url": "pt.ying.us.kg",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "NovaHD",
@@ -973,7 +973,7 @@
     "base_url": "pt.novahd.top",
     "special_tracker_domain": null,
     "group": "NHDWeb",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "SBPT",
@@ -981,7 +981,7 @@
     "base_url": "sbpt.link",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "jivon",
@@ -989,7 +989,7 @@
     "base_url": "nex.jivon.de",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "YHPP",
@@ -997,7 +997,7 @@
     "base_url": "www.yhpp.cc",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "ASMR",
@@ -1005,7 +1005,7 @@
     "base_url": "www.asmrpt.org",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "TorrentHub",
@@ -1013,6 +1013,6 @@
     "base_url": "torrenthub.club",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 1
+    "migration": 0
   }
 ]

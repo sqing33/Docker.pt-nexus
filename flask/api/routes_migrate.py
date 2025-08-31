@@ -15,10 +15,9 @@ MIGRATION_CACHE = {}
 def migrate_fetch_info():
     db_manager = migrate_bp.db_manager
     data = request.json
-    source_site_name, search_term = (
-        data.get("sourceSite"),
-        data.get("searchTerm"),
-    )
+    source_site_name, search_term, save_path = (data.get("sourceSite"),
+                                                data.get("searchTerm"),
+                                                data.get("savePath", ""))
 
     if not all([source_site_name, search_term]):
         return jsonify({"success": False, "logs": "错误：源站点和搜索词不能为空。"}), 400
@@ -49,7 +48,8 @@ def migrate_fetch_info():
         # 初始化 Migrator 时不传入目标站点信息
         migrator = TorrentMigrator(source_site_info=source_info,
                                    target_site_info=None,
-                                   search_term=search_term)
+                                   search_term=search_term,
+                                   save_path=save_path)
         # 调用只获取信息和原始种子的方法
         result = migrator.prepare_review_data()
 
@@ -227,19 +227,18 @@ def parse_title_utility():
 @migrate_bp.route("/media/validate", methods=["POST"])
 def validate_media():
     """接收前端发送的失效图片信息。"""
-    if not request.is_json:
-        return jsonify({"success": False, "message": "请求格式错误，需要JSON。"}), 400
+    data = request.json
 
-    data = request.get_json()
-
-    image_type = data.get("type")  # e.g., 'poster', 'screenshot_batch'
+    image_type = data.get("type")
     source_info = data.get("source_info")
+    save_path = data.get("savePath")
 
     # 记录日志，方便调试
     logging.warning(f"收到失效图片报告 - 类型: {image_type}, "
-                    f"来源信息: {source_info}")
+                    f"来源信息: {source_info}，视频路径: {save_path}")
     if image_type == "screenshot":
-        screenshots = upload_data_screenshot(image_type, source_info)
+        screenshots = upload_data_screenshot(image_type, source_info,
+                                             save_path)
         return jsonify({"success": True, "screenshots": screenshots}), 200
     else:
         print("上传海报功能尚未实现。")

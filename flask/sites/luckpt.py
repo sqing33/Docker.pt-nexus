@@ -57,7 +57,7 @@ class LuckyUploader:
             mapped["type"] = "401"
         elif "电视剧" in source_type:
             mapped["type"] = "402"
-        elif "动画" in source_type or "动漫" in source_type or "Anime" in source_type:
+        elif "动画" in source_type or "动漫" in source_type or "Anime" in source_type or "Animations" in source_type:
             mapped["type"] = "405"
         elif "MV" in source_type:
             mapped["type"] = "406"
@@ -75,8 +75,18 @@ class LuckyUploader:
             mapped["type"] = "409"
 
         # 2. 媒介
-        medium_str = title_params.get("媒介", "bluray").lower()
-        if "web" in medium_str:
+        medium_str = title_params.get("媒介", "").lower()
+        mediainfo_str = self.upload_data.get("mediainfo", "")
+
+        # 检查MediaInfo是否为文件类型（非原盘）
+        is_standard_mediainfo = "General" in mediainfo_str and "Complete name" in mediainfo_str
+
+        # 新增判断逻辑：
+        # 如果是标准文件类MediaInfo，且原始媒介是蓝光或DVD，则判定为Encode
+        if is_standard_mediainfo and ('blu' in medium_str
+                                      or 'dvd' in medium_str):
+            mapped["medium_sel[4]"] = "7"  # Encode
+        elif "web" in medium_str:
             mapped["medium_sel[4]"] = "11"  # WEB-DL
         elif "uhd" in medium_str and "blu" in medium_str:
             mapped["medium_sel[4]"] = "10"  # UHD Blu-ray
@@ -94,11 +104,10 @@ class LuckyUploader:
             mapped["medium_sel[4]"] = "8"  # CD
         elif "track" in medium_str:
             mapped["medium_sel[4]"] = "9"  # Track
-        elif "encode" in medium_str:
+        elif "encode" in medium_str:  # 保留作为备用
             mapped["medium_sel[4]"] = "7"  # Encode
         else:
             mapped["medium_sel[4]"] = "13"  # Other
-
         # 3. 视频编码
         codec_str = title_params.get("视频编码", "H.264").lower()
         if "264" in codec_str:
