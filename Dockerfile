@@ -28,7 +28,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY ./flask .
 
-RUN apt install -y ffmpeg mediainfo
+RUN apt update && \
+    apt install -y ffmpeg mediainfo && \
+    apt clean && \
+    rm -rf /var/lib/apt/lists/*
 
 VOLUME /app/data
 
