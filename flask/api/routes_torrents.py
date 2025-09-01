@@ -62,7 +62,8 @@ def get_data_api():
 
         # --- [新增] 开始: 一次性获取所有站点配置信息 ---
         cursor.execute("SELECT nickname, migration FROM sites")
-        site_configs = {row["nickname"]: row for row in cursor.fetchall()}
+        # [修复] 将 sqlite3.Row 对象转换为标准的 dict，以支持 .get() 方法
+        site_configs = {row["nickname"]: dict(row) for row in cursor.fetchall()}
         # --- [新增] 结束 ---
 
         cursor.execute(
@@ -107,7 +108,7 @@ def get_data_api():
             upload_for_this_hash = uploads_by_hash.get(t["hash"], 0)
             agg["total_uploaded"] += upload_for_this_hash
             if t.get("sites"):
-                site_name = t.get("sites")  # [修改] 提取站点名称为变量
+                site_name = t.get("sites")
                 agg["sites"][site_name]["uploaded"] = (
                     agg["sites"][site_name].get("uploaded", 0) +
                     upload_for_this_hash)
@@ -115,6 +116,7 @@ def get_data_api():
 
                 # --- [修改] 开始: 附加 migration 状态 ---
                 # 从预加载的配置中获取 migration 值，如果站点不存在则默认为 0
+                # 此处现在可以安全地使用 .get()
                 agg["sites"][site_name]["migration"] = site_configs.get(
                     site_name, {}).get("migration", 0)
                 # --- [修改] 结束 ---
@@ -224,7 +226,6 @@ def get_data_api():
             cursor.close()
         if conn:
             conn.close()
-
 
 @torrents_bp.route("/refresh_data", methods=["POST"])
 def refresh_data_api():
