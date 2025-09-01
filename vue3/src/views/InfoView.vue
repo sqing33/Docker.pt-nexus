@@ -7,43 +7,24 @@
         <div class="header-left-controls">
           <div class="button-group">
             <!-- [修改] 为“近1分钟”按钮添加禁用状态和提示 -->
-            <el-tooltip
-              content="请在设置页面开启“实时速率”以使用此功能"
-              :disabled="isRealtimeSpeedEnabled"
-              placement="top"
-            >
+            <el-tooltip content="请在设置页面开启“实时速率”以使用此功能" :disabled="isRealtimeSpeedEnabled" placement="top">
               <div class="button-wrapper">
-                <button
-                  @click="changeSpeedMode('last_1_min')"
-                  :class="{ active: speedDisplayMode === 'last_1_min' }"
-                  :disabled="!isRealtimeSpeedEnabled"
-                >
+                <button @click="changeSpeedMode('last_1_min')" :class="{ active: speedDisplayMode === 'last_1_min' }"
+                  :disabled="!isRealtimeSpeedEnabled">
                   近1分钟
                 </button>
               </div>
             </el-tooltip>
-            <button
-              @click="changeSpeedMode('last_12_hours')"
-              :class="{ active: speedDisplayMode === 'last_12_hours' }"
-            >
+            <button @click="changeSpeedMode('last_12_hours')" :class="{ active: speedDisplayMode === 'last_12_hours' }">
               近12小时
             </button>
-            <button
-              @click="changeSpeedMode('last_24_hours')"
-              :class="{ active: speedDisplayMode === 'last_24_hours' }"
-            >
+            <button @click="changeSpeedMode('last_24_hours')" :class="{ active: speedDisplayMode === 'last_24_hours' }">
               近24小时
             </button>
-            <button
-              @click="changeSpeedMode('today')"
-              :class="{ active: speedDisplayMode === 'today' }"
-            >
+            <button @click="changeSpeedMode('today')" :class="{ active: speedDisplayMode === 'today' }">
               今日
             </button>
-            <button
-              @click="changeSpeedMode('yesterday')"
-              :class="{ active: speedDisplayMode === 'yesterday' }"
-            >
+            <button @click="changeSpeedMode('yesterday')" :class="{ active: speedDisplayMode === 'yesterday' }">
               昨日
             </button>
           </div>
@@ -55,22 +36,14 @@
         <!-- 右侧：显示切换按钮 -->
         <div class="header-right-controls">
           <div class="button-group">
-            <button
-              @click="changeSpeedVisibility('all')"
-              :class="{ active: speedChartVisibilityMode === 'all' }"
-            >
+            <button @click="changeSpeedVisibility('all')" :class="{ active: speedChartVisibilityMode === 'all' }">
               全部
             </button>
-            <button
-              @click="changeSpeedVisibility('upload')"
-              :class="{ active: speedChartVisibilityMode === 'upload' }"
-            >
+            <button @click="changeSpeedVisibility('upload')" :class="{ active: speedChartVisibilityMode === 'upload' }">
               仅上传
             </button>
-            <button
-              @click="changeSpeedVisibility('download')"
-              :class="{ active: speedChartVisibilityMode === 'download' }"
-            >
+            <button @click="changeSpeedVisibility('download')"
+              :class="{ active: speedChartVisibilityMode === 'download' }">
               仅下载
             </button>
           </div>
@@ -79,18 +52,11 @@
 
       <!-- 自定义的可换行图例容器 -->
       <div class="custom-legend-container">
-        <span
-          v-for="item in speedChartLegendItems"
-          :key="item.fullName"
-          class="legend-item"
-          :class="{ disabled: item.disabled }"
-          @click="toggleSeries(item.fullName)"
-        >
+        <span v-for="item in speedChartLegendItems" :key="item.fullName" class="legend-item"
+          :class="{ disabled: item.disabled }" @click="toggleSeries(item.fullName)">
           <span class="legend-color-box" :style="{ backgroundColor: item.color }"></span>
           <span class="legend-item-content">
-            <span class="legend-base-name" :title="item.baseName"
-              >{{ item.baseName }}{{ item.arrow }}</span
-            >
+            <span class="legend-base-name" :title="item.baseName">{{ item.baseName }}{{ item.arrow }}</span>
             <span class="legend-speed-info"> {{ item.speed }}</span>
           </span>
         </span>
@@ -105,58 +71,32 @@
         <!-- 左侧：时间段筛选 -->
         <div class="header-left-controls">
           <div class="button-group">
-            <button
-              @click="changeTrafficMode('today')"
-              :class="{ active: trafficDisplayMode === 'today' }"
-            >
+            <button @click="changeTrafficMode('today')" :class="{ active: trafficDisplayMode === 'today' }">
               今日
             </button>
-            <button
-              @click="changeTrafficMode('yesterday')"
-              :class="{ active: trafficDisplayMode === 'yesterday' }"
-            >
+            <button @click="changeTrafficMode('yesterday')" :class="{ active: trafficDisplayMode === 'yesterday' }">
               昨日
             </button>
-            <button
-              @click="changeTrafficMode('this_week')"
-              :class="{ active: trafficDisplayMode === 'this_week' }"
-            >
+            <button @click="changeTrafficMode('this_week')" :class="{ active: trafficDisplayMode === 'this_week' }">
               本周
             </button>
-            <button
-              @click="changeTrafficMode('last_week')"
-              :class="{ active: trafficDisplayMode === 'last_week' }"
-            >
+            <button @click="changeTrafficMode('last_week')" :class="{ active: trafficDisplayMode === 'last_week' }">
               上周
             </button>
-            <button
-              @click="changeTrafficMode('this_month')"
-              :class="{ active: trafficDisplayMode === 'this_month' }"
-            >
+            <button @click="changeTrafficMode('this_month')" :class="{ active: trafficDisplayMode === 'this_month' }">
               本月
             </button>
-            <button
-              @click="changeTrafficMode('last_month')"
-              :class="{ active: trafficDisplayMode === 'last_month' }"
-            >
+            <button @click="changeTrafficMode('last_month')" :class="{ active: trafficDisplayMode === 'last_month' }">
               上月
             </button>
-            <button
-              @click="changeTrafficMode('last_6_months')"
-              :class="{ active: trafficDisplayMode === 'last_6_months' }"
-            >
+            <button @click="changeTrafficMode('last_6_months')"
+              :class="{ active: trafficDisplayMode === 'last_6_months' }">
               近半年
             </button>
-            <button
-              @click="changeTrafficMode('this_year')"
-              :class="{ active: trafficDisplayMode === 'this_year' }"
-            >
+            <button @click="changeTrafficMode('this_year')" :class="{ active: trafficDisplayMode === 'this_year' }">
               今年
             </button>
-            <button
-              @click="changeTrafficMode('all')"
-              :class="{ active: trafficDisplayMode === 'all' }"
-            >
+            <button @click="changeTrafficMode('all')" :class="{ active: trafficDisplayMode === 'all' }">
               全部
             </button>
           </div>
@@ -168,22 +108,15 @@
         <!-- 右侧：显示切换按钮 -->
         <div class="header-right-controls">
           <div class="button-group">
-            <button
-              @click="changeTrafficVisibility('all')"
-              :class="{ active: trafficChartVisibilityMode === 'all' }"
-            >
+            <button @click="changeTrafficVisibility('all')" :class="{ active: trafficChartVisibilityMode === 'all' }">
               全部
             </button>
-            <button
-              @click="changeTrafficVisibility('upload')"
-              :class="{ active: trafficChartVisibilityMode === 'upload' }"
-            >
+            <button @click="changeTrafficVisibility('upload')"
+              :class="{ active: trafficChartVisibilityMode === 'upload' }">
               仅上传
             </button>
-            <button
-              @click="changeTrafficVisibility('download')"
-              :class="{ active: trafficChartVisibilityMode === 'download' }"
-            >
+            <button @click="changeTrafficVisibility('download')"
+              :class="{ active: trafficChartVisibilityMode === 'download' }">
               仅下载
             </button>
           </div>
@@ -198,9 +131,9 @@
 import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue'
 import * as echarts from 'echarts'
 import axios from 'axios'
-import { ElMessage, ElTooltip } from 'element-plus' // [修改] 引入 ElTooltip
+import { ElMessage, ElTooltip } from 'element-plus'
 
-// --- Refs and State ---
+// --- Refs and State (无变动) ---
 const speedChart = ref(null)
 const trafficChart = ref(null)
 let speedChartInstance = null
@@ -218,9 +151,8 @@ const trafficChartVisibilityMode = ref('all')
 const speedChartDownloaders = ref([])
 const speedChartLegendItems = ref([])
 
-// --- [新增] 全局设置状态 ---
-const isRealtimeSpeedEnabled = ref(true) // 默认开启，等待API加载后更新
-const areSettingsLoading = ref(true) // 用于控制页面加载动画
+const isRealtimeSpeedEnabled = ref(true)
+const areSettingsLoading = ref(true)
 
 const displayModeTextMap = {
   last_1_min: '近1分钟',
@@ -242,7 +174,7 @@ const trafficDisplayModeButtonText = computed(
   () => `(${displayModeTextMap[trafficDisplayMode.value]})`,
 )
 
-// --- Helper Functions ---
+// --- Helper Functions (无变动) ---
 const formatBytes = (b) => {
   if (b === null || b === undefined || isNaN(b) || b < 0) return '0 B'
   if (b === 0) return '0 B'
@@ -252,7 +184,7 @@ const formatBytes = (b) => {
 }
 const formatSpeed = (speed) => formatBytes(speed) + '/s'
 
-// --- [新增] 获取全局设置 ---
+// --- App Settings Fetching (无变动) ---
 const fetchAppSettings = async () => {
   try {
     const { data } = await axios.get('/api/settings')
@@ -260,13 +192,13 @@ const fetchAppSettings = async () => {
   } catch (error) {
     console.error('获取应用设置失败:', error)
     ElMessage.error('获取应用设置失败，部分功能可能不正常。')
-    // 在失败时保持默认值 true，以避免UI崩溃
     isRealtimeSpeedEnabled.value = true
   }
 }
 
-// --- ECharts Initialization (无变动) ---
+// --- ECharts Initialization (Traffic Chart 初始化有修改) ---
 const initSpeedChart = () => {
+  // ... (initSpeedChart 函数保持不变)
   if (speedChart.value) {
     speedChartInstance = echarts.init(speedChart.value)
     speedChartInstance.setOption({
@@ -344,54 +276,63 @@ const initTrafficChart = () => {
       tooltip: {
         trigger: 'axis',
         axisPointer: { type: 'shadow' },
+
+        // --- 核心修改：更新 Tooltip 的 formatter ---
         formatter: (params) => {
           if (!params || params.length === 0) return ''
           let content = `${params[0].axisValueLabel}<br/>`
+
+          const dataByDownloaderName = {}
+
           params.forEach((param) => {
-            content += `${param.marker} ${param.seriesName.split(' ')[0]}: ${formatBytes(param.value)}<br/>`
+            // 1. 先用 " - " 分割，获取下载器名称
+            const baseName = param.seriesName.split(' - ')[0]
+
+            // 2. 初始化该下载器的数据对象（如果需要）
+            if (!dataByDownloaderName[baseName]) {
+              dataByDownloaderName[baseName] = {}
+            }
+
+            // 3. 使用 .includes() 来判断类型，这不再受括号内总量的影响
+            if (param.seriesName.includes('上传量')) {
+              dataByDownloaderName[baseName]['上传'] = { // 使用简单的 key
+                value: param.value,
+                marker: param.marker,
+              }
+            } else if (param.seriesName.includes('下载量')) {
+              dataByDownloaderName[baseName]['下载'] = { // 使用简单的 key
+                value: param.value,
+                marker: param.marker,
+              }
+            }
           })
+
+          // 4. 构建 tooltip 内容 (这部分逻辑现在可以正常工作了)
+          for (const name in dataByDownloaderName) {
+            const data = dataByDownloaderName[name]
+            content += `<div style="margin-top: 8px; font-weight: bold;">${name}</div>`
+            if (data['上传'])
+              content += `${data['上传'].marker} 上传: ${formatBytes(data['上传'].value)}<br/>`
+            if (data['下载'])
+              content += `${data['下载'].marker} 下载: ${formatBytes(data['下载'].value)}<br/>`
+          }
           return content
         },
+        // --- 结束修改 ---
       },
       xAxis: { type: 'category', data: [] },
       yAxis: { type: 'value', axisLabel: { formatter: (value) => formatBytes(value) } },
-      series: [
-        {
-          name: '上传量',
-          type: 'bar',
-          emphasis: { focus: 'series' },
-          data: [],
-          label: {
-            show: true,
-            position: 'top',
-            formatter: (p) => (p.value > 0 ? formatBytes(p.value) : ''),
-            color: '#464646',
-            fontSize: 10,
-          },
-        },
-        {
-          name: '下载量',
-          type: 'bar',
-          emphasis: { focus: 'series' },
-          data: [],
-          label: {
-            show: true,
-            position: 'top',
-            formatter: (p) => (p.value > 0 ? formatBytes(p.value) : ''),
-            color: '#464646',
-            fontSize: 10,
-          },
-        },
-      ],
+      series: [],
       grid: { top: 60, left: '3%', right: '4%', bottom: '3%', containLabel: true },
-      legend: { data: ['上传量', '下载量'], top: 'top' },
+      legend: { type: 'scroll', top: 'top' },
       dataZoom: [{ type: 'inside' }],
     })
   }
 }
 
-// --- Data Fetching (无变动) ---
+// --- Data Fetching (fetchTrafficData 有重大修改) ---
 const fetchSpeedData = async (mode, isPeriodicUpdate = false) => {
+  // ... (fetchSpeedData 函数保持不变)
   if (!speedChartInstance) return
   if (!isPeriodicUpdate) speedChartInstance.showLoading()
   try {
@@ -478,49 +419,81 @@ const fetchSpeedData = async (mode, isPeriodicUpdate = false) => {
     if (!isPeriodicUpdate) speedChartInstance.hideLoading()
   }
 }
+
 const fetchTrafficData = async (range) => {
   if (!trafficChartInstance) return
   trafficChartInstance.showLoading()
   try {
     const { data } = await axios.get('/api/chart_data', { params: { range } })
-    const uploadData = data.datasets.map((item) => item.uploaded)
-    const downloadData = data.datasets.map((item) => item.downloaded)
-    const totalUpload = uploadData.reduce((acc, val) => acc + val, 0)
-    const totalDownload = downloadData.reduce((acc, val) => acc + val, 0)
-    const uploadLegendName = `上传量 (${formatBytes(totalUpload)})`
-    const downloadLegendName = `下载量 (${formatBytes(totalDownload)})`
-    trafficChartInstance.setOption({
-      xAxis: { data: data.labels },
-      series: [
-        {
-          name: uploadLegendName,
-          data: uploadData,
-          type: 'bar',
-          emphasis: { focus: 'series' },
-          label: {
-            show: true,
-            position: 'top',
-            formatter: (p) => (p.value > 0 ? formatBytes(p.value) : ''),
-            color: '#464646',
-            fontSize: 10,
-          },
+
+    const { labels, datasets, downloaders } = data
+    const series = []
+    const legendData = []
+    const uploadColors = ['#F56C6C', '#E6A23C', '#D98A6F', '#FAB6B6', '#F7D0A3']
+    const downloadColors = ['#409EFF', '#67C23A', '#8A2BE2', '#A0CFFF', '#B3E19D']
+
+    downloaders.forEach((downloader, index) => {
+      const downloaderData = datasets[downloader.id]
+      if (!downloaderData) return
+
+      // --- 核心修改：计算总量并创建动态图例名称 ---
+
+      // 1. 计算总上传量并格式化
+      const totalUpload = downloaderData.uploaded.reduce((acc, val) => acc + val, 0)
+      const formattedTotalUpload = formatBytes(totalUpload)
+      const uploadSeriesName = `${downloader.name} - 上传量 (${formattedTotalUpload})`
+
+      // 2. 计算总下载量并格式化
+      const totalDownload = downloaderData.downloaded.reduce((acc, val) => acc + val, 0)
+      const formattedTotalDownload = formatBytes(totalDownload)
+      const downloadSeriesName = `${downloader.name} - 下载量 (${formattedTotalDownload})`
+
+      // --- 结束修改 ---
+
+
+      // --- 创建上传系列 (使用新的动态名称) ---
+      legendData.push(uploadSeriesName)
+      series.push({
+        name: uploadSeriesName, // 使用动态名称
+        type: 'bar',
+        stack: downloader.name,
+        emphasis: { focus: 'series' },
+        data: downloaderData.uploaded,
+        color: uploadColors[index % uploadColors.length],
+        label: {
+          show: true,
+          position: 'inside',
+          formatter: (p) => (p.value > 0 ? formatBytes(p.value) : ''),
+          color: '#fff',
+          fontSize: 9,
         },
-        {
-          name: downloadLegendName,
-          data: downloadData,
-          type: 'bar',
-          emphasis: { focus: 'series' },
-          label: {
-            show: true,
-            position: 'top',
-            formatter: (p) => (p.value > 0 ? formatBytes(p.value) : ''),
-            color: '#464646',
-            fontSize: 10,
-          },
+      })
+
+      // --- 创建下载系列 (使用新的动态名称) ---
+      legendData.push(downloadSeriesName)
+      series.push({
+        name: downloadSeriesName, // 使用动态名称
+        type: 'bar',
+        stack: downloader.name,
+        emphasis: { focus: 'series' },
+        data: downloaderData.downloaded,
+        color: downloadColors[index % downloadColors.length],
+        label: {
+          show: true,
+          position: 'inside',
+          formatter: (p) => (p.value > 0 ? formatBytes(p.value) : ''),
+          color: '#fff',
+          fontSize: 9,
         },
-      ],
-      legend: { data: [uploadLegendName, downloadLegendName], top: 'top' },
+      })
     })
+
+    trafficChartInstance.setOption({
+      xAxis: { data: labels },
+      series: series,
+      legend: { data: legendData, top: 'top' },
+    })
+
     changeTrafficVisibility(trafficChartVisibilityMode.value, true)
   } catch (error) {
     console.error('获取数据量数据失败:', error)
@@ -529,9 +502,10 @@ const fetchTrafficData = async (range) => {
   }
 }
 
-// --- Event Handlers ---
-// [修改] changeSpeedMode 逻辑
+
+// --- Event Handlers (changeTrafficVisibility 有修改) ---
 const changeSpeedMode = (mode) => {
+  // ... (changeSpeedMode 函数保持不变)
   if (speedUpdateTimer) {
     clearInterval(speedUpdateTimer)
     speedUpdateTimer = null
@@ -539,7 +513,6 @@ const changeSpeedMode = (mode) => {
   speedDisplayMode.value = mode
   fetchSpeedData(mode)
 
-  // 只有在模式为'last_1_min'且实时功能开启时，才启动定时器
   if (mode === 'last_1_min' && isRealtimeSpeedEnabled.value) {
     speedUpdateTimer = setInterval(() => {
       fetchSpeedData(mode, true)
@@ -556,6 +529,7 @@ const toggleSeries = (name) => {
   }
 }
 const changeSpeedVisibility = (mode, isInternalCall = false) => {
+  // ... (changeSpeedVisibility 函数保持不变)
   if (!isInternalCall) speedChartVisibilityMode.value = mode
   if (!speedChartInstance || !speedChartLegendItems.value.length) return
   const selected = {}
@@ -569,31 +543,31 @@ const changeSpeedVisibility = (mode, isInternalCall = false) => {
 const changeTrafficVisibility = (mode, isInternalCall = false) => {
   if (!isInternalCall) trafficChartVisibilityMode.value = mode
   if (!trafficChartInstance) return
+
   const option = trafficChartInstance.getOption()
-  if (!option || !option.series || option.series.length < 2) return
-  const uploadSeriesName = option.series[0].name
-  const downloadSeriesName = option.series[1].name
+  if (!option || !option.legend || !option.legend[0] || !option.legend[0].data) return
+
+  const legendData = option.legend[0].data
   const selected = {}
-  if (mode === 'all') {
-    selected[uploadSeriesName] = true
-    selected[downloadSeriesName] = true
-  } else if (mode === 'upload') {
-    selected[uploadSeriesName] = true
-    selected[downloadSeriesName] = false
-  } else if (mode === 'download') {
-    selected[uploadSeriesName] = false
-    selected[downloadSeriesName] = true
-  }
+
+  legendData.forEach(name => {
+    if (mode === 'all') {
+      selected[name] = true
+    } else if (mode === 'upload') {
+      selected[name] = name.includes('上传量')
+    } else if (mode === 'download') {
+      selected[name] = name.includes('下载量')
+    }
+  })
+
   trafficChartInstance.setOption({ legend: { selected: selected } })
 }
 
-// --- Lifecycle ---
-// [修改] onMounted 逻辑
+// --- Lifecycle (无变动) ---
 onMounted(async () => {
   areSettingsLoading.value = true
   await fetchAppSettings()
 
-  // 如果实时速率被禁用，则修正默认显示模式
   if (!isRealtimeSpeedEnabled.value && speedDisplayMode.value === 'last_1_min') {
     speedDisplayMode.value = 'last_12_hours'
   }
@@ -628,6 +602,7 @@ onUnmounted(() => {
   gap: 20px;
   box-sizing: border-box;
 }
+
 .chart-card {
   border: 1px solid #e0e0e0;
   border-radius: 8px;
@@ -640,11 +615,13 @@ onUnmounted(() => {
   flex-direction: column;
   position: relative;
 }
+
 .chart-body {
   flex: 1;
   width: 100%;
   min-height: 0;
 }
+
 .chart-header {
   display: flex;
   align-items: center;
@@ -652,6 +629,7 @@ onUnmounted(() => {
   gap: 16px;
   flex-wrap: wrap;
 }
+
 .header-left-controls,
 .header-right-controls {
   flex: 1;
@@ -659,12 +637,15 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
 }
+
 .header-left-controls {
   justify-content: flex-start;
 }
+
 .header-right-controls {
   justify-content: flex-end;
 }
+
 .chart-title {
   flex-shrink: 0;
   font-size: 16px;
@@ -672,11 +653,13 @@ onUnmounted(() => {
   color: #333;
   text-align: center;
 }
+
 .button-group {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
+
 .button-group button {
   padding: 6px 12px;
   border: 1px solid #ccc;
@@ -689,14 +672,17 @@ onUnmounted(() => {
     color 0.2s,
     border-color 0.2s;
 }
+
 .button-group button:hover {
   background-color: #e9e9e9;
   border-color: #bbb;
 }
+
 .button-group button:disabled {
   cursor: not-allowed;
   opacity: 0.6;
 }
+
 .button-group button.active {
   background-color: #007bff;
   color: white;
@@ -719,6 +705,7 @@ onUnmounted(() => {
   justify-content: center;
   gap: 8px 16px;
 }
+
 .legend-item {
   display: flex;
   align-items: center;
@@ -726,10 +713,12 @@ onUnmounted(() => {
   font-size: 13px;
   transition: opacity 0.2s;
 }
+
 .legend-item.disabled {
   opacity: 0.5;
   text-decoration: line-through;
 }
+
 .legend-color-box {
   width: 25px;
   height: 14px;
@@ -737,6 +726,7 @@ onUnmounted(() => {
   border-radius: 3px;
   flex-shrink: 0;
 }
+
 .legend-item-content {
   display: flex;
   align-items: center;
@@ -745,6 +735,7 @@ onUnmounted(() => {
   max-width: 150px;
   overflow: hidden;
 }
+
 .legend-base-name {
   color: #333;
   white-space: nowrap;
@@ -754,13 +745,15 @@ onUnmounted(() => {
   flex: 1 1 auto;
   min-width: 0;
 }
+
 .legend-speed-info {
   color: #666;
   white-space: nowrap;
   flex-shrink: 0;
-  width: 60px;
+  width: 75px;
   text-align: right;
 }
+
 .legend-item.disabled .legend-base-name,
 .legend-item.disabled .legend-speed-info {
   color: #999;

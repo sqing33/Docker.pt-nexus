@@ -3,12 +3,62 @@
 import logging
 import uuid
 from flask import Blueprint, jsonify, request
-from utils import upload_data_title, upload_data_screenshot
+from utils import upload_data_title, upload_data_screenshot, upload_data_poster, add_torrent_to_downloader
 from core.migrator import TorrentMigrator
+
+# --- [新增] 导入 config_manager ---
+# 确保能够访问到全局的 config_manager 实例
+from config import config_manager
 
 migrate_bp = Blueprint("migrate_api", __name__, url_prefix="/api")
 
 MIGRATION_CACHE = {}
+
+# ===================================================================
+#                          转种设置 API (新整合)
+# ===================================================================
+
+
+@migrate_bp.route("/settings/cross_seed", methods=["GET"])
+def get_cross_seed_settings():
+    """获取转种相关的设置。"""
+    try:
+        config = config_manager.get()
+        # 使用 .get() 提供默认值，防止配置文件损坏时出错
+        cross_seed_config = config.get("cross_seed",
+                                       {"image_hoster": "pixhost"})
+        return jsonify(cross_seed_config)
+    except Exception as e:
+        logging.error(f"获取转种设置失败: {e}", exc_info=True)
+        return jsonify({"error": "服务器内部错误"}), 500
+
+
+@migrate_bp.route("/settings/cross_seed", methods=["POST"])
+def save_cross_seed_settings():
+    """保存转种相关的设置。"""
+    try:
+        new_settings = request.json
+        if not isinstance(new_settings,
+                          dict) or "image_hoster" not in new_settings:
+            return jsonify({"error": "无效的设置数据格式。"}), 400
+
+        current_config = config_manager.get()
+        # 更新配置中的 cross_seed 部分
+        current_config["cross_seed"] = new_settings
+
+        if config_manager.save(current_config):
+            return jsonify({"message": "转种设置已成功保存！"})
+        else:
+            return jsonify({"error": "无法将设置写入配置文件。"}), 500
+
+    except Exception as e:
+        logging.error(f"保存转种设置失败: {e}", exc_info=True)
+        return jsonify({"error": "服务器内部错误"}), 500
+
+
+# ===================================================================
+#                          原有迁移 API
+# ===================================================================
 
 
 @migrate_bp.route("/migrate/fetch_info", methods=["POST"])
@@ -232,14 +282,46 @@ def validate_media():
     image_type = data.get("type")
     source_info = data.get("source_info")
     save_path = data.get("savePath")
+    imdb_link = source_info.get("imdb_link", '')
+    douban_link = source_info.get("douban_link", '')
 
-    # 记录日志，方便调试
     logging.warning(f"收到失效图片报告 - 类型: {image_type}, "
                     f"来源信息: {source_info}，视频路径: {save_path}")
     if image_type == "screenshot":
-        screenshots = upload_data_screenshot(image_type, source_info,
-                                             save_path)
+        screenshots = upload_data_screenshot(source_info, save_path)
         return jsonify({"success": True, "screenshots": screenshots}), 200
     else:
-        print("上传海报功能尚未实现。")
-        return jsonify({"success": False, "message": "上传海报功能尚未实现。"}), 501
+        status, posters = upload_data_poster(douban_link, imdb_link)
+        if status:
+            return jsonify({"success": True, "posters": posters}), 200
+        else:
+            return jsonify({"success": False, "error": posters}), 400
+
+
+@migrate_bp.route("/migrate/add_to_downloader", methods=["POST"])
+def migrate_add_to_downloader():
+    """接收发布成功的种子信息，并将其添加到指定的下载器。"""
+    db_manager = migrate_bp.db_manager
+    # config_manager 在文件顶部已导入，可以直接使用
+    data = request.json
+
+    detail_page_url = data.get("url")
+    save_path = data.get("savePath")
+    downloader_path = data.get("downloaderPath")
+    downloader_id = data.get("downloaderId")
+
+    if not all([detail_page_url, save_path, downloader_id]):
+        return jsonify({
+            "success": False,
+            "message": "错误：缺少必要参数 (url, savePath, downloaderId)。"
+        }), 400
+
+    try:
+        success, message = add_torrent_to_downloader(detail_page_url,
+                                                     downloader_path,
+                                                     downloader_id, db_manager,
+                                                     config_manager)
+        return jsonify({"success": success, "message": message})
+    except Exception as e:
+        logging.error(f"add_to_downloader 路由发生意外错误: {e}", exc_info=True)
+        return jsonify({"success": False, "message": f"服务器内部错误: {e}"}), 500

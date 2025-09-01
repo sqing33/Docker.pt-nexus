@@ -1,5 +1,8 @@
 # utils/media_helper.py
 
+import base64
+import logging
+import mimetypes
 import re
 import os
 import shutil
@@ -9,7 +12,13 @@ import requests
 import json
 from pymediainfo import MediaInfo
 import time
-from config import TEMP_DIR
+import cloudscraper
+from bs4 import BeautifulSoup
+from urllib.parse import urljoin
+from config import TEMP_DIR, config_manager
+from qbittorrentapi import Client as qbClient
+from transmission_rpc import Client as TrClient
+from utils import ensure_scheme
 
 
 def _upload_to_pixhost(image_path: str):
@@ -55,6 +64,84 @@ def _upload_to_pixhost(image_path: str):
         return None
     except Exception as e:
         print(f"上传过程中发生未知错误: {e}")
+        return None
+
+
+def _get_agsv_auth_token():
+    """使用配置文件中的邮箱和密码获取 末日图床 的授权 Token。"""
+    config = config_manager.get().get("cross_seed", {})
+    email = config.get("agsv_email")
+    password = config.get("agsv_password")
+
+    if not email or not password:
+        logging.warning("末日图床 邮箱或密码未配置，无法获取 Token。")
+        return None
+
+    token_url = "https://img.seedvault.cn/api/v1/tokens"
+    payload = {"email": email, "password": password}
+    headers = {"Accept": "application/json"}
+    print("正在为 末日图床 获取授权 Token...")
+    try:
+        response = requests.post(token_url,
+                                 headers=headers,
+                                 json=payload,
+                                 timeout=30)
+        if response.status_code == 200 and response.json().get("status"):
+            token = response.json().get("data", {}).get("token")
+            if token:
+                print("   ✅ 成功获取 末日图床 Token！")
+                return token
+
+        logging.error(
+            f"获取 末日图床 Token 失败。状态码: {response.status_code}, 响应: {response.text}"
+        )
+        print(f"   ❌ 获取 末日图床 Token 失败: {response.text}")
+        return None
+    except requests.exceptions.RequestException as e:
+        logging.error(f"获取 末日图床 Token 时网络请求错误: {e}")
+        print(f"   ❌ 获取 末日图床 Token 时网络请求错误: {e}")
+        return None
+
+
+def _upload_to_agsv(image_path: str, token: str):
+    """使用给定的 Token 上传单个图片到 末日图床。"""
+    upload_url = "https://img.seedvault.cn/api/v1/upload"
+    headers = {
+        "Authorization":
+        f"Bearer {token}",
+        "Accept":
+        "application/json",
+        "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+    }
+
+    mime_type = mimetypes.guess_type(
+        image_path)[0] or 'application/octet-stream'
+    image_name = os.path.basename(image_path)
+
+    print(f"准备上传图片到 末日图床: {image_name}")
+    try:
+        with open(image_path, 'rb') as f:
+            files = {'file': (image_name, f, mime_type)}
+            response = requests.post(upload_url,
+                                     headers=headers,
+                                     files=files,
+                                     timeout=60)
+
+        data = response.json()
+        if response.status_code == 200 and data.get("status"):
+            image_url = data.get("data", {}).get("links", {}).get("url")
+            print(f"   ✅ 末日图床 上传成功！URL: {image_url}")
+            return image_url
+        else:
+            message = data.get('message', '无详细信息')
+            logging.error(f"末日图床 上传失败。API 消息: {message}")
+            print(f"   ❌ 末日图床 上传失败: {message}")
+            return None
+    except (requests.exceptions.RequestException,
+            requests.exceptions.JSONDecodeError) as e:
+        logging.error(f"上传到 末日图床 时发生错误: {e}")
+        print(f"   ❌ 上传到 末日图床 时发生错误: {e}")
         return None
 
 
@@ -491,21 +578,30 @@ def upload_data_title(title: str):
     return final_components_list
 
 
-def upload_data_screenshot(image_type, source_info, save_path):
+def upload_data_screenshot(source_info, save_path):
     """
-    使用ffmpeg从指定的视频文件中截取5张图片，上传到Pixhost图床，
+    使用ffmpeg从指定的视频文件中截取多张图片，根据配置上传到指定图床，
     并返回一个包含所有图片BBCode链接的字符串。
     """
     print("开始执行截图和上传任务...")
 
-    target_video_file = _find_target_video_file(save_path)
+    # --- [核心修改] 读取图床配置 ---
+    config = config_manager.get()
+    hoster = config.get("cross_seed", {}).get("image_hoster", "pixhost")
+    print(f"已选择图床服务: {hoster}")
+    # -----------------------------
 
-    # --- 1. 配置和环境检查 ---
+    target_video_file = _find_target_video_file(save_path)
+    if not target_video_file:
+        print("错误：在指定路径中未找到视频文件。")
+        return ""
+
     if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
         print("错误：找不到 ffmpeg 或 ffprobe。请确保它们已安装并已添加到系统环境变量 PATH 中。")
         return ""
 
     try:
+        # ... (获取视频时长的代码保持不变) ...
         print("正在获取视频时长...")
         cmd_duration = [
             "ffprobe", "-v", "error", "-show_entries", "format=duration",
@@ -517,12 +613,16 @@ def upload_data_screenshot(image_type, source_info, save_path):
                                 check=True)
         duration = float(result.stdout.strip())
         print(f"视频总时长: {duration:.2f} 秒")
-    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+    except Exception as e:
         print(f"错误：使用 ffprobe 获取视频时长失败。{e}")
         return ""
-    except ValueError:
-        print("错误：无法将 ffprobe 的输出解析为有效的时长。")
-        return ""
+
+    auth_token = None
+    if hoster == "agsv":
+        auth_token = _get_agsv_auth_token()
+        if not auth_token:
+            print("❌ 无法获取 末日图床 Token，截图上传任务终止。")
+            return ""
 
     uploaded_urls = []
     screenshot_points = [0.20, 0.35, 0.65]
@@ -530,8 +630,10 @@ def upload_data_screenshot(image_type, source_info, save_path):
     try:
         for i, point in enumerate(screenshot_points):
             screenshot_time = duration * point
+            base_name = source_info.get('main_title', f'screenshot_{i+1}')
+            safe_name = re.sub(r'[\\/*?:"<>|\'\s\.]+', '_', base_name)
             output_filename = os.path.join(
-                TEMP_DIR, f"screenshot_{i+1}_{source_info}_{time.time()}.jpg")
+                TEMP_DIR, f"{safe_name}_{i+1}_{time.time()}.jpg")
 
             print(
                 f"正在截取第 {i+1}/{len(screenshot_points)} 张图片 (时间点: {screenshot_time:.2f}s)..."
@@ -548,9 +650,21 @@ def upload_data_screenshot(image_type, source_info, save_path):
 
                 if os.path.exists(output_filename):
                     print(f"截图 {output_filename} 生成成功，准备上传。")
-                    image_url = _upload_to_pixhost(output_filename)
+
+                    # --- [核心修改] 根据配置选择上传函数 ---
+                    upload_result = None
+                    if hoster == "pixhost":
+                        image_url = _upload_to_pixhost(output_filename)
+                    elif hoster == "agsv":
+                        image_url = _upload_to_agsv(output_filename,
+                                                    auth_token)
+                    else:
+                        print(f"警告: 未知的图床 '{hoster}'，将默认使用 pixhost。")
+                        image_url = _upload_to_pixhost(output_filename)
+
                     if image_url:
                         uploaded_urls.append(image_url)
+
                 else:
                     print(f"警告：ffmpeg 命令执行成功，但未找到输出文件 {output_filename}")
 
@@ -559,14 +673,15 @@ def upload_data_screenshot(image_type, source_info, save_path):
                 print(
                     f"FFMPEG Stderr: {e.stderr.decode('utf-8', errors='ignore')}"
                 )
-            except FileNotFoundError:
-                print("错误: ffmpeg 命令未找到。请确认其已安装并位于系统 PATH。")
-                break
+
     finally:
-        # if os.path.exists(TEMP_DIR):
-        #     print(f"正在清理临时目录: {TEMP_DIR}")
-        #     shutil.rmtree(TEMP_DIR)
-        print(f"正在清理临时目录: {TEMP_DIR}")
+        print(f"正在清理临时目录中的截图文件...")
+        for item in os.listdir(TEMP_DIR):
+            if item.endswith(".jpg"):
+                try:
+                    os.remove(os.path.join(TEMP_DIR, item))
+                except OSError as e:
+                    print(f"清理临时文件 {item} 失败: {e}")
 
     if not uploaded_urls:
         print("任务完成，但没有成功上传任何图片。")
@@ -587,5 +702,157 @@ def upload_data_screenshot(image_type, source_info, save_path):
     return screenshots
 
 
-def upload_data_poster():
-    pass
+def upload_data_poster(douban_link: str, imdb_link: str):
+    """
+    通过PT-Gen API获取电影信息的海报。
+    """
+    pt_gen_api_url = 'https://api.iyuu.cn/App.Movie.Ptgen'
+
+    resource_url = douban_link or imdb_link
+
+    if not resource_url:
+        return False, "未提供豆瓣或IMDb链接。"
+
+    try:
+        response = requests.get(f'{pt_gen_api_url}?url={resource_url}',
+                                timeout=30)
+        response.raise_for_status()
+
+        data = response.json()
+
+        format_data = data.get('format') or data.get('data', {}).get(
+            'format', '')
+
+        if format_data:
+            img_match = re.search(r'(\[img\].*?\[/img\])', format_data)
+            if img_match:
+                return True, img_match.group(1)
+            else:
+                return False, "PT-Gen返回的简介中未找到图片标签。"
+        else:
+            return False, "PT-Gen接口未返回有效的简介内容。"
+
+    except Exception as e:
+        error_message = f"请求PT-Gen接口时发生错误: {e}"
+        print(error_message)
+        return False, error_message
+
+
+# (确保文件顶部有 import bencoder, import json)
+
+
+def add_torrent_to_downloader(detail_page_url: str, save_path: str,
+                              downloader_id: str, db_manager, config_manager):
+    """
+    从种子详情页下载 .torrent 文件并添加到指定的下载器。
+    [最终修复版] 修正了向 Transmission 发送数据时的双重编码问题。
+    """
+    logging.info(
+        f"开始自动添加任务: URL='{detail_page_url}', Path='{save_path}', DownloaderID='{downloader_id}'"
+    )
+
+    # ... (前面的下载逻辑保持不变，因为它已经被证明是正确的) ...
+    # 1. 查找对应的站点配置
+    conn = db_manager._get_connection()
+    cursor = db_manager._get_cursor(conn)
+    cursor.execute("SELECT nickname, base_url, cookie FROM sites")
+    site_info = None
+    for site in cursor.fetchall():
+        if site['base_url'] and site['base_url'] in detail_page_url:
+            site_info = site
+            break
+    conn.close()
+
+    if not site_info or not site_info.get("cookie"):
+        msg = f"未能找到与URL '{detail_page_url}' 匹配的站点配置或该站点缺少Cookie。"
+        logging.error(msg)
+        return False, msg
+
+    try:
+        # 2. 下载种子文件
+        common_headers = {
+            "Cookie":
+            site_info["cookie"],
+            "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36",
+        }
+        scraper = cloudscraper.create_scraper()
+
+        details_response = scraper.get(detail_page_url,
+                                       headers=common_headers,
+                                       timeout=60)
+        details_response.raise_for_status()
+
+        soup = BeautifulSoup(details_response.text, "html.parser")
+        torrent_id_match = re.search(r"id=(\d+)", detail_page_url)
+        if not torrent_id_match: raise ValueError("无法从详情页URL中提取种子ID。")
+        torrent_id = torrent_id_match.group(1)
+
+        download_link_tag = soup.select_one(
+            f'a.index[href^="download.php?id={torrent_id}"]')
+        if not download_link_tag: raise RuntimeError("在详情页HTML中未能找到下载链接！")
+
+        download_url_part = download_link_tag['href']
+        full_download_url = f"{ensure_scheme(site_info['base_url'])}/{download_url_part}"
+
+        common_headers["Referer"] = detail_page_url
+        torrent_response = scraper.get(full_download_url,
+                                       headers=common_headers,
+                                       timeout=60)
+        torrent_response.raise_for_status()
+
+        torrent_content = torrent_response.content
+        logging.info("已成功下载有效的种子文件内容。")
+
+    except Exception as e:
+        msg = f"在下载种子文件步骤发生错误: {e}"
+        logging.error(msg, exc_info=True)
+        return False, msg
+
+    # 3. 找到下载器配置
+    config = config_manager.get()
+    downloader_config = next(
+        (d for d in config.get("downloaders", [])
+         if d.get("id") == downloader_id and d.get("enabled")), None)
+
+    if not downloader_config:
+        msg = f"未找到ID为 '{downloader_id}' 的已启用下载器配置。"
+        logging.error(msg)
+        return False, msg
+
+    # 4. 添加到下载器 (核心修改在此！)
+    try:
+        from core.services import _prepare_api_config
+
+        api_config = _prepare_api_config(downloader_config)
+        client_name = downloader_config['name']
+
+        if downloader_config['type'] == 'qbittorrent':
+            client = qbClient(**api_config)
+            client.auth_log_in()
+            result = client.torrents_add(
+                torrent_files=torrent_content,  # qBittorrent 客户端也直接接收原始二进制
+                save_path=save_path,
+                is_paused=False)
+            logging.info(f"已将种子添加到 qBitorrent '{client_name}': {result}")
+
+        elif downloader_config['type'] == 'transmission':
+            client = TrClient(**api_config)
+            # ==================== [核心修复] ====================
+            # 移除我们手动添加的 base64 编码，
+            # 直接将原始的、正确的 torrent_content (bytes) 传给库。
+            # 库会自动处理后续的编码。
+            # ======================================================
+            result = client.add_torrent(
+                torrent=torrent_content,  # <--- 修改这里！
+                download_dir=save_path,
+                paused=False)
+            logging.info(
+                f"已将种子添加到 Transmission '{client_name}': ID={result.id}")
+
+        return True, f"成功将种子添加到下载器 '{client_name}'。"
+
+    except Exception as e:
+        msg = f"添加到下载器 '{downloader_config['name']}' 时失败: {e}"
+        logging.error(msg, exc_info=True)
+        return False, msg

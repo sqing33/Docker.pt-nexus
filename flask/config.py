@@ -10,14 +10,14 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # 配置文件路径
-DATA_DIR = "data"
+DATA_DIR = "/app/data"
 os.makedirs(DATA_DIR, exist_ok=True)
 
 TEMP_DIR = os.path.join(DATA_DIR, "tmp")
 os.makedirs(TEMP_DIR, exist_ok=True)
 
 CONFIG_FILE = os.path.join(DATA_DIR, "config.json")
-SITES_DATA_FILE = "sites_data.json"
+SITES_DATA_FILE = "/app/sites_data.json"
 
 
 class ConfigManager:
@@ -37,6 +37,12 @@ class ConfigManager:
                 "key": "",
                 "e2e_password": ""
             },
+            "cross_seed": {
+                "image_hoster": "pixhost",
+                # [新增] 为 SeedVault (agsvpic) 添加配置字段
+                "seedvault_email": "",
+                "seedvault_password": ""
+            }
         }
 
     def load(self):
@@ -45,27 +51,39 @@ class ConfigManager:
         如果文件不存在或损坏，则创建/加载一个安全的默认配置。
         同时确保旧配置文件能平滑过渡，自动添加新的配置项。
         """
+        default_conf = self._get_default_config()
+
         if os.path.exists(CONFIG_FILE):
             logging.info(f"从 {CONFIG_FILE} 加载配置。")
             try:
                 with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                     self._config = json.load(f)
 
-                default_conf = self._get_default_config()
+                # --- 确保旧配置平滑迁移 ---
                 if "realtime_speed_enabled" not in self._config:
                     self._config["realtime_speed_enabled"] = default_conf[
                         "realtime_speed_enabled"]
+
                 if "cookiecloud" not in self._config:
                     self._config["cookiecloud"] = default_conf["cookiecloud"]
-                elif "e2e_password" not in self._config.get("cookiecloud", {}):
-                    self._config["cookiecloud"]["e2e_password"] = ""
+
+                # [修改] 扩展转种设置的迁移逻辑
+                if "cross_seed" not in self._config:
+                    self._config["cross_seed"] = default_conf["cross_seed"]
+                else:
+                    # 如果已有 cross_seed，检查是否缺少新字段
+                    if "seedvault_email" not in self._config["cross_seed"]:
+                        self._config["cross_seed"]["seedvault_email"] = ""
+                    if "seedvault_password" not in self._config["cross_seed"]:
+                        self._config["cross_seed"]["seedvault_password"] = ""
 
             except (json.JSONDecodeError, IOError) as e:
                 logging.error(f"无法读取或解析 {CONFIG_FILE}: {e}。将加载一个安全的默认配置。")
-                self._config = self._get_default_config()
+                self._config = default_conf
         else:
             logging.info(f"未找到 {CONFIG_FILE}，将创建一个新的默认配置文件。")
-            self.save(self._get_default_config())
+            self._config = default_conf
+            self.save(self._config)
 
     def get(self):
         """返回当前缓存的配置。"""
@@ -75,10 +93,15 @@ class ConfigManager:
         """将配置字典保存到 config.json 文件并更新缓存。"""
         logging.info(f"正在将新配置保存到 {CONFIG_FILE}。")
         try:
+            # 深拷贝以避免意外修改内存中的配置
             config_to_save = copy.deepcopy(config_data)
+
+            # 从内存中移除 CookieCloud 的端到端密码，避免写入文件
             if "cookiecloud" in config_to_save and "e2e_password" in config_to_save[
                     "cookiecloud"]:
-                config_to_save["cookiecloud"]["e2e_password"] = ""
+                # 如果用户在UI中输入了密码，我们不希望它被保存
+                if config_to_save["cookiecloud"]["e2e_password"]:
+                    config_to_save["cookiecloud"]["e2e_password"] = ""
 
             with open(CONFIG_FILE, "w", encoding="utf-8") as f:
                 json.dump(config_to_save, f, ensure_ascii=False, indent=4)
@@ -90,6 +113,7 @@ class ConfigManager:
             return False
 
 
+# ... (文件其余部分 get_db_config 和 config_manager 实例保持不变) ...
 def get_db_config():
     """根据环境变量 DB_TYPE 显式选择数据库。"""
     db_choice = os.getenv("DB_TYPE", "sqlite").lower()

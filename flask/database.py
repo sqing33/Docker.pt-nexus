@@ -48,6 +48,85 @@ class DatabaseManager:
             conn.row_factory = sqlite3.Row
             return conn.cursor()
 
+    def _run_schema_migrations(self, conn, cursor):
+        """检查并执行必要的数据库结构变更。"""
+        logging.info("正在运行数据库结构迁移检查...")
+
+        # --- 迁移 downloader_clients 表 ---
+        table_name = 'downloader_clients'
+        # 获取当前表的列信息
+        if self.db_type == 'mysql':
+            cursor.execute(f"DESCRIBE {table_name}")
+            columns = {row['Field'].lower() for row in cursor.fetchall()}
+        else:  # sqlite
+            cursor.execute(f"PRAGMA table_info({table_name})")
+            columns = {row['name'].lower() for row in cursor.fetchall()}
+
+        # 检查是否需要新的统一列
+        if 'last_total_dl' not in columns:
+            logging.info(
+                f"在 '{table_name}' 表中添加 'last_total_dl' 和 'last_total_ul' 列..."
+            )
+            if self.db_type == 'mysql':
+                cursor.execute(
+                    f"ALTER TABLE {table_name} ADD COLUMN last_total_dl BIGINT NOT NULL DEFAULT 0"
+                )
+                cursor.execute(
+                    f"ALTER TABLE {table_name} ADD COLUMN last_total_ul BIGINT NOT NULL DEFAULT 0"
+                )
+            else:
+                cursor.execute(
+                    f"ALTER TABLE {table_name} ADD COLUMN last_total_dl INTEGER NOT NULL DEFAULT 0"
+                )
+                cursor.execute(
+                    f"ALTER TABLE {table_name} ADD COLUMN last_total_ul INTEGER NOT NULL DEFAULT 0"
+                )
+            conn.commit()
+            logging.info("新列添加成功。")
+
+        # 检查并移除旧的、不再使用的列
+        old_columns_to_drop = [
+            'last_session_dl', 'last_session_ul', 'last_cumulative_dl',
+            'last_cumulative_ul'
+        ]
+        for col in old_columns_to_drop:
+            if col in columns:
+                logging.info(f"正在从 '{table_name}' 表中移除已过时的列: '{col}'...")
+                # SQLite 在较新版本才支持 DROP COLUMN，MySQL 支持
+                if self.db_type == 'mysql':
+                    cursor.execute(
+                        f"ALTER TABLE {table_name} DROP COLUMN {col}")
+                else:
+                    # 对于 SQLite，需要重建表的复杂操作在这里不演示，
+                    # 较新版本 (3.35.0+) 直接支持 DROP COLUMN
+                    cursor.execute(
+                        f"ALTER TABLE {table_name} DROP COLUMN {col}")
+                conn.commit()
+                logging.info(f"'{col}' 列移除成功。")
+
+    def _migrate_torrents_table(self, conn, cursor):
+        """检查并向 torrents 表添加 downloader_id 列。"""
+        table_name = 'torrents'
+        if self.db_type == 'mysql':
+            cursor.execute(f"DESCRIBE {table_name}")
+            columns = {row['Field'].lower() for row in cursor.fetchall()}
+        else:  # sqlite
+            cursor.execute(f"PRAGMA table_info({table_name})")
+            columns = {row['name'].lower() for row in cursor.fetchall()}
+
+        if 'downloader_id' not in columns:
+            logging.info(f"正在向 '{table_name}' 表添加 'downloader_id' 列...")
+            if self.db_type == 'mysql':
+                cursor.execute(
+                    f"ALTER TABLE {table_name} ADD COLUMN downloader_id VARCHAR(36) NULL"
+                )
+            else:
+                cursor.execute(
+                    f"ALTER TABLE {table_name} ADD COLUMN downloader_id TEXT NULL"
+                )
+            conn.commit()
+            logging.info("'downloader_id' 列添加成功。")
+
     def get_placeholder(self):
         """返回数据库类型对应的正确参数占位符。"""
         return "%s" if self.db_type == "mysql" else "?"
@@ -218,10 +297,10 @@ class DatabaseManager:
                 "CREATE TABLE IF NOT EXISTS traffic_stats (stat_datetime DATETIME NOT NULL, downloader_id VARCHAR(36) NOT NULL, uploaded BIGINT DEFAULT 0, downloaded BIGINT DEFAULT 0, upload_speed BIGINT DEFAULT 0, download_speed BIGINT DEFAULT 0, PRIMARY KEY (stat_datetime, downloader_id)) ENGINE=InnoDB ROW_FORMAT=Dynamic"
             )
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS downloader_clients (id VARCHAR(36) PRIMARY KEY, name VARCHAR(255) NOT NULL, type VARCHAR(50) NOT NULL, last_session_dl BIGINT NOT NULL DEFAULT 0, last_session_ul BIGINT NOT NULL DEFAULT 0, last_cumulative_dl BIGINT NOT NULL DEFAULT 0, last_cumulative_ul BIGINT NOT NULL DEFAULT 0) ENGINE=InnoDB ROW_FORMAT=Dynamic"
+                "CREATE TABLE IF NOT EXISTS downloader_clients (id VARCHAR(36) PRIMARY KEY, name VARCHAR(255) NOT NULL, type VARCHAR(50) NOT NULL, last_total_dl BIGINT NOT NULL DEFAULT 0, last_total_ul BIGINT NOT NULL DEFAULT 0) ENGINE=InnoDB ROW_FORMAT=Dynamic"
             )
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS torrents (hash VARCHAR(40) PRIMARY KEY, name TEXT NOT NULL, save_path TEXT, size BIGINT, progress FLOAT, state VARCHAR(50), sites VARCHAR(255), `group` VARCHAR(255), details TEXT, last_seen DATETIME NOT NULL) ENGINE=InnoDB ROW_FORMAT=Dynamic"
+                "CREATE TABLE IF NOT EXISTS torrents (hash VARCHAR(40) PRIMARY KEY, name TEXT NOT NULL, save_path TEXT, size BIGINT, progress FLOAT, state VARCHAR(50), sites VARCHAR(255), `group` VARCHAR(255), details TEXT, downloader_id VARCHAR(36) NULL, last_seen DATETIME NOT NULL) ENGINE=InnoDB ROW_FORMAT=Dynamic"
             )
             cursor.execute(
                 "CREATE TABLE IF NOT EXISTS torrent_upload_stats (hash VARCHAR(40) NOT NULL, downloader_id VARCHAR(36) NOT NULL, uploaded BIGINT DEFAULT 0, PRIMARY KEY (hash, downloader_id)) ENGINE=InnoDB ROW_FORMAT=Dynamic"
@@ -235,10 +314,10 @@ class DatabaseManager:
                 "CREATE TABLE IF NOT EXISTS traffic_stats (stat_datetime TEXT NOT NULL, downloader_id TEXT NOT NULL, uploaded INTEGER DEFAULT 0, downloaded INTEGER DEFAULT 0, upload_speed INTEGER DEFAULT 0, download_speed INTEGER DEFAULT 0, PRIMARY KEY (stat_datetime, downloader_id))"
             )
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS downloader_clients (id TEXT PRIMARY KEY, name TEXT NOT NULL, type TEXT NOT NULL, last_session_dl INTEGER NOT NULL DEFAULT 0, last_session_ul INTEGER NOT NULL DEFAULT 0, last_cumulative_dl INTEGER NOT NULL DEFAULT 0, last_cumulative_ul INTEGER NOT NULL DEFAULT 0)"
+                "CREATE TABLE IF NOT EXISTS downloader_clients (id TEXT PRIMARY KEY, name TEXT NOT NULL, type TEXT NOT NULL, last_total_dl INTEGER NOT NULL DEFAULT 0, last_total_ul INTEGER NOT NULL DEFAULT 0)"
             )
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS torrents (hash TEXT PRIMARY KEY, name TEXT NOT NULL, save_path TEXT, size INTEGER, progress REAL, state TEXT, sites TEXT, `group` TEXT, details TEXT, last_seen TEXT NOT NULL)"
+                "CREATE TABLE IF NOT EXISTS torrents (hash TEXT PRIMARY KEY, name TEXT NOT NULL, save_path TEXT, size INTEGER, progress REAL, state TEXT, sites TEXT, `group` TEXT, details TEXT, downloader_id TEXT, last_seen TEXT NOT NULL)"
             )
             cursor.execute(
                 "CREATE TABLE IF NOT EXISTS torrent_upload_stats (hash TEXT NOT NULL, downloader_id TEXT NOT NULL, uploaded INTEGER DEFAULT 0, PRIMARY KEY (hash, downloader_id))"
@@ -248,7 +327,8 @@ class DatabaseManager:
             )
 
         conn.commit()
-
+        self._migrate_torrents_table(conn, cursor)
+        self._run_schema_migrations(conn, cursor)
         self._add_missing_columns(conn, cursor)
         conn.commit()
 
@@ -328,6 +408,7 @@ def reconcile_historical_data(db_manager, config):
             continue
         client_id = client_config["id"]
         try:
+            total_dl, total_ul = 0, 0
             if client_config["type"] == "qbittorrent":
                 api_config = {
                     k: v
@@ -336,27 +417,24 @@ def reconcile_historical_data(db_manager, config):
                 }
                 client = Client(**api_config)
                 client.auth_log_in()
-                info = client.transfer_info()
-                session_dl, session_ul = int(
-                    getattr(info, "dl_info_data",
-                            0)), int(getattr(info, "up_info_data", 0))
-                cursor.execute(
-                    f"UPDATE downloader_clients SET last_session_dl = {ph}, last_session_ul = {ph} WHERE id = {ph}",
-                    (session_dl, session_ul, client_id),
-                )
-
+                # --- 修改：获取累计值 ---
+                server_state = client.sync_maindata().get('server_state', {})
+                total_dl = int(server_state.get('alltime_dl', 0))
+                total_ul = int(server_state.get('alltime_ul', 0))
+                # -------------------------
             elif client_config["type"] == "transmission":
-                # 使用正确的、能处理端口的 _prepare_api_config 函数
                 api_config = _prepare_api_config(client_config)
                 client = TrClient(**api_config)
                 stats = client.session_stats()
-                cumulative_dl, cumulative_ul = int(
-                    stats.cumulative_stats.downloaded_bytes), int(
-                        stats.cumulative_stats.uploaded_bytes)
-                cursor.execute(
-                    f"UPDATE downloader_clients SET last_cumulative_dl = {ph}, last_cumulative_ul = {ph} WHERE id = {ph}",
-                    (cumulative_dl, cumulative_ul, client_id),
-                )
+                total_dl = int(stats.cumulative_stats.downloaded_bytes)
+                total_ul = int(stats.cumulative_stats.uploaded_bytes)
+
+            # --- 修改：更新新的统一列 ---
+            cursor.execute(
+                f"UPDATE downloader_clients SET last_total_dl = {ph}, last_total_ul = {ph} WHERE id = {ph}",
+                (total_dl, total_ul, client_id),
+            )
+            # ---------------------------
 
             zero_point_records.append(
                 (current_timestamp_str, client_id, 0, 0, 0, 0))
