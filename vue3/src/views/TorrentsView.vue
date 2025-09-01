@@ -7,6 +7,7 @@
     <el-table :data="allData" v-loading="loading" border height="100%" ref="tableRef" row-key="name"
       :row-class-name="tableRowClassName" @row-click="handleRowClick" @expand-change="handleExpandChange"
       @sort-change="handleSortChange" :default-sort="currentSort" empty-text="无数据或当前筛选条件下无结果">
+      <!-- ... (el-table-column type="expand" and other columns remain the same) ... -->
       <el-table-column type="expand" width="1">
         <template #default="props">
           <div class="expand-content">
@@ -74,7 +75,6 @@
         </template>
       </el-table-column>
 
-      <!-- [修改] 此处是之前版本已添加的，代码保持不变 -->
       <el-table-column label="操作" width="100" align="center">
         <template #default="scope">
           <el-button type="primary" size="small" @click.stop="startCrossSeed(scope.row)">
@@ -89,50 +89,64 @@
       :total="totalTorrents" layout="total, sizes, prev, pager, next, jumper" @size-change="handleSizeChange"
       @current-change="handleCurrentChange" background />
 
-    <el-dialog v-model="filterDialogVisible" title="筛选选项" width="800px" class="filter-dialog">
-      <el-divider content-position="left">站点筛选</el-divider>
-      <div class="site-filter-container">
-        <el-radio-group v-model="tempFilters.siteExistence" style="margin-bottom: 10px">
-          <el-radio label="all">不过滤</el-radio>
-          <el-radio label="exists">存在于</el-radio>
-          <el-radio label="not-exists">不存在于</el-radio>
-        </el-radio-group>
+    <!-- [修改] 使用自定义的 el-card 模态框替代 el-dialog -->
+    <div v-if="filterDialogVisible" class="filter-overlay">
+      <el-card class="filter-card">
+        <template #header>
+          <div class="filter-card-header">
+            <span>筛选选项</span>
+            <el-button type="danger" circle @click="filterDialogVisible = false" plain>X</el-button>
+          </div>
+        </template>
 
-        <div class="site-checkbox-container">
-          <el-checkbox-group v-model="tempFilters.siteNames" :disabled="tempFilters.siteExistence === 'all'">
-            <!-- [修改] 使用按中文拼音排序的 sorted_all_sites -->
-            <el-checkbox v-for="site in sorted_all_sites" :key="site" :label="site">{{
-              site
+        <div class="filter-card-body">
+          <el-divider content-position="left">站点筛选</el-divider>
+          <div class="site-filter-container">
+            <el-radio-group v-model="tempFilters.siteExistence" style="margin-bottom: 10px">
+              <el-radio label="all">不过滤</el-radio>
+              <el-radio label="exists">存在于</el-radio>
+              <el-radio label="not-exists">不存在于</el-radio>
+            </el-radio-group>
+            <div class="site-checkbox-container">
+              <el-checkbox-group v-model="tempFilters.siteNames" :disabled="tempFilters.siteExistence === 'all'">
+                <el-checkbox v-for="site in sorted_all_sites" :key="site" :label="site">{{
+                  site
+                }}</el-checkbox>
+              </el-checkbox-group>
+            </div>
+          </div>
+
+          <el-divider content-position="left">下载器</el-divider>
+          <el-checkbox-group v-model="tempFilters.downloaderIds">
+            <el-checkbox v-for="downloader in downloadersList" :key="downloader.id" :label="downloader.id">
+              {{ downloader.name }}
+            </el-checkbox>
+          </el-checkbox-group>
+
+          <el-divider content-position="left">保存路径</el-divider>
+          <div class="path-tree-container">
+            <el-tree ref="pathTreeRef" :data="pathTreeData" show-checkbox node-key="path" default-expand-all
+              check-on-click-node :props="{ class: 'path-tree-node' }" />
+          </div>
+
+          <el-divider content-position="left">状态</el-divider>
+          <el-checkbox-group v-model="tempFilters.states">
+            <el-checkbox v-for="state in unique_states" :key="state" :label="state">{{
+              state
             }}</el-checkbox>
           </el-checkbox-group>
         </div>
-      </div>
 
-      <el-divider content-position="left">保存路径</el-divider>
-      <div class="path-tree-container">
-        <el-tree ref="pathTreeRef" :data="pathTreeData" show-checkbox node-key="path" default-expand-all
-          check-on-click-node :props="{ class: 'path-tree-node' }" />
-      </div>
-
-      <el-divider content-position="left">状态</el-divider>
-      <el-checkbox-group v-model="tempFilters.states">
-        <el-checkbox v-for="state in unique_states" :key="state" :label="state">{{
-          state
-        }}</el-checkbox>
-      </el-checkbox-group>
-
-      <template #footer>
-        <span class="dialog-footer">
+        <div class="filter-card-footer">
           <el-button @click="filterDialogVisible = false">取消</el-button>
           <el-button type="primary" @click="applyFilters">确认</el-button>
-        </span>
-      </template>
-    </el-dialog>
+        </div>
+      </el-card>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-// [修改] 引入 computed, useRouter, ElMessage
 import { ref, onMounted, reactive, watch, defineEmits, nextTick, computed } from 'vue'
 import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
@@ -144,7 +158,6 @@ const emits = defineEmits(['ready'])
 interface SiteData {
   uploaded: number
   comment: string
-  // [新增] 为 SiteData 接口添加 migration 字段
   migration: number
 }
 interface Torrent {
@@ -157,21 +170,28 @@ interface Torrent {
   sites: Record<string, SiteData>
   total_uploaded: number
   total_uploaded_formatted: string
+  downloaderId?: string
 }
 
+// [修改] 为 ActiveFilters 接口添加 downloaderIds
 interface ActiveFilters {
   paths: string[]
   states: string[]
   siteExistence: 'all' | 'exists' | 'not-exists'
   siteNames: string[]
+  downloaderIds: string[]
 }
 interface PathNode {
   path: string
   label: string
   children?: PathNode[]
 }
+// [新增] 下载器接口
+interface Downloader {
+  id: string;
+  name: string;
+}
 
-// [新增] 初始化 useRouter
 const router = useRouter();
 
 const tableRef = ref<TableInstance | null>(null)
@@ -182,11 +202,13 @@ const error = ref<string | null>(null)
 const nameSearch = ref<string>('')
 const currentSort = ref<Sort>({ prop: 'name', order: 'ascending' })
 
+// [修改] 初始化 activeFilters
 const activeFilters = reactive<ActiveFilters>({
   paths: [],
   states: [],
   siteExistence: 'all',
   siteNames: [],
+  downloaderIds: [],
 })
 const tempFilters = reactive<ActiveFilters>({ ...activeFilters })
 const filterDialogVisible = ref<boolean>(false)
@@ -200,6 +222,8 @@ const unique_states = ref<string[]>([])
 const all_sites = ref<string[]>([])
 const site_link_rules = ref<Record<string, { base_url: string }>>({})
 const expandedRows = ref<string[]>([])
+// [新增] 用于存储下载器列表的 ref
+const downloadersList = ref<Downloader[]>([]);
 
 const pathTreeRef = ref<InstanceType<typeof ElTree> | null>(null)
 const pathTreeData = ref<PathNode[]>([])
@@ -245,6 +269,17 @@ const buildPathTree = (paths: string[]): PathNode[] => {
   return root
 }
 
+// [新增] 获取下载器列表的函数
+const fetchDownloadersList = async () => {
+  try {
+    const response = await fetch('/api/downloaders_list');
+    if (!response.ok) throw new Error('无法获取下载器列表');
+    downloadersList.value = await response.json();
+  } catch (e: any) {
+    error.value = e.message;
+  }
+}
+
 const fetchData = async () => {
   loading.value = true
   error.value = null
@@ -259,6 +294,8 @@ const fetchData = async () => {
       siteFilterNames: JSON.stringify(activeFilters.siteNames),
       path_filters: JSON.stringify(activeFilters.paths || []),
       state_filters: JSON.stringify(activeFilters.states),
+      // [修改] 将下载器筛选添加到请求参数
+      downloader_filters: JSON.stringify(activeFilters.downloaderIds),
     })
 
     const response = await fetch(`/api/data?${params.toString()}`)
@@ -284,30 +321,21 @@ const fetchData = async () => {
   }
 }
 
-// [新增] 开始: “一键转种”按钮的点击处理函数
 const startCrossSeed = (row: Torrent) => {
-  // 1. 筛选出所有可用的源站点
   const availableSources = Object.entries(row.sites)
     .map(([siteName, siteDetails]) => ({ siteName, ...siteDetails }))
     .filter(site => {
-      // 条件1: 必须有详情页链接 (显示为绿色)
       const hasDetailsLink = site.comment && site.comment.includes('details.php?id=');
-      // 条件2: 站点必须被配置为可作为源站 (migration 为 1 或 3)
       const isSourceSite = site.migration === 1 || site.migration === 3;
       return hasDetailsLink && isSourceSite;
     });
 
-  // 2. 根据筛选结果进行处理
   if (availableSources.length === 0) {
     ElMessage.error('该种子没有找到可用的源站点进行迁移。');
     return;
   }
 
-  // 假设我们只使用找到的第一个可用源站
-  // 如果希望用户在有多个可用源站时进行选择，可以在此弹出一个对话框
   const sourceSite = availableSources[0];
-
-  // 3. 从详情页链接中提取种子 ID
   const idMatch = sourceSite.comment.match(/id=(\d+)/);
   if (!idMatch || !idMatch[1]) {
     ElMessage.error(`无法从源站点 ${sourceSite.siteName} 的链接中提取种子ID。`);
@@ -319,18 +347,17 @@ const startCrossSeed = (row: Torrent) => {
   ElMessage.success(`准备从站点 [${sourceSiteName}] 开始迁移种子...`);
   const finalSavePath = `${row.save_path.replace(/[/\\]$/, '')}/${row.name}`;
 
-  // 4. 跳转到转种页面，并携带参数
   router.push({
     path: '/cross_seed',
     query: {
       sourceSite: sourceSiteName,
       searchTerm: torrentId,
       savePath: finalSavePath,
+      downloaderPath: row.save_path,
+      downloaderId: row.downloaderId,
     },
   });
 };
-// [新增] 结束
-
 const handleSizeChange = (val: number) => {
   pageSize.value = val
   currentPage.value = 1
@@ -358,7 +385,7 @@ const openFilterDialog = () => {
 const applyFilters = async () => {
   if (pathTreeRef.value) {
     const selectedPaths = pathTreeRef.value.getCheckedKeys(true)
-    tempFilters.paths = selectedPaths
+    tempFilters.paths = selectedPaths as string[]
   }
 
   Object.assign(activeFilters, tempFilters)
@@ -417,8 +444,9 @@ const tableRowClassName = ({ row }: { row: Torrent }) => {
 }
 
 onMounted(() => {
-  fetchData()
-  emits('ready', fetchData)
+  fetchData();
+  fetchDownloadersList(); // [修改] 调用获取下载器列表的函数
+  emits('ready', fetchData);
 })
 
 watch(nameSearch, () => {
@@ -495,15 +523,66 @@ watch(
   background-color: #ecf5ff !important;
 }
 
-.filter-dialog .el-checkbox-group,
-.filter-dialog .el-radio-group {
+/* [新增] 自定义模态框样式 */
+.filter-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 2000;
+  /* 确保在最上层 */
+}
+
+.filter-card {
+  width: 800px;
+  max-width: 95vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.filter-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+:deep(.filter-card .el-card__body) {
+  padding: 0;
+  flex: 1;
+  /* 关键：让 body 区域自适应填充 */
+  overflow-y: hidden;
+  /* 隐藏 el-card__body 的滚动条 */
+}
+
+.filter-card-body {
+  height: 100%;
+  overflow-y: auto;
+  /* 内部 div 负责滚动 */
+  padding: 20px;
+}
+
+.filter-card-footer {
+  padding: 10px 20px;
+  border-top: 1px solid var(--el-border-color-lighter);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.filter-card .el-checkbox-group,
+.filter-card .el-radio-group {
   display: flex;
   flex-wrap: wrap;
   gap: 5px 0;
 }
 
-.filter-dialog .el-checkbox,
-.filter-dialog .el-radio {
+.filter-card .el-checkbox,
+.filter-card .el-radio {
   margin-right: 15px !important;
 }
 

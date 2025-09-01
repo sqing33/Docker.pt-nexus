@@ -20,7 +20,7 @@
     "nickname": "馒头",
     "base_url": "kp.m-team.cc",
     "special_tracker_domain": "manfuz",
-    "group": "MWeb,MTeam,PTTV",
+    "group": "-MWeb,MTeam,PTTV",
     "migration": 0
   },
   {
@@ -28,7 +28,7 @@
     "nickname": "天空",
     "base_url": "hdsky.me",
     "special_tracker_domain": null,
-    "group": "HDSky",
+    "group": "HDSky,HDSWEB",
     "migration": 0
   },
   {
@@ -405,7 +405,7 @@
     "base_url": "zmpt.cc",
     "special_tracker_domain": null,
     "group": "ZmWeb,ZmAudio,ZmPT",
-    "migration": 0
+    "migration": 1
   },
   {
     "site": "rousi",
@@ -445,7 +445,7 @@
     "base_url": "pandapt.net",
     "special_tracker_domain": null,
     "group": "AilMWeb,Panda,AilME,AilMTV,AilMUpscale",
-    "migration": 0
+    "migration": 1
   },
   {
     "site": "carpt",
@@ -477,7 +477,7 @@
     "base_url": "www.agsvpt.com",
     "special_tracker_domain": null,
     "group": "AGSVWEB,AGSVMUS,AGSVPT,AGSVMUSIC",
-    "migration": 0
+    "migration": 1
   },
   {
     "site": "ptvicomo",
@@ -493,7 +493,7 @@
     "base_url": "www.qingwapt.com",
     "special_tracker_domain": null,
     "group": "FROGE,FROGWeb",
-    "migration": 0
+    "migration": 1
   },
   {
     "site": "xingtan",

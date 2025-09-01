@@ -13,7 +13,6 @@ COPY ./vue3 .
 
 RUN pnpm build
 
-# Stage 2: Setup Python application
 FROM python:3.12-slim
 
 WORKDIR /app
@@ -28,6 +27,8 @@ COPY ./flask/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY ./flask .
+
+RUN apt install -y ffmpeg mediainfo
 
 VOLUME /app/data
 

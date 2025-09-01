@@ -19,6 +19,22 @@ torrents_bp = Blueprint("torrents_api", __name__, url_prefix="/api")
 # config_manager = None
 
 
+@torrents_bp.route("/downloaders_list")
+def get_downloaders_list():
+    """获取已配置且启用的下载器列表。"""
+    config_manager = torrents_bp.config_manager
+    try:
+        downloaders = config_manager.get().get("downloaders", [])
+        downloader_list = [{
+            "id": d["id"],
+            "name": d["name"]
+        } for d in downloaders if d.get("enabled")]
+        return jsonify(downloader_list)
+    except Exception as e:
+        logging.error(f"get_downloaders_list 出错: {e}", exc_info=True)
+        return jsonify({"error": "获取下载器列表失败"}), 500
+
+
 @torrents_bp.route("/data")
 def get_data_api():
     """获取种子列表数据，支持分页、排序和多种筛选。"""
@@ -28,6 +44,8 @@ def get_data_api():
         page_size = int(request.args.get("pageSize", 50))
         path_filters = json.loads(request.args.get("path_filters", "[]"))
         state_filters = json.loads(request.args.get("state_filters", "[]"))
+        downloader_filters = json.loads(
+            request.args.get("downloader_filters", "[]"))
         site_filter_existence = request.args.get("siteFilterExistence", "all")
         site_filter_names = json.loads(
             request.args.get("siteFilterNames", "[]"))
@@ -73,6 +91,7 @@ def get_data_api():
                 "state": set(),
                 "sites": defaultdict(dict),
                 "total_uploaded": 0,
+                "downloader_id": None,
             })
         for t in torrents_raw:
             agg = agg_torrents[t["name"]]
@@ -81,6 +100,7 @@ def get_data_api():
                     "name": t["name"],
                     "save_path": t.get("save_path", ""),
                     "size": t.get("size", 0),
+                    "downloader_id": t.get("downloader_id"),
                 })
             agg["progress"] = max(agg.get("progress", 0), t.get("progress", 0))
             agg["state"].add(t.get("state", "N/A"))
@@ -112,6 +132,8 @@ def get_data_api():
                 len(data.get("sites", {})),
                 "total_site_count":
                 len(all_discovered_sites),
+                "downloaderId":
+                data.get("downloader_id")
             })
             final_torrent_list.append(data)
 
@@ -129,6 +151,11 @@ def get_data_api():
             filtered_list = [
                 t for t in filtered_list if any(
                     s in state_filters for s in t.get("state", "").split(", "))
+            ]
+        if downloader_filters:
+            filtered_list = [
+                t for t in filtered_list
+                if t.get("downloaderId") in downloader_filters
             ]
         if site_filter_existence != "all" and site_filter_names:
             site_filter_set = set(site_filter_names)

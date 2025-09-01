@@ -40,6 +40,11 @@ const router = createRouter({
           name: 'settings-indexer',
           component: () => import('../components/settings/IndexerSettings.vue'),
         },
+        {
+          path: 'crossseed',
+          name: 'settings-crossseed',
+          component: () => import('../components/settings/CrossSeedSettings.vue'),
+        },
       ],
     },
     {

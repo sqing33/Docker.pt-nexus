@@ -4,15 +4,27 @@
     <el-aside width="200px" class="settings-aside">
       <el-menu :default-active="route.path" class="settings-menu" router>
         <el-menu-item index="/settings/downloader">
-          <el-icon><Download /></el-icon>
+          <el-icon>
+            <Download />
+          </el-icon>
           <span>下载器</span>
         </el-menu-item>
         <el-menu-item index="/settings/cookie">
-          <el-icon><Tickets /></el-icon>
+          <el-icon>
+            <Tickets />
+          </el-icon>
           <span>站点管理</span>
         </el-menu-item>
+        <el-menu-item index="/settings/crossseed">
+          <el-icon>
+            <Tickets />
+          </el-icon>
+          <span>转种设置</span>
+        </el-menu-item>
         <el-menu-item index="/settings/indexer">
-          <el-icon><User /></el-icon>
+          <el-icon>
+            <User />
+          </el-icon>
           <span>一键引爆</span>
         </el-menu-item>
       </el-menu>
@@ -35,13 +47,16 @@ const route = useRoute()
 .settings-container {
   height: 100vh;
 }
+
 .settings-aside {
   border-right: 1px solid var(--el-border-color);
 }
+
 .settings-menu {
   height: 100%;
   border-right: none;
 }
+
 .settings-main {
   padding: 0;
   display: flex;
