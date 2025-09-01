@@ -290,7 +290,13 @@ class LuckptUploader:
                 else:
                     title_parts.append(str(value))
 
-        main_part = " ".join(filter(None, title_parts)).replace(".", " ")
+        # [修改] 使用正则表达式替换分隔符，以保护数字中的小数点（例如 5.1）
+        raw_main_part = " ".join(filter(None, title_parts))
+        # r'(?<!\d)\.(?!\d)' 的意思是：匹配一个点，但前提是它的前面和后面都不是数字
+        main_part = re.sub(r'(?<!\d)\.(?!\d)', ' ', raw_main_part)
+        # 额外清理，将可能产生的多个空格合并为一个
+        main_part = re.sub(r'\s+', ' ', main_part).strip()
+
         release_group = components.get("制作组", "NOGROUP")
         if "N/A" in release_group:
             release_group = "NOGROUP"

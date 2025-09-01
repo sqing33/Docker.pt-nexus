@@ -740,6 +740,8 @@ def upload_data_poster(douban_link: str, imdb_link: str):
 
 # (确保文件顶部有 import bencoder, import json)
 
+# utils/media_helper.py
+
 
 def add_torrent_to_downloader(detail_page_url: str, save_path: str,
                               downloader_id: str, db_manager, config_manager):
@@ -751,15 +753,15 @@ def add_torrent_to_downloader(detail_page_url: str, save_path: str,
         f"开始自动添加任务: URL='{detail_page_url}', Path='{save_path}', DownloaderID='{downloader_id}'"
     )
 
-    # ... (前面的下载逻辑保持不变，因为它已经被证明是正确的) ...
     # 1. 查找对应的站点配置
     conn = db_manager._get_connection()
     cursor = db_manager._get_cursor(conn)
     cursor.execute("SELECT nickname, base_url, cookie FROM sites")
     site_info = None
     for site in cursor.fetchall():
+        # [修复] 确保 base_url 存在且不为空
         if site['base_url'] and site['base_url'] in detail_page_url:
-            site_info = site
+            site_info = dict(site)  # [修复] 将 sqlite3.Row 转换为 dict
             break
     conn.close()
 
@@ -830,23 +832,16 @@ def add_torrent_to_downloader(detail_page_url: str, save_path: str,
         if downloader_config['type'] == 'qbittorrent':
             client = qbClient(**api_config)
             client.auth_log_in()
-            result = client.torrents_add(
-                torrent_files=torrent_content,  # qBittorrent 客户端也直接接收原始二进制
-                save_path=save_path,
-                is_paused=False)
+            result = client.torrents_add(torrent_files=torrent_content,
+                                         save_path=save_path,
+                                         is_paused=False)
             logging.info(f"已将种子添加到 qBitorrent '{client_name}': {result}")
 
         elif downloader_config['type'] == 'transmission':
             client = TrClient(**api_config)
-            # ==================== [核心修复] ====================
-            # 移除我们手动添加的 base64 编码，
-            # 直接将原始的、正确的 torrent_content (bytes) 传给库。
-            # 库会自动处理后续的编码。
-            # ======================================================
-            result = client.add_torrent(
-                torrent=torrent_content,  # <--- 修改这里！
-                download_dir=save_path,
-                paused=False)
+            result = client.add_torrent(torrent=torrent_content,
+                                        download_dir=save_path,
+                                        paused=False)
             logging.info(
                 f"已将种子添加到 Transmission '{client_name}': ID={result.id}")
 
