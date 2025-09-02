@@ -342,7 +342,9 @@ def get_sites_status():
         sites_from_db = cursor.fetchall()
 
         sites_status = []
-        for row in sites_from_db:
+        for row_obj in sites_from_db:
+            # [修复] 将 sqlite3.Row 对象转换为标准的 dict，以支持 .get() 方法
+            row = dict(row_obj)
             nickname = row.get("nickname")
             if not nickname:
                 continue

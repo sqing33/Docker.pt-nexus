@@ -419,13 +419,15 @@ def get_downloader_info_api():
         cursor.execute(
             "SELECT downloader_id, SUM(downloaded) as total_dl, SUM(uploaded) as total_ul FROM traffic_stats GROUP BY downloader_id"
         )
-        totals = {r["downloader_id"]: r for r in cursor.fetchall()}
+        # [修复] 将 sqlite3.Row 对象转换为标准的 dict
+        totals = {r["downloader_id"]: dict(r) for r in cursor.fetchall()}
         today_query = f"SELECT downloader_id, SUM(downloaded) as today_dl, SUM(uploaded) as today_ul FROM traffic_stats WHERE stat_datetime >= {db_manager.get_placeholder()} GROUP BY downloader_id"
         from datetime import datetime
 
         cursor.execute(today_query,
                        (datetime.now().strftime("%Y-%m-%d 00:00:00"), ))
-        today_stats = {r["downloader_id"]: r for r in cursor.fetchall()}
+        # [修复] 将 sqlite3.Row 对象转换为标准的 dict
+        today_stats = {r["downloader_id"]: dict(r) for r in cursor.fetchall()}
     except Exception as e:
         logging.error(f"获取下载器统计信息时数据库出错: {e}", exc_info=True)
         totals, today_stats = {}, {}
