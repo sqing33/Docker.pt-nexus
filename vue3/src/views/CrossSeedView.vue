@@ -201,7 +201,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+// [修改1] 从 'vue' 中导入 'watch'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElNotification, ElMessageBox } from 'element-plus'
 import axios from 'axios'
@@ -552,7 +553,7 @@ const resetMigration = () => {
   savePath.value = ''
   downloaderId.value = ''
   downloaderPath.value = ''
-  fetchSitesList()
+  // fetchSitesList() // 在 reset 时不需要重新获取，除非站点列表是动态的
 }
 
 const handleApiError = (error: any, defaultMessage: string) => {
@@ -577,26 +578,41 @@ const hideLog = () => {
   showLogCard.value = false
 }
 
-onMounted(() => {
-  fetchSitesList();
+// [修改2] 新增一个专门处理路由参数的函数
+const processRouteParams = (query: any) => {
+  const querySourceSite = query.sourceSite;
+  const querySearchTerm = query.searchTerm;
 
-  const querySourceSite = route.query.sourceSite;
-  const querySearchTerm = route.query.searchTerm;
-  const querySavePath = route.query.savePath;
-  const queryDownloaderPath = route.query.downloaderPath;
-  const queryDownloaderId = route.query.downloaderId;
-
+  // 仅当核心参数存在时才执行
   if (querySourceSite && querySearchTerm) {
-    console.log('通过URL参数自动填充转种信息。');
+    console.log('检测到URL参数，正在处理新的转种请求...');
 
-    sourceSite.value = String(querySourceSite);
-    searchTerm.value = String(querySearchTerm);
-    savePath.value = String(querySavePath || '');
-    downloaderPath.value = String(queryDownloaderPath || '');
-    downloaderId.value = String(queryDownloaderId || '');
+    // 重要：在处理新的转种任务前，重置整个组件的状态
+    resetMigration();
 
+    // 从路由参数填充数据
+    sourceSite.value = String(query.sourceSite);
+    searchTerm.value = String(query.searchTerm);
+    savePath.value = String(query.savePath || '');
+    downloaderPath.value = String(query.downloaderPath || '');
+    downloaderId.value = String(query.downloaderId || '');
+
+    // 手动触发获取种子信息的步骤
     handleNextStep();
   }
+}
+
+// [修改3] 修改 onMounted 钩子
+onMounted(() => {
+  fetchSitesList();
+  // 在组件首次挂载时，处理可能存在的URL参数
+  processRouteParams(route.query);
+});
+
+// [修改4] 添加 watch 监听器以处理组件复用时的情况
+watch(() => route.query, (newQuery) => {
+  // 当 query 变化时（例如，从种子页面跳转过来），再次调用处理函数
+  processRouteParams(newQuery);
 });
 
 </script>

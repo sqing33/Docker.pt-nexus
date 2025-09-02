@@ -332,7 +332,6 @@ const initTrafficChart = () => {
 
 // --- Data Fetching (fetchTrafficData 有重大修改) ---
 const fetchSpeedData = async (mode, isPeriodicUpdate = false) => {
-  // ... (fetchSpeedData 函数保持不变)
   if (!speedChartInstance) return
   if (!isPeriodicUpdate) speedChartInstance.showLoading()
   try {
@@ -345,6 +344,12 @@ const fetchSpeedData = async (mode, isPeriodicUpdate = false) => {
     const uploadColors = ['#F56C6C', '#E6A23C', '#D98A6F', '#FAB6B6', '#F7D0A3']
     const downloadColors = ['#409EFF', '#67C23A', '#8A2BE2', '#A0CFFF', '#B3E19D']
     const lastDataPoint = data.datasets.length > 0 ? data.datasets[data.datasets.length - 1] : null
+
+    // --- [新增] 用于计算Y轴最大值的数据收集 ---
+    const allUploadData = []
+    const allDownloadData = []
+    // --- 结束新增 ---
+
     speedChartDownloaders.value.forEach((downloader, index) => {
       const currentSpeeds = lastDataPoint?.speeds?.[downloader.id] || { ul_speed: 0, dl_speed: 0 }
       const ulSpeedText = formatSpeed(currentSpeeds.ul_speed || 0)
@@ -357,14 +362,19 @@ const fetchSpeedData = async (mode, isPeriodicUpdate = false) => {
         color: uploadColors[index % uploadColors.length],
         disabled: false,
       })
+
+      const uploadData = data.datasets.map((d) => d.speeds[downloader.id]?.ul_speed || 0);
+      allUploadData.push(...uploadData); // 收集上传数据
+
       series.push({
         name: uploadLegendFullName,
         type: 'line',
         smooth: true,
         showSymbol: false,
-        data: data.datasets.map((d) => d.speeds[downloader.id]?.ul_speed || 0),
+        data: uploadData, // 使用已提取的数据
         color: uploadColors[index % uploadColors.length],
       })
+
       const dlSpeedText = formatSpeed(currentSpeeds.dl_speed || 0)
       const downloadLegendFullName = `${downloader.name} ↓ ${dlSpeedText}`
       newLegendItems.push({
@@ -375,15 +385,40 @@ const fetchSpeedData = async (mode, isPeriodicUpdate = false) => {
         color: downloadColors[index % downloadColors.length],
         disabled: false,
       })
+
+      const downloadData = data.datasets.map((d) => d.speeds[downloader.id]?.dl_speed || 0);
+      allDownloadData.push(...downloadData); // 收集下载数据
+
       series.push({
         name: downloadLegendFullName,
         type: 'line',
         smooth: true,
         showSymbol: false,
-        data: data.datasets.map((d) => d.speeds[downloader.id]?.dl_speed || 0),
+        data: downloadData, // 使用已提取的数据
         color: downloadColors[index % downloadColors.length],
       })
     })
+
+    // --- [核心修改] 根据当前的筛选模式计算并设置 Y 轴最大值 ---
+    let yAxisMax = null; // 默认为 null，让 ECharts 自动计算
+
+    if (speedChartVisibilityMode.value === 'upload') {
+      yAxisMax = Math.max(...allUploadData);
+    } else if (speedChartVisibilityMode.value === 'download') {
+      yAxisMax = Math.max(...allDownloadData);
+    } else { // 'all' 模式
+      yAxisMax = Math.max(...allUploadData, ...allDownloadData);
+    }
+
+    // 如果最大值为0，给一个小的默认值防止图表完全压扁
+    if (yAxisMax === 0) {
+      yAxisMax = 1024; // 1 KB/s
+    }
+
+    // 增加 20% 的缓冲空间，让曲线不至于顶到头
+    yAxisMax = yAxisMax * 1.2;
+    // --- 结束修改 ---
+
     const oldSelectedState = speedChartLegendItems.value.reduce((acc, item) => {
       if (item.disabled) acc[`${item.baseName} ${item.arrow}`] = true
       return acc
@@ -396,8 +431,15 @@ const fetchSpeedData = async (mode, isPeriodicUpdate = false) => {
     newLegendItems.forEach((item) => {
       currentSelected[item.fullName] = !item.disabled
     })
+
     speedChartInstance.setOption({
       xAxis: { data: data.labels },
+      // --- [修改] 应用计算出的Y轴最大值 ---
+      yAxis: {
+        type: 'value',
+        axisLabel: { formatter: (value) => formatSpeed(value) },
+        max: yAxisMax // 在这里设置最大值
+      },
       series: series,
       legend: {
         show: false,
@@ -405,6 +447,7 @@ const fetchSpeedData = async (mode, isPeriodicUpdate = false) => {
         selected: currentSelected,
       },
     })
+
     changeSpeedVisibility(speedChartVisibilityMode.value, true)
     if (isPeriodicUpdate && isMouseOverChart && lastTooltipDataIndex !== null) {
       speedChartInstance.dispatchAction({
@@ -464,8 +507,8 @@ const fetchTrafficData = async (range) => {
           show: true,
           position: 'inside',
           formatter: (p) => (p.value > 0 ? formatBytes(p.value) : ''),
-          color: '#fff',
-          fontSize: 9,
+          color: '#333',
+          fontSize: 12,
         },
       })
 
@@ -482,8 +525,8 @@ const fetchTrafficData = async (range) => {
           show: true,
           position: 'inside',
           formatter: (p) => (p.value > 0 ? formatBytes(p.value) : ''),
-          color: '#fff',
-          fontSize: 9,
+          color: '#333',
+          fontSize: 12,
         },
       })
     })

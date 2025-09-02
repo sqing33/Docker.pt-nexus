@@ -23,11 +23,7 @@
             <el-input v-model="settingsForm.agsv_email" placeholder="请输入您在末日图床注册的邮箱" />
           </el-form-item>
           <el-form-item label="末日图床密码">
-            <el-input v-model="settingsForm.agsv_password" type="password" placeholder="请输入您的末日图床登录密码"
-              show-password />
-            <div class="form-item-help">
-              您的密码将明文保存在 <code>data/config.json</code> 文件中，请注意安全。
-            </div>
+            <el-input v-model="settingsForm.agsv_password" type="password" placeholder="请输入您的末日图床登录密码" show-password />
           </el-form-item>
         </div>
 

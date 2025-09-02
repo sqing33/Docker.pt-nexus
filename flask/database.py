@@ -286,12 +286,12 @@ class DatabaseManager:
                     )
 
     def init_db(self):
-        """确保数据库表存在，并根据 sites_data.json 仅添加新站点，不覆盖已有数据。"""
+        """确保数据库表存在，并根据 sites_data.json 同步站点数据。"""
         conn = self._get_connection()
         cursor = self._get_cursor(conn)
 
         logging.info("正在初始化并验证数据库表结构...")
-        # 表创建逻辑 (MySQL)
+        # 表创建逻辑 (MySQL) - [此部分保持不变]
         if self.db_type == "mysql":
             cursor.execute(
                 "CREATE TABLE IF NOT EXISTS traffic_stats (stat_datetime DATETIME NOT NULL, downloader_id VARCHAR(36) NOT NULL, uploaded BIGINT DEFAULT 0, downloaded BIGINT DEFAULT 0, upload_speed BIGINT DEFAULT 0, download_speed BIGINT DEFAULT 0, PRIMARY KEY (stat_datetime, downloader_id)) ENGINE=InnoDB ROW_FORMAT=Dynamic"
@@ -308,7 +308,7 @@ class DatabaseManager:
             cursor.execute(
                 "CREATE TABLE IF NOT EXISTS `sites` (`id` mediumint NOT NULL AUTO_INCREMENT, `site` varchar(255) UNIQUE DEFAULT NULL, `nickname` varchar(255) DEFAULT NULL, `base_url` varchar(255) DEFAULT NULL, `special_tracker_domain` varchar(255) DEFAULT NULL, `group` varchar(255) DEFAULT NULL, `cookie` TEXT DEFAULT NULL,`passkey` varchar(255) DEFAULT NULL,`migration` int(11) NOT NULL DEFAULT 1, PRIMARY KEY (`id`)) ENGINE=InnoDB ROW_FORMAT=DYNAMIC"
             )
-        # 表创建逻辑 (SQLite)
+        # 表创建逻辑 (SQLite) - [此部分保持不变]
         else:
             cursor.execute(
                 "CREATE TABLE IF NOT EXISTS traffic_stats (stat_datetime TEXT NOT NULL, downloader_id TEXT NOT NULL, uploaded INTEGER DEFAULT 0, downloaded INTEGER DEFAULT 0, upload_speed INTEGER DEFAULT 0, download_speed INTEGER DEFAULT 0, PRIMARY KEY (stat_datetime, downloader_id))"
@@ -333,9 +333,11 @@ class DatabaseManager:
         conn.commit()
 
         if os.path.exists(SITES_DATA_FILE):
-            logging.info(f"正在从 {SITES_DATA_FILE} 检查并添加新站点...")
+            logging.info(f"正在从 {SITES_DATA_FILE} 检查并同步站点...")
             with open(SITES_DATA_FILE, "r", encoding="utf-8") as f:
                 sites_from_json = json.load(f)
+
+            # --- 步骤 1: 插入在数据库中不存在的新站点 (逻辑不变) ---
             cursor.execute("SELECT site FROM sites")
             sites_in_db = {row["site"] for row in cursor.fetchall()}
             sites_to_insert = [
@@ -354,7 +356,24 @@ class DatabaseManager:
                 ph = self.get_placeholder()
                 sql_insert = f"INSERT INTO sites (site, nickname, base_url, special_tracker_domain, `group`, migration) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph})"
                 cursor.executemany(sql_insert, sites_to_insert)
-                conn.commit()
+
+            # --- 步骤 2: [新增逻辑] 更新所有站点的 migration 值 ---
+            # 准备要更新的数据：(migration_value, site_domain)
+            migration_data_to_update = [(s.get("migration", 1), s.get("site"))
+                                        for s in sites_from_json
+                                        if s.get("site")]
+
+            if migration_data_to_update:
+                logging.info(
+                    f"正在根据 {SITES_DATA_FILE} 同步 {len(migration_data_to_update)} 个站点的 migration 值..."
+                )
+                ph = self.get_placeholder()
+                # SQL语句的 WHERE site = ? 会确保只更新数据库中已存在的站点
+                sql_update = f"UPDATE sites SET migration = {ph} WHERE site = {ph}"
+                cursor.executemany(sql_update, migration_data_to_update)
+
+            # 一次性提交所有更改
+            conn.commit()
 
         self._sync_downloaders_from_config(cursor)
         conn.commit()

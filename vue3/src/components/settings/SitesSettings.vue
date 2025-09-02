@@ -5,63 +5,32 @@
       <!-- CookieCloud 表单 -->
       <el-form :model="cookieCloudForm" inline class="cookie-cloud-form">
         <el-form-item label="CookieCloud">
-          <el-input
-            v-model="cookieCloudForm.url"
-            placeholder="http://127.0.0.1:8088"
-            clearable
-            style="width: 200px"
-          ></el-input>
+          <el-input v-model="cookieCloudForm.url" placeholder="http://127.0.0.1:8088" clearable
+            style="width: 200px"></el-input>
         </el-form-item>
         <el-form-item label="KEY">
-          <el-input
-            v-model="cookieCloudForm.key"
-            placeholder="KEY (UUID)"
-            clearable
-            style="width: 100px"
-          ></el-input>
+          <el-input v-model="cookieCloudForm.key" placeholder="KEY (UUID)" clearable style="width: 100px"></el-input>
         </el-form-item>
         <el-form-item label="端对端密码">
-          <el-input
-            v-model="cookieCloudForm.e2e_password"
-            type="password"
-            show-password
-            placeholder="端对端加密密码"
-            clearable
-            style="width: 125px"
-          ></el-input>
+          <el-input v-model="cookieCloudForm.e2e_password" type="password" show-password placeholder="端对端加密密码" clearable
+            style="width: 125px"></el-input>
         </el-form-item>
         <el-form-item>
-          <el-button
-            type="success"
-            size="large"
-            @click="saveCookieCloudSettings"
-            :loading="isSaving"
-          >
-            <el-icon><Select /></el-icon>
-            <span>保存配置</span>
+          <!-- [修改] 合并后的按钮 -->
+          <el-button type="primary" size="large" @click="handleSaveAndSync" :loading="isCookieActionLoading">
+            <el-icon>
+              <Refresh />
+            </el-icon>
+            <span>同步Cookie</span>
           </el-button>
         </el-form-item>
       </el-form>
 
       <div class="right-action-group">
-        <el-input
-          v-model="searchQuery"
-          placeholder="搜索站点昵称/标识/官组"
-          clearable
-          :prefix-icon="Search"
-          class="search-input"
-        />
-        <el-button type="primary" size="large" @click="syncFromCookieCloud" :loading="isSyncing">
-          <el-icon><Refresh /></el-icon>
-          <span>同步Cookie</span>
-        </el-button>
-        <el-button
-          type="primary"
-          size="large"
-          @click="handleOpenDialog('add')"
-          :icon="Plus"
-          class="add-site-btn"
-        >
+        <el-input v-model="searchQuery" placeholder="搜索站点昵称/标识/官组" clearable :prefix-icon="Search"
+          class="search-input" />
+        <!-- [移除] 原来的独立同步按钮已被删除 -->
+        <el-button type="primary" size="large" @click="handleOpenDialog('add')" :icon="Plus" class="add-site-btn">
           添加站点
         </el-button>
       </div>
@@ -90,12 +59,7 @@
         </el-table-column>
         <el-table-column label="操作" width="180" align="center" fixed="right">
           <template #default="scope">
-            <el-button
-              type="primary"
-              :icon="Edit"
-              link
-              @click="handleOpenDialog('edit', scope.row)"
-            >
+            <el-button type="primary" :icon="Edit" link @click="handleOpenDialog('edit', scope.row)">
               编辑
             </el-button>
             <el-button type="danger" :icon="Delete" link @click="handleDelete(scope.row)">
@@ -114,30 +78,17 @@
       </el-radio-group>
       <div class="pagination-container">
         <div class="page-size-text">{{ pagination.pageSize }} 条/页</div>
-        <el-pagination
-          v-model:current-page="pagination.currentPage"
-          v-model:page-size="pagination.pageSize"
-          :total="pagination.total"
-          layout="total, prev, pager, next, jumper"
-          background
-        />
+        <el-pagination v-model:current-page="pagination.currentPage" v-model:page-size="pagination.pageSize"
+          :total="pagination.total" layout="total, prev, pager, next, jumper" background />
       </div>
     </div>
 
     <!-- 添加/编辑站点对话框 -->
-    <el-dialog
-      v-model="dialogVisible"
-      :title="dialogMode === 'add' ? '添加新站点' : '编辑站点'"
-      width="700px"
-      :close-on-click-modal="false"
-    >
+    <el-dialog v-model="dialogVisible" :title="dialogMode === 'add' ? '添加新站点' : '编辑站点'" width="700px"
+      :close-on-click-modal="false">
       <el-form :model="siteForm" ref="siteFormRef" label-width="140px" label-position="left">
         <el-form-item label="站点标识" prop="site" required>
-          <el-input
-            v-model="siteForm.site"
-            placeholder="例如：pt"
-            :disabled="dialogMode === 'edit'"
-          ></el-input>
+          <el-input v-model="siteForm.site" placeholder="例如：pt" :disabled="dialogMode === 'edit'"></el-input>
           <div class="form-tip">作为站点的唯一标识，添加后不可修改。</div>
         </el-form-item>
         <el-form-item label="站点昵称" prop="nickname" required>
@@ -148,10 +99,7 @@
           <div class="form-tip">用于拼接种子详情页链接。</div>
         </el-form-item>
         <el-form-item label="Tracker域名" prop="special_tracker_domain">
-          <el-input
-            v-model="siteForm.special_tracker_domain"
-            placeholder="例如：pt-tracker.com"
-          ></el-input>
+          <el-input v-model="siteForm.special_tracker_domain" placeholder="例如：pt-tracker.com"></el-input>
           <div class="form-tip">
             如果站点的Tracker域名与主域名的二级域名（则域名去掉前缀后缀部分）不同，请在此填写。
           </div>
@@ -161,12 +109,7 @@
           <div class="form-tip">用于识别种子所属发布组，多个组用英文逗号(,)分隔。</div>
         </el-form-item>
         <el-form-item label="Cookie" prop="cookie">
-          <el-input
-            v-model="siteForm.cookie"
-            type="textarea"
-            :rows="3"
-            placeholder="从浏览器获取的Cookie字符串"
-          ></el-input>
+          <el-input v-model="siteForm.cookie" type="textarea" :rows="3" placeholder="从浏览器获取的Cookie字符串"></el-input>
         </el-form-item>
         <el-form-item label="Passkey" prop="passkey">
           <el-input v-model="siteForm.passkey" placeholder="站点的Passkey"></el-input>
@@ -186,15 +129,15 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Delete, Edit, Refresh, Select, Search } from '@element-plus/icons-vue'
+import { Plus, Delete, Edit, Refresh, Search } from '@element-plus/icons-vue'
 
 // --- 状态管理 ---
-const isSaving = ref(false)
+const isSaving = ref(false) // 用于站点编辑对话框的保存按钮
 
 // --- 站点管理状态 ---
 const sitesList = ref([]) // 存储从后端获取的原始列表
 const isSitesLoading = ref(false)
-const isSyncing = ref(false)
+const isCookieActionLoading = ref(false) // [新增] 用于新的“同步Cookie”按钮的加载状态
 const cookieCloudForm = ref({ url: '', key: '', e2e_password: '' })
 const searchQuery = ref('')
 const siteFilter = ref('active')
@@ -297,25 +240,38 @@ const handleFilterChange = () => {
   fetchSites()
 }
 
-const syncFromCookieCloud = async () => {
+// [新增] 合并后的保存与同步功能
+const handleSaveAndSync = async () => {
+  // 1. 前端校验
   if (!cookieCloudForm.value.url || !cookieCloudForm.value.key) {
     ElMessage.warning('CookieCloud URL 和 KEY 不能为空！')
     return
   }
-  isSyncing.value = true
+  isCookieActionLoading.value = true
   try {
-    const response = await axios.post(`${API_BASE_URL}/cookiecloud/sync`, cookieCloudForm.value)
-    if (response.data.success) {
-      ElMessage.success(response.data.message)
-      await fetchSites()
+    // 2. 第一步：先保存配置
+    await axios.post(`${API_BASE_URL}/settings`, {
+      cookiecloud: cookieCloudForm.value,
+    })
+
+    // 3. 第二步：配置保存成功后，立即执行同步
+    const syncResponse = await axios.post(
+      `${API_BASE_URL}/cookiecloud/sync`,
+      cookieCloudForm.value
+    )
+
+    // 4. 处理同步结果
+    if (syncResponse.data.success) {
+      ElMessage.success(`配置已保存. ${syncResponse.data.message}`)
+      await fetchSites() // 同步成功后刷新站点列表
     } else {
-      ElMessage.error(response.data.message || '同步失败！')
+      ElMessage.error(syncResponse.data.message || '同步失败，但配置已保存。')
     }
   } catch (error) {
-    const errorMessage = error.response?.data?.message || '同步请求失败，请检查网络或后端服务。'
+    const errorMessage = error.response?.data?.message || '操作失败，请检查网络或后端服务。'
     ElMessage.error(errorMessage)
   } finally {
-    isSyncing.value = false
+    isCookieActionLoading.value = false
   }
 }
 
@@ -388,23 +344,11 @@ const handleDelete = (site) => {
     })
 }
 
-const saveCookieCloudSettings = async () => {
-  isSaving.value = true
-  try {
-    // Note: This only saves the 'cookiecloud' part of the settings.
-    await axios.post(`${API_BASE_URL}/settings/cookiecloud`, cookieCloudForm.value)
-    ElMessage.success('CookieCloud配置已成功保存！')
-    await fetchCookieCloudSettings()
-  } catch (error) {
-    ElMessage.error('保存CookieCloud配置失败！')
-    console.error(error)
-  } finally {
-    isSaving.value = false
-  }
-}
+// [移除] 不再需要独立的 saveCookieCloudSettings 和 syncFromCookieCloud 方法
 </script>
 
 <style scoped>
+/* 样式部分保持不变 */
 .cookie-view-container {
   display: flex;
   flex-direction: column;

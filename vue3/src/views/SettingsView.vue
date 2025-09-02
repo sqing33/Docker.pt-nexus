@@ -17,7 +17,7 @@
         </el-menu-item>
         <el-menu-item index="/settings/crossseed">
           <el-icon>
-            <Tickets />
+            <Operation />
           </el-icon>
           <span>转种设置</span>
         </el-menu-item>
@@ -38,7 +38,7 @@
 
 <script setup>
 import { useRoute } from 'vue-router'
-import { Download, User, Tickets } from '@element-plus/icons-vue'
+import { Download, User, Tickets, Operation } from '@element-plus/icons-vue'
 
 const route = useRoute()
 </script>
