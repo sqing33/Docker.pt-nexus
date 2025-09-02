@@ -834,7 +834,8 @@ def add_torrent_to_downloader(detail_page_url: str, save_path: str,
             client.auth_log_in()
             result = client.torrents_add(torrent_files=torrent_content,
                                          save_path=save_path,
-                                         is_paused=False)
+                                         is_paused=False,
+                                         skip_checking=True)
             logging.info(f"已将种子添加到 qBitorrent '{client_name}': {result}")
 
         elif downloader_config['type'] == 'transmission':

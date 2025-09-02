@@ -12,8 +12,8 @@ from core.services import start_data_tracker, stop_data_tracker
 
 # --- 日志基础配置 ---
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - [PID:%(process)d] - %(levelname)s - %(message)s"
-)
+    level=logging.INFO,
+    format="%(asctime)s - [PID:%(process)d] - %(levelname)s - %(message)s")
 
 
 def create_app():
@@ -70,7 +70,8 @@ def create_app():
     @app.route("/<path:path>")
     def serve_vue_app(path):
         # 如果请求的路径是前端静态资源文件，则直接返回
-        if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
+        if path != "" and os.path.exists(os.path.join(app.static_folder,
+                                                      path)):
             return send_from_directory(app.static_folder, path)
         # 否则，返回前端应用的入口 index.html，由 Vue Router 处理路由
         else:
@@ -86,7 +87,7 @@ if __name__ == "__main__":
     flask_app = create_app()
 
     # 从环境变量获取端口，如果未设置则使用默认值 15272
-    port = int(os.getenv("PORT", 15272))
+    port = int(os.getenv("PORT", 15273))
 
     logging.info(f"以开发模式启动 Flask 服务器，监听端口 http://0.0.0.0:{port} ...")
 
