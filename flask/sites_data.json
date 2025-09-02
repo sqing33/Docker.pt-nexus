@@ -373,7 +373,7 @@
     "base_url": "pt.0ff.cc",
     "special_tracker_domain": null,
     "group": "FFweb",
-    "migration": 0
+    "migration": 1
   },
   {
     "site": "redleaves",
@@ -437,7 +437,7 @@
     "base_url": "ubits.club",
     "special_tracker_domain": null,
     "group": "UBits,UBWEB,UBTV",
-    "migration": 0
+    "migration": 1
   },
   {
     "site": "pandapt",
@@ -509,7 +509,7 @@
     "base_url": "www.hdkyl.in",
     "special_tracker_domain": null,
     "group": "Kylin,HDKWEB,HDKylinWeb,HDKTV",
-    "migration": 0
+    "migration": 1
   },
   {
     "site": "ilolicon",
@@ -549,7 +549,7 @@
     "base_url": "crabpt.vip",
     "special_tracker_domain": null,
     "group": "crab",
-    "migration": 0
+    "migration": 1
   },
   {
     "site": "icc2022",
@@ -805,7 +805,7 @@
     "base_url": "cangbao.ge",
     "special_tracker_domain": null,
     "group": "CBGWT",
-    "migration": 0
+    "migration": 1
   },
   {
     "site": "Tokyo",

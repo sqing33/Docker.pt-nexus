@@ -325,3 +325,46 @@ def migrate_add_to_downloader():
     except Exception as e:
         logging.error(f"add_to_downloader 路由发生意外错误: {e}", exc_info=True)
         return jsonify({"success": False, "message": f"服务器内部错误: {e}"}), 500
+
+
+@migrate_bp.route("/sites/status", methods=["GET"])
+def get_sites_status():
+    """获取所有站点的详细配置状态。"""
+    db_manager = migrate_bp.db_manager
+    try:
+        conn = db_manager._get_connection()
+        cursor = db_manager._get_cursor(conn)
+
+        # 从数据库查询所有站点的关键信息
+        cursor.execute(
+            "SELECT nickname, cookie, passkey, migration FROM sites WHERE nickname IS NOT NULL AND nickname != ''"
+        )
+        sites_from_db = cursor.fetchall()
+
+        sites_status = []
+        for row in sites_from_db:
+            nickname = row.get("nickname")
+            if not nickname:
+                continue
+
+            migration_status = row.get("migration", 0)
+
+            site_info = {
+                "name": nickname,
+                "has_cookie": bool(row.get("cookie")),
+                "has_passkey": bool(row.get("passkey")),
+                "is_source": migration_status in [1, 3],
+                "is_target": migration_status in [2, 3]
+            }
+            sites_status.append(site_info)
+
+        return jsonify(sorted(sites_status, key=lambda x: x['name'].lower()))
+
+    except Exception as e:
+        logging.error(f"获取站点状态列表失败: {e}", exc_info=True)
+        return jsonify({"error": "服务器内部错误"}), 500
+    finally:
+        if 'conn' in locals() and conn:
+            if 'cursor' in locals() and cursor:
+                cursor.close()
+            conn.close()

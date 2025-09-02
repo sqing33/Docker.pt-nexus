@@ -21,12 +21,6 @@
           </el-icon>
           <span>转种设置</span>
         </el-menu-item>
-        <el-menu-item index="/settings/indexer">
-          <el-icon>
-            <User />
-          </el-icon>
-          <span>一键引爆</span>
-        </el-menu-item>
       </el-menu>
     </el-aside>
 

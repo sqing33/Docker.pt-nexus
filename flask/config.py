@@ -44,6 +44,22 @@ class ConfigManager:
                 # [新增] 为 SeedVault (agsvpic) 添加配置字段
                 "seedvault_email": "",
                 "seedvault_password": ""
+            },
+            # --- [新增] 为前端 UI 添加默认设置 ---
+            "ui_settings": {
+                "torrents_view": {
+                    "page_size": 50,
+                    "sort_prop": "name",
+                    "sort_order": "ascending",
+                    "name_search": "",
+                    "active_filters": {
+                        "paths": [],
+                        "states": [],
+                        "siteExistence": "all",
+                        "siteNames": [],
+                        "downloaderIds": [],
+                    }
+                }
             }
         }
 
@@ -78,6 +94,15 @@ class ConfigManager:
                         self._config["cross_seed"]["seedvault_email"] = ""
                     if "seedvault_password" not in self._config["cross_seed"]:
                         self._config["cross_seed"]["seedvault_password"] = ""
+
+                # --- [新增] 检查并添加 UI 设置的兼容性 ---
+                if "ui_settings" not in self._config:
+                    self._config["ui_settings"] = default_conf["ui_settings"]
+                elif "torrents_view" not in self._config["ui_settings"]:
+                    # 如果 ui_settings 已存在但缺少 torrents_view，也进行补充
+                    self._config["ui_settings"][
+                        "torrents_view"] = default_conf["ui_settings"][
+                            "torrents_view"]
 
             except (json.JSONDecodeError, IOError) as e:
                 logging.error(f"无法读取或解析 {CONFIG_FILE}: {e}。将加载一个安全的默认配置。")
