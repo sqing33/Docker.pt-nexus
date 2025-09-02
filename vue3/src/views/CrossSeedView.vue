@@ -14,18 +14,34 @@
           <el-row :gutter="24">
             <el-col :span="12">
               <h3 class="site-list-title">支持的源站点</h3>
+              <!-- [新增] 源站点颜色注释 -->
+              <p class="site-list-tip">
+                <el-tag type="success" size="small" effect="dark" style="margin-right: 5px;">绿色</el-tag>
+                表示已配置Cookie<br></br>
+                <el-tag type="primary" size="small" effect="dark" style="margin-right: 5px;">蓝色</el-tag>
+                表示站点支持但未配置Cookie
+              </p>
               <div class="site-list-box">
-                <el-tag v-for="site in sourceSitesList" :key="site" class="site-tag" type="info">
-                  {{ site }}
+                <el-tag v-for="site in sourceSitesList" :key="site.name" class="site-tag"
+                  :type="site.has_cookie ? 'success' : 'primary'">
+                  {{ site.name }}
                 </el-tag>
                 <div v-if="!sourceSitesList.length" class="empty-placeholder">加载中...</div>
               </div>
             </el-col>
             <el-col :span="12">
               <h3 class="site-list-title">支持的目标站点</h3>
+              <!-- [新增] 目标站点颜色注释 -->
+              <p class="site-list-tip">
+                <el-tag type="success" size="small" effect="dark" style="margin-right: 5px;">绿色</el-tag>
+                表示Cookie/Passkey齐全<br></br>
+                <el-tag type="primary" size="small" effect="dark" style="margin-right: 5px;">蓝色</el-tag>
+                表示站点支持但未配置Cookie/Passkey
+              </p>
               <div class="site-list-box">
-                <el-tag v-for="site in targetSitesList" :key="site" class="site-tag" type="success">
-                  {{ site }}
+                <el-tag v-for="site in targetSitesList" :key="site.name" class="site-tag"
+                  :type="site.has_cookie && site.has_passkey ? 'success' : 'primary'">
+                  {{ site.name }}
                 </el-tag>
                 <div v-if="!targetSitesList.length" class="empty-placeholder">加载中...</div>
               </div>
@@ -34,12 +50,13 @@
         </div>
         <div style="text-align: center;margin-top: 10px;">
           <el-button type="primary" size="large" @click="navigateToTorrents">
-            选择种子
+            从种子列表选择
           </el-button>
         </div>
       </div>
 
-      <!-- 步骤 1: 核对种子详情 -->
+      <!-- ... 其他步骤保持不变 ... -->
+      <!-- 步骤 1: 核对种子详情 (无改动) -->
       <div v-if="activeStep === 1" class="details-container">
         <el-tabs v-model="activeTab" type="border-card" class="details-tabs">
           <el-tab-pane label="主要信息" name="main">
@@ -137,15 +154,15 @@
         </div>
       </div>
 
-      <!-- 步骤 2: 选择发布站点 -->
+      <!-- 步骤 2: 选择发布站点 (无改动) -->
       <div v-if="activeStep === 2" class="form-container">
         <div class="site-selection-container">
           <h3 class="selection-title">请选择要发布的目标站点 (可多选)</h3>
           <div class="site-buttons-group">
-            <el-button v-for="site in targetSitesList" :key="site"
-              :type="selectedTargetSites.includes(site) ? 'primary' : 'default'" @click="toggleSiteSelection(site)"
-              class="site-button">
-              {{ site }}
+            <el-button v-for="site in targetSitesList" :key="site.name"
+              :type="selectedTargetSites.includes(site.name) ? 'primary' : 'default'"
+              @click="toggleSiteSelection(site.name)" class="site-button">
+              {{ site.name }}
             </el-button>
           </div>
         </div>
@@ -158,7 +175,7 @@
         </div>
       </div>
 
-      <!-- ==================== [UI 修改] 步骤 3: 完成发布 ==================== -->
+      <!-- 步骤 3: 完成发布 (无改动) -->
       <div v-if="activeStep === 3" class="form-container">
         <div class="results-grid-container">
           <div v-for="result in finalResultsList" :key="result.siteName" class="result-card"
@@ -184,8 +201,6 @@
           <el-button type="primary" @click="resetMigration">开始新的迁移</el-button>
         </div>
       </div>
-      <!-- ==================== [UI 修改] 结束 ==================== -->
-
     </div>
     <div v-if="showLogCard" class="log-card-overlay" @click="hideLog"></div>
     <el-card v-if="showLogCard" class="log-card" shadow="xl">
@@ -201,7 +216,6 @@
 </template>
 
 <script setup lang="ts">
-// [修改1] 从 'vue' 中导入 'watch'
 import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElNotification, ElMessageBox } from 'element-plus'
@@ -212,7 +226,6 @@ import { useRouter } from 'vue-router';
 
 const router = useRouter();
 
-// ==================== [功能增强] 新增：自动添加到下载器的方法 ====================
 const triggerAddToDownloader = async (result: any) => {
   if (!downloaderPath.value || !downloaderId.value) {
     const msg = `[${result.siteName}] 警告: 未能获取到原始保存路径或下载器ID，已跳过自动添加任务。`;
@@ -241,7 +254,6 @@ const triggerAddToDownloader = async (result: any) => {
     logContent.value += `\n[${result.siteName}] 错误: 调用“添加到下载器”API失败: ${errorMessage}`;
   }
 }
-// ==================== [功能增强] 结束 ====================
 
 const getInitialTorrentData = () => ({
   title_components: [] as { key: string, value: string }[],
@@ -261,10 +273,17 @@ const parseImageUrls = (text: string) => {
   return matches.map((match) => match[1])
 }
 
+interface SiteStatus {
+  name: string;
+  has_cookie: boolean;
+  has_passkey: boolean;
+  is_source: boolean;
+  is_target: boolean;
+}
+
 const activeStep = ref(0)
 const activeTab = ref('main')
-const sourceSitesList = ref<string[]>([])
-const targetSitesList = ref<string[]>([])
+const allSitesStatus = ref<SiteStatus[]>([])
 const sourceSite = ref('')
 const selectedTargetSites = ref<string[]>([])
 const searchTerm = ref('')
@@ -282,6 +301,9 @@ const savePath = ref('')
 const downloaderId = ref('')
 const downloaderPath = ref('')
 const route = useRoute();
+
+const sourceSitesList = computed(() => allSitesStatus.value.filter(s => s.is_source));
+const targetSitesList = computed(() => allSitesStatus.value.filter(s => s.is_target));
 
 const reparseTitle = async () => {
   if (!torrentData.value.original_main_title) {
@@ -366,21 +388,17 @@ const handleImageError = async (url: string, type: 'poster' | 'screenshot', inde
   }
 }
 
-
 const navigateToTorrents = () => {
   resetMigration();
   router.push('/torrents');
 };
 
-
-
-const fetchSitesList = async () => {
+const fetchSitesStatus = async () => {
   try {
-    const response = await axios.get('/api/sites_list')
-    sourceSitesList.value = response.data.source_sites
-    targetSitesList.value = response.data.target_sites
+    const response = await axios.get('/api/sites/status');
+    allSitesStatus.value = response.data;
   } catch (error) {
-    ElNotification.error({ title: '错误', message: '无法从服务器获取站点列表' })
+    ElNotification.error({ title: '错误', message: '无法从服务器获取站点状态列表' });
   }
 }
 
@@ -515,7 +533,6 @@ const handlePublish = async () => {
 
     logContent.value = results.map(r => `--- Log for ${r.siteName} ---\n${r.logs || 'No logs available.'}`).join('\n\n')
 
-    // ==================== [功能增强] 触发自动添加到下载器 ====================
     logContent.value += '\n\n--- [开始自动添加任务] ---';
     for (const result of finalResultsList.value) {
       if (result.success && result.url) {
@@ -523,7 +540,6 @@ const handlePublish = async () => {
       }
     }
     logContent.value += '\n--- [自动添加任务结束] ---';
-    // ==================== [功能增强] 结束 ====================
 
   } catch (error) {
     ElNotification.closeAll()
@@ -553,7 +569,6 @@ const resetMigration = () => {
   savePath.value = ''
   downloaderId.value = ''
   downloaderPath.value = ''
-  // fetchSitesList() // 在 reset 时不需要重新获取，除非站点列表是动态的
 }
 
 const handleApiError = (error: any, defaultMessage: string) => {
@@ -578,40 +593,28 @@ const hideLog = () => {
   showLogCard.value = false
 }
 
-// [修改2] 新增一个专门处理路由参数的函数
 const processRouteParams = (query: any) => {
   const querySourceSite = query.sourceSite;
   const querySearchTerm = query.searchTerm;
 
-  // 仅当核心参数存在时才执行
   if (querySourceSite && querySearchTerm) {
     console.log('检测到URL参数，正在处理新的转种请求...');
-
-    // 重要：在处理新的转种任务前，重置整个组件的状态
     resetMigration();
-
-    // 从路由参数填充数据
     sourceSite.value = String(query.sourceSite);
     searchTerm.value = String(query.searchTerm);
     savePath.value = String(query.savePath || '');
     downloaderPath.value = String(query.downloaderPath || '');
     downloaderId.value = String(query.downloaderId || '');
-
-    // 手动触发获取种子信息的步骤
     handleNextStep();
   }
 }
 
-// [修改3] 修改 onMounted 钩子
 onMounted(() => {
-  fetchSitesList();
-  // 在组件首次挂载时，处理可能存在的URL参数
+  fetchSitesStatus();
   processRouteParams(route.query);
 });
 
-// [修改4] 添加 watch 监听器以处理组件复用时的情况
 watch(() => route.query, (newQuery) => {
-  // 当 query 变化时（例如，从种子页面跳转过来），再次调用处理函数
   processRouteParams(newQuery);
 });
 
@@ -636,7 +639,6 @@ watch(() => route.query, (newQuery) => {
 
 .content-card.narrow-card {
   max-width: 800px;
-  /* 调整第一步和最后一步的卡片宽度 */
   margin: 15vh auto;
 }
 
@@ -857,6 +859,15 @@ watch(() => route.query, (newQuery) => {
   text-align: center;
   color: #303133;
   font-weight: 500;
+  margin: 0 0 8px;
+  /* 调整了 margin */
+}
+
+/* [新增] 站点注释样式 */
+.site-list-tip {
+  font-size: 12px;
+  color: #909399;
+  text-align: center;
   margin: 0 0 12px;
 }
 
@@ -874,6 +885,8 @@ watch(() => route.query, (newQuery) => {
 
 .site-tag {
   font-size: 14px;
+  height: 28px;
+  line-height: 26px;
 }
 
 .empty-placeholder {
@@ -882,8 +895,6 @@ watch(() => route.query, (newQuery) => {
   color: #909399;
 }
 
-
-/* ==================== [UI 修改] 新增的样式 ==================== */
 .results-grid-container {
   display: flex;
   flex-wrap: wrap;
@@ -954,6 +965,4 @@ watch(() => route.query, (newQuery) => {
 .card-extra a:hover {
   text-decoration: underline;
 }
-
-/* ==================== [UI 修改] 样式结束 ==================== */
 </style>

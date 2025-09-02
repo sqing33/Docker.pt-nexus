@@ -1,17 +1,16 @@
-<!-- src/views/TorrentsView.vue -->
 <template>
   <div class="torrents-view">
     <el-alert v-if="error" :title="error" type="error" show-icon :closable="false" center
       style="margin-bottom: 15px"></el-alert>
 
-    <el-table :data="allData" v-loading="loading" border height="100%" ref="tableRef" row-key="name"
-      :row-class-name="tableRowClassName" @row-click="handleRowClick" @expand-change="handleExpandChange"
+    <!-- [修改] 使用 v-if 确保在加载设置后再渲染表格 -->
+    <el-table v-if="settingsLoaded" :data="allData" v-loading="loading" border height="100%" ref="tableRef"
+      row-key="name" :row-class-name="tableRowClassName" @row-click="handleRowClick" @expand-change="handleExpandChange"
       @sort-change="handleSortChange" :default-sort="currentSort" empty-text="无数据或当前筛选条件下无结果">
-      <!-- ... (el-table-column type="expand" and other columns remain the same) ... -->
+      <!-- ... (其他列保持不变) ... -->
       <el-table-column type="expand" width="1">
         <template #default="props">
           <div class="expand-content">
-            <!-- [修改] 使用按中文拼音排序的 sorted_all_sites -->
             <template v-for="siteName in sorted_all_sites" :key="siteName">
               <template v-if="props.row.sites[siteName]">
                 <a v-if="hasLink(props.row.sites[siteName], siteName)"
@@ -89,7 +88,7 @@
       :total="totalTorrents" layout="total, sizes, prev, pager, next, jumper" @size-change="handleSizeChange"
       @current-change="handleCurrentChange" background />
 
-    <!-- 筛选器弹窗 -->
+    <!-- 筛选器弹窗 (无改动) -->
     <div v-if="filterDialogVisible" class="filter-overlay">
       <el-card class="filter-card">
         <template #header>
@@ -98,7 +97,6 @@
             <el-button type="danger" circle @click="filterDialogVisible = false" plain>X</el-button>
           </div>
         </template>
-
         <div class="filter-card-body">
           <el-divider content-position="left">站点筛选</el-divider>
           <div class="site-filter-container">
@@ -115,20 +113,17 @@
               </el-checkbox-group>
             </div>
           </div>
-
           <el-divider content-position="left">下载器</el-divider>
           <el-checkbox-group v-model="tempFilters.downloaderIds">
             <el-checkbox v-for="downloader in downloadersList" :key="downloader.id" :label="downloader.id">
               {{ downloader.name }}
             </el-checkbox>
           </el-checkbox-group>
-
           <el-divider content-position="left">保存路径</el-divider>
           <div class="path-tree-container">
             <el-tree ref="pathTreeRef" :data="pathTreeData" show-checkbox node-key="path" default-expand-all
               check-on-click-node :props="{ class: 'path-tree-node' }" />
           </div>
-
           <el-divider content-position="left">状态</el-divider>
           <el-checkbox-group v-model="tempFilters.states">
             <el-checkbox v-for="state in unique_states" :key="state" :label="state">{{
@@ -136,7 +131,6 @@
               }}</el-checkbox>
           </el-checkbox-group>
         </div>
-
         <div class="filter-card-footer">
           <el-button @click="filterDialogVisible = false">取消</el-button>
           <el-button type="primary" @click="applyFilters">确认</el-button>
@@ -144,9 +138,9 @@
       </el-card>
     </div>
 
-    <!-- [新增] 源站点选择弹窗 -->
+    <!-- 源站点选择弹窗 -->
     <div v-if="sourceSelectionDialogVisible" class="filter-overlay">
-      <el-card class="filter-card" style="max-width: 500px;">
+      <el-card class="filter-card" style="max-width: 600px;">
         <template #header>
           <div class="filter-card-header">
             <span>请选择转种的源站点</span>
@@ -154,10 +148,22 @@
           </div>
         </template>
         <div class="source-site-selection-body">
-          <el-button v-for="site in availableSourceSites" :key="site.siteName"
-            @click="confirmSourceSiteAndProceed(site)" type="primary" plain class="source-site-button">
-            {{ site.siteName }}
-          </el-button>
+          <p class="source-site-tip">
+            <el-tag type="success" size="small" effect="dark" style="margin-right: 5px;">绿色</el-tag> 表示已配置Cookie，
+            <el-tag type="primary" size="small" effect="dark" style="margin-right: 5px;">蓝色</el-tag> 表示未配置Cookie。
+            只有当前种子所在的站点才可点击。
+          </p>
+          <div class="site-list-box">
+            <el-tooltip v-for="site in allSourceSitesStatus" :key="site.name"
+              :content="isSourceSiteSelectable(site.name) ? `从 ${site.name} 转种` : `当前种子不在 ${site.name}`"
+              placement="top">
+              <el-tag :type="site.has_cookie ? 'success' : 'primary'"
+                :class="{ 'is-selectable': isSourceSiteSelectable(site.name) }" class="site-tag"
+                @click="isSourceSiteSelectable(site.name) && confirmSourceSiteAndProceed(getSiteDetails(site.name))">
+                {{ site.name }}
+              </el-tag>
+            </el-tooltip>
+          </div>
         </div>
         <div class="filter-card-footer">
           <el-button @click="sourceSelectionDialogVisible = false">取消</el-button>
@@ -193,7 +199,13 @@ interface Torrent {
   total_uploaded_formatted: string
   downloaderId?: string
 }
-
+interface SiteStatus {
+  name: string;
+  has_cookie: boolean;
+  has_passkey: boolean;
+  is_source: boolean;
+  is_target: boolean;
+}
 interface ActiveFilters {
   paths: string[]
   states: string[]
@@ -217,6 +229,9 @@ const tableRef = ref<TableInstance | null>(null)
 const loading = ref<boolean>(true)
 const allData = ref<Torrent[]>([])
 const error = ref<string | null>(null)
+
+// --- [新增] 控制表格渲染的状态 ---
+const settingsLoaded = ref<boolean>(false)
 
 const nameSearch = ref<string>('')
 const currentSort = ref<Sort>({ prop: 'name', order: 'ascending' })
@@ -245,11 +260,9 @@ const downloadersList = ref<Downloader[]>([]);
 const pathTreeRef = ref<InstanceType<typeof ElTree> | null>(null)
 const pathTreeData = ref<PathNode[]>([])
 
-// [新增] 用于源站点选择弹窗的状态
 const sourceSelectionDialogVisible = ref<boolean>(false);
-const availableSourceSites = ref<any[]>([]);
+const allSourceSitesStatus = ref<SiteStatus[]>([]);
 const selectedTorrentForMigration = ref<Torrent | null>(null);
-
 
 const sorted_all_sites = computed(() => {
   const collator = new Intl.Collator('zh-CN', { numeric: true })
@@ -261,6 +274,52 @@ const progressColors = [
   { color: '#e6a23c', percentage: 99 },
   { color: '#67c23a', percentage: 100 },
 ]
+
+const saveUiSettings = async () => {
+  try {
+    const settingsToSave = {
+      page_size: pageSize.value,
+      sort_prop: currentSort.value.prop,
+      sort_order: currentSort.value.order,
+      name_search: nameSearch.value,
+      active_filters: activeFilters,
+    };
+    await fetch('/api/ui_settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(settingsToSave)
+    });
+  } catch (e: any) {
+    console.error('无法保存UI设置:', e.message);
+  }
+};
+
+const loadUiSettings = async () => {
+  try {
+    const response = await fetch('/api/ui_settings');
+    if (!response.ok) {
+      console.warn('无法加载UI设置，将使用默认值。');
+      return;
+    }
+    const settings = await response.json();
+    pageSize.value = settings.page_size ?? 50;
+    currentSort.value = {
+      prop: settings.sort_prop || 'name',
+      // --- [修改] 正确处理 null (取消排序) 状态 ---
+      order: 'sort_order' in settings ? settings.sort_order : 'ascending'
+    };
+    nameSearch.value = settings.name_search ?? '';
+    if (settings.active_filters) {
+      Object.assign(activeFilters, settings.active_filters);
+    }
+  } catch (e) {
+    console.error('加载UI设置时出错:', e);
+  } finally {
+    // --- [修改] 无论加载成功与否，都设置此值为 true，以渲染表格 ---
+    settingsLoaded.value = true;
+  }
+}
+
 
 const buildPathTree = (paths: string[]): PathNode[] => {
   const root: PathNode[] = []
@@ -302,6 +361,18 @@ const fetchDownloadersList = async () => {
   }
 }
 
+const fetchAllSitesStatus = async () => {
+  try {
+    const response = await fetch('/api/sites/status');
+    if (!response.ok) throw new Error('无法获取站点状态列表');
+    const allSites = await response.json();
+    allSourceSitesStatus.value = allSites.filter((s: SiteStatus) => s.is_source);
+  } catch (e: any) {
+    error.value = (e as Error).message;
+  }
+};
+
+
 const fetchData = async () => {
   loading.value = true
   error.value = null
@@ -342,7 +413,6 @@ const fetchData = async () => {
   }
 }
 
-// [修改] startCrossSeed 函数逻辑
 const startCrossSeed = (row: Torrent) => {
   const availableSources = Object.entries(row.sites)
     .map(([siteName, siteDetails]) => ({ siteName, ...siteDetails }))
@@ -353,34 +423,24 @@ const startCrossSeed = (row: Torrent) => {
     });
 
   if (availableSources.length === 0) {
-    ElMessage.error('该种子没有找到可用的源站点进行迁移。');
+    ElMessage.error('该种子没有找到可用的、已配置为源站点的做种站点。');
     return;
   }
 
-  // 如果只有一个可用源，为方便起见直接跳转
-  if (availableSources.length === 1) {
-    confirmSourceSiteAndProceed(availableSources[0], row);
-    return;
-  }
-
-  // 存储数据并显示选择弹窗
-  availableSourceSites.value = availableSources;
   selectedTorrentForMigration.value = row;
   sourceSelectionDialogVisible.value = true;
 };
 
-// [新增] 处理用户在弹窗中选择源站点的函数
-const confirmSourceSiteAndProceed = (sourceSite: any, torrent?: Torrent) => {
-  // 兼容直接调用和弹窗调用两种情况
-  const row = torrent || selectedTorrentForMigration.value;
-
+const confirmSourceSiteAndProceed = (sourceSite: any) => {
+  const row = selectedTorrentForMigration.value;
   if (!row) {
     ElMessage.error('发生内部错误：未找到选中的种子信息。');
     sourceSelectionDialogVisible.value = false;
     return;
   }
 
-  const idMatch = sourceSite.comment.match(/id=(\d+)/);
+  const siteDetails = row.sites[sourceSite.siteName];
+  const idMatch = siteDetails.comment.match(/id=(\d+)/);
   if (!idMatch || !idMatch[1]) {
     ElMessage.error(`无法从源站点 ${sourceSite.siteName} 的链接中提取种子ID。`);
     sourceSelectionDialogVisible.value = false;
@@ -403,8 +463,18 @@ const confirmSourceSiteAndProceed = (sourceSite: any, torrent?: Torrent) => {
     },
   });
 
-  // 执行后关闭弹窗
   sourceSelectionDialogVisible.value = false;
+};
+
+const isSourceSiteSelectable = (siteName: string): boolean => {
+  return !!(selectedTorrentForMigration.value && selectedTorrentForMigration.value.sites[siteName]);
+};
+
+const getSiteDetails = (siteName: string) => {
+  if (!selectedTorrentForMigration.value) return null;
+  const siteData = selectedTorrentForMigration.value.sites[siteName];
+  if (!siteData) return null;
+  return { siteName, ...siteData };
 };
 
 
@@ -412,6 +482,7 @@ const handleSizeChange = (val: number) => {
   pageSize.value = val
   currentPage.value = 1
   fetchData()
+  saveUiSettings()
 }
 const handleCurrentChange = (val: number) => {
   currentPage.value = val
@@ -421,6 +492,7 @@ const handleSortChange = (sort: Sort) => {
   currentSort.value = sort
   currentPage.value = 1
   fetchData()
+  saveUiSettings()
 }
 
 const openFilterDialog = () => {
@@ -442,15 +514,7 @@ const applyFilters = async () => {
   filterDialogVisible.value = false
   currentPage.value = 1
   await fetchData()
-  try {
-    await fetch('/api/save_filters', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ paths: activeFilters.paths }),
-    })
-  } catch (e: any) {
-    console.error(`保存路径筛选器设置失败: ${e.message}`)
-  }
+  saveUiSettings()
 }
 
 const formatBytes = (b: number | null): string => {
@@ -493,15 +557,23 @@ const tableRowClassName = ({ row }: { row: Torrent }) => {
   return expandedRows.value.includes(row.name) ? 'expanded-row' : ''
 }
 
-onMounted(() => {
+// --- [修改] onMounted 启动逻辑 ---
+onMounted(async () => {
+  // 1. 先加载保存的UI设置
+  await loadUiSettings();
+  // 2. loadUiSettings 会设置 settingsLoaded=true，此时表格才会被渲染
+  // 3. 使用加载好的设置去获取数据
   fetchData();
+  // 4. 执行其他初始化
   fetchDownloadersList();
+  fetchAllSitesStatus();
   emits('ready', fetchData);
 })
 
 watch(nameSearch, () => {
   currentPage.value = 1
   fetchData()
+  saveUiSettings()
 })
 watch(
   () => tempFilters.siteExistence,
@@ -514,6 +586,7 @@ watch(
 </script>
 
 <style scoped>
+/* ... (所有样式保持不变) ... */
 .torrents-view {
   height: 100%;
   display: flex;
@@ -569,11 +642,10 @@ watch(
   display: none;
 }
 
-:deep(.expanded-row > td) {
+:deep(.expanded-row>td) {
   background-color: #ecf5ff !important;
 }
 
-/* 自定义模态框样式 */
 .filter-overlay {
   position: fixed;
   top: 0;
@@ -585,7 +657,6 @@ watch(
   justify-content: center;
   align-items: center;
   z-index: 2000;
-  /* 确保在最上层 */
 }
 
 .filter-card {
@@ -617,7 +688,6 @@ watch(
 }
 
 .filter-card-body {
-  /* height: 655px; */
   overflow-y: auto;
   padding: 10px 15px;
 }
@@ -687,18 +757,41 @@ watch(
   padding-right: 10px;
 }
 
-/* [新增] 源站点选择弹窗的特定样式 */
 .source-site-selection-body {
-  padding: 20px 30px;
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-  align-items: center;
+  padding: 5px 20px 20px 20px;
 }
 
-.source-site-button {
-  width: 90%;
-  height: 40px;
-  font-size: 16px;
+.source-site-tip {
+  font-size: 13px;
+  color: #909399;
+  margin-bottom: 15px;
+  text-align: center;
+}
+
+.site-list-box {
+  border: 1px solid #dcdfe6;
+  border-radius: 6px;
+  padding: 16px;
+  background-color: #fafafa;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-content: flex-start;
+}
+
+.site-list-box .site-tag {
+  font-size: 14px;
+  height: 28px;
+  line-height: 26px;
+  opacity: 0.5;
+}
+
+.site-list-box .site-tag.is-selectable {
+  cursor: pointer;
+  opacity: 1;
+}
+
+.site-list-box .site-tag.is-selectable:hover {
+  filter: brightness(1.1);
 }
 </style>
