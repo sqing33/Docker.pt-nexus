@@ -31,7 +31,7 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Res
     mergedHeaders.set('Authorization', `Bearer ${token}`)
   }
 
-  const finalInit: RequestInit = { ...(init || {}), headers: mergedHeaders }
+  const finalInit: RequestInit = { ...init, headers: mergedHeaders }
   const finalInput =
     typeof input === 'string' || input instanceof URL ? url : new Request(input, finalInit)
 

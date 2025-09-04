@@ -651,19 +651,40 @@ def upload_data_screenshot(source_info, save_path):
                 if os.path.exists(output_filename):
                     print(f"截图 {output_filename} 生成成功，准备上传。")
 
-                    # --- [核心修改] 根据配置选择上传函数 ---
-                    upload_result = None
-                    if hoster == "pixhost":
-                        image_url = _upload_to_pixhost(output_filename)
-                    elif hoster == "agsv":
-                        image_url = _upload_to_agsv(output_filename,
-                                                    auth_token)
-                    else:
-                        print(f"警告: 未知的图床 '{hoster}'，将默认使用 pixhost。")
-                        image_url = _upload_to_pixhost(output_filename)
-
-                    if image_url:
-                        uploaded_urls.append(image_url)
+                    # --- [核心修改] 根据配置选择上传函数，并添加重试机制 ---
+                    max_retries = 3
+                    image_url = None
+                    
+                    for attempt in range(max_retries):
+                        try:
+                            if hoster == "pixhost":
+                                image_url = _upload_to_pixhost(output_filename)
+                            elif hoster == "agsv":
+                                image_url = _upload_to_agsv(output_filename,
+                                                            auth_token)
+                            else:
+                                print(f"警告: 未知的图床 '{hoster}'，将默认使用 pixhost。")
+                                image_url = _upload_to_pixhost(output_filename)
+                            
+                            if image_url:
+                                uploaded_urls.append(image_url)
+                                print(f"第 {i+1} 张图片上传成功 (尝试 {attempt+1}/{max_retries})")
+                                break
+                            else:
+                                print(f"第 {i+1} 张图片上传失败 (尝试 {attempt+1}/{max_retries})")
+                                if attempt < max_retries - 1:
+                                    print(f"等待 2 秒后重试...")
+                                    time.sleep(2)
+                                
+                        except Exception as e:
+                            print(f"第 {i+1} 张图片上传出现异常 (尝试 {attempt+1}/{max_retries}): {e}")
+                            if attempt < max_retries - 1:
+                                print(f"等待 2 秒后重试...")
+                                time.sleep(2)
+                            continue
+                    
+                    if not image_url:
+                        print(f"⚠️  第 {i+1} 张图片经过 {max_retries} 次尝试后仍然上传失败")
 
                 else:
                     print(f"警告：ffmpeg 命令执行成功，但未找到输出文件 {output_filename}")

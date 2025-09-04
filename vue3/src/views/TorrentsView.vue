@@ -88,6 +88,26 @@
       :total="totalTorrents" layout="total, sizes, prev, pager, next, jumper" @size-change="handleSizeChange"
       @current-change="handleCurrentChange" background />
 
+    <!-- 转种弹窗 -->
+    <div v-if="crossSeedDialogVisible" class="modal-overlay" @click.self="closeCrossSeedDialog">
+      <el-card class="cross-seed-card" shadow="always">
+        <template #header>
+          <div class="modal-header">
+            <span>转种 - {{ selectedTorrentForMigration?.name }}</span>
+            <el-button type="danger" circle @click="closeCrossSeedDialog" plain>X</el-button>
+          </div>
+        </template>
+        <div class="cross-seed-content" v-if="selectedTorrentForMigration">
+          <CrossSeedPanel
+            :torrent="selectedTorrentForMigration"
+            :source-site="selectedSourceSite"
+            @complete="handleCrossSeedComplete"
+            @cancel="closeCrossSeedDialog"
+          />
+        </div>
+      </el-card>
+    </div>
+
     <!-- 筛选器弹窗 (无改动) -->
     <div v-if="filterDialogVisible" class="filter-overlay" @click.self="filterDialogVisible = false">
       <el-card class="filter-card">
@@ -184,10 +204,10 @@
 
 <script setup lang="ts">
 import { ref, onMounted, reactive, watch, defineEmits, nextTick, computed } from 'vue'
-import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import type { TableInstance, Sort } from 'element-plus'
 import type { ElTree } from 'element-plus'
+import CrossSeedPanel from '../components/CrossSeedPanel.vue'
 
 const emits = defineEmits(['ready'])
 
@@ -232,7 +252,7 @@ interface Downloader {
   name: string;
 }
 
-const router = useRouter();
+// const router = useRouter();
 
 const tableRef = ref<TableInstance | null>(null)
 const loading = ref<boolean>(true)
@@ -272,6 +292,8 @@ const pathTreeData = ref<PathNode[]>([])
 const sourceSelectionDialogVisible = ref<boolean>(false);
 const allSourceSitesStatus = ref<SiteStatus[]>([]);
 const selectedTorrentForMigration = ref<Torrent | null>(null);
+const crossSeedDialogVisible = ref<boolean>(false);
+const selectedSourceSite = ref<string>('');
 
 const sorted_all_sites = computed(() => {
   const collator = new Intl.Collator('zh-CN', { numeric: true })
@@ -466,24 +488,28 @@ const confirmSourceSiteAndProceed = (sourceSite: any) => {
   const sourceSiteName = sourceSite.siteName;
 
   ElMessage.success(`准备从站点 [${sourceSiteName}] 开始迁移种子...`);
-  const finalSavePath = `${row.save_path.replace(/[/\\]$/, '')}/${row.name}`;
-
-  router.push({
-    path: '/cross_seed',
-    query: {
-      sourceSite: sourceSiteName,
-      searchTerm: torrentId,
-      savePath: finalSavePath,
-      downloaderPath: row.save_path,
-      downloaderId: row.downloaderId,
-    },
-  });
-
+  
+  // 设置选中的源站点并打开转种弹窗
+  selectedSourceSite.value = sourceSiteName;
   sourceSelectionDialogVisible.value = false;
+  crossSeedDialogVisible.value = true;
 };
 
 const isSourceSiteSelectable = (siteName: string): boolean => {
   return !!(selectedTorrentForMigration.value && selectedTorrentForMigration.value.sites[siteName]);
+};
+
+const closeCrossSeedDialog = () => {
+  crossSeedDialogVisible.value = false;
+  selectedTorrentForMigration.value = null;
+  selectedSourceSite.value = '';
+};
+
+const handleCrossSeedComplete = () => {
+  ElMessage.success('转种操作已完成！');
+  closeCrossSeedDialog();
+  // 可选：刷新数据以显示最新状态
+  fetchData();
 };
 
 const getSiteDetails = (siteName: string) => {
@@ -809,5 +835,48 @@ watch(
 
 .site-list-box .site-tag.is-selectable:hover {
   filter: brightness(1.1);
+}
+
+/* 转种弹窗样式 */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 2000;
+}
+
+.cross-seed-card {
+  width: 90vw;
+  max-width: 1200px;
+  height: 90vh;
+  max-height: 800px;
+  display: flex;
+  flex-direction: column;
+}
+
+:deep(.cross-seed-card .el-card__body) {
+  padding: 10px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.cross-seed-content {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 </style>
