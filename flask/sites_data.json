@@ -389,7 +389,7 @@
     "base_url": "ptchina.org",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 0
+    "migration": 2
   },
   {
     "site": "zhuque",
@@ -525,7 +525,7 @@
     "base_url": "pt.gtk.pw",
     "special_tracker_domain": "gtkpw",
     "group": null,
-    "migration": 0
+    "migration": 2
   },
   {
     "site": "wukongwendao",
@@ -629,7 +629,7 @@
     "base_url": "ptzone.xyz",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 0
+    "migration": 2
   },
   {
     "site": "hdclone",
