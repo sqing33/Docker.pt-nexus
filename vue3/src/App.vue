@@ -1,6 +1,6 @@
 <!-- src/App.vue -->
 <template>
-  <el-menu :default-active="activeRoute" class="main-nav" mode="horizontal" router>
+  <el-menu v-if="!isLoginPage" :default-active="activeRoute" class="main-nav" mode="horizontal" router>
     <el-menu-item index="/">流量统计</el-menu-item>
     <el-menu-item index="/torrents">种子查询</el-menu-item>
     <el-menu-item index="/sites">做种信息</el-menu-item>
@@ -18,7 +18,7 @@
       </el-button>
     </div>
   </el-menu>
-  <main class="main-content">
+  <main :class="['main-content', isLoginPage ? 'no-nav' : '']">
     <router-view v-slot="{ Component }">
       <keep-alive>
         <component :is="Component" @ready="handleComponentReady" />
@@ -33,6 +33,8 @@ import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 
 const route = useRoute()
+
+const isLoginPage = computed(() => route.path === '/login')
 
 const activeRoute = computed(() => {
   if (route.matched.length > 0) {
@@ -111,6 +113,10 @@ body {
   display: flex;
   flex-direction: column;
   height: calc(100% - 40px);
+}
+
+.main-content.no-nav {
+  height: 100%;
 }
 
 .refresh-button-container {

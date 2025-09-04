@@ -10,16 +10,16 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # 配置文件路径
-DATA_DIR = "/app/data"
-# DATA_DIR = "data"
+# DATA_DIR = "/app/data"
+DATA_DIR = "data"
 os.makedirs(DATA_DIR, exist_ok=True)
 
 TEMP_DIR = os.path.join(DATA_DIR, "tmp")
 os.makedirs(TEMP_DIR, exist_ok=True)
 
 CONFIG_FILE = os.path.join(DATA_DIR, "config.json")
-SITES_DATA_FILE = "/app/sites_data.json"
-# SITES_DATA_FILE = "sites_data.json"
+# SITES_DATA_FILE = "/app/sites_data.json"
+SITES_DATA_FILE = "sites_data.json"
 
 
 class ConfigManager:
@@ -34,6 +34,11 @@ class ConfigManager:
         return {
             "downloaders": [],
             "realtime_speed_enabled": True,
+            "auth": {
+                "username": "admin",
+                "password_hash": "",
+                "must_change_password": True
+            },
             "cookiecloud": {
                 "url": "",
                 "key": "",
@@ -103,6 +108,17 @@ class ConfigManager:
                     self._config["ui_settings"][
                         "torrents_view"] = default_conf["ui_settings"][
                             "torrents_view"]
+
+                # --- [新增] 认证配置兼容 ---
+                if "auth" not in self._config:
+                    self._config["auth"] = default_conf["auth"]
+                else:
+                    if "username" not in self._config["auth"]:
+                        self._config["auth"]["username"] = "admin"
+                    if "password_hash" not in self._config["auth"]:
+                        self._config["auth"]["password_hash"] = ""
+                    if "must_change_password" not in self._config["auth"]:
+                        self._config["auth"]["must_change_password"] = True
 
             except (json.JSONDecodeError, IOError) as e:
                 logging.error(f"无法读取或解析 {CONFIG_FILE}: {e}。将加载一个安全的默认配置。")
