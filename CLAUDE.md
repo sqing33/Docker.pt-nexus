@@ -73,6 +73,20 @@ The application follows a client-server architecture with a clear separation bet
    python app.py
    ```
 
+### Linting and Formatting
+
+Frontend linting can be performed with:
+```bash
+cd vue3
+pnpm lint
+```
+
+To format code:
+```bash
+cd vue3
+pnpm format
+```
+
 ### Environment Variables
 
 Key environment variables for configuration:
