@@ -43,6 +43,11 @@
         <el-table-column prop="site" label="站点标识" width="200" show-overflow-tooltip />
         <el-table-column prop="base_url" label="基础URL" width="225" show-overflow-tooltip />
         <el-table-column prop="group" label="官组" show-overflow-tooltip />
+        <el-table-column prop="proxy" label="代理" width="70" align="center">
+          <template #default="scope">
+            <el-tag :type="scope.row.proxy ? 'success' : 'info'">{{ scope.row.proxy ? '启用' : '关闭' }}</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column label="Cookie" width="100" align="center">
           <template #default="scope">
             <el-tag :type="scope.row.has_cookie ? 'success' : 'danger'">
@@ -104,6 +109,9 @@
             如果站点的Tracker域名与主域名的二级域名（则域名去掉前缀后缀部分）不同，请在此填写。
           </div>
         </el-form-item>
+        <el-form-item label="使用代理">
+          <el-switch v-model="siteForm.proxy" :active-value="1" :inactive-value="0" />
+        </el-form-item>
         <el-form-item label="关联官组" prop="group">
           <el-input v-model="siteForm.group" placeholder="例如：PT, PTWEB"></el-input>
           <div class="form-tip">用于识别种子所属发布组，多个组用英文逗号(,)分隔。</div>
@@ -162,6 +170,7 @@ const siteForm = ref({
   group: '',
   cookie: '',
   passkey: '',
+  proxy: 0,
 })
 
 const API_BASE_URL = '/api'
@@ -289,6 +298,7 @@ const handleOpenDialog = (mode, site = null) => {
       group: '',
       cookie: '',
       passkey: '',
+      proxy: 0,
     }
   }
   dialogVisible.value = true

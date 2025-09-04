@@ -333,6 +333,21 @@ class CsptUploader:
                     return False, "目标站点 Cookie 未配置。"
                 cookie_jar = cookies_raw2jar(cleaned_cookie_str)
                 logger.info("正在向 财神 站点提交发布请求...")
+                # 若站点启用代理且配置了全局代理地址，则通过代理请求
+                proxies = None
+                try:
+                    from config import config_manager
+                    use_proxy = bool(self.site_info.get("proxy"))
+                    conf = (config_manager.get() or {})
+                    # 优先使用转种设置中的代理地址，其次兼容旧的 network.proxy_url
+                    proxy_url = (conf.get("cross_seed", {})
+                                 or {}).get("proxy_url") or (conf.get(
+                                     "network", {}) or {}).get("proxy_url")
+                    if use_proxy and proxy_url:
+                        proxies = {"http": proxy_url, "https": proxy_url}
+                except Exception:
+                    proxies = None
+
                 response = self.scraper.post(
                     self.post_url,
                     headers=self.headers,
@@ -340,6 +355,7 @@ class CsptUploader:
                     data=form_data,
                     files=files,
                     timeout=self.timeout,
+                    proxies=proxies,
                 )
                 response.raise_for_status()
 

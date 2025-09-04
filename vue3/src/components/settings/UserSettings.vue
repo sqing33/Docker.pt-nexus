@@ -1,37 +1,90 @@
 <template>
-  <div class="user-settings">
-    <el-card class="card">
-      <template #header>
-        <div class="card-header">
-          <span>用户管理</span>
-          <el-tag type="warning" v-if="mustChange">首次登录需修改</el-tag>
-        </div>
-      </template>
+  <div class="user-settings-container">
+    <div class="user-settings-wrapper">
+      <el-card class="user-settings-card">
+        <template #header>
+          <div class="card-header">
+            <el-icon class="header-icon"><User /></el-icon>
+            <h3>用户设置</h3>
+            <el-tag type="warning" v-if="mustChange" size="small">首次登录需修改</el-tag>
+          </div>
+        </template>
 
-      <el-form :model="form" label-width="100px" class="form" @keyup.enter="onSubmit">
-        <el-form-item label="当前密码" required>
-          <el-input v-model="form.old_password" type="password" placeholder="请输入当前密码" />
-        </el-form-item>
-        <el-form-item label="用户名">
-          <el-input v-model="form.username" placeholder="请输入新用户名" />
-        </el-form-item>
-        <el-form-item label="新密码">
-          <el-input v-model="form.password" type="password" placeholder="至少 6 位" />
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary" :loading="loading" @click="onSubmit">保存</el-button>
-          <el-button @click="resetForm">重置</el-button>
-        </el-form-item>
-      </el-form>
+        <el-form :model="form" label-position="top" class="settings-form" @keyup.enter="onSubmit">
+          <el-form-item label="用户名">
+            <el-input 
+              v-model="form.username" 
+              placeholder="请输入用户名"
+              size="large"
+              clearable
+            >
+              <template #prefix>
+                <el-icon><User /></el-icon>
+              </template>
+            </el-input>
+          </el-form-item>
+          
+          <el-form-item label="当前密码" required>
+            <el-input 
+              v-model="form.old_password" 
+              type="password" 
+              placeholder="请输入当前密码"
+              size="large"
+              show-password
+            >
+              <template #prefix>
+                <el-icon><Lock /></el-icon>
+              </template>
+            </el-input>
+          </el-form-item>
+          
+          <el-form-item label="新密码">
+            <el-input 
+              v-model="form.password" 
+              type="password" 
+              placeholder="至少 6 位"
+              size="large"
+              show-password
+            >
+              <template #prefix>
+                <el-icon><Key /></el-icon>
+              </template>
+            </el-input>
+            <div class="password-hint">
+              <el-text type="info" size="small">留空表示不修改密码</el-text>
+            </div>
+          </el-form-item>
+          
+          <div class="form-actions">
+            <el-button 
+              type="primary" 
+              :loading="loading" 
+              @click="onSubmit"
+              size="large"
+              class="action-button"
+            >
+              保存设置
+            </el-button>
+            <el-button 
+              @click="resetForm"
+              size="large"
+              class="action-button"
+            >
+              重置
+            </el-button>
+          </div>
+        </el-form>
 
-      <el-alert
-        v-if="mustChange"
-        title="为确保安全，请立即设置新用户名与密码。"
-        type="warning"
-        show-icon
-        :closable="false"
-      />
-    </el-card>
+        <el-alert
+          v-if="mustChange"
+          title="为确保安全，请立即设置新用户名与密码。"
+          type="warning"
+          show-icon
+          :closable="false"
+          class="security-alert"
+        />
+      </el-card>
+    </div>
   </div>
 </template>
 
@@ -39,6 +92,7 @@
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
+import { User, Lock, Key } from '@element-plus/icons-vue'
 
 const loading = ref(false)
 const currentUsername = ref('admin')
@@ -57,7 +111,7 @@ onMounted(async () => {
 })
 
 const resetForm = () => {
-  form.value = { old_password: '', username: '', password: '' }
+  form.value = { old_password: '', username: currentUsername.value, password: '' }
 }
 
 const onSubmit = async () => {
@@ -100,10 +154,95 @@ const onSubmit = async () => {
 </script>
 
 <style scoped>
-.user-settings { padding: 16px; }
-.card { max-width: 560px; }
-.card-header { display: flex; align-items: center; gap: 8px; }
-.form { margin-top: 8px; }
+.user-settings-container {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 100%;
+  padding: 40px 20px;
+  background-color: var(--el-bg-color-page);
+}
+
+.user-settings-wrapper {
+  width: 100%;
+  max-width: 500px;
+}
+
+.user-settings-card {
+  border-radius: 8px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+  border: 1px solid var(--el-border-color);
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.header-icon {
+  font-size: 20px;
+  color: var(--el-color-primary);
+}
+
+.card-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--el-text-color-primary);
+}
+
+.settings-form {
+  margin-top: 20px;
+}
+
+:deep(.el-form-item__label) {
+  font-weight: 500;
+  color: var(--el-text-color-regular);
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+:deep(.el-input__inner) {
+  height: 42px;
+  font-size: 14px;
+}
+
+:deep(.el-input-group__prepend) {
+  background-color: var(--el-fill-color-light);
+}
+
+.password-hint {
+  margin-top: 6px;
+}
+
+.form-actions {
+  display: flex;
+  gap: 16px;
+  margin-top: 32px;
+}
+
+.action-button {
+  flex: 1;
+  height: 42px;
+  font-size: 14px;
+}
+
+.security-alert {
+  margin-top: 24px;
+}
+
+@media (max-width: 768px) {
+  .user-settings-container {
+    padding: 20px 16px;
+  }
+  
+  .form-actions {
+    flex-direction: column;
+  }
+  
+  .action-button {
+    width: 100%;
+  }
+}
 </style>
-
-

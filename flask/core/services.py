@@ -84,7 +84,11 @@ def _prepare_api_config(downloader_config):
     }
     if downloader_config["type"] == "transmission":
         if api_config.get("host"):
-            parsed_url = urlparse(f"http://{api_config['host']}")
+            # 如果主机地址已经包含协议，则直接解析，否则添加默认的http://前缀
+            host_value = api_config["host"]
+            if not host_value.startswith(("http://", "https://")):
+                host_value = f"http://{host_value}"
+            parsed_url = urlparse(host_value)
             api_config["host"] = parsed_url.hostname
             api_config["port"] = parsed_url.port or 9091
     elif downloader_config["type"] == "qbittorrent" and "port" in api_config:

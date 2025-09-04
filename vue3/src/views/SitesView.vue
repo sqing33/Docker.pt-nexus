@@ -44,7 +44,25 @@
 
       <!-- 第二个象限：做种官组统计 -->
       <div class="quadrant">
-        <h2 class="quadrant-title">做种官组统计</h2>
+        <h2 class="quadrant-title" style="display:flex;align-items:center;gap:10px;">
+          <span>做种官组统计</span>
+          <el-select
+            v-model="selectedSite"
+            placeholder="全部站点"
+            clearable
+            filterable
+            size="small"
+            style="width: 240px"
+            @change="handleSiteChange"
+          >
+            <el-option
+              v-for="s in siteStatsData"
+              :key="s.site_name"
+              :label="s.site_name"
+              :value="s.site_name"
+            />
+          </el-select>
+        </h2>
         <!-- [修改] 添加 table-wrapper 用于在极端情况下提供水平滚动 -->
         <div class="table-wrapper">
           <el-table
@@ -59,8 +77,18 @@
             <template #empty>
               <el-empty description="无官组数据" />
             </template>
-            <el-table-column prop="site_name" label="所属站点" sortable min-width="60" />
-            <el-table-column prop="group_suffix" label="官组" sortable />
+            <el-table-column
+              prop="site_name"
+              label="所属站点"
+              sortable
+              min-width="80"
+            />
+            <el-table-column
+              :label="selectedSite ? '官组' : '官组'"
+              prop="group_suffix"
+              sortable
+              min-width="120"
+            />
             <el-table-column
               prop="torrent_count"
               label="数量"
@@ -105,6 +133,7 @@ const siteStatsLoading = ref(true)
 const groupStatsLoading = ref(true)
 const siteStatsData = ref([])
 const groupStatsData = ref([])
+const selectedSite = ref('')
 
 const formatBytes = (bytes, decimals = 2) => {
   if (!+bytes) return '0 Bytes'
@@ -135,7 +164,8 @@ const fetchSiteStats = async () => {
 const fetchGroupStats = async () => {
   groupStatsLoading.value = true
   try {
-    const response = await fetch('/api/group_stats')
+    const url = selectedSite.value ? `/api/group_stats?site=${encodeURIComponent(selectedSite.value)}` : '/api/group_stats'
+    const response = await fetch(url)
     if (!response.ok) throw new Error(`网络响应错误: ${response.status}`)
     const data = await response.json()
     groupStatsData.value = Array.isArray(data) ? data : []
@@ -145,6 +175,10 @@ const fetchGroupStats = async () => {
   } finally {
     groupStatsLoading.value = false
   }
+}
+
+const handleSiteChange = () => {
+  fetchGroupStats()
 }
 
 const refreshAllData = async () => {

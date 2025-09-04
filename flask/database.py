@@ -154,7 +154,7 @@ class DatabaseManager:
         cursor = self._get_cursor(conn)
         ph = self.get_placeholder()
         try:
-            sql = f"INSERT INTO sites (site, nickname, base_url, special_tracker_domain, `group`, cookie, passkey) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})"
+            sql = f"INSERT INTO sites (site, nickname, base_url, special_tracker_domain, `group`, cookie, passkey, proxy) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})"
             params = (
                 site_data.get("site"),
                 site_data.get("nickname"),
@@ -163,6 +163,7 @@ class DatabaseManager:
                 site_data.get("group"),
                 site_data.get("cookie"),
                 site_data.get("passkey"),
+                int(site_data.get("proxy", 0)),
             )
             cursor.execute(sql, params)
             conn.commit()
@@ -186,7 +187,7 @@ class DatabaseManager:
         cursor = self._get_cursor(conn)
         ph = self.get_placeholder()
         try:
-            sql = f"UPDATE sites SET nickname = {ph}, base_url = {ph}, special_tracker_domain = {ph}, `group` = {ph}, cookie = {ph}, passkey = {ph} WHERE id = {ph}"
+            sql = f"UPDATE sites SET nickname = {ph}, base_url = {ph}, special_tracker_domain = {ph}, `group` = {ph}, cookie = {ph}, passkey = {ph}, proxy = {ph} WHERE id = {ph}"
             params = (
                 site_data.get("nickname"),
                 site_data.get("base_url"),
@@ -194,6 +195,7 @@ class DatabaseManager:
                 site_data.get("group"),
                 site_data.get("cookie"),
                 site_data.get("passkey"),
+                int(site_data.get("proxy", 0)),
                 site_data.get("id"),
             )
             cursor.execute(sql, params)
@@ -251,7 +253,9 @@ class DatabaseManager:
         columns_to_add = [("cookie", "TEXT", "TEXT"),
                           ("passkey", "TEXT", "VARCHAR(255)"),
                           ("migration", "INTEGER DEFAULT 0",
-                           "TINYINT DEFAULT 0")]
+                           "TINYINT DEFAULT 0"),
+                          ("proxy", "INTEGER NOT NULL DEFAULT 0",
+                           "TINYINT NOT NULL DEFAULT 0")]
 
         if self.db_type == "mysql":
             meta_cursor = conn.cursor()
@@ -269,7 +273,7 @@ class DatabaseManager:
                     logging.info(
                         f"在 MySQL 'sites' 表中发现缺失列: '{col_name}'。正在添加...")
                     cursor.execute(
-                        f"ALTER TABLE `sites` ADD COLUMN `{col_name}` {mysql_type} NOT NULL"
+                        f"ALTER TABLE `sites` ADD COLUMN `{col_name}` {mysql_type}"
                     )
         else:  # SQLite
             cursor.execute("PRAGMA table_info(sites)")

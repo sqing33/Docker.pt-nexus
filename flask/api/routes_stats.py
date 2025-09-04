@@ -333,44 +333,94 @@ def get_group_stats_api():
         conn = db_manager._get_connection()
         cursor = db_manager._get_cursor(conn)
         group_col_quoted = "`group`" if db_manager.db_type == "mysql" else '"group"'
-        query = f"""
-            SELECT s.nickname AS site_name, 
-                   GROUP_CONCAT(DISTINCT ut.{group_col_quoted}) AS group_suffix, 
-                   COUNT(ut.name) AS torrent_count, 
-                   SUM(ut.size) AS total_size 
-            FROM (
-                SELECT name, {group_col_quoted}, MAX(size) AS size 
-                FROM torrents 
-                WHERE {group_col_quoted} IS NOT NULL AND {group_col_quoted} != '' 
-                GROUP BY name, {group_col_quoted}
-            ) AS ut 
-            JOIN sites AS s ON (',' || s.`group` || ',' LIKE '%,' || ut.{group_col_quoted} || ',%')
-            GROUP BY s.nickname ORDER BY s.nickname;
-        """
-        # A simplified JOIN for MySQL might be more performant, but this works for both for now.
-        if db_manager.db_type == "mysql":
+        site_nickname = request.args.get("site", "").strip()
+
+        if site_nickname:
+            # 统计：先筛选做种站点为指定站点的种子，再按官组与“官组所属站点”聚合
+            if db_manager.db_type == "mysql":
+                query = f"""
+                    SELECT s.nickname AS site_name,
+                           ut.`group` AS group_suffix,
+                           COUNT(ut.name) AS torrent_count,
+                           SUM(ut.size) AS total_size
+                    FROM (
+                        SELECT name, `group`, MAX(size) AS size
+                        FROM torrents
+                        WHERE `group` IS NOT NULL AND `group` != '' AND sites = %s
+                        GROUP BY name, `group`
+                    ) AS ut
+                    JOIN sites AS s ON FIND_IN_SET(ut.`group`, s.`group`) > 0
+                    GROUP BY s.nickname, ut.`group`
+                    ORDER BY torrent_count DESC;
+                """
+                cursor.execute(query, (site_nickname, ))
+            else:
+                query = f"""
+                    SELECT s.nickname AS site_name,
+                           ut.{group_col_quoted} AS group_suffix,
+                           COUNT(ut.name) AS torrent_count,
+                           SUM(ut.size) AS total_size
+                    FROM (
+                        SELECT name, {group_col_quoted}, MAX(size) AS size
+                        FROM torrents
+                        WHERE {group_col_quoted} IS NOT NULL AND {group_col_quoted} != '' AND sites = ?
+                        GROUP BY name, {group_col_quoted}
+                    ) AS ut
+                    JOIN sites AS s ON (',' || s.`group` || ',' LIKE '%,' || ut.{group_col_quoted} || ',%')
+                    GROUP BY s.nickname, ut.{group_col_quoted}
+                    ORDER BY torrent_count DESC;
+                """
+                cursor.execute(query, (site_nickname, ))
+
+            results = [{
+                "site_name":
+                r["site_name"],
+                "group_suffix": (r["group_suffix"].replace("-", "")
+                                 if r["group_suffix"] else r["group_suffix"]),
+                "torrent_count":
+                int(r["torrent_count"] or 0),
+                "total_size":
+                int(r["total_size"] or 0),
+            } for r in cursor.fetchall()]
+        else:
+            # 原逻辑：按站点聚合整体展示
             query = f"""
                 SELECT s.nickname AS site_name, 
-                       GROUP_CONCAT(DISTINCT ut.`group` ORDER BY ut.`group` SEPARATOR ', ') AS group_suffix, 
-                       COUNT(ut.name) AS torrent_count, SUM(ut.size) AS total_size 
+                       GROUP_CONCAT(DISTINCT ut.{group_col_quoted}) AS group_suffix, 
+                       COUNT(ut.name) AS torrent_count, 
+                       SUM(ut.size) AS total_size 
                 FROM (
-                    SELECT name, `group`, MAX(size) AS size FROM torrents 
-                    WHERE `group` IS NOT NULL AND `group` != '' GROUP BY name, `group`
+                    SELECT name, {group_col_quoted}, MAX(size) AS size 
+                    FROM torrents 
+                    WHERE {group_col_quoted} IS NOT NULL AND {group_col_quoted} != '' 
+                    GROUP BY name, {group_col_quoted}
                 ) AS ut 
-                JOIN sites AS s ON FIND_IN_SET(ut.`group`, s.`group`) > 0 
+                JOIN sites AS s ON (',' || s.`group` || ',' LIKE '%,' || ut.{group_col_quoted} || ',%')
                 GROUP BY s.nickname ORDER BY s.nickname;
-             """
-        cursor.execute(query)
-        results = [{
-            "site_name":
-            r["site_name"],
-            "group_suffix": (r["group_suffix"].replace("-", "")
-                             if r["group_suffix"] else r["group_suffix"]),
-            "torrent_count":
-            int(r["torrent_count"] or 0),
-            "total_size":
-            int(r["total_size"] or 0),
-        } for r in cursor.fetchall()]
+            """
+            if db_manager.db_type == "mysql":
+                query = f"""
+                    SELECT s.nickname AS site_name, 
+                           GROUP_CONCAT(DISTINCT ut.`group` ORDER BY ut.`group` SEPARATOR ', ') AS group_suffix, 
+                           COUNT(ut.name) AS torrent_count, SUM(ut.size) AS total_size 
+                    FROM (
+                        SELECT name, `group`, MAX(size) AS size FROM torrents 
+                        WHERE `group` IS NOT NULL AND `group` != '' GROUP BY name, `group`
+                    ) AS ut 
+                    JOIN sites AS s ON FIND_IN_SET(ut.`group`, s.`group`) > 0 
+                    GROUP BY s.nickname ORDER BY s.nickname;
+                 """
+            cursor.execute(query)
+            results = [{
+                "site_name":
+                r["site_name"],
+                "group_suffix": (r["group_suffix"].replace("-", "")
+                                 if r["group_suffix"] else r["group_suffix"]),
+                "torrent_count":
+                int(r["torrent_count"] or 0),
+                "total_size":
+                int(r["total_size"] or 0),
+            } for r in cursor.fetchall()]
         return jsonify(results)
     except Exception as e:
         logging.error(f"get_group_stats_api 出错: {e}", exc_info=True)
