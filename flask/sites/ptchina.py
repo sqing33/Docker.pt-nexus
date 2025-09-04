@@ -1,0 +1,372 @@
+# sites/ptchina.py
+
+import os
+import re
+import traceback
+import cloudscraper
+from loguru import logger
+from utils import cookies_raw2jar, ensure_scheme
+
+
+class PtchinaUploader:
+
+    def __init__(self, site_info: dict, upload_data: dict):
+        """
+        :param site_info: 包含站点URL、Cookie等基本信息的字典。
+        :param upload_data: 包含待上传种子所有详细信息的字典 (即 upload_payload)。
+        """
+        self.site_info = site_info
+        self.upload_data = upload_data
+        self.scraper = cloudscraper.create_scraper()
+
+        base_url = ensure_scheme(self.site_info.get("base_url"))
+
+        self.post_url = f"{base_url}/takeupload.php"
+        self.timeout = 40
+        self.headers = {
+            "origin":
+            base_url,
+            "referer":
+            f"{base_url}/upload.php",
+            "user-agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/5.0 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+        }
+
+    def _map_parameters(self) -> dict:
+        """
+        将参数映射为 铂金学院 站点所需的表单值。
+        - 映射表根据站点 upload.php 的 HTML 源码进行最终校对。
+        - 字典的顺序很重要，用于优先匹配更精确的关键词。
+        """
+        source_params = self.upload_data.get("source_params", {})
+        title_components_list = self.upload_data.get("title_components", [])
+        title_params = {
+            item["key"]: item["value"]
+            for item in title_components_list if item.get("value")
+        }
+
+        mapped = {}
+        tags = []
+
+        # 1. 类型映射 (Type)
+        type_map = {
+            "电影": "401",
+            "电视剧": "402",
+            "纪录片": "404",
+        }
+        source_type = source_params.get("类型") or ""
+        # 铂金学院分类较少，未匹配到的不设置默认值，让用户手动选择
+        for key, value in type_map.items():
+            if key in source_type:
+                mapped["type"] = value
+                break
+
+        # 2. 媒介映射 (Medium) - 逻辑较复杂
+        medium_str = title_params.get("媒介", "")
+        resolution_str = title_params.get("分辨率", "")
+        source_tags = source_params.get("标签") or []
+        is_diy = "DIY" in source_tags
+
+        medium_val = "13"  # 默认 Other
+        if 'uhd' in resolution_str.lower() or '2160p' in resolution_str.lower(
+        ) or '4k' in resolution_str.lower():
+            if 'remux' in medium_str.lower():
+                medium_val = "3"  # UHD Remux
+            elif 'encode' in medium_str.lower():
+                medium_val = "4"  # UHD 压制
+            elif is_diy:
+                medium_val = "2"  # UHD DIY
+            elif 'blu-ray' in medium_str.lower(
+            ) or 'bluray' in medium_str.lower():
+                medium_val = "1"  # UHD原盘
+        elif '1080' in resolution_str.lower():
+            if 'remux' in medium_str.lower():
+                medium_val = "7"  # BD Remux
+            elif 'encode' in medium_str.lower():
+                medium_val = "8"  # 1080p/i压制
+            elif is_diy:
+                medium_val = "6"  # BD DIY
+            elif 'blu-ray' in medium_str.lower(
+            ) or 'bluray' in medium_str.lower():
+                medium_val = "5"  # BD 原盘
+
+        if 'web-dl' in medium_str.lower() or 'webrip' in medium_str.lower():
+            medium_val = "9"  # WEB-DL
+        elif 'hdtv' in medium_str.lower():
+            medium_val = "12"  # HDTV
+
+        mapped["medium_sel[4]"] = medium_val
+
+        # 3. 视频编码映射 (Video Codec)
+        codec_map = {
+            'H.265': '3',
+            'HEVC': '3',
+            'x265': '4',
+            'H.264': '1',
+            'AVC': '1',
+            'x264': '2',
+            'VC-1': '5',
+            'MPEG-2': '11',
+            'MPEG-4': '12',
+            'XviD': '13',
+            'AV1': '14',
+        }
+        codec_str = title_params.get("视频编码", "")
+        mapped["codec_sel[4]"] = "15"  # 默认值: Other
+        for key, value in codec_map.items():
+            if key.lower() in codec_str.lower():
+                mapped["codec_sel[4]"] = value
+                break
+
+        # 4. 音频编码映射 (Audio Codec)
+        audio_map = {
+            'TrueHD Atmos': '1',
+            'DDP Atmos': '15',
+            'Atmos': '1',
+            'DTS:X': '3',
+            'DTS X': '3',
+            'DTS-HD MA': '4',
+            'DTS-HDMA': '4',
+            'DTS-HD HR': '5',
+            'TrueHD': '6',
+            'True-HD': '6',
+            'LPCM': '7',
+            'DDP': '16',
+            'DD+': '16',
+            'EAC3': '16',
+            'AC3': '18',
+            'DD': '18',
+            'DTS': '2',
+            'AAC': '19',
+            'FLAC': '20',
+            'APE': '21',
+            'WAV': '22',
+            'MP3': '23',
+        }
+        audio_str = title_params.get("音频编码", "")
+        audio_str_normalized = audio_str.upper().replace(" ",
+                                                         "").replace(".", "")
+        mapped["audiocodec_sel[4]"] = "24"  # 默认值: Other
+        for key, value in audio_map.items():
+            key_normalized = key.upper().replace(" ", "").replace(".", "")
+            if key_normalized in audio_str_normalized:
+                mapped["audiocodec_sel[4]"] = value
+                break
+
+        # 5. 分辨率映射 (Resolution)
+        resolution_map = {
+            '4K': '1',
+            'UHD': '1',
+            '2160p': '1',
+            '2K': '2',
+            '1440p': '2',
+            '1080p': '3',
+            '1080i': '4',
+        }
+        mapped["standard_sel[4]"] = "6"  # 默认值: Other
+        for key, value in resolution_map.items():
+            if key.lower() in resolution_str.lower():
+                mapped["standard_sel[4]"] = value
+                break
+
+        # 6. 地区映射 (Processing)
+        mapped["processing_sel[4]"] = "12"  # 默认值: Other
+
+        # 7. 制作组映射 (Team)
+        team_map = {
+            "PTChina": "1",
+            "CHD": "2",
+            "CHDBits": "2",
+            "HDC": "3",
+            "HDChina": "3",
+            "TTG": "4",
+            "WiKi": "5",
+            "beAst": "21",
+            "CMCT": "22",
+            "FRDS": "23",
+            "HDS": "24",
+            "HDSky": "24",
+            "OurBits": "25",
+            "PTer": "26",
+            "PTHome": "29",
+            "HDHome": "28",
+            "Audiences": "30",
+        }
+        release_group_str = str(title_params.get("制作组", "")).upper()
+        mapped["team_sel[4]"] = team_map.get(release_group_str,
+                                             "35")  # 默认值 Other
+
+        # 8. 标签 (Tags)
+        tag_map = {
+            "首发": 2,
+            "DIY": 4,
+            "国语": 5,
+            "中字": 6,
+            "HDR": 7,
+            "Dolby Vision": 8,
+            "DV": 8,
+        }
+        for tag in source_tags:
+            tag_id = tag_map.get(tag)
+            if tag_id is not None:
+                tags.append(tag_id)
+
+        hdr_str = title_params.get("HDR格式", "").upper()
+        if "VISION" in hdr_str or "DV" in hdr_str:
+            tags.append(tag_map["Dolby Vision"])
+        elif "HDR" in hdr_str:
+            tags.append(tag_map["HDR"])
+
+        if "中字" in source_type:
+            tags.append(tag_map["中字"])
+
+        for i, tag_id in enumerate(sorted(list(set(tags)))):
+            mapped[f"tags[4][{i}]"] = tag_id
+
+        return mapped
+
+    def _build_description(self) -> str:
+        """
+        根据 intro 数据构建完整的 BBCode 描述。
+        """
+        intro = self.upload_data.get("intro", {})
+        return (f"{intro.get('statement', '')}\n"
+                f"{intro.get('poster', '')}\n"
+                f"{intro.get('body', '')}\n"
+                f"{intro.get('screenshots', '')}")
+
+    def _build_title(self) -> str:
+        """
+        根据 title_components 参数，按照 铂金学院 的规则拼接主标题。
+        """
+        components_list = self.upload_data.get("title_components", [])
+        components = {
+            item["key"]: item["value"]
+            for item in components_list if item.get("value")
+        }
+        logger.info(f"开始为铂金学院拼接主标题，源参数: {components}")
+
+        order = [
+            "主标题",
+            "年份",
+            "季集",
+            "剧集状态",
+            "发布版本",
+            "分辨率",
+            "媒介",
+            "片源平台",
+            "视频编码",
+            "视频格式",
+            "HDR格式",
+            "色深",
+            "帧率",
+            "音频编码",
+        ]
+        title_parts = []
+        for key in order:
+            value = components.get(key)
+            if value:
+                if isinstance(value, list):
+                    title_parts.append(" ".join(map(str, value)))
+                else:
+                    title_parts.append(str(value))
+
+        raw_main_part = " ".join(filter(None, title_parts))
+        main_part = re.sub(r'(?<!\d)\.(?!\d)', ' ', raw_main_part)
+        main_part = re.sub(r'\s+', ' ', main_part).strip()
+
+        release_group = components.get("制作组", "NOGROUP")
+        if "N/A" in release_group:
+            release_group = "NOGROUP"
+
+        final_title = f"{main_part}-{release_group}"
+        final_title = re.sub(r"\s{2,}", " ", final_title).strip()
+        logger.info(f"拼接完成的主标题: {final_title}")
+        return final_title
+
+    def execute_upload(self):
+        """
+        执行上传的核心逻辑。
+        """
+        logger.info("正在为 铂金学院 站点适配上传参数...")
+        try:
+            mapped_params = self._map_parameters()
+            description = self._build_description()
+            final_main_title = self._build_title()
+            logger.info("参数适配完成。")
+
+            form_data = {
+                "name": final_main_title,
+                "small_descr": self.upload_data.get("subtitle", ""),
+                "url": self.upload_data.get("imdb_link", "") or "",
+                "color": "0",
+                "font": "0",
+                "size": "0",
+                "descr": description,
+                "technical_info": self.upload_data.get("mediainfo", ""),
+                "uplver": "yes",  # 默认匿名上传
+                **mapped_params,
+            }
+
+            torrent_path = self.upload_data["modified_torrent_path"]
+            with open(torrent_path, "rb") as torrent_file:
+                files = {
+                    "file": (
+                        os.path.basename(torrent_path),
+                        torrent_file,
+                        "application/x-bittorent",
+                    ),
+                    "nfo": ("", b"", "application/octet-stream"),
+                }
+                cleaned_cookie_str = self.site_info.get("cookie", "").strip()
+                if not cleaned_cookie_str:
+                    logger.error("目标站点 Cookie 为空，无法发布。")
+                    return False, "目标站点 Cookie 未配置。"
+                cookie_jar = cookies_raw2jar(cleaned_cookie_str)
+                logger.info("正在向 铂金学院 站点提交发布请求...")
+
+                proxies = None
+                try:
+                    from config import config_manager
+                    use_proxy = bool(self.site_info.get("proxy"))
+                    conf = (config_manager.get() or {})
+                    proxy_url = (conf.get("cross_seed", {})
+                                 or {}).get("proxy_url") or (conf.get(
+                                     "network", {}) or {}).get("proxy_url")
+                    if use_proxy and proxy_url:
+                        proxies = {"http": proxy_url, "https": proxy_url}
+                except Exception:
+                    proxies = None
+
+                response = self.scraper.post(
+                    self.post_url,
+                    headers=self.headers,
+                    cookies=cookie_jar,
+                    data=form_data,
+                    files=files,
+                    timeout=self.timeout,
+                    proxies=proxies,
+                )
+                response.raise_for_status()
+
+            if "details.php" in response.url and "uploaded=1" in response.url:
+                logger.success("发布成功！已跳转到种子详情页。")
+                return True, f"发布成功！新种子页面: {response.url}"
+            elif "login.php" in response.url:
+                logger.error("发布失败，Cookie 已失效，被重定向到登录页。")
+                return False, "发布失败，Cookie 已失效或无效。"
+            else:
+                logger.error("发布失败，站点返回未知响应。")
+                logger.debug(f"响应URL: {response.url}")
+                logger.debug(f"响应内容: {response.text}")
+                return False, f"发布失败，请检查站点返回信息。 URL: {response.url}"
+
+        except Exception as e:
+            logger.error(f"发布到 铂金学院 站点时发生错误: {e}")
+            logger.error(traceback.format_exc())
+            return False, f"请求异常: {e}"
+
+
+def upload(site_info: dict, upload_payload: dict):
+    uploader = PtchinaUploader(site_info, upload_payload)
+    return uploader.execute_upload()

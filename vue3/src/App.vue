@@ -1,10 +1,10 @@
 <!-- src/App.vue -->
 <template>
   <el-menu v-if="!isLoginPage" :default-active="activeRoute" class="main-nav" mode="horizontal" router>
-    <el-menu-item index="/">流量统计</el-menu-item>
+    <el-menu-item index="/">首页</el-menu-item>
+    <el-menu-item index="/info">流量统计</el-menu-item>
     <el-menu-item index="/torrents">种子查询</el-menu-item>
     <el-menu-item index="/sites">做种信息</el-menu-item>
-    <el-menu-item index="/cross_seed">转种</el-menu-item>
     <el-menu-item index="/settings">设置</el-menu-item>
     <div class="refresh-button-container">
       <el-button

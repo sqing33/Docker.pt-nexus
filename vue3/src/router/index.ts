@@ -8,6 +8,11 @@ const router = createRouter({
   routes: [
     {
       path: '/',
+      name: 'home',
+      component: () => import('../views/HomeView.vue'),
+    },
+    {
+      path: '/info',
       name: 'info',
       component: () => import('../views/InfoView.vue'),
     },
@@ -48,11 +53,6 @@ const router = createRouter({
           component: () => import('../components/settings/CrossSeedSettings.vue'),
         },
       ],
-    },
-    {
-      path: '/cross_seed',
-      name: 'cross_seed',
-      component: () => import('../views/CrossSeedView.vue'),
     },
     {
       path: '/login',

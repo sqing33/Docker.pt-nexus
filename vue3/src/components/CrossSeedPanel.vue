@@ -1,7 +1,7 @@
 <template>
   <div class="cross-seed-panel">
     <div class="steps-header">
-      <el-button v-if="activeStep === 2" type="info" size="small" @click="showLogs">
+      <el-button v-if="activeStep === 2" type="info" size="small" @click="showLog">
         查看日志
       </el-button>
       <div class="custom-steps">
@@ -195,14 +195,24 @@
         </div>
       </div>
     </div>
+    <div v-if="showLogCard" class="log-card-overlay" @click="hideLog"></div>
+    <el-card v-if="showLogCard" class="log-card" shadow="xl">
+      <template #header>
+        <div class="card-header">
+          <span>操作日志</span>
+          <el-button type="danger" :icon="Close" circle @click="hideLog" />
+        </div>
+      </template>
+      <pre class="log-content-pre">{{ logContent }}</pre>
+    </el-card>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import { ElNotification } from 'element-plus'
+import { ElNotification, ElMessageBox } from 'element-plus'
 import axios from 'axios'
-import { DocumentChecked, UploadFilled, Refresh, Promotion, CircleCheckFilled, CircleCloseFilled } from '@element-plus/icons-vue'
+import { Refresh, CircleCheckFilled, CircleCloseFilled, Close } from '@element-plus/icons-vue'
 
 interface SiteStatus {
   name: string;
@@ -266,6 +276,8 @@ const taskId = ref<string | null>(null)
 const finalResultsList = ref<any[]>([])
 const isReparsing = ref(false)
 const reportedFailedScreenshots = ref(false)
+const logContent = ref('')
+const showLogCard = ref(false)
 const posterImages = computed(() => parseImageUrls(torrentData.value.intro.poster))
 const screenshotImages = computed(() => parseImageUrls(torrentData.value.intro.screenshots))
 
@@ -497,6 +509,21 @@ const handlePublish = async () => {
       message: `成功发布到 ${successCount} / ${selectedTargetSites.value.length} 个站点。`
     })
 
+    // 更新日志内容
+    logContent.value = results.map(r => `--- Log for ${r.siteName} ---\n${r.logs || 'No logs available.'}`).join('\n\n')
+
+    // 自动添加任务到下载器
+    logContent.value += '\n\n--- [开始自动添加任务] ---';
+    for (const result of results) {
+      if (result.success && result.url) {
+        await triggerAddToDownloader(result);
+      }
+    }
+    logContent.value += '\n--- [自动添加任务结束] ---';
+
+    // 显示日志
+    showLog();
+    
     activeStep.value = 2
   } catch (error) {
     ElNotification.closeAll()
@@ -533,6 +560,35 @@ const handleApiError = (error: any, defaultMessage: string) => {
   ElNotification.error({ title: '操作失败', message, duration: 0, showClose: true })
 }
 
+const triggerAddToDownloader = async (result: any) => {
+  if (!props.torrent.save_path || !props.torrent.downloaderId) {
+    const msg = `[${result.siteName}] 警告: 未能获取到原始保存路径或下载器ID，已跳过自动添加任务。`;
+    console.warn(msg);
+    logContent.value += `\n${msg}`;
+    return;
+  }
+
+  logContent.value += `\n[${result.siteName}] 正在尝试将新种子添加到下载器...`;
+
+  try {
+    const response = await axios.post('/api/migrate/add_to_downloader', {
+      url: result.url,
+      savePath: props.torrent.save_path,
+      downloaderPath: props.torrent.save_path,
+      downloaderId: props.torrent.downloaderId,
+    });
+
+    if (response.data.success) {
+      logContent.value += `\n[${result.siteName}] 成功: ${response.data.message}`;
+    } else {
+      logContent.value += `\n[${result.siteName}] 失败: ${response.data.message}`;
+    }
+  } catch (error: any) {
+    const errorMessage = error.response?.data?.message || error.message;
+    logContent.value += `\n[${result.siteName}] 错误: 调用“添加到下载器”API失败: ${errorMessage}`;
+  }
+}
+
 const showLogs = async () => {
   if (!taskId.value) {
     ElNotification.warning('没有可用的任务日志')
@@ -555,6 +611,20 @@ const showLogs = async () => {
   } catch (error) {
     handleApiError(error, '获取日志时发生错误')
   }
+}
+
+const showLog = () => {
+  if (!logContent.value) {
+    ElMessageBox.alert('当前没有可供显示的日志。', '提示', {
+      confirmButtonText: '确定',
+    })
+    return
+  }
+  showLogCard.value = true
+}
+
+const hideLog = () => {
+  showLogCard.value = false
 }
 
 onMounted(() => {
@@ -1055,5 +1125,48 @@ onMounted(() => {
   font-family: 'Courier New', Courier, monospace;
   font-size: 13px;
   background-color: #f8f9fa;
+}
+
+.log-card-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 1999;
+}
+
+.log-card {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 75vw;
+  max-width: 900px;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  max-height: 80vh;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.log-card :deep(.el-card__body) {
+  overflow-y: auto;
+  flex: 1;
+}
+
+.log-content-pre {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  margin: 0;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 13px;
+  color: #606266;
 }
 </style>
