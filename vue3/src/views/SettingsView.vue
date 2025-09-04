@@ -9,6 +9,12 @@
           </el-icon>
           <span>下载器</span>
         </el-menu-item>
+        <el-menu-item index="/settings/user">
+          <el-icon>
+            <User />
+          </el-icon>
+          <span>用户管理</span>
+        </el-menu-item>
         <el-menu-item index="/settings/cookie">
           <el-icon>
             <Tickets />

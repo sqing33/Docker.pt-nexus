@@ -11,3 +11,5 @@ beautifulsoup4
 loguru
 bencoder
 pymediainfo
+PyJWT
+Flask-Bcrypt
