@@ -88,7 +88,7 @@ def get_sites():
         conn = db_manager._get_connection()
         cursor = db_manager._get_cursor(conn)
         select_fields = """
-            s.id, s.nickname, s.site, s.base_url, s.special_tracker_domain, s.`group`,
+            s.id, s.nickname, s.site, s.base_url, s.special_tracker_domain, s.`group`, s.proxy,
             CASE WHEN s.cookie IS NOT NULL AND s.cookie != '' THEN 1 ELSE 0 END as has_cookie,
             CASE WHEN s.passkey IS NOT NULL AND s.passkey != '' THEN 1 ELSE 0 END as has_passkey,
             s.cookie, s.passkey
@@ -338,6 +338,11 @@ def update_settings():
 
     if "cookiecloud" in new_config:
         current_config["cookiecloud"] = new_config["cookiecloud"]
+
+    if "network" in new_config:
+        # 仅更新网络代理配置
+        current_config.setdefault("network", {})
+        current_config["network"]["proxy_url"] = new_config["network"].get("proxy_url", "")
 
     if config_manager.save(current_config):
         if restart_needed:

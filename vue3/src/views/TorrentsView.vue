@@ -89,7 +89,7 @@
       @current-change="handleCurrentChange" background />
 
     <!-- 筛选器弹窗 (无改动) -->
-    <div v-if="filterDialogVisible" class="filter-overlay">
+    <div v-if="filterDialogVisible" class="filter-overlay" @click.self="filterDialogVisible = false">
       <el-card class="filter-card">
         <template #header>
           <div class="filter-card-header">
@@ -100,14 +100,23 @@
         <div class="filter-card-body">
           <el-divider content-position="left">站点筛选</el-divider>
           <div class="site-filter-container">
-            <el-radio-group v-model="tempFilters.siteExistence" style="margin-bottom: 10px">
-              <el-radio label="all">不过滤</el-radio>
-              <el-radio label="exists">存在于</el-radio>
-              <el-radio label="not-exists">不存在于</el-radio>
-            </el-radio-group>
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+              <el-radio-group v-model="tempFilters.siteExistence">
+                <el-radio label="all">不过滤</el-radio>
+                <el-radio label="exists">存在于</el-radio>
+                <el-radio label="not-exists">不存在于</el-radio>
+              </el-radio-group>
+              <el-input
+                v-model="siteSearch"
+                size="small"
+                placeholder="搜索站点"
+                clearable
+                style="width:220px;"
+              />
+            </div>
             <div class="site-checkbox-container">
               <el-checkbox-group v-model="tempFilters.siteNames" :disabled="tempFilters.siteExistence === 'all'">
-                <el-checkbox v-for="site in sorted_all_sites" :key="site" :label="site">{{
+                <el-checkbox v-for="site in filteredSiteOptions" :key="site" :label="site">{{
                   site
                   }}</el-checkbox>
               </el-checkbox-group>
@@ -267,6 +276,13 @@ const selectedTorrentForMigration = ref<Torrent | null>(null);
 const sorted_all_sites = computed(() => {
   const collator = new Intl.Collator('zh-CN', { numeric: true })
   return [...all_sites.value].sort(collator.compare)
+})
+
+const siteSearch = ref('')
+const filteredSiteOptions = computed(() => {
+  if (!siteSearch.value) return sorted_all_sites.value
+  const kw = siteSearch.value.toLowerCase()
+  return sorted_all_sites.value.filter((s) => s.toLowerCase().includes(kw))
 })
 
 const progressColors = [
@@ -733,7 +749,7 @@ watch(
 
 .site-checkbox-container {
   width: 100%;
-  max-height: 160px;
+  height: 160px; /* 固定高度，避免筛选结果变少时区域高度跳变 */
   overflow-y: auto;
   border: 1px solid #dcdfe6;
   border-radius: 4px;

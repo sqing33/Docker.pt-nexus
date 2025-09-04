@@ -34,6 +34,9 @@ class ConfigManager:
         return {
             "downloaders": [],
             "realtime_speed_enabled": True,
+            "network": {
+                "proxy_url": ""
+            },
             "auth": {
                 "username": "admin",
                 "password_hash": "",
@@ -108,6 +111,13 @@ class ConfigManager:
                     self._config["ui_settings"][
                         "torrents_view"] = default_conf["ui_settings"][
                             "torrents_view"]
+
+                # --- [新增] 网络代理配置兼容 ---
+                if "network" not in self._config:
+                    self._config["network"] = default_conf["network"]
+                else:
+                    if "proxy_url" not in self._config["network"]:
+                        self._config["network"]["proxy_url"] = ""
 
                 # --- [新增] 认证配置兼容 ---
                 if "auth" not in self._config:
