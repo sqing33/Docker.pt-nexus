@@ -1,4 +1,4 @@
-# sites/pandapt.py
+# sites/novahd.py
 
 import os
 import re
@@ -8,7 +8,7 @@ from loguru import logger
 from utils import cookies_raw2jar, ensure_scheme
 
 
-class PandaptUploader:
+class NovahdUploader:
 
     def __init__(self, site_info: dict, upload_data: dict):
         """
@@ -29,15 +29,15 @@ class PandaptUploader:
             "referer":
             f"{base_url}/upload.php",
             "user-agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/5.0 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
         }
 
     def _map_parameters(self) -> dict:
         """
-        将参数映射为 熊猫 站点所需的表单值。
+        将参数映射为 NovaHD 站点所需的表单值。
         - 映射表根据站点 upload.php 的 HTML 源码进行最终校对。
         - 字典的顺序很重要，用于优先匹配更精确的关键词。
-        - 任何未匹配到的项目都将自动归类于 'Other' 或不进行选择。
+        - 任何未匹配到的项目都将自动归类于 'Other'。
         """
         # 从源站原始参数中获取
         source_params = self.upload_data.get("source_params", {})
@@ -52,7 +52,7 @@ class PandaptUploader:
         mapped = {}
         tags = []
 
-        # 1. 类型映射 (Type) - 根据站点HTML校对
+        # 1. 类型映射 (Type) - 基于统一类型映射标准
         type_map = {
             "Movies": "401",
             "电影": "401",
@@ -60,43 +60,41 @@ class PandaptUploader:
             "Movie": "401",
             "TV Series": "402",
             "电视剧": "402",
+            "TV Shows": "402",
+            "综艺": "402",
+            "Documentaries": "404",
+            "记录片": "404",
+            "纪录片": "404",
             "Animations": "405",
             "动漫": "405",
             "动画": "405",
             "Anime": "405",
-            "TV Shows": "403",
-            "综艺": "403",
-            "Documentaries": "404",
-            "记录片": "404",
-            "纪录片": "404",
+            "MV": "406",
+            "演唱会": "406",
+            "Music Video": "406",
             "Sports": "407",
             "体育": "407",
-            "Software": "412",
-            "软件": "412",
-            "Games": "411",
-            "游戏": "411",
-            "MV": "413",
-            "演唱会": "413",
-            "音乐会": "413",
-            "Music Video": "413",
             "Music": "409",
             "音乐": "409",
             "专辑": "409",
             "音轨": "409",
             "音频": "409",
-            "短剧": "409",
-            "图书": "409",
-            "学习": "409",
-            "资料": "409",
-            "其他": "409",
-            "Misc": "409",
-            "未知": "409",
-            "Unknown": "409",
+            "短剧": "410",
+            "软件": "410",
+            "图书": "410",
+            "学习": "410",
+            "游戏": "410",
+            "音乐会": "410",
+            "资料": "410",
+            "其他": "410",
+            "Misc": "410",
+            "未知": "410",
+            "Unknown": "410",
         }
         source_type = source_params.get("类型") or ""
         # 优先完全匹配，然后部分匹配，最后使用默认值
-        mapped["type"] = "409"  # 默认值: 其他
-        
+        mapped["type"] = "410"  # 默认值: 其他
+
         # 精确匹配
         for key, value in type_map.items():
             if key.lower() == source_type.lower().strip():
@@ -110,34 +108,39 @@ class PandaptUploader:
                     break
 
         # 2. 媒介映射 (Medium) - 根据站点HTML校对
+        # 站点默认值 'Other': 16
         medium_map = {
-            'UHD Blu-ray': '11',
-            'BluRay': '1',
+            'UHD Blu-ray': '10',
             'Blu-ray': '1',
             'BD': '1',
             'Remux': '3',
             'Encode': '7',
-            'MiniBD': '4',
-            'WEB-DL': '10',
-            'WEBRip': '10',
-            'WEB': '10',
+            'WEB-DL': '11',
+            'WEBRip': '7',
+            'WEB': '11',
             'HDTV': '5',
-            'UHDTV': '12',
             'TVrip': '5',
-            'DVD': '6',
-            'DVDR': '6',
+            'DVD': '13',
             'CD': '8',
             'Track': '9',
-            'HD DVD': '2',
         }
         medium_str = title_params.get("媒介", "")
-        mapped["medium_sel[4]"] = "13"  # 默认值: Other
-        for key, value in medium_map.items():
-            if key.lower() in medium_str.lower():
-                mapped["medium_sel[4]"] = value
-                break
+        mediainfo_str = self.upload_data.get("mediainfo", "")
+        is_standard_mediainfo = "General" in mediainfo_str and "Complete name" in mediainfo_str
+
+        # 站点规则：有mediainfo的Blu-ray/DVD源盘rip都算Encode
+        if is_standard_mediainfo and ('blu' in medium_str.lower()
+                                      or 'dvd' in medium_str.lower()):
+            mapped["medium_sel[4]"] = "7"  # Encode
+        else:
+            mapped["medium_sel[4]"] = "16"  # 默认值: Other
+            for key, value in medium_map.items():
+                if key.lower() in medium_str.lower():
+                    mapped["medium_sel[4]"] = value
+                    break
 
         # 3. 视频编码映射 (Video Codec) - 根据站点HTML校对
+        # 站点默认值 'Other': 5
         codec_map = {
             'H.265': '6',
             'HEVC': '6',
@@ -145,13 +148,8 @@ class PandaptUploader:
             'H.264': '1',
             'AVC': '1',
             'x264': '1',
-            'VP8': '7',
-            'VP9': '7',
             'VC-1': '2',
-            'XviD': '3',
             'MPEG-2': '4',
-            'MPEG-4': '5',
-            'AV1': '8',
         }
         codec_str = title_params.get("视频编码", "")
         mapped["codec_sel[4]"] = "5"  # 默认值: Other
@@ -161,32 +159,32 @@ class PandaptUploader:
                 break
 
         # 4. 音频编码映射 (Audio Codec) - 根据站点HTML校对
+        # 站点默认值 'Other': 15
         audio_map = {
             'TrueHD Atmos': '8',
-            'DTS:X': '2',
-            'DTS-HD MA': '3',
-            'DTS-HD': '3',
-            'DTS-HR': '18',
-            'DDP': '6',
-            'DD+': '6',
-            'E-AC3': '6',
+            'DTS:X': '14',
+            'DTS-HD MA': '13',
+            'DDP': '9',
+            'DD+': '9',
+            'E-AC3': '9',
             'Atmos': '8',
-            'TrueHD': '1',
-            'DTS': '4',
-            'AC3': '5',
-            'DD': '5',
-            'AAC': '7',
-            'FLAC': '11',
-            'LPCM': '9',
-            'PCM': '9',
-            'APE': '12',
-            'WAV': '13',
-            'MP3': '14',
+            'TrueHD': '12',
+            'DTS': '3',
+            'AC3': '10',
+            'DD': '10',
+            'LPCM': '11',
+            'FLAC': '1',
+            'AAC': '6',
+            'ALAC': '7',
+            'APE': '2',
+            'M4A': '1',
+            'WAV': '1',
+            'MP3': '4',
         }
         audio_str = title_params.get("音频编码", "")
         audio_str_normalized = audio_str.upper().replace(" ",
                                                          "").replace(".", "")
-        mapped["audiocodec_sel[4]"] = "16"  # 默认值: Other
+        mapped["audiocodec_sel[4]"] = "15"  # 默认值: Other
         for key, value in audio_map.items():
             key_normalized = key.upper().replace(" ", "").replace(".", "")
             if key_normalized in audio_str_normalized:
@@ -194,82 +192,64 @@ class PandaptUploader:
                 break
 
         # 5. 分辨率映射 (Resolution) - 根据站点HTML校对
+        # 站点默认值 'Other': 6
         resolution_map = {
             '8K': '6',
             '4320p': '6',
             '4K': '5',
             '2160p': '5',
             'UHD': '5',
+            '2K': '5',
+            '1440p': '5',
             '1080p': '1',
             '1080i': '2',
             '720p': '3',
-            'SD': '7',  # 通用SD
-            '480p': '7',
-            '480i': '7',
+            '480p': '4',
+            '480i': '4',
         }
         resolution_str = title_params.get("分辨率", "")
-        mapped["standard_sel[4]"] = "8"  # 默认值: Other
+        mapped["standard_sel[4]"] = "6"  # 默认值: Other
         for key, value in resolution_map.items():
             if key.lower() in resolution_str.lower():
                 mapped["standard_sel[4]"] = value
                 break
 
-        # 6. 地区映射 (Source) - 默认设置为 'Other'
-        mapped["source_sel[4]"] = "6"  # 默认值: Other
-
-        # 7. 制作组映射 (Team) - 根据站点HTML校对
+        # 6. 制作组映射 (Team) - 根据站点HTML校对
+        # 站点默认值 'Other': 5
         team_map = {
-            "Panda": "1",  # Panda(压制组)
-            "AilMWeb": "7",  # AilMWeb(流媒体组)
-            "AilMTV": "8",  # AilMTV(电视录制组)
-            "AilMUpscale": "14",  # AilMUpscale(超分视频组)
-            "CatEDU": "15",  # CatEDU(部分禁转)
-            "Red Leaves": "22",  # Red Leaves (红叶)
+            "NOVAHD": "15",
+            "NHD": "15",
         }
         release_group_str = str(title_params.get("制作组", "")).upper()
         mapped["team_sel[4]"] = team_map.get(release_group_str,
                                              "5")  # 默认值 Other
 
-        # 8. 标签 (Tags) - 根据站点HTML校对
+        # 7. 标签 (Tags)
+        source_tags = source_params.get("标签") or []
         tag_map = {
             "首发": 2,
             "DIY": 4,
             "国语": 5,
             "中字": 6,
-            "Dolby Vision": 8,
-            "DV": 8,
-            "HDR10+": 9,
-            "HDR10": 7,
-            "HDR": 7,  # 将通用HDR默认映射到HDR10
+            "HDR": 7,
+            "连载": 18,
+            "番组": 17,
+            "特效": 15,
+            "杜比": 14,
+            "大包": 13,
+            "应求": 12,
+            "英字": 11,
             "完结": 10,
-            "特效": 12,
-            "粤语": 13,
-            "纯净版": 16,
-            "分集": 17,
+            "分集": 9,
+            "驻站": 8,
         }
-        # 从源站标签中匹配
-        source_tags = source_params.get("标签") or []
         for tag in source_tags:
             tag_id = tag_map.get(tag)
             if tag_id is not None:
                 tags.append(tag_id)
-
-        # 从标题组件中智能匹配HDR等信息
-        hdr_str = title_params.get("HDR格式", "").upper()
-        if "VISION" in hdr_str or "DV" in hdr_str:
-            tags.append(tag_map["Dolby Vision"])
-        if "HDR10+" in hdr_str:
-            tags.append(tag_map["HDR10+"])
-        elif "HDR10" in hdr_str:
-            tags.append(tag_map["HDR10"])
-        elif "HDR" in hdr_str:
-            tags.append(tag_map["HDR"])
-
-        # 同时检查类型中是否包含"中字"信息
         if "中字" in source_type:
             tags.append(tag_map["中字"])
 
-        # 去重并格式化
         for i, tag_id in enumerate(sorted(list(set(tags)))):
             mapped[f"tags[4][{i}]"] = tag_id
 
@@ -287,14 +267,14 @@ class PandaptUploader:
 
     def _build_title(self) -> str:
         """
-        根据 title_components 参数，按照 熊猫 的规则拼接主标题。
+        根据 title_components 参数，按照 NovaHD 的规则拼接主标题。
         """
         components_list = self.upload_data.get("title_components", [])
         components = {
             item["key"]: item["value"]
             for item in components_list if item.get("value")
         }
-        logger.info(f"开始为熊猫拼接主标题，源参数: {components}")
+        logger.info(f"开始拼接主标题，源参数: {components}")
 
         order = [
             "主标题",
@@ -321,8 +301,11 @@ class PandaptUploader:
                 else:
                     title_parts.append(str(value))
 
+        # [修改] 使用正则表达式替换分隔符，以保护数字中的小数点（例如 5.1）
         raw_main_part = " ".join(filter(None, title_parts))
+        # r'(?<!\d)\.(?!\d)' 的意思是：匹配一个点，但前提是它的前面和后面都不是数字
         main_part = re.sub(r'(?<!\d)\.(?!\d)', ' ', raw_main_part)
+        # 额外清理，将可能产生的多个空格合并为一个
         main_part = re.sub(r'\s+', ' ', main_part).strip()
 
         release_group = components.get("制作组", "NOGROUP")
@@ -338,7 +321,7 @@ class PandaptUploader:
         """
         执行上传的核心逻辑。
         """
-        logger.info("正在为 熊猫 站点适配上传参数...")
+        logger.info("正在为 NovaHD 站点适配上传参数...")
         try:
             mapped_params = self._map_parameters()
             description = self._build_description()
@@ -349,9 +332,13 @@ class PandaptUploader:
                 "name": final_main_title,
                 "small_descr": self.upload_data.get("subtitle", ""),
                 "url": self.upload_data.get("imdb_link", "") or "",
-                "pt_gen": self.upload_data.get("douban_link", "") or "",
+                "pt_gen": self.upload_data.get("pt_gen", "") or "",
+                "color": "0",
+                "font": "0",
+                "size": "0",
                 "descr": description,
                 "technical_info": self.upload_data.get("mediainfo", ""),
+                "uplver": "yes",
                 **mapped_params,
             }
 
@@ -361,7 +348,7 @@ class PandaptUploader:
                     "file": (
                         os.path.basename(torrent_path),
                         torrent_file,
-                        "application/x-bittorent",
+                        "application/x-bittorrent",
                     ),
                     "nfo": ("", b"", "application/octet-stream"),
                 }
@@ -370,13 +357,14 @@ class PandaptUploader:
                     logger.error("目标站点 Cookie 为空，无法发布。")
                     return False, "目标站点 Cookie 未配置。"
                 cookie_jar = cookies_raw2jar(cleaned_cookie_str)
-                logger.info("正在向 熊猫 站点提交发布请求...")
-
+                logger.info("正在向 NovaHD 站点提交发布请求...")
+                # 若站点启用代理且配置了全局代理地址，则通过代理请求
                 proxies = None
                 try:
                     from config import config_manager
                     use_proxy = bool(self.site_info.get("proxy"))
                     conf = (config_manager.get() or {})
+                    # 优先使用转种设置中的代理地址，其次兼容旧的 network.proxy_url
                     proxy_url = (conf.get("cross_seed", {})
                                  or {}).get("proxy_url") or (conf.get(
                                      "network", {}) or {}).get("proxy_url")
@@ -398,7 +386,10 @@ class PandaptUploader:
 
             if "details.php" in response.url and "uploaded=1" in response.url:
                 logger.success("发布成功！已跳转到种子详情页。")
-                return True, f"发布成功！新种子页面: {response.url}"
+                # 修复服务器返回的错误URL：将tracker.novahd.top替换为pt.novahd.top
+                corrected_url = response.url.replace("tracker.novahd.top",
+                                                     "pt.novahd.top")
+                return True, f"发布成功！新种子页面: {corrected_url}"
             elif "login.php" in response.url:
                 logger.error("发布失败，Cookie 已失效，被重定向到登录页。")
                 return False, "发布失败，Cookie 已失效或无效。"
@@ -409,11 +400,11 @@ class PandaptUploader:
                 return False, f"发布失败，请检查站点返回信息。 URL: {response.url}"
 
         except Exception as e:
-            logger.error(f"发布到 熊猫 站点时发生错误: {e}")
+            logger.error(f"发布到 NovaHD 站点时发生错误: {e}")
             logger.error(traceback.format_exc())
             return False, f"请求异常: {e}"
 
 
 def upload(site_info: dict, upload_payload: dict):
-    uploader = PandaptUploader(site_info, upload_payload)
+    uploader = NovahdUploader(site_info, upload_payload)
     return uploader.execute_upload()

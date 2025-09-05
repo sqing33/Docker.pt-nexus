@@ -54,24 +54,59 @@ class LuckptUploader:
 
         # 1. 类型映射 (Type) - 根据站点HTML校对
         type_map = {
+            "Movies": "401",
             "电影": "401",
+            "Driver": "401",
+            "Movie": "401",
+            "TV Series": "402",
             "电视剧": "402",
-            "动画": "405",
-            "动漫": "405",
             "Animations": "405",
+            "动漫": "405",
+            "动画": "405",
+            "Anime": "405",
             "MV": "406",
+            "演唱会": "406",
+            "Music Video": "406",
+            "Music": "408",
             "音乐": "408",
+            "专辑": "408",
+            "音轨": "408",
+            "音频": "408",
+            "Audio": "408",
+            "TV Shows": "410",
             "综艺": "410",
+            "Documentaries": "411",
+            "记录片": "411",
             "纪录片": "411",
+            "Sports": "412",
             "体育": "412",
             "短剧": "413",
+            "软件": "409",
+            "图书": "409",
+            "学习": "409",
+            "游戏": "409",
+            "音乐会": "409",
+            "资料": "409",
+            "其他": "409",
+            "Misc": "409",
+            "未知": "409",
+            "Unknown": "409",
         }
         source_type = source_params.get("类型") or ""
+        # 优先完全匹配，然后部分匹配，最后使用默认值
         mapped["type"] = "409"  # 默认值: 其他
+
+        # 精确匹配
         for key, value in type_map.items():
-            if key in source_type:
+            if key.lower() == source_type.lower().strip():
                 mapped["type"] = value
                 break
+        else:
+            # 如果没有精确匹配，尝试部分匹配
+            for key, value in type_map.items():
+                if key.lower() in source_type.lower():
+                    mapped["type"] = value
+                    break
 
         # 2. 媒介映射 (Medium) - 根据站点HTML校对
         # 站点默认值 'Other': 13
@@ -199,7 +234,6 @@ class LuckptUploader:
 
         # 7. 标签 (Tags) - 根据站点HTML校对
         tag_map = {
-            "禁转": 1,
             "首发": 2,
             "DIY": 4,
             "国语": 5,

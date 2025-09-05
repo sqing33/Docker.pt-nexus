@@ -50,24 +50,67 @@ class PtchinaUploader:
 
         # 1. 类型映射 (Type)
         type_map = {
+            "Movies": "401",
             "电影": "401",
+            "Driver": "401",
+            "Movie": "401",
+            "TV Series": "402",
             "电视剧": "402",
-            "综艺": "404",
+            "TV Shows": "402",
+            "综艺": "402",
+            "Documentaries": "404",
+            "记录片": "404",
             "纪录片": "404",
-            "动漫": "401",
-            "动画": "402",
-            "Animations": "401",
-            "MV": "404",
-            "体育": "404",
-            "音乐": "404",
-            "音轨": "404",
         }
+        # 扩展映射，将其他类型映射到最接近的选项
+        fallback_map = {
+            "Animations": "402",
+            "动漫": "402",
+            "动画": "402",
+            "Anime": "402",
+            "MV": "402",
+            "演唱会": "402",
+            "Music Video": "402",
+            "Sports": "402",
+            "体育": "402",
+            "Music": "402",
+            "音乐": "402",
+            "专辑": "402",
+            "音轨": "402",
+            "音频": "402",
+            "短剧": "402",
+            "软件": "402",
+            "图书": "402",
+            "学习": "402",
+            "游戏": "402",
+            "音乐会": "402",
+            "资料": "402",
+            "其他": "401",
+            "Misc": "401",
+            "未知": "401",
+            "Unknown": "401",
+        }
+        
         source_type = source_params.get("类型") or ""
-        mapped["type"] = "409"  # 默认值: 其他
+        mapped["type"] = "401"  # 默认值: 电影
+        
+        # 精确匹配
         for key, value in type_map.items():
-            if key in source_type:
+            if key.lower() == source_type.lower().strip():
                 mapped["type"] = value
                 break
+        else:
+            # 如果没有精确匹配，尝试部分匹配
+            for key, value in type_map.items():
+                if key.lower() in source_type.lower():
+                    mapped["type"] = value
+                    break
+            else:
+                # 最后尝试回退映射
+                for key, value in fallback_map.items():
+                    if key.lower() in source_type.lower():
+                        mapped["type"] = value
+                        break
 
         # 2. 媒介映射 (Medium) - 根据站点HTML校对
         # 站点默认值 'Other': 13
@@ -81,7 +124,7 @@ class PtchinaUploader:
             'Remux': '3',
             'Encode': '8',
             'WEB-DL': '9',
-            'WEBRip': '9',
+            'WEBRip': '8',
             'WEB': '9',
             'HDTV': '12',
             'TVrip': '12',
