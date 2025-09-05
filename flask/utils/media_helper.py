@@ -286,9 +286,9 @@ def upload_data_mediaInfo(mediaInfo: str, save_path: str):
             return mediaInfo
 
 
-def upload_data_title(title: str):
+def upload_data_title(title: str, torrent_filename: str = ""):
     """
-    从种子主标题中提取所有参数。
+    从种子主标题中提取所有参数，并可选地从种子文件名中补充缺失参数。
     """
     print(f"开始从主标题解析参数: {title}")
 
@@ -434,6 +434,46 @@ def upload_data_title(title: str):
         if unique_processed:
             params[key] = unique_processed[0] if len(
                 unique_processed) == 1 else unique_processed
+
+    # --- [新增] 开始: 从种子文件名补充缺失的参数 ---
+    if torrent_filename:
+        print(f"开始从种子文件名补充参数: {torrent_filename}")
+        # 预处理文件名：移除后缀，用空格替换点和其他常用分隔符
+        filename_base = re.sub(r'(\.original)?\.torrent', '', torrent_filename, flags=re.IGNORECASE)
+        filename_candidate = re.sub(r'[\._\[\]\(\)]', ' ', filename_base)
+
+        # 再次遍历所有技术标签定义，以补充信息
+        for key in priority_order:
+            # 如果主标题中已解析出此参数，则跳过，优先使用主标题的结果
+            if key in params and params.get(key):
+                continue
+
+            pattern = tech_patterns_definitions[key]
+            search_pattern = (re.compile(r"(?<!\w)(" + pattern + r")(?!\w)", re.IGNORECASE)
+                              if r"\b" not in pattern else re.compile(pattern, re.IGNORECASE))
+
+            matches = list(search_pattern.finditer(filename_candidate))
+            if matches:
+                # 提取所有匹配到的值
+                raw_values = [m.group(0).strip() if r"\b" in pattern else m.group(1).strip() for m in matches]
+                
+                # (复制主解析逻辑中的 audio 特殊处理)
+                processed_values = ([re.sub(r"(DD)\\+", r"\1+", val, flags=re.I) for val in raw_values]
+                                    if key == "audio" else raw_values)
+                if key == "audio":
+                    processed_values = [re.sub(r"((?:FLAC|DDP|AV3A|AAC|LPCM|AC3|DD))(\d(?:\.\d)?)", r"\1 \2", val, flags=re.I)
+                                        for val in processed_values]
+                
+                # 取独一无二的值并按出现顺序排序
+                unique_processed = sorted(list(set(processed_values)), key=lambda x: filename_candidate.find(x.replace(" ", "")))
+
+                if unique_processed:
+                    print(f"   [文件名补充] 找到缺失参数 '{key}': {unique_processed}")
+                    # 将补充的参数存入 params 字典
+                    params[key] = unique_processed[0] if len(unique_processed) == 1 else unique_processed
+                    # 将新找到的标签也加入 all_found_tags，以便后续正确计算“无法识别”部分
+                    all_found_tags.extend(unique_processed)
+    # --- [新增] 结束 ---
 
     if "quality_modifier" in params:
         modifiers = params.pop("quality_modifier")
