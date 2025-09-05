@@ -1,4 +1,4 @@
-# sites/gtkpw.py
+# sites/pandapt.py
 
 import os
 import re
@@ -8,7 +8,7 @@ from loguru import logger
 from utils import cookies_raw2jar, ensure_scheme
 
 
-class GtkpwUploader:
+class PandaptUploader:
 
     def __init__(self, site_info: dict, upload_data: dict):
         """
@@ -34,11 +34,15 @@ class GtkpwUploader:
 
     def _map_parameters(self) -> dict:
         """
-        将参数映射为 GTK 站点所需的表单值。
+        将参数映射为 熊猫 站点所需的表单值。
         - 映射表根据站点 upload.php 的 HTML 源码进行最终校对。
         - 字典的顺序很重要，用于优先匹配更精确的关键词。
+        - 任何未匹配到的项目都将自动归类于 'Other' 或不进行选择。
         """
+        # 从源站原始参数中获取
         source_params = self.upload_data.get("source_params", {})
+
+        # 从主标题解析结果中获取
         title_components_list = self.upload_data.get("title_components", [])
         title_params = {
             item["key"]: item["value"]
@@ -48,22 +52,27 @@ class GtkpwUploader:
         mapped = {}
         tags = []
 
-        # 1. 类型映射 (Type)
+        # 1. 类型映射 (Type) - 根据站点HTML校对
         type_map = {
             "电影": "401",
             "电视剧": "402",
-            "综艺": "403",
-            "纪录片": "404",
             "动漫": "405",
             "动画": "405",
-            "MV": "406",
+            "Animations": "405",
+            "综艺": "403",
+            "纪录片": "404",
             "体育": "407",
             "音乐": "408",
             "音轨": "408",
-            "图书": "410",
-            "专辑": "411",
-            "学习": "412",
-            "资料": "412",
+            "软件": "412",
+            "游戏": "411",
+            "演唱会": "413",
+            "音乐会": "413",
+            "MV": "413",  # 归类到演唱会/音乐会
+            "学习": "414",
+            "资料": "414",
+            "图书": "415",
+            "其他": "409",
         }
         source_type = source_params.get("类型") or ""
         mapped["type"] = "409"  # 默认值: 其他
@@ -72,30 +81,35 @@ class GtkpwUploader:
                 mapped["type"] = value
                 break
 
-        # 2. 媒介映射 (Medium)
+        # 2. 媒介映射 (Medium) - 根据站点HTML校对
         medium_map = {
-            'UHD Blu-ray': '10',
-            'Blu-ray': '1',
+            'UHD Blu-ray': '11',
             'BluRay': '1',
-            'HD DVD': '2',
+            'Blu-ray': '1',
+            'BD': '1',
             'Remux': '3',
             'Encode': '7',
             'MiniBD': '4',
-            'WEB-DL': '11',
-            'WEB': '11',
-            'WEBRip': '11',
+            'WEB-DL': '10',
+            'WEBRip': '10',
+            'WEB': '10',
             'HDTV': '5',
+            'UHDTV': '12',
+            'TVrip': '5',
+            'DVD': '6',
             'DVDR': '6',
             'CD': '8',
             'Track': '9',
+            'HD DVD': '2',
         }
         medium_str = title_params.get("媒介", "")
+        mapped["medium_sel[4]"] = "13"  # 默认值: Other
         for key, value in medium_map.items():
             if key.lower() in medium_str.lower():
                 mapped["medium_sel[4]"] = value
                 break
 
-        # 3. 视频编码映射 (Video Codec)
+        # 3. 视频编码映射 (Video Codec) - 根据站点HTML校对
         codec_map = {
             'H.265': '6',
             'HEVC': '6',
@@ -103,11 +117,13 @@ class GtkpwUploader:
             'H.264': '1',
             'AVC': '1',
             'x264': '1',
+            'VP8': '7',
+            'VP9': '7',
             'VC-1': '2',
             'XviD': '3',
             'MPEG-2': '4',
-            'AV1': '7',
-            'VP9': '8',
+            'MPEG-4': '5',
+            'AV1': '8',
         }
         codec_str = title_params.get("视频编码", "")
         mapped["codec_sel[4]"] = "5"  # 默认值: Other
@@ -116,67 +132,117 @@ class GtkpwUploader:
                 mapped["codec_sel[4]"] = value
                 break
 
-        # GTK 没有音频编码选项，故注释掉
-        # # 4. 音频编码映射 (Audio Codec)
-        # audio_map = {}
-        # audio_str = title_params.get("音频编码", "")
+        # 4. 音频编码映射 (Audio Codec) - 根据站点HTML校对
+        audio_map = {
+            'TrueHD Atmos': '8',
+            'DTS:X': '2',
+            'DTS-HD MA': '3',
+            'DTS-HD': '3',
+            'DTS-HR': '18',
+            'DDP': '6',
+            'DD+': '6',
+            'E-AC3': '6',
+            'Atmos': '8',
+            'TrueHD': '1',
+            'DTS': '4',
+            'AC3': '5',
+            'DD': '5',
+            'AAC': '7',
+            'FLAC': '11',
+            'LPCM': '9',
+            'PCM': '9',
+            'APE': '12',
+            'WAV': '13',
+            'MP3': '14',
+        }
+        audio_str = title_params.get("音频编码", "")
+        audio_str_normalized = audio_str.upper().replace(" ",
+                                                         "").replace(".", "")
+        mapped["audiocodec_sel[4]"] = "16"  # 默认值: Other
+        for key, value in audio_map.items():
+            key_normalized = key.upper().replace(" ", "").replace(".", "")
+            if key_normalized in audio_str_normalized:
+                mapped["audiocodec_sel[4]"] = value
+                break
 
-        # 5. 分辨率映射 (Resolution)
+        # 5. 分辨率映射 (Resolution) - 根据站点HTML校对
         resolution_map = {
             '8K': '6',
             '4320p': '6',
             '4K': '5',
             '2160p': '5',
+            'UHD': '5',
             '1080p': '1',
             '1080i': '2',
             '720p': '3',
-            'SD': '4',
+            'SD': '7',  # 通用SD
+            '480p': '7',
+            '480i': '7',
         }
         resolution_str = title_params.get("分辨率", "")
+        mapped["standard_sel[4]"] = "8"  # 默认值: Other
         for key, value in resolution_map.items():
             if key.lower() in resolution_str.lower():
                 mapped["standard_sel[4]"] = value
                 break
 
-        # 6. 制作组映射 (Team)
+        # 6. 地区映射 (Source) - 默认设置为 'Other'
+        mapped["source_sel[4]"] = "6"  # 默认值: Other
+
+        # 7. 制作组映射 (Team) - 根据站点HTML校对
         team_map = {
-            "CMCT": "6",
-            "HDS": "1",
-            "CHD": "2",
-            "MYSILU": "3",
-            "WIKI": "4",
-            "MARK": "7",
-            "MTEAM": "8",
-            "FRDS": "9",
-            "PTHOME": "10",
-            "BEAST": "11",
+            "Panda": "1",  # Panda(压制组)
+            "AilMWeb": "7",  # AilMWeb(流媒体组)
+            "AilMTV": "8",  # AilMTV(电视录制组)
+            "AilMUpscale": "14",  # AilMUpscale(超分视频组)
+            "CatEDU": "15",  # CatEDU(部分禁转)
+            "Red Leaves": "22",  # Red Leaves (红叶)
         }
         release_group_str = str(title_params.get("制作组", "")).upper()
         mapped["team_sel[4]"] = team_map.get(release_group_str,
                                              "5")  # 默认值 Other
 
-        # 7. 标签 (Tags)
+        # 8. 标签 (Tags) - 根据站点HTML校对
         tag_map = {
             "禁转": 1,
             "首发": 2,
             "DIY": 4,
             "国语": 5,
             "中字": 6,
-            "HDR": 7,
+            "Dolby Vision": 8,
+            "DV": 8,
+            "HDR10+": 9,
+            "HDR10": 7,
+            "HDR": 7,  # 将通用HDR默认映射到HDR10
+            "完结": 10,
+            "特效": 12,
+            "粤语": 13,
+            "纯净版": 16,
+            "分集": 17,
         }
+        # 从源站标签中匹配
         source_tags = source_params.get("标签") or []
         for tag in source_tags:
             tag_id = tag_map.get(tag)
             if tag_id is not None:
                 tags.append(tag_id)
 
+        # 从标题组件中智能匹配HDR等信息
         hdr_str = title_params.get("HDR格式", "").upper()
-        if "HDR" in hdr_str:
+        if "VISION" in hdr_str or "DV" in hdr_str:
+            tags.append(tag_map["Dolby Vision"])
+        if "HDR10+" in hdr_str:
+            tags.append(tag_map["HDR10+"])
+        elif "HDR10" in hdr_str:
+            tags.append(tag_map["HDR10"])
+        elif "HDR" in hdr_str:
             tags.append(tag_map["HDR"])
 
+        # 同时检查类型中是否包含"中字"信息
         if "中字" in source_type:
             tags.append(tag_map["中字"])
 
+        # 去重并格式化
         for i, tag_id in enumerate(sorted(list(set(tags)))):
             mapped[f"tags[4][{i}]"] = tag_id
 
@@ -194,14 +260,14 @@ class GtkpwUploader:
 
     def _build_title(self) -> str:
         """
-        根据 title_components 参数，按照 GTK 的规则拼接主标题。
+        根据 title_components 参数，按照 熊猫 的规则拼接主标题。
         """
         components_list = self.upload_data.get("title_components", [])
         components = {
             item["key"]: item["value"]
             for item in components_list if item.get("value")
         }
-        logger.info(f"开始为 GTK 拼接主标题，源参数: {components}")
+        logger.info(f"开始为熊猫拼接主标题，源参数: {components}")
 
         order = [
             "主标题",
@@ -245,7 +311,7 @@ class GtkpwUploader:
         """
         执行上传的核心逻辑。
         """
-        logger.info("正在为 GTK 站点适配上传参数...")
+        logger.info("正在为 熊猫 站点适配上传参数...")
         try:
             mapped_params = self._map_parameters()
             description = self._build_description()
@@ -257,12 +323,8 @@ class GtkpwUploader:
                 "small_descr": self.upload_data.get("subtitle", ""),
                 "url": self.upload_data.get("imdb_link", "") or "",
                 "pt_gen": self.upload_data.get("douban_link", "") or "",
-                "color": "0",
-                "font": "0",
-                "size": "0",
                 "descr": description,
                 "technical_info": self.upload_data.get("mediainfo", ""),
-                "uplver": "yes",  # 默认匿名上传
                 **mapped_params,
             }
 
@@ -281,7 +343,7 @@ class GtkpwUploader:
                     logger.error("目标站点 Cookie 为空，无法发布。")
                     return False, "目标站点 Cookie 未配置。"
                 cookie_jar = cookies_raw2jar(cleaned_cookie_str)
-                logger.info("正在向 GTK 站点提交发布请求...")
+                logger.info("正在向 熊猫 站点提交发布请求...")
 
                 proxies = None
                 try:
@@ -320,11 +382,11 @@ class GtkpwUploader:
                 return False, f"发布失败，请检查站点返回信息。 URL: {response.url}"
 
         except Exception as e:
-            logger.error(f"发布到 GTK 站点时发生错误: {e}")
+            logger.error(f"发布到 熊猫 站点时发生错误: {e}")
             logger.error(traceback.format_exc())
             return False, f"请求异常: {e}"
 
 
 def upload(site_info: dict, upload_payload: dict):
-    uploader = GtkpwUploader(site_info, upload_payload)
+    uploader = PandaptUploader(site_info, upload_payload)
     return uploader.execute_upload()

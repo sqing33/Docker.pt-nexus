@@ -77,6 +77,7 @@ class PtzoneUploader:
             'Remux': '3',
             'WEB-DL': '4',
             'WEB': '4',
+            'WEBRip': '4',
             'HDTV': '5',
             'DVDR': '6',
             'Encode': '7',
