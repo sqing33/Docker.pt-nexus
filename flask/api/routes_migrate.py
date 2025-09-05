@@ -291,9 +291,9 @@ def validate_media():
         screenshots = upload_data_screenshot(source_info, save_path)
         return jsonify({"success": True, "screenshots": screenshots}), 200
     else:
-        status, posters = upload_data_poster(douban_link, imdb_link)
+        status, posters, extracted_imdb_link = upload_data_poster(douban_link, imdb_link)
         if status:
-            return jsonify({"success": True, "posters": posters}), 200
+            return jsonify({"success": True, "posters": posters, "extracted_imdb_link": extracted_imdb_link}), 200
         else:
             return jsonify({"success": False, "error": posters}), 400
 
