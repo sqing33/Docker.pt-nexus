@@ -129,8 +129,16 @@
               </el-form-item>
             </el-form>
           </el-tab-pane>
-          <el-tab-pane label="源站参数" name="params" class="params-pane">
-            <pre class="code-block fill-height-pre">{{ JSON.stringify(torrentData.source_params, null, 2) }}</pre>
+          <el-tab-pane label="发布参数预览" name="publish-preview" class="params-pane">
+            <div class="code-block fill-height-pre">
+              <pre>{{ JSON.stringify(torrentData.final_publish_parameters, (key, value) => {
+                // 为了更好的可读性，如果简介或Mediainfo过长，则进行截断
+                if ((key === '简介 (完整BBCode)' || key === 'Mediainfo') && typeof value === 'string' && value.length > 1000) {
+                  return value.substring(0, 1000) + '\n\n... (内容过长，已截断显示)';
+                }
+                return value;
+              }, 2) }}</pre>
+            </div>
           </el-tab-pane>
           <el-tab-pane label="已过滤声明" name="filtered-declarations" class="filtered-declarations-pane">
             <div class="filtered-declarations-container">
@@ -269,6 +277,7 @@ const getInitialTorrentData = () => ({
   intro: { statement: '', poster: '', body: '', screenshots: '', removed_ardtudeclarations: [] },
   mediainfo: '',
   source_params: {},
+  final_publish_parameters: {}, // <-- [新增] 为新数据添加一个空的初始对象
 })
 
 const parseImageUrls = (text: string) => {

@@ -5,7 +5,7 @@ import re
 import traceback
 import cloudscraper
 from loguru import logger
-from utils import cookies_raw2jar, ensure_scheme
+from utils import cookies_raw2jar, ensure_scheme, extract_tags_from_mediainfo
 
 
 class LuckptUploader:
@@ -250,14 +250,23 @@ class LuckptUploader:
             "完结": 10,
             "连载": 9,
         }
-        # 从源站标签中匹配
-        source_tags = source_params.get("标签") or []
-        for tag in source_tags:
-            tag_id = tag_map.get(tag)
+        # --- [核心修改] 开始: 整合来自多源的标签 ---
+        # 1. 从源站参数获取标签
+        combined_tags = set(source_params.get("标签") or [])
+        
+        # 2. 从 MediaInfo 提取标签
+        mediainfo_str = self.upload_data.get("mediainfo", "")
+        tags_from_mediainfo = extract_tags_from_mediainfo(mediainfo_str)
+        for tag in tags_from_mediainfo:
+            combined_tags.add(tag)
+            
+        # 3. 将所有收集到的标签字符串映射为站点ID
+        for tag_str in combined_tags:
+            tag_id = tag_map.get(tag_str)
             if tag_id is not None:
                 tags.append(tag_id)
 
-        # 从标题组件中智能匹配HDR等信息
+        # 4. 从标题组件中智能匹配HDR等信息 (保留原有逻辑作为补充)
         hdr_str = title_params.get("HDR格式", "").upper()
         if "VISION" in hdr_str or "DV" in hdr_str:
             tags.append(tag_map["Dolby Vision"])
@@ -268,9 +277,10 @@ class LuckptUploader:
         elif "HDR" in hdr_str:
             tags.append(tag_map["HDR"])
 
-        # 同时检查类型中是否包含“中字”信息
+        # 5. 同时检查类型中是否包含"中字"信息
         if "中字" in source_type:
             tags.append(tag_map["中字"])
+        # --- [核心修改] 结束 ---
 
         # 去重并格式化
         for i, tag_id in enumerate(sorted(list(set(tags)))):

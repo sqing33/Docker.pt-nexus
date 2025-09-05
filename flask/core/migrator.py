@@ -15,7 +15,7 @@ import traceback
 import importlib
 from io import StringIO
 from config import TEMP_DIR
-from utils import ensure_scheme, upload_data_mediaInfo, upload_data_title
+from utils import ensure_scheme, upload_data_mediaInfo, upload_data_title, extract_tags_from_mediainfo
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -538,17 +538,81 @@ class TorrentMigrator:
 
             # 此处已提前下载种子文件，无需重复下载
 
+            # --- [新增] 开始: 构建最终发布参数预览对象 ---
+            try:
+                # 1. 将 title_components 列表转换为更易于使用的字典
+                title_params = {
+                    item["key"]: item["value"]
+                    for item in title_components if item.get("value")
+                }
+
+                # 2. 模拟拼接最终的主标题 (逻辑与 sites/*.py 中的 _build_title 一致)
+                order = [
+                    "主标题", "年份", "季集", "剧集状态", "发布版本", "分辨率", "媒介",
+                    "片源平台", "视频编码", "视频格式", "HDR格式", "色深", "帧率", "音频编码",
+                ]
+                title_parts = []
+                for key in order:
+                    value = title_params.get(key)
+                    if value:
+                        title_parts.append(" ".join(map(str, value)) if isinstance(value, list) else str(value))
+                
+                raw_main_part = " ".join(filter(None, title_parts))
+                main_part = re.sub(r'(?<!\d)\.(?!\d)', ' ', raw_main_part)
+                main_part = re.sub(r'\s+', ' ', main_part).strip()
+                release_group = title_params.get("制作组", "NOGROUP")
+                if "N/A" in release_group: release_group = "NOGROUP"
+                preview_title = f"{main_part}-{release_group}"
+
+                # 3. 组合最终的简介 (逻辑与 sites/*.py 中的 _build_description 一致)
+                full_description = (
+                    f"{intro.get('statement', '')}\n"
+                    f"{intro.get('poster', '')}\n"
+                    f"{intro.get('body', '')}\n"
+                    f"{intro.get('screenshots', '')}"
+                )
+
+                # 4. 整合所有来源的标签
+                source_tags = set(source_params.get("标签") or [])
+                mediainfo_tags = set(extract_tags_from_mediainfo(mediainfo))
+                all_tags = sorted(list(source_tags.union(mediainfo_tags)))
+
+                # 5. 组装最终的预览字典 (不包含Mediainfo和完整简介，保持简洁)
+                final_publish_parameters = {
+                    "主标题 (预览)": preview_title,
+                    "副标题": subtitle,
+                    "IMDb链接": imdb_link,
+                    "类型": source_params.get("类型", "N/A"),
+                    "媒介": title_params.get("媒介", "N/A"),
+                    "视频编码": title_params.get("视频编码", "N/A"),
+                    "音频编码": title_params.get("音频编码", "N/A"),
+                    "分辨率": title_params.get("分辨率", "N/A"),
+                    "制作组": title_params.get("制作组", "N/A"),
+                    "标签 (综合)": all_tags,
+                    # 注: 不包含Mediainfo和完整简介，保持预览简洁
+                }
+            except Exception as e:
+                self.logger.error(f"构建发布参数预览时出错: {e}")
+                final_publish_parameters = {"error": "构建预览失败，请检查日志。"}
+            # --- [新增] 结束 ---
+
             self.logger.info("--- [步骤1] 种子信息获取和解析完成 ---")
+            
+            # 将新构建的预览对象添加到返回数据中
+            review_data_payload = {
+                "original_main_title": original_main_title,
+                "title_components": title_components,
+                "subtitle": subtitle,
+                "imdb_link": imdb_link,
+                "intro": intro,
+                "mediainfo": mediainfo,
+                "source_params": source_params,
+                # --- [新增] ---
+                "final_publish_parameters": final_publish_parameters 
+            }
+
             return {
-                "review_data": {
-                    "original_main_title": original_main_title,
-                    "title_components": title_components,
-                    "subtitle": subtitle,
-                    "imdb_link": imdb_link,
-                    "intro": intro,
-                    "mediainfo": mediainfo,
-                    "source_params": source_params,
-                },
+                "review_data": review_data_payload,
                 "original_torrent_path": original_torrent_path,
                 "logs": self.log_handler.get_logs(),
             }
