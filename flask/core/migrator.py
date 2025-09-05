@@ -321,6 +321,24 @@ class TorrentMigrator:
                 descr_container_soup = BeautifulSoup(corrected_descr_html,
                                                      "html.parser")
                 bbcode = self._html_to_bbcode(descr_container_soup)
+                
+                # --- [新增修复代码] 开始 ---
+                # 清理连续的、中间无内容的 [quote] 标签，以修正源站错误的嵌套。
+                # 例如将 [quote][quote]...[/quote][/quote] 简化为 [quote]...[/quote]。
+                # 使用循环是为了处理可能存在的三层或更多层的连续嵌套。
+                original_bbcode = bbcode
+                while True:
+                    # 将连续的开标签 [quote][quote] 合并为一个
+                    bbcode = re.sub(r"\[quote\]\s*\[quote\]", "[quote]", bbcode, flags=re.IGNORECASE)
+                    # 将连续的闭标签 [/quote][/quote] 合并为一个
+                    bbcode = re.sub(r"\[/quote\]\s*\[/quote\]", "[/quote]", bbcode, flags=re.IGNORECASE)
+                    # 如果经过一轮替换后内容没有变化，说明已经清理干净，退出循环
+                    if bbcode == original_bbcode:
+                        break
+                    # 更新原始文本以进行下一轮检查
+                    original_bbcode = bbcode
+                # --- [新增修复代码] 结束 ---
+                
                 quotes = re.findall(r"\[quote\].*?\[/quote\]", bbcode,
                                     re.DOTALL)
                 images = re.findall(r"\[img\].*?\[/img\]", bbcode)
