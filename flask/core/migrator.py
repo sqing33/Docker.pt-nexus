@@ -217,7 +217,38 @@ class TorrentMigrator:
                 h1_top.stripped_strings)[0] if h1_top else "未找到标题"
             self.logger.info(f"获取到原始主标题: {original_main_title}")
 
-            title_components = upload_data_title(original_main_title)
+            # --- [核心修改 1] 开始 ---
+            # 先下载种子文件，以便获取其准确的文件名
+            download_link_tag = soup.select_one(
+                f'a.index[href^="download.php?id={torrent_id}"]')
+            if not download_link_tag:
+                raise Exception("在详情页未找到种子下载链接。")
+            torrent_response = self.scraper.get(
+                f"{self.SOURCE_BASE_URL}/{download_link_tag['href']}",
+                headers={"Cookie": self.SOURCE_COOKIE},
+                timeout=60,
+            )
+            torrent_response.raise_for_status()
+
+            # 从响应头中尝试获取文件名，这是最准确的方式
+            content_disposition = torrent_response.headers.get('content-disposition')
+            torrent_filename = "default.torrent" # 设置一个默认值
+            if content_disposition:
+                filename_match = re.search(r'filename="?([^"]+)"?', content_disposition)
+                if filename_match:
+                    torrent_filename = filename_match.group(1)
+
+            safe_filename_base = re.sub(r'[\\/*?:"<>|]', "_", original_main_title)[:150]
+            original_torrent_path = os.path.join(
+                TEMP_DIR, f"{safe_filename_base}.original.torrent")
+            with open(original_torrent_path, "wb") as f:
+                f.write(torrent_response.content)
+            self.temp_files.append(original_torrent_path)
+
+            # 调用 upload_data_title 时，传入主标题和种子文件名
+            title_components = upload_data_title(original_main_title, torrent_filename)
+            # --- [核心修改 1] 结束 ---
+
             if not title_components:
                 self.logger.warning("主标题解析失败，将使用原始标题作为回退。")
                 title_components = {"主标题": original_main_title, "无法识别": "解析失败"}
@@ -505,24 +536,7 @@ class TorrentMigrator:
                 tags,
             }
 
-            download_link_tag = soup.select_one(
-                f'a.index[href^="download.php?id={torrent_id}"]')
-            if not download_link_tag:
-                raise Exception("在详情页未找到种子下载链接。")
-            torrent_response = self.scraper.get(
-                f"{self.SOURCE_BASE_URL}/{download_link_tag['href']}",
-                headers={"Cookie": self.SOURCE_COOKIE},
-                timeout=60,
-            )
-            torrent_response.raise_for_status()
-
-            safe_filename = re.sub(r'[\\/*?:"<>|]', "_",
-                                   original_main_title)[:150]
-            original_torrent_path = os.path.join(
-                TEMP_DIR, f"{safe_filename}.original.torrent")
-            with open(original_torrent_path, "wb") as f:
-                f.write(torrent_response.content)
-            self.temp_files.append(original_torrent_path)
+            # 此处已提前下载种子文件，无需重复下载
 
             self.logger.info("--- [步骤1] 种子信息获取和解析完成 ---")
             return {
