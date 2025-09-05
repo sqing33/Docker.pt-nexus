@@ -133,7 +133,7 @@ import * as echarts from 'echarts'
 import axios from 'axios'
 import { ElMessage, ElTooltip } from 'element-plus'
 
-// --- Refs and State (无变动) ---
+// --- Refs and State ---
 const speedChart = ref(null)
 const trafficChart = ref(null)
 let speedChartInstance = null
@@ -174,7 +174,7 @@ const trafficDisplayModeButtonText = computed(
   () => `(${displayModeTextMap[trafficDisplayMode.value]})`,
 )
 
-// --- Helper Functions (无变动) ---
+// --- Helper Functions ---
 const formatBytes = (b) => {
   if (b === null || b === undefined || isNaN(b) || b < 0) return '0 B'
   if (b === 0) return '0 B'
@@ -184,7 +184,7 @@ const formatBytes = (b) => {
 }
 const formatSpeed = (speed) => formatBytes(speed) + '/s'
 
-// --- App Settings Fetching (无变动) ---
+// --- App Settings Fetching ---
 const fetchAppSettings = async () => {
   try {
     const { data } = await axios.get('/api/settings')
@@ -196,9 +196,8 @@ const fetchAppSettings = async () => {
   }
 }
 
-// --- ECharts Initialization (Traffic Chart 初始化有修改) ---
+// --- ECharts Initialization ---
 const initSpeedChart = () => {
-  // ... (initSpeedChart 函数保持不变)
   if (speedChart.value) {
     speedChartInstance = echarts.init(speedChart.value)
     speedChartInstance.setOption({
@@ -269,6 +268,7 @@ const initSpeedChart = () => {
     })
   }
 }
+
 const initTrafficChart = () => {
   if (trafficChart.value) {
     trafficChartInstance = echarts.init(trafficChart.value)
@@ -276,8 +276,6 @@ const initTrafficChart = () => {
       tooltip: {
         trigger: 'axis',
         axisPointer: { type: 'shadow' },
-
-        // --- 核心修改：更新 Tooltip 的 formatter ---
         formatter: (params) => {
           if (!params || params.length === 0) return ''
           let content = `${params[0].axisValueLabel}<br/>`
@@ -285,29 +283,25 @@ const initTrafficChart = () => {
           const dataByDownloaderName = {}
 
           params.forEach((param) => {
-            // 1. 先用 " - " 分割，获取下载器名称
             const baseName = param.seriesName.split(' - ')[0]
 
-            // 2. 初始化该下载器的数据对象（如果需要）
             if (!dataByDownloaderName[baseName]) {
               dataByDownloaderName[baseName] = {}
             }
 
-            // 3. 使用 .includes() 来判断类型，这不再受括号内总量的影响
             if (param.seriesName.includes('上传量')) {
-              dataByDownloaderName[baseName]['上传'] = { // 使用简单的 key
+              dataByDownloaderName[baseName]['上传'] = {
                 value: param.value,
                 marker: param.marker,
               }
             } else if (param.seriesName.includes('下载量')) {
-              dataByDownloaderName[baseName]['下载'] = { // 使用简单的 key
+              dataByDownloaderName[baseName]['下载'] = {
                 value: param.value,
                 marker: param.marker,
               }
             }
           })
 
-          // 4. 构建 tooltip 内容 (这部分逻辑现在可以正常工作了)
           for (const name in dataByDownloaderName) {
             const data = dataByDownloaderName[name]
             content += `<div style="margin-top: 8px; font-weight: bold;">${name}</div>`
@@ -318,19 +312,18 @@ const initTrafficChart = () => {
           }
           return content
         },
-        // --- 结束修改 ---
       },
       xAxis: { type: 'category', data: [] },
       yAxis: { type: 'value', axisLabel: { formatter: (value) => formatBytes(value) } },
       series: [],
-      grid: { top: 60, left: '3%', right: '4%', bottom: '3%', containLabel: true },
+      grid: { top: 80, left: '3%', right: '4%', bottom: '3%', containLabel: true },
       legend: { type: 'scroll', top: 'top' },
       dataZoom: [{ type: 'inside' }],
     })
   }
 }
 
-// --- Data Fetching (fetchTrafficData 有重大修改) ---
+// --- Data Fetching ---
 const fetchSpeedData = async (mode, isPeriodicUpdate = false) => {
   if (!speedChartInstance) return
   if (!isPeriodicUpdate) speedChartInstance.showLoading()
@@ -345,10 +338,8 @@ const fetchSpeedData = async (mode, isPeriodicUpdate = false) => {
     const downloadColors = ['#409EFF', '#67C23A', '#8A2BE2', '#A0CFFF', '#B3E19D']
     const lastDataPoint = data.datasets.length > 0 ? data.datasets[data.datasets.length - 1] : null
 
-    // --- [新增] 用于计算Y轴最大值的数据收集 ---
     const allUploadData = []
     const allDownloadData = []
-    // --- 结束新增 ---
 
     speedChartDownloaders.value.forEach((downloader, index) => {
       const currentSpeeds = lastDataPoint?.speeds?.[downloader.id] || { ul_speed: 0, dl_speed: 0 }
@@ -364,14 +355,14 @@ const fetchSpeedData = async (mode, isPeriodicUpdate = false) => {
       })
 
       const uploadData = data.datasets.map((d) => d.speeds[downloader.id]?.ul_speed || 0);
-      allUploadData.push(...uploadData); // 收集上传数据
+      allUploadData.push(...uploadData);
 
       series.push({
         name: uploadLegendFullName,
         type: 'line',
         smooth: true,
         showSymbol: false,
-        data: uploadData, // 使用已提取的数据
+        data: uploadData,
         color: uploadColors[index % uploadColors.length],
       })
 
@@ -387,37 +378,33 @@ const fetchSpeedData = async (mode, isPeriodicUpdate = false) => {
       })
 
       const downloadData = data.datasets.map((d) => d.speeds[downloader.id]?.dl_speed || 0);
-      allDownloadData.push(...downloadData); // 收集下载数据
+      allDownloadData.push(...downloadData);
 
       series.push({
         name: downloadLegendFullName,
         type: 'line',
         smooth: true,
         showSymbol: false,
-        data: downloadData, // 使用已提取的数据
+        data: downloadData,
         color: downloadColors[index % downloadColors.length],
       })
     })
 
-    // --- [核心修改] 根据当前的筛选模式计算并设置 Y 轴最大值 ---
-    let yAxisMax = null; // 默认为 null，让 ECharts 自动计算
+    let yAxisMax = null;
 
     if (speedChartVisibilityMode.value === 'upload') {
       yAxisMax = Math.max(...allUploadData);
     } else if (speedChartVisibilityMode.value === 'download') {
       yAxisMax = Math.max(...allDownloadData);
-    } else { // 'all' 模式
+    } else {
       yAxisMax = Math.max(...allUploadData, ...allDownloadData);
     }
 
-    // 如果最大值为0，给一个小的默认值防止图表完全压扁
     if (yAxisMax === 0) {
-      yAxisMax = 1024; // 1 KB/s
+      yAxisMax = 1024;
     }
 
-    // 增加 20% 的缓冲空间，让曲线不至于顶到头
     yAxisMax = yAxisMax * 1.2;
-    // --- 结束修改 ---
 
     const oldSelectedState = speedChartLegendItems.value.reduce((acc, item) => {
       if (item.disabled) acc[`${item.baseName} ${item.arrow}`] = true
@@ -434,11 +421,10 @@ const fetchSpeedData = async (mode, isPeriodicUpdate = false) => {
 
     speedChartInstance.setOption({
       xAxis: { data: data.labels },
-      // --- [修改] 应用计算出的Y轴最大值 ---
       yAxis: {
         type: 'value',
         axisLabel: { formatter: (value) => formatSpeed(value) },
-        max: yAxisMax // 在这里设置最大值
+        max: yAxisMax
       },
       series: series,
       legend: {
@@ -475,60 +461,118 @@ const fetchTrafficData = async (range) => {
     const uploadColors = ['#F56C6C', '#E6A23C', '#D98A6F', '#FAB6B6', '#F7D0A3']
     const downloadColors = ['#409EFF', '#67C23A', '#8A2BE2', '#A0CFFF', '#B3E19D']
 
+    // 1. [保持不变] 创建用于存储每项总和的数组
+    const uploadTotals = new Array(labels.length).fill(0)
+    const downloadTotals = new Array(labels.length).fill(0)
+
+    // 2. [保持不变] 遍历下载器，创建真实的柱状图系列，并累计总和
     downloaders.forEach((downloader, index) => {
       const downloaderData = datasets[downloader.id]
       if (!downloaderData) return
 
-      // --- 核心修改：计算总量并创建动态图例名称 ---
-
-      // 1. 计算总上传量并格式化
       const totalUpload = downloaderData.uploaded.reduce((acc, val) => acc + val, 0)
       const formattedTotalUpload = formatBytes(totalUpload)
       const uploadSeriesName = `${downloader.name} - 上传量 (${formattedTotalUpload})`
 
-      // 2. 计算总下载量并格式化
       const totalDownload = downloaderData.downloaded.reduce((acc, val) => acc + val, 0)
       const formattedTotalDownload = formatBytes(totalDownload)
       const downloadSeriesName = `${downloader.name} - 下载量 (${formattedTotalDownload})`
 
-      // --- 结束修改 ---
+      // 累计到总和数组中
+      downloaderData.uploaded.forEach((value, i) => {
+        uploadTotals[i] += value
+      })
+      downloaderData.downloaded.forEach((value, i) => {
+        downloadTotals[i] += value
+      })
 
-
-      // --- 创建上传系列 (使用新的动态名称) ---
+      // 添加上传系列
       legendData.push(uploadSeriesName)
       series.push({
-        name: uploadSeriesName, // 使用动态名称
+        name: uploadSeriesName,
         type: 'bar',
-        stack: downloader.name,
+        stack: 'upload', // 放入 'upload' 堆叠组
         emphasis: { focus: 'series' },
         data: downloaderData.uploaded,
         color: uploadColors[index % uploadColors.length],
-        label: {
-          show: true,
-          position: 'inside',
-          formatter: (p) => (p.value > 0 ? formatBytes(p.value) : ''),
-          color: '#333',
-          fontSize: 12,
-        },
       })
 
-      // --- 创建下载系列 (使用新的动态名称) ---
+      // 添加下载系列
       legendData.push(downloadSeriesName)
       series.push({
-        name: downloadSeriesName, // 使用动态名称
+        name: downloadSeriesName,
         type: 'bar',
-        stack: downloader.name,
+        stack: 'download', // 放入 'download' 堆叠组
         emphasis: { focus: 'series' },
         data: downloaderData.downloaded,
         color: downloadColors[index % downloadColors.length],
-        label: {
-          show: true,
-          position: 'inside',
-          formatter: (p) => (p.value > 0 ? formatBytes(p.value) : ''),
-          color: '#333',
-          fontSize: 12,
-        },
       })
+    })
+
+    // 3. [核心修正] 添加用于显示“上传总量”的透明系列
+    series.push({
+      name: '上传总量标签', // 给予一个不重复的名字
+      type: 'bar',
+      stack: 'upload', // 和上传系列在同一个stack
+      data: new Array(labels.length).fill(0), // **关键：数据必须是0，因为它只占位，不增加高度**
+      itemStyle: {
+        borderColor: 'transparent',
+        color: 'transparent'
+      },
+      emphasis: {
+        itemStyle: {
+          borderColor: 'transparent',
+          color: 'transparent'
+        }
+      },
+      tooltip: {
+        show: false // 不在tooltip中显示
+      },
+      label: {
+        show: true,
+        position: 'top', // 显示在堆叠柱的顶部
+        formatter: (p) => {
+          // **关键：从预先计算好的 totals 数组中根据索引获取值**
+          const total = uploadTotals[p.dataIndex]
+          return total > 0 ? formatBytes(total) : '' // 仅当总和大于0时显示标签
+        },
+        color: '#333',
+        fontSize: 12,
+        fontWeight: 'normal', // 修改为 normal，不那么粗壮
+      }
+    })
+
+    // 4. [核心修正] 添加用于显示“下载总量”的透明系列
+    series.push({
+      name: '下载总量标签', // 给予一个不重复的名字
+      type: 'bar',
+      stack: 'download', // 和下载系列在同一个stack
+      data: new Array(labels.length).fill(0), // **关键：数据必须是0**
+      itemStyle: {
+        borderColor: 'transparent',
+        color: 'transparent'
+      },
+      emphasis: {
+        itemStyle: {
+          borderColor: 'transparent',
+          color: 'transparent'
+        }
+      },
+      tooltip: {
+        show: false
+      },
+      label: {
+        show: true,
+        position: 'top',
+        formatter: (p) => {
+          // **关键：从预先计算好的 totals 数组中根据索引获取值**
+          const total = downloadTotals[p.dataIndex]
+          return total > 0 ? formatBytes(total) : ''
+        },
+        color: '#333',
+        fontSize: 12,
+        fontWeight: 'normal', // 修改为 normal，不那么粗壮
+      }
     })
 
     trafficChartInstance.setOption({
@@ -546,9 +590,8 @@ const fetchTrafficData = async (range) => {
 }
 
 
-// --- Event Handlers (changeTrafficVisibility 有修改) ---
+// --- Event Handlers ---
 const changeSpeedMode = (mode) => {
-  // ... (changeSpeedMode 函数保持不变)
   if (speedUpdateTimer) {
     clearInterval(speedUpdateTimer)
     speedUpdateTimer = null
@@ -572,7 +615,6 @@ const toggleSeries = (name) => {
   }
 }
 const changeSpeedVisibility = (mode, isInternalCall = false) => {
-  // ... (changeSpeedVisibility 函数保持不变)
   if (!isInternalCall) speedChartVisibilityMode.value = mode
   if (!speedChartInstance || !speedChartLegendItems.value.length) return
   const selected = {}
@@ -606,7 +648,7 @@ const changeTrafficVisibility = (mode, isInternalCall = false) => {
   trafficChartInstance.setOption({ legend: { selected: selected } })
 }
 
-// --- Lifecycle (无变动) ---
+// --- Lifecycle ---
 onMounted(async () => {
   areSettingsLoading.value = true
   await fetchAppSettings()

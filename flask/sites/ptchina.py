@@ -52,50 +52,47 @@ class PtchinaUploader:
         type_map = {
             "电影": "401",
             "电视剧": "402",
+            "综艺": "404",
             "纪录片": "404",
+            "动漫": "401",
+            "动画": "402",
+            "Animations": "401",
+            "MV": "404",
+            "体育": "404",
+            "音乐": "404",
+            "音轨": "404",
         }
         source_type = source_params.get("类型") or ""
-        # 铂金学院分类较少，未匹配到的不设置默认值，让用户手动选择
+        mapped["type"] = "409"  # 默认值: 其他
         for key, value in type_map.items():
             if key in source_type:
                 mapped["type"] = value
                 break
 
-        # 2. 媒介映射 (Medium) - 逻辑较复杂
-        medium_str = title_params.get("媒介", "")
-        resolution_str = title_params.get("分辨率", "")
+        # 2. 媒介映射 (Medium) - 根据站点HTML校对
+        # 站点默认值 'Other': 13
         source_tags = source_params.get("标签") or []
-        is_diy = "DIY" in source_tags
-
-        medium_val = "13"  # 默认 Other
-        if 'uhd' in resolution_str.lower() or '2160p' in resolution_str.lower(
-        ) or '4k' in resolution_str.lower():
-            if 'remux' in medium_str.lower():
-                medium_val = "3"  # UHD Remux
-            elif 'encode' in medium_str.lower():
-                medium_val = "4"  # UHD 压制
-            elif is_diy:
-                medium_val = "2"  # UHD DIY
-            elif 'blu-ray' in medium_str.lower(
-            ) or 'bluray' in medium_str.lower():
-                medium_val = "1"  # UHD原盘
-        elif '1080' in resolution_str.lower():
-            if 'remux' in medium_str.lower():
-                medium_val = "7"  # BD Remux
-            elif 'encode' in medium_str.lower():
-                medium_val = "8"  # 1080p/i压制
-            elif is_diy:
-                medium_val = "6"  # BD DIY
-            elif 'blu-ray' in medium_str.lower(
-            ) or 'bluray' in medium_str.lower():
-                medium_val = "5"  # BD 原盘
-
-        if 'web-dl' in medium_str.lower() or 'webrip' in medium_str.lower():
-            medium_val = "9"  # WEB-DL
-        elif 'hdtv' in medium_str.lower():
-            medium_val = "12"  # HDTV
-
-        mapped["medium_sel[4]"] = medium_val
+        resolution_str = title_params.get("分辨率", "")
+        medium_map = {
+            'UHD Blu-ray': '1',
+            'BluRay': '5',
+            'Blu-ray': '5',
+            'BD': '5',
+            'Remux': '3',
+            'Encode': '8',
+            'WEB-DL': '9',
+            'WEBRip': '9',
+            'WEB': '9',
+            'HDTV': '12',
+            'TVrip': '12',
+            'DVD': '11',
+        }
+        medium_str = title_params.get("媒介", "")
+        mapped["medium_sel[4]"] = "13"  # 默认值: Other
+        for key, value in medium_map.items():
+            if key.lower() in medium_str.lower():
+                mapped["medium_sel[4]"] = value
+                break
 
         # 3. 视频编码映射 (Video Codec)
         codec_map = {
