@@ -5,7 +5,7 @@ import re
 import traceback
 import cloudscraper
 from loguru import logger
-from utils import cookies_raw2jar, ensure_scheme
+from utils import cookies_raw2jar, ensure_scheme, extract_tags_from_mediainfo
 
 
 class CsptUploader:
@@ -254,12 +254,31 @@ class CsptUploader:
             "完结": 9,
             "儿童": 24,
         }
-        for tag in source_tags:
-            tag_id = tag_map.get(tag)
+        
+        # --- [核心修改] 开始: 整合来自多源的标签 ---
+        # 1. 从源站参数获取标签
+        combined_tags = set(source_params.get("标签") or [])
+        
+        # 2. 从 MediaInfo 提取标签
+        mediainfo_str = self.upload_data.get("mediainfo", "")
+        tags_from_mediainfo = extract_tags_from_mediainfo(mediainfo_str)
+        for tag in tags_from_mediainfo:
+            # 特殊处理：将 'Dolby Vision' 映射到财神的 '杜比' 标签
+            if tag == 'Dolby Vision':
+                 combined_tags.add('杜比')
+            else:
+                 combined_tags.add(tag)
+        
+        # 3. 从类型中补充 "中字"
+        if "中字" in source_type:
+            combined_tags.add("中字")
+
+        # 4. 将所有收集到的标签字符串映射为站点ID
+        for tag_str in combined_tags:
+            tag_id = tag_map.get(tag_str)
             if tag_id is not None:
                 tags.append(tag_id)
-        if "中字" in source_type:
-            tags.append(tag_map["中字"])
+        # --- [核心修改] 结束 ---
 
         for i, tag_id in enumerate(sorted(list(set(tags)))):
             mapped[f"tags[4][{i}]"] = tag_id

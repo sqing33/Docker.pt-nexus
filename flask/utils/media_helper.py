@@ -923,3 +923,84 @@ def add_torrent_to_downloader(detail_page_url: str, save_path: str,
         msg = f"添加到下载器 '{downloader_config['name']}' 时失败: {e}"
         logging.error(msg, exc_info=True)
         return False, msg
+
+
+def extract_tags_from_mediainfo(mediainfo_text: str) -> list:
+    """
+    从 MediaInfo 文本中提取关键词，并返回一个标准化的标签列表。
+
+    :param mediainfo_text: 完整的 MediaInfo 报告字符串。
+    :return: 一个包含识别出的标签字符串的列表，例如 ['国语', '中字', 'HDR10']。
+    """
+    if not mediainfo_text:
+        return []
+
+    found_tags = set()
+    lines = mediainfo_text.lower().split('\n')
+
+    # 定义关键词到标准化标签的映射
+    tag_keywords_map = {
+        # 语言标签
+        '国语': ['国语', 'mandarin'],
+        '粤语': ['粤语', 'cantonese'],
+        # 字幕标签
+        '中字': ['中字', 'chinese', 'chs', 'cht', '简', '繁'],
+        # HDR 格式标签
+        'Dolby Vision': ['dolby vision', '杜比视界'],
+        'HDR10+': ['hdr10+'],
+        'HDR10': ['hdr10'],
+        'HDR': ['hdr'], # 作为通用 HDR 的备用选项
+        'HDRVivid': ['hdr vivid'],
+    }
+
+    # 定义检查范围，减少不必要的扫描
+    # is_audio_section/is_text_section 用于限定语言和字幕的检查范围
+    is_audio_section = False
+    is_text_section = False
+
+    for line in lines:
+        line = line.strip()
+
+        # 判定当前是否处于特定信息块中
+        if 'audio' in line and '#' in line:
+            is_audio_section = True
+            is_text_section = False
+            continue
+        if 'text' in line and '#' in line:
+            is_text_section = True
+            is_audio_section = False
+            continue
+        if 'video' in line and '#' in line:
+            is_audio_section = False
+            is_text_section = False
+
+        # 1. 检查音频语言标签 (仅在 Audio 块中)
+        if is_audio_section:
+            if '国语' in tag_keywords_map and any(kw in line for kw in tag_keywords_map['国语']):
+                found_tags.add('国语')
+            if '粤语' in tag_keywords_map and any(kw in line for kw in tag_keywords_map['粤语']):
+                found_tags.add('粤语')
+
+        # 2. 检查字幕标签 (仅在 Text 块中)
+        if is_text_section:
+            if '中字' in tag_keywords_map and any(kw in line for kw in tag_keywords_map['中字']):
+                found_tags.add('中字')
+
+        # 3. 检查视频 HDR 标签 (全局检查，因为格式可能在 Video 块外部的摘要中)
+        if 'dolby vision' in tag_keywords_map and any(kw in line for kw in tag_keywords_map['Dolby Vision']):
+            found_tags.add('Dolby Vision')
+        if 'hdr10+' in tag_keywords_map and any(kw in line for kw in tag_keywords_map['HDR10+']):
+            found_tags.add('HDR10+')
+        # HDR10 要放在 HDR 之前检查，以获得更精确匹配
+        if 'hdr10' in tag_keywords_map and any(kw in line for kw in tag_keywords_map['HDR10']):
+            found_tags.add('HDR10')
+        elif 'hdr' in tag_keywords_map and any(kw in line for kw in tag_keywords_map['HDR']):
+            # 避免重复添加，如果已有更具体的HDR格式，则不添加通用的'HDR'
+            if not any(hdr_tag in found_tags for hdr_tag in ['Dolby Vision', 'HDR10+', 'HDR10']):
+                found_tags.add('HDR')
+        if 'hdrvivid' in tag_keywords_map and any(kw in line for kw in tag_keywords_map['HDRVivid']):
+            # 注意：站点可能没有 HDRVivid 标签，但我们先提取出来
+            found_tags.add('HDRVivid')
+
+    print(f"从 MediaInfo 中提取到的标签: {list(found_tags)}")
+    return list(found_tags)
