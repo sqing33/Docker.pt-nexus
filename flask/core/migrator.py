@@ -237,10 +237,19 @@ class TorrentMigrator:
             descr_container = soup.select_one("div#kdescr")
 
             imdb_link = ""
-            if descr_container and (imdb_match := re.search(
-                    r"(https?://www\.imdb\.com/title/tt\d+)",
-                    descr_container.get_text())):
-                imdb_link = imdb_match.group(1)
+            douban_link = ""
+            if descr_container:
+                descr_text = descr_container.get_text()
+                if imdb_match := re.search(
+                        r"(https?://www\.imdb\.com/title/tt\d+)",
+                        descr_text):
+                    imdb_link = imdb_match.group(1)
+                
+                # 提取豆瓣链接（从源站）
+                if douban_match := re.search(
+                        r"(https?://movie\.douban\.com/subject/\d+)",
+                        descr_text):
+                    douban_link = douban_match.group(1)
 
             # --- [核心修改] MediaInfo 提取逻辑 ---
 
@@ -259,6 +268,51 @@ class TorrentMigrator:
             quotes = []
             images = []
             body = ""
+            
+            # 提取简介中的IMDb和豆瓣链接
+            intro_imdb_link = ""
+            intro_douban_link = ""
+            
+            if descr_container:
+                descr_text = descr_container.get_text()
+                
+                # 提取IMDb链接
+                imdb_link_match = re.search(r'◎IMDb链接\s*\[url=([^\]]+)\]([^\[]+)\[/url\]', descr_text)
+                if imdb_link_match:
+                    intro_imdb_link = imdb_link_match.group(1)  # 获取URL部分
+                
+                # 提取豆瓣链接
+                douban_link_match = re.search(r'◎豆瓣链接\s*\[url=([^\]]+)\]([^\[]+)\[/url\]', descr_text)
+                if douban_link_match:
+                    intro_douban_link = douban_link_match.group(1)  # 获取URL部分
+            
+            # 检查IMDb链接处理逻辑：源站提取的优先，不存在则使用简介中的
+            if not imdb_link and intro_imdb_link:
+                imdb_link = intro_imdb_link
+                self.logger.info(f"从简介中提取到IMDb链接: {imdb_link}")
+            elif imdb_link and not intro_imdb_link:
+                # 如果在简介中没有找到IMDb链接但源站提取到了，添加到简介中
+                self.logger.info(f"源站提取到IMDb链接但简介中缺失，将在简介中添加: {imdb_link}")
+                # 在body中添加IMDb链接信息
+                imdb_info = f"◎IMDb链接　[url={imdb_link}]{imdb_link}[/url]"
+                if body:
+                    body = f"{body}\n\n{imdb_info}"
+                else:
+                    body = imdb_info
+            
+            # 处理豆瓣链接：源站提取的优先，不存在则使用简介中的
+            if not douban_link and intro_douban_link:
+                douban_link = intro_douban_link
+                self.logger.info(f"从简介中提取到豆瓣链接: {douban_link}")
+            elif douban_link and not intro_douban_link:
+                # 如果在简介中没有找到豆瓣链接但源站提取到了，添加到简介中
+                self.logger.info(f"源站提取到豆瓣链接但简介中缺失，将在简介中添加: {douban_link}")
+                # 在body中添加豆瓣链接信息
+                douban_info = f"◎豆瓣链接　[url={douban_link}]{douban_link}[/url]"
+                if body:
+                    body = f"{body}\n\n{douban_info}"
+                else:
+                    body = douban_info
 
             if descr_container:
                 descr_html_string = str(descr_container)
@@ -350,19 +404,50 @@ class TorrentMigrator:
                 # 更新 quotes 列表，移除已作为 mediainfo 的内容
                 quotes = remaining_quotes
 
-            # 4. 组装最终的 intro 字典
+            # 4. 如果没有IMDb链接但有豆瓣链接，尝试通过PT-Gen API获取IMDb链接
+            if not imdb_link and douban_link:
+                from utils import upload_data_poster
+                poster_status, poster_content, extracted_imdb = upload_data_poster(douban_link, "")
+                if extracted_imdb:
+                    imdb_link = extracted_imdb
+                    self.logger.info(f"通过PT-Gen API提取到IMDb链接: {imdb_link}")
+                    
+                    # 将IMDb链接添加到简介中（放在豆瓣链接下面）
+                    imdb_info = f"◎IMDb链接　[url={imdb_link}]{imdb_link}[/url]"
+                    # 查找完整的豆瓣链接行，在其后添加IMDb链接
+                    douban_pattern = r"◎豆瓣链接　\[url=[^\]]+\][^\[]+\[/url\]"
+                    if re.search(douban_pattern, body):
+                        body = re.sub(douban_pattern, lambda m: m.group(0) + "\n" + imdb_info, body)
+                    else:
+                        if body:
+                            body = f"{body}\n\n{imdb_info}"
+                        else:
+                            body = imdb_info
+                
+                # 如果成功获取到海报，更新poster
+                if poster_status and poster_content:
+                    # 确保images列表不为空
+                    if not images:
+                        images = [poster_content]
+                    else:
+                        images[0] = poster_content
+            
+            # 5. 组装最终的 intro 字典
             intro = {
                 "statement": "\n".join(quotes),
                 "poster": images[0] if images else "",
                 "body": re.sub(r"\n{2,}", "\n", body),
                 "screenshots": "\n".join(images[1:]),
                 "removed_ardtudeclarations": ardtu_declarations,
+                "imdb_link": imdb_link,
+                "douban_link": douban_link,
             }
 
-            # 5. 最后调用验证函数处理 mediainfo_text
+            # 6. 最后调用验证函数处理 mediainfo_text
             mediainfo = upload_data_mediaInfo(
                 mediainfo_text if mediainfo_text else "未找到 Mediainfo 或 BDInfo",
                 self.save_path)
+            
             # --- [核心修改结束] ---
 
             basic_info_td = soup.find("td", string="基本信息")

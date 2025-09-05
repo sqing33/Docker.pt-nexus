@@ -725,14 +725,14 @@ def upload_data_screenshot(source_info, save_path):
 
 def upload_data_poster(douban_link: str, imdb_link: str):
     """
-    通过PT-Gen API获取电影信息的海报。
+    通过PT-Gen API获取电影信息的海报和IMDb链接。
     """
     pt_gen_api_url = 'https://api.iyuu.cn/App.Movie.Ptgen'
 
     resource_url = douban_link or imdb_link
 
     if not resource_url:
-        return False, "未提供豆瓣或IMDb链接。"
+        return False, "未提供豆瓣或IMDb链接。", ""
 
     try:
         response = requests.get(f'{pt_gen_api_url}?url={resource_url}',
@@ -744,19 +744,29 @@ def upload_data_poster(douban_link: str, imdb_link: str):
         format_data = data.get('format') or data.get('data', {}).get(
             'format', '')
 
+        extracted_imdb_link = ""
+        poster = ""
+        
         if format_data:
+            # 提取IMDb链接
+            imdb_match = re.search(r'◎IMDb链接\s*(https?://www\.imdb\.com/title/tt\d+/)', format_data)
+            if imdb_match:
+                extracted_imdb_link = imdb_match.group(1)
+            
+            # 提取海报图片
             img_match = re.search(r'(\[img\].*?\[/img\])', format_data)
             if img_match:
-                return True, img_match.group(1)
+                poster = img_match.group(1)
+                return True, poster, extracted_imdb_link
             else:
-                return False, "PT-Gen返回的简介中未找到图片标签。"
+                return False, "PT-Gen返回的简介中未找到图片标签。", extracted_imdb_link
         else:
-            return False, "PT-Gen接口未返回有效的简介内容。"
+            return False, "PT-Gen接口未返回有效的简介内容。", ""
 
     except Exception as e:
         error_message = f"请求PT-Gen接口时发生错误: {e}"
         print(error_message)
-        return False, error_message
+        return False, error_message, ""
 
 
 # (确保文件顶部有 import bencoder, import json)
