@@ -342,16 +342,45 @@ class DatabaseManager:
                 sites_from_json = json.load(f)
 
             # --- 步骤 1: 插入在数据库中不存在的新站点 (逻辑不变) ---
-            cursor.execute("SELECT site FROM sites")
-            sites_in_db = {row["site"] for row in cursor.fetchall()}
-            sites_to_insert = [
-                tuple(
-                    s.get(k) for k in [
-                        "site", "nickname", "base_url",
-                        "special_tracker_domain", "group", "migration"
-                    ]) for s in sites_from_json
-                if s.get("site") not in sites_in_db
-            ]
+            cursor.execute("SELECT site, nickname FROM sites")
+            sites_in_db = {row["site"]: row["nickname"] for row in cursor.fetchall()}
+            
+            # 处理大小写不一致的情况：如果JSON中的站点小写版本在数据库中存在但大小写不同，则更新数据库中的站点名
+            sites_to_update_case = []
+            sites_to_insert = []
+            
+            for site_data in sites_from_json:
+                json_site = site_data.get("site")
+                json_nickname = site_data.get("nickname")
+                
+                if not json_site:
+                    continue
+                    
+                # 检查是否存在大小写不同的相同站点
+                found_match = False
+                for db_site, db_nickname in sites_in_db.items():
+                    if db_site and json_site and db_site.lower() == json_site.lower():
+                        if db_site != json_site:  # 大小写不同
+                            sites_to_update_case.append((json_site, db_site))
+                        found_match = True
+                        break
+                
+                if not found_match:
+                    sites_to_insert.append(tuple(
+                        site_data.get(k) for k in [
+                            "site", "nickname", "base_url",
+                            "special_tracker_domain", "group", "migration"
+                        ]))
+            
+            # 更新数据库中大小写不一致的站点名
+            if sites_to_update_case:
+                logging.info(f"发现 {len(sites_to_update_case)} 个大小写不一致的站点，正在更新数据库中的站点名...")
+                ph = self.get_placeholder()
+                for new_site, old_site in sites_to_update_case:
+                    cursor.execute(
+                        f"UPDATE sites SET site = {ph} WHERE site = {ph}",
+                        (new_site, old_site)
+                    )
 
             if sites_to_insert:
                 logging.info(

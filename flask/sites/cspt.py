@@ -54,23 +54,59 @@ class CsptUploader:
 
         # 1. 类型映射 (Type)
         type_map = {
-            "电影": "401",
-            "电视剧": "402",
-            "动画": "405",
-            "动漫": "405",
-            "Animations": "405",
-            "MV": "406",
+            "Music": "408",
             "音乐": "408",
-            "综艺": "403",
-            "纪录片": "404",
+            "HQ音乐": "408",
+            "专辑": "408",
+            "音轨": "408",
+            "音频": "408",
+            "Audio": "408",
+            "Sports": "407",
             "体育": "407",
+            "MV": "406",
+            "演唱会": "406",
+            "Music Video": "406",
+            "Documentaries": "404",
+            "记录片": "404",
+            "纪录片": "404",
+            "TV Shows": "403",
+            "综艺": "403",
+            "TV Series": "402",
+            "电视剧": "402",
+            "Movies": "401",
+            "电影": "401",
+            "Driver": "401",
+            "Movie": "401",
+            "Animations": "405",
+            "动漫": "405",
+            "动画": "405",
+            "Anime": "405",
+            "软件": "409",
+            "图书": "409",
+            "学习": "409",
+            "游戏": "409",
+            "音乐会": "409",
+            "资料": "409",
+            "其他": "409",
+            "Misc": "409",
+            "未知": "409",
+            "Unknown": "409",
         }
         source_type = source_params.get("类型") or ""
+        # 优先完全匹配，然后部分匹配，最后使用默认值
         mapped["type"] = "409"  # 默认值: 其他
+        
+        # 精确匹配
         for key, value in type_map.items():
-            if key in source_type:
+            if key.lower() == source_type.lower().strip():
                 mapped["type"] = value
                 break
+        else:
+            # 如果没有精确匹配，尝试部分匹配
+            for key, value in type_map.items():
+                if key.lower() in source_type.lower():
+                    mapped["type"] = value
+                    break
 
         # 2. 媒介映射 (Medium) - 根据站点HTML校对
         # 站点默认值 'Other': 16
@@ -197,7 +233,6 @@ class CsptUploader:
         source_tags = source_params.get("标签") or []
         tag_map = {
             "驻站": 23,
-            "禁转": 1,
             "首发": 2,
             "DIY": 4,
             "国语": 5,

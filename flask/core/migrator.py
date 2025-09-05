@@ -230,6 +230,8 @@ class TorrentMigrator:
             if subtitle_td and subtitle_td.find_next_sibling("td"):
                 subtitle = subtitle_td.find_next_sibling("td").get_text(
                     strip=True)
+                # 剔除以 "| ARDTU" 开始及之后的所有内容
+                subtitle = re.sub(r"\s*\|\s*ARDTU.*", "", subtitle)
             else:
                 subtitle = ""
             descr_container = soup.select_one("div#kdescr")
@@ -268,6 +270,56 @@ class TorrentMigrator:
                 quotes = re.findall(r"\[quote\].*?\[/quote\]", bbcode,
                                     re.DOTALL)
                 images = re.findall(r"\[img\].*?\[/img\]", bbcode)
+
+                # 过滤掉 ARDTU 工具自动发布的声明和免责声明，但保留包含 "By ARDTU" 的组信息
+                filtered_quotes = []
+                ardtu_declarations = []
+
+                for quote in quotes:
+                    # 检查是否为完整的 ARDTU 工具自动发布声明
+                    is_ardtutool_auto_publish = (
+                        "ARDTU工具自动发布" in quote and "有错误请评论或举报" in quote
+                        and any(tag in quote
+                                for tag in ["[size=7]", "[color=Red]"]))
+
+                    # 检查是否为免责声明模板
+                    is_disclaimer = (
+                        "郑重声明：" in quote and "本站提供的所有作品均是用户自行搜集并且上传" in quote
+                        and "禁止任何涉及商业盈利目的使用" in quote
+                        and any(tag in quote
+                                for tag in ["[size=3]", "[color=Red]"]))
+
+                    # 检查是否为财神CSWEB免责声明
+                    is_csweb_disclaimer = (
+                        "财神CSWEB提供的所有资源均是在网上搜集且由用户上传" in quote
+                        and "不可用于任何形式的商业盈利活动" in quote
+                        and "请在下载后24小时内尽快删除" in quote)
+
+                    # 检查是否为 "By ARDTU" 结尾的组信息（需要过滤掉 "By ARDTU" 部分）
+                    is_by_ardtu_group_info = "By ARDTU" in quote and "官组作品" in quote
+
+                    if is_ardtutool_auto_publish or is_disclaimer or is_csweb_disclaimer:
+                        # --- [核心修改] ---
+                        # 将整个 quote 块（去除首尾的 [quote] 标签）作为一个整体添加到声明列表
+                        clean_content = re.sub(r"\[\/?quote\]", "",
+                                               quote).strip()
+                        ardtu_declarations.append(
+                            clean_content)  # 使用 append 添加完整内容
+                    elif is_by_ardtu_group_info:
+                        # 过滤掉 "By ARDTU" 部分，保留官方组内容
+                        filtered_quote = re.sub(r"\s*By ARDTU\s*", "", quote)
+                        filtered_quotes.append(filtered_quote)
+                    elif "ARDTU" in quote:
+                        # --- [核心修改] ---
+                        # 其他包含 ARDTU 的声明也过滤掉，同样作为一个整体
+                        clean_content = re.sub(r"\[\/?quote\]", "",
+                                               quote).strip()
+                        ardtu_declarations.append(
+                            clean_content)  # 使用 append 添加完整内容
+                    else:
+                        filtered_quotes.append(quote)
+
+                quotes = filtered_quotes
                 body = (re.sub(r"\[quote\].*?\[/quote\]|\[img\].*?\[/img\]",
                                "",
                                bbcode,
@@ -304,6 +356,7 @@ class TorrentMigrator:
                 "poster": images[0] if images else "",
                 "body": re.sub(r"\n{2,}", "\n", body),
                 "screenshots": "\n".join(images[1:]),
+                "removed_ardtudeclarations": ardtu_declarations,
             }
 
             # 5. 最后调用验证函数处理 mediainfo_text

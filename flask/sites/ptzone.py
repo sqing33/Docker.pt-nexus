@@ -50,23 +50,60 @@ class PtzoneUploader:
 
         # 1. 类型映射 (Type)
         type_map = {
+            "Movies": "401",
             "电影": "401",
+            "Driver": "401",
+            "Movie": "401",
+            "TV Series": "402",
             "电视剧": "402",
+            "TV Shows": "403",
             "综艺": "403",
+            "Documentaries": "404",
+            "记录片": "404",
             "纪录片": "404",
+            "Animations": "405",
             "动漫": "405",
             "动画": "405",
+            "Anime": "405",
+            "MV": "406",
+            "演唱会": "406",
+            "Music Video": "406",
+            "Music": "406",
             "音乐": "406",
+            "专辑": "406",
+            "音轨": "406",
+            "音频": "406",
+            "Sports": "407",
             "体育": "407",
+            "Software": "410",
             "软件": "410",
+            "Games": "411",
             "游戏": "411",
+            "短剧": "409",
+            "图书": "409",
+            "学习": "409",
+            "音乐会": "409",
+            "资料": "409",
+            "其他": "409",
+            "Misc": "409",
+            "未知": "409",
+            "Unknown": "409",
         }
         source_type = source_params.get("类型") or ""
-        mapped["type"] = "408"  # 默认值: Others(其它)
+        # 优先完全匹配，然后部分匹配，最后使用默认值
+        mapped["type"] = "409"  # 默认值: Others(其它)
+
+        # 精确匹配
         for key, value in type_map.items():
-            if key in source_type:
+            if key.lower() == source_type.lower().strip():
                 mapped["type"] = value
                 break
+        else:
+            # 如果没有精确匹配，尝试部分匹配
+            for key, value in type_map.items():
+                if key.lower() in source_type.lower():
+                    mapped["type"] = value
+                    break
 
         # 2. 媒介映射 (Medium)
         medium_map = {
@@ -168,7 +205,6 @@ class PtzoneUploader:
 
         # 7. 标签 (Tags)
         tag_map = {
-            "禁转": 1,
             "首发": 2,
             "DIY": 4,
             "国语": 5,

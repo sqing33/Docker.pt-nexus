@@ -445,7 +445,7 @@
     "base_url": "pandapt.net",
     "special_tracker_domain": null,
     "group": "AilMWeb,Panda,AilME,AilMTV,AilMUpscale",
-    "migration": 3
+    "migration": 1
   },
   {
     "site": "carpt",
@@ -968,12 +968,12 @@
     "migration": 0
   },
   {
-    "site": "NovaHD",
+    "site": "novahd",
     "nickname": "NovaHD",
     "base_url": "pt.novahd.top",
     "special_tracker_domain": null,
     "group": "NHDWeb",
-    "migration": 0
+    "migration": 2
   },
   {
     "site": "SBPT",

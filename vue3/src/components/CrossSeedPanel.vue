@@ -5,16 +5,11 @@
         查看日志
       </el-button>
       <div class="custom-steps">
-        <div 
-          v-for="(step, index) in steps" 
-          :key="index" 
-          class="custom-step"
-          :class="{ 
-            'active': index === activeStep, 
-            'completed': index < activeStep,
-            'last': index === steps.length - 1
-          }"
-        >
+        <div v-for="(step, index) in steps" :key="index" class="custom-step" :class="{
+          'active': index === activeStep,
+          'completed': index < activeStep,
+          'last': index === steps.length - 1
+        }">
           <div class="step-icon">
             <el-icon v-if="index < activeStep">
               <CircleCheckFilled />
@@ -26,7 +21,7 @@
         </div>
       </div>
     </div>
-    
+
     <div class="panel-content">
       <!-- 步骤 0: 核对种子详情 -->
       <div v-if="activeStep === 0" class="details-container">
@@ -51,7 +46,7 @@
                       </el-form-item>
                     </div>
                   </div>
-                  
+
                   <div class="bottom-info-section">
                     <el-form-item label="副标题">
                       <el-input v-model="torrentData.subtitle" />
@@ -69,29 +64,28 @@
             <div class="poster-statement-container">
               <el-form label-position="top" class="fill-height-form">
                 <div class="poster-statement-split">
-                    <div class="left-panel">
-                      <el-form-item label="声明" class="statement-item">
-                        <el-input type="textarea" v-model="torrentData.intro.statement" :rows="18" />
-                      </el-form-item>
-                      <el-form-item label="海报链接">
-                        <el-input type="textarea" v-model="torrentData.intro.poster" :rows="2" />
-                      </el-form-item>
-                    </div>
-                    <div class="right-panel">
-                      <div class="poster-preview-section">
-                        <div class="preview-header">海报预览</div>
-                        <div class="image-preview-container">
-                          <template v-if="posterImages.length">
-                            <img v-for="(url, index) in posterImages" :key="'poster-' + index" :src="url" alt="海报预览"
-                              class="preview-image"
-                              @error="handleImageError(url, 'poster', index)" />
-                          </template>
-                          <div v-else class="preview-placeholder">暂无海报预览</div>
-                        </div>
+                  <div class="left-panel">
+                    <el-form-item label="声明" class="statement-item">
+                      <el-input type="textarea" v-model="torrentData.intro.statement" :rows="18" />
+                    </el-form-item>
+                    <el-form-item label="海报链接">
+                      <el-input type="textarea" v-model="torrentData.intro.poster" :rows="2" />
+                    </el-form-item>
+                  </div>
+                  <div class="right-panel">
+                    <div class="poster-preview-section">
+                      <div class="preview-header">海报预览</div>
+                      <div class="image-preview-container">
+                        <template v-if="posterImages.length">
+                          <img v-for="(url, index) in posterImages" :key="'poster-' + index" :src="url" alt="海报预览"
+                            class="preview-image" @error="handleImageError(url, 'poster', index)" />
+                        </template>
+                        <div v-else class="preview-placeholder">暂无海报预览</div>
                       </div>
                     </div>
                   </div>
-                </el-form>
+                </div>
+              </el-form>
             </div>
           </el-tab-pane>
 
@@ -110,8 +104,8 @@
                     <el-carousel :interval="5000" height="500px" indicator-position="outside">
                       <el-carousel-item v-for="(url, index) in screenshotImages" :key="'ss-' + index">
                         <div class="carousel-image-wrapper">
-                          <img :src="url" alt="截图预览" class="carousel-image" 
-                               @error="handleImageError(url, 'screenshot', index)" />
+                          <img :src="url" alt="截图预览" class="carousel-image"
+                            @error="handleImageError(url, 'screenshot', index)" />
                         </div>
                       </el-carousel-item>
                     </el-carousel>
@@ -137,6 +131,28 @@
           </el-tab-pane>
           <el-tab-pane label="源站参数" name="params" class="params-pane">
             <pre class="code-block fill-height-pre">{{ JSON.stringify(torrentData.source_params, null, 2) }}</pre>
+          </el-tab-pane>
+          <el-tab-pane label="已过滤声明" name="filtered-declarations" class="filtered-declarations-pane">
+            <div class="filtered-declarations-container">
+              <div class="filtered-declarations-header">
+                <h3>已自动过滤的声明内容</h3>
+                <el-tag type="warning" size="small">共 {{ filteredDeclarationsCount }} 条</el-tag>
+              </div>
+              <div class="filtered-declarations-content">
+                <template v-if="filteredDeclarationsCount > 0">
+                  <div v-for="(declaration, index) in filteredDeclarationsList" :key="index" class="declaration-item">
+                    <div class="declaration-header">
+                      <span class="declaration-number">#{{ index + 1 }}</span>
+                      <el-tag type="danger" size="small">已过滤</el-tag>
+                    </div>
+                    <pre class="declaration-content code-font">{{ declaration }}</pre>
+                  </div>
+                </template>
+                <div v-else class="no-filtered-declarations">
+                  <el-empty description="未检测到需要过滤的 ARDTU 声明内容" />
+                </div>
+              </div>
+            </div>
           </el-tab-pane>
         </el-tabs>
         <div class="button-group">
@@ -242,13 +258,15 @@ const props = defineProps<{
 
 const emit = defineEmits(['complete', 'cancel']);
 
+// ======================= [核心修改点 1] =======================
+// 将 removed_ardtudeclarations 的初始值设为空数组 []
 const getInitialTorrentData = () => ({
   title_components: [] as { key: string, value: string }[],
   original_main_title: '',
   subtitle: '',
   imdb_link: '',
   douban_link: '',
-  intro: { statement: '', poster: '', body: '', screenshots: '' },
+  intro: { statement: '', poster: '', body: '', screenshots: '', removed_ardtudeclarations: [] },
   mediainfo: '',
   source_params: {},
 })
@@ -280,6 +298,18 @@ const logContent = ref('')
 const showLogCard = ref(false)
 const posterImages = computed(() => parseImageUrls(torrentData.value.intro.poster))
 const screenshotImages = computed(() => parseImageUrls(torrentData.value.intro.screenshots))
+
+// ======================= [核心修改点 2] =======================
+// 直接返回数组，不再执行 split 操作
+const filteredDeclarationsList = computed(() => {
+  const removedDeclarations = torrentData.value.intro.removed_ardtudeclarations;
+  // 确保返回的是一个数组
+  if (Array.isArray(removedDeclarations)) {
+    return removedDeclarations;
+  }
+  return [];
+})
+const filteredDeclarationsCount = computed(() => filteredDeclarationsList.value.length)
 
 // const sourceSitesList = computed(() => allSitesStatus.value.filter(s => s.is_source));
 const targetSitesList = computed(() => allSitesStatus.value.filter(s => s.is_target));
@@ -377,8 +407,7 @@ const fetchSitesStatus = async () => {
 
 const fetchTorrentInfo = async () => {
   if (!props.sourceSite || !props.torrent) return;
-  
-  // 从种子站点信息中提取种子ID
+
   const siteDetails = props.torrent.sites[props.sourceSite];
   const idMatch = siteDetails.comment.match(/id=(\d+)/);
   if (!idMatch || !idMatch[1]) {
@@ -509,10 +538,8 @@ const handlePublish = async () => {
       message: `成功发布到 ${successCount} / ${selectedTargetSites.value.length} 个站点。`
     })
 
-    // 更新日志内容
     logContent.value = results.map(r => `--- Log for ${r.siteName} ---\n${r.logs || 'No logs available.'}`).join('\n\n')
 
-    // 自动添加任务到下载器
     logContent.value += '\n\n--- [开始自动添加任务] ---';
     for (const result of results) {
       if (result.success && result.url) {
@@ -521,9 +548,8 @@ const handlePublish = async () => {
     }
     logContent.value += '\n--- [自动添加任务结束] ---';
 
-    // 显示日志
     showLog();
-    
+
     activeStep.value = 2
   } catch (error) {
     ElNotification.closeAll()
@@ -541,17 +567,15 @@ const handlePreviousStep = () => {
 
 const getCleanMessage = (logs: string): string => {
   if (!logs || logs === '发布成功') return '发布成功'
-  
-  // 过滤掉时间戳和INFO级别的日志
+
   const lines = logs.split('\n').filter(line => {
     return line && !line.includes('--- [步骤') && !line.includes('INFO - ---')
   })
-  
-  // 移除时间戳部分
+
   const cleanLines = lines.map(line => {
     return line.replace(/^\d{2}:\d{2}:\d{2} - \w+ - /, '')
   })
-  
+
   return cleanLines.filter(Boolean).pop() || '发布成功'
 }
 
@@ -594,11 +618,10 @@ const showLogs = async () => {
     ElNotification.warning('没有可用的任务日志')
     return
   }
-  
+
   try {
     const response = await axios.get(`/api/migrate/logs/${taskId.value}`)
     if (response.data.success) {
-      // 显示日志对话框
       ElNotification.info({
         title: '转种日志',
         message: response.data.logs,
@@ -634,6 +657,7 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* [所有样式保持不变] */
 .cross-seed-panel {
   width: 100%;
   height: 100%;
@@ -733,8 +757,8 @@ onMounted(() => {
   flex: 0 0 auto;
 }
 
-.custom-step.completed + .custom-step .step-connector,
-.custom-step.active + .custom-step .step-connector {
+.custom-step.completed+.custom-step .step-connector,
+.custom-step.active+.custom-step .step-connector {
   background-color: #67c23a;
 }
 
@@ -748,11 +772,6 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
 }
-
-/* .panel-content.narrow-content {
-  max-width: 800px;
-  margin: 0 auto;
-} */
 
 .details-container {
   flex: 1;
@@ -885,6 +904,81 @@ onMounted(() => {
 .params-pane {
   display: flex;
   flex-direction: column;
+  height: 100%;
+}
+
+.filtered-declarations-pane {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.filtered-declarations-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.filtered-declarations-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding: 0 8px;
+}
+
+.filtered-declarations-header h3 {
+  margin: 0;
+  color: #303133;
+  font-size: 16px;
+}
+
+.filtered-declarations-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 8px;
+}
+
+.declaration-item {
+  border: 1px solid #e4e7ed;
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 12px;
+  background-color: #f8f9fa;
+}
+
+.declaration-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.declaration-number {
+  font-weight: 600;
+  color: #606266;
+}
+
+.declaration-content {
+  margin: 0;
+  padding: 12px;
+  background-color: #fff;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-size: 13px;
+  line-height: 1.4;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.no-filtered-declarations {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   height: 100%;
 }
 
