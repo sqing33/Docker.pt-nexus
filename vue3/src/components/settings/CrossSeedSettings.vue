@@ -2,7 +2,7 @@
   <div class="settings-container">
     <div class="page-header">
       <h2>转种设置</h2>
-      <p class="page-description">配置转种过程中的图床和网络代理设置</p>
+      <p class="page-description">配置转种过程中的图床、网络代理和默认下载器设置</p>
     </div>
     
     <div class="settings-grid">
@@ -103,18 +103,42 @@
         </div>
       </div>
       
-      <!-- 占位卡片1 -->
+      <!-- 默认下载器设置卡片 -->
       <div class="settings-card">
         <div class="card-header">
           <div class="header-content">
             <el-icon class="header-icon"><Document /></el-icon>
-            <h3>更多设置</h3>
+            <h3>默认下载器设置</h3>
           </div>
+          <el-button type="primary" @click="saveCrossSeedSettings" :loading="savingCrossSeed" size="small">
+            保存
+          </el-button>
         </div>
         
-        <div class="card-content placeholder-content">
-          <el-icon class="placeholder-icon"><Document /></el-icon>
-          <p class="placeholder-text">更多设置选项即将推出</p>
+        <div class="card-content">
+          <el-form :model="settingsForm" label-position="top" class="settings-form">
+            <el-form-item label="默认下载器" class="form-item">
+              <el-select v-model="settingsForm.default_downloader" placeholder="请选择默认下载器" clearable>
+                <el-option 
+                  label="使用源种子所在的下载器" 
+                  value=""
+                />
+                <el-option 
+                  v-for="item in downloaderOptions" 
+                  :key="item.id" 
+                  :label="item.name" 
+                  :value="item.id"
+                />
+              </el-select>
+            </el-form-item>
+            
+            <div class="form-spacer"></div>
+            
+            <el-text type="info" size="small" class="proxy-hint">
+              <el-icon size="12"><InfoFilled /></el-icon>
+              转种完成后自动将种子添加到指定的下载器。选择"使用源种子所在的下载器"或不选择任何下载器，则添加到源种子所在的下载器。
+            </el-text>
+          </el-form>
         </div>
       </div>
       
@@ -140,13 +164,14 @@
 import { ref, onMounted, reactive } from 'vue';
 import { ElMessage } from 'element-plus';
 import axios from 'axios';
-import { Picture, Connection, Lock, Link, Warning, Document, Setting } from '@element-plus/icons-vue'
+import { Picture, Connection, Lock, Link, Warning, Document, Setting, InfoFilled } from '@element-plus/icons-vue'
 
 interface CrossSeedSettings {
   image_hoster: string;
   agsv_email?: string;
   agsv_password?: string;
   proxy_url?: string;
+  default_downloader?: string;
 }
 
 const loading = ref(true);
@@ -158,12 +183,16 @@ const settingsForm = reactive<CrossSeedSettings>({
   agsv_email: '',
   agsv_password: '',
   proxy_url: '',
+  default_downloader: '',
 });
 
 const imageHosterOptions = [
   { value: 'pixhost', label: 'Pixhost (免费)' },
   { value: 'agsv', label: '末日图床 (需账号)' },
 ];
+
+// 添加下载器选项状态
+const downloaderOptions = ref<{id: string, name: string}[]>([]);
 
 const fetchSettings = async () => {
   loading.value = true;
@@ -179,6 +208,10 @@ const fetchSettings = async () => {
     if (config.network && config.network.proxy_url && !settingsForm.proxy_url) {
       settingsForm.proxy_url = config.network.proxy_url;
     }
+    
+    // 获取下载器列表
+    const downloaderResponse = await axios.get('/api/downloaders_list');
+    downloaderOptions.value = downloaderResponse.data;
   } catch (error) {
     ElMessage.error('无法加载转种设置。');
   } finally {
@@ -193,11 +226,12 @@ const saveCrossSeedSettings = async () => {
     const crossSeedSettings = {
       image_hoster: settingsForm.image_hoster,
       agsv_email: settingsForm.agsv_email,
-      agsv_password: settingsForm.agsv_password
+      agsv_password: settingsForm.agsv_password,
+      default_downloader: settingsForm.default_downloader
     };
     
     await axios.post('/api/settings/cross_seed', crossSeedSettings);
-    ElMessage.success('图床设置已保存！');
+    ElMessage.success('转种设置已保存！');
   } catch (error: any) {
     const errorMessage = error.response?.data?.error || '保存失败。';
     ElMessage.error(errorMessage);

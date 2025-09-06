@@ -609,6 +609,7 @@ const triggerAddToDownloader = async (result: any) => {
       savePath: props.torrent.save_path,
       downloaderPath: props.torrent.save_path,
       downloaderId: props.torrent.downloaderId,
+      useDefaultDownloader: true, // 添加这个参数以使用默认下载器设置
     });
 
     if (response.data.success) {
