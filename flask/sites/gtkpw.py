@@ -91,7 +91,7 @@ class GtkpwUploader:
         source_type = source_params.get("类型") or ""
         # 优先完全匹配，然后部分匹配，最后使用默认值
         mapped["type"] = "410"  # 默认值: 其他
-        
+
         # 精确匹配
         for key, value in type_map.items():
             if key.lower() == source_type.lower().strip():
@@ -241,8 +241,8 @@ class GtkpwUploader:
             "剧集状态",
             "发布版本",
             "分辨率",
-            "媒介",
             "片源平台",
+            "媒介",
             "视频编码",
             "视频格式",
             "HDR格式",

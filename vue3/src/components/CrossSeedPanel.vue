@@ -206,11 +206,32 @@
               </el-icon>
             </div>
             <h4 class="card-title">{{ result.siteName }}</h4>
-            <p class="card-message" :title="result.message || (result.success ? '发布成功' : '发布失败')">
-              {{ result.message || (result.success ? '发布成功' : '发布失败') }}
-            </p>
-            <div v-if="result.success && result.url" class="card-extra">
-              <a :href="result.url" target="_blank" rel="noopener noreferrer">查看种子</a>
+            
+            <!-- 下载器添加状态 -->
+            <div class="downloader-status" v-if="result.downloaderStatus">
+              <div class="status-icon">
+                <el-icon v-if="result.downloaderStatus.success" color="#67C23A" :size="16">
+                  <CircleCheckFilled />
+                </el-icon>
+                <el-icon v-else color="#F56C6C" :size="16">
+                  <CircleCloseFilled />
+                </el-icon>
+              </div>
+              <span class="status-text" :class="{ 'success': result.downloaderStatus.success, 'error': !result.downloaderStatus.success }">
+                {{ result.downloaderStatus.success ? '添加成功' : '添加失败' }}
+              </span>
+            </div>
+            
+            <!-- 日志按钮 -->
+            <div class="card-extra">
+              <el-button type="primary" size="small" @click="showSiteLog(result.siteName, result.logs)">
+                查看日志
+              </el-button>
+              <a v-if="result.success && result.url" :href="result.url" target="_blank" rel="noopener noreferrer">
+                <el-button type="success" size="small" style="margin-left: 8px;">
+                  查看种子
+                </el-button>
+              </a>
             </div>
           </div>
         </div>
@@ -550,12 +571,24 @@ const handlePublish = async () => {
     logContent.value = results.map(r => `--- Log for ${r.siteName} ---\n${r.logs || 'No logs available.'}`).join('\n\n')
 
     logContent.value += '\n\n--- [开始自动添加任务] ---';
+    // 创建一个映射来存储每个站点的下载器状态
+    const downloaderStatusMap: Record<string, { success: boolean, message: string }> = {};
+    
     for (const result of results) {
       if (result.success && result.url) {
-        await triggerAddToDownloader(result);
+        const downloaderStatus = await triggerAddToDownloader(result);
+        downloaderStatusMap[result.siteName] = downloaderStatus;
+      } else {
+        downloaderStatusMap[result.siteName] = { success: false, message: "发布失败，跳过添加到下载器" };
       }
     }
     logContent.value += '\n--- [自动添加任务结束] ---';
+
+    // 将下载器状态添加到结果中
+    finalResultsList.value = results.map(result => ({
+      ...result,
+      downloaderStatus: downloaderStatusMap[result.siteName]
+    }));
 
     showLog();
 
@@ -598,7 +631,7 @@ const triggerAddToDownloader = async (result: any) => {
     const msg = `[${result.siteName}] 警告: 未能获取到原始保存路径或下载器ID，已跳过自动添加任务。`;
     console.warn(msg);
     logContent.value += `\n${msg}`;
-    return;
+    return { success: false, message: "未能获取到原始保存路径或下载器ID，已跳过自动添加任务。" };
   }
 
   logContent.value += `\n[${result.siteName}] 正在尝试将新种子添加到下载器...`;
@@ -614,12 +647,15 @@ const triggerAddToDownloader = async (result: any) => {
 
     if (response.data.success) {
       logContent.value += `\n[${result.siteName}] 成功: ${response.data.message}`;
+      return { success: true, message: response.data.message };
     } else {
       logContent.value += `\n[${result.siteName}] 失败: ${response.data.message}`;
+      return { success: false, message: response.data.message };
     }
   } catch (error: any) {
     const errorMessage = error.response?.data?.message || error.message;
     logContent.value += `\n[${result.siteName}] 错误: 调用“添加到下载器”API失败: ${errorMessage}`;
+    return { success: false, message: `调用“添加到下载器”API失败: ${errorMessage}` };
   }
 }
 
@@ -658,6 +694,16 @@ const showLog = () => {
 
 const hideLog = () => {
   showLogCard.value = false
+}
+
+// 添加显示特定站点日志的函数
+const showSiteLog = (siteName: string, logs: string) => {
+  const siteLogContent = `--- Log for ${siteName} ---\n${logs || 'No logs available.'}`;
+  ElMessageBox.alert(siteLogContent, `站点日志 - ${siteName}`, {
+    confirmButtonText: '确定',
+    dangerouslyUseHTMLString: false,
+    customClass: 'site-log-dialog'
+  })
 }
 
 onMounted(() => {
@@ -985,11 +1031,54 @@ onMounted(() => {
   overflow-y: auto;
 }
 
-.no-filtered-declarations {
+.downloader-status {
   display: flex;
   align-items: center;
+  margin: 8px 0;
+  padding: 6px 12px;
+  border-radius: 4px;
+  background-color: #f5f7fa;
+  font-size: 14px;
+}
+
+.status-icon {
+  margin-right: 6px;
+  display: flex;
+  align-items: center;
+}
+
+.status-text.success {
+  color: #67C23A;
+  font-weight: 500;
+}
+
+.status-text.error {
+  color: #F56C6C;
+  font-weight: 500;
+}
+
+.card-extra {
+  margin-top: 12px;
+  display: flex;
   justify-content: center;
-  height: 100%;
+  gap: 8px;
+}
+
+.site-log-dialog {
+  width: 600px;
+}
+
+.site-log-dialog .el-message-box__content {
+  padding: 20px;
+}
+
+.site-log-dialog .el-message-box__message {
+  white-space: pre-wrap;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  max-height: 400px;
+  overflow-y: auto;
 }
 
 .code-block {
