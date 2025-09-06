@@ -35,16 +35,6 @@ const onSubmit = async () => {
   if (loading.value) return
   loading.value = true
   try {
-    // 首先查询是否需要强制修改密码
-    try {
-      const st = await axios.get('/api/auth/status')
-      if (st.data?.success && st.data?.must_change_password) {
-        ElMessage.warning('首次登录必须先设置新用户名和密码')
-        router.replace('/first_setup')
-        return
-      }
-    } catch {}
-
     const res = await axios.post('/api/auth/login', form.value)
     if (res.data?.success && res.data?.token) {
       localStorage.setItem('token', res.data.token)

@@ -10,8 +10,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # 配置文件路径
-# DATA_DIR = "data"
-# SITES_DATA_FILE = "sites_data.json"
+# DATA_DIR = "/app/Code/Dockerfile/Docker.pt-nexus/flask/data"
+# SITES_DATA_FILE = "/app/Code/Dockerfile/Docker.pt-nexus/flask/sites_data.json"
 
 DATA_DIR = "/app/data"
 SITES_DATA_FILE = "/app/sites_data.json"

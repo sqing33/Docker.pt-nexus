@@ -1,7 +1,7 @@
 // src/router/index.ts
 import { createRouter, createWebHistory } from 'vue-router'
 
-const whiteList: string[] = ['/login', '/first_setup']
+const whiteList: string[] = ['/login']
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -59,12 +59,7 @@ const router = createRouter({
       name: 'login',
       component: () => import('../views/LoginView.vue'),
     },
-    {
-      path: '/first_setup',
-      name: 'first_setup',
-      component: () => import('../views/FirstSetupView.vue'),
-    },
-  ],
+      ],
 })
 
 // 简单路由守卫：当开启后端认证时，未携带 token 的请求会被 401 拦截
@@ -72,14 +67,7 @@ router.beforeEach(async (to, _from, next) => {
   const token = localStorage.getItem('token')
   if (whiteList.includes(to.path)) return next()
   if (!token) {
-    // 未登录：若需要强制修改则直接去 first_setup，否则去 login
-    try {
-      const st = await fetch('/api/auth/status')
-      if (st.ok) {
-        const js = await st.json()
-        if (js?.must_change_password) return next('/first_setup')
-      }
-    } catch {}
+    // 未登录：直接去 login
     return next({ path: '/login', query: { redirect: to.fullPath } })
   }
   return next()
