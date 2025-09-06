@@ -310,6 +310,19 @@ def migrate_add_to_downloader():
     downloader_path = data.get("downloaderPath")
     downloader_id = data.get("downloaderId")
 
+    # 检查是否使用默认下载器
+    use_default_downloader = data.get("useDefaultDownloader", False)
+    
+    # 如果需要使用默认下载器，从配置中获取
+    if use_default_downloader:
+        config = config_manager.get()
+        default_downloader_id = config.get("cross_seed", {}).get("default_downloader")
+        # 只有当默认下载器ID不为空时才使用默认下载器
+        if default_downloader_id:
+            downloader_id = default_downloader_id
+            logging.info(f"使用默认下载器: {default_downloader_id}")
+        # 如果 default_downloader_id 为空，则使用源种子所在的下载器（保持 downloader_id 不变）
+
     if not all([detail_page_url, save_path, downloader_id]):
         return jsonify({
             "success": False,

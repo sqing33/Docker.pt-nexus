@@ -51,7 +51,9 @@ class ConfigManager:
                 "image_hoster": "pixhost",
                 # [新增] 为 SeedVault (agsvpic) 添加配置字段
                 "seedvault_email": "",
-                "seedvault_password": ""
+                "seedvault_password": "",
+                # [新增] 默认下载器设置
+                "default_downloader": ""
             },
             # --- [新增] 为前端 UI 添加默认设置 ---
             "ui_settings": {
