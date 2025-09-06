@@ -95,7 +95,7 @@ class CsptUploader:
         source_type = source_params.get("类型") or ""
         # 优先完全匹配，然后部分匹配，最后使用默认值
         mapped["type"] = "409"  # 默认值: 其他
-        
+
         # 精确匹配
         for key, value in type_map.items():
             if key.lower() == source_type.lower().strip():
@@ -254,21 +254,21 @@ class CsptUploader:
             "完结": 9,
             "儿童": 24,
         }
-        
+
         # --- [核心修改] 开始: 整合来自多源的标签 ---
         # 1. 从源站参数获取标签
         combined_tags = set(source_params.get("标签") or [])
-        
+
         # 2. 从 MediaInfo 提取标签
         mediainfo_str = self.upload_data.get("mediainfo", "")
         tags_from_mediainfo = extract_tags_from_mediainfo(mediainfo_str)
         for tag in tags_from_mediainfo:
             # 特殊处理：将 'Dolby Vision' 映射到财神的 '杜比' 标签
             if tag == 'Dolby Vision':
-                 combined_tags.add('杜比')
+                combined_tags.add('杜比')
             else:
-                 combined_tags.add(tag)
-        
+                combined_tags.add(tag)
+
         # 3. 从类型中补充 "中字"
         if "中字" in source_type:
             combined_tags.add("中字")
@@ -313,8 +313,8 @@ class CsptUploader:
             "剧集状态",
             "发布版本",
             "分辨率",
-            "媒介",
             "片源平台",
+            "媒介",
             "视频编码",
             "视频格式",
             "HDR格式",

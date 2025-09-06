@@ -253,13 +253,13 @@ class LuckptUploader:
         # --- [核心修改] 开始: 整合来自多源的标签 ---
         # 1. 从源站参数获取标签
         combined_tags = set(source_params.get("标签") or [])
-        
+
         # 2. 从 MediaInfo 提取标签
         mediainfo_str = self.upload_data.get("mediainfo", "")
         tags_from_mediainfo = extract_tags_from_mediainfo(mediainfo_str)
         for tag in tags_from_mediainfo:
             combined_tags.add(tag)
-            
+
         # 3. 将所有收集到的标签字符串映射为站点ID
         for tag_str in combined_tags:
             tag_id = tag_map.get(tag_str)
@@ -316,8 +316,8 @@ class LuckptUploader:
             "剧集状态",
             "发布版本",
             "分辨率",
-            "媒介",
             "片源平台",
+            "媒介",
             "视频编码",
             "视频格式",
             "HDR格式",

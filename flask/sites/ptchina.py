@@ -90,10 +90,10 @@ class PtchinaUploader:
             "未知": "401",
             "Unknown": "401",
         }
-        
+
         source_type = source_params.get("类型") or ""
         mapped["type"] = "401"  # 默认值: 电影
-        
+
         # 精确匹配
         for key, value in type_map.items():
             if key.lower() == source_type.lower().strip():
@@ -293,8 +293,8 @@ class PtchinaUploader:
             "剧集状态",
             "发布版本",
             "分辨率",
-            "媒介",
             "片源平台",
+            "媒介",
             "视频编码",
             "视频格式",
             "HDR格式",
