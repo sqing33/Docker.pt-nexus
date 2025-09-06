@@ -15,7 +15,7 @@ import traceback
 import importlib
 from io import StringIO
 from config import TEMP_DIR
-from utils import ensure_scheme, upload_data_mediaInfo, upload_data_title, extract_tags_from_mediainfo
+from utils import ensure_scheme, upload_data_mediaInfo, upload_data_title, extract_tags_from_mediainfo, extract_origin_from_description
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -453,33 +453,84 @@ class TorrentMigrator:
                 # 更新 quotes 列表，移除已作为 mediainfo 的内容
                 quotes = remaining_quotes
 
-            # 4. 如果没有IMDb链接但有豆瓣链接，尝试通过PT-Gen API获取IMDb链接
-            if not imdb_link and douban_link:
-                from utils import upload_data_poster
-                poster_status, poster_content, extracted_imdb = upload_data_poster(douban_link, "")
-                if extracted_imdb:
-                    imdb_link = extracted_imdb
-                    self.logger.info(f"通过PT-Gen API提取到IMDb链接: {imdb_link}")
-                    
-                    # 将IMDb链接添加到简介中（放在豆瓣链接下面）
-                    imdb_info = f"◎IMDb链接　[url={imdb_link}]{imdb_link}[/url]"
-                    # 查找完整的豆瓣链接行，在其后添加IMDb链接
-                    douban_pattern = r"◎豆瓣链接　\[url=[^\]]+\][^\[]+\[/url\]"
-                    if re.search(douban_pattern, body):
-                        body = re.sub(douban_pattern, lambda m: m.group(0) + "\n" + imdb_info, body)
-                    else:
-                        if body:
-                            body = f"{body}\n\n{imdb_info}"
-                        else:
-                            body = imdb_info
+            # 4. 海报失效处理：优先尝试从豆瓣链接获取，如果没有豆瓣链接则尝试IMDb链接
+            from utils import upload_data_poster
+            
+            # 检查当前海报是否有效（简单检查是否包含图片标签）
+            current_poster_valid = bool(images and images[0] and "[img]" in images[0])
+            
+            if not current_poster_valid:
+                self.logger.info("当前海报失效，尝试从豆瓣或IMDb获取新海报...")
                 
-                # 如果成功获取到海报，更新poster
-                if poster_status and poster_content:
-                    # 确保images列表不为空
-                    if not images:
-                        images = [poster_content]
+                # 优先级1：如果有豆瓣链接，优先从豆瓣获取
+                if douban_link:
+                    self.logger.info(f"尝试从豆瓣链接获取海报: {douban_link}")
+                    poster_status, poster_content, extracted_imdb = upload_data_poster(douban_link, "")
+                    
+                    if poster_status and poster_content:
+                        # 成功获取到海报，更新images列表
+                        if not images:
+                            images = [poster_content]
+                        else:
+                            images[0] = poster_content
+                        self.logger.success("成功从豆瓣获取到海报")
+                        
+                        # 如果同时获取到IMDb链接且当前没有IMDb链接，也更新IMDb链接
+                        if extracted_imdb and not imdb_link:
+                            imdb_link = extracted_imdb
+                            self.logger.info(f"通过豆瓣海报提取到IMDb链接: {imdb_link}")
+                            
+                            # 将IMDb链接添加到简介中
+                            imdb_info = f"◎IMDb链接　[url={imdb_link}]{imdb_link}[/url]"
+                            douban_pattern = r"◎豆瓣链接　\[url=[^\]]+\][^\[]+\[/url\]"
+                            if re.search(douban_pattern, body):
+                                body = re.sub(douban_pattern, lambda m: m.group(0) + "\n" + imdb_info, body)
+                            else:
+                                if body:
+                                    body = f"{body}\n\n{imdb_info}"
+                                else:
+                                    body = imdb_info
                     else:
-                        images[0] = poster_content
+                        self.logger.warning(f"从豆瓣链接获取海报失败: {poster_content}")
+                
+                # 优先级2：如果没有豆瓣链接或豆瓣获取失败，尝试从IMDb链接获取
+                elif imdb_link and (not images or not images[0] or "[img]" not in images[0]):
+                    self.logger.info(f"尝试从IMDb链接获取海报: {imdb_link}")
+                    poster_status, poster_content, _ = upload_data_poster("", imdb_link)
+                    
+                    if poster_status and poster_content:
+                        # 成功获取到海报，更新images列表
+                        if not images:
+                            images = [poster_content]
+                        else:
+                            images[0] = poster_content
+                        self.logger.success("成功从IMDb获取到海报")
+                    else:
+                        self.logger.warning(f"从IMDb链接获取海报失败: {poster_content}")
+                
+                # 如果两种方式都失败了，记录日志
+                if not images or not images[0] or "[img]" not in images[0]:
+                    self.logger.warning("无法从豆瓣或IMDb获取到有效的海报")
+            else:
+                self.logger.info("当前海报有效，无需重新获取")
+                
+                # 即使海报有效，如果有豆瓣链接也可以尝试获取IMDb链接
+                if douban_link and not imdb_link:
+                    poster_status, poster_content, extracted_imdb = upload_data_poster(douban_link, "")
+                    if extracted_imdb:
+                        imdb_link = extracted_imdb
+                        self.logger.info(f"通过豆瓣提取到IMDb链接: {imdb_link}")
+                        
+                        # 将IMDb链接添加到简介中
+                        imdb_info = f"◎IMDb链接　[url={imdb_link}]{imdb_link}[/url]"
+                        douban_pattern = r"◎豆瓣链接　\[url=[^\]]+\][^\[]+\[/url\]"
+                        if re.search(douban_pattern, body):
+                            body = re.sub(douban_pattern, lambda m: m.group(0) + "\n" + imdb_info, body)
+                        else:
+                            if body:
+                                body = f"{body}\n\n{imdb_info}"
+                            else:
+                                body = imdb_info
             
             # 5. 组装最终的 intro 字典
             intro = {
@@ -491,8 +542,12 @@ class TorrentMigrator:
                 "imdb_link": imdb_link,
                 "douban_link": douban_link,
             }
+            
+            # 6. 提取产地信息并添加到source_params中
+            full_description_text = f"{intro.get('statement', '')}\n{intro.get('body', '')}"
+            origin_info = extract_origin_from_description(full_description_text)
 
-            # 6. 最后调用验证函数处理 mediainfo_text
+            # 7. 最后调用验证函数处理 mediainfo_text
             mediainfo = upload_data_mediaInfo(
                 mediainfo_text if mediainfo_text else "未找到 Mediainfo 或 BDInfo",
                 self.save_path)
@@ -534,6 +589,8 @@ class TorrentMigrator:
                 basic_info_dict.get("制作组"),
                 "标签":
                 tags,
+                "产地":
+                origin_info,  # 添加产地信息
             }
 
             # 此处已提前下载种子文件，无需重复下载
@@ -588,6 +645,7 @@ class TorrentMigrator:
                     "音频编码": title_params.get("音频编码", "N/A"),
                     "分辨率": title_params.get("分辨率", "N/A"),
                     "制作组": title_params.get("制作组", "N/A"),
+                    "产地": source_params.get("产地", "N/A"),
                     "标签 (综合)": all_tags,
                     # 注: 不包含Mediainfo和完整简介，保持预览简洁
                 }

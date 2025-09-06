@@ -226,6 +226,8 @@ class LuckptUploader:
             "LUCKWEB": "7",
             "LUCKMUSIC": "8",
             "FRDS": "9",
+            "mUHD-FRDS": "9",
+            "MNHD-FRDS": "9",
             "StarfallWeb": "10",
         }
         release_group_str = str(title_params.get("制作组", "")).upper()
@@ -345,7 +347,12 @@ class LuckptUploader:
         if "N/A" in release_group:
             release_group = "NOGROUP"
 
-        final_title = f"{main_part}-{release_group}"
+        # 对特殊制作组进行处理，不需要添加前缀连字符
+        special_groups = ["MNHD-FRDS", "mUHD-FRDS"]
+        if release_group in special_groups:
+            final_title = f"{main_part} {release_group}"
+        else:
+            final_title = f"{main_part}-{release_group}"
         final_title = re.sub(r"\s{2,}", " ", final_title).strip()
         logger.info(f"拼接完成的主标题: {final_title}")
         return final_title

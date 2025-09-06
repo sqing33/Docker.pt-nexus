@@ -1,14 +1,14 @@
-# sites/ptzone.py
+# sites/13city.py
 
 import os
 import re
 import traceback
 import cloudscraper
 from loguru import logger
-from utils import cookies_raw2jar, ensure_scheme
+from utils import cookies_raw2jar, ensure_scheme, extract_tags_from_mediainfo
 
 
-class PtzoneUploader:
+class City13Uploader:
 
     def __init__(self, site_info: dict, upload_data: dict):
         """
@@ -19,7 +19,7 @@ class PtzoneUploader:
         self.upload_data = upload_data
         self.scraper = cloudscraper.create_scraper()
 
-        base_url = ensure_scheme(self.site_info.get("base_url"))
+        base_url = ensure_scheme(self.site_info.get("base_url") or "")
 
         self.post_url = f"{base_url}/takeupload.php"
         self.timeout = 40
@@ -29,16 +29,20 @@ class PtzoneUploader:
             "referer":
             f"{base_url}/upload.php",
             "user-agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/5.0 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
         }
 
     def _map_parameters(self) -> dict:
         """
-        将参数映射为 PTZone 站点所需的表单值。
+        将参数映射为 13City 站点所需的表单值。
         - 映射表根据站点 upload.php 的 HTML 源码进行最终校对。
         - 字典的顺序很重要，用于优先匹配更精确的关键词。
+        - 任何未匹配到的项目都将自动归类于 'Other'。
         """
+        # 从源站原始参数中获取
         source_params = self.upload_data.get("source_params", {})
+
+        # 从主标题解析结果中获取
         title_components_list = self.upload_data.get("title_components", [])
         title_params = {
             item["key"]: item["value"]
@@ -48,7 +52,7 @@ class PtzoneUploader:
         mapped = {}
         tags = []
 
-        # 1. 类型映射 (Type)
+        # 1. 类型映射 (Type) - 根据站点HTML校对
         type_map = {
             "Movies": "401",
             "电影": "401",
@@ -58,9 +62,6 @@ class PtzoneUploader:
             "电视剧": "402",
             "TV Shows": "403",
             "综艺": "403",
-            "Documentaries": "404",
-            "记录片": "404",
-            "纪录片": "404",
             "Animations": "405",
             "动漫": "405",
             "动画": "405",
@@ -68,20 +69,22 @@ class PtzoneUploader:
             "MV": "406",
             "演唱会": "406",
             "Music Video": "406",
-            "Music": "406",
-            "音乐": "406",
-            "专辑": "406",
-            "音轨": "406",
-            "音频": "406",
-            "Sports": "407",
-            "体育": "407",
-            "Software": "410",
-            "软件": "410",
-            "Games": "411",
-            "游戏": "411",
-            "短剧": "409",
+            "Music": "408",
+            "音乐": "408",
+            "专辑": "408",
+            "音轨": "408",
+            "音频": "408",
+            "Audio": "408",
+            "Documentaries": "413",
+            "记录片": "413",
+            "纪录片": "413",
+            "电子书": "409",
+            "有声读物": "409",
+            "E-book": "409",
+            "软件": "409",
             "图书": "409",
             "学习": "409",
+            "游戏": "409",
             "音乐会": "409",
             "资料": "409",
             "其他": "409",
@@ -90,10 +93,9 @@ class PtzoneUploader:
             "Unknown": "409",
         }
         source_type = source_params.get("类型") or ""
-        # 优先完全匹配，然后部分匹配，最后使用默认值
-        mapped["type"] = "409"  # 默认值: Others(其它)
+        mapped["type"] = "409"  # 默认值: 其他
 
-        # 精确匹配
+        # 优先完全匹配，然后部分匹配
         for key, value in type_map.items():
             if key.lower() == source_type.lower().strip():
                 mapped["type"] = value
@@ -105,127 +107,215 @@ class PtzoneUploader:
                     mapped["type"] = value
                     break
 
-        # 2. 媒介映射 (Medium)
+        # 2. 媒介映射 (Medium) - 根据站点HTML校对
+        # 站点默认值 'Other': 13
         medium_map = {
-            'UHD Blu-ray': '10',
-            'Blu-ray': '1',
-            'BluRay': '1',
-            'HD DVD': '2',
+            'UHD Blu-ray': '11',
+            'BluRay': '11',
+            'Blu-ray': '11',
+            'BD': '11',
             'Remux': '3',
-            'WEB-DL': '4',
-            'WEB': '4',
-            'WEBRip': '4',
-            'HDTV': '5',
-            'DVDR': '6',
             'Encode': '7',
+            'MiniBD': '4',
+            'WEB-DL': '10',
+            'WEBRip': '12',
+            'WEB': '10',
+            'HDTV': '5',
+            'TVrip': '5',
+            'DVD': '6',
             'CD': '8',
             'Track': '9',
         }
         medium_str = title_params.get("媒介", "")
-        for key, value in medium_map.items():
-            if key.lower() in medium_str.lower():
-                mapped["medium_sel[4]"] = value
-                break
+        mediainfo_str = self.upload_data.get("mediainfo", "")
+        is_standard_mediainfo = "General" in mediainfo_str and "Complete name" in mediainfo_str
 
-        # 3. 视频编码映射 (Video Codec)
+        # 站点规则：有mediainfo的Blu-ray/DVD源盘rip都算Encode
+        if is_standard_mediainfo and ('blu' in medium_str.lower()
+                                      or 'dvd' in medium_str.lower()):
+            mapped["medium_sel[4]"] = "7"  # Encode
+        else:
+            mapped["medium_sel[4]"] = "13"  # 默认值: Other
+            for key, value in medium_map.items():
+                if key.lower() in medium_str.lower():
+                    mapped["medium_sel[4]"] = value
+                    break
+
+        # 3. 视频编码映射 (Video Codec) - 根据站点HTML校对
+        # 站点默认值 'Other': 7
         codec_map = {
-            'H.265': '6',
-            'HEVC': '6',
-            'x265': '6',
+            'H.265': '2',
+            'HEVC': '2',
+            'x265': '2',
             'H.264': '1',
             'AVC': '1',
             'x264': '1',
-            'VC-1': '2',
+            'AV1': '6',
+            'VC-1': '4',
             'MPEG-2': '3',
-            'MPEG-4': '4',
+            'Xvid': '6',
         }
         codec_str = title_params.get("视频编码", "")
-        mapped["codec_sel[4]"] = "5"  # 默认值: Other
+        mapped["codec_sel[4]"] = "7"  # 默认值: Other
         for key, value in codec_map.items():
             if key.lower() in codec_str.lower():
                 mapped["codec_sel[4]"] = value
                 break
 
-        # 4. 音频编码映射 (Audio Codec)
+        # 4. 音频编码映射 (Audio Codec) - 根据站点HTML校对
+        # 站点默认值 'Other': 11
         audio_map = {
-            'DTS-HD MA': '10',
-            'DTS-HD': '13',
-            'TrueHD': '14',
-            'DDP': '12',
-            'EAC3': '12',
-            'DD+': '12',
-            'AC3': '11',
-            'DD': '11',
-            'DTS': '3',  #有两个DTS，优先选3
+            'TrueHD Atmos': '9',
+            'DTS:X': '3',
+            'DTS-HD MA': '3',
+            'DDP': '7',
+            'DD+': '7',
+            'E-AC3': '7',
+            'Atmos': '9',
+            'TrueHD': '8',
+            'DTS': '3',
+            'AC3': '7',
+            'DD': '7',
+            'LPCM': '10',
             'FLAC': '1',
+            'AAC': '6',
             'APE': '2',
+            'M4A': '10',
+            'WAV': '10',
             'MP3': '4',
             'OGG': '5',
-            'AAC': '6',
-            'WAV': '15',
         }
         audio_str = title_params.get("音频编码", "")
         audio_str_normalized = audio_str.upper().replace(" ",
                                                          "").replace(".", "")
-        mapped["audiocodec_sel[4]"] = "7"  # 默认值: Other
+        mapped["audiocodec_sel[4]"] = "11"  # 默认值: Other
         for key, value in audio_map.items():
             key_normalized = key.upper().replace(" ", "").replace(".", "")
             if key_normalized in audio_str_normalized:
                 mapped["audiocodec_sel[4]"] = value
                 break
 
-        # 5. 分辨率映射 (Resolution)
+        # 5. 分辨率映射 (Resolution) - 根据站点HTML校对
+        # 站点默认值 'Other': 5
         resolution_map = {
-            '8K': '5',
-            '4320p': '5',
-            '4K': '6',
-            '2160p': '6',
-            '1080p': '1',
-            '1080i': '2',
-            '720p': '3',
-            'SD': '4',
+            '8K': '1',
+            '4320p': '1',
+            '4K': '2',
+            '2160p': '2',
+            'UHD': '2',
+            '2K': '2',
+            '1440p': '2',
+            '1080p': '3',
+            '1080i': '4',
+            '720p': '5',
+            '480p': '5',
+            '480i': '5',
         }
         resolution_str = title_params.get("分辨率", "")
+        mapped["standard_sel[4]"] = "5"  # 默认值: Other
         for key, value in resolution_map.items():
             if key.lower() in resolution_str.lower():
                 mapped["standard_sel[4]"] = value
                 break
 
-        # 6. 制作组映射 (Team)
+        # 6. 区域映射 (Processing) - 根据站点HTML校对
+        # 站点默认值 'Other（其他）': 7
+        processing_map = {
+            "中国": "1",
+            "港澳台": "1",
+            "日本": "2",
+            "泰国": "3",
+            "印度": "4",
+            "韩国": "5",
+            "欧美": "6",
+        }
+        # 优先使用从简介中提取的产地信息，如果没有则使用片源平台
+        origin_str = source_params.get("产地", "")
+        processing_str = origin_str if origin_str else title_params.get(
+            "片源平台", "")
+        mapped["processing_sel[4]"] = "7"  # 默认值: Other（其他）
+        for key, value in processing_map.items():
+            if key.lower() in processing_str.lower():
+                mapped["processing_sel[4]"] = value
+                break
+
+        # 7. 制作组映射 (Team) - 根据站点HTML校对
+        # 站点默认值 'Other': 11
         team_map = {
-            "PTZWeb": "6",
-            "HDS": "1",
-            "CHD": "2",
-            "MYSILU": "3",
-            "WIKI": "4",
+            "13City": "1",
+            "52pt": "3",
+            "HHWEB": "4",
+            "CHDWEB": "5",
+            "FRDS": "6",
+            "mUHD-FRDS": "6",
+            "MNHD-FRDS": "6",
+            "MTeam": "7",
+            "MWeb": "7",
+            "QHstudIo": "8",
+            "rainweb": "10",
+            "SewageWeb": "12",
+            "UBWEB": "13",
+            "ZmWeb": "14",
+            "ADWeb": "15",
+            "UBits": "16",
+            "WiKi": "17",
+            "PTerWEB": "9",
         }
         release_group_str = str(title_params.get("制作组", "")).upper()
         mapped["team_sel[4]"] = team_map.get(release_group_str,
-                                             "5")  # 默认值 Other
+                                             "11")  # 默认值 Other
 
-        # 7. 标签 (Tags)
+        # 8. 标签 (Tags) - 根据站点HTML校对
         tag_map = {
             "首发": 2,
-            "DIY": 4,
+            "完结": 9,
+            "分集": 8,
+            "粤语": 13,
+            "多语": 10,
             "国语": 5,
             "中字": 6,
+            "中英双字": 14,
+            "4K": 12,
+            "1080p": 11,
             "HDR": 7,
-            "分集": 8,
-            "完结": 9,
+            "DIY": 4,
+            "红叶转载": 19,
+            "有声图书": 15,
         }
+
+        # 从源站参数获取标签
         source_tags = source_params.get("标签") or []
-        for tag in source_tags:
-            tag_id = tag_map.get(tag)
+
+        # 从 MediaInfo 提取标签
+        mediainfo_str = self.upload_data.get("mediainfo", "")
+        tags_from_mediainfo = extract_tags_from_mediainfo(mediainfo_str)
+
+        # 合并所有标签
+        combined_tags = set(source_tags)
+        combined_tags.update(tags_from_mediainfo)
+
+        # 从类型中补充 "中字"
+        if "中字" in source_type:
+            combined_tags.add("中字")
+
+        # 从标题组件中智能匹配HDR等信息
+        hdr_str = title_params.get("HDR格式", "").upper()
+        if "VISION" in hdr_str or "DV" in hdr_str:
+            combined_tags.add("HDR")
+        if "HDR10+" in hdr_str:
+            combined_tags.add("HDR")
+        elif "HDR10" in hdr_str:
+            combined_tags.add("HDR")
+        elif "HDR" in hdr_str:
+            combined_tags.add("HDR")
+
+        # 映射标签到站点ID
+        for tag_str in combined_tags:
+            tag_id = tag_map.get(tag_str)
             if tag_id is not None:
                 tags.append(tag_id)
 
-        hdr_str = title_params.get("HDR格式", "").upper()
-        if "HDR" in hdr_str:
-            tags.append(tag_map["HDR"])
-
-        if "中字" in source_type:
-            tags.append(tag_map["中字"])
-
+        # 去重并格式化
         for i, tag_id in enumerate(sorted(list(set(tags)))):
             mapped[f"tags[4][{i}]"] = tag_id
 
@@ -243,14 +333,14 @@ class PtzoneUploader:
 
     def _build_title(self) -> str:
         """
-        根据 title_components 参数，按照 PTZone 的规则拼接主标题。
+        根据 title_components 参数，按照 13City 的规则拼接主标题。
         """
         components_list = self.upload_data.get("title_components", [])
         components = {
             item["key"]: item["value"]
             for item in components_list if item.get("value")
         }
-        logger.info(f"开始为 PTZone 拼接主标题，源参数: {components}")
+        logger.info(f"开始拼接主标题，源参数: {components}")
 
         order = [
             "主标题",
@@ -277,8 +367,11 @@ class PtzoneUploader:
                 else:
                     title_parts.append(str(value))
 
+        # 使用正则表达式替换分隔符，以保护数字中的小数点（例如 5.1）
         raw_main_part = " ".join(filter(None, title_parts))
+        # r'(?<!\d)\.(?!\d)' 的意思是：匹配一个点，但前提是它的前面和后面都不是数字
         main_part = re.sub(r'(?<!\d)\.(?!\d)', ' ', raw_main_part)
+        # 额外清理，将可能产生的多个空格合并为一个
         main_part = re.sub(r'\s+', ' ', main_part).strip()
 
         release_group = components.get("制作组", "NOGROUP")
@@ -299,7 +392,7 @@ class PtzoneUploader:
         """
         执行上传的核心逻辑。
         """
-        logger.info("正在为 PTZone 站点适配上传参数...")
+        logger.info("正在为 13City 站点适配上传参数...")
         try:
             mapped_params = self._map_parameters()
             description = self._build_description()
@@ -310,13 +403,12 @@ class PtzoneUploader:
                 "name": final_main_title,
                 "small_descr": self.upload_data.get("subtitle", ""),
                 "url": self.upload_data.get("imdb_link", "") or "",
-                "pt_gen": self.upload_data.get("douban_link", "") or "",
                 "color": "0",
                 "font": "0",
                 "size": "0",
                 "descr": description,
                 "technical_info": self.upload_data.get("mediainfo", ""),
-                "uplver": "yes",  # 默认匿名上传
+                "uplver": "yes",
                 **mapped_params,
             }
 
@@ -326,7 +418,7 @@ class PtzoneUploader:
                     "file": (
                         os.path.basename(torrent_path),
                         torrent_file,
-                        "application/x-bittorent",
+                        "application/x-bittorrent",
                     ),
                     "nfo": ("", b"", "application/octet-stream"),
                 }
@@ -335,13 +427,14 @@ class PtzoneUploader:
                     logger.error("目标站点 Cookie 为空，无法发布。")
                     return False, "目标站点 Cookie 未配置。"
                 cookie_jar = cookies_raw2jar(cleaned_cookie_str)
-                logger.info("正在向 PTZone 站点提交发布请求...")
-
+                logger.info("正在向 13City 站点提交发布请求...")
+                # 若站点启用代理且配置了全局代理地址，则通过代理请求
                 proxies = None
                 try:
                     from config import config_manager
                     use_proxy = bool(self.site_info.get("proxy"))
                     conf = (config_manager.get() or {})
+                    # 优先使用转种设置中的代理地址，其次兼容旧的 network.proxy_url
                     proxy_url = (conf.get("cross_seed", {})
                                  or {}).get("proxy_url") or (conf.get(
                                      "network", {}) or {}).get("proxy_url")
@@ -363,7 +456,9 @@ class PtzoneUploader:
 
             if "details.php" in response.url and "uploaded=1" in response.url:
                 logger.success("发布成功！已跳转到种子详情页。")
-                return True, f"发布成功！新种子页面: {response.url}"
+                # 将URL转换为小写以避免后续步骤失败
+                corrected_url = response.url.lower()
+                return True, f"发布成功！新种子页面: {corrected_url}"
             elif "login.php" in response.url:
                 logger.error("发布失败，Cookie 已失效，被重定向到登录页。")
                 return False, "发布失败，Cookie 已失效或无效。"
@@ -374,11 +469,11 @@ class PtzoneUploader:
                 return False, f"发布失败，请检查站点返回信息。 URL: {response.url}"
 
         except Exception as e:
-            logger.error(f"发布到 PTZone 站点时发生错误: {e}")
+            logger.error(f"发布到 13City 站点时发生错误: {e}")
             logger.error(traceback.format_exc())
             return False, f"请求异常: {e}"
 
 
 def upload(site_info: dict, upload_payload: dict):
-    uploader = PtzoneUploader(site_info, upload_payload)
+    uploader = City13Uploader(site_info, upload_payload)
     return uploader.execute_upload()

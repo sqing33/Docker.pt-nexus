@@ -766,9 +766,11 @@ def upload_data_screenshot(source_info, save_path):
 def upload_data_poster(douban_link: str, imdb_link: str):
     """
     通过PT-Gen API获取电影信息的海报和IMDb链接。
+    支持从豆瓣链接或IMDb链接获取信息。
     """
     pt_gen_api_url = 'https://api.iyuu.cn/App.Movie.Ptgen'
 
+    # 确定要使用的资源URL（豆瓣优先）
     resource_url = douban_link or imdb_link
 
     if not resource_url:
@@ -1004,3 +1006,38 @@ def extract_tags_from_mediainfo(mediainfo_text: str) -> list:
 
     print(f"从 MediaInfo 中提取到的标签: {list(found_tags)}")
     return list(found_tags)
+
+
+def extract_origin_from_description(description_text: str) -> str:
+    """
+    从简介详情中提取产地信息。
+    
+    :param description_text: 简介详情文本
+    :return: 产地信息，例如 "日本"、"中国" 等
+    """
+    if not description_text:
+        return ""
+    
+    # 使用正则表达式匹配 "◎产　　地　日本" 这种格式
+    # 支持多种变体：◎产地、◎产　　地、◎国　　家等
+    patterns = [
+        r"◎\s*产\s*地\s*(.+?)(?:\s|$)",  # 匹配 ◎产地 日本
+        r"◎\s*国\s*家\s*(.+?)(?:\s|$)",  # 匹配 ◎国家 日本
+        r"◎\s*地\s*区\s*(.+?)(?:\s|$)",  # 匹配 ◎地区 日本
+        r"制片国家/地区[:\s]+(.+?)(?:\s|$)",  # 匹配 制片国家/地区: 日本
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, description_text)
+        if match:
+            origin = match.group(1).strip()
+            # 清理可能的多余字符
+            origin = re.sub(r'[\[\]【】\(\)]', '', origin).strip()
+            # 如果匹配到的是多个地区，只取第一个
+            if '/' in origin:
+                origin = origin.split('/')[0].strip()
+            if ',' in origin:
+                origin = origin.split(',')[0].strip()
+            return origin
+    
+    return ""

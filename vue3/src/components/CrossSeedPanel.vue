@@ -1,9 +1,6 @@
 <template>
   <div class="cross-seed-panel">
     <div class="steps-header">
-      <el-button v-if="activeStep === 2" type="info" size="small" @click="showLog">
-        查看日志
-      </el-button>
       <div class="custom-steps">
         <div v-for="(step, index) in steps" :key="index" class="custom-step" :class="{
           'active': index === activeStep,
@@ -218,17 +215,17 @@
                 </el-icon>
               </div>
               <span class="status-text" :class="{ 'success': result.downloaderStatus.success, 'error': !result.downloaderStatus.success }">
-                {{ result.downloaderStatus.success ? '添加成功' : '添加失败' }}
+                {{ result.downloaderStatus.success ? `成功将种子添加到下载器 '${result.downloaderStatus.downloaderName}'` : '添加失败' }}
               </span>
             </div>
             
-            <!-- 日志按钮 -->
+            <!-- 操作按钮 -->
             <div class="card-extra">
               <el-button type="primary" size="small" @click="showSiteLog(result.siteName, result.logs)">
                 查看日志
               </el-button>
               <a v-if="result.success && result.url" :href="result.url" target="_blank" rel="noopener noreferrer">
-                <el-button type="success" size="small" style="margin-left: 8px;">
+                <el-button type="success" size="small">
                   查看种子
                 </el-button>
               </a>
@@ -326,6 +323,8 @@ const isReparsing = ref(false)
 const reportedFailedScreenshots = ref(false)
 const logContent = ref('')
 const showLogCard = ref(false)
+// 添加下载器列表状态
+const downloaderList = ref<{id: string, name: string}[]>([])
 const posterImages = computed(() => parseImageUrls(torrentData.value.intro.poster))
 const screenshotImages = computed(() => parseImageUrls(torrentData.value.intro.screenshots))
 
@@ -430,8 +429,12 @@ const fetchSitesStatus = async () => {
   try {
     const response = await axios.get('/api/sites/status');
     allSitesStatus.value = response.data;
+    
+    // 同时获取下载器列表
+    const downloaderResponse = await axios.get('/api/downloaders_list');
+    downloaderList.value = downloaderResponse.data;
   } catch (error) {
-    ElNotification.error({ title: '错误', message: '无法从服务器获取站点状态列表' });
+    ElNotification.error({ title: '错误', message: '无法从服务器获取站点状态列表或下载器列表' });
   }
 }
 
@@ -572,14 +575,14 @@ const handlePublish = async () => {
 
     logContent.value += '\n\n--- [开始自动添加任务] ---';
     // 创建一个映射来存储每个站点的下载器状态
-    const downloaderStatusMap: Record<string, { success: boolean, message: string }> = {};
+    const downloaderStatusMap: Record<string, { success: boolean, message: string, downloaderName: string }> = {};
     
     for (const result of results) {
       if (result.success && result.url) {
         const downloaderStatus = await triggerAddToDownloader(result);
         downloaderStatusMap[result.siteName] = downloaderStatus;
       } else {
-        downloaderStatusMap[result.siteName] = { success: false, message: "发布失败，跳过添加到下载器" };
+        downloaderStatusMap[result.siteName] = { success: false, message: "发布失败，跳过添加到下载器", downloaderName: "" };
       }
     }
     logContent.value += '\n--- [自动添加任务结束] ---';
@@ -589,8 +592,6 @@ const handlePublish = async () => {
       ...result,
       downloaderStatus: downloaderStatusMap[result.siteName]
     }));
-
-    showLog();
 
     activeStep.value = 2
   } catch (error) {
@@ -631,7 +632,32 @@ const triggerAddToDownloader = async (result: any) => {
     const msg = `[${result.siteName}] 警告: 未能获取到原始保存路径或下载器ID，已跳过自动添加任务。`;
     console.warn(msg);
     logContent.value += `\n${msg}`;
-    return { success: false, message: "未能获取到原始保存路径或下载器ID，已跳过自动添加任务。" };
+    return { success: false, message: "未能获取到原始保存路径或下载器ID，已跳过自动添加任务。", downloaderName: "" };
+  }
+
+  // 获取默认下载器设置
+  let targetDownloaderId = props.torrent.downloaderId;
+  let targetDownloaderName = "";
+  
+  try {
+    // 获取配置以确定使用的下载器
+    const configResponse = await axios.get('/api/settings');
+    const config = configResponse.data;
+    const defaultDownloaderId = config.cross_seed?.default_downloader;
+    
+    // 如果使用了默认下载器设置
+    if (defaultDownloaderId) {
+      targetDownloaderId = defaultDownloaderId;
+      // 查找下载器名称
+      const downloader = downloaderList.value.find(d => d.id === defaultDownloaderId);
+      targetDownloaderName = downloader ? downloader.name : "未知下载器";
+    } else {
+      // 使用源种子所在的下载器
+      const downloader = downloaderList.value.find(d => d.id === props.torrent.downloaderId);
+      targetDownloaderName = downloader ? downloader.name : "未知下载器";
+    }
+  } catch (error) {
+    targetDownloaderName = "未知下载器";
   }
 
   logContent.value += `\n[${result.siteName}] 正在尝试将新种子添加到下载器...`;
@@ -647,15 +673,15 @@ const triggerAddToDownloader = async (result: any) => {
 
     if (response.data.success) {
       logContent.value += `\n[${result.siteName}] 成功: ${response.data.message}`;
-      return { success: true, message: response.data.message };
+      return { success: true, message: response.data.message, downloaderName: targetDownloaderName };
     } else {
       logContent.value += `\n[${result.siteName}] 失败: ${response.data.message}`;
-      return { success: false, message: response.data.message };
+      return { success: false, message: response.data.message, downloaderName: targetDownloaderName };
     }
   } catch (error: any) {
     const errorMessage = error.response?.data?.message || error.message;
     logContent.value += `\n[${result.siteName}] 错误: 调用“添加到下载器”API失败: ${errorMessage}`;
-    return { success: false, message: `调用“添加到下载器”API失败: ${errorMessage}` };
+    return { success: false, message: `调用“添加到下载器”API失败: ${errorMessage}`, downloaderName: targetDownloaderName };
   }
 }
 
@@ -682,16 +708,6 @@ const showLogs = async () => {
   }
 }
 
-const showLog = () => {
-  if (!logContent.value) {
-    ElMessageBox.alert('当前没有可供显示的日志。', '提示', {
-      confirmButtonText: '确定',
-    })
-    return
-  }
-  showLogCard.value = true
-}
-
 const hideLog = () => {
   showLogCard.value = false
 }
@@ -699,11 +715,9 @@ const hideLog = () => {
 // 添加显示特定站点日志的函数
 const showSiteLog = (siteName: string, logs: string) => {
   const siteLogContent = `--- Log for ${siteName} ---\n${logs || 'No logs available.'}`;
-  ElMessageBox.alert(siteLogContent, `站点日志 - ${siteName}`, {
-    confirmButtonText: '确定',
-    dangerouslyUseHTMLString: false,
-    customClass: 'site-log-dialog'
-  })
+  // 使用与左上角查看日志相同的样式
+  logContent.value = siteLogContent;
+  showLogCard.value = true;
 }
 
 onMounted(() => {

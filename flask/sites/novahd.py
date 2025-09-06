@@ -219,6 +219,24 @@ class NovahdUploader:
         team_map = {
             "NOVAHD": "15",
             "NHD": "15",
+            "HDSKY": "1",
+            "CHD": "2",
+            "MYSILU": "3",
+            "WIKI": "4",
+            "OTHER": "5",
+            "FRDS": "6",
+            "mUHD-FRDS": "6",
+            "MNHD-FRDS": "6",
+            "BEAST": "7",
+            "CMCT": "8",
+            "TLF": "9",
+            "M-TEAM": "10",
+            "MWeb": "10",
+            "BEITAI": "11",
+            "AGSV": "12",
+            "HDHOME": "13",
+            "TTG": "14",
+            "NHDWEB": "15",
         }
         release_group_str = str(title_params.get("制作组", "")).upper()
         mapped["team_sel[4]"] = team_map.get(release_group_str,
@@ -312,7 +330,12 @@ class NovahdUploader:
         if "N/A" in release_group:
             release_group = "NOGROUP"
 
-        final_title = f"{main_part}-{release_group}"
+        # 对特殊制作组进行处理，不需要添加前缀连字符
+        special_groups = ["MNHD-FRDS", "mUHD-FRDS"]
+        if release_group in special_groups:
+            final_title = f"{main_part} {release_group}"
+        else:
+            final_title = f"{main_part}-{release_group}"
         final_title = re.sub(r"\s{2,}", " ", final_title).strip()
         logger.info(f"拼接完成的主标题: {final_title}")
         return final_title

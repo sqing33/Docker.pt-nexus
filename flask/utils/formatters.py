@@ -57,11 +57,35 @@ def _parse_hostname_from_url(url_string):
 
 
 def _extract_url_from_comment(comment):
-    """从注释字符串中提取找到的第一个 URL。"""
-    if not isinstance(comment, str):
-        return comment
-    match = re.search(r"https?://[^\s/$.?#].[^\s]*", comment)
-    return match.group(0) if match else comment
+    """从注释字符串中提取种子链接或种子ID，过滤掉无效内容。
+    
+    处理以下几种情况：
+    1. 内容只有种子链接：https://example.com/torrent/12345
+    2. 链接前后有内容：更多信息请访问 https://example.com/torrent/12345 查看详情
+    3. 只有一串数字（种子ID）：12345
+    4. 特殊格式注释（如HDH）：HDHx122230x1653609725x185205f1（提取第二个x和第三个x之间的ID）
+    5. 无效注释：返回None而不是保留原内容
+    """
+    if not isinstance(comment, str) or not comment.strip():
+        return None
+    
+    # 情况1和2：提取URL链接
+    url_match = re.search(r"https?://[^\s/$.?#].[^\s]*", comment)
+    if url_match:
+        return url_match.group(0)
+    
+    # 情况4：特殊格式注释提取种子ID（如HDH格式：HDHx122230x1653609725x185205f1）
+    hdh_match = re.search(r"[A-Za-z0-9]+x(\d+)x\d+x[0-9a-zA-Z]+", comment)
+    if hdh_match:
+        return hdh_match.group(1)
+    
+    # 情况3：只有一串数字（种子ID）
+    id_match = re.match(r"^\s*(\d+)\s*$", comment)
+    if id_match:
+        return id_match.group(1)
+    
+    # 情况5：无效注释，返回None
+    return None
 
 
 def format_bytes(b):
