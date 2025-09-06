@@ -41,30 +41,29 @@ def _upload_to_pixhost(image_path: str):
         print(f"错误：文件不存在 {image_path}")
         return None
 
-    try:
-        with open(image_path, 'rb') as f:
-            files = {'img': f}
-            print("正在发送上传请求到 Pixhost...")
-            response = requests.post(api_url,
-                                     data=params,
-                                     files=files,
-                                     headers=headers)
+    # 读取代理配置
+    config = config_manager.get()
+    proxy_mode = config.get("cross_seed", {}).get("pixhost_proxy_mode", "retry")
+    global_proxy = config.get("network", {}).get("proxy_url")
 
-            if response.status_code == 200:
-                data = response.json()
-                show_url = data.get('show_url')
-                print(f"上传成功！图片链接: {show_url}")
-                return show_url
-            else:
-                print(f"上传失败，状态码: {response.status_code}")
-                print(f"错误信息: {response.text}")
-                return None
-    except FileNotFoundError:
-        print(f"错误: 找不到指定的图片文件: {image_path}")
-        return None
-    except Exception as e:
-        print(f"上传过程中发生未知错误: {e}")
-        return None
+    # 根据代理模式决定上传策略
+    if proxy_mode == "always" and global_proxy:
+        print(f"代理模式设置为总是使用代理，使用代理: {global_proxy}")
+        return _upload_to_pixhost_with_proxy(image_path, api_url, params, headers, global_proxy)
+    elif proxy_mode == "never":
+        print("代理模式设置为不使用代理，直接上传")
+        return _upload_to_pixhost_direct(image_path, api_url, params, headers)
+    else:
+        # 默认模式：失败时重试或没有配置代理时直接上传
+        print("使用默认上传策略：先尝试直接上传")
+        result = _upload_to_pixhost_direct(image_path, api_url, params, headers)
+        
+        # 如果直接上传失败且配置了代理，则尝试代理上传
+        if not result and global_proxy and proxy_mode == "retry":
+            print("直接上传失败，尝试使用代理上传...")
+            result = _upload_to_pixhost_with_proxy(image_path, api_url, params, headers, global_proxy)
+        
+        return result
 
 
 def _get_agsv_auth_token():
@@ -618,7 +617,7 @@ def upload_data_title(title: str, torrent_filename: str = ""):
     return final_components_list
 
 
-def upload_data_screenshot(source_info, save_path):
+def upload_data_screenshot(source_info, save_path, torrent_name=None):
     """
     使用ffmpeg从指定的视频文件中截取多张图片，根据配置上传到指定图床，
     并返回一个包含所有图片BBCode链接的字符串。
@@ -630,8 +629,16 @@ def upload_data_screenshot(source_info, save_path):
     hoster = config.get("cross_seed", {}).get("image_hoster", "pixhost")
     print(f"已选择图床服务: {hoster}")
     # -----------------------------
+    
+    # 如果提供了种子名称，则构建完整的视频文件路径
+    if torrent_name:
+        full_video_path = os.path.join(save_path, torrent_name)
+        print(f"使用完整视频路径: {full_video_path}")
+    else:
+        full_video_path = save_path
+        print(f"使用原始路径: {full_video_path}")
 
-    target_video_file = _find_target_video_file(save_path)
+    target_video_file = _find_target_video_file(full_video_path)
     if not target_video_file:
         print("错误：在指定路径中未找到视频文件。")
         return ""
@@ -853,9 +860,20 @@ def add_torrent_to_downloader(detail_page_url: str, save_path: str,
         }
         scraper = cloudscraper.create_scraper()
 
-        details_response = scraper.get(detail_page_url,
-                                       headers=common_headers,
-                                       timeout=60)
+        # Add retry logic for network requests
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                details_response = scraper.get(detail_page_url,
+                                               headers=common_headers,
+                                               timeout=60)
+                break  # Success, exit retry loop
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    logging.warning(f"Attempt {attempt + 1} failed to fetch details page: {e}. Retrying...")
+                    time.sleep(2 ** attempt)  # Exponential backoff
+                else:
+                    raise  # Re-raise the exception if all retries failed
         details_response.raise_for_status()
 
         soup = BeautifulSoup(details_response.text, "html.parser")
@@ -871,10 +889,20 @@ def add_torrent_to_downloader(detail_page_url: str, save_path: str,
         full_download_url = f"{ensure_scheme(site_info['base_url'])}/{download_url_part}"
 
         common_headers["Referer"] = detail_page_url
-        torrent_response = scraper.get(full_download_url,
-                                       headers=common_headers,
-                                       timeout=60)
-        torrent_response.raise_for_status()
+        # Add retry logic for torrent download
+        for attempt in range(max_retries):
+            try:
+                torrent_response = scraper.get(full_download_url,
+                                               headers=common_headers,
+                                               timeout=60)
+                torrent_response.raise_for_status()
+                break  # Success, exit retry loop
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    logging.warning(f"Attempt {attempt + 1} failed to download torrent: {e}. Retrying...")
+                    time.sleep(2 ** attempt)  # Exponential backoff
+                else:
+                    raise  # Re-raise the exception if all retries failed
 
         torrent_content = torrent_response.content
         logging.info("已成功下载有效的种子文件内容。")
@@ -1041,3 +1069,92 @@ def extract_origin_from_description(description_text: str) -> str:
             return origin
     
     return ""
+
+
+def _upload_to_pixhost_direct(image_path: str, api_url: str, params: dict, headers: dict):
+    """直接上传图片到Pixhost"""
+    try:
+        with open(image_path, 'rb') as f:
+            files = {'img': f}
+            print("正在发送上传请求到 Pixhost...")
+            response = requests.post(api_url,
+                                     data=params,
+                                     files=files,
+                                     headers=headers)
+
+            if response.status_code == 200:
+                data = response.json()
+                show_url = data.get('show_url')
+                print(f"直接上传成功！图片链接: {show_url}")
+                return show_url
+            else:
+                print(f"直接上传失败，状态码: {response.status_code}")
+                print(f"错误信息: {response.text}")
+                return None
+    except FileNotFoundError:
+        print(f"错误: 找不到指定的图片文件: {image_path}")
+        return None
+    except Exception as e:
+        print(f"直接上传过程中发生未知错误: {e}")
+        return None
+
+
+def _upload_to_pixhost_with_proxy(image_path: str, api_url: str, params: dict, headers: dict, proxy_url: str):
+    """通过代理上传图片到Pixhost"""
+    if not proxy_url:
+        print("未配置全局代理，跳过代理上传")
+        return None
+        
+    print(f"使用代理: {proxy_url}")
+    print(f"目标URL: {api_url}")
+    print(f"上传文件: {image_path}")
+    
+    try:
+        # 使用标准HTTP代理方式
+        with open(image_path, 'rb') as f:
+            files = {'img': f}
+            
+            # 设置代理
+            proxies = {
+                'http': proxy_url,
+                'https': proxy_url
+            }
+            
+            print(f"代理配置: {proxies}")
+            
+            response = requests.post(api_url,
+                                     data=params,
+                                     files=files,
+                                     headers=headers,
+                                     proxies=proxies,
+                                     timeout=30)
+
+            print(f"代理方式响应状态码: {response.status_code}")
+            if response.status_code == 200:
+                try:
+                    data = response.json()
+                    show_url = data.get('show_url')
+                    if show_url:
+                        print(f"代理上传成功！图片链接: {show_url}")
+                        return show_url
+                    else:
+                        print(f"代理上传成功但无法解析返回的URL: {response.text}")
+                        return None
+                except Exception as json_error:
+                    print(f"解析JSON响应时出错: {json_error}")
+                    if response.text and 'pixhost' in response.text:
+                        print(f"代理上传成功！图片链接: {response.text}")
+                        return response.text.strip()
+                    else:
+                        print(f"代理上传成功但返回了无效响应: {response.text}")
+                        return None
+            else:
+                print(f"代理上传失败，状态码: {response.status_code}")
+                if response.text:
+                    print(f"响应内容: {response.text[:500]}...")  # 显示更多内容用于调试
+                return None
+    except Exception as e:
+        print(f"代理上传过程中发生错误: {e}")
+        import traceback
+        traceback.print_exc()
+        return None

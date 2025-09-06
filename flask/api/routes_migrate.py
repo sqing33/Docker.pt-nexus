@@ -282,13 +282,14 @@ def validate_media():
     image_type = data.get("type")
     source_info = data.get("source_info")
     save_path = data.get("savePath")
+    torrent_name = data.get("torrentName")
     imdb_link = source_info.get("imdb_link", '')
     douban_link = source_info.get("douban_link", '')
 
     logging.warning(f"收到失效图片报告 - 类型: {image_type}, "
-                    f"来源信息: {source_info}，视频路径: {save_path}")
+                    f"来源信息: {source_info}，视频路径: {save_path}，种子名称: {torrent_name}")
     if image_type == "screenshot":
-        screenshots = upload_data_screenshot(source_info, save_path)
+        screenshots = upload_data_screenshot(source_info, save_path, torrent_name)
         return jsonify({"success": True, "screenshots": screenshots}), 200
     else:
         status, posters, extracted_imdb_link = upload_data_poster(douban_link, imdb_link)
