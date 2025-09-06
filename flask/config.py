@@ -10,16 +10,18 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # 配置文件路径
-# DATA_DIR = "/app/data"
-DATA_DIR = "data"
+# DATA_DIR = "data"
+# SITES_DATA_FILE = "sites_data.json"
+
+DATA_DIR = "/app/data"
+SITES_DATA_FILE = "/app/sites_data.json"
+
 os.makedirs(DATA_DIR, exist_ok=True)
 
 TEMP_DIR = os.path.join(DATA_DIR, "tmp")
 os.makedirs(TEMP_DIR, exist_ok=True)
 
 CONFIG_FILE = os.path.join(DATA_DIR, "config.json")
-# SITES_DATA_FILE = "/app/sites_data.json"
-SITES_DATA_FILE = "sites_data.json"
 
 
 class ConfigManager:

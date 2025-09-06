@@ -373,7 +373,7 @@
     "base_url": "pt.0ff.cc",
     "special_tracker_domain": null,
     "group": "FFweb",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "redleaves",
@@ -717,7 +717,7 @@
     "base_url": "pt.xingyungept.org",
     "special_tracker_domain": null,
     "group": "StarfallWeb",
-    "migration": 3
+    "migration": 0
   },
   {
     "site": "cspt",
@@ -761,11 +761,11 @@
   },
   {
     "site": "13city",
-    "nickname": "13city",
+    "nickname": "13City",
     "base_url": "13city.org",
     "special_tracker_domain": null,
     "group": "13City",
-    "migration": 0
+    "migration": 2
   },
   {
     "site": "luckpt",
@@ -805,7 +805,7 @@
     "base_url": "cangbao.ge",
     "special_tracker_domain": null,
     "group": "CBGWT",
-    "migration": 1
+    "migration": 0
   },
   {
     "site": "Tokyo",
