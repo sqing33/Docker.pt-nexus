@@ -50,6 +50,7 @@ The application follows a client-server architecture with a clear separation bet
 
 1. **Docker Deployment** (recommended):
    ```bash
+   # Create docker-compose.yml first (see Deployment Details)
    docker-compose up -d
    ```
 
@@ -104,6 +105,30 @@ The application uses a multi-stage Docker build process:
 5. **Port Mapping**:
    - The container exposes port 5272
    - Map to a host port using `-p <host_port>:5272`
+
+6. **Docker Compose Deployment**:
+   Create a `docker-compose.yml` file with the following content:
+   ```yaml
+   services:
+     pt-nexus:
+       image: ghcr.io/sqing33/pt-nexus
+       container_name: pt-nexus
+       ports:
+         - 5272:5272
+       volumes:
+         - ./data:/app/data
+       environment:
+         - TZ=Asia/Shanghai
+         - DB_TYPE=sqlite
+         - JWT_SECRET=please-change-me
+         - AUTH_USERNAME=admin
+         - AUTH_PASSWORD=your_password
+   ```
+   
+   Then run:
+   ```bash
+   docker-compose up -d
+   ```
 
 ### Backend Development Commands
 

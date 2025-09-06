@@ -23,11 +23,15 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 class LoguruHandler(StringIO):
     """一个内存中的日志处理器，用于捕获日志并在 API 响应中返回。"""
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, site_name=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.records = []
+        self.site_name = site_name
 
     def write(self, message):
+        # Add site name prefix to each log message if available
+        if self.site_name:
+            message = f"[{self.site_name}] {message}"
         self.records.append(message.strip())
 
     def get_logs(self):
@@ -65,7 +69,9 @@ class TorrentMigrator:
         session.verify = False
         self.scraper = cloudscraper.create_scraper(sess=session)
 
-        self.log_handler = LoguruHandler()
+        # Create a separate log handler for this instance with site name
+        site_name = self.target_site["nickname"] if self.target_site else self.SOURCE_NAME
+        self.log_handler = LoguruHandler(site_name=site_name)
         self.logger = logger
         self.logger.remove()
         self.logger.add(self.log_handler,

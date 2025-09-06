@@ -391,6 +391,7 @@ const handleImageError = async (url: string, type: 'poster' | 'screenshot', inde
       douban_link: torrentData.value.douban_link,
     },
     savePath: props.torrent.save_path,
+    torrentName: props.torrent.name
   }
 
   try {
@@ -542,64 +543,106 @@ const handlePublish = async () => {
     duration: 0,
   })
 
-  const publishPromises = selectedTargetSites.value.map(siteName => {
-    return axios.post('/api/migrate/publish', {
-      task_id: taskId.value,
-      upload_data: torrentData.value,
-      targetSite: siteName,
-    }).then(response => ({
-      siteName,
-      message: getCleanMessage(response.data.logs || '发布成功'),
-      ...response.data
-    })).catch(error => ({
-      siteName,
-      success: false,
-      logs: error.response?.data?.logs || error.message,
-      url: null,
-      message: `发布到 ${siteName} 时发生网络错误。`
-    }));
-  });
-
-  try {
-    const results = await Promise.all(publishPromises)
-    finalResultsList.value = results
-
-    ElNotification.closeAll()
-    const successCount = results.filter(r => r.success).length
-    ElNotification.success({
-      title: '发布完成',
-      message: `成功发布到 ${successCount} / ${selectedTargetSites.value.length} 个站点。`
-    })
-
-    logContent.value = results.map(r => `--- Log for ${r.siteName} ---\n${r.logs || 'No logs available.'}`).join('\n\n')
-
-    logContent.value += '\n\n--- [开始自动添加任务] ---';
-    // 创建一个映射来存储每个站点的下载器状态
-    const downloaderStatusMap: Record<string, { success: boolean, message: string, downloaderName: string }> = {};
+  const results = []
+  
+  // Sequential processing to prevent network overload
+  for (const siteName of selectedTargetSites.value) {
+    try {
+      const response = await axios.post('/api/migrate/publish', {
+        task_id: taskId.value,
+        upload_data: torrentData.value,
+        targetSite: siteName,
+      })
+      
+      const result = {
+        siteName,
+        message: getCleanMessage(response.data.logs || '发布成功'),
+        ...response.data
+      }
+      
+      results.push(result)
+      
+      // Update UI with intermediate results
+      finalResultsList.value = [...results]
+      
+      // Show individual success notification
+      if (result.success) {
+        ElNotification.success({
+          title: `发布成功 - ${siteName}`,
+          message: '种子已成功发布到该站点'
+        })
+      }
+    } catch (error) {
+      const result = {
+        siteName,
+        success: false,
+        logs: error.response?.data?.logs || error.message,
+        url: null,
+        message: `发布到 ${siteName} 时发生网络错误。`
+      }
+      
+      results.push(result)
+      finalResultsList.value = [...results]
+      
+      // Show individual error notification
+      ElNotification.error({
+        title: `发布失败 - ${siteName}`,
+        message: result.message
+      })
+    }
     
-    for (const result of results) {
-      if (result.success && result.url) {
-        const downloaderStatus = await triggerAddToDownloader(result);
-        downloaderStatusMap[result.siteName] = downloaderStatus;
+    // Add a small delay between requests to reduce server load
+    await new Promise(resolve => setTimeout(resolve, 1000))
+  }
+
+  ElNotification.closeAll()
+  const successCount = results.filter(r => r.success).length
+  ElNotification.success({
+    title: '发布完成',
+    message: `成功发布到 ${successCount} / ${selectedTargetSites.value.length} 个站点。`
+  })
+
+  logContent.value += '\n\n--- [开始自动添加任务] ---';
+  // 创建一个映射来存储每个站点的下载器状态
+  const downloaderStatusMap: Record<string, { success: boolean, message: string, downloaderName: string }> = {};
+  
+  for (const result of results) {
+    if (result.success && result.url) {
+      const downloaderStatus = await triggerAddToDownloader(result);
+      downloaderStatusMap[result.siteName] = downloaderStatus;
+    } else {
+      downloaderStatusMap[result.siteName] = { success: false, message: "发布失败，跳过添加到下载器", downloaderName: "" };
+    }
+  }
+  logContent.value += '\n--- [自动添加任务结束] ---';
+
+  // Create separate logs for each site, including downloader status
+  const siteLogs = results.map(r => {
+    let logEntry = `--- Log for ${r.siteName} ---\n${r.logs || 'No logs available.'}`
+    
+    // Add downloader status to the log if available
+    if (downloaderStatusMap[r.siteName]) {
+      const status = downloaderStatusMap[r.siteName]
+      logEntry += `\n\n--- Downloader Status for ${r.siteName} ---`
+      if (status.success) {
+        logEntry += `\n✅ 成功: ${status.message}`
       } else {
-        downloaderStatusMap[result.siteName] = { success: false, message: "发布失败，跳过添加到下载器", downloaderName: "" };
+        logEntry += `\n❌ 失败: ${status.message}`
       }
     }
-    logContent.value += '\n--- [自动添加任务结束] ---';
+    
+    return logEntry
+  })
+  logContent.value = siteLogs.join('\n\n')
 
-    // 将下载器状态添加到结果中
-    finalResultsList.value = results.map(result => ({
-      ...result,
-      downloaderStatus: downloaderStatusMap[result.siteName]
-    }));
+  // 将下载器状态添加到结果中
+  finalResultsList.value = results.map(result => ({
+    ...result,
+    downloaderStatus: downloaderStatusMap[result.siteName]
+  }));
 
-    activeStep.value = 2
-  } catch (error) {
-    ElNotification.closeAll()
-    handleApiError(error, '发布种子时发生严重错误')
-  } finally {
-    isLoading.value = false
-  }
+  activeStep.value = 2
+  isLoading.value = false
 }
 
 const handlePreviousStep = () => {
