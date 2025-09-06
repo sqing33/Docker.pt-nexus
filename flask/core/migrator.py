@@ -619,7 +619,13 @@ class TorrentMigrator:
                 main_part = re.sub(r'\s+', ' ', main_part).strip()
                 release_group = title_params.get("制作组", "NOGROUP")
                 if "N/A" in release_group: release_group = "NOGROUP"
-                preview_title = f"{main_part}-{release_group}"
+                
+                # 对特殊制作组进行处理，不需要添加前缀连字符
+                special_groups = ["MNHD-FRDS", "mUHD-FRDS"]
+                if release_group in special_groups:
+                    preview_title = f"{main_part} {release_group}"
+                else:
+                    preview_title = f"{main_part}-{release_group}"
 
                 # 3. 组合最终的简介 (逻辑与 sites/*.py 中的 _build_description 一致)
                 full_description = (
