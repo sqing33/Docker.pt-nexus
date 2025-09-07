@@ -162,7 +162,7 @@
         </el-tabs>
         <div class="button-group">
           <el-button @click="$emit('cancel')">取消</el-button>
-          <el-button type="primary" @click="goToSelectSiteStep" :disabled="isLoading">
+          <el-button type="primary" @click="goToSelectSiteStep" :disabled="isLoading || !canProceedToNextStep">
             下一步：选择发布站点
           </el-button>
         </div>
@@ -173,11 +173,17 @@
         <div class="site-selection-container">
           <h3 class="selection-title">请选择要发布的目标站点 (可多选)</h3>
           <div class="site-buttons-group">
-            <el-button v-for="site in targetSitesList" :key="site.name"
-              :type="selectedTargetSites.includes(site.name) ? 'primary' : 'default'"
-              @click="toggleSiteSelection(site.name)" class="site-button">
-              {{ site.name }}
-            </el-button>
+            <el-tooltip v-for="site in allSitesStatus.filter(s => s.is_target)" :key="site.name"
+              :content="isTargetSiteSelectable(site.name) ? `发布到 ${site.name}` : `种子已在 ${site.name} 做种`"
+              placement="top">
+              <el-button 
+                :type="selectedTargetSites.includes(site.name) ? 'primary' : 'default'"
+                :class="{ 'site-button': true, 'is-disabled': !isTargetSiteSelectable(site.name) }"
+                :disabled="!isTargetSiteSelectable(site.name)"
+                @click="toggleSiteSelection(site.name)">
+                {{ site.name }}
+              </el-button>
+            </el-tooltip>
           </div>
         </div>
         <div class="button-group">
@@ -203,6 +209,9 @@
               </el-icon>
             </div>
             <h4 class="card-title">{{ result.siteName }}</h4>
+            <div v-if="result.isExisted" class="existed-tag">
+              <el-tag type="warning" size="small">种子已存在</el-tag>
+            </div>
             
             <!-- 下载器添加状态 -->
             <div class="downloader-status" v-if="result.downloaderStatus">
@@ -341,7 +350,57 @@ const filteredDeclarationsList = computed(() => {
 const filteredDeclarationsCount = computed(() => filteredDeclarationsList.value.length)
 
 // const sourceSitesList = computed(() => allSitesStatus.value.filter(s => s.is_source));
-const targetSitesList = computed(() => allSitesStatus.value.filter(s => s.is_target));
+// 修改targetSitesList计算属性，排除当前种子已存在的站点
+// 检查目标站点是否可选（即种子是否已在该站点做种）
+const isTargetSiteSelectable = (siteName: string): boolean => {
+  // 如果没有torrent数据，所有站点都可选
+  if (!props.torrent || !props.torrent.sites) {
+    return true;
+  }
+  
+  // 检查种子是否已在该站点做种
+  return !props.torrent.sites[siteName];
+};
+
+// 检查是否可以进入下一步
+const canProceedToNextStep = computed(() => {
+  // 如果正在加载，不能进入下一步
+  if (isLoading.value) {
+    return false;
+  }
+  
+  // 如果正在重新解析标题，不能进入下一步
+  if (isReparsing.value) {
+    return false;
+  }
+  
+  // 检查是否有截图正在上传（通过检查是否有失效截图的报告）
+  if (reportedFailedScreenshots.value) {
+    // 如果有失效截图但截图预览区域没有图片，则说明还在上传中
+    if (screenshotImages.value.length === 0 && torrentData.value.intro.screenshots) {
+      return false;
+    }
+  }
+  
+  // 检查是否有无法识别的参数
+  const titleComponents = torrentData.value.title_components;
+  if (titleComponents && Array.isArray(titleComponents)) {
+    // 查找是否有"无法识别"的参数且值不为空
+    const unrecognizedParam = titleComponents.find(
+      param => param.key === "无法识别" && param.value && param.value.trim() !== ""
+    );
+    if (unrecognizedParam) {
+      return false;
+    }
+  }
+  
+  // 检查是否已填写主要信息
+  if (!torrentData.value.original_main_title || torrentData.value.original_main_title.trim() === "") {
+    return false;
+  }
+  
+  return true;
+});
 
 const reparseTitle = async () => {
   if (!torrentData.value.original_main_title) {
@@ -399,6 +458,8 @@ const handleImageError = async (url: string, type: 'poster' | 'screenshot', inde
     if (response.data.success) {
       if (type === 'screenshot' && response.data.screenshots) {
         torrentData.value.intro.screenshots = response.data.screenshots;
+        // 重置截图上传状态
+        reportedFailedScreenshots.value = false;
         ElNotification.success({
           title: '截图已更新',
           message: '已成功生成并加载了新的截图。',
@@ -560,6 +621,11 @@ const handlePublish = async () => {
         ...response.data
       }
       
+      // 检查是否是种子已存在的情况
+      if (response.data.logs && response.data.logs.includes("种子已存在")) {
+        result.isExisted = true;
+      }
+      
       results.push(result)
       
       // Update UI with intermediate results
@@ -653,6 +719,11 @@ const handlePreviousStep = () => {
 
 const getCleanMessage = (logs: string): string => {
   if (!logs || logs === '发布成功') return '发布成功'
+
+  // 检查是否包含种子已存在的信息
+  if (logs.includes("种子已存在")) {
+    return '种子已存在，发布成功'
+  }
 
   const lines = logs.split('\n').filter(line => {
     return line && !line.includes('--- [步骤') && !line.includes('INFO - ---')
@@ -1200,6 +1271,11 @@ onMounted(() => {
   transition: all 0.2s;
 }
 
+.site-button.is-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .results-grid-container {
   flex: 1;
   display: flex;
@@ -1248,6 +1324,10 @@ onMounted(() => {
   font-weight: 600;
   margin: 0 0 8px 0;
   color: #303133;
+}
+
+.existed-tag {
+  margin-bottom: 8px;
 }
 
 .card-message {

@@ -269,6 +269,8 @@ class TorrentMigrator:
                     strip=True)
                 # 剔除以 "| ARDTU" 开始及之后的所有内容
                 subtitle = re.sub(r"\s*\|\s*ARDTU.*", "", subtitle)
+                # 剔除以 "| A | By ATU" 开始及之后的所有内容
+                subtitle = re.sub(r"\s*\|\s*A\s*\|\s*By\s*ATU.*", "", subtitle)
             else:
                 subtitle = ""
             descr_container = soup.select_one("div#kdescr")
@@ -407,6 +409,12 @@ class TorrentMigrator:
                     # 检查是否为 "By ARDTU" 结尾的组信息（需要过滤掉 "By ARDTU" 部分）
                     is_by_ardtu_group_info = "By ARDTU" in quote and "官组作品" in quote
 
+                    # 检查是否为不规范的MediaInfo声明（以.Release.Info开头的块）
+                    is_invalid_mediainfo = ".Release.Info" in quote and "ENCODER" in quote and "RELEASE NAME" in quote
+
+                    # 检查是否包含 "| A | By ATU" 的声明
+                    has_atu_tool_signature = "| A | By ATU" in quote
+
                     if is_ardtutool_auto_publish or is_disclaimer or is_csweb_disclaimer:
                         # --- [核心修改] ---
                         # 将整个 quote 块（去除首尾的 [quote] 标签）作为一个整体添加到声明列表
@@ -425,6 +433,18 @@ class TorrentMigrator:
                                                quote).strip()
                         ardtu_declarations.append(
                             clean_content)  # 使用 append 添加完整内容
+                    elif is_invalid_mediainfo:
+                        # 过滤掉不规范的MediaInfo声明
+                        clean_content = re.sub(r"\[\/?quote\]", "",
+                                               quote).strip()
+                        ardtu_declarations.append(
+                            clean_content)  # 添加到已过滤声明列表
+                    elif has_atu_tool_signature:
+                        # 过滤掉包含 "| A | By ATU" 的声明
+                        clean_content = re.sub(r"\[\/?quote\]", "",
+                                               quote).strip()
+                        ardtu_declarations.append(
+                            clean_content)  # 添加到已过滤声明列表
                     else:
                         filtered_quotes.append(quote)
 

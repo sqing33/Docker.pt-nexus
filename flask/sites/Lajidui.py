@@ -1,4 +1,4 @@
-# sites/xingyunge.py
+# sites/lajidui.py
 
 import os
 import re
@@ -7,8 +7,7 @@ import cloudscraper
 from loguru import logger
 from utils import cookies_raw2jar, ensure_scheme
 
-
-class XingyungeUploader:
+class LajiduiUploader:
 
     def __init__(self, site_info: dict, upload_data: dict):
         """
@@ -29,12 +28,12 @@ class XingyungeUploader:
             "referer":
             f"{base_url}/upload.php",
             "user-agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/5.0 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
         }
 
     def _map_parameters(self) -> dict:
         """
-        将参数映射为 星陨阁 站点所需的表单值。
+        将参数映射为 垃圾堆 站点所需的表单值。
         - 映射表根据站点 upload.php 的 HTML 源码进行最终校对。
         - 字典的顺序很重要，用于优先匹配更精确的关键词。
         - 任何未匹配到的项目都将自动归类于 'Other'。
@@ -66,23 +65,32 @@ class XingyungeUploader:
             "Animations": "405",
             "动漫": "405",
             "动画": "405",
+            "Music Videos": "406",
             "MV": "406",
             "演唱会": "406",
             "Sports": "407",
             "体育": "407",
-            "Music": "408",
+            "Audio": "408",
             "音乐": "408",
             "专辑": "408",
             "音轨": "408",
             "音频": "408",
-            "短剧": "410",
-            "软件": "410",
-            "图书": "410",
-            "学习": "410",
-            "游戏": "410",
-            "音乐会": "410",
-            "资料": "410",
+            "Misc": "409",
             "其他": "409",
+            "Cartoon": "410",
+            "少儿动画": "410",
+            "Ebook": "411",
+            "电子书": "411",
+            "ShortDrama": "412",
+            "短剧": "412",
+            "Game": "413",
+            "游戏": "413",
+            "APP": "414",
+            "软件": "414",
+            "Education": "415",
+            "教育视频": "415",
+            "Audiobook": "416",
+            "有声书": "416",
         }
         source_type = source_params.get("类型") or ""
         mapped["type"] = "409"  # 默认值: 其他
@@ -92,21 +100,18 @@ class XingyungeUploader:
                 break
 
         # 2. 媒介映射 (Medium) - 根据站点HTML校对
-        # 站点默认值 'Other': 10
+        # 站点默认值 'Other': 11
         medium_map = {
-            'UHD Blu-ray': '2',
-            'Blu-ray': '1',
-            'BD': '1',
-            'Remux': '3',
-            'Encode': '7',
-            'WEB-DL': '4',
-            'WEBRip': '7',
-            'WEB': '4',
-            'HDTV': '5',
-            'TVrip': '5',
-            'DVD': '6',
-            'CD': '8',
+            'WEB-DL': '10',
             'Track': '9',
+            'CD': '8',
+            'DVDR': '6',
+            'HDTV': '5',
+            'MiniBD': '4',
+            'Encode': '7',
+            'Remux': '3',
+            'HD DVD': '2',
+            'Blu-ray': '1',
         }
         medium_str = title_params.get("媒介", "")
         mediainfo_str = self.upload_data.get("mediainfo", "")
@@ -117,143 +122,187 @@ class XingyungeUploader:
                                       or 'dvd' in medium_str.lower()):
             mapped["medium_sel[4]"] = "7"  # Encode
         else:
-            mapped["medium_sel[4]"] = "10"  # 默认值: Other
+            mapped["medium_sel[4]"] = "11"  # 默认值: Other
             for key, value in medium_map.items():
                 if key.lower() in medium_str.lower():
                     mapped["medium_sel[4]"] = value
                     break
 
-        # 3. 视频编码映射 (Video Codec) - 根据站点HTML校对
-        # 站点默认值 'Other': 6
+        # 3. 格式映射 (Processing) - 根据站点HTML校对
+        # 站点默认值 'Other': 17
+        processing_map = {
+            'MKV': '10',
+            'MP4': '11',
+            'EPUB': '1',
+            'PDF': '2',
+            'TXT': '3',
+            'DOCX': '4',
+            'PPTX': '5',
+            'XLSX': '6',
+            'WPS': '7',
+            'AZW3': '8',
+            'MOBI': '9',
+            'RAR': '12',
+            'ZIP': '13',
+            '7z': '14',
+            'ISO': '16',
+        }
+        processing_str = title_params.get("视频格式", "")
+        mapped["processing_sel[4]"] = "10"  # 默认值: MKV
+        for key, value in processing_map.items():
+            if key.lower() in processing_str.lower():
+                mapped["processing_sel[4]"] = value
+                break
+
+        # 4. 视频编码映射 (Video Codec) - 根据站点HTML校对
+        # 站点默认值 'Other': 5
         codec_map = {
-            'H.265': '2',
-            'HEVC': '2',
-            'x265': '2',
+            'AV1': '6',
+            'H.265': '7',
+            'x265': '7',
+            'HEVC': '7',
             'H.264': '1',
-            'AVC': '1',
             'x264': '1',
-            'AV1': '5',
-            'VC-1': '3',
+            'AVC': '1',
+            'VC-1': '2',
+            'Xvid': '3',
             'MPEG-2': '4',
         }
         codec_str = title_params.get("视频编码", "")
-        mapped["codec_sel[4]"] = "6"  # 默认值: Other
+        mapped["codec_sel[4]"] = "5"  # 默认值: Other
         for key, value in codec_map.items():
             if key.lower() in codec_str.lower():
                 mapped["codec_sel[4]"] = value
                 break
 
-        # 4. 音频编码映射 (Audio Codec) - 根据站点HTML校对
-        # 站点默认值 'Other': 16
+        # 5. 分辨率映射 (Resolution) - 根据站点HTML校对
+        # 站点默认值 'Other': 8
+        resolution_map = {
+            '8k': '7',
+            '4k': '6',
+            '2k': '5',
+            '1080p': '1',
+            '1080i': '2',
+            '720p': '3',
+            'SD': '4',
+        }
+        resolution_str = title_params.get("分辨率", "")
+        mapped["standard_sel[4]"] = "8"  # 默认值: Other
+        for key, value in resolution_map.items():
+            if key.lower() in resolution_str.lower():
+                mapped["standard_sel[4]"] = value
+                break
+
+        # 6. 音频编码映射 (Audio Codec) - 根据站点HTML校对
+        # 站点默认值 'Other': 7
         audio_map = {
-            'TrueHD Atmos': '12',
-            'DTS:X': '7',
-            'DTS-HD MA': '6',
-            'DDP': '11',
-            'DD+': '11',
-            'E-AC3': '11',
-            'Atmos': '12',
-            'TrueHD': '8',
-            'DTS': '5',
-            'AC3': '10',
-            'DD': '10',
-            'LPCM': '9',
             'FLAC': '1',
-            'AAC': '14',
-            'ALAC': '15',
-            'APE': '13',
-            'M4A': '4',
-            'WAV': '3',
-            'MP3': '2',
-            'OPUS': '17',
+            'APE': '2',
+            'DTS': '3',
+            'MP3': '4',
+            'OGG': '5',
+            'AAC': '6',
+            'WAV': '8',
+            'DTS-HD': '9',
+            'TrueHD': '10',
+            'LPCM': '11',
+            'E-AC-3': '12',
+            'DDP': '12',
+            'AC-3': '13',
+            'DD': '13',
         }
         audio_str = title_params.get("音频编码", "")
         audio_str_normalized = audio_str.upper().replace(" ",
                                                          "").replace(".", "")
-        mapped["audiocodec_sel[4]"] = "16"  # 默认值: Other
+        mapped["audiocodec_sel[4]"] = "7"  # 默认值: Other
         for key, value in audio_map.items():
             key_normalized = key.upper().replace(" ", "").replace(".", "")
             if key_normalized in audio_str_normalized:
                 mapped["audiocodec_sel[4]"] = value
                 break
 
-        # 5. 分辨率映射 (Resolution) - 根据站点HTML校对
+        # 7. 地区映射 (Source) - 根据站点HTML校对
         # 站点默认值 'Other': 6
-        resolution_map = {
-            '8K': '5',
-            '4320p': '5',
-            '4K': '4',
-            '2160p': '4',
-            'UHD': '4',
-            '1080p': '3',
-            '1080i': '3',
-            '720p': '2',
-            '480p': '1',
-            '480i': '1',
+        source_map = {
+            '大陆': '7',
+            '台湾': '2',
+            '香港': '8',
+            '日本': '10',
+            '韩国': '11',
+            '欧美': '1',
+            '印度': '3',
         }
-        resolution_str = title_params.get("分辨率", "")
-        mapped["standard_sel[4]"] = "6"  # 默认值: Other
-        for key, value in resolution_map.items():
-            if key.lower() in resolution_str.lower():
-                mapped["standard_sel[4]"] = value
+        # 优先使用从简介中提取的产地信息，如果没有则使用片源平台
+        origin_str = source_params.get("产地", "")
+        source_str = origin_str if origin_str else title_params.get(
+            "片源平台", "")
+        mapped["source_sel[4]"] = "6"  # 默认值: Other
+        for key, value in source_map.items():
+            if key.lower() in source_str.lower():
+                mapped["source_sel[4]"] = value
                 break
 
-        # 6. 制作组映射 (Team) - 根据站点HTML校对
+        # 8. 制作组映射 (Team) - 根据站点HTML校对
         # 站点默认值 'Other': 5
         team_map = {
+            "Ourbits": "12",
+            "GodDramas": "22",
+            "BeiTai": "21",
+            "BMDru": "20",
+            "LHD": "19",
+            "beAst": "18",
+            "CatEDU": "17",
+            "Pter": "16",
+            "AGSVWEB": "15",
+            "HDHome": "14",
+            "QHstudIo": "13",
+            "HDSky": "1",
+            "UBits": "11",
+            "TJUPT": "10",
+            "FRDS": "9",
+            "CMCT": "8",
+            "ADE": "7",
+            "HHWEB": "6",
             "WiKi": "4",
-            "MySiLU": "3",
-            "HDS": "1",
+            "原创": "3",
             "CHD": "2",
-            "rainweb": "7",
-            "rain": "6",
-            "StarfallWeb": "8",
-            "AGSVWEB": "9",
-            "Starfall": "10",
         }
         release_group_str = str(title_params.get("制作组", "")).upper()
         mapped["team_sel[4]"] = team_map.get(release_group_str,
                                              "5")  # 默认值 Other
 
-        # 7. 标签 (Tags) - 根据站点HTML校对
+        # 9. 标签 (Tags) - 根据站点HTML校对
         tag_map = {
-            "驻站": 23,
-            "国语": 5,
-            "中字": 6,
-            "补帧": 20,
-            "超分": 19,
-            "特效": 18,
-            "大包": 17,
-            "应求": 16,
-            "英字": 15,
-            "韩剧": 14,
-            "美剧": 13,
-            "粤语": 12,
-            "特效字幕": 9,
-            "杜比视界": 8,
-            "DV": 8,
+            "已刮削": 8,
+            "禁转": 1,
             "首发": 2,
             "DIY": 4,
+            "国语": 5,
+            "中字": 6,
             "HDR": 7,
-            "原生": 24,
-            "完结": 11,
-            "分集": 10,
+            "单集": 12,
+            "粤语": 11,
+            "杜比": 10,
+            "完结": 9,
         }
+        
         # 从源站标签中匹配
         source_tags = source_params.get("标签") or []
         for tag in source_tags:
             tag_id = tag_map.get(tag)
             if tag_id is not None:
                 tags.append(tag_id)
+        
+        # 如果源标签有AVOR则自动添加禁转标签
+        if "AVOR" in source_tags:
+            tags.append(tag_map["禁转"])
 
         # 从标题组件中智能匹配HDR等信息
         hdr_str = title_params.get("HDR格式", "").upper()
-        if "VISION" in hdr_str or "DV" in hdr_str:
-            tags.append(tag_map["杜比视界"])
-        elif "HDR" in hdr_str:
+        if "HDR" in hdr_str:
             tags.append(tag_map["HDR"])
 
-        # 同时检查类型中是否包含“中字”信息
+        # 同时检查类型中是否包含"中字"信息
         if "中字" in source_type:
             tags.append(tag_map["中字"])
 
@@ -275,7 +324,7 @@ class XingyungeUploader:
 
     def _build_title(self) -> str:
         """
-        根据 title_components 参数，按照 星陨阁 的规则拼接主标题。
+        根据 title_components 参数，按照 垃圾堆 的规则拼接主标题。
         """
         components_list = self.upload_data.get("title_components", [])
         components = {
@@ -334,7 +383,7 @@ class XingyungeUploader:
         """
         执行上传的核心逻辑。
         """
-        logger.info("正在为 星陨阁 站点适配上传参数...")
+        logger.info("正在为 垃圾堆 站点适配上传参数...")
         try:
             mapped_params = self._map_parameters()
             description = self._build_description()
@@ -369,7 +418,7 @@ class XingyungeUploader:
                     logger.error("目标站点 Cookie 为空，无法发布。")
                     return False, "目标站点 Cookie 未配置。"
                 cookie_jar = cookies_raw2jar(cleaned_cookie_str)
-                logger.info("正在向 星陨阁 站点提交发布请求...")
+                logger.info("正在向 垃圾堆 站点提交发布请求...")
                 # 若站点启用代理且配置了全局代理地址，则通过代理请求
                 proxies = None
                 try:
@@ -416,11 +465,11 @@ class XingyungeUploader:
                 return False, f"发布失败，请检查站点返回信息。 URL: {response.url}"
 
         except Exception as e:
-            logger.error(f"发布到 星陨阁 站点时发生错误: {e}")
+            logger.error(f"发布到 垃圾堆 站点时发生错误: {e}")
             logger.error(traceback.format_exc())
             return False, f"请求异常: {e}"
 
 
 def upload(site_info: dict, upload_payload: dict):
-    uploader = XingyungeUploader(site_info, upload_payload)
+    uploader = LajiduiUploader(site_info, upload_payload)
     return uploader.execute_upload()
