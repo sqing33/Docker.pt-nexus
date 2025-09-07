@@ -34,6 +34,64 @@
         </div>
       </el-col>
     </el-row>
+    
+    <!-- 下载器信息展示 -->
+    <el-row :gutter="24" style="margin-top: 24px;">
+      <el-col :span="24">
+        <h3 class="downloader-title">下载器状态</h3>
+        <div class="downloader-grid">
+          <el-card 
+            v-for="downloader in downloaderInfo" 
+            :key="downloader.name" 
+            class="downloader-card"
+            :class="{ 'disabled': !downloader.enabled }"
+          >
+            <div class="downloader-header">
+              <div class="downloader-name">
+                <el-tag :type="downloader.enabled ? 'success' : 'info'" effect="dark" size="small">
+                  {{ downloader.type === 'qbittorrent' ? 'qB' : 'TR' }}
+                </el-tag>
+                {{ downloader.name }}
+              </div>
+              <el-tag :type="downloader.status === '已连接' ? 'success' : 'danger'" size="small">
+                {{ downloader.status }}
+              </el-tag>
+            </div>
+            
+            <div class="downloader-details" v-if="downloader.enabled">
+              <div class="detail-row">
+                <span class="detail-label">版本:</span>
+                <span class="detail-value">{{ downloader.details?.版本 || 'N/A' }}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">今日上传:</span>
+                <span class="detail-value">{{ downloader.details?.['今日上传量'] || '0 B' }}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">今日下载:</span>
+                <span class="detail-value">{{ downloader.details?.['今日下载量'] || '0 B' }}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">累计上传:</span>
+                <span class="detail-value">{{ downloader.details?.['累计上传量'] || '0 B' }}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">累计下载:</span>
+                <span class="detail-value">{{ downloader.details?.['累计下载量'] || '0 B' }}</span>
+              </div>
+            </div>
+            
+            <div class="downloader-disabled" v-else>
+              下载器已禁用
+            </div>
+          </el-card>
+          
+          <div v-if="!downloaderInfo.length" class="empty-downloader-placeholder">
+            暂无下载器配置
+          </div>
+        </div>
+      </el-col>
+    </el-row>
   </div>
 </template>
 
@@ -50,7 +108,18 @@ interface SiteStatus {
   is_target: boolean;
 }
 
+interface DownloaderInfo {
+  name: string;
+  type: string;
+  enabled: boolean;
+  status: string;
+  details: {
+    [key: string]: string;
+  } | null;
+}
+
 const allSitesStatus = ref<SiteStatus[]>([])
+const downloaderInfo = ref<DownloaderInfo[]>([])
 
 const sourceSitesList = computed(() => allSitesStatus.value.filter(s => s.is_source));
 const targetSitesList = computed(() => allSitesStatus.value.filter(s => s.is_target));
@@ -64,8 +133,24 @@ const fetchSitesStatus = async () => {
   }
 }
 
+const fetchDownloaderInfo = async () => {
+  try {
+    const response = await axios.get('/api/downloader_info');
+    downloaderInfo.value = response.data;
+  } catch (error) {
+    console.error('获取下载器信息失败:', error);
+    ElNotification.error({ title: '错误', message: '无法从服务器获取下载器信息' });
+  }
+}
+
 onMounted(() => {
   fetchSitesStatus();
+  fetchDownloaderInfo();
+  
+  // 每30秒自动刷新一次下载器信息
+  setInterval(() => {
+    fetchDownloaderInfo();
+  }, 30000);
 });
 </script>
 
@@ -112,5 +197,87 @@ onMounted(() => {
   width: 100%;
   text-align: center;
   color: #909399;
+}
+
+/* 下载器信息样式 */
+.downloader-title {
+  text-align: center;
+  color: #303133;
+  font-weight: 500;
+  margin: 0 0 16px;
+}
+
+.downloader-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+.downloader-card {
+  border: 1px solid #dcdfe6;
+  border-radius: 8px;
+  transition: all 0.3s;
+}
+
+.downloader-card:hover {
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+}
+
+.downloader-card.disabled {
+  opacity: 0.6;
+}
+
+.downloader-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.downloader-name {
+  font-size: 16px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.downloader-details {
+  padding: 8px 0;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.detail-row:last-child {
+  margin-bottom: 0;
+}
+
+.detail-label {
+  color: #606266;
+}
+
+.detail-value {
+  color: #303133;
+  font-weight: 500;
+}
+
+.downloader-disabled {
+  text-align: center;
+  color: #909399;
+  padding: 20px 0;
+  font-size: 14px;
+}
+
+.empty-downloader-placeholder {
+  width: 100%;
+  text-align: center;
+  color: #909399;
+  padding: 40px 0;
+  font-size: 14px;
 }
 </style>

@@ -421,17 +421,29 @@ def get_downloader_info_api():
     try:
         conn = db_manager._get_connection()
         cursor = db_manager._get_cursor(conn)
+        
+        # 获取累计上传和下载量
         cursor.execute(
             "SELECT downloader_id, SUM(downloaded) as total_dl, SUM(uploaded) as total_ul FROM traffic_stats GROUP BY downloader_id"
         )
-        # [修复] 将 sqlite3.Row 对象转换为标准的 dict
         totals = {r["downloader_id"]: dict(r) for r in cursor.fetchall()}
-        today_query = f"SELECT downloader_id, SUM(downloaded) as today_dl, SUM(uploaded) as today_ul FROM traffic_stats WHERE stat_datetime >= {db_manager.get_placeholder()} GROUP BY downloader_id"
-        from datetime import datetime
-
-        cursor.execute(today_query,
-                       (datetime.now().strftime("%Y-%m-%d 00:00:00"), ))
-        # [修复] 将 sqlite3.Row 对象转换为标准的 dict
+        
+        # 获取今日上传和下载量
+        from datetime import datetime, timedelta
+        # 使用更可靠的日期查询方式
+        if db_manager.db_type == "mysql":
+            today_query = """SELECT downloader_id, SUM(downloaded) as today_dl, SUM(uploaded) as today_ul 
+                            FROM traffic_stats 
+                            WHERE DATE(stat_datetime) = CURDATE() 
+                            GROUP BY downloader_id"""
+            cursor.execute(today_query)
+        else:  # SQLite
+            today_query = """SELECT downloader_id, SUM(downloaded) as today_dl, SUM(uploaded) as today_ul 
+                            FROM traffic_stats 
+                            WHERE DATE(stat_datetime) = DATE('now') 
+                            GROUP BY downloader_id"""
+            cursor.execute(today_query)
+            
         today_stats = {r["downloader_id"]: dict(r) for r in cursor.fetchall()}
     except Exception as e:
         logging.error(f"获取下载器统计信息时数据库出错: {e}", exc_info=True)
@@ -449,13 +461,27 @@ def get_downloader_info_api():
             continue
         client_config = next(
             (item for item in cfg_downloaders if item["id"] == d_id), None)
+        
+        # 确保从数据库获取的值是数字类型
+        today_dl = today_stats.get(d_id, {}).get("today_dl", 0)
+        today_ul = today_stats.get(d_id, {}).get("today_ul", 0)
+        total_dl = totals.get(d_id, {}).get("total_dl", 0)
+        total_ul = totals.get(d_id, {}).get("total_ul", 0)
+        
+        # 转换为整数（处理可能的字符串类型）
+        try:
+            today_dl = int(float(today_dl))
+            today_ul = int(float(today_ul))
+            total_dl = int(float(total_dl))
+            total_ul = int(float(total_ul))
+        except (ValueError, TypeError):
+            today_dl = today_ul = total_dl = total_ul = 0
+            
         d_info["details"] = {
-            "今日下载量":
-            format_bytes(today_stats.get(d_id, {}).get("today_dl", 0)),
-            "今日上传量":
-            format_bytes(today_stats.get(d_id, {}).get("today_ul", 0)),
-            "累计下载量": format_bytes(totals.get(d_id, {}).get("total_dl", 0)),
-            "累计上传量": format_bytes(totals.get(d_id, {}).get("total_ul", 0)),
+            "今日下载量": format_bytes(today_dl),
+            "今日上传量": format_bytes(today_ul),
+            "累计下载量": format_bytes(total_dl),
+            "累计上传量": format_bytes(total_ul),
         }
         try:
             if d_info["type"] == "qbittorrent":
