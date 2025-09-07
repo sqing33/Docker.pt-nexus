@@ -412,7 +412,18 @@ class NovahdUploader:
                 # 修复服务器返回的错误URL：将tracker.novahd.top替换为pt.novahd.top
                 corrected_url = response.url.replace("tracker.novahd.top",
                                                      "pt.novahd.top")
+                # 将URL转换为小写以避免后续步骤失败
+                corrected_url = corrected_url.lower()
                 return True, f"发布成功！新种子页面: {corrected_url}"
+            elif "details.php" in response.url and "existed=1" in response.url:
+                logger.success("种子已存在！已跳转到种子详情页。")
+                # 检查响应内容中是否包含"该种子已存在"的提示
+                if "该种子已存在" in response.text:
+                    logger.info("检测到种子已存在的提示信息。")
+                # 修复服务器返回的错误URL：将tracker.novahd.top替换为pt.novahd.top
+                corrected_url = response.url.replace("tracker.novahd.top",
+                                                     "pt.novahd.top")
+                return True, f"发布成功！种子已存在，详情页: {corrected_url}"
             elif "login.php" in response.url:
                 logger.error("发布失败，Cookie 已失效，被重定向到登录页。")
                 return False, "发布失败，Cookie 已失效或无效。"

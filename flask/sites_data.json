@@ -717,7 +717,7 @@
     "base_url": "pt.xingyungept.org",
     "special_tracker_domain": null,
     "group": "StarfallWeb",
-    "migration": 0
+    "migration": 3
   },
   {
     "site": "cspt",
@@ -821,7 +821,7 @@
     "base_url": "pt.lajidui.top",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 0
+    "migration": 2
   },
   {
     "site": "VCB-Studio",

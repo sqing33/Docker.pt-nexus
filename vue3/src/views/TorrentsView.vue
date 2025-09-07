@@ -186,8 +186,10 @@
             <el-tooltip v-for="site in allSourceSitesStatus" :key="site.name"
               :content="isSourceSiteSelectable(site.name) ? `从 ${site.name} 转种` : `当前种子不在 ${site.name}`"
               placement="top">
-              <el-tag :type="site.has_cookie ? 'success' : 'primary'"
-                :class="{ 'is-selectable': isSourceSiteSelectable(site.name) }" class="site-tag"
+              <el-tag 
+                :type="getSiteTagType(site, isSourceSiteSelectable(site.name))"
+                :class="{ 'is-selectable': isSourceSiteSelectable(site.name) }" 
+                class="site-tag"
                 @click="isSourceSiteSelectable(site.name) && confirmSourceSiteAndProceed(getSiteDetails(site.name))">
                 {{ site.name }}
               </el-tag>
@@ -583,6 +585,20 @@ const getLink = (siteData: SiteData, siteName: string): string | null => {
   return null
 }
 const getTagType = (siteData: SiteData) => (siteData.comment ? 'success' : 'primary')
+
+// 根据站点配置和可选性返回标签类型
+const getSiteTagType = (site: SiteStatus, isSelectable: boolean) => {
+  // 如果站点不可选，显示为灰色
+  if (!isSelectable) {
+    return 'info';
+  }
+  // 如果站点已配置Cookie，显示为绿色
+  if (site.has_cookie) {
+    return 'success';
+  }
+  // 如果站点未配置Cookie，显示为蓝色
+  return 'primary';
+}
 const getStateTagType = (state: string) => {
   if (state.includes('下载')) return 'primary'
   if (state.includes('做种')) return 'success'
