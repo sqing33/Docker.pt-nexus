@@ -316,9 +316,9 @@ class DataTracker(Thread):
 
             if params_to_insert:
                 sql_insert = (
-                    """INSERT INTO traffic_stats (stat_datetime, downloader_id, uploaded, downloaded, upload_speed, download_speed) VALUES (%s, %s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE uploaded = uploaded + VALUES(uploaded), downloaded = downloaded + VALUES(downloaded), upload_speed = VALUES(upload_speed), download_speed = VALUES(download_speed)"""
+                    """INSERT INTO traffic_stats (stat_datetime, downloader_id, uploaded, downloaded, upload_speed, download_speed) VALUES (%s, %s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE uploaded = VALUES(uploaded), downloaded = VALUES(downloaded), upload_speed = VALUES(upload_speed), download_speed = VALUES(download_speed)"""
                     if is_mysql else
-                    """INSERT INTO traffic_stats (stat_datetime, downloader_id, uploaded, downloaded, upload_speed, download_speed) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(stat_datetime, downloader_id) DO UPDATE SET uploaded = uploaded + excluded.uploaded, downloaded = downloaded + excluded.downloaded, upload_speed = excluded.upload_speed, download_speed = excluded.download_speed"""
+                    """INSERT INTO traffic_stats (stat_datetime, downloader_id, uploaded, downloaded, upload_speed, download_speed) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(stat_datetime, downloader_id) DO UPDATE SET uploaded = excluded.uploaded, downloaded = excluded.downloaded, upload_speed = excluded.upload_speed, download_speed = excluded.download_speed"""
                 )
                 cursor.executemany(sql_insert, params_to_insert)
 
