@@ -836,7 +836,7 @@ def add_torrent_to_downloader(detail_page_url: str, save_path: str,
     # 1. 查找对应的站点配置
     conn = db_manager._get_connection()
     cursor = db_manager._get_cursor(conn)
-    cursor.execute("SELECT nickname, base_url, cookie FROM sites")
+    cursor.execute("SELECT nickname, base_url, cookie, proxy FROM sites")
     site_info = None
     for site in cursor.fetchall():
         # [修复] 确保 base_url 存在且不为空
@@ -860,13 +860,30 @@ def add_torrent_to_downloader(detail_page_url: str, save_path: str,
         }
         scraper = cloudscraper.create_scraper()
 
+        # Add proxy support for downloading torrent
+        proxies = None
+        if site_info.get("proxy"):
+            try:
+                conf = (config_manager.get() or {})
+                # 优先使用转种设置中的代理地址，其次兼容旧的 network.proxy_url
+                proxy_url = (conf.get("cross_seed", {})
+                             or {}).get("proxy_url") or (conf.get(
+                                 "network", {}) or {}).get("proxy_url")
+                if proxy_url:
+                    proxies = {"http": proxy_url, "https": proxy_url}
+                    logging.info(f"使用代理下载种子: {proxy_url}")
+            except Exception as e:
+                logging.warning(f"代理设置失败: {e}")
+                proxies = None
+
         # Add retry logic for network requests
         max_retries = 3
         for attempt in range(max_retries):
             try:
                 details_response = scraper.get(detail_page_url,
                                                headers=common_headers,
-                                               timeout=60)
+                                               timeout=60,
+                                               proxies=proxies)
                 break  # Success, exit retry loop
             except Exception as e:
                 if attempt < max_retries - 1:
@@ -894,7 +911,8 @@ def add_torrent_to_downloader(detail_page_url: str, save_path: str,
             try:
                 torrent_response = scraper.get(full_download_url,
                                                headers=common_headers,
-                                               timeout=60)
+                                               timeout=60,
+                                               proxies=proxies)
                 torrent_response.raise_for_status()
                 break  # Success, exit retry loop
             except Exception as e:
