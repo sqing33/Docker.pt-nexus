@@ -99,7 +99,8 @@ def migrate_fetch_info():
         migrator = TorrentMigrator(source_site_info=source_info,
                                    target_site_info=None,
                                    search_term=search_term,
-                                   save_path=save_path)
+                                   save_path=save_path,
+                                   config_manager=config_manager)
         # 调用只获取信息和原始种子的方法
         result = migrator.prepare_review_data()
 
@@ -156,7 +157,7 @@ def migrate_publish():
         original_torrent_path = context["original_torrent_path"]
 
         # 动态创建针对本次发布的 Migrator 实例
-        migrator = TorrentMigrator(source_info, target_info)
+        migrator = TorrentMigrator(source_info, target_info, config_manager=config_manager)
 
         # 1. 修改种子文件
         main_title = upload_data.get("original_main_title", "torrent")
@@ -227,7 +228,7 @@ def migrate_torrent():
                 404,
             )
 
-        migrator = TorrentMigrator(source_info, target_info, search_term)
+        migrator = TorrentMigrator(source_info, target_info, search_term, config_manager=config_manager)
         if hasattr(migrator, "run"):
             result = migrator.run()
             return jsonify(result)
