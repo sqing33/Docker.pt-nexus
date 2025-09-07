@@ -432,8 +432,9 @@ class DatabaseManager:
                     (d["name"], d["type"], d["id"]),
                 )
             else:
+                # 修复：在插入新下载器时初始化last_total_dl和last_total_ul字段
                 cursor.execute(
-                    f"INSERT INTO downloader_clients (id, name, type) VALUES ({ph}, {ph}, {ph})",
+                    f"INSERT INTO downloader_clients (id, name, type, last_total_dl, last_total_ul) VALUES ({ph}, {ph}, {ph}, 0, 0)",
                     (d["id"], d["name"], d["type"]),
                 )
 
