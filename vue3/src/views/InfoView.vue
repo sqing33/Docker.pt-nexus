@@ -537,7 +537,7 @@ const fetchTrafficData = async (range) => {
           return total > 0 ? formatBytes(total) : '' // 仅当总和大于0时显示标签
         },
         color: '#333',
-        fontSize: 12,
+        fontSize: 10,
         fontWeight: 'normal', // 修改为 normal，不那么粗壮
       }
     })
@@ -570,7 +570,7 @@ const fetchTrafficData = async (range) => {
           return total > 0 ? formatBytes(total) : ''
         },
         color: '#333',
-        fontSize: 12,
+        fontSize: 10,
         fontWeight: 'normal', // 修改为 normal，不那么粗壮
       }
     })

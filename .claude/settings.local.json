@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(then echo \"Fixing $file\")",
+      "Bash(mysql:*)",
+      "Bash(find:*)",
+      "Bash(sed:*)",
+      "Bash(pnpm build)",
+      "WebFetch(domain:img.seedvault.cn)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
