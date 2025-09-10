@@ -5,7 +5,7 @@ import re
 import traceback
 import cloudscraper
 from loguru import logger
-from utils import cookies_raw2jar, ensure_scheme
+from utils import cookies_raw2jar, ensure_scheme, extract_tags_from_mediainfo
 
 
 class GtkpwUploader:
@@ -187,27 +187,57 @@ class GtkpwUploader:
         mapped["team_sel[4]"] = team_map.get(release_group_str,
                                              "5")  # 默认值 Other
 
-        # 7. 标签 (Tags)
+        # 7. 标签 (Tags) - 根据站点HTML校对
         tag_map = {
             "首发": 2,
-            "DIY": 4,
+            "完结": 9,
+            "分集": 8,
+            "粤语": 13,
+            "多语": 10,
             "国语": 5,
             "中字": 6,
+            "中英双字": 14,
+            "4K": 12,
+            "1080p": 11,
             "HDR": 7,
+            "DIY": 4,
+            "红叶转载": 19,
+            "有声图书": 15,
         }
+
+        # 从源站参数获取标签
         source_tags = source_params.get("标签") or []
-        for tag in source_tags:
-            tag_id = tag_map.get(tag)
+
+        # 从 MediaInfo 提取标签
+        mediainfo_str = self.upload_data.get("mediainfo", "")
+        tags_from_mediainfo = extract_tags_from_mediainfo(mediainfo_str)
+
+        # 合并所有标签
+        combined_tags = set(source_tags)
+        combined_tags.update(tags_from_mediainfo)
+
+        # 从类型中补充 "中字"
+        if "中字" in source_type:
+            combined_tags.add("中字")
+
+        # 从标题组件中智能匹配HDR等信息
+        hdr_str = title_params.get("HDR格式", "").upper()
+        if "VISION" in hdr_str or "DV" in hdr_str:
+            combined_tags.add("HDR")
+        if "HDR10+" in hdr_str:
+            combined_tags.add("HDR")
+        elif "HDR10" in hdr_str:
+            combined_tags.add("HDR")
+        elif "HDR" in hdr_str:
+            combined_tags.add("HDR")
+
+        # 映射标签到站点ID
+        for tag_str in combined_tags:
+            tag_id = tag_map.get(tag_str)
             if tag_id is not None:
                 tags.append(tag_id)
 
-        hdr_str = title_params.get("HDR格式", "").upper()
-        if "HDR" in hdr_str:
-            tags.append(tag_map["HDR"])
-
-        if "中字" in source_type:
-            tags.append(tag_map["中字"])
-
+        # 去重并格式化
         for i, tag_id in enumerate(sorted(list(set(tags)))):
             mapped[f"tags[4][{i}]"] = tag_id
 

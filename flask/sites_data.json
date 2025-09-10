@@ -216,12 +216,12 @@
     "migration": 0
   },
   {
-    "site": "upxin",
+    "site": "hdupt",
     "nickname": "好多油",
     "base_url": "pt.upxin.net",
     "special_tracker_domain": null,
     "group": "HDU",
-    "migration": 0
+    "migration": 3
   },
   {
     "site": "oshen",
@@ -389,7 +389,7 @@
     "base_url": "ptchina.org",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 0
+    "migration": 2
   },
   {
     "site": "zhuque",
@@ -405,7 +405,7 @@
     "base_url": "zmpt.cc",
     "special_tracker_domain": null,
     "group": "ZmWeb,ZmAudio,ZmPT",
-    "migration": 1
+    "migration": 3
   },
   {
     "site": "rousi",
@@ -413,7 +413,7 @@
     "base_url": "rousi.zip",
     "special_tracker_domain": "rousipt",
     "group": null,
-    "migration": 0
+    "migration": 2
   },
   {
     "site": "monikadesign",
@@ -445,7 +445,7 @@
     "base_url": "pandapt.net",
     "special_tracker_domain": null,
     "group": "AilMWeb,Panda,AilME,AilMTV,AilMUpscale",
-    "migration": 1
+    "migration": 3
   },
   {
     "site": "carpt",
@@ -477,7 +477,7 @@
     "base_url": "www.agsvpt.com",
     "special_tracker_domain": null,
     "group": "AGSVWEB,AGSVMUS,AGSVPT,AGSVMUSIC",
-    "migration": 1
+    "migration": 3
   },
   {
     "site": "ptvicomo",
@@ -509,7 +509,7 @@
     "base_url": "www.hdkyl.in",
     "special_tracker_domain": null,
     "group": "Kylin,HDKWEB,HDKylinWeb,HDKTV",
-    "migration": 1
+    "migration": 3
   },
   {
     "site": "ilolicon",
@@ -525,7 +525,7 @@
     "base_url": "pt.gtk.pw",
     "special_tracker_domain": "gtkpw",
     "group": null,
-    "migration": 0
+    "migration": 2
   },
   {
     "site": "wukongwendao",
@@ -549,7 +549,7 @@
     "base_url": "crabpt.vip",
     "special_tracker_domain": null,
     "group": "crab",
-    "migration": 1
+    "migration": 3
   },
   {
     "site": "icc2022",
@@ -581,7 +581,7 @@
     "base_url": "ptcafe.club",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 0
+    "migration": 2
   },
   {
     "site": "tosky",
@@ -629,7 +629,7 @@
     "base_url": "ptzone.xyz",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 0
+    "migration": 2
   },
   {
     "site": "hdclone",
@@ -653,7 +653,7 @@
     "base_url": "www.ptlover.cc",
     "special_tracker_domain": null,
     "group": "AFWEB",
-    "migration": 0
+    "migration": 2
   },
   {
     "site": "hspt",
@@ -805,7 +805,7 @@
     "base_url": "cangbao.ge",
     "special_tracker_domain": null,
     "group": "CBGWT",
-    "migration": 0
+    "migration": 3
   },
   {
     "site": "Tokyo",

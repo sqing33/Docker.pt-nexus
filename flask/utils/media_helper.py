@@ -984,7 +984,7 @@ def extract_tags_from_mediainfo(mediainfo_text: str) -> list:
         return []
 
     found_tags = set()
-    lines = mediainfo_text.lower().split('\n')
+    lines = mediainfo_text.split('\n')  # 不转小写，保持原始大小写
 
     # 定义关键词到标准化标签的映射
     tag_keywords_map = {
@@ -1005,53 +1005,85 @@ def extract_tags_from_mediainfo(mediainfo_text: str) -> list:
     # is_audio_section/is_text_section 用于限定语言和字幕的检查范围
     is_audio_section = False
     is_text_section = False
+    audio_section_lines = []
 
     for line in lines:
-        line = line.strip()
+        line_stripped = line.strip()
 
         # 判定当前是否处于特定信息块中
-        if 'audio' in line and '#' in line:
+        if 'audio' in line_stripped.lower() and '#' in line_stripped:
             is_audio_section = True
             is_text_section = False
+            audio_section_lines = [line_stripped]  # 开始新的音频块
             continue
-        if 'text' in line and '#' in line:
+        if 'text' in line_stripped.lower() and '#' in line_stripped:
             is_text_section = True
             is_audio_section = False
             continue
-        if 'video' in line and '#' in line:
+        if 'video' in line_stripped.lower() and '#' in line_stripped:
             is_audio_section = False
             is_text_section = False
-
-        # 1. 检查音频语言标签 (仅在 Audio 块中)
+            # 处理音频块中的国语检测
+            if audio_section_lines:
+                if _check_mandarin_in_audio_section(audio_section_lines):
+                    found_tags.add('国语')
+                audio_section_lines = []  # 清空音频块
+            continue
+            
+        # 收集音频块的行
         if is_audio_section:
-            if '国语' in tag_keywords_map and any(kw in line for kw in tag_keywords_map['国语']):
-                found_tags.add('国语')
-            if '粤语' in tag_keywords_map and any(kw in line for kw in tag_keywords_map['粤语']):
-                found_tags.add('粤语')
-
-        # 2. 检查字幕标签 (仅在 Text 块中)
+            audio_section_lines.append(line_stripped)
+            
+        # 检查字幕标签 (仅在 Text 块中)
         if is_text_section:
-            if '中字' in tag_keywords_map and any(kw in line for kw in tag_keywords_map['中字']):
+            line_lower = line_stripped.lower()
+            if '中字' in tag_keywords_map and any(kw in line_lower for kw in tag_keywords_map['中字']):
                 found_tags.add('中字')
 
-        # 3. 检查视频 HDR 标签 (全局检查，因为格式可能在 Video 块外部的摘要中)
-        if 'dolby vision' in tag_keywords_map and any(kw in line for kw in tag_keywords_map['Dolby Vision']):
+        # 检查 HDR 格式标签 (全局检查)
+        line_lower = line_stripped.lower()
+        if 'dolby vision' in tag_keywords_map and any(kw in line_lower for kw in tag_keywords_map['Dolby Vision']):
             found_tags.add('Dolby Vision')
-        if 'hdr10+' in tag_keywords_map and any(kw in line for kw in tag_keywords_map['HDR10+']):
+        if 'hdr10+' in tag_keywords_map and any(kw in line_lower for kw in tag_keywords_map['HDR10+']):
             found_tags.add('HDR10+')
         # HDR10 要放在 HDR 之前检查，以获得更精确匹配
-        if 'hdr10' in tag_keywords_map and any(kw in line for kw in tag_keywords_map['HDR10']):
+        if 'hdr10' in tag_keywords_map and any(kw in line_lower for kw in tag_keywords_map['HDR10']):
             found_tags.add('HDR10')
-        elif 'hdr' in tag_keywords_map and any(kw in line for kw in tag_keywords_map['HDR']):
+        elif 'hdr' in tag_keywords_map and any(kw in line_lower for kw in tag_keywords_map['HDR']):
             # 避免重复添加，如果已有更具体的HDR格式，则不添加通用的'HDR'
             if not any(hdr_tag in found_tags for hdr_tag in ['Dolby Vision', 'HDR10+', 'HDR10']):
                 found_tags.add('HDR')
-        if 'hdrvivid' in tag_keywords_map and any(kw in line for kw in tag_keywords_map['HDRVivid']):
+        if 'hdrvivid' in tag_keywords_map and any(kw in line_lower for kw in tag_keywords_map['HDRVivid']):
             # 注意：站点可能没有 HDRVivid 标签，但我们先提取出来
             found_tags.add('HDRVivid')
 
+    # 处理最后一个音频块（如果文件末尾没有video块）
+    if audio_section_lines:
+        if _check_mandarin_in_audio_section(audio_section_lines):
+            found_tags.add('国语')
+
     print(f"从 MediaInfo 中提取到的标签: {list(found_tags)}")
     return list(found_tags)
+
+
+def _check_mandarin_in_audio_section(audio_lines):
+    """
+    检查音频块中是否包含国语相关标识。
+    
+    :param audio_lines: 音频块的所有行
+    :return: 如果检测到国语返回True，否则返回False
+    """
+    for line in audio_lines:
+        # 检查 Title: 中文 或 Language: Chinese
+        if 'title:' in line.lower() and '中文' in line:
+            return True
+        if 'language:' in line.lower() and ('chinese' in line.lower() or 'mandarin' in line.lower()):
+            return True
+        # 检查其他可能的国语标识
+        if 'mandarin' in line.lower():
+            return True
+            
+    return False
 
 
 def extract_origin_from_description(description_text: str) -> str:

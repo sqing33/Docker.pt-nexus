@@ -5,7 +5,7 @@ import re
 import traceback
 import cloudscraper
 from loguru import logger
-from utils import cookies_raw2jar, ensure_scheme
+from utils import cookies_raw2jar, ensure_scheme, extract_tags_from_mediainfo
 
 
 class PtchinaUploader:
@@ -246,20 +246,36 @@ class PtchinaUploader:
             "Dolby Vision": 8,
             "DV": 8,
         }
-        for tag in source_tags:
-            tag_id = tag_map.get(tag)
+        
+        # 从源站参数获取标签
+        source_tags = source_params.get("标签") or []
+
+        # 从 MediaInfo 提取标签
+        mediainfo_str = self.upload_data.get("mediainfo", "")
+        tags_from_mediainfo = extract_tags_from_mediainfo(mediainfo_str)
+
+        # 合并所有标签
+        combined_tags = set(source_tags)
+        combined_tags.update(tags_from_mediainfo)
+
+        # 从类型中补充 "中字"
+        if "中字" in source_type:
+            combined_tags.add("中字")
+
+        # 映射标签到站点ID
+        for tag_str in combined_tags:
+            tag_id = tag_map.get(tag_str)
             if tag_id is not None:
                 tags.append(tag_id)
 
+        # 从标题组件中智能匹配HDR等信息 (保留原有逻辑作为补充)
         hdr_str = title_params.get("HDR格式", "").upper()
         if "VISION" in hdr_str or "DV" in hdr_str:
             tags.append(tag_map["Dolby Vision"])
         elif "HDR" in hdr_str:
             tags.append(tag_map["HDR"])
 
-        if "中字" in source_type:
-            tags.append(tag_map["中字"])
-
+        # 去重并格式化
         for i, tag_id in enumerate(sorted(list(set(tags)))):
             mapped[f"tags[4][{i}]"] = tag_id
 
