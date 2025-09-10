@@ -1,4 +1,4 @@
-# sites/luckpt.py
+# sites/hdupt.py
 
 import os
 import re
@@ -8,7 +8,7 @@ from loguru import logger
 from utils import cookies_raw2jar, ensure_scheme, extract_tags_from_mediainfo
 
 
-class LuckptUploader:
+class HduptUploader:
 
     def __init__(self, site_info: dict, upload_data: dict):
         """
@@ -34,7 +34,7 @@ class LuckptUploader:
 
     def _map_parameters(self) -> dict:
         """
-        将参数映射为 幸运 站点所需的表单值。
+        将参数映射为 Hdupt 站点所需的表单值。
         - 映射表根据站点 upload.php 的 HTML 源码进行最终校对。
         - 字典的顺序很重要，用于优先匹配更精确的关键词。
         - 任何未匹配到的项目都将自动归类于 'Other'。
@@ -50,7 +50,6 @@ class LuckptUploader:
         }
 
         mapped = {}
-        tags = []
 
         # 1. 类型映射 (Type) - 根据站点HTML校对
         type_map = {
@@ -60,61 +59,68 @@ class LuckptUploader:
             "Movie": "401",
             "TV Series": "402",
             "电视剧": "402",
+            "TV Shows": "403",
+            "综艺": "403",
+            "Documentaries": "404",
+            "记录片": "404",
+            "纪录片": "404",
             "Animations": "405",
             "动漫": "405",
             "动画": "405",
             "Anime": "405",
             "MV": "406",
+            "Music Videos": "406",
             "演唱会": "406",
-            "Music Video": "406",
-            "Music": "408",
+            "Sports": "407",
+            "体育": "407",
+            "HQ Audio": "408",
             "音乐": "408",
-            "专辑": "408",
-            "音轨": "408",
+            "无损音乐": "408",
             "音频": "408",
-            "Audio": "408",
-            "TV Shows": "410",
-            "综艺": "410",
-            "Documentaries": "411",
-            "记录片": "411",
-            "纪录片": "411",
-            "Sports": "412",
-            "体育": "412",
-            "短剧": "413",
-            "软件": "409",
-            "图书": "409",
-            "学习": "409",
-            "游戏": "409",
-            "音乐会": "409",
-            "资料": "409",
-            "其他": "409",
-            "Misc": "409",
-            "未知": "409",
-            "Unknown": "409",
+            "Games": "410",
+            "游戏": "410",
+            "其他": "411",
+            "Misc": "411",
+            "未知": "411",
+            "Unknown": "411",
         }
         source_type = source_params.get("类型") or ""
-        mapped["type"] = "409"  # 默认值: 其他
+        # 优先完全匹配，然后部分匹配，最后使用默认值
+        mapped["type"] = "411"  # 默认值: Misc/其他
+
+        # 精确匹配
         for key, value in type_map.items():
-            if key in source_type:
+            if key.lower() == source_type.lower().strip():
                 mapped["type"] = value
                 break
+        else:
+            # 如果没有精确匹配，尝试部分匹配
+            for key, value in type_map.items():
+                if key.lower() in source_type.lower():
+                    mapped["type"] = value
+                    break
 
         # 2. 媒介映射 (Medium) - 根据站点HTML校对
-        # 站点默认值 'Other': 13
+        # 站点默认值 'Other': 0
         medium_map = {
-            'UHD Blu-ray': '10',
-            'BluRay': '1',
+            'UHD Blu-ray': '11',
             'Blu-ray': '1',
             'BD': '1',
             'Remux': '3',
+            'UHD Remux': '15',
+            'UHD Remux TV': '16',
+            'Remux TV': '12',
             'Encode': '7',
-            'MiniBD': '4',
-            'WEB-DL': '11',
-            'WEBRip': '11',
-            'WEB': '11',
+            'Encode TV': '14',
+            'WEB-DL': '10',
+            'WEBRip': '10',
+            'WEB': '10',
+            'WEB-DL TV': '13',
+            'WEBRip TV': '13',
             'HDTV': '5',
             'TVrip': '5',
             'DVD': '6',
+            'MiniBD': '4',
             'CD': '8',
             'Track': '9',
         }
@@ -125,158 +131,134 @@ class LuckptUploader:
         # 站点规则：有mediainfo的Blu-ray/DVD源盘rip都算Encode
         if is_standard_mediainfo and ('blu' in medium_str.lower()
                                       or 'dvd' in medium_str.lower()):
-            mapped["medium_sel[4]"] = "7"  # Encode
+            mapped["medium_sel"] = "7"  # Encode
         else:
-            mapped["medium_sel[4]"] = "13"  # 默认值: Other
+            mapped["medium_sel"] = "0"  # 默认值: 请选择
             for key, value in medium_map.items():
                 if key.lower() in medium_str.lower():
-                    mapped["medium_sel[4]"] = value
+                    mapped["medium_sel"] = value
                     break
 
         # 3. 视频编码映射 (Video Codec) - 根据站点HTML校对
         # 站点默认值 'Other': 5
         codec_map = {
-            'H.265': '6',
-            'HEVC': '6',
-            'x265': '6',
+            'H.265': '14',
+            'HEVC': '14',
+            'x265': '14',
             'H.264': '1',
             'AVC': '1',
-            'x264': '1',
-            'AV1': '2',
-            'VC-1': '3',
-            'MPEG-2': '4',
-            'XviD': '12',
-            'MPEG-4': '12',
+            'x264': '16',
+            'VC-1': '2',
+            'XviD': '3',
+            'MPEG-2': '18',
+            'MPEG': '18',
         }
         codec_str = title_params.get("视频编码", "")
-        mapped["codec_sel[4]"] = "5"  # 默认值: Other
+        mapped["codec_sel"] = "5"  # 默认值: Other
         for key, value in codec_map.items():
             if key.lower() in codec_str.lower():
-                mapped["codec_sel[4]"] = value
+                mapped["codec_sel"] = value
                 break
 
         # 4. 音频编码映射 (Audio Codec) - 根据站点HTML校对
-        # 站点默认值 'Other': 7
+        # 站点默认值 'Other': 13
         audio_map = {
-            'TrueHD Atmos': '11',
-            'DTS:X': '15',
-            'DTS-HD MA': '16',
-            'DDP': '12',
-            'DD+': '12',
-            'E-AC3': '12',
-            'Atmos': '11',
-            'TrueHD': '14',
-            'DTS': '3',
-            'AC3': '8',
-            'DD': '8',
-            'LPCM': '13',
-            'FLAC': '1',
+            'DTS:X': '16',
+            'DTS-HD MA': '1',
+            'DTS-HDMA': '1',
+            'TrueHD': '3',
+            'LPCM': '11',
+            'DTS': '4',
+            'AC3': '2',
+            'EAC3': '2',
+            'DD+': '2',
+            'DD': '2',
             'AAC': '6',
-            'APE': '2',
-            'M4A': '17',
-            'WAV': '18',
-            'MP3': '4',
-            'OGG': '5',
+            'FLAC': '7',
+            'APE': '10',
+            'WAV': '17',
+            'MPEG': '18',
+            'MP3': '18',
         }
         audio_str = title_params.get("音频编码", "")
         audio_str_normalized = audio_str.upper().replace(" ",
                                                          "").replace(".", "")
-        mapped["audiocodec_sel[4]"] = "7"  # 默认值: Other
+        mapped["audiocodec_sel"] = "13"  # 默认值: Other
         for key, value in audio_map.items():
             key_normalized = key.upper().replace(" ", "").replace(".", "")
             if key_normalized in audio_str_normalized:
-                mapped["audiocodec_sel[4]"] = value
+                mapped["audiocodec_sel"] = value
                 break
 
         # 5. 分辨率映射 (Resolution) - 根据站点HTML校对
-        # 站点默认值 'Other': 8
+        # 站点默认值 'Other': 0
         resolution_map = {
-            '8K': '7',
-            '4320p': '7',
-            '4K': '6',
-            '2160p': '6',
-            'UHD': '6',
-            '2K': '5',
-            '1440p': '5',
+            '8K': '5',
+            '4320p': '5',
+            '4K': '5',
+            '2160p': '5',
+            'UHD': '5',
             '1080p': '1',
-            '1080i': '1',
+            '1080i': '2',
             '720p': '3',
+            '720i': '3',
             '480p': '4',
             '480i': '4',
+            'SD': '4',
+            'iPad': '6',
         }
         resolution_str = title_params.get("分辨率", "")
-        mapped["standard_sel[4]"] = "8"  # 默认值: Other
+        mapped["standard_sel"] = "0"  # 默认值: 请选择
         for key, value in resolution_map.items():
             if key.lower() in resolution_str.lower():
-                mapped["standard_sel[4]"] = value
+                mapped["standard_sel"] = value
                 break
 
-        # 6. 制作组映射 (Team) - 根据站点HTML校对
+        # 6. 处理映射 (Processing) - 根据站点HTML校对
+        # 站点默认值 'Other': 7
+        processing_map = {
+            "中国": "1",
+            "CN": "1",
+            "大陆": "1",
+            "中国内地": "1",
+            "香港": "3",
+            "HK": "3",
+            "台湾": "3",
+            "TW": "3",
+            "港台": "3",
+            "美国": "2",
+            "US": "2",
+            "欧美": "2",
+            "欧洲": "2",
+            "EU": "2",
+            "日本": "4",
+            "JPN": "4",
+            "JP": "4",
+            "韩国": "5",
+            "KR": "5",
+            "印度": "6",
+            "IN": "6",
+            "东南亚": "8",
+            "SEA": "8",
+        }
+        # 优先使用从简介中提取的产地信息，如果没有则使用片源平台
+        origin_str = source_params.get("产地", "")
+        source_str = origin_str if origin_str else title_params.get(
+            "片源平台", "")
+        mapped["processing_sel"] = "7"  # 默认值: Other
+        for key, value in processing_map.items():
+            if key.lower() in source_str.lower():
+                mapped["processing_sel"] = value
+                break
+
+        # 7. 制作组映射 (Team) - 根据站点HTML校对
         # 站点默认值 'Other': 5
         team_map = {
-            "LUCKWEB": "7",
-            "LUCKMUSIC": "8",
-            "FRDS": "9",
-            "StarfallWeb": "10",
+            "HDU": "2",
         }
         release_group_str = str(title_params.get("制作组", "")).upper()
-        mapped["team_sel[4]"] = team_map.get(release_group_str,
-                                             "5")  # 默认值 Other
-
-        # 7. 标签 (Tags) - 根据站点HTML校对
-        tag_map = {
-            "首发": 2,
-            "DIY": 4,
-            "国语": 5,
-            "中字": 6,
-            "Dolby Vision": 20,
-            "DV": 20,
-            "HDR10+": 18,
-            "HDR10": 19,
-            "HDR": 19,  # 将通用HDR默认映射到HDR10
-            "合集": 17,
-            "特效": 16,
-            "粤语": 14,
-            "大包": 11,
-            "完结": 10,
-            "连载": 9,
-        }
-        
-        # 从源站参数获取标签
-        source_tags = source_params.get("标签") or []
-
-        # 从 MediaInfo 提取标签
-        mediainfo_str = self.upload_data.get("mediainfo", "")
-        tags_from_mediainfo = extract_tags_from_mediainfo(mediainfo_str)
-
-        # 合并所有标签
-        combined_tags = set(source_tags)
-        combined_tags.update(tags_from_mediainfo)
-
-        # 从类型中补充 "中字"
-        if "中字" in source_type:
-            combined_tags.add("中字")
-
-        # 映射标签到站点ID
-        for tag_str in combined_tags:
-            tag_id = tag_map.get(tag_str)
-            if tag_id is not None:
-                tags.append(tag_id)
-
-        # 从标题组件中智能匹配HDR等信息 (保留原有逻辑作为补充)
-        hdr_str = title_params.get("HDR格式", "").upper()
-        if "VISION" in hdr_str or "DV" in hdr_str:
-            tags.append(tag_map["Dolby Vision"])
-        if "HDR10+" in hdr_str:
-            tags.append(tag_map["HDR10+"])
-        elif "HDR10" in hdr_str:
-            tags.append(tag_map["HDR10"])
-        elif "HDR" in hdr_str:
-            tags.append(tag_map["HDR"])
-
-        # 去重并格式化
-        for i, tag_id in enumerate(sorted(list(set(tags)))):
-            mapped[f"tags[4][{i}]"] = tag_id
+        mapped["team_sel"] = team_map.get(release_group_str,
+                                          "5")  # 默认值 Other
 
         return mapped
 
@@ -292,7 +274,7 @@ class LuckptUploader:
 
     def _build_title(self) -> str:
         """
-        根据 title_components 参数，按照 幸运 的规则拼接主标题。
+        根据 title_components 参数，按照 Hdupt 的规则拼接主标题。
         """
         components_list = self.upload_data.get("title_components", [])
         components = {
@@ -351,7 +333,7 @@ class LuckptUploader:
         """
         执行上传的核心逻辑。
         """
-        logger.info("正在为 幸运 站点适配上传参数...")
+        logger.info("正在为 Hdupt 站点适配上传参数...")
         try:
             mapped_params = self._map_parameters()
             description = self._build_description()
@@ -361,13 +343,8 @@ class LuckptUploader:
             form_data = {
                 "name": final_main_title,
                 "small_descr": self.upload_data.get("subtitle", ""),
-                "url": self.upload_data.get("imdb_link", "") or "",
-                "color": "0",
-                "font": "0",
-                "size": "0",
                 "descr": description,
-                "technical_info": self.upload_data.get("mediainfo", ""),
-                "uplver": "yes",
+                "uplver": "yes",  # 默认匿名上传
                 **mapped_params,
             }
 
@@ -386,7 +363,21 @@ class LuckptUploader:
                     logger.error("目标站点 Cookie 为空，无法发布。")
                     return False, "目标站点 Cookie 未配置。"
                 cookie_jar = cookies_raw2jar(cleaned_cookie_str)
-                logger.info("正在向 幸运 站点提交发布请求...")
+                logger.info("正在向 Hdupt 站点提交发布请求...")
+                # 若站点启用代理且配置了全局代理地址，则通过代理请求
+                proxies = None
+                try:
+                    from config import config_manager
+                    use_proxy = bool(self.site_info.get("proxy"))
+                    conf = (config_manager.get() or {})
+                    # 优先使用转种设置中的代理地址，其次兼容旧的 network.proxy_url
+                    proxy_url = (conf.get("cross_seed", {})
+                                 or {}).get("proxy_url") or (conf.get(
+                                     "network", {}) or {}).get("proxy_url")
+                    if use_proxy and proxy_url:
+                        proxies = {"http": proxy_url, "https": proxy_url}
+                except Exception:
+                    proxies = None
                 response = self.scraper.post(
                     self.post_url,
                     headers=self.headers,
@@ -394,12 +385,21 @@ class LuckptUploader:
                     data=form_data,
                     files=files,
                     timeout=self.timeout,
+                    proxies=proxies,
                 )
                 response.raise_for_status()
 
             if "details.php" in response.url and "uploaded=1" in response.url:
                 logger.success("发布成功！已跳转到种子详情页。")
-                return True, f"发布成功！新种子页面: {response.url}"
+                # 将URL转换为小写以避免后续步骤失败
+                corrected_url = response.url.lower()
+                return True, f"发布成功！新种子页面: {corrected_url}"
+            elif "details.php" in response.url and "existed=1" in response.url:
+                logger.success("种子已存在！已跳转到种子详情页。")
+                # 检查响应内容中是否包含"该种子已存在"的提示
+                if "该种子已存在" in response.text:
+                    logger.info("检测到种子已存在的提示信息。")
+                return True, f"发布成功！种子已存在，详情页: {response.url}"
             elif "login.php" in response.url:
                 logger.error("发布失败，Cookie 已失效，被重定向到登录页。")
                 return False, "发布失败，Cookie 已失效或无效。"
@@ -410,11 +410,11 @@ class LuckptUploader:
                 return False, f"发布失败，请检查站点返回信息。 URL: {response.url}"
 
         except Exception as e:
-            logger.error(f"发布到 幸运 站点时发生错误: {e}")
+            logger.error(f"发布到 Hdupt 站点时发生错误: {e}")
             logger.error(traceback.format_exc())
             return False, f"请求异常: {e}"
 
 
 def upload(site_info: dict, upload_payload: dict):
-    uploader = LuckptUploader(site_info, upload_payload)
+    uploader = HduptUploader(site_info, upload_payload)
     return uploader.execute_upload()

@@ -1,4 +1,4 @@
-# sites/novahd.py
+# sites/crabpt.py
 
 import os
 import re
@@ -8,7 +8,7 @@ from loguru import logger
 from utils import cookies_raw2jar, ensure_scheme, extract_tags_from_mediainfo
 
 
-class NovahdUploader:
+class CrabptUploader:
 
     def __init__(self, site_info: dict, upload_data: dict):
         """
@@ -29,12 +29,12 @@ class NovahdUploader:
             "referer":
             f"{base_url}/upload.php",
             "user-agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/5.0 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
         }
 
     def _map_parameters(self) -> dict:
         """
-        将参数映射为 NovaHD 站点所需的表单值。
+        将参数映射为 CrabPT 站点所需的表单值。
         - 映射表根据站点 upload.php 的 HTML 源码进行最终校对。
         - 字典的顺序很重要，用于优先匹配更精确的关键词。
         - 任何未匹配到的项目都将自动归类于 'Other'。
@@ -52,7 +52,7 @@ class NovahdUploader:
         mapped = {}
         tags = []
 
-        # 1. 类型映射 (Type) - 基于统一类型映射标准
+        # 1. 类型映射 (Type) - 根据站点HTML校对
         type_map = {
             "Movies": "401",
             "电影": "401",
@@ -60,11 +60,10 @@ class NovahdUploader:
             "Movie": "401",
             "TV Series": "402",
             "电视剧": "402",
-            "TV Shows": "402",
-            "综艺": "402",
-            "Documentaries": "404",
-            "记录片": "404",
-            "纪录片": "404",
+            "Playlet": "413",
+            "短剧": "413",
+            "Music": "408",
+            "音乐": "408",
             "Animations": "405",
             "动漫": "405",
             "动画": "405",
@@ -72,28 +71,32 @@ class NovahdUploader:
             "MV": "406",
             "演唱会": "406",
             "Music Video": "406",
+            "TV Shows": "403",
+            "综艺": "403",
             "Sports": "407",
             "体育": "407",
-            "Music": "409",
-            "音乐": "409",
-            "专辑": "409",
-            "音轨": "409",
-            "音频": "409",
-            "短剧": "410",
-            "软件": "410",
-            "图书": "410",
-            "学习": "410",
-            "游戏": "410",
-            "音乐会": "410",
-            "资料": "410",
-            "其他": "410",
-            "Misc": "410",
-            "未知": "410",
-            "Unknown": "410",
+            "体育竞技": "407",
+            "Documentaries": "404",
+            "记录片": "404",
+            "纪录片": "404",
+            "漫画": "415",
+            "Cartoon": "415",
+            "游戏": "414",
+            "Game": "414",
+            "学习": "412",
+            "Study": "412",
+            "有声书": "411",
+            "Audiobook": "411",
+            "电子书": "410",
+            "Ebook": "410",
+            "其他": "409",
+            "Misc": "409",
+            "未知": "409",
+            "Unknown": "409",
         }
         source_type = source_params.get("类型") or ""
         # 优先完全匹配，然后部分匹配，最后使用默认值
-        mapped["type"] = "410"  # 默认值: 其他
+        mapped["type"] = "409"  # 默认值: 其他
 
         # 精确匹配
         for key, value in type_map.items():
@@ -108,21 +111,23 @@ class NovahdUploader:
                     break
 
         # 2. 媒介映射 (Medium) - 根据站点HTML校对
-        # 站点默认值 'Other': 16
+        # 站点默认值 'Other': 1
         medium_map = {
-            'UHD Blu-ray': '10',
-            'Blu-ray': '1',
-            'BD': '1',
-            'Remux': '3',
-            'Encode': '7',
-            'WEB-DL': '11',
-            'WEBRip': '7',
-            'WEB': '11',
-            'HDTV': '5',
-            'TVrip': '5',
-            'DVD': '13',
+            'UHD Blu-ray': '3',
+            'Blu-ray': '2',
+            'BD': '2',
+            'Remux': '4',
+            'Encode': '5',
+            'WEB-DL': '6',
+            'WEBRip': '5',  # 近似映射到Encode
+            'WEB': '6',
+            'HDTV': '7',
+            'TVrip': '7',
             'CD': '8',
-            'Track': '9',
+            'Track': '8',  # 近似映射到CD
+            'MVC': '9',
+            'ProRes': '10',
+            'Xvid': '11',
         }
         medium_str = title_params.get("媒介", "")
         mediainfo_str = self.upload_data.get("mediainfo", "")
@@ -131,60 +136,70 @@ class NovahdUploader:
         # 站点规则：有mediainfo的Blu-ray/DVD源盘rip都算Encode
         if is_standard_mediainfo and ('blu' in medium_str.lower()
                                       or 'dvd' in medium_str.lower()):
-            mapped["medium_sel[4]"] = "7"  # Encode
+            mapped["source_sel[4]"] = "5"  # Encode
         else:
-            mapped["medium_sel[4]"] = "16"  # 默认值: Other
+            mapped["source_sel[4]"] = "1"  # 默认值: Other
             for key, value in medium_map.items():
                 if key.lower() in medium_str.lower():
-                    mapped["medium_sel[4]"] = value
+                    mapped["source_sel[4]"] = value
                     break
 
         # 3. 视频编码映射 (Video Codec) - 根据站点HTML校对
-        # 站点默认值 'Other': 5
+        # 站点默认值 'Other': 1
         codec_map = {
-            'H.265': '6',
-            'HEVC': '6',
-            'x265': '6',
-            'H.264': '1',
-            'AVC': '1',
-            'x264': '1',
-            'VC-1': '2',
-            'MPEG-2': '4',
+            'H.265': '3',
+            'HEVC': '3',
+            'x265': '3',
+            'H.264': '2',
+            'AVC': '2',
+            'x264': '2',
+            'VC-1': '14',
+            'MPEG-2': '15',
+            'MPEG-4': '15',
+            'H.266': '4',
+            'VVC': '4',
+            'AV1': '6',
+            'VP9': '5',
         }
         codec_str = title_params.get("视频编码", "")
-        mapped["codec_sel[4]"] = "5"  # 默认值: Other
+        mapped["codec_sel[4]"] = "1"  # 默认值: Other
         for key, value in codec_map.items():
             if key.lower() in codec_str.lower():
                 mapped["codec_sel[4]"] = value
                 break
 
         # 4. 音频编码映射 (Audio Codec) - 根据站点HTML校对
-        # 站点默认值 'Other': 15
+        # 站点默认值 'Other': 1
         audio_map = {
-            'TrueHD Atmos': '8',
-            'DTS:X': '14',
-            'DTS-HD MA': '13',
-            'DDP': '9',
-            'DD+': '9',
-            'E-AC3': '9',
-            'Atmos': '8',
-            'TrueHD': '12',
-            'DTS': '3',
-            'AC3': '10',
-            'DD': '10',
-            'LPCM': '11',
-            'FLAC': '1',
-            'AAC': '6',
-            'ALAC': '7',
-            'APE': '2',
-            'M4A': '1',
-            'WAV': '1',
-            'MP3': '4',
+            'TrueHD Atmos': '26',
+            'DTS:X': '8',
+            'DTS-HD MA': '17',
+            'DTS-HD HR': '22',
+            'DDP': '4',
+            'DD+': '4',
+            'E-AC3': '4',
+            'Atmos': '26',
+            'TrueHD': '6',
+            'DTS': '5',
+            'AC3': '3',
+            'DD': '3',
+            'LPCM': '7',
+            'FLAC': '10',
+            'APE': '12',
+            'WAV': '11',
+            'M4A': '13',
+            'MPEG': '9',
+            'MP3': '9',
+            'AAC': '2',
+            'OGG': '21',
+            'OPUS': '24',
+            'DSD': '23',
+            'ALAC': '16',
         }
         audio_str = title_params.get("音频编码", "")
         audio_str_normalized = audio_str.upper().replace(" ",
                                                          "").replace(".", "")
-        mapped["audiocodec_sel[4]"] = "15"  # 默认值: Other
+        mapped["audiocodec_sel[4]"] = "1"  # 默认值: Other
         for key, value in audio_map.items():
             key_normalized = key.upper().replace(" ", "").replace(".", "")
             if key_normalized in audio_str_normalized:
@@ -192,75 +207,140 @@ class NovahdUploader:
                 break
 
         # 5. 分辨率映射 (Resolution) - 根据站点HTML校对
-        # 站点默认值 'Other': 6
+        # 站点默认值 'Other': 1
         resolution_map = {
-            '8K': '6',
-            '4320p': '6',
-            '4K': '5',
-            '2160p': '5',
-            'UHD': '5',
-            '2K': '5',
-            '1440p': '5',
-            '1080p': '1',
-            '1080i': '2',
-            '720p': '3',
-            '480p': '4',
-            '480i': '4',
+            '8K': '5',
+            '4320p': '5',
+            '4K': '4',
+            '2160p': '4',
+            'UHD': '4',
+            '1080p': '3',
+            '1080i': '3',
+            '720p': '2',
+            '720i': '2',
         }
         resolution_str = title_params.get("分辨率", "")
-        mapped["standard_sel[4]"] = "6"  # 默认值: Other
+        mapped["standard_sel[4]"] = "1"  # 默认值: Other
         for key, value in resolution_map.items():
             if key.lower() in resolution_str.lower():
                 mapped["standard_sel[4]"] = value
                 break
 
-        # 6. 制作组映射 (Team) - 根据站点HTML校对
-        # 站点默认值 'Other': 5
+        # 6. 地区映射 (Processing) - 根据站点HTML校对
+        # 站点默认值 '其他': 1
+        processing_map = {
+            "中国": "2",
+            "CN": "2",
+            "中国大陆": "2",
+            "香港": "3",
+            "HK": "3",
+            "台湾": "3",
+            "TW": "3",
+            "港台": "3",
+            "美国": "4",
+            "US": "4",
+            "欧美": "4",
+            "欧洲": "4",
+            "EU": "4",
+            "日本": "5",
+            "JPN": "5",
+            "JP": "5",
+            "韩国": "6",
+            "KR": "6",
+            "印度": "7",
+            "IN": "7",
+        }
+        # 优先使用从简介中提取的产地信息，如果没有则使用片源平台
+        origin_str = source_params.get("产地", "")
+        source_str = origin_str if origin_str else title_params.get(
+            "片源平台", "")
+        mapped["processing_sel[4]"] = "1"  # 默认值: 其他
+        for key, value in processing_map.items():
+            if key.lower() in source_str.lower():
+                mapped["processing_sel[4]"] = value
+                break
+
+        # 7. 制作组映射 (Team) - 根据站点HTML校对
+        # 站点默认值 'Other': 1
         team_map = {
-            "NOVAHD": "15",
-            "NHD": "15",
-            "HDSKY": "1",
+            "AGSVWEB": "15",
+            "DYZ-WEB": "11",
+            "DYZ-Movie": "12",
+            "DYZ-TV": "13",
+            "UBits": "9",
+            "HHWEB": "8",
+            "FRDS": "7",
+            "XHB": "6",
+            "OurBits": "5",
+            "WiKi": "4",
+            "HDS": "3",
             "CHD": "2",
-            "MYSILU": "3",
-            "WIKI": "4",
-            "OTHER": "5",
-            "FRDS": "6",
-            "mUHD-FRDS": "6",
-            "MNHD-FRDS": "6",
-            "BEAST": "7",
-            "CMCT": "8",
-            "TLF": "9",
-            "M-TEAM": "10",
-            "MWeb": "10",
-            "BEITAI": "11",
-            "AGSV": "12",
-            "HDHOME": "13",
-            "TTG": "14",
-            "NHDWEB": "15",
+            "Audiences": "10",
+            "ZmWeb": "16",
+            "MTeam": "37",
+            "HDVWEB": "36",
+            "HDHome": "35",
+            "QHstudIo": "34",
+            "beAst": "33",
+            "tlf": "32",
+            "FROGWeb": "30",
+            "FROG": "29",
+            "CMCT": "27",
+            "ADWeb": "25",
+            "PiGoNF": "23",
+            "PigoWeb": "22",
+            "PigoHD": "21",
+            "HDFans": "20",
+            "UBWEB": "19",
+            "FFans": "18",
+            "Pter": "17",
+            "红叶": "38",
         }
         release_group_str = str(title_params.get("制作组", "")).upper()
         mapped["team_sel[4]"] = team_map.get(release_group_str,
-                                             "5")  # 默认值 Other
+                                             "1")  # 默认值 Other
 
-        # 7. 标签 (Tags)
+        # 8. 标签 (Tags) - 根据站点HTML校对
         tag_map = {
-            "首发": 2,
-            "DIY": 4,
+            "合集大包": 19,
+            "禁转": 1,
+            "自购": 2,
+            "原盘DIY": 4,
             "国语": 5,
-            "中字": 6,
-            "HDR": 7,
-            "连载": 18,
-            "番组": 17,
-            "特效": 15,
-            "杜比": 14,
-            "大包": 13,
-            "应求": 12,
-            "英字": 11,
-            "完结": 10,
+            "粤语": 6,
+            "中字": 7,
             "分集": 9,
-            "驻站": 8,
+            "完结": 8,
+            "HDR": 11,
+            "特效字幕": 10,
+            "Dolby Vision": 12,
+            "Dolby Atmos": 13,
+            "未完结": 59,
+            "ASMR": 50,
+            "武侠": 48,
+            "灾难": 47,
+            "冒险": 46,
+            "奇幻": 45,
+            "犯罪": 44,
+            "战争": 43,
+            "历史": 42,
+            "纪录": 41,
+            "恐怖": 40,
+            "惊悚": 39,
+            "悬疑": 38,
+            "动画": 37,
+            "科幻": 36,
+            "爱情": 35,
+            "动作": 34,
+            "喜剧": 33,
+            "剧情": 32,
+            "短剧": 25,
+            "AGSV": 24,
+            "Audiences": 23,
+            "驻站": 22,
+            "伦理": 20,
         }
-        
+
         # 从源站参数获取标签
         source_tags = source_params.get("标签") or []
 
@@ -282,10 +362,10 @@ class NovahdUploader:
             if tag_id is not None:
                 tags.append(tag_id)
 
-        # 从标题组件中智能匹配HDR等信息
+        # 从标题组件中智能匹配HDR等信息 (保留原有逻辑作为补充)
         hdr_str = title_params.get("HDR格式", "").upper()
         if "VISION" in hdr_str or "DV" in hdr_str:
-            combined_tags.add("HDR")
+            combined_tags.add("Dolby Vision")
         if "HDR10+" in hdr_str:
             combined_tags.add("HDR")
         elif "HDR10" in hdr_str:
@@ -296,6 +376,135 @@ class NovahdUploader:
         # 去重并格式化
         for i, tag_id in enumerate(sorted(list(set(tags)))):
             mapped[f"tags[4][{i}]"] = tag_id
+
+        # 9. 特别区的映射（电子书等）
+        # 格式映射
+        format_map = {
+            'EPUB': '8',
+            'AZW3': '9',
+            'MOBI': '10',
+            'PDF': '11',
+            'ZIP': '12',
+            'EPUB/ZAW3/MOBI': '13',
+            'TXT': '7',
+        }
+        format_str = title_params.get("格式", "")
+        mapped["codec_sel[6]"] = "1"  # 默认值: Other
+        for key, value in format_map.items():
+            if key.lower() in format_str.lower():
+                mapped["codec_sel[6]"] = value
+                break
+
+        # 特别区音频编码映射
+        special_audio_map = {
+            'OGG': '14',
+            'M4A': '13',
+            'AAC': '2',
+            'DTS-HD': '15',
+            'DTS-HD MA': '17',
+            'DSD': '23',
+            'Atmos': '26',
+        }
+        special_audio_str = title_params.get("音频编码", "")
+        special_audio_str_normalized = special_audio_str.upper().replace(" ",
+                                                                         "").replace(".", "")
+        mapped["audiocodec_sel[6]"] = "1"  # 默认值: Other
+        for key, value in special_audio_map.items():
+            key_normalized = key.upper().replace(" ", "").replace(".", "")
+            if key_normalized in special_audio_str_normalized:
+                mapped["audiocodec_sel[6]"] = value
+                break
+
+        # 特别区制作组映射
+        special_team_map = {
+            "AGSVWEB": "15",
+            "DYZ-WEB": "11",
+            "DYZ-Movie": "12",
+            "DYZ-TV": "13",
+            "UBits": "9",
+            "HHWEB": "8",
+            "FRDS": "7",
+            "XHB": "6",
+            "OurBits": "5",
+            "WiKi": "4",
+            "HDS": "3",
+            "CHD": "2",
+            "Audiences": "10",
+            "ZmWeb": "16",
+            "红叶": "38",
+            "beAst": "33",
+            "tlf": "32",
+            "FROGWeb": "30",
+            "FROG": "29",
+            "CMCT": "27",
+            "ADWeb": "25",
+            "QHstudIo": "24",
+            "PiGoNF": "23",
+            "PigoWeb": "22",
+            "PigoHD": "21",
+            "HDFans": "20",
+            "UBWEB": "19",
+            "FFans": "18",
+            "Pter": "17",
+        }
+        special_release_group_str = str(title_params.get("制作组", "")).upper()
+        mapped["team_sel[6]"] = special_team_map.get(special_release_group_str,
+                                                     "1")  # 默认值 Other
+
+        # 特别区地区映射 (与普通区相同)
+        mapped["processing_sel[6]"] = mapped.get("processing_sel[4]", "1")
+
+        # 特别区标签映射
+        special_tag_map = {
+            "无限流": 62,
+            "穿越重生": 61,
+            "传记名著": 60,
+            "文学出版": 56,
+            "外语有声": 55,
+            "相声评书": 57,
+            "言情小说": 58,
+            "灵异悬疑": 30,
+            "历史军事": 53,
+            "电台节目": 52,
+            "传统戏曲": 51,
+            "都市异能": 31,
+            "武侠仙侠": 29,
+            "科幻末日": 28,
+            "游戏竞技": 27,
+            "奇幻玄幻": 26,
+            "知识普及": 17,
+            "历史架空": 14,
+            "合集大包": 19,
+            "禁转": 1,
+            "自购": 2,
+            "中字": 7,
+            "分集": 9,
+            "完结": 8,
+            "军事": 18,
+            "财经": 16,
+            "网文": 15,
+            "未完结": 59,
+            "轻小说": 54,
+            "灾难": 47,
+            "犯罪": 44,
+            "动画": 37,
+            "科幻": 36,
+            "条漫": 21,
+        }
+
+        # 映射特别区标签
+        for tag_str in combined_tags:
+            tag_id = special_tag_map.get(tag_str)
+            if tag_id is not None:
+                # 确保不会重复添加
+                if tag_id not in tags:
+                    tags.append(tag_id)
+
+        # 去重并格式化特别区标签
+        for i, tag_id in enumerate(sorted(list(set(tags)))):
+            # 同时为两个区域设置标签
+            mapped[f"tags[4][{i}]"] = tag_id
+            mapped[f"tags[6][{i}]"] = tag_id
 
         return mapped
 
@@ -311,7 +520,7 @@ class NovahdUploader:
 
     def _build_title(self) -> str:
         """
-        根据 title_components 参数，按照 NovaHD 的规则拼接主标题。
+        根据 title_components 参数，按照 CrabPT 的规则拼接主标题。
         """
         components_list = self.upload_data.get("title_components", [])
         components = {
@@ -370,7 +579,7 @@ class NovahdUploader:
         """
         执行上传的核心逻辑。
         """
-        logger.info("正在为 NovaHD 站点适配上传参数...")
+        logger.info("正在为 CrabPT 站点适配上传参数...")
         try:
             mapped_params = self._map_parameters()
             description = self._build_description()
@@ -381,13 +590,9 @@ class NovahdUploader:
                 "name": final_main_title,
                 "small_descr": self.upload_data.get("subtitle", ""),
                 "url": self.upload_data.get("imdb_link", "") or "",
-                "pt_gen": self.upload_data.get("pt_gen", "") or "",
-                "color": "0",
-                "font": "0",
-                "size": "0",
                 "descr": description,
                 "technical_info": self.upload_data.get("mediainfo", ""),
-                "uplver": "yes",
+                "uplver": "yes",  # 默认匿名上传
                 **mapped_params,
             }
 
@@ -397,7 +602,7 @@ class NovahdUploader:
                     "file": (
                         os.path.basename(torrent_path),
                         torrent_file,
-                        "application/x-bittorrent",
+                        "application/x-bittorent",
                     ),
                     "nfo": ("", b"", "application/octet-stream"),
                 }
@@ -406,7 +611,7 @@ class NovahdUploader:
                     logger.error("目标站点 Cookie 为空，无法发布。")
                     return False, "目标站点 Cookie 未配置。"
                 cookie_jar = cookies_raw2jar(cleaned_cookie_str)
-                logger.info("正在向 NovaHD 站点提交发布请求...")
+                logger.info("正在向 CrabPT 站点提交发布请求...")
                 # 若站点启用代理且配置了全局代理地址，则通过代理请求
                 proxies = None
                 try:
@@ -421,7 +626,6 @@ class NovahdUploader:
                         proxies = {"http": proxy_url, "https": proxy_url}
                 except Exception:
                     proxies = None
-
                 response = self.scraper.post(
                     self.post_url,
                     headers=self.headers,
@@ -435,21 +639,15 @@ class NovahdUploader:
 
             if "details.php" in response.url and "uploaded=1" in response.url:
                 logger.success("发布成功！已跳转到种子详情页。")
-                # 修复服务器返回的错误URL：将tracker.novahd.top替换为pt.novahd.top
-                corrected_url = response.url.replace("tracker.novahd.top",
-                                                     "pt.novahd.top")
                 # 将URL转换为小写以避免后续步骤失败
-                corrected_url = corrected_url.lower()
+                corrected_url = response.url.lower()
                 return True, f"发布成功！新种子页面: {corrected_url}"
             elif "details.php" in response.url and "existed=1" in response.url:
                 logger.success("种子已存在！已跳转到种子详情页。")
                 # 检查响应内容中是否包含"该种子已存在"的提示
                 if "该种子已存在" in response.text:
                     logger.info("检测到种子已存在的提示信息。")
-                # 修复服务器返回的错误URL：将tracker.novahd.top替换为pt.novahd.top
-                corrected_url = response.url.replace("tracker.novahd.top",
-                                                     "pt.novahd.top")
-                return True, f"发布成功！种子已存在，详情页: {corrected_url}"
+                return True, f"发布成功！种子已存在，详情页: {response.url}"
             elif "login.php" in response.url:
                 logger.error("发布失败，Cookie 已失效，被重定向到登录页。")
                 return False, "发布失败，Cookie 已失效或无效。"
@@ -460,11 +658,11 @@ class NovahdUploader:
                 return False, f"发布失败，请检查站点返回信息。 URL: {response.url}"
 
         except Exception as e:
-            logger.error(f"发布到 NovaHD 站点时发生错误: {e}")
+            logger.error(f"发布到 CrabPT 站点时发生错误: {e}")
             logger.error(traceback.format_exc())
             return False, f"请求异常: {e}"
 
 
 def upload(site_info: dict, upload_payload: dict):
-    uploader = NovahdUploader(site_info, upload_payload)
+    uploader = CrabptUploader(site_info, upload_payload)
     return uploader.execute_upload()
