@@ -13,3 +13,4 @@ bencoder
 pymediainfo
 PyJWT
 Flask-Bcrypt
+psycopg2-binary

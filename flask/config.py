@@ -196,6 +196,27 @@ def get_db_config():
         logging.info("MySQL 配置验证通过。")
         return {"db_type": "mysql", "mysql": mysql_config}
 
+    elif db_choice == "postgresql":
+        logging.info("数据库类型选择为 PostgreSQL。正在检查相关环境变量...")
+        postgresql_config = {
+            "host": os.getenv("POSTGRES_HOST"),
+            "user": os.getenv("POSTGRES_USER"),
+            "password": os.getenv("POSTGRES_PASSWORD"),
+            "database": os.getenv("POSTGRES_DATABASE"),
+            "port": os.getenv("POSTGRES_PORT", 5432),
+        }
+        if not all(postgresql_config.values()):
+            logging.error("关键错误: DB_TYPE='postgresql', 但一个或多个 POSTGRES_* 环境变量缺失！")
+            sys.exit(1)
+        try:
+            postgresql_config["port"] = int(postgresql_config["port"])
+        except (ValueError, TypeError):
+            logging.error(
+                f"关键错误: POSTGRES_PORT ('{postgresql_config['port']}') 不是一个有效的整数！")
+            sys.exit(1)
+        logging.info("PostgreSQL 配置验证通过。")
+        return {"db_type": "postgresql", "postgresql": postgresql_config}
+
     elif db_choice == "sqlite":
         logging.info("数据库类型选择为 SQLite。")
         db_path = os.path.join(DATA_DIR, "pt_stats.db")

@@ -41,7 +41,7 @@ def get_date_range_and_grouping(time_range_str, for_speed=False):
     }
     if time_range_str in ranges:
         start_dt, group_by_format_override = ranges[time_range_str]
-        if group_by_format_override:
+        if group_by_format_override is not None:  # Changed from "if group_by_format_override:" to handle empty string
             group_by_format = group_by_format_override
 
     if time_range_str == "yesterday":
@@ -63,9 +63,14 @@ def get_date_range_and_grouping(time_range_str, for_speed=False):
 
 
 def get_time_group_fn(db_type, format_str):
-    return (f"DATE_FORMAT(stat_datetime, '{format_str.replace('%M', '%i')}')"
-            if db_type == "mysql" else
-            f"STRFTIME('{format_str}', stat_datetime)")
+    if db_type == "mysql":
+        return f"DATE_FORMAT(stat_datetime, '{format_str.replace('%M', '%i')}')"
+    elif db_type == "postgresql":
+        # Convert strftime format to PostgreSQL TO_CHAR format
+        pg_format = format_str.replace('%Y', 'YYYY').replace('%m', 'MM').replace('%d', 'DD').replace('%H', 'HH24').replace('%M', 'MI')
+        return f"TO_CHAR(stat_datetime, '{pg_format}')"
+    else:  # sqlite
+        return f"STRFTIME('{format_str}', stat_datetime)"
 
 
 @stats_bp.route("/chart_data")
@@ -76,16 +81,41 @@ def get_chart_data_api():
 
     time_range = request.args.get("range", "this_week")
     start_dt, end_dt, group_by_format = get_date_range_and_grouping(time_range)
+    # 如果 group_by_format 为 None，设置默认值
+    if not group_by_format:
+        group_by_format = "%Y-%m-%d %H:00"
     time_group_fn = get_time_group_fn(db_manager.db_type, group_by_format)
     ph = db_manager.get_placeholder()
 
     # --- 修改 SQL 查询，增加 downloader_id 分组 ---
     query = f"SELECT {time_group_fn} AS time_group, downloader_id, SUM(uploaded) AS total_ul, SUM(downloaded) AS total_dl FROM traffic_stats WHERE stat_datetime >= {ph}"
-    params = [start_dt.strftime("%Y-%m-%d %H:%M:%S")]
-    if end_dt:
+    params = [start_dt.strftime("%Y-%m-%d %H:%M:%S")] if start_dt else []
+    if end_dt and start_dt:
         query += f" AND stat_datetime < {ph}"
         params.append(end_dt.strftime("%Y-%m-%d %H:%M:%S"))
     query += " GROUP BY time_group, downloader_id ORDER BY time_group"
+    
+    # 获取下载器信息（移到前面以便在早期返回中使用）
+    enabled_downloaders = [{
+        "id": d["id"],
+        "name": d["name"]
+    } for d in config_manager.get().get("downloaders", [])
+                            if d.get("enabled")]
+    
+    # 如果没有参数但查询中有占位符，则返回空数据
+    if not params:
+        logging.info("No params for chart data query, returning empty data")
+        return jsonify({
+            "labels": [],
+            "datasets": {},
+            "downloaders": enabled_downloaders
+        })
+    
+    # 添加调试日志
+    logging.info(f"Chart data query: {query}")
+    logging.info(f"Chart data params: {params}")
+    logging.info(f"Number of placeholders in query: {query.count(ph)}")
+    logging.info(f"Number of params: {len(params)}")
 
     conn, cursor = None, None
     try:
@@ -257,14 +287,32 @@ def get_speed_chart_data_api():
         cursor = db_manager._get_cursor(conn)
         start_dt, end_dt, group_by_format = get_date_range_and_grouping(
             time_range, for_speed=True)
+        # 如果 group_by_format 为 None，设置默认值
+        if not group_by_format:
+            group_by_format = "%Y-%m-%d %H:00" if not for_speed else "%Y-%m-%d %H:%M"
         time_group_fn = get_time_group_fn(db_manager.db_type, group_by_format)
 
         query = f"SELECT {time_group_fn} AS time_group, downloader_id, AVG(upload_speed) AS ul_speed, AVG(download_speed) AS dl_speed FROM traffic_stats WHERE stat_datetime >= {db_manager.get_placeholder()}"
-        params = [start_dt.strftime("%Y-%m-%d %H:%M:%S")]
-        if end_dt:
+        params = [start_dt.strftime("%Y-%m-%d %H:%M:%S")] if start_dt else []
+        if end_dt and start_dt:
             query += f" AND stat_datetime < {db_manager.get_placeholder()}"
             params.append(end_dt.strftime("%Y-%m-%d %H:%M:%S"))
         query += " GROUP BY time_group, downloader_id ORDER BY time_group"
+        
+        # 如果没有参数但查询中有占位符，则返回空数据
+        if not params:
+            logging.info("No params for speed chart data query, returning empty data")
+            return jsonify({
+                "labels": [],
+                "datasets": [],
+                "downloaders": enabled_downloaders
+            })
+            
+        # 添加调试日志
+        logging.info(f"Speed chart data query: {query}")
+        logging.info(f"Speed chart data params: {params}")
+        logging.info(f"Number of placeholders in speed query: {query.count(db_manager.get_placeholder())}")
+        logging.info(f"Number of speed params: {len(params)}")
 
         cursor.execute(query, tuple(params))
         rows = cursor.fetchall()
