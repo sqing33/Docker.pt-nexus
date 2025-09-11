@@ -194,8 +194,8 @@
     "base_url": "hdtime.org",
     "special_tracker_domain": null,
     "group": "HDtime",
-    "migration": 0,
-    "speed_limit": 0
+    "migration": 2,
+    "speed_limit": 10
   },
   {
     "site": "1ptba",
@@ -419,8 +419,8 @@
     "base_url": "pt.0ff.cc",
     "special_tracker_domain": null,
     "group": "FFweb",
-    "migration": 0,
-    "speed_limit": 0
+    "migration": 3,
+    "speed_limit": 10
   },
   {
     "site": "redleaves",
@@ -509,8 +509,8 @@
     "base_url": "carpt.net",
     "special_tracker_domain": null,
     "group": "CarPT",
-    "migration": 0,
-    "speed_limit": 0
+    "migration": 2,
+    "speed_limit": 10
   },
   {
     "site": "dajiao",
@@ -770,8 +770,8 @@
     "base_url": "sewerpt.com",
     "special_tracker_domain": null,
     "group": "SewageWeb",
-    "migration": 0,
-    "speed_limit": 0
+    "migration": 2,
+    "speed_limit": 10
   },
   {
     "site": "bilibili",
