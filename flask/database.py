@@ -3,9 +3,11 @@
 import logging
 import sqlite3
 import mysql.connector
+import psycopg2
 import json
 import os
 from datetime import datetime
+from psycopg2.extras import RealDictCursor
 
 # 从项目根目录导入模块
 from config import SITES_DATA_FILE, config_manager
@@ -20,7 +22,7 @@ from core.services import _prepare_api_config
 
 
 class DatabaseManager:
-    """处理与配置的数据库（MySQL 或 SQLite）的所有交互。"""
+    """处理与配置的数据库（MySQL、PostgreSQL 或 SQLite）的所有交互。"""
 
     def __init__(self, config):
         """根据提供的配置初始化 DatabaseManager。"""
@@ -28,6 +30,9 @@ class DatabaseManager:
         if self.db_type == "mysql":
             self.mysql_config = config.get("mysql", {})
             logging.info("数据库后端设置为 MySQL。")
+        elif self.db_type == "postgresql":
+            self.postgresql_config = config.get("postgresql", {})
+            logging.info("数据库后端设置为 PostgreSQL。")
         else:
             self.sqlite_path = config.get("path", "data/pt_stats.db")
             logging.info(f"数据库后端设置为 SQLite。路径: {self.sqlite_path}")
@@ -37,6 +42,8 @@ class DatabaseManager:
         if self.db_type == "mysql":
             return mysql.connector.connect(**self.mysql_config,
                                            autocommit=False)
+        elif self.db_type == "postgresql":
+            return psycopg2.connect(**self.postgresql_config)
         else:
             return sqlite3.connect(self.sqlite_path, timeout=20)
 
@@ -44,6 +51,8 @@ class DatabaseManager:
         """从连接中返回一个游标。"""
         if self.db_type == "mysql":
             return conn.cursor(dictionary=True, buffered=True)
+        elif self.db_type == "postgresql":
+            return conn.cursor(cursor_factory=RealDictCursor)
         else:
             conn.row_factory = sqlite3.Row
             return conn.cursor()
@@ -58,6 +67,9 @@ class DatabaseManager:
         if self.db_type == 'mysql':
             cursor.execute(f"DESCRIBE {table_name}")
             columns = {row['Field'].lower() for row in cursor.fetchall()}
+        elif self.db_type == 'postgresql':
+            cursor.execute("SELECT column_name FROM information_schema.columns WHERE table_name = %s AND table_schema = 'public'", (table_name,))
+            columns = {row['column_name'].lower() for row in cursor.fetchall()}
         else:  # sqlite
             cursor.execute(f"PRAGMA table_info({table_name})")
             columns = {row['name'].lower() for row in cursor.fetchall()}
@@ -110,6 +122,9 @@ class DatabaseManager:
         if self.db_type == 'mysql':
             cursor.execute(f"DESCRIBE {table_name}")
             columns = {row['Field'].lower() for row in cursor.fetchall()}
+        elif self.db_type == 'postgresql':
+            cursor.execute("SELECT column_name FROM information_schema.columns WHERE table_name = %s AND table_schema = 'public'", (table_name,))
+            columns = {row['column_name'].lower() for row in cursor.fetchall()}
         else:  # sqlite
             cursor.execute(f"PRAGMA table_info({table_name})")
             columns = {row['name'].lower() for row in cursor.fetchall()}
@@ -129,7 +144,7 @@ class DatabaseManager:
 
     def get_placeholder(self):
         """返回数据库类型对应的正确参数占位符。"""
-        return "%s" if self.db_type == "mysql" else "?"
+        return "%s" if self.db_type in ["mysql", "postgresql"] else "?"
 
     def get_site_by_nickname(self, nickname):
         """通过站点昵称从数据库中获取站点的完整信息。"""
@@ -282,6 +297,28 @@ class DatabaseManager:
                     cursor.execute(
                         f"ALTER TABLE `sites` ADD COLUMN `{col_name}` {mysql_type}"
                     )
+        elif self.db_type == "postgresql":
+            meta_cursor = conn.cursor(cursor_factory=RealDictCursor)
+            meta_cursor.execute(
+                "SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'sites'"
+            )
+            existing_columns = {
+                row["column_name"].lower()
+                for row in meta_cursor.fetchall()
+            }
+            meta_cursor.close()
+            for col_name, _, mysql_type in columns_to_add:
+                if col_name.lower() not in existing_columns:
+                    # PostgreSQL type mappings
+                    postgresql_type = {
+                        "TINYINT DEFAULT 0": "SMALLINT DEFAULT 0",
+                        "TINYINT NOT NULL DEFAULT 0": "SMALLINT NOT NULL DEFAULT 0",
+                    }.get(mysql_type, mysql_type)
+                    logging.info(
+                        f"在 PostgreSQL 'sites' 表中发现缺失列: '{col_name}'。正在添加...")
+                    cursor.execute(
+                        f"ALTER TABLE sites ADD COLUMN {col_name} {postgresql_type}"
+                    )
         else:  # SQLite
             cursor.execute("PRAGMA table_info(sites)")
             existing_columns = {
@@ -302,7 +339,7 @@ class DatabaseManager:
         cursor = self._get_cursor(conn)
 
         logging.info("正在初始化并验证数据库表结构...")
-        # 表创建逻辑 (MySQL) - [此部分保持不变]
+        # 表创建逻辑 (MySQL)
         if self.db_type == "mysql":
             cursor.execute(
                 "CREATE TABLE IF NOT EXISTS traffic_stats (stat_datetime DATETIME NOT NULL, downloader_id VARCHAR(36) NOT NULL, uploaded BIGINT DEFAULT 0, downloaded BIGINT DEFAULT 0, upload_speed BIGINT DEFAULT 0, download_speed BIGINT DEFAULT 0, PRIMARY KEY (stat_datetime, downloader_id)) ENGINE=InnoDB ROW_FORMAT=Dynamic"
@@ -319,7 +356,24 @@ class DatabaseManager:
             cursor.execute(
                 "CREATE TABLE IF NOT EXISTS `sites` (`id` mediumint NOT NULL AUTO_INCREMENT, `site` varchar(255) UNIQUE DEFAULT NULL, `nickname` varchar(255) DEFAULT NULL, `base_url` varchar(255) DEFAULT NULL, `special_tracker_domain` varchar(255) DEFAULT NULL, `group` varchar(255) DEFAULT NULL, `cookie` TEXT DEFAULT NULL,`passkey` varchar(255) DEFAULT NULL,`migration` int(11) NOT NULL DEFAULT 1, `speed_limit` int(11) NOT NULL DEFAULT 0, PRIMARY KEY (`id`)) ENGINE=InnoDB ROW_FORMAT=DYNAMIC"
             )
-        # 表创建逻辑 (SQLite) - [此部分保持不变]
+        # 表创建逻辑 (PostgreSQL)
+        elif self.db_type == "postgresql":
+            cursor.execute(
+                "CREATE TABLE IF NOT EXISTS traffic_stats (stat_datetime TIMESTAMP NOT NULL, downloader_id VARCHAR(36) NOT NULL, uploaded BIGINT DEFAULT 0, downloaded BIGINT DEFAULT 0, upload_speed BIGINT DEFAULT 0, download_speed BIGINT DEFAULT 0, PRIMARY KEY (stat_datetime, downloader_id))"
+            )
+            cursor.execute(
+                "CREATE TABLE IF NOT EXISTS downloader_clients (id VARCHAR(36) PRIMARY KEY, name VARCHAR(255) NOT NULL, type VARCHAR(50) NOT NULL, last_total_dl BIGINT NOT NULL DEFAULT 0, last_total_ul BIGINT NOT NULL DEFAULT 0)"
+            )
+            cursor.execute(
+                "CREATE TABLE IF NOT EXISTS torrents (hash VARCHAR(40) PRIMARY KEY, name TEXT NOT NULL, save_path TEXT, size BIGINT, progress REAL, state VARCHAR(50), sites VARCHAR(255), \"group\" VARCHAR(255), details TEXT, downloader_id VARCHAR(36), last_seen TIMESTAMP NOT NULL)"
+            )
+            cursor.execute(
+                "CREATE TABLE IF NOT EXISTS torrent_upload_stats (hash VARCHAR(40) NOT NULL, downloader_id VARCHAR(36) NOT NULL, uploaded BIGINT DEFAULT 0, PRIMARY KEY (hash, downloader_id))"
+            )
+            cursor.execute(
+                "CREATE TABLE IF NOT EXISTS sites (id SERIAL PRIMARY KEY, site VARCHAR(255) UNIQUE, nickname VARCHAR(255), base_url VARCHAR(255), special_tracker_domain VARCHAR(255), \"group\" VARCHAR(255), cookie TEXT, passkey VARCHAR(255), migration INTEGER NOT NULL DEFAULT 1, speed_limit INTEGER NOT NULL DEFAULT 0)"
+            )
+        # 表创建逻辑 (SQLite)
         else:
             cursor.execute(
                 "CREATE TABLE IF NOT EXISTS traffic_stats (stat_datetime TEXT NOT NULL, downloader_id TEXT NOT NULL, uploaded INTEGER DEFAULT 0, downloaded INTEGER DEFAULT 0, upload_speed INTEGER DEFAULT 0, download_speed INTEGER DEFAULT 0, PRIMARY KEY (stat_datetime, downloader_id))"
@@ -415,7 +469,10 @@ class DatabaseManager:
                     f"发现 {len(sites_to_insert)} 个新站点，将从 {SITES_DATA_FILE} 插入数据库。"
                 )
                 ph = self.get_placeholder()
-                sql_insert = f"INSERT INTO sites (site, nickname, base_url, special_tracker_domain, `group`, migration, speed_limit) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})"
+                if self.db_type == "postgresql":
+                    sql_insert = f"INSERT INTO sites (site, nickname, base_url, special_tracker_domain, \"group\", migration, speed_limit) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})"
+                else:
+                    sql_insert = f"INSERT INTO sites (site, nickname, base_url, special_tracker_domain, `group`, migration, speed_limit) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})"
                 cursor.executemany(sql_insert, sites_to_insert)
 
             # --- 步骤 2: [新增逻辑] 更新所有站点的 migration 值 ---
@@ -638,6 +695,8 @@ def reconcile_historical_data(db_manager, config):
     if zero_point_records:
         try:
             sql_insert_zero = (
+                f"INSERT INTO traffic_stats (stat_datetime, downloader_id, uploaded, downloaded, upload_speed, download_speed) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}) ON CONFLICT(stat_datetime, downloader_id) DO UPDATE SET uploaded = EXCLUDED.uploaded, downloaded = EXCLUDED.downloaded"
+                if db_manager.db_type == "postgresql" else
                 f"INSERT INTO traffic_stats (stat_datetime, downloader_id, uploaded, downloaded, upload_speed, download_speed) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}) ON DUPLICATE KEY UPDATE uploaded = VALUES(uploaded), downloaded = VALUES(downloaded)"
                 if db_manager.db_type == "mysql" else
                 f"INSERT INTO traffic_stats (stat_datetime, downloader_id, uploaded, downloaded, upload_speed, download_speed) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(stat_datetime, downloader_id) DO UPDATE SET uploaded = excluded.uploaded, downloaded = excluded.downloaded"

@@ -23,7 +23,7 @@
 
 ### 4. 现代化技术栈
 
-- **数据库支持**：支持 **SQLite**（默认，零配置）和 **MySQL** 两种数据库后端。
+- **数据库支持**：支持 **SQLite**（默认，零配置）、**MySQL** 和 **PostgreSQL** 三种数据库后端。
 - **全功能 API**：前后端分离架构，所有数据均通过 API 交互，方便二次开发或集成。
 - **容器化部署**：提供开箱即用的 Docker Compose 配置，实现简单快速的部署与管理。
 
@@ -36,12 +36,17 @@
 | 分类       | 参数                 | 说明                                | 示例            |
 | :--------- | :------------------- | :---------------------------------- | :-------------- |
 | **通用**   | `TZ`                 | 设置容器时区，确保时间与日志准确。  | `Asia/Shanghai` |
-| **数据库** | `DB_TYPE`            | 选择数据库类型。`sqlite`或`mysql`。 | `sqlite`        |
+| **数据库** | `DB_TYPE`            | 选择数据库类型。`sqlite`、`mysql`或`postgresql`。 | `sqlite`        |
 |            | `MYSQL_HOST`         | **(MySQL 专用)** 数据库主机地址。   | `192.168.1.100` |
 |            | `MYSQL_PORT`         | **(MySQL 专用)** 数据库端口。       | `3306`          |
 |            | `MYSQL_DATABASE`     | **(MySQL 专用)** 数据库名称。       | `pt_nexus`      |
 |            | `MYSQL_USER`         | **(MySQL 专用)** 数据库用户名。     | `root`          |
 |            | `MYSQL_PASSWORD`     | **(MySQL 专用)** 数据库密码。       | `your_password` |
+|            | `POSTGRES_HOST`      | **(PostgreSQL 专用)** 数据库主机地址。 | `192.168.1.100` |
+|            | `POSTGRES_PORT`      | **(PostgreSQL 专用)** 数据库端口。     | `5432`          |
+|            | `POSTGRES_DATABASE`  | **(PostgreSQL 专用)** 数据库名称。     | `pt_nexus`      |
+|            | `POSTGRES_USER`      | **(PostgreSQL 专用)** 数据库用户名。   | `postgres`      |
+|            | `POSTGRES_PASSWORD`  | **(PostgreSQL 专用)** 数据库密码。     | `your_password` |
 
 ### Docker Compose 示例
 

@@ -33,9 +33,15 @@ def load_site_maps_from_db(db_manager):
     try:
         conn = db_manager._get_connection()
         cursor = db_manager._get_cursor(conn)
-        cursor.execute(
-            "SELECT nickname, base_url, special_tracker_domain, `group` FROM sites"
-        )
+        # 根据数据库类型使用正确的引号
+        if db_manager.db_type == "postgresql":
+            cursor.execute(
+                "SELECT nickname, base_url, special_tracker_domain, \"group\" FROM sites"
+            )
+        else:
+            cursor.execute(
+                "SELECT nickname, base_url, special_tracker_domain, `group` FROM sites"
+            )
         for row in cursor.fetchall():
             nickname, base_url, special_tracker, groups_str = (
                 row["nickname"],
@@ -315,22 +321,24 @@ class DataTracker(Thread):
                          data_point["ul_speed"], data_point["dl_speed"]))
 
             if params_to_insert:
-                sql_insert = (
-                    """INSERT INTO traffic_stats (stat_datetime, downloader_id, uploaded, downloaded, upload_speed, download_speed) VALUES (%s, %s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE uploaded = VALUES(uploaded), downloaded = VALUES(downloaded), upload_speed = VALUES(upload_speed), download_speed = VALUES(download_speed)"""
-                    if is_mysql else
-                    """INSERT INTO traffic_stats (stat_datetime, downloader_id, uploaded, downloaded, upload_speed, download_speed) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(stat_datetime, downloader_id) DO UPDATE SET uploaded = excluded.uploaded, downloaded = excluded.downloaded, upload_speed = excluded.upload_speed, download_speed = excluded.download_speed"""
-                )
+                # 根据数据库类型使用正确的占位符和冲突处理语法
+                if self.db_manager.db_type == "mysql":
+                    sql_insert = """INSERT INTO traffic_stats (stat_datetime, downloader_id, uploaded, downloaded, upload_speed, download_speed) VALUES (%s, %s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE uploaded = VALUES(uploaded), downloaded = VALUES(downloaded), upload_speed = VALUES(upload_speed), download_speed = VALUES(download_speed)"""
+                elif self.db_manager.db_type == "postgresql":
+                    sql_insert = """INSERT INTO traffic_stats (stat_datetime, downloader_id, uploaded, downloaded, upload_speed, download_speed) VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT(stat_datetime, downloader_id) DO UPDATE SET uploaded = EXCLUDED.uploaded, downloaded = EXCLUDED.downloaded, upload_speed = EXCLUDED.upload_speed, download_speed = EXCLUDED.download_speed"""
+                else:  # sqlite
+                    sql_insert = """INSERT INTO traffic_stats (stat_datetime, downloader_id, uploaded, downloaded, upload_speed, download_speed) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(stat_datetime, downloader_id) DO UPDATE SET uploaded = excluded.uploaded, downloaded = excluded.downloaded, upload_speed = excluded.upload_speed, download_speed = excluded.download_speed"""
                 cursor.executemany(sql_insert, params_to_insert)
 
             update_params = [(state["last_total_dl"], state["last_total_ul"],
                               client_id)
                              for client_id, state in last_states.items()]
             if update_params:
-                sql = (
-                    "UPDATE downloader_clients SET last_total_dl = %s, last_total_ul = %s WHERE id = %s"
-                    if is_mysql else
-                    "UPDATE downloader_clients SET last_total_dl = ?, last_total_ul = ? WHERE id = ?"
-                )
+                # 根据数据库类型使用正确的占位符
+                if self.db_manager.db_type == "mysql" or self.db_manager.db_type == "postgresql":
+                    sql = "UPDATE downloader_clients SET last_total_dl = %s, last_total_ul = %s WHERE id = %s"
+                else:  # sqlite
+                    sql = "UPDATE downloader_clients SET last_total_dl = ?, last_total_ul = ? WHERE id = ?"
                 cursor.executemany(sql, update_params)
             conn.commit()
         except Exception as e:
@@ -425,24 +433,30 @@ class DataTracker(Thread):
             if torrents_to_upsert:
                 params = [(*d.values(), now_str)
                           for d in torrents_to_upsert.values()]
-                sql = (
-                    """INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, `group`, downloader_id, last_seen) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE name=VALUES(name), save_path=VALUES(save_path), size=VALUES(size), progress=VALUES(progress), state=VALUES(state), sites=VALUES(sites), details=VALUES(details), `group`=VALUES(`group`), downloader_id=VALUES(downloader_id), last_seen=VALUES(last_seen)"""
-                    if is_mysql else
-                    """INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, `group`, downloader_id, last_seen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(hash) DO UPDATE SET name=excluded.name, save_path=excluded.save_path, size=excluded.size, progress=excluded.progress, state=excluded.state, sites=excluded.sites, details=excluded.details, `group`=excluded.`group`, downloader_id=excluded.downloader_id, last_seen=excluded.last_seen"""
-                )
+                # 根据数据库类型使用正确的引号和冲突处理语法
+                if self.db_manager.db_type == "mysql":
+                    sql = """INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, `group`, downloader_id, last_seen) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE name=VALUES(name), save_path=VALUES(save_path), size=VALUES(size), progress=VALUES(progress), state=VALUES(state), sites=VALUES(sites), details=VALUES(details), `group`=VALUES(`group`), downloader_id=VALUES(downloader_id), last_seen=VALUES(last_seen)"""
+                elif self.db_manager.db_type == "postgresql":
+                    sql = """INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, "group", downloader_id, last_seen) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT(hash) DO UPDATE SET name=excluded.name, save_path=excluded.save_path, size=excluded.size, progress=excluded.progress, state=excluded.state, sites=excluded.sites, details=excluded.details, "group"=excluded."group", downloader_id=excluded.downloader_id, last_seen=excluded.last_seen"""
+                else:  # sqlite
+                    sql = """INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, `group`, downloader_id, last_seen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(hash) DO UPDATE SET name=excluded.name, save_path=excluded.save_path, size=excluded.size, progress=excluded.progress, state=excluded.state, sites=excluded.sites, details=excluded.details, `group`=excluded.`group`, downloader_id=excluded.downloader_id, last_seen=excluded.last_seen"""
                 cursor.executemany(sql, params)
                 logging.info(f"已批量处理 {len(params)} 条种子主信息。")
             if upload_stats_to_upsert:
-                sql_upload = (
-                    """INSERT INTO torrent_upload_stats (hash, downloader_id, uploaded) VALUES (%s, %s, %s) ON DUPLICATE KEY UPDATE uploaded=VALUES(uploaded)"""
-                    if is_mysql else
-                    """INSERT INTO torrent_upload_stats (hash, downloader_id, uploaded) VALUES (?, ?, ?) ON CONFLICT(hash, downloader_id) DO UPDATE SET uploaded=excluded.uploaded"""
-                )
+                # 根据数据库类型使用正确的占位符和冲突处理语法
+                if self.db_manager.db_type == "mysql":
+                    sql_upload = """INSERT INTO torrent_upload_stats (hash, downloader_id, uploaded) VALUES (%s, %s, %s) ON DUPLICATE KEY UPDATE uploaded=VALUES(uploaded)"""
+                elif self.db_manager.db_type == "postgresql":
+                    sql_upload = """INSERT INTO torrent_upload_stats (hash, downloader_id, uploaded) VALUES (%s, %s, %s) ON CONFLICT(hash, downloader_id) DO UPDATE SET uploaded=EXCLUDED.uploaded"""
+                else:  # sqlite
+                    sql_upload = """INSERT INTO torrent_upload_stats (hash, downloader_id, uploaded) VALUES (?, ?, ?) ON CONFLICT(hash, downloader_id) DO UPDATE SET uploaded=excluded.uploaded"""
                 cursor.executemany(sql_upload, upload_stats_to_upsert)
                 logging.info(f"已批量处理 {len(upload_stats_to_upsert)} 条种子上传数据。")
+            # 根据数据库类型使用正确的占位符
+            placeholder = "%s" if self.db_manager.db_type in ["mysql", "postgresql"] else "?"
             (cursor.execute(
                 "DELETE FROM torrents WHERE hash NOT IN ({})".format(",".join(
-                    ["%s" if is_mysql else "?"] *
+                    [placeholder] *
                     len(all_current_hashes))), tuple(all_current_hashes))
              if all_current_hashes else cursor.execute("DELETE FROM torrents"))
             logging.info(f"从 torrents 表中移除了 {cursor.rowcount} 个陈旧的种子。")

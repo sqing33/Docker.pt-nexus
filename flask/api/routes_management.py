@@ -87,12 +87,21 @@ def get_sites():
     try:
         conn = db_manager._get_connection()
         cursor = db_manager._get_cursor(conn)
-        select_fields = """
-            s.id, s.nickname, s.site, s.base_url, s.special_tracker_domain, s.`group`, s.proxy, s.speed_limit,
-            CASE WHEN s.cookie IS NOT NULL AND s.cookie != '' THEN 1 ELSE 0 END as has_cookie,
-            CASE WHEN s.passkey IS NOT NULL AND s.passkey != '' THEN 1 ELSE 0 END as has_passkey,
-            s.cookie, s.passkey
-        """
+        # 根据数据库类型使用正确的引号
+        if db_manager.db_type == "postgresql":
+            select_fields = """
+                s.id, s.nickname, s.site, s.base_url, s.special_tracker_domain, s."group", s.proxy, s.speed_limit,
+                CASE WHEN s.cookie IS NOT NULL AND s.cookie != '' THEN 1 ELSE 0 END as has_cookie,
+                CASE WHEN s.passkey IS NOT NULL AND s.passkey != '' THEN 1 ELSE 0 END as has_passkey,
+                s.cookie, s.passkey
+            """
+        else:
+            select_fields = """
+                s.id, s.nickname, s.site, s.base_url, s.special_tracker_domain, s.`group`, s.proxy, s.speed_limit,
+                CASE WHEN s.cookie IS NOT NULL AND s.cookie != '' THEN 1 ELSE 0 END as has_cookie,
+                CASE WHEN s.passkey IS NOT NULL AND s.passkey != '' THEN 1 ELSE 0 END as has_passkey,
+                s.cookie, s.passkey
+            """
         if filter_by_torrents == "active":
             sql = f"""
                 SELECT DISTINCT {select_fields}
@@ -443,6 +452,12 @@ def get_downloader_info_api():
             today_query = """SELECT downloader_id, SUM(downloaded) as today_dl, SUM(uploaded) as today_ul 
                             FROM traffic_stats 
                             WHERE DATE(stat_datetime) = CURDATE() 
+                            GROUP BY downloader_id"""
+            cursor.execute(today_query)
+        elif db_manager.db_type == "postgresql":
+            today_query = """SELECT downloader_id, SUM(downloaded) as today_dl, SUM(uploaded) as today_ul 
+                            FROM traffic_stats 
+                            WHERE stat_datetime::date = CURRENT_DATE 
                             GROUP BY downloader_id"""
             cursor.execute(today_query)
         else:  # SQLite
