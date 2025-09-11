@@ -433,20 +433,6 @@ def get_group_stats_api():
             } for r in cursor.fetchall()]
         else:
             # 原逻辑：按站点聚合整体展示
-            query = f"""
-                SELECT s.nickname AS site_name, 
-                       GROUP_CONCAT(DISTINCT ut.{group_col_quoted}) AS group_suffix, 
-                       COUNT(ut.name) AS torrent_count, 
-                       SUM(ut.size) AS total_size 
-                FROM (
-                    SELECT name, {group_col_quoted}, MAX(size) AS size 
-                    FROM torrents 
-                    WHERE {group_col_quoted} IS NOT NULL AND {group_col_quoted} != '' 
-                    GROUP BY name, {group_col_quoted}
-                ) AS ut 
-                JOIN sites AS s ON (',' || s."group" || ',' LIKE '%,' || ut.{group_col_quoted} || ',%')
-                GROUP BY s.nickname ORDER BY s.nickname;
-            """
             if db_manager.db_type == "mysql":
                 query = f"""
                     SELECT s.nickname AS site_name, 
@@ -459,6 +445,33 @@ def get_group_stats_api():
                     JOIN sites AS s ON FIND_IN_SET(ut.`group`, s.`group`) > 0 
                     GROUP BY s.nickname ORDER BY s.nickname;
                  """
+            elif db_manager.db_type == "postgresql":
+                query = f"""
+                    SELECT s.nickname AS site_name, 
+                           STRING_AGG(DISTINCT ut."group", ', ') AS group_suffix, 
+                           COUNT(ut.name) AS torrent_count, SUM(ut.size) AS total_size 
+                    FROM (
+                        SELECT name, "group", MAX(size) AS size FROM torrents 
+                        WHERE "group" IS NOT NULL AND "group" != '' GROUP BY name, "group"
+                    ) AS ut 
+                    JOIN sites AS s ON (',' || s."group" || ',' LIKE '%,' || ut."group" || ',%') 
+                    GROUP BY s.nickname ORDER BY s.nickname;
+                 """
+            else:  # sqlite
+                query = f"""
+                    SELECT s.nickname AS site_name, 
+                           GROUP_CONCAT(DISTINCT ut.{group_col_quoted}) AS group_suffix, 
+                           COUNT(ut.name) AS torrent_count, 
+                           SUM(ut.size) AS total_size 
+                    FROM (
+                        SELECT name, {group_col_quoted}, MAX(size) AS size 
+                        FROM torrents 
+                        WHERE {group_col_quoted} IS NOT NULL AND {group_col_quoted} != '' 
+                        GROUP BY name, {group_col_quoted}
+                    ) AS ut 
+                    JOIN sites AS s ON (',' || s."group" || ',' LIKE '%,' || ut.{group_col_quoted} || ',%')
+                    GROUP BY s.nickname ORDER BY s.nickname;
+                """
             cursor.execute(query)
             results = [{
                 "site_name":
