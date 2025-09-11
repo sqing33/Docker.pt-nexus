@@ -386,6 +386,7 @@ def get_group_stats_api():
         if site_nickname:
             # 统计：先筛选做种站点为指定站点的种子，再按官组与“官组所属站点”聚合
             if db_manager.db_type == "mysql":
+                ph = db_manager.get_placeholder()
                 query = f"""
                     SELECT s.nickname AS site_name,
                            ut.`group` AS group_suffix,
@@ -394,7 +395,7 @@ def get_group_stats_api():
                     FROM (
                         SELECT name, `group`, MAX(size) AS size
                         FROM torrents
-                        WHERE `group` IS NOT NULL AND `group` != '' AND sites = %s
+                        WHERE `group` IS NOT NULL AND `group` != '' AND sites = {ph}
                         GROUP BY name, `group`
                     ) AS ut
                     JOIN sites AS s ON FIND_IN_SET(ut.`group`, s.`group`) > 0
@@ -411,10 +412,10 @@ def get_group_stats_api():
                     FROM (
                         SELECT name, {group_col_quoted}, MAX(size) AS size
                         FROM torrents
-                        WHERE {group_col_quoted} IS NOT NULL AND {group_col_quoted} != '' AND sites = ?
+                        WHERE {group_col_quoted} IS NOT NULL AND {group_col_quoted} != '' AND sites = {db_manager.get_placeholder()}
                         GROUP BY name, {group_col_quoted}
                     ) AS ut
-                    JOIN sites AS s ON (',' || s.`group` || ',' LIKE '%,' || ut.{group_col_quoted} || ',%')
+                    JOIN sites AS s ON (',' || s."group" || ',' LIKE '%,' || ut.{group_col_quoted} || ',%')
                     GROUP BY s.nickname, ut.{group_col_quoted}
                     ORDER BY torrent_count DESC;
                 """
@@ -443,7 +444,7 @@ def get_group_stats_api():
                     WHERE {group_col_quoted} IS NOT NULL AND {group_col_quoted} != '' 
                     GROUP BY name, {group_col_quoted}
                 ) AS ut 
-                JOIN sites AS s ON (',' || s.`group` || ',' LIKE '%,' || ut.{group_col_quoted} || ',%')
+                JOIN sites AS s ON (',' || s."group" || ',' LIKE '%,' || ut.{group_col_quoted} || ',%')
                 GROUP BY s.nickname ORDER BY s.nickname;
             """
             if db_manager.db_type == "mysql":
