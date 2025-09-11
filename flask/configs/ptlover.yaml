@@ -1,0 +1,163 @@
+# Ptlover站点的配置文件
+site_name: "Ptlover"
+form_fields:
+  medium: "medium_sel[4]"
+  codec: "codec_sel[4]"
+  resolution: "standard_sel[4]"
+  source: "source_sel[4]"
+  team: "team_sel[4]"
+
+mappings:
+  type:
+    "Movies": "401"
+    "电影": "401"
+    "Driver": "401"
+    "Movie": "401"
+    "TV Series": "402"
+    "电视剧": "402"
+    "Documentaries": "404"
+    "记录片": "404"
+    "纪录片": "404"
+    "Animations": "405"
+    "动漫": "405"
+    "动画": "405"
+    "Anime": "405"
+    "脱口秀": "403"
+    "Talk Show": "403"
+    "MV": "406"
+    "演唱会": "406"
+    "Sports": "407"
+    "体育": "407"
+    "HQ Audio": "408"
+    "音乐": "408"
+    "音频": "408"
+    "综艺": "414"
+    "TV Shows": "414"
+    "其他": "409"
+    "Misc": "409"
+    "未知": "409"
+    "Unknown": "409"
+    # 9kg区类型
+    "写真": "420"
+    "Photography": "420"
+    "绘本": "417"
+    "Illustration": "417"
+    "国产": "416"
+    "Domestic": "416"
+    "步兵": "415"
+    "Unedited": "415"
+    "骑兵": "410"
+    "Edited": "410"
+    "直播秀": "411"
+    "Live Show": "411"
+    "游戏": "418"
+    "Game": "418"
+    "default": "409"
+
+  medium:
+    'UHD Blu-ray': '1'
+    'Blu-ray': '1'
+    'BD': '1'
+    'HD DVD': '2'
+    'Remux': '3'
+    'Encode': '7'
+    'WEB-DL': '10'
+    'WEBRip': '7'
+    'WEB': '10'
+    'HDTV': '5'
+    'TVrip': '5'
+    'DVD': '6'
+    'MiniBD': '4'
+    'CD': '8'
+    'Track': '9'
+    'BDMV': '11'
+    'default': '0'
+
+  codec:
+    'H.265': '6'
+    'HEVC': '6'
+    'x265': '6'
+    'H.264': '1'
+    'AVC': '8'
+    'x264': '1'
+    'VC-1': '2'
+    'XviD': '3'
+    'MPEG-2': '4'
+    'MPEG-4': '9'
+    'AV1': '7'
+    'VP9': '10'
+    'default': '5'
+
+  resolution:
+    '8K': '6'
+    '4320p': '6'
+    '4K': '5'
+    '2160p': '5'
+    'UHD': '5'
+    '1080p': '1'
+    '1080i': '2'
+    '720p': '3'
+    '720i': '3'
+    '480p': '7'
+    '480i': '7'
+    'SD': '4'
+    'default': '0'
+
+  source:
+    "中国": "1"
+    "CN": "1"
+    "大陆": "1"
+    "香港": "2"
+    "HK": "2"
+    "台湾": "3"
+    "TW": "3"
+    "美国": "4"
+    "US": "4"
+    "欧美": "4"
+    "欧洲": "4"
+    "EU": "4"
+    "日本": "5"
+    "JPN": "5"
+    "JP": "5"
+    "韩国": "6"
+    "KR": "6"
+    "印度": "7"
+    "IN": "7"
+    "default": "99"
+
+  team:
+    "TTG": "6"
+    "sunny": "7"
+    "HHWEB": "8"
+    "52pt": "14"
+    "OpenCD": "26"
+    "MrHulk": "25"
+    "JPTVclub": "24"
+    "DUSKLiGHT": "23"
+    "ADWeb": "22"
+    "DBTV": "21"
+    "PTerWEB": "20"
+    "AilMWeb": "19"
+    "HDH": "18"
+    "NTb": "17"
+    "Raws": "16"
+    "doraemon": "15"
+    "HDS": "1"
+    "ZWEX": "13"
+    "FRDS": "12"
+    "HDHome": "11"
+    "QHstudIo": "10"
+    "UBWEB": "9"
+    "WiKi": "4"
+    "MySiLU": "3"
+    "CHD": "2"
+    "default": "5"
+
+  tag:
+    "禁转": 1
+    "首发": 2
+    "DIY": 4
+    "国语": 5
+    "中字": 6
+    "HDR": 7
+    "default": null

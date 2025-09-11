@@ -1,0 +1,145 @@
+# 13City站点的配置文件
+site_name: "13City"
+form_fields:
+  medium: "medium_sel[4]"
+  codec: "codec_sel[4]"
+  audio_codec: "audiocodec_sel[4]"
+  resolution: "standard_sel[4]"
+  team: "team_sel[4]"
+  processing: "processing_sel[4]"
+
+mappings:
+  type:
+    "Movies": "401"
+    "电影": "401"
+    "TV Series": "402"
+    "电视剧": "402"
+    "TV Shows": "403"
+    "综艺": "403"
+    "Animations": "405"
+    "动漫": "405"
+    "动画": "405"
+    "Anime": "405"
+    "Music Videos": "406"
+    "演唱会、MV": "406"
+    "Music": "408"
+    "音乐": "408"
+    "E-book": "409"
+    "电子书&有声读物": "409"
+    "Documentaries": "413"
+    "纪录片": "413"
+    "default": "401"
+
+  medium:
+    'Blu-ray': '1'
+    'BD': '1'
+    'Remux': '3'
+    'Encode': '7'
+    'WEB-DL': '10'
+    'WEBRip': '12'
+    'HDTV': '5'
+    'HD DVD': '2'
+    'DVDR': '6'
+    'CD': '8'
+    'Track': '9'
+    'MiniBD': '4'
+    'Other': '13'
+    'default': '13'
+
+  codec:
+    'AVC': '1'
+    'H.264': '1'
+    'x264': '1'
+    'HEVC': '2'
+    'H.265': '2'
+    'x265': '2'
+    'MPEG-2': '3'
+    'VC-1': '4'
+    'VP9': '5'
+    'VPB': '5'
+    'Xvid': '6'
+    'Other': '7'
+    'default': '7'
+
+  audio_codec:
+    'FLAC': '1'
+    'APE': '2'
+    'DTS-HD': '3'
+    'DTS': '3'
+    'MP3': '4'
+    'OGG': '5'
+    'AAC': '6'
+    'DDP': '7'
+    'E-AC3': '7'
+    'TrueHD': '8'
+    'TrueHD Atmos': '9'
+    'LPCM': '10'
+    'Other': '11'
+    'default': '11'
+
+  resolution:
+    '8K': '1'
+    '4K': '2'
+    '1080p': '3'
+    '1080i': '4'
+    'Other': '5'
+    'default': '5'
+
+  processing:
+    "中国（含港澳台）": "1"
+    "中国": "1"
+    "CN": "1"
+    "中国大陆": "1"
+    "日本": "2"
+    "JPN": "2"
+    "JP": "2"
+    "泰国": "3"
+    "印度": "4"
+    "韩国": "5"
+    "KR": "5"
+    "欧美": "6"
+    "美国": "6"
+    "US": "6"
+    "欧洲": "6"
+    "EU": "6"
+    "Other（其他）": "7"
+    "其他": "7"
+    "default": "7"
+
+  team:
+    "13City": "1"
+    "AilMWeb": "2"
+    "52pt": "3"
+    "HHWEB": "4"
+    "CHDWEB": "5"
+    "FRDS": "6"
+    "MTeam": "7"
+    "QHstudIo": "8"
+    "PTerWEB": "9"
+    "rainweb": "10"
+    "SewageWeb": "12"
+    "UBWEB": "13"
+    "ZmWeb": "14"
+    "ADWeb": "15"
+    "UBits": "16"
+    "WiKi": "17"
+    "Other": "11"
+    "default": "11"
+
+  tag:
+    "禁转": 1
+    "首发": 2
+    "完结": 9
+    "分集": 8
+    "粤语": 13
+    "多语": 10
+    "国语": 5
+    "中字": 6
+    "中英双字": 14
+    "4K": 12
+    "1080p": 11
+    "HDR": 7
+    "DIY": 4
+    "红叶转载": 19
+    "有声图书": 15
+    "default": null

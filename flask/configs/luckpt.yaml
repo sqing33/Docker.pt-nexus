@@ -1,0 +1,145 @@
+# Luckpt站点的配置文件
+site_name: "Luckpt"
+form_fields:
+  medium: "medium_sel[4]"
+  codec: "codec_sel[4]"
+  audio_codec: "audiocodec_sel[4]"
+  resolution: "standard_sel[4]"
+  team: "team_sel[4]"
+
+mappings:
+  type:
+    "Movies": "401"
+    "电影": "401"
+    "Driver": "401"
+    "Movie": "401"
+    "TV Series": "402"
+    "电视剧": "402"
+    "Animations": "405"
+    "动漫": "405"
+    "动画": "405"
+    "Anime": "405"
+    "MV": "406"
+    "演唱会": "406"
+    "Music Video": "406"
+    "Music": "408"
+    "音乐": "408"
+    "专辑": "408"
+    "音轨": "408"
+    "音频": "408"
+    "Audio": "408"
+    "TV Shows": "410"
+    "综艺": "410"
+    "Documentaries": "411"
+    "记录片": "411"
+    "纪录片": "411"
+    "Sports": "412"
+    "体育": "412"
+    "短剧": "413"
+    "软件": "409"
+    "图书": "409"
+    "学习": "409"
+    "游戏": "409"
+    "音乐会": "409"
+    "资料": "409"
+    "其他": "409"
+    "Misc": "409"
+    "未知": "409"
+    "Unknown": "409"
+    "default": "409"
+
+  medium:
+    'UHD Blu-ray': '10'
+    'BluRay': '1'
+    'Blu-ray': '1'
+    'BD': '1'
+    'Remux': '3'
+    'Encode': '7'
+    'MiniBD': '4'
+    'WEB-DL': '11'
+    'WEBRip': '11'
+    'WEB': '11'
+    'HDTV': '5'
+    'TVrip': '5'
+    'DVD': '6'
+    'CD': '8'
+    'Track': '9'
+    'default': '13'
+
+  codec:
+    'H.265': '6'
+    'HEVC': '6'
+    'x265': '6'
+    'H.264': '1'
+    'AVC': '1'
+    'x264': '1'
+    'AV1': '2'
+    'VC-1': '3'
+    'MPEG-2': '4'
+    'XviD': '12'
+    'MPEG-4': '12'
+    'default': '5'
+
+  audio_codec:
+    'TrueHD Atmos': '11'
+    'DTS:X': '15'
+    'DTS-HD MA': '16'
+    'DDP': '12'
+    'DD+': '12'
+    'E-AC3': '12'
+    'Atmos': '11'
+    'TrueHD': '14'
+    'DTS': '3'
+    'AC3': '8'
+    'DD': '8'
+    'LPCM': '13'
+    'FLAC': '1'
+    'AAC': '6'
+    'APE': '2'
+    'M4A': '17'
+    'WAV': '18'
+    'MP3': '4'
+    'OGG': '5'
+    'default': '7'
+
+  resolution:
+    '8K': '7'
+    '4320p': '7'
+    '4K': '6'
+    '2160p': '6'
+    'UHD': '6'
+    '2K': '5'
+    '1440p': '5'
+    '1080p': '1'
+    '1080i': '1'
+    '720p': '3'
+    '480p': '4'
+    '480i': '4'
+    'default': '8'
+
+  team:
+    "LUCKWEB": "7"
+    "LUCKMUSIC": "8"
+    "FRDS": "9"
+    "mUHD-FRDS": "9"
+    "MNHD-FRDS": "9"
+    "StarfallWeb": "10"
+    "default": "5"
+
+  tag:
+    "首发": 2
+    "DIY": 4
+    "国语": 5
+    "中字": 6
+    "Dolby Vision": 20
+    "DV": 20
+    "HDR10+": 18
+    "HDR10": 19
+    "HDR": 19
+    "合集": 17
+    "特效": 16
+    "粤语": 14
+    "大包": 11
+    "完结": 10
+    "连载": 9
+    "default": null

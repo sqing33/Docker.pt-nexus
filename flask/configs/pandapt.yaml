@@ -1,0 +1,154 @@
+# Pandapt站点的配置文件
+site_name: "Pandapt"
+form_fields:
+  medium: "medium_sel[4]"
+  codec: "codec_sel[4]"
+  audio_codec: "audiocodec_sel[4]"
+  resolution: "standard_sel[4]"
+  source: "source_sel[4]"
+  team: "team_sel[4]"
+
+mappings:
+  type:
+    "Movies": "401"
+    "电影": "401"
+    "Driver": "401"
+    "Movie": "401"
+    "TV Series": "402"
+    "电视剧": "402"
+    "Animations": "405"
+    "动漫": "405"
+    "动画": "405"
+    "Anime": "405"
+    "TV Shows": "403"
+    "综艺": "403"
+    "Documentaries": "404"
+    "记录片": "404"
+    "纪录片": "404"
+    "Sports": "407"
+    "体育": "407"
+    "Software": "412"
+    "软件": "412"
+    "Games": "411"
+    "游戏": "411"
+    "MV": "413"
+    "演唱会": "413"
+    "音乐会": "413"
+    "Music Video": "413"
+    "Music": "409"
+    "音乐": "409"
+    "专辑": "409"
+    "音轨": "409"
+    "音频": "409"
+    "短剧": "409"
+    "图书": "409"
+    "学习": "409"
+    "资料": "409"
+    "其他": "409"
+    "Misc": "409"
+    "未知": "409"
+    "Unknown": "409"
+    "default": "409"
+
+  medium:
+    'UHD Blu-ray': '11'
+    'BluRay': '1'
+    'Blu-ray': '1'
+    'BD': '1'
+    'Remux': '3'
+    'Encode': '7'
+    'MiniBD': '4'
+    'WEB-DL': '10'
+    'WEBRip': '10'
+    'WEB': '10'
+    'HDTV': '5'
+    'UHDTV': '12'
+    'TVrip': '5'
+    'DVD': '6'
+    'DVDR': '6'
+    'CD': '8'
+    'Track': '9'
+    'HD DVD': '2'
+    'default': '13'
+
+  codec:
+    'H.265': '6'
+    'HEVC': '6'
+    'x265': '6'
+    'H.264': '1'
+    'AVC': '1'
+    'x264': '1'
+    'VP8': '7'
+    'VP9': '7'
+    'VC-1': '2'
+    'XviD': '3'
+    'MPEG-2': '4'
+    'MPEG-4': '5'
+    'AV1': '8'
+    'default': '5'
+
+  audio_codec:
+    'TrueHD Atmos': '8'
+    'DTS:X': '2'
+    'DTS-HD MA': '3'
+    'DTS-HD': '3'
+    'DTS-HR': '18'
+    'DDP': '6'
+    'DD+': '6'
+    'E-AC3': '6'
+    'Atmos': '8'
+    'TrueHD': '1'
+    'DTS': '4'
+    'AC3': '5'
+    'DD': '5'
+    'AAC': '7'
+    'FLAC': '11'
+    'LPCM': '9'
+    'PCM': '9'
+    'APE': '12'
+    'WAV': '13'
+    'MP3': '14'
+    'default': '16'
+
+  resolution:
+    '8K': '6'
+    '4320p': '6'
+    '4K': '5'
+    '2160p': '5'
+    'UHD': '5'
+    '1080p': '1'
+    '1080i': '2'
+    '720p': '3'
+    'SD': '7'
+    '480p': '7'
+    '480i': '7'
+    'default': '8'
+
+  source:
+    'default': '6'
+
+  team:
+    "Panda": "1"
+    "AilMWeb": "7"
+    "AilMTV": "8"
+    "AilMUpscale": "14"
+    "CatEDU": "15"
+    "Red Leaves": "22"
+    "default": "5"
+
+  tag:
+    "首发": 2
+    "DIY": 4
+    "国语": 5
+    "中字": 6
+    "Dolby Vision": 8
+    "DV": 8
+    "HDR10+": 9
+    "HDR10": 7
+    "HDR": 7
+    "完结": 10
+    "特效": 12
+    "粤语": 13
+    "纯净版": 16
+    "分集": 17
+    "default": null

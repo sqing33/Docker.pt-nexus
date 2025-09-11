@@ -1,0 +1,147 @@
+# Ptchina站点的配置文件
+site_name: "Ptchina"
+form_fields:
+  medium: "medium_sel[4]"
+  codec: "codec_sel[4]"
+  audio_codec: "audiocodec_sel[4]"
+  resolution: "standard_sel[4]"
+  source: "source_sel[4]"
+  team: "team_sel[4]"
+  processing: "processing_sel[4]"
+
+mappings:
+  type:
+    "Movies": "401"
+    "电影": "401"
+    "Driver": "401"
+    "Movie": "401"
+    "TV Series": "402"
+    "电视剧": "402"
+    "TV Shows": "402"
+    "综艺": "402"
+    "Documentaries": "404"
+    "记录片": "404"
+    "纪录片": "404"
+    "Animations": "402"
+    "动漫": "402"
+    "动画": "402"
+    "Anime": "402"
+    "MV": "402"
+    "演唱会": "402"
+    "Music Video": "402"
+    "Sports": "402"
+    "体育": "402"
+    "Music": "402"
+    "音乐": "402"
+    "专辑": "402"
+    "音轨": "402"
+    "音频": "402"
+    "短剧": "402"
+    "软件": "402"
+    "图书": "402"
+    "学习": "402"
+    "游戏": "402"
+    "音乐会": "402"
+    "资料": "402"
+    "其他": "401"
+    "Misc": "401"
+    "未知": "401"
+    "Unknown": "401"
+    "default": "401"
+
+  medium:
+    'UHD Blu-ray': '1'
+    'BluRay': '5'
+    'Blu-ray': '5'
+    'BD': '5'
+    'Remux': '3'
+    'Encode': '8'
+    'WEB-DL': '9'
+    'WEBRip': '8'
+    'WEB': '9'
+    'HDTV': '12'
+    'TVrip': '12'
+    'DVD': '11'
+    'default': '13'
+
+  codec:
+    'H.265': '3'
+    'HEVC': '3'
+    'x265': '4'
+    'H.264': '1'
+    'AVC': '1'
+    'x264': '2'
+    'VC-1': '5'
+    'MPEG-2': '11'
+    'MPEG-4': '12'
+    'XviD': '13'
+    'AV1': '14'
+    'default': '15'
+
+  audio_codec:
+    'TrueHD Atmos': '1'
+    'DDP Atmos': '15'
+    'Atmos': '1'
+    'DTS:X': '3'
+    'DTS X': '3'
+    'DTS-HD MA': '4'
+    'DTS-HDMA': '4'
+    'DTS-HD HR': '5'
+    'TrueHD': '6'
+    'True-HD': '6'
+    'LPCM': '7'
+    'DDP': '16'
+    'DD+': '16'
+    'EAC3': '16'
+    'AC3': '18'
+    'DD': '18'
+    'DTS': '2'
+    'AAC': '19'
+    'FLAC': '20'
+    'APE': '21'
+    'WAV': '22'
+    'MP3': '23'
+    'default': '24'
+
+  resolution:
+    '4K': '1'
+    'UHD': '1'
+    '2160p': '1'
+    '2K': '2'
+    '1440p': '2'
+    '1080p': '3'
+    '1080i': '4'
+    'default': '6'
+
+  processing:
+    'default': '12'
+
+  team:
+    "PTChina": "1"
+    "CHD": "2"
+    "CHDBits": "2"
+    "HDC": "3"
+    "HDChina": "3"
+    "TTG": "4"
+    "WiKi": "5"
+    "beAst": "21"
+    "CMCT": "22"
+    "FRDS": "23"
+    "HDS": "24"
+    "HDSky": "24"
+    "OurBits": "25"
+    "PTer": "26"
+    "PTHome": "29"
+    "HDHome": "28"
+    "Audiences": "30"
+    "default": "35"
+
+  tag:
+    "首发": 2
+    "DIY": 4
+    "国语": 5
+    "中字": 6
+    "HDR": 7
+    "Dolby Vision": 8
+    "DV": 8
+    "default": null

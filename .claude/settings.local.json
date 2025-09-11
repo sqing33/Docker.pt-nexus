@@ -11,7 +11,8 @@
       "WebFetch(domain:github.com)",
       "Bash(python -c \"from qbittorrentapi import Client; help(Client.torrents_add)\")",
       "Bash(cat:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(mkdir:*)"
     ],
     "deny": [],
     "ask": []

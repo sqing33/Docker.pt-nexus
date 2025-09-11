@@ -1,0 +1,194 @@
+# Ptcafe站点的配置文件
+site_name: "Ptcafe"
+form_fields:
+  medium: "medium_sel[4]"
+  codec: "codec_sel[4]"
+  audio_codec: "audiocodec_sel[4]"
+  resolution: "standard_sel[4]"
+  source: "source_sel[4]"
+  team: "team_sel[4]"
+
+mappings:
+  type:
+    "Movies": "401"
+    "电影": "401"
+    "Driver": "401"
+    "Movie": "401"
+    "TV Series": "402"
+    "电视剧": "402"
+    "剧集": "402"
+    "TV Shows": "403"
+    "综艺": "403"
+    "Documentaries": "404"
+    "记录片": "404"
+    "纪录片": "404"
+    "纪录": "404"
+    "Animations": "405"
+    "动漫": "405"
+    "动画": "405"
+    "Anime": "405"
+    "MV": "406"
+    "演唱会": "406"
+    "演唱": "406"
+    "Sports": "407"
+    "体育": "407"
+    "Music": "408"
+    "音乐": "408"
+    "专辑": "408"
+    "音轨": "408"
+    "音频": "408"
+    "其他": "409"
+    "Misc": "409"
+    "未知": "409"
+    "Unknown": "409"
+    "default": "409"
+
+  medium:
+    'UHD Blu-ray': '1'
+    'UHD BD': '1'
+    'UHD Blu-ray DIY': '2'
+    'UHD Remux': '3'
+    'Blu-ray': '4'
+    'BD': '4'
+    'Blu-ray DIY': '5'
+    'Remux': '6'
+    'Encode': '7'
+    'WEB-DL': '8'
+    'WEBRip': '8'
+    'WEB': '8'
+    'HDTV': '9'
+    'TV': '9'
+    'TVrip': '9'
+    'DVD': '10'
+    'CD': '11'
+    'Track': '12'
+    'default': '13'
+
+  codec:
+    'H.265': '1'
+    'HEVC': '1'
+    'H.264': '2'
+    'AVC': '2'
+    'x265': '3'
+    'x264': '4'
+    'VC-1': '5'
+    'MPEG-2': '6'
+    'MPEG-4': '7'
+    'XVID': '8'
+    'VP9': '9'
+    'DIVX': '10'
+    'default': '11'
+
+  audio_codec:
+    'DTS-HD MA': '2'
+    'DTS-HDMA': '2'
+    'DTS-HD HR': '3'
+    'DTS-HDHR': '3'
+    'DTS-HD': '4'
+    'DTS:X': '5'
+    'DTS-X': '5'
+    'LPCM': '6'
+    'AC3': '7'
+    'DD': '7'
+    'Atmos': '8'
+    'AAC': '9'
+    'TrueHD': '10'
+    'DTS': '11'
+    'FLAC': '12'
+    'APE': '13'
+    'MP3': '14'
+    'WAV': '15'
+    'OPUS': '16'
+    'OGG': '17'
+    'default': '18'
+
+  resolution:
+    '8K': '1'
+    '4320p': '1'
+    'FUHD': '1'
+    '4K': '2'
+    '2160p': '2'
+    'UHD': '2'
+    '1080p': '3'
+    '1080i': '3'
+    'FHD': '3'
+    '720p': '4'
+    '720i': '4'
+    'HD': '4'
+    '360p': '5'
+    '360i': '5'
+    'SD': '5'
+    'default': '6'
+
+  source:
+    "中国": "1"
+    "CN": "1"
+    "大陆": "1"
+    "香港": "2"
+    "HK": "2"
+    "台湾": "2"
+    "TW": "2"
+    "港台": "2"
+    "美国": "3"
+    "US": "3"
+    "欧美": "3"
+    "欧洲": "3"
+    "EU": "3"
+    "日本": "4"
+    "JPN": "4"
+    "JP": "4"
+    "韩国": "5"
+    "KR": "5"
+    "印度": "6"
+    "IN": "6"
+    "default": "7"
+
+  team:
+    "ADE": "1"
+    "ADWeb": "2"
+    "Audies": "3"
+    "beAst": "4"
+    "BeiTai": "5"
+    "BeyondHD": "6"
+    "BtsTV": "7"
+    "CafeTV": "8"
+    "CafeWEB": "9"
+    "CHDBits": "10"
+    "CHDWEB": "11"
+    "CMCT": "12"
+    "DJWEB": "13"
+    "FRDS": "14"
+    "HDCTV": "15"
+    "HDH": "16"
+    "HDHome": "17"
+    "HDSky": "18"
+    "HDSWEB": "19"
+    "HHWEB": "20"
+    "MTeam": "21"
+    "MWeb": "22"
+    "OurBits": "23"
+    "OurTV": "24"
+    "PTCafe": "25"
+    "PTerWEB": "26"
+    "QHstudIo": "27"
+    "TTG": "28"
+    "WiKi": "29"
+    "default": "30"
+
+  tag:
+    "官方": 1
+    "首发": 2
+    "完结": 3
+    "原创": 4
+    "禁转": 5
+    "国语": 7
+    "粤语": 8
+    "中字": 9
+    "备胎": 10
+    "杜比视界": 11
+    "HDR": 12
+    "DIY": 13
+    "应求": 14
+    "高码高帧": 15
+    "月月": 16
+    "default": null

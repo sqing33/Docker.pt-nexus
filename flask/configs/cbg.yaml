@@ -1,0 +1,133 @@
+# Cangbao站点的配置文件
+site_name: "Cangbao"
+form_fields:
+  medium: "medium_sel[4]"
+  codec: "codec_sel[4]"
+  audio_codec: "audiocodec_sel[4]"
+  resolution: "standard_sel[4]"
+  team: "team_sel[4]"
+
+mappings:
+  type:
+    "Movies": "401"
+    "电影": "401"
+    "Movie": "401"
+    "TV Series": "402"
+    "电视剧": "402"
+    "剧集": "402"
+    "Animations": "403"
+    "动漫": "403"
+    "动画": "403"
+    "Anime": "403"
+    "TV Shows": "405"
+    "综艺": "405"
+    "Documentaries": "406"
+    "记录片": "406"
+    "纪录片": "406"
+    "纪录": "406"
+    "Music": "407"
+    "音乐": "407"
+    "Books": "408"
+    "书籍": "408"
+    "Sports": "409"
+    "体育": "409"
+    "其他": "410"
+    "Misc": "410"
+    "未知": "410"
+    "Unknown": "410"
+    "default": "0"
+
+  medium:
+    'UHD Blu-ray': '9'
+    'UHD BD': '9'
+    'UHD': '9'
+    'Remux': '8'
+    'Blu-ray': '7'
+    'BD': '7'
+    'WEB-DL': '6'
+    'WEBRip': '6'
+    'WEB': '6'
+    'UHDTV': '5'
+    'HDTV': '4'
+    'Encode': '3'
+    'DVD': '2'
+    'VCD': '1'
+    'default': '0'
+
+  codec:
+    'H.265': '8'
+    'HEVC': '8'
+    'x265': '8'
+    'H.264': '6'
+    'AVC': '6'
+    'x264': '6'
+    'VP9': '7'
+    'AV1': '9'
+    'VC-1': '5'
+    'MPEG-4': '4'
+    'MPEG-2': '3'
+    'MPEG-1': '2'
+    'H.261': '1'
+    'default': '0'
+
+  audio_codec:
+    'PCM': '9'
+    'LPCM': '9'
+    'TrueHD': '8'
+    'FLAC': '7'
+    'Opus': '6'
+    'DDP': '5'
+    'EAC3': '5'
+    'DD+': '5'
+    'AC3': '2'
+    'DD': '2'
+    'AAC': '4'
+    'DTS': '3'
+    'MP3': '1'
+    'default': '0'
+
+  resolution:
+    '8K': '7'
+    '4320p': '7'
+    '4K': '6'
+    '2160p': '6'
+    'QHD': '5'
+    '1440p': '5'
+    'FHD': '4'
+    '1080p': '4'
+    '1080i': '4'
+    '720p': '3'
+    '720i': '3'
+    '540p': '2'
+    '480p': '1'
+    '480i': '1'
+    'SD': '1'
+    'default': '0'
+
+  team:
+    "NONE": "1"
+    "CBGWT": "2"
+    "CBGER": "3"
+    "default": "1"
+
+  tag:
+    "合集": 20
+    "官方": 19
+    "原声": 18
+    "DIY": 17
+    "特效": 16
+    "原盘": 15
+    "DV": 14
+    "HDR": 13
+    "高码": 12
+    "零魔": 11
+    "禁转": 10
+    "英字": 9
+    "国语": 8
+    "中字": 7
+    "驻站": 5
+    "分集": 4
+    "完结": 3
+    "短剧": 2
+    "儿童": 1
+    "default": null

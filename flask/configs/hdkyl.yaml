@@ -1,0 +1,199 @@
+# Hdkyl站点的配置文件
+site_name: "Hdkyl"
+form_fields:
+  processing: "processing_sel[4]"
+  medium: "medium_sel[4]"
+  codec: "codec_sel[4]"
+  audio_codec: "audiocodec_sel[4]"
+  resolution: "standard_sel[4]"
+  source: "source_sel[4]"
+  team: "team_sel[4]"
+
+mappings:
+  type:
+    "Movies": "401"
+    "电影": "401"
+    "Driver": "401"
+    "Movie": "401"
+    "TV Series": "402"
+    "电视剧": "402"
+    "Record Education": "404"
+    "记录教育": "404"
+    "纪录片": "404"
+    "HQ Audio": "408"
+    "音乐": "408"
+    "音频": "408"
+    "Playlet": "421"
+    "短剧": "421"
+    "Animations": "405"
+    "动漫": "405"
+    "动画": "405"
+    "Anime": "405"
+    "Study": "419"
+    "学习": "419"
+    "Sports": "407"
+    "体育": "407"
+    "体育运动": "407"
+    "Music Videos": "406"
+    "音乐视频": "406"
+    "演唱会": "406"
+    "software": "411"
+    "软件": "411"
+    "Game": "412"
+    "游戏": "412"
+    "Ebook": "413"
+    "电子书": "413"
+    "Misc": "409"
+    "其他": "409"
+    "TV Shows": "420"
+    "综艺": "420"
+    "default": "409"
+
+  processing:
+    "2025": "11"
+    "2024": "10"
+    "2023": "1"
+    "2022": "2"
+    "2021": "3"
+    "2020": "4"
+    "2019": "5"
+    "2018": "6"
+    "2017": "7"
+    "2016": "8"
+    "earlier": "9"
+    "default": "9"
+
+  medium:
+    'UHD Blu-ray': '24'
+    'Blu-ray': '25'
+    'BD': '25'
+    'DVD': '27'
+    'HDTV': '28'
+    'Encode': '29'
+    'Remux': '30'
+    'WEB-DL': '31'
+    'WEBRip': '29'
+    'WEB': '31'
+    'TVrip': '28'
+    'Track': '32'
+    'CD': '33'
+    'default': '34'
+
+  codec:
+    'H.265': '6'
+    'HEVC': '6'
+    'x265': '6'
+    'H.264': '1'
+    'AVC': '1'
+    'x264': '1'
+    'VC-1': '2'
+    'XviD': '3'
+    'MPEG-2': '4'
+    'MPEG-4': '4'
+    'AV1': '7'
+    'default': '5'
+
+  audio_codec:
+    'TrueHD Atmos': '15'
+    'DTS:X': '16'
+    'DTS-HD MA': '8'
+    'DTS-HD HR': '19'
+    'DDP': '17'
+    'DD+': '17'
+    'E-AC3': '17'
+    'Atmos': '15'
+    'TrueHD': '9'
+    'DTS': '3'
+    'AC3': '11'
+    'DD': '11'
+    'LPCM': '10'
+    'FLAC': '1'
+    'APE': '12'
+    'WAV': '13'
+    'M4A': '14'
+    'MPEG': '18'
+    'MP3': '4'
+    'AAC': '6'
+    'OGG': '7'
+    'OPUS': '20'
+    'default': '7'
+
+  resolution:
+    '8K': '7'
+    '4320p': '7'
+    '4K': '6'
+    '2160p': '6'
+    'UHD': '6'
+    '1080p': '1'
+    '1080i': '1'
+    '720p': '3'
+    '720i': '3'
+    '480p': '8'
+    '480i': '8'
+    'default': '9'
+
+  source:
+    "中国": "15"
+    "CN": "15"
+    "香港": "16"
+    "HK": "16"
+    "台湾": "17"
+    "TW": "17"
+    "美国": "18"
+    "US": "18"
+    "欧洲": "28"
+    "EU": "28"
+    "日本": "19"
+    "JPN": "19"
+    "韩国": "20"
+    "KR": "20"
+    "英国": "21"
+    "GB": "21"
+    "法国": "22"
+    "FR": "22"
+    "德国": "23"
+    "DE": "23"
+    "印度": "25"
+    "IN": "25"
+    "俄罗斯": "30"
+    "RU": "30"
+    "加拿大": "31"
+    "CA": "31"
+    "巴西": "32"
+    "BR": "32"
+    "瑞典": "33"
+    "SE": "33"
+    "丹麦": "34"
+    "DK": "34"
+    "泰国": "35"
+    "TH": "35"
+    "default": "14"
+
+  team:
+    "HDK": "6"
+    "HDKWeb": "7"
+    "HDKGame": "8"
+    "Kylin": "12"
+    "RedLeaves": "14"
+    "CatEDU": "10"
+    "GodDramas": "9"
+    "StarfallWeb": "13"
+    "default": "5"
+
+  tag:
+    "官种": 3
+    "驻站": 15
+    "首发": 2
+    "特效字幕": 21
+    "DIY": 4
+    "国语": 5
+    "英字": 18
+    "中字": 6
+    "HDR": 7
+    "Dolby Vision": 8
+    "Blu-ray": 9
+    "LIVE现场": 10
+    "4 K": 11
+    "完结": 16
+    "分集": 19
+    "default": null
