@@ -122,10 +122,18 @@ class GtkpwUploader:
             'Track': '9',
         }
         medium_str = title_params.get("媒介", "")
-        for key, value in medium_map.items():
-            if key.lower() in medium_str.lower():
-                mapped["medium_sel[4]"] = value
-                break
+        mediainfo_str = self.upload_data.get("mediainfo", "")
+        is_standard_mediainfo = "General" in mediainfo_str and "Complete name" in mediainfo_str
+        
+        # 站点规则：有mediainfo的Blu-ray/DVD源盘rip都算Encode
+        if is_standard_mediainfo and ('blu' in medium_str.lower()
+                                      or 'dvd' in medium_str.lower()):
+            mapped["medium_sel[4]"] = "7"  # Encode
+        else:
+            for key, value in medium_map.items():
+                if key.lower() in medium_str.lower():
+                    mapped["medium_sel[4]"] = value
+                    break
 
         # 3. 视频编码映射 (Video Codec)
         codec_map = {
@@ -266,8 +274,8 @@ class GtkpwUploader:
 
         order = [
             "主标题",
-            "年份",
             "季集",
+            "年份",
             "剧集状态",
             "发布版本",
             "分辨率",
@@ -376,6 +384,44 @@ class GtkpwUploader:
             if "details.php" in response.url and "uploaded=1" in response.url:
                 logger.success("发布成功！已跳转到种子详情页。")
                 return True, f"发布成功！新种子页面: {response.url}"
+            elif "details.php" in response.url and "existed=1" in response.url:
+                logger.success("种子已存在！已跳转到种子详情页。")
+                # 检查响应内容中是否包含"该种子已存在"的提示
+                if "该种子已存在" in response.text:
+                    logger.info("检测到种子已存在的提示信息。")
+                return True, f"发布成功！种子已存在，详情页: {response.url}"
+            elif "该种子已存在" in response.text:
+                # 特殊处理：GTK站点在种子已存在时可能不会重定向到details.php
+                logger.success("种子已存在！")
+                logger.info("检测到种子已存在的提示信息。")
+                # 尝试从响应中提取种子ID并构造详情页URL
+                torrent_id = None
+                
+                # 方法1: 从响应URL中查找ID
+                id_match = re.search(r'id=(\d+)', response.url)
+                
+                if not id_match:
+                    # 方法2: 从响应文本中查找ID
+                    id_match = re.search(r'id=(\d+)', response.text)
+                
+                if not id_match:
+                    # 方法3: 从下载链接中提取ID
+                    download_match = re.search(r'download\.php\?id=(\d+)', response.text)
+                    if download_match:
+                        torrent_id = download_match.group(1)
+                
+                if id_match:
+                    torrent_id = id_match.group(1)
+                
+                if torrent_id:
+                    base_url = ensure_scheme(self.site_info.get("base_url"))
+                    details_url = f"{base_url}/details.php?id={torrent_id}"
+                    logger.info(f"成功构造种子详情页URL: {details_url}")
+                    return True, f"发布成功！种子已存在，详情页: {details_url}"
+                else:
+                    # 如果无法提取ID，仍然返回成功状态以便触发下载器添加
+                    logger.warning("无法提取种子ID，将使用基本成功消息。")
+                    return True, "发布成功！种子已存在。"
             elif "login.php" in response.url:
                 logger.error("发布失败，Cookie 已失效，被重定向到登录页。")
                 return False, "发布失败，Cookie 已失效或无效。"

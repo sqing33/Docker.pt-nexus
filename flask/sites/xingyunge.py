@@ -239,7 +239,7 @@ class XingyungeUploader:
             "完结": 11,
             "分集": 10,
         }
-        
+
         # 从源站参数获取标签
         source_tags = source_params.get("标签") or []
 
@@ -297,8 +297,8 @@ class XingyungeUploader:
 
         order = [
             "主标题",
-            "年份",
             "季集",
+            "年份",
             "剧集状态",
             "发布版本",
             "分辨率",

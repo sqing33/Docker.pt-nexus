@@ -1,4 +1,4 @@
-# sites/rousi.py
+# sites/cangbao.py
 
 import os
 import re
@@ -8,7 +8,7 @@ from loguru import logger
 from utils import cookies_raw2jar, ensure_scheme, extract_tags_from_mediainfo
 
 
-class RousiUploader:
+class CangbaoUploader:
 
     def __init__(self, site_info: dict, upload_data: dict):
         """
@@ -34,7 +34,7 @@ class RousiUploader:
 
     def _map_parameters(self) -> dict:
         """
-        将参数映射为 Rousi 站点所需的表单值。
+        将参数映射为 Cangbao 站点所需的表单值。
         - 映射表根据站点 upload.php 的 HTML 源码进行最终校对。
         - 字典的顺序很重要，用于优先匹配更精确的关键词。
         - 任何未匹配到的项目都将自动归类于 'Other'。
@@ -56,104 +56,34 @@ class RousiUploader:
         type_map = {
             "Movies": "401",
             "电影": "401",
-            "Driver": "401",
             "Movie": "401",
             "TV Series": "402",
             "电视剧": "402",
-            "TV Shows": "403",
-            "综艺": "403",
-            "Sports": "407",
-            "体育": "407",
-            "竞技": "407",
-            "武术": "407",
-            "Documentaries": "404",
-            "记录片": "404",
-            "纪录片": "404",
-            "Games": "410",
-            "游戏": "410",
-            "Music": "406",
-            "音乐": "406",
-            "专辑": "406",
-            "MV": "406",
-            "演唱会": "406",
-            "Art": "419",
-            "舞蹈": "419",
-            "歌剧": "419",
-            "戏曲": "419",
-            "相声": "419",
-            "评书": "419",
-            "Science": "411",
-            "科学": "411",
-            "知识": "411",
-            "技能": "411",
-            "School": "412",
-            "应试": "412",
-            "考级": "412",
-            "教育": "412",
-            "Book": "413",
-            "书籍": "413",
-            "杂志": "413",
-            "报刊": "413",
-            "有声书": "413",
-            "Code": "414",
-            "IT技术": "414",
-            "建模": "414",
-            "编程": "414",
-            "信息技术": "414",
-            "大数据": "414",
-            "人工智能": "414",
-            "Animations": "405",
-            "3D动画": "405",
-            "2.5次元": "405",
-            "ACGN": "415",
-            "二次元": "415",
-            "漫画": "415",
-            "动漫": "415",
-            "Baby": "416",
-            "婴幼": "416",
-            "儿童": "416",
-            "早教": "416",
-            "小学": "416",
-            "Resource": "417",
-            "图片": "417",
-            "文档": "417",
-            "素材": "417",
-            "模板": "417",
-            "Software": "418",
-            "软件": "418",
-            "系统": "418",
-            "程序": "418",
-            "APP": "418",
-            "其他": "409",
-            "Misc": "409",
-            "未知": "409",
-            "Unknown": "409",
-            # 特别区类型
-            "步兵": "420",
-            "无码": "420",
-            "骑兵": "421",
-            "有码": "421",
-            "三级片": "422",
-            "限制级": "422",
-            "H漫": "423",
-            "H游": "424",
-            "H书": "425",
-            "H图": "426",
-            "写真": "426",
-            "私拍": "426",
-            "短视频": "426",
-            "H音": "427",
-            "ASMR": "427",
-            "音频": "427",
-            "H综": "428",
-            "剪辑": "428",
-            "H同": "429",
-            "男同": "429",
-            "女同": "429",
+            "剧集": "402",
+            "Animations": "403",
+            "动漫": "403",
+            "动画": "403",
+            "Anime": "403",
+            "TV Shows": "405",
+            "综艺": "405",
+            "Documentaries": "406",
+            "记录片": "406",
+            "纪录片": "406",
+            "纪录": "406",
+            "Music": "407",
+            "音乐": "407",
+            "Books": "408",
+            "书籍": "408",
+            "Sports": "409",
+            "体育": "409",
+            "其他": "410",
+            "Misc": "410",
+            "未知": "410",
+            "Unknown": "410",
         }
         source_type = source_params.get("类型") or ""
         # 优先完全匹配，然后部分匹配，最后使用默认值
-        mapped["type"] = "409"  # 默认值: Other(其它)
+        mapped["type"] = "0"  # 默认值: 请选择
 
         # 精确匹配
         for key, value in type_map.items():
@@ -167,31 +97,148 @@ class RousiUploader:
                     mapped["type"] = value
                     break
 
-        # 2. 标签 (Tags) - 根据站点HTML校对
+        # 2. 媒介映射 (Medium) - 根据站点HTML校对
+        # 站点默认值 '请选择一项': 0
+        medium_map = {
+            'UHD Blu-ray': '9',
+            'UHD BD': '9',
+            'UHD': '9',
+            'Remux': '8',
+            'Blu-ray': '7',
+            'BD': '7',
+            'WEB-DL': '6',
+            'WEBRip': '6',
+            'WEB': '6',
+            'UHDTV': '5',
+            'HDTV': '4',
+            'Encode': '3',
+            'DVD': '2',
+            'VCD': '1',
+        }
+        medium_str = title_params.get("媒介", "")
+        mediainfo_str = self.upload_data.get("mediainfo", "")
+        is_standard_mediainfo = "General" in mediainfo_str and "Complete name" in mediainfo_str
+
+        # 站点规则：有mediainfo的Blu-ray/DVD源盘rip都算Encode
+        if is_standard_mediainfo and ('blu' in medium_str.lower()
+                                      or 'dvd' in medium_str.lower()):
+            mapped["medium_sel[4]"] = "3"  # Encode
+        else:
+            mapped["medium_sel[4]"] = "0"  # 默认值: 请选择一项
+            for key, value in medium_map.items():
+                if key.lower() in medium_str.lower():
+                    mapped["medium_sel[4]"] = value
+                    break
+
+        # 3. 视频编码映射 (Video Codec) - 根据站点HTML校对
+        # 站点默认值 '请选择一项': 0
+        codec_map = {
+            'H.265': '8',
+            'HEVC': '8',
+            'x265': '8',
+            'H.264': '6',
+            'AVC': '6',
+            'x264': '6',
+            'VP9': '7',
+            'AV1': '9',
+            'VC-1': '5',
+            'MPEG-4': '4',
+            'MPEG-2': '3',
+            'MPEG-1': '2',
+            'H.261': '1',
+        }
+        codec_str = title_params.get("视频编码", "")
+        mapped["codec_sel[4]"] = "0"  # 默认值: 请选择一项
+        for key, value in codec_map.items():
+            if key.lower() in codec_str.lower():
+                mapped["codec_sel[4]"] = value
+                break
+
+        # 4. 音频编码映射 (Audio Codec) - 根据站点HTML校对
+        # 站点默认值 '请选择一项': 0
+        audio_map = {
+            'PCM': '9',
+            'LPCM': '9',
+            'TrueHD': '8',
+            'FLAC': '7',
+            'Opus': '6',
+            'DDP': '5',
+            'EAC3': '5',
+            'DD+': '5',
+            'AC3': '2',
+            'DD': '2',
+            'AAC': '4',
+            'DTS': '3',
+            'MP3': '1',
+        }
+        audio_str = title_params.get("音频编码", "")
+        audio_str_normalized = audio_str.upper().replace(" ",
+                                                         "").replace(".", "")
+        mapped["audiocodec_sel[4]"] = "0"  # 默认值: 请选择一项
+        for key, value in audio_map.items():
+            key_normalized = key.upper().replace(" ", "").replace(".", "")
+            if key_normalized in audio_str_normalized:
+                mapped["audiocodec_sel[4]"] = value
+                break
+
+        # 5. 分辨率映射 (Resolution) - 根据站点HTML校对
+        # 站点默认值 '请选择一项': 0
+        resolution_map = {
+            '8K': '7',
+            '4320p': '7',
+            '4K': '6',
+            '2160p': '6',
+            'QHD': '5',
+            '1440p': '5',
+            'FHD': '4',
+            '1080p': '4',
+            '1080i': '4',
+            '720p': '3',
+            '720i': '3',
+            '540p': '2',
+            '480p': '1',
+            '480i': '1',
+            'SD': '1',
+        }
+        resolution_str = title_params.get("分辨率", "")
+        mapped["standard_sel[4]"] = "0"  # 默认值: 请选择一项
+        for key, value in resolution_map.items():
+            if key.lower() in resolution_str.lower():
+                mapped["standard_sel[4]"] = value
+                break
+
+        # 6. 制作组映射 (Team) - 根据站点HTML校对
+        # 站点默认值 '请选择一项': 0
+        team_map = {
+            "NONE": "1",
+            "CBGWT": "2",
+            "CBGER": "3",
+        }
+        release_group_str = str(title_params.get("制作组", "")).upper()
+        mapped["team_sel[4]"] = team_map.get(release_group_str,
+                                             "1")  # 默认值 NONE
+
+        # 7. 标签 (Tags) - 根据站点HTML校对
         tag_map = {
-            "禁转": 1,
-            "首发": 2,
-            "官方": 3,
-            "DIY": 4,
-            "国语": 5,
-            "中字": 6,
-            "HDR": 7,
-            "4K": 18,
-            "VR": 17,
-            "粤语": 15,
-            "英字": 14,
-            "RousiWeb": 13,
-            "杜比视界": 11,
-            "合集": 10,
-            "足控": 23,
-            "肉丝": 22,
-            "蕾丝": 21,
-            "白丝": 20,
-            "黑丝": 19,
-            "FC2": 16,
-            "自购": 12,
-            "无码": 9,
-            "有码": 8,
+            "合集": 20,
+            "官方": 19,
+            "原声": 18,
+            "DIY": 17,
+            "特效": 16,
+            "原盘": 15,
+            "DV": 14,
+            "HDR": 13,
+            "高码": 12,
+            "零魔": 11,
+            "禁转": 10,
+            "英字": 9,
+            "国语": 8,
+            "中字": 7,
+            "驻站": 5,
+            "分集": 4,
+            "完结": 3,
+            "短剧": 2,
+            "儿童": 1,
         }
 
         # 从源站参数获取标签
@@ -218,7 +265,7 @@ class RousiUploader:
         # 从标题组件中智能匹配HDR等信息 (保留原有逻辑作为补充)
         hdr_str = title_params.get("HDR格式", "").upper()
         if "VISION" in hdr_str or "DV" in hdr_str:
-            combined_tags.add("杜比视界")
+            combined_tags.add("DV")
         if "HDR10+" in hdr_str:
             combined_tags.add("HDR")
         elif "HDR10" in hdr_str:
@@ -229,7 +276,6 @@ class RousiUploader:
         # 去重并格式化
         for i, tag_id in enumerate(sorted(list(set(tags)))):
             mapped[f"tags[4][{i}]"] = tag_id
-            mapped[f"tags[5][{i}]"] = tag_id
 
         return mapped
 
@@ -245,7 +291,7 @@ class RousiUploader:
 
     def _build_title(self) -> str:
         """
-        根据 title_components 参数，按照 Rousi 的规则拼接主标题。
+        根据 title_components 参数，按照 Cangbao 的规则拼接主标题。
         """
         components_list = self.upload_data.get("title_components", [])
         components = {
@@ -256,8 +302,8 @@ class RousiUploader:
 
         order = [
             "主标题",
-            "年份",
             "季集",
+            "年份",
             "剧集状态",
             "发布版本",
             "分辨率",
@@ -304,7 +350,7 @@ class RousiUploader:
         """
         执行上传的核心逻辑。
         """
-        logger.info("正在为 Rousi 站点适配上传参数...")
+        logger.info("正在为 Cangbao 站点适配上传参数...")
         try:
             mapped_params = self._map_parameters()
             description = self._build_description()
@@ -337,7 +383,7 @@ class RousiUploader:
                     logger.error("目标站点 Cookie 为空，无法发布。")
                     return False, "目标站点 Cookie 未配置。"
                 cookie_jar = cookies_raw2jar(cleaned_cookie_str)
-                logger.info("正在向 Rousi 站点提交发布请求...")
+                logger.info("正在向 Cangbao 站点提交发布请求...")
                 # 若站点启用代理且配置了全局代理地址，则通过代理请求
                 proxies = None
                 try:
@@ -384,11 +430,11 @@ class RousiUploader:
                 return False, f"发布失败，请检查站点返回信息。 URL: {response.url}"
 
         except Exception as e:
-            logger.error(f"发布到 Rousi 站点时发生错误: {e}")
+            logger.error(f"发布到 Cangbao 站点时发生错误: {e}")
             logger.error(traceback.format_exc())
             return False, f"请求异常: {e}"
 
 
 def upload(site_info: dict, upload_payload: dict):
-    uploader = RousiUploader(site_info, upload_payload)
+    uploader = CangbaoUploader(site_info, upload_payload)
     return uploader.execute_upload()

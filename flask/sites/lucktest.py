@@ -241,7 +241,7 @@ class LuckptUploader:
             "完结": 10,
             "连载": 9,
         }
-        
+
         # 从源站参数获取标签
         source_tags = source_params.get("标签") or []
 
@@ -303,8 +303,8 @@ class LuckptUploader:
 
         order = [
             "主标题",
-            "年份",
             "季集",
+            "年份",
             "剧集状态",
             "发布版本",
             "分辨率",

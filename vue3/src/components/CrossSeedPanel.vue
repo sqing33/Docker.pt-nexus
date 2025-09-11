@@ -172,18 +172,23 @@
       <div v-if="activeStep === 1" class="form-container">
         <div class="site-selection-container">
           <h3 class="selection-title">请选择要发布的目标站点 (可多选)</h3>
+          <div class="select-all-container">
+            <el-button @click="selectAllTargetSites" size="small" type="primary" plain>
+              全选
+            </el-button>
+            <el-button @click="clearAllTargetSites" size="small" type="danger" plain>
+              清空
+            </el-button>
+          </div>
           <div class="site-buttons-group">
-            <el-tooltip v-for="site in allSitesStatus.filter(s => s.is_target)" :key="site.name"
-              :content="isTargetSiteSelectable(site.name) ? `发布到 ${site.name}` : `种子已在 ${site.name} 做种`"
-              placement="top">
-              <el-button 
-                :type="selectedTargetSites.includes(site.name) ? 'primary' : 'default'"
-                :class="{ 'site-button': true, 'is-disabled': !isTargetSiteSelectable(site.name) }"
-                :disabled="!isTargetSiteSelectable(site.name)"
-                @click="toggleSiteSelection(site.name)">
-                {{ site.name }}
-              </el-button>
-            </el-tooltip>
+            <el-button 
+              v-for="site in allSitesStatus.filter(s => s.is_target)" :key="site.name"
+              :type="selectedTargetSites.includes(site.name) ? 'primary' : 'default'"
+              :class="{ 'site-button': true, 'is-disabled': !isTargetSiteSelectable(site.name) }"
+              :disabled="!isTargetSiteSelectable(site.name)"
+              @click="toggleSiteSelection(site.name)">
+              {{ site.name }}
+            </el-button>
           </div>
         </div>
         <div class="button-group">
@@ -594,6 +599,19 @@ const toggleSiteSelection = (siteName: string) => {
   }
 }
 
+// 全选所有可选的目标站点
+const selectAllTargetSites = () => {
+  const selectableSites = allSitesStatus.value
+    .filter(s => s.is_target && isTargetSiteSelectable(s.name))
+    .map(s => s.name);
+  selectedTargetSites.value = selectableSites;
+}
+
+// 清空所有已选的目标站点
+const clearAllTargetSites = () => {
+  selectedTargetSites.value = [];
+}
+
 const handlePublish = async () => {
   isLoading.value = true
   finalResultsList.value = []
@@ -828,7 +846,21 @@ const hideLog = () => {
 
 // 添加显示特定站点日志的函数
 const showSiteLog = (siteName: string, logs: string) => {
-  const siteLogContent = `--- Log for ${siteName} ---\n${logs || 'No logs available.'}`;
+  // 查找该站点的完整日志信息
+  let siteLogContent = `--- Log for ${siteName} ---\n${logs || 'No logs available.'}`;
+  
+  // 添加下载器状态信息
+  const siteResult = finalResultsList.value.find((result: any) => result.siteName === siteName);
+  if (siteResult && siteResult.downloaderStatus) {
+    const status = siteResult.downloaderStatus;
+    siteLogContent += `\n\n--- Downloader Status for ${siteName} ---`;
+    if (status.success) {
+      siteLogContent += `\n✅ 成功: ${status.message}`;
+    } else {
+      siteLogContent += `\n❌ 失败: ${status.message}`;
+    }
+  }
+  
   // 使用与左上角查看日志相同的样式
   logContent.value = siteLogContent;
   showLogCard.value = true;
@@ -1266,6 +1298,11 @@ onMounted(() => {
   gap: 12px;
 }
 
+.select-all-container {
+  margin-bottom: 16px;
+  text-align: center;
+}
+
 .site-button {
   min-width: 120px;
   transition: all 0.2s;
@@ -1285,6 +1322,7 @@ onMounted(() => {
   padding: 20px;
   align-content: flex-start;
   overflow-y: auto;
+  max-height: 500px;
 }
 
 .result-card {

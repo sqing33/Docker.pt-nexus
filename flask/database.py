@@ -154,7 +154,7 @@ class DatabaseManager:
         cursor = self._get_cursor(conn)
         ph = self.get_placeholder()
         try:
-            sql = f"INSERT INTO sites (site, nickname, base_url, special_tracker_domain, `group`, cookie, passkey, proxy) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})"
+            sql = f"INSERT INTO sites (site, nickname, base_url, special_tracker_domain, `group`, cookie, passkey, proxy, speed_limit) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})"
             params = (
                 site_data.get("site"),
                 site_data.get("nickname"),
@@ -164,6 +164,7 @@ class DatabaseManager:
                 site_data.get("cookie"),
                 site_data.get("passkey"),
                 int(site_data.get("proxy", 0)),
+                int(site_data.get("speed_limit", 0)),
             )
             cursor.execute(sql, params)
             conn.commit()
@@ -187,7 +188,7 @@ class DatabaseManager:
         cursor = self._get_cursor(conn)
         ph = self.get_placeholder()
         try:
-            sql = f"UPDATE sites SET nickname = {ph}, base_url = {ph}, special_tracker_domain = {ph}, `group` = {ph}, cookie = {ph}, passkey = {ph}, proxy = {ph} WHERE id = {ph}"
+            sql = f"UPDATE sites SET nickname = {ph}, base_url = {ph}, special_tracker_domain = {ph}, `group` = {ph}, cookie = {ph}, passkey = {ph}, proxy = {ph}, speed_limit = {ph} WHERE id = {ph}"
             params = (
                 site_data.get("nickname"),
                 site_data.get("base_url"),
@@ -196,6 +197,7 @@ class DatabaseManager:
                 site_data.get("cookie"),
                 site_data.get("passkey"),
                 int(site_data.get("proxy", 0)),
+                int(site_data.get("speed_limit", 0)),
                 site_data.get("id"),
             )
             cursor.execute(sql, params)
@@ -233,6 +235,9 @@ class DatabaseManager:
         conn = self._get_connection()
         cursor = self._get_cursor(conn)
         try:
+            # 去除cookie字符串首尾的换行符和多余空白字符
+            if cookie:
+                cookie = cookie.strip()
             cursor.execute(
                 f"UPDATE sites SET cookie = {self.get_placeholder()} WHERE nickname = {self.get_placeholder()}",
                 (cookie, nickname),
@@ -255,7 +260,9 @@ class DatabaseManager:
                           ("migration", "INTEGER DEFAULT 0",
                            "TINYINT DEFAULT 0"),
                           ("proxy", "INTEGER NOT NULL DEFAULT 0",
-                           "TINYINT NOT NULL DEFAULT 0")]
+                           "TINYINT NOT NULL DEFAULT 0"),
+                          ("speed_limit", "INTEGER DEFAULT 0",
+                           "INTEGER DEFAULT 0")]
 
         if self.db_type == "mysql":
             meta_cursor = conn.cursor()
@@ -310,7 +317,7 @@ class DatabaseManager:
                 "CREATE TABLE IF NOT EXISTS torrent_upload_stats (hash VARCHAR(40) NOT NULL, downloader_id VARCHAR(36) NOT NULL, uploaded BIGINT DEFAULT 0, PRIMARY KEY (hash, downloader_id)) ENGINE=InnoDB ROW_FORMAT=Dynamic"
             )
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS `sites` (`id` mediumint NOT NULL AUTO_INCREMENT, `site` varchar(255) UNIQUE DEFAULT NULL, `nickname` varchar(255) DEFAULT NULL, `base_url` varchar(255) DEFAULT NULL, `special_tracker_domain` varchar(255) DEFAULT NULL, `group` varchar(255) DEFAULT NULL, `cookie` TEXT DEFAULT NULL,`passkey` varchar(255) DEFAULT NULL,`migration` int(11) NOT NULL DEFAULT 1, PRIMARY KEY (`id`)) ENGINE=InnoDB ROW_FORMAT=DYNAMIC"
+                "CREATE TABLE IF NOT EXISTS `sites` (`id` mediumint NOT NULL AUTO_INCREMENT, `site` varchar(255) UNIQUE DEFAULT NULL, `nickname` varchar(255) DEFAULT NULL, `base_url` varchar(255) DEFAULT NULL, `special_tracker_domain` varchar(255) DEFAULT NULL, `group` varchar(255) DEFAULT NULL, `cookie` TEXT DEFAULT NULL,`passkey` varchar(255) DEFAULT NULL,`migration` int(11) NOT NULL DEFAULT 1, `speed_limit` int(11) NOT NULL DEFAULT 0, PRIMARY KEY (`id`)) ENGINE=InnoDB ROW_FORMAT=DYNAMIC"
             )
         # 表创建逻辑 (SQLite) - [此部分保持不变]
         else:
@@ -327,7 +334,7 @@ class DatabaseManager:
                 "CREATE TABLE IF NOT EXISTS torrent_upload_stats (hash TEXT NOT NULL, downloader_id TEXT NOT NULL, uploaded INTEGER DEFAULT 0, PRIMARY KEY (hash, downloader_id))"
             )
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS sites (id INTEGER PRIMARY KEY AUTOINCREMENT, site TEXT UNIQUE, nickname TEXT, base_url TEXT, special_tracker_domain TEXT, `group` TEXT, cookie TEXT, passkey TEXT, migration INTEGER NOT NULL DEFAULT 1)"
+                "CREATE TABLE IF NOT EXISTS sites (id INTEGER PRIMARY KEY AUTOINCREMENT, site TEXT UNIQUE, nickname TEXT, base_url TEXT, special_tracker_domain TEXT, `group` TEXT, cookie TEXT, passkey TEXT, migration INTEGER NOT NULL DEFAULT 1, speed_limit INTEGER NOT NULL DEFAULT 0)"
             )
 
         conn.commit()
@@ -341,9 +348,9 @@ class DatabaseManager:
             with open(SITES_DATA_FILE, "r", encoding="utf-8") as f:
                 sites_from_json = json.load(f)
 
-            # --- 步骤 1: 插入在数据库中不存在的新站点 (逻辑不变) ---
-            cursor.execute("SELECT site, nickname FROM sites")
-            sites_in_db = {row["site"]: row["nickname"] for row in cursor.fetchall()}
+            # --- 步骤 1: 插入在数据库中不存在的新站点 (逻辑更新) ---
+            cursor.execute("SELECT site, nickname, base_url FROM sites")
+            sites_in_db = [{k: row[k] for k in ['site', 'nickname', 'base_url']} for row in cursor.fetchall()]
             
             # 处理大小写不一致的情况：如果JSON中的站点小写版本在数据库中存在但大小写不同，则更新数据库中的站点名
             sites_to_update_case = []
@@ -352,25 +359,46 @@ class DatabaseManager:
             for site_data in sites_from_json:
                 json_site = site_data.get("site")
                 json_nickname = site_data.get("nickname")
+                json_base_url = site_data.get("base_url")
                 
                 if not json_site:
                     continue
                     
-                # 检查是否存在大小写不同的相同站点
+                # 检查是否存在匹配的站点（基于site、nickname或base_url中的任何一个）
                 found_match = False
-                for db_site, db_nickname in sites_in_db.items():
-                    if db_site and json_site and db_site.lower() == json_site.lower():
-                        if db_site != json_site:  # 大小写不同
-                            sites_to_update_case.append((json_site, db_site))
+                matched_db_site = None
+                
+                for db_site_info in sites_in_db:
+                    db_site = db_site_info.get("site") or ""
+                    db_nickname = db_site_info.get("nickname") or ""
+                    db_base_url = db_site_info.get("base_url") or ""
+                    
+                    # 检查是否匹配（任何一个字段相同）
+                    site_match = json_site and db_site and json_site.lower() == db_site.lower()
+                    nickname_match = json_nickname and db_nickname and json_nickname.lower() == db_nickname.lower()
+                    base_url_match = json_base_url and db_base_url and json_base_url.lower() == db_base_url.lower()
+                    
+                    if site_match or nickname_match or base_url_match:
+                        matched_db_site = db_site_info
                         found_match = True
+                        
+                        # 处理大小写不同的情况
+                        if site_match and db_site != json_site:
+                            sites_to_update_case.append((json_site, db_site))
                         break
                 
                 if not found_match:
-                    sites_to_insert.append(tuple(
-                        site_data.get(k) for k in [
-                            "site", "nickname", "base_url",
-                            "special_tracker_domain", "group", "migration"
-                        ]))
+                    # 统一使用MB/s单位
+                    speed_limit_mb = site_data.get("speed_limit", 0)
+                    sites_to_insert.append((
+                        site_data.get("site"),
+                        site_data.get("nickname"),
+                        site_data.get("base_url"),
+                        site_data.get("special_tracker_domain"),
+                        site_data.get("group"),
+                        site_data.get("migration"),
+                        speed_limit_mb
+                    ))
             
             # 更新数据库中大小写不一致的站点名
             if sites_to_update_case:
@@ -387,23 +415,135 @@ class DatabaseManager:
                     f"发现 {len(sites_to_insert)} 个新站点，将从 {SITES_DATA_FILE} 插入数据库。"
                 )
                 ph = self.get_placeholder()
-                sql_insert = f"INSERT INTO sites (site, nickname, base_url, special_tracker_domain, `group`, migration) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph})"
+                sql_insert = f"INSERT INTO sites (site, nickname, base_url, special_tracker_domain, `group`, migration, speed_limit) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})"
                 cursor.executemany(sql_insert, sites_to_insert)
 
             # --- 步骤 2: [新增逻辑] 更新所有站点的 migration 值 ---
             # 准备要更新的数据：(migration_value, site_domain)
-            migration_data_to_update = [(s.get("migration", 1), s.get("site"))
-                                        for s in sites_from_json
-                                        if s.get("site")]
+            migration_data_to_update = []
+            
+            for site_data in sites_from_json:
+                json_site = site_data.get("site")
+                json_nickname = site_data.get("nickname")
+                json_base_url = site_data.get("base_url")
+                json_migration = site_data.get("migration", 1)
+                
+                if not json_site:
+                    continue
+                    
+                # 查询数据库中该站点的信息（基于site、nickname或base_url中的任何一个）
+                cursor.execute(f"SELECT id, migration FROM sites WHERE site = {self.get_placeholder()} OR nickname = {self.get_placeholder()} OR base_url = {self.get_placeholder()}", 
+                              (json_site, json_nickname, json_base_url,))
+                db_result = cursor.fetchone()
+                
+                if db_result:
+                    db_migration = db_result["migration"] if isinstance(db_result, dict) else db_result[1]
+                    # 只有当数据库中的值不等于JSON中的值时才更新
+                    if db_migration != json_migration:
+                        db_id = db_result["id"] if isinstance(db_result, dict) else db_result[0]
+                        migration_data_to_update.append((int(json_migration), db_id))
 
             if migration_data_to_update:
                 logging.info(
                     f"正在根据 {SITES_DATA_FILE} 同步 {len(migration_data_to_update)} 个站点的 migration 值..."
                 )
                 ph = self.get_placeholder()
-                # SQL语句的 WHERE site = ? 会确保只更新数据库中已存在的站点
-                sql_update = f"UPDATE sites SET migration = {ph} WHERE site = {ph}"
+                # SQL语句的 WHERE id = ? 会确保只更新数据库中已存在的站点
+                sql_update = f"UPDATE sites SET migration = {ph} WHERE id = {ph}"
                 cursor.executemany(sql_update, migration_data_to_update)
+
+            # --- 步骤 3: [新增逻辑] 更新站点的 nickname、base_url 字段 ---
+            site_info_to_update = []
+            
+            for site_data in sites_from_json:
+                json_site = site_data.get("site")
+                json_nickname = site_data.get("nickname")
+                json_base_url = site_data.get("base_url")
+                
+                if not json_site:
+                    continue
+                    
+                # 查询数据库中该站点的信息（基于site、nickname或base_url中的任何一个）
+                cursor.execute(f"SELECT id, site, nickname, base_url FROM sites WHERE site = {self.get_placeholder()} OR nickname = {self.get_placeholder()} OR base_url = {self.get_placeholder()}", 
+                              (json_site, json_nickname, json_base_url,))
+                db_result = cursor.fetchone()
+                
+                if db_result:
+                    db_id = db_result["id"] if isinstance(db_result, dict) else db_result[0]
+                    db_site = db_result["site"] if isinstance(db_result, dict) else db_result[1]
+                    db_nickname = db_result["nickname"] if isinstance(db_result, dict) else db_result[2]
+                    db_base_url = db_result["base_url"] if isinstance(db_result, dict) else db_result[3]
+                    
+                    # 检查各个字段是否需要更新
+                    update_params = []
+                    set_clauses = []
+                    
+                    # 检查 site 是否需要更新
+                    if json_site is not None and db_site != json_site:
+                        set_clauses.append("site = ?")
+                        update_params.append(json_site)
+                    
+                    # 检查 nickname 是否需要更新
+                    if json_nickname is not None and db_nickname != json_nickname:
+                        set_clauses.append("nickname = ?")
+                        update_params.append(json_nickname)
+                    
+                    # 检查 base_url 是否需要更新
+                    if json_base_url is not None and db_base_url != json_base_url:
+                        set_clauses.append("base_url = ?")
+                        update_params.append(json_base_url)
+                    
+                    # 如果有任何字段需要更新，则添加到更新列表
+                    if set_clauses:
+                        update_params.append(db_id)  # WHERE 条件使用ID
+                        site_info_to_update.append((set_clauses, update_params))
+
+            # 更新站点基本信息
+            if site_info_to_update:
+                logging.info(
+                    f"正在根据 {SITES_DATA_FILE} 同步 {len(site_info_to_update)} 个站点的基本信息..."
+                )
+                for set_clauses, update_params in site_info_to_update:
+                    sql_update = f"UPDATE sites SET {', '.join(set_clauses)} WHERE id = ?"
+                    cursor.execute(sql_update, update_params)
+
+            # --- 步骤 4: [新增逻辑] 智能更新站点的 speed_limit 值 ---
+            # 只有当数据库中的值为0且JSON文件中的值不为0时才更新，保留用户手动设置的值
+            # 统一使用MB/s单位
+            speed_limit_data_to_update = []
+            
+            for site_data in sites_from_json:
+                json_site = site_data.get("site")
+                json_nickname = site_data.get("nickname")
+                json_base_url = site_data.get("base_url")
+                json_speed_limit = site_data.get("speed_limit", 0)
+                
+                if not json_site:
+                    continue
+                    
+                # 只有当JSON中有speed_limit值且不为0时才考虑更新
+                if json_speed_limit > 0:
+                    # 查询数据库中该站点当前的speed_limit值（基于site、nickname或base_url中的任何一个）
+                    cursor.execute(f"SELECT id, speed_limit FROM sites WHERE site = {self.get_placeholder()} OR nickname = {self.get_placeholder()} OR base_url = {self.get_placeholder()}", 
+                                  (json_site, json_nickname, json_base_url,))
+                    db_result = cursor.fetchone()
+                    
+                    if db_result:
+                        db_speed_limit = db_result["speed_limit"] if isinstance(db_result, dict) else db_result[1]
+                        # 只有当数据库中的值为0时才更新（保留用户手动设置的值）
+                        if db_speed_limit == 0:
+                            # 统一使用MB/s单位
+                            db_id = db_result["id"] if isinstance(db_result, dict) else db_result[0]
+                            speed_limit_data_to_update.append((int(json_speed_limit), db_id))
+
+            if speed_limit_data_to_update:
+                logging.info(
+                    f"正在根据 {SITES_DATA_FILE} 智能同步 {len(speed_limit_data_to_update)} 个站点的 speed_limit 值（仅更新未手动设置的站点）..."
+                )
+                ph = self.get_placeholder()
+                # SQL语句的 WHERE id = ? 会确保只更新数据库中已存在的站点
+                sql_update = f"UPDATE sites SET speed_limit = {ph} WHERE id = {ph}"
+                cursor.executemany(sql_update, speed_limit_data_to_update)
 
             # 一次性提交所有更改
             conn.commit()

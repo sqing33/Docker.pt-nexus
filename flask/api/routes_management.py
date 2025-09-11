@@ -88,7 +88,7 @@ def get_sites():
         conn = db_manager._get_connection()
         cursor = db_manager._get_cursor(conn)
         select_fields = """
-            s.id, s.nickname, s.site, s.base_url, s.special_tracker_domain, s.`group`, s.proxy,
+            s.id, s.nickname, s.site, s.base_url, s.special_tracker_domain, s.`group`, s.proxy, s.speed_limit,
             CASE WHEN s.cookie IS NOT NULL AND s.cookie != '' THEN 1 ELSE 0 END as has_cookie,
             CASE WHEN s.passkey IS NOT NULL AND s.passkey != '' THEN 1 ELSE 0 END as has_passkey,
             s.cookie, s.passkey
@@ -177,6 +177,11 @@ def update_site_cookie():
     nickname, cookie = data.get("nickname"), data.get("cookie")
     if not nickname or cookie is None:
         return jsonify({"success": False, "message": "必须提供站点昵称和 Cookie。"}), 400
+    
+    # 去除cookie字符串首尾的换行符和多余空白字符
+    if cookie:
+        cookie = cookie.strip()
+    
     try:
         if db_manager.update_site_cookie(nickname, cookie):
             return jsonify({
@@ -277,6 +282,9 @@ def cookiecloud_sync():
                 cookie_str = ("; ".join([
                     f"{c['name']}={c['value']}" for c in cookie_value
                 ]) if isinstance(cookie_value, list) else cookie_value)
+                # 去除cookie字符串首尾的换行符和多余空白字符
+                if cookie_str:
+                    cookie_str = cookie_str.strip()
                 if db_manager.update_site_cookie(site_in_app["nickname"],
                                                  cookie_str):
                     updated_count += 1

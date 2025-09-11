@@ -6,7 +6,12 @@
       "Bash(find:*)",
       "Bash(sed:*)",
       "Bash(pnpm build)",
-      "WebFetch(domain:img.seedvault.cn)"
+      "WebFetch(domain:img.seedvault.cn)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "Bash(python -c \"from qbittorrentapi import Client; help(Client.torrents_add)\")",
+      "Bash(cat:*)",
+      "Bash(python:*)"
     ],
     "deny": [],
     "ask": []

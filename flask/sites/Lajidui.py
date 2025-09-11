@@ -7,6 +7,7 @@ import cloudscraper
 from loguru import logger
 from utils import cookies_raw2jar, ensure_scheme, extract_tags_from_mediainfo
 
+
 class LajiduiUploader:
 
     def __init__(self, site_info: dict, upload_data: dict):
@@ -234,8 +235,7 @@ class LajiduiUploader:
         }
         # 优先使用从简介中提取的产地信息，如果没有则使用片源平台
         origin_str = source_params.get("产地", "")
-        source_str = origin_str if origin_str else title_params.get(
-            "片源平台", "")
+        source_str = origin_str if origin_str else title_params.get("片源平台", "")
         mapped["source_sel[4]"] = "6"  # 默认值: Other
         for key, value in source_map.items():
             if key.lower() in source_str.lower():
@@ -285,7 +285,7 @@ class LajiduiUploader:
             "杜比": 10,
             "完结": 9,
         }
-        
+
         # 从源站参数获取标签
         source_tags = source_params.get("标签") or []
 
@@ -351,8 +351,8 @@ class LajiduiUploader:
 
         order = [
             "主标题",
-            "年份",
             "季集",
+            "年份",
             "剧集状态",
             "发布版本",
             "分辨率",
