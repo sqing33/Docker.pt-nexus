@@ -43,6 +43,12 @@
         <el-table-column prop="site" label="站点标识" width="200" show-overflow-tooltip />
         <el-table-column prop="base_url" label="基础URL" width="225" show-overflow-tooltip />
         <el-table-column prop="group" label="官组" show-overflow-tooltip />
+        <el-table-column label="限速" width="100" align="center">
+          <template #default="scope">
+            <span v-if="scope.row.speed_limit > 0">{{ scope.row.speed_limit }} MB/s</span>
+            <span v-else>不限速</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="proxy" label="代理" width="70" align="center">
           <template #default="scope">
             <el-tag :type="scope.row.proxy ? 'success' : 'info'">{{ scope.row.proxy ? '启用' : '关闭' }}</el-tag>
@@ -122,6 +128,10 @@
         <el-form-item label="Passkey" prop="passkey">
           <el-input v-model="siteForm.passkey" placeholder="站点的Passkey"></el-input>
         </el-form-item>
+        <el-form-item label="上传限速 (MB/s)" prop="speed_limit">
+          <el-input-number v-model="siteForm.speed_limit" :min="0" :max="1000" placeholder="0 表示不限速" style="width: 100%"/>
+          <div class="form-tip">单位为 MB/s，0 表示不限速</div>
+        </el-form-item>
       </el-form>
       <template #footer>
         <span class="dialog-footer">
@@ -171,6 +181,7 @@ const siteForm = ref({
   cookie: '',
   passkey: '',
   proxy: 0,
+  speed_limit: 0, // 前端显示和输入使用 MB/s 单位
 })
 
 const API_BASE_URL = '/api'
@@ -287,7 +298,9 @@ const handleSaveAndSync = async () => {
 const handleOpenDialog = (mode, site = null) => {
   dialogMode.value = mode
   if (mode === 'edit' && site) {
-    siteForm.value = JSON.parse(JSON.stringify(site))
+    // 统一使用MB/s单位
+    const siteData = JSON.parse(JSON.stringify(site))
+    siteForm.value = siteData
   } else {
     siteForm.value = {
       id: null,
@@ -299,6 +312,7 @@ const handleOpenDialog = (mode, site = null) => {
       cookie: '',
       passkey: '',
       proxy: 0,
+      speed_limit: 0,
     }
   }
   dialogVisible.value = true
@@ -307,11 +321,14 @@ const handleOpenDialog = (mode, site = null) => {
 const handleSave = async () => {
   isSaving.value = true
   try {
+    // 统一使用MB/s单位
+    const siteData = JSON.parse(JSON.stringify(siteForm.value))
+    
     let response
     if (dialogMode.value === 'add') {
-      response = await axios.post(`${API_BASE_URL}/sites/add`, siteForm.value)
+      response = await axios.post(`${API_BASE_URL}/sites/add`, siteData)
     } else {
-      response = await axios.post(`${API_BASE_URL}/sites/update`, siteForm.value)
+      response = await axios.post(`${API_BASE_URL}/sites/update`, siteData)
     }
 
     if (response.data.success) {

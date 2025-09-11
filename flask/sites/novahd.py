@@ -260,7 +260,7 @@ class NovahdUploader:
             "分集": 9,
             "驻站": 8,
         }
-        
+
         # 从源站参数获取标签
         source_tags = source_params.get("标签") or []
 
@@ -322,8 +322,8 @@ class NovahdUploader:
 
         order = [
             "主标题",
-            "年份",
             "季集",
+            "年份",
             "剧集状态",
             "发布版本",
             "分辨率",

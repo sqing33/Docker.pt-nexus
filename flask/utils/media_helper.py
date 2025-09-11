@@ -836,7 +836,7 @@ def add_torrent_to_downloader(detail_page_url: str, save_path: str,
     # 1. 查找对应的站点配置
     conn = db_manager._get_connection()
     cursor = db_manager._get_cursor(conn)
-    cursor.execute("SELECT nickname, base_url, cookie, proxy FROM sites")
+    cursor.execute("SELECT nickname, base_url, cookie, proxy, speed_limit FROM sites")
     site_info = None
     for site in cursor.fetchall():
         # [修复] 确保 base_url 存在且不为空
@@ -951,17 +951,44 @@ def add_torrent_to_downloader(detail_page_url: str, save_path: str,
         if downloader_config['type'] == 'qbittorrent':
             client = qbClient(**api_config)
             client.auth_log_in()
-            result = client.torrents_add(torrent_files=torrent_content,
-                                         save_path=save_path,
-                                         is_paused=False,
-                                         skip_checking=True)
-            logging.info(f"已将种子添加到 qBitorrent '{client_name}': {result}")
+            
+            # 准备 qBittorrent 参数
+            qb_params = {
+                'torrent_files': torrent_content,
+                'save_path': save_path,
+                'is_paused': False,
+                'skip_checking': True
+            }
+            
+            # 如果站点设置了速度限制，则添加速度限制参数
+            # 数据库中存储的是MB/s，需要转换为bytes/s传递给下载器API
+            if site_info and site_info.get('speed_limit', 0) > 0:
+                speed_limit = int(site_info['speed_limit']) * 1024 * 1024  # 转换为 bytes/s
+                qb_params['upload_limit'] = speed_limit
+                logging.info(f"为站点 '{site_info['nickname']}' 设置上传速度限制: {site_info['speed_limit']} MB/s")
+            
+            result = client.torrents_add(**qb_params)
+            logging.info(f"已将种子添加到 qBittorrent '{client_name}': {result}")
 
         elif downloader_config['type'] == 'transmission':
             client = TrClient(**api_config)
-            result = client.add_torrent(torrent=torrent_content,
-                                        download_dir=save_path,
-                                        paused=False)
+            
+            # 准备 Transmission 参数
+            tr_params = {
+                'torrent': torrent_content,
+                'download_dir': save_path,
+                'paused': False
+            }
+            
+            # 如果站点设置了速度限制，则添加速度限制参数
+            # 数据库中存储的是MB/s，需要转换为bytes/s传递给下载器API
+            if site_info and site_info.get('speed_limit', 0) > 0:
+                speed_limit = int(site_info['speed_limit']) * 1024 * 1024  # 转换为 bytes/s
+                tr_params['uploadLimit'] = speed_limit
+                tr_params['uploadLimited'] = True
+                logging.info(f"为站点 '{site_info['nickname']}' 设置上传速度限制: {site_info['speed_limit']} MB/s")
+            
+            result = client.add_torrent(**tr_params)
             logging.info(
                 f"已将种子添加到 Transmission '{client_name}': ID={result.id}")
 

@@ -262,8 +262,7 @@ class PtloverUploader:
         }
         # 优先使用从简介中提取的产地信息，如果没有则使用片源平台
         origin_str = source_params.get("产地", "")
-        source_str = origin_str if origin_str else title_params.get(
-            "片源平台", "")
+        source_str = origin_str if origin_str else title_params.get("片源平台", "")
         mapped["source_sel[4]"] = "99"  # 默认值: Other
         for key, value in source_map.items():
             if key.lower() in source_str.lower():
@@ -342,8 +341,8 @@ class PtloverUploader:
 
         order = [
             "主标题",
-            "年份",
             "季集",
+            "年份",
             "剧集状态",
             "发布版本",
             "分辨率",

@@ -1,4 +1,4 @@
-# sites/hdupt.py
+# sites/qingwapt.py
 
 import os
 import re
@@ -8,7 +8,7 @@ from loguru import logger
 from utils import cookies_raw2jar, ensure_scheme, extract_tags_from_mediainfo
 
 
-class HduptUploader:
+class QingwaUploader:
 
     def __init__(self, site_info: dict, upload_data: dict):
         """
@@ -19,7 +19,7 @@ class HduptUploader:
         self.upload_data = upload_data
         self.scraper = cloudscraper.create_scraper()
 
-        base_url = ensure_scheme(self.site_info.get("base_url"))
+        base_url = ensure_scheme(self.site_info.get("base_url") or "")
 
         self.post_url = f"{base_url}/takeupload.php"
         self.timeout = 40
@@ -29,12 +29,12 @@ class HduptUploader:
             "referer":
             f"{base_url}/upload.php",
             "user-agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/5.0 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
         }
 
     def _map_parameters(self) -> dict:
         """
-        将参数映射为 Hdupt 站点所需的表单值。
+        将参数映射为 青蛙 (qingwapt) 站点所需的表单值。
         - 映射表根据站点 upload.php 的 HTML 源码进行最终校对。
         - 字典的顺序很重要，用于优先匹配更精确的关键词。
         - 任何未匹配到的项目都将自动归类于 'Other'。
@@ -50,6 +50,7 @@ class HduptUploader:
         }
 
         mapped = {}
+        tags = []
 
         # 1. 类型映射 (Type) - 根据站点HTML校对
         type_map = {
@@ -61,34 +62,34 @@ class HduptUploader:
             "电视剧": "402",
             "TV Shows": "403",
             "综艺": "403",
-            "Documentaries": "404",
-            "记录片": "404",
-            "纪录片": "404",
             "Animations": "405",
             "动漫": "405",
             "动画": "405",
             "Anime": "405",
             "MV": "406",
-            "Music Videos": "406",
             "演唱会": "406",
-            "Sports": "407",
+            "Music Video": "406",
+            "Sport": "407",
             "体育": "407",
-            "HQ Audio": "408",
+            "Music": "408",
             "音乐": "408",
-            "无损音乐": "408",
+            "专辑": "408",
+            "音轨": "408",
             "音频": "408",
-            "Games": "410",
-            "游戏": "410",
-            "其他": "411",
-            "Misc": "411",
-            "未知": "411",
-            "Unknown": "411",
+            "Audio": "408",
+            "Documentaries": "404",
+            "记录片": "404",
+            "纪录片": "404",
+            "短剧": "412",
+            "其他": "409",
+            "Misc": "409",
+            "未知": "409",
+            "Unknown": "409",
         }
         source_type = source_params.get("类型") or ""
-        # 优先完全匹配，然后部分匹配，最后使用默认值
-        mapped["type"] = "411"  # 默认值: Misc/其他
+        mapped["type"] = "409"  # 默认值: 其他
 
-        # 精确匹配
+        # 优先完全匹配，然后部分匹配
         for key, value in type_map.items():
             if key.lower() == source_type.lower().strip():
                 mapped["type"] = value
@@ -101,28 +102,23 @@ class HduptUploader:
                     break
 
         # 2. 媒介映射 (Medium) - 根据站点HTML校对
-        # 站点默认值 'Other': 0
+        # 站点默认值 'Other': 6
         medium_map = {
-            'UHD Blu-ray': '11',
-            'Blu-ray': '1',
-            'BD': '1',
-            'Remux': '3',
-            'UHD Remux': '15',
-            'UHD Remux TV': '16',
-            'Remux TV': '12',
-            'Encode': '7',
-            'Encode TV': '14',
-            'WEB-DL': '10',
-            'WEBRip': '10',
-            'WEB': '10',
-            'WEB-DL TV': '13',
-            'WEBRip TV': '13',
-            'HDTV': '5',
-            'TVrip': '5',
-            'DVD': '6',
-            'MiniBD': '4',
-            'CD': '8',
-            'Track': '9',
+            'UHD Blu-ray': '1',
+            'BluRay': '8',
+            'Blu-ray': '8',
+            'BD': '8',
+            'Remux': '9',
+            'Encode': '10',
+            'MiniBD': '11',
+            'WEB-DL': '7',
+            'WEBRip': '7',
+            'WEB': '7',
+            'HDTV': '4',
+            'TVrip': '4',
+            'DVD': '2',
+            'CD': '3',
+            'Track': '5',
         }
         medium_str = title_params.get("媒介", "")
         mediainfo_str = self.upload_data.get("mediainfo", "")
@@ -131,134 +127,164 @@ class HduptUploader:
         # 站点规则：有mediainfo的Blu-ray/DVD源盘rip都算Encode
         if is_standard_mediainfo and ('blu' in medium_str.lower()
                                       or 'dvd' in medium_str.lower()):
-            mapped["medium_sel"] = "7"  # Encode
+            mapped["source_sel[4]"] = "10"  # Encode
         else:
-            mapped["medium_sel"] = "0"  # 默认值: 请选择
+            mapped["source_sel[4]"] = "6"  # 默认值: Other
             for key, value in medium_map.items():
                 if key.lower() in medium_str.lower():
-                    mapped["medium_sel"] = value
+                    mapped["source_sel[4]"] = value
                     break
 
         # 3. 视频编码映射 (Video Codec) - 根据站点HTML校对
         # 站点默认值 'Other': 5
         codec_map = {
-            'H.265': '14',
-            'HEVC': '14',
-            'x265': '14',
+            'H.265': '6',
+            'HEVC': '6',
+            'x265': '6',
             'H.264': '1',
             'AVC': '1',
-            'x264': '16',
+            'x264': '1',
+            'AV1': '7',
             'VC-1': '2',
-            'XviD': '3',
-            'MPEG-2': '18',
-            'MPEG': '18',
+            'MPEG-2': '4',
+            'Xvid': '3',
+            'MPEG-4': '3',
+            'VP9': '8',
         }
         codec_str = title_params.get("视频编码", "")
-        mapped["codec_sel"] = "5"  # 默认值: Other
+        mapped["codec_sel[4]"] = "5"  # 默认值: Other
         for key, value in codec_map.items():
             if key.lower() in codec_str.lower():
-                mapped["codec_sel"] = value
+                mapped["codec_sel[4]"] = value
                 break
 
         # 4. 音频编码映射 (Audio Codec) - 根据站点HTML校对
-        # 站点默认值 'Other': 13
+        # 站点默认值 'Other': 7
         audio_map = {
-            'DTS:X': '16',
-            'DTS-HD MA': '1',
-            'DTS-HDMA': '1',
-            'TrueHD': '3',
-            'LPCM': '11',
-            'DTS': '4',
-            'AC3': '2',
-            'EAC3': '2',
-            'DD+': '2',
-            'DD': '2',
-            'AAC': '6',
-            'FLAC': '7',
-            'APE': '10',
-            'WAV': '17',
-            'MPEG': '18',
-            'MP3': '18',
+            'DTS:X': '9',
+            'DTS-X': '9',
+            'DTS': '14',
+            'DTS-HD MA': '10',
+            'DTS-HD HRA': '21',
+            'TrueHD Atmos': '11',
+            'Atmos': '11',
+            'TrueHD': '12',
+            'LPCM': '13',
+            'DD/AC3': '15',
+            'AC3': '15',
+            'DDP/E-AC3': '16',
+            'E-AC3': '16',
+            'DD+': '16',
+            'FLAC': '1',
+            'AAC': '17',
+            'APE': '18',
+            'WAV': '19',
+            'MP3': '4',
+            'M4A': '8',
+            'OPUS': '20',
+            'AV3A': '22',
         }
         audio_str = title_params.get("音频编码", "")
         audio_str_normalized = audio_str.upper().replace(" ",
                                                          "").replace(".", "")
-        mapped["audiocodec_sel"] = "13"  # 默认值: Other
+        mapped["audiocodec_sel[4]"] = "7"  # 默认值: Other
         for key, value in audio_map.items():
             key_normalized = key.upper().replace(" ", "").replace(".", "")
             if key_normalized in audio_str_normalized:
-                mapped["audiocodec_sel"] = value
+                mapped["audiocodec_sel[4]"] = value
                 break
 
         # 5. 分辨率映射 (Resolution) - 根据站点HTML校对
-        # 站点默认值 'Other': 0
+        # 站点默认值 'Other': 5
         resolution_map = {
-            '8K': '5',
-            '4320p': '5',
-            '4K': '5',
-            '2160p': '5',
-            'UHD': '5',
+            '8K': '6',
+            '4320p': '6',
+            '4K': '7',
+            '2160p': '7',
+            'UHD': '7',
+            '2K': '8',
+            '1440p': '8',
             '1080p': '1',
             '1080i': '2',
             '720p': '3',
-            '720i': '3',
+            'SD': '4',
             '480p': '4',
             '480i': '4',
-            'SD': '4',
-            'iPad': '6',
         }
         resolution_str = title_params.get("分辨率", "")
-        mapped["standard_sel"] = "0"  # 默认值: 请选择
+        mapped["standard_sel[4]"] = "5"  # 默认值: Other
         for key, value in resolution_map.items():
             if key.lower() in resolution_str.lower():
-                mapped["standard_sel"] = value
+                mapped["standard_sel[4]"] = value
                 break
 
-        # 6. 处理映射 (Processing) - 根据站点HTML校对
-        # 站点默认值 'Other': 7
-        processing_map = {
-            "中国": "1",
-            "CN": "1",
-            "大陆": "1",
-            "中国内地": "1",
-            "香港": "3",
-            "HK": "3",
-            "台湾": "3",
-            "TW": "3",
-            "港台": "3",
-            "美国": "2",
-            "US": "2",
-            "欧美": "2",
-            "欧洲": "2",
-            "EU": "2",
-            "日本": "4",
-            "JPN": "4",
-            "JP": "4",
-            "韩国": "5",
-            "KR": "5",
-            "印度": "6",
-            "IN": "6",
-            "东南亚": "8",
-            "SEA": "8",
-        }
-        # 优先使用从简介中提取的产地信息，如果没有则使用片源平台
-        origin_str = source_params.get("产地", "")
-        source_str = origin_str if origin_str else title_params.get(
-            "片源平台", "")
-        mapped["processing_sel"] = "7"  # 默认值: Other
-        for key, value in processing_map.items():
-            if key.lower() in source_str.lower():
-                mapped["processing_sel"] = value
-                break
-
-        # 7. 制作组映射 (Team) - 根据站点HTML校对
+        # 6. 制作组映射 (Team) - 根据站点HTML校对
         # 站点默认值 'Other': 5
         team_map = {
-            "HDU": "2",
+            "FROG": "6",
+            "FROGE": "7",
+            "FROGWeb": "8",
+            "CatEDU": "10",
         }
         release_group_str = str(title_params.get("制作组", "")).upper()
-        mapped["team_sel"] = team_map.get(release_group_str,
-                                          "5")  # 默认值 Other
+        mapped["team_sel[4]"] = team_map.get(release_group_str,
+                                             "5")  # 默认值 Other
+
+        # 7. 标签 (Tags) - 根据站点HTML校对
+        tag_map = {
+            "VCB-Studio": 2,
+            "儿童片": 17,
+            "LGBTQ+": 19,
+            "禁转": 1,
+            "中字": 6,
+            "特效字幕": 20,
+            "国语": 5,
+            "粤语": 8,
+            "完结": 14,
+            "系列合集": 10,
+            "原生原盘": 11,
+            "DIY": 4,
+            "Remux": 15,
+            "杜比视界": 12,
+            "HDR10+": 13,
+            "HDR": 7,
+        }
+
+        # 从源站参数获取标签
+        source_tags = source_params.get("标签") or []
+
+        # 从 MediaInfo 提取标签
+        mediainfo_str = self.upload_data.get("mediainfo", "")
+        tags_from_mediainfo = extract_tags_from_mediainfo(mediainfo_str)
+
+        # 合并所有标签
+        combined_tags = set(source_tags)
+        combined_tags.update(tags_from_mediainfo)
+
+        # 从类型中补充 "中字"
+        if "中字" in source_type:
+            combined_tags.add("中字")
+
+        # 从标题组件中智能匹配HDR等信息
+        hdr_str = title_params.get("HDR格式", "").upper()
+        if "VISION" in hdr_str or "DV" in hdr_str:
+            combined_tags.add("杜比视界")
+        if "HDR10+" in hdr_str:
+            combined_tags.add("HDR10+")
+        elif "HDR10" in hdr_str:
+            combined_tags.add("HDR")
+        elif "HDR" in hdr_str:
+            combined_tags.add("HDR")
+
+        # 映射标签到站点ID
+        for tag_str in combined_tags:
+            tag_id = tag_map.get(tag_str)
+            if tag_id is not None:
+                tags.append(tag_id)
+
+        # 去重并格式化
+        for i, tag_id in enumerate(sorted(list(set(tags)))):
+            mapped[f"tags[4][{i}]"] = tag_id
 
         return mapped
 
@@ -274,7 +300,7 @@ class HduptUploader:
 
     def _build_title(self) -> str:
         """
-        根据 title_components 参数，按照 Hdupt 的规则拼接主标题。
+        根据 title_components 参数，按照 青蛙 (qingwapt) 的规则拼接主标题。
         """
         components_list = self.upload_data.get("title_components", [])
         components = {
@@ -285,9 +311,8 @@ class HduptUploader:
 
         order = [
             "主标题",
-            "年份",
             "季集",
-            "剧集状态",
+            "年份",
             "发布版本",
             "分辨率",
             "片源平台",
@@ -295,7 +320,6 @@ class HduptUploader:
             "视频编码",
             "视频格式",
             "HDR格式",
-            "色深",
             "帧率",
             "音频编码",
         ]
@@ -308,7 +332,7 @@ class HduptUploader:
                 else:
                     title_parts.append(str(value))
 
-        # [修改] 使用正则表达式替换分隔符，以保护数字中的小数点（例如 5.1）
+        # 使用正则表达式替换分隔符，以保护数字中的小数点（例如 5.1）
         raw_main_part = " ".join(filter(None, title_parts))
         # r'(?<!\d)\.(?!\d)' 的意思是：匹配一个点，但前提是它的前面和后面都不是数字
         main_part = re.sub(r'(?<!\d)\.(?!\d)', ' ', raw_main_part)
@@ -320,7 +344,7 @@ class HduptUploader:
             release_group = "NOGROUP"
 
         # 对特殊制作组进行处理，不需要添加前缀连字符
-        special_groups = ["MNHD-FRDS", "mUHD-FRDS"]
+        special_groups = ["FROG", "FROGE", "FROGWeb", "CatEDU"]
         if release_group in special_groups:
             final_title = f"{main_part} {release_group}"
         else:
@@ -333,7 +357,7 @@ class HduptUploader:
         """
         执行上传的核心逻辑。
         """
-        logger.info("正在为 Hdupt 站点适配上传参数...")
+        logger.info("正在为 青蛙 (qingwapt) 站点适配上传参数...")
         try:
             mapped_params = self._map_parameters()
             description = self._build_description()
@@ -343,8 +367,11 @@ class HduptUploader:
             form_data = {
                 "name": final_main_title,
                 "small_descr": self.upload_data.get("subtitle", ""),
+                "url": self.upload_data.get("imdb_link", "") or "",
+                "pt_gen": self.upload_data.get("douban_link", "") or "",
                 "descr": description,
-                "uplver": "yes",  # 默认匿名上传
+                "technical_info": self.upload_data.get("mediainfo", ""),
+                "uplver": "yes",
                 **mapped_params,
             }
 
@@ -354,7 +381,7 @@ class HduptUploader:
                     "file": (
                         os.path.basename(torrent_path),
                         torrent_file,
-                        "application/x-bittorent",
+                        "application/x-bittorrent",
                     ),
                     "nfo": ("", b"", "application/octet-stream"),
                 }
@@ -363,7 +390,7 @@ class HduptUploader:
                     logger.error("目标站点 Cookie 为空，无法发布。")
                     return False, "目标站点 Cookie 未配置。"
                 cookie_jar = cookies_raw2jar(cleaned_cookie_str)
-                logger.info("正在向 Hdupt 站点提交发布请求...")
+                logger.info("正在向 青蛙 (qingwapt) 站点提交发布请求...")
                 # 若站点启用代理且配置了全局代理地址，则通过代理请求
                 proxies = None
                 try:
@@ -378,6 +405,7 @@ class HduptUploader:
                         proxies = {"http": proxy_url, "https": proxy_url}
                 except Exception:
                     proxies = None
+
                 response = self.scraper.post(
                     self.post_url,
                     headers=self.headers,
@@ -410,11 +438,11 @@ class HduptUploader:
                 return False, f"发布失败，请检查站点返回信息。 URL: {response.url}"
 
         except Exception as e:
-            logger.error(f"发布到 Hdupt 站点时发生错误: {e}")
+            logger.error(f"发布到 青蛙 (qingwapt) 站点时发生错误: {e}")
             logger.error(traceback.format_exc())
             return False, f"请求异常: {e}"
 
 
 def upload(site_info: dict, upload_payload: dict):
-    uploader = HduptUploader(site_info, upload_payload)
+    uploader = QingwaUploader(site_info, upload_payload)
     return uploader.execute_upload()

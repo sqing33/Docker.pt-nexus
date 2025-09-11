@@ -70,7 +70,7 @@
         <template #default="scope">
           <el-tag :type="getStateTagType(scope.row.state)" size="large">{{
             scope.row.state
-            }}</el-tag>
+          }}</el-tag>
         </template>
       </el-table-column>
 
@@ -98,12 +98,8 @@
           </div>
         </template>
         <div class="cross-seed-content" v-if="selectedTorrentForMigration">
-          <CrossSeedPanel
-            :torrent="selectedTorrentForMigration"
-            :source-site="selectedSourceSite"
-            @complete="handleCrossSeedComplete"
-            @cancel="closeCrossSeedDialog"
-          />
+          <CrossSeedPanel :torrent="selectedTorrentForMigration" :source-site="selectedSourceSite"
+            @complete="handleCrossSeedComplete" @cancel="closeCrossSeedDialog" />
         </div>
       </el-card>
     </div>
@@ -126,19 +122,13 @@
                 <el-radio label="exists">存在于</el-radio>
                 <el-radio label="not-exists">不存在于</el-radio>
               </el-radio-group>
-              <el-input
-                v-model="siteSearch"
-                size="small"
-                placeholder="搜索站点"
-                clearable
-                style="width:220px;"
-              />
+              <el-input v-model="siteSearch" size="small" placeholder="搜索站点" clearable style="width:220px;" />
             </div>
             <div class="site-checkbox-container">
               <el-checkbox-group v-model="tempFilters.siteNames" :disabled="tempFilters.siteExistence === 'all'">
                 <el-checkbox v-for="site in filteredSiteOptions" :key="site" :label="site">{{
                   site
-                  }}</el-checkbox>
+                }}</el-checkbox>
               </el-checkbox-group>
             </div>
           </div>
@@ -157,7 +147,7 @@
           <el-checkbox-group v-model="tempFilters.states">
             <el-checkbox v-for="state in unique_states" :key="state" :label="state">{{
               state
-              }}</el-checkbox>
+            }}</el-checkbox>
           </el-checkbox-group>
         </div>
         <div class="filter-card-footer">
@@ -183,17 +173,12 @@
             只有当前种子所在的站点才可点击。
           </p>
           <div class="site-list-box">
-            <el-tooltip v-for="site in allSourceSitesStatus" :key="site.name"
-              :content="isSourceSiteSelectable(site.name) ? `从 ${site.name} 转种` : `当前种子不在 ${site.name}`"
-              placement="top">
-              <el-tag 
-                :type="getSiteTagType(site, isSourceSiteSelectable(site.name))"
-                :class="{ 'is-selectable': isSourceSiteSelectable(site.name) }" 
-                class="site-tag"
-                @click="isSourceSiteSelectable(site.name) && confirmSourceSiteAndProceed(getSiteDetails(site.name))">
-                {{ site.name }}
-              </el-tag>
-            </el-tooltip>
+            <el-tag v-for="site in allSourceSitesStatus" :key="site.name"
+              :type="getSiteTagType(site, isSourceSiteSelectable(site.name))"
+              :class="{ 'is-selectable': isSourceSiteSelectable(site.name) }" class="site-tag"
+              @click="isSourceSiteSelectable(site.name) && confirmSourceSiteAndProceed(getSiteDetails(site.name))">
+              {{ site.name }}
+            </el-tag>
           </div>
         </div>
         <div class="filter-card-footer">
@@ -490,7 +475,7 @@ const confirmSourceSiteAndProceed = (sourceSite: any) => {
   const sourceSiteName = sourceSite.siteName;
 
   ElMessage.success(`准备从站点 [${sourceSiteName}] 开始迁移种子...`);
-  
+
   // 设置选中的源站点并打开转种弹窗
   selectedSourceSite.value = sourceSiteName;
   sourceSelectionDialogVisible.value = false;
@@ -667,7 +652,7 @@ watch(
 }
 
 .name-header-container .search-input {
-  width: 200px;
+  width: calc(30vw - 100px);
   margin: 0 15px;
 }
 
@@ -791,7 +776,8 @@ watch(
 
 .site-checkbox-container {
   width: 100%;
-  height: 160px; /* 固定高度，避免筛选结果变少时区域高度跳变 */
+  height: 160px;
+  /* 固定高度，避免筛选结果变少时区域高度跳变 */
   overflow-y: auto;
   border: 1px solid #dcdfe6;
   border-radius: 4px;

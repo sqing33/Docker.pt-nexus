@@ -122,10 +122,18 @@ class PtzoneUploader:
             'Track': '9',
         }
         medium_str = title_params.get("媒介", "")
-        for key, value in medium_map.items():
-            if key.lower() in medium_str.lower():
-                mapped["medium_sel[4]"] = value
-                break
+        mediainfo_str = self.upload_data.get("mediainfo", "")
+        is_standard_mediainfo = "General" in mediainfo_str and "Complete name" in mediainfo_str
+        
+        # 站点规则：有mediainfo的Blu-ray/DVD源盘rip都算Encode
+        if is_standard_mediainfo and ('blu' in medium_str.lower()
+                                      or 'dvd' in medium_str.lower()):
+            mapped["medium_sel[4]"] = "7"  # Encode
+        else:
+            for key, value in medium_map.items():
+                if key.lower() in medium_str.lower():
+                    mapped["medium_sel[4]"] = value
+                    break
 
         # 3. 视频编码映射 (Video Codec)
         codec_map = {
@@ -213,7 +221,7 @@ class PtzoneUploader:
             "分集": 8,
             "完结": 9,
         }
-        
+
         # 从源站参数获取标签
         source_tags = source_params.get("标签") or []
 
@@ -269,8 +277,8 @@ class PtzoneUploader:
 
         order = [
             "主标题",
-            "年份",
             "季集",
+            "年份",
             "剧集状态",
             "发布版本",
             "分辨率",
