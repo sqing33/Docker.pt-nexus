@@ -10,11 +10,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # 配置文件路径
-DATA_DIR = "/app/Code/Dockerfile/Docker.pt-nexus/flask/data"
-SITES_DATA_FILE = "/app/Code/Dockerfile/Docker.pt-nexus/flask/sites_data.json"
+# DATA_DIR = "/app/Code/Dockerfile/Docker.pt-nexus/flask/data"
+# SITES_DATA_FILE = "/app/Code/Dockerfile/Docker.pt-nexus/flask/sites_data.json"
 
-# DATA_DIR = "/app/data"
-# SITES_DATA_FILE = "/app/sites_data.json"
+DATA_DIR = "/app/data"
+SITES_DATA_FILE = "/app/sites_data.json"
 
 os.makedirs(DATA_DIR, exist_ok=True)
 
@@ -206,13 +206,15 @@ def get_db_config():
             "port": os.getenv("POSTGRES_PORT", 5432),
         }
         if not all(postgresql_config.values()):
-            logging.error("关键错误: DB_TYPE='postgresql', 但一个或多个 POSTGRES_* 环境变量缺失！")
+            logging.error(
+                "关键错误: DB_TYPE='postgresql', 但一个或多个 POSTGRES_* 环境变量缺失！")
             sys.exit(1)
         try:
             postgresql_config["port"] = int(postgresql_config["port"])
         except (ValueError, TypeError):
             logging.error(
-                f"关键错误: POSTGRES_PORT ('{postgresql_config['port']}') 不是一个有效的整数！")
+                f"关键错误: POSTGRES_PORT ('{postgresql_config['port']}') 不是一个有效的整数！"
+            )
             sys.exit(1)
         logging.info("PostgreSQL 配置验证通过。")
         return {"db_type": "postgresql", "postgresql": postgresql_config}
