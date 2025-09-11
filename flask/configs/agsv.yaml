@@ -1,0 +1,152 @@
+# AGSV站点的配置文件
+site_name: "AGSV"
+form_fields:
+  medium: "medium_sel[4]"
+  codec: "codec_sel[4]"
+  audio_codec: "audiocodec_sel[4]"
+  resolution: "standard_sel[4]"
+  team: "team_sel[4]"
+
+mappings:
+  type:
+    "Movies": "401"
+    "电影": "401"
+    "Driver": "401"
+    "Movie": "401"
+    "TV Series": "402"
+    "电视剧": "402"
+    "TV Shows": "403"
+    "综艺": "403"
+    "Documentaries": "404"
+    "记录片": "404"
+    "纪录片": "404"
+    "Animations": "405"
+    "动漫": "405"
+    "动画": "405"
+    "Anime": "405"
+    "MV": "406"
+    "演唱会": "406"
+    "Music Video": "406"
+    "Sports": "407"
+    "体育": "407"
+    "Music": "408"
+    "音乐": "408"
+    "专辑": "408"
+    "音轨": "408"
+    "音频": "408"
+    "Audio": "408"
+    "Playlet": "419"
+    "短剧": "419"
+    "游戏": "413"
+    "软件": "413"
+    "图书": "415"
+    "学习": "415"
+    "有声书": "415"
+    "E-Book": "415"
+    "其他": "413"
+    "Misc": "413"
+    "未知": "413"
+    "Unknown": "413"
+    "default": "413"
+
+  medium:
+    'UHD Blu-ray': '11'
+    'Blu-ray': '1'
+    'BD': '1'
+    'Remux': '3'
+    'Encode': '7'
+    'WEB-DL': '10'
+    'WEBRip': '7'
+    'WEB': '10'
+    'HDTV': '5'
+    'TVrip': '5'
+    'DVD': '2'
+    'CD': '8'
+    'Track': '12'
+    'default': '13'
+
+  codec:
+    'H.265': '6'
+    'HEVC': '6'
+    'x265': '6'
+    'H.264': '1'
+    'AVC': '1'
+    'x264': '1'
+    'VC-1': '2'
+    'MPEG-2': '4'
+    'AV1': '12'
+    'default': '5'
+
+  audio_codec:
+    'TrueHD Atmos': '17'
+    'DTS:X': '18'
+    'DTS-HD MA': '8'
+    'DDP': '19'
+    'DD+': '19'
+    'E-AC3': '19'
+    'Atmos': '17'
+    'TrueHD': '9'
+    'DTS': '3'
+    'AC3': '11'
+    'DD': '11'
+    'LPCM': '10'
+    'FLAC': '1'
+    'APE': '2'
+    'M4A': '16'
+    'ALAC': '20'
+    'WAV': '15'
+    'MP3': '4'
+    'AAC': '6'
+    'OGG': '7'
+    'default': '7'
+
+  resolution:
+    '8K': '6'
+    '4320p': '6'
+    '4K': '5'
+    '2160p': '5'
+    'UHD': '5'
+    '1080p': '1'
+    '1080i': '1'
+    '720p': '3'
+    '720i': '3'
+    '480p': '4'
+    '480i': '4'
+    'default': '8'
+
+  team:
+    "AGSVPT": "6"
+    "AGSVWEB": "21"
+    "AGSVMUS": "20"
+    "GodDramas": "23"
+    "RL": "31"
+    "BeiTai": "30"
+    "DYZ": "28"
+    "Hares": "29"
+    "CatEDU": "24"
+    "Pack": "16"
+    "Other": "22"
+    "default": "22"
+
+  tag:
+    "禁转": 1
+    "首发": 2
+    "粤语": 21
+    "国语": 5
+    "美剧": 31
+    "韩剧": 26
+    "英字": 20
+    "中字": 6
+    "分集": 48
+    "完结": 19
+    "应求": 18
+    "大包": 22
+    "特效": 47
+    "超分": 49
+    "补帧": 50
+    "DIY": 4
+    "HDR": 7
+    "杜比": 13
+    "合并": 51
+    "方舟": 52
+    "default": null
