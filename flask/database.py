@@ -362,6 +362,10 @@ class DatabaseManager:
             cursor.execute(
                 "CREATE TABLE IF NOT EXISTS traffic_stats (stat_datetime DATETIME NOT NULL, downloader_id VARCHAR(36) NOT NULL, uploaded BIGINT DEFAULT 0, downloaded BIGINT DEFAULT 0, upload_speed BIGINT DEFAULT 0, download_speed BIGINT DEFAULT 0, PRIMARY KEY (stat_datetime, downloader_id)) ENGINE=InnoDB ROW_FORMAT=Dynamic"
             )
+            # 创建小时聚合表 (MySQL)
+            cursor.execute(
+                "CREATE TABLE IF NOT EXISTS traffic_stats_hourly (stat_datetime DATETIME NOT NULL, downloader_id VARCHAR(36) NOT NULL, uploaded BIGINT DEFAULT 0, downloaded BIGINT DEFAULT 0, avg_upload_speed BIGINT DEFAULT 0, avg_download_speed BIGINT DEFAULT 0, samples INTEGER DEFAULT 0, PRIMARY KEY (stat_datetime, downloader_id)) ENGINE=InnoDB ROW_FORMAT=Dynamic"
+            )
             cursor.execute(
                 "CREATE TABLE IF NOT EXISTS downloader_clients (id VARCHAR(36) PRIMARY KEY, name VARCHAR(255) NOT NULL, type VARCHAR(50) NOT NULL, last_total_dl BIGINT NOT NULL DEFAULT 0, last_total_ul BIGINT NOT NULL DEFAULT 0) ENGINE=InnoDB ROW_FORMAT=Dynamic"
             )
@@ -379,6 +383,10 @@ class DatabaseManager:
             cursor.execute(
                 "CREATE TABLE IF NOT EXISTS traffic_stats (stat_datetime TIMESTAMP NOT NULL, downloader_id VARCHAR(36) NOT NULL, uploaded BIGINT DEFAULT 0, downloaded BIGINT DEFAULT 0, upload_speed BIGINT DEFAULT 0, download_speed BIGINT DEFAULT 0, PRIMARY KEY (stat_datetime, downloader_id))"
             )
+            # 创建小时聚合表 (PostgreSQL)
+            cursor.execute(
+                "CREATE TABLE IF NOT EXISTS traffic_stats_hourly (stat_datetime TIMESTAMP NOT NULL, downloader_id VARCHAR(36) NOT NULL, uploaded BIGINT DEFAULT 0, downloaded BIGINT DEFAULT 0, avg_upload_speed BIGINT DEFAULT 0, avg_download_speed BIGINT DEFAULT 0, samples INTEGER DEFAULT 0, PRIMARY KEY (stat_datetime, downloader_id))"
+            )
             cursor.execute(
                 "CREATE TABLE IF NOT EXISTS downloader_clients (id VARCHAR(36) PRIMARY KEY, name VARCHAR(255) NOT NULL, type VARCHAR(50) NOT NULL, last_total_dl BIGINT NOT NULL DEFAULT 0, last_total_ul BIGINT NOT NULL DEFAULT 0)"
             )
@@ -395,6 +403,10 @@ class DatabaseManager:
         else:
             cursor.execute(
                 "CREATE TABLE IF NOT EXISTS traffic_stats (stat_datetime TEXT NOT NULL, downloader_id TEXT NOT NULL, uploaded INTEGER DEFAULT 0, downloaded INTEGER DEFAULT 0, upload_speed INTEGER DEFAULT 0, download_speed INTEGER DEFAULT 0, PRIMARY KEY (stat_datetime, downloader_id))"
+            )
+            # 创建小时聚合表 (SQLite)
+            cursor.execute(
+                "CREATE TABLE IF NOT EXISTS traffic_stats_hourly (stat_datetime TEXT NOT NULL, downloader_id TEXT NOT NULL, uploaded INTEGER DEFAULT 0, downloaded INTEGER DEFAULT 0, avg_upload_speed INTEGER DEFAULT 0, avg_download_speed INTEGER DEFAULT 0, samples INTEGER DEFAULT 0, PRIMARY KEY (stat_datetime, downloader_id))"
             )
             cursor.execute(
                 "CREATE TABLE IF NOT EXISTS downloader_clients (id TEXT PRIMARY KEY, name TEXT NOT NULL, type TEXT NOT NULL, last_total_dl INTEGER NOT NULL DEFAULT 0, last_total_ul INTEGER NOT NULL DEFAULT 0)"
@@ -415,221 +427,153 @@ class DatabaseManager:
         self._add_missing_columns(conn, cursor)
         conn.commit()
 
-        if os.path.exists(SITES_DATA_FILE):
-            logging.info(f"正在从 {SITES_DATA_FILE} 检查并同步站点...")
-            with open(SITES_DATA_FILE, "r", encoding="utf-8") as f:
-                sites_from_json = json.load(f)
-
-            # --- 步骤 1: 插入在数据库中不存在的新站点 (逻辑更新) ---
-            cursor.execute("SELECT site, nickname, base_url FROM sites")
-            sites_in_db = [{k: row[k] for k in ['site', 'nickname', 'base_url']} for row in cursor.fetchall()]
+    def aggregate_hourly_traffic(self, retention_hours=48):
+        """
+        聚合小时流量数据并清理原始数据。
+        
+        此函数是数据聚合策略的核心，它将 traffic_stats 表中的原始数据按小时聚合到 
+        traffic_stats_hourly 表中，然后删除已聚合的原始数据以控制数据库大小。
+        
+        Args:
+            retention_hours (int): 保留原始数据的时间（小时）。
+                                  在此时间之前的原始数据将被聚合和删除。
+        """
+        from datetime import datetime, timedelta
+        
+        # 计算聚合和清理的边界时间
+        cutoff_time = datetime.now() - timedelta(hours=retention_hours)
+        
+        # 添加特殊日期保护逻辑
+        # 确保不会聚合最近3天的数据，以防止数据丢失
+        safe_cutoff = datetime.now() - timedelta(days=3)
+        if cutoff_time > safe_cutoff:
+            logging.info(f"为防止数据丢失，调整聚合截止时间为 {safe_cutoff}")
+            cutoff_time = safe_cutoff
             
-            # 处理大小写不一致的情况：如果JSON中的站点小写版本在数据库中存在但大小写不同，则更新数据库中的站点名
-            sites_to_update_case = []
-            sites_to_insert = []
+        cutoff_time_str = cutoff_time.strftime("%Y-%m-%d %H:%M:%S")
+        ph = self.get_placeholder()
+        
+        conn = None
+        cursor = None
+        
+        try:
+            conn = self._get_connection()
+            cursor = self._get_cursor(conn)
             
-            for site_data in sites_from_json:
-                json_site = site_data.get("site")
-                json_nickname = site_data.get("nickname")
-                json_base_url = site_data.get("base_url")
-                
-                if not json_site:
-                    continue
-                    
-                # 检查是否存在匹配的站点（基于site、nickname或base_url中的任何一个）
-                found_match = False
-                matched_db_site = None
-                
-                for db_site_info in sites_in_db:
-                    db_site = db_site_info.get("site") or ""
-                    db_nickname = db_site_info.get("nickname") or ""
-                    db_base_url = db_site_info.get("base_url") or ""
-                    
-                    # 检查是否匹配（任何一个字段相同）
-                    site_match = json_site and db_site and json_site.lower() == db_site.lower()
-                    nickname_match = json_nickname and db_nickname and json_nickname.lower() == db_nickname.lower()
-                    base_url_match = json_base_url and db_base_url and json_base_url.lower() == db_base_url.lower()
-                    
-                    if site_match or nickname_match or base_url_match:
-                        matched_db_site = db_site_info
-                        found_match = True
-                        
-                        # 处理大小写不同的情况
-                        if site_match and db_site != json_site:
-                            sites_to_update_case.append((json_site, db_site))
-                        break
-                
-                if not found_match:
-                    # 统一使用MB/s单位
-                    speed_limit_mb = site_data.get("speed_limit", 0)
-                    sites_to_insert.append((
-                        site_data.get("site"),
-                        site_data.get("nickname"),
-                        site_data.get("base_url"),
-                        site_data.get("special_tracker_domain"),
-                        site_data.get("group"),
-                        site_data.get("migration"),
-                        speed_limit_mb
-                    ))
+            # 开始事务
+            if self.db_type == "postgresql":
+                # PostgreSQL 需要显式开始事务
+                cursor.execute("BEGIN")
             
-            # 更新数据库中大小写不一致的站点名
-            if sites_to_update_case:
-                logging.info(f"发现 {len(sites_to_update_case)} 个大小写不一致的站点，正在更新数据库中的站点名...")
-                ph = self.get_placeholder()
-                for new_site, old_site in sites_to_update_case:
-                    cursor.execute(
-                        f"UPDATE sites SET site = {ph} WHERE site = {ph}",
-                        (new_site, old_site)
-                    )
-
-            if sites_to_insert:
-                logging.info(
-                    f"发现 {len(sites_to_insert)} 个新站点，将从 {SITES_DATA_FILE} 插入数据库。"
+            # 根据数据库类型生成时间截断函数
+            if self.db_type == "mysql":
+                time_group_fn = "DATE_FORMAT(stat_datetime, '%Y-%m-%d %H:00:00')"
+            elif self.db_type == "postgresql":
+                time_group_fn = "DATE_TRUNC('hour', stat_datetime)"
+            else:  # sqlite
+                time_group_fn = "STRFTIME('%Y-%m-%d %H:00:00', stat_datetime)"
+            
+            # 执行聚合查询：从原始表中按小时分组计算聚合值
+            aggregate_query = f"""
+                SELECT 
+                    {time_group_fn} AS hour_group,
+                    downloader_id,
+                    SUM(uploaded) AS total_uploaded,
+                    SUM(downloaded) AS total_downloaded,
+                    AVG(upload_speed) AS avg_upload_speed,
+                    AVG(download_speed) AS avg_download_speed,
+                    COUNT(*) AS samples
+                FROM traffic_stats 
+                WHERE stat_datetime < {ph}
+                GROUP BY hour_group, downloader_id
+            """
+            
+            cursor.execute(aggregate_query, (cutoff_time_str,))
+            aggregated_rows = cursor.fetchall()
+            
+            # 如果没有数据需要聚合，则直接返回
+            if not aggregated_rows:
+                logging.info("没有需要聚合的数据。")
+                conn.commit()
+                return
+            
+            # 批量插入聚合数据到 traffic_stats_hourly 表中
+            # 使用 UPSERT 机制处理重复数据
+            if self.db_type == "mysql":
+                upsert_sql = f"""
+                    INSERT INTO traffic_stats_hourly 
+                    (stat_datetime, downloader_id, uploaded, downloaded, avg_upload_speed, avg_download_speed, samples)
+                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+                    ON DUPLICATE KEY UPDATE
+                    uploaded = uploaded + VALUES(uploaded),
+                    downloaded = downloaded + VALUES(downloaded),
+                    avg_upload_speed = ((avg_upload_speed * samples) + (VALUES(avg_upload_speed) * VALUES(samples))) / (samples + VALUES(samples)),
+                    avg_download_speed = ((avg_download_speed * samples) + (VALUES(avg_download_speed) * VALUES(samples))) / (samples + VALUES(samples)),
+                    samples = samples + VALUES(samples)
+                """
+            elif self.db_type == "postgresql":
+                upsert_sql = f"""
+                    INSERT INTO traffic_stats_hourly 
+                    (stat_datetime, downloader_id, uploaded, downloaded, avg_upload_speed, avg_download_speed, samples)
+                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+                    ON CONFLICT (stat_datetime, downloader_id) 
+                    DO UPDATE SET
+                    uploaded = traffic_stats_hourly.uploaded + EXCLUDED.uploaded,
+                    downloaded = traffic_stats_hourly.downloaded + EXCLUDED.downloaded,
+                    avg_upload_speed = ((traffic_stats_hourly.avg_upload_speed * traffic_stats_hourly.samples) + (EXCLUDED.avg_upload_speed * EXCLUDED.samples)) / (traffic_stats_hourly.samples + EXCLUDED.samples),
+                    avg_download_speed = ((traffic_stats_hourly.avg_download_speed * traffic_stats_hourly.samples) + (EXCLUDED.avg_download_speed * EXCLUDED.samples)) / (traffic_stats_hourly.samples + EXCLUDED.samples),
+                    samples = traffic_stats_hourly.samples + EXCLUDED.samples
+                """
+            else:  # sqlite
+                upsert_sql = f"""
+                    INSERT INTO traffic_stats_hourly 
+                    (stat_datetime, downloader_id, uploaded, downloaded, avg_upload_speed, avg_download_speed, samples)
+                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+                    ON CONFLICT (stat_datetime, downloader_id) 
+                    DO UPDATE SET
+                    uploaded = traffic_stats_hourly.uploaded + excluded.uploaded,
+                    downloaded = traffic_stats_hourly.downloaded + excluded.downloaded,
+                    avg_upload_speed = ((traffic_stats_hourly.avg_upload_speed * traffic_stats_hourly.samples) + (excluded.avg_upload_speed * excluded.samples)) / (traffic_stats_hourly.samples + excluded.samples),
+                    avg_download_speed = ((traffic_stats_hourly.avg_download_speed * traffic_stats_hourly.samples) + (excluded.avg_download_speed * excluded.samples)) / (traffic_stats_hourly.samples + excluded.samples),
+                    samples = traffic_stats_hourly.samples + excluded.samples
+                """
+            
+            # 准备插入参数
+            upsert_params = [
+                (
+                    row["hour_group"] if isinstance(row, dict) else row[0],
+                    row["downloader_id"] if isinstance(row, dict) else row[1],
+                    int(row["total_uploaded"] if isinstance(row, dict) else row[2]),
+                    int(row["total_downloaded"] if isinstance(row, dict) else row[3]),
+                    int(row["avg_upload_speed"] if isinstance(row, dict) else row[4]),
+                    int(row["avg_download_speed"] if isinstance(row, dict) else row[5]),
+                    int(row["samples"] if isinstance(row, dict) else row[6])
                 )
-                ph = self.get_placeholder()
-                if self.db_type == "postgresql":
-                    sql_insert = f"INSERT INTO sites (site, nickname, base_url, special_tracker_domain, \"group\", migration, speed_limit) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})"
-                else:
-                    sql_insert = f"INSERT INTO sites (site, nickname, base_url, special_tracker_domain, `group`, migration, speed_limit) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})"
-                cursor.executemany(sql_insert, sites_to_insert)
-
-            # --- 步骤 2: [新增逻辑] 更新所有站点的 migration 值 ---
-            # 准备要更新的数据：(migration_value, site_domain)
-            migration_data_to_update = []
+                for row in aggregated_rows
+            ]
             
-            for site_data in sites_from_json:
-                json_site = site_data.get("site")
-                json_nickname = site_data.get("nickname")
-                json_base_url = site_data.get("base_url")
-                json_migration = site_data.get("migration", 1)
-                
-                if not json_site:
-                    continue
-                    
-                # 查询数据库中该站点的信息（基于site、nickname或base_url中的任何一个）
-                cursor.execute(f"SELECT id, migration FROM sites WHERE site = {self.get_placeholder()} OR nickname = {self.get_placeholder()} OR base_url = {self.get_placeholder()}", 
-                              (json_site, json_nickname, json_base_url,))
-                db_result = cursor.fetchone()
-                
-                if db_result:
-                    db_migration = db_result["migration"] if isinstance(db_result, dict) else db_result[1]
-                    # 只有当数据库中的值不等于JSON中的值时才更新
-                    if db_migration != json_migration:
-                        db_id = db_result["id"] if isinstance(db_result, dict) else db_result[0]
-                        migration_data_to_update.append((int(json_migration), db_id))
-
-            if migration_data_to_update:
-                logging.info(
-                    f"正在根据 {SITES_DATA_FILE} 同步 {len(migration_data_to_update)} 个站点的 migration 值..."
-                )
-                ph = self.get_placeholder()
-                # SQL语句的 WHERE id = ? 会确保只更新数据库中已存在的站点
-                sql_update = f"UPDATE sites SET migration = {ph} WHERE id = {ph}"
-                cursor.executemany(sql_update, migration_data_to_update)
-
-            # --- 步骤 3: [新增逻辑] 更新站点的 nickname、base_url 字段 ---
-            site_info_to_update = []
+            cursor.executemany(upsert_sql, upsert_params)
             
-            for site_data in sites_from_json:
-                json_site = site_data.get("site")
-                json_nickname = site_data.get("nickname")
-                json_base_url = site_data.get("base_url")
-                
-                if not json_site:
-                    continue
-                    
-                # 查询数据库中该站点的信息（基于site、nickname或base_url中的任何一个）
-                cursor.execute(f"SELECT id, site, nickname, base_url FROM sites WHERE site = {self.get_placeholder()} OR nickname = {self.get_placeholder()} OR base_url = {self.get_placeholder()}", 
-                              (json_site, json_nickname, json_base_url,))
-                db_result = cursor.fetchone()
-                
-                if db_result:
-                    db_id = db_result["id"] if isinstance(db_result, dict) else db_result[0]
-                    db_site = db_result["site"] if isinstance(db_result, dict) else db_result[1]
-                    db_nickname = db_result["nickname"] if isinstance(db_result, dict) else db_result[2]
-                    db_base_url = db_result["base_url"] if isinstance(db_result, dict) else db_result[3]
-                    
-                    # 检查各个字段是否需要更新
-                    update_params = []
-                    set_clauses = []
-                    
-                    # 检查 site 是否需要更新
-                    if json_site is not None and db_site != json_site:
-                        set_clauses.append("site = %s")
-                        update_params.append(json_site)
-                    
-                    # 检查 nickname 是否需要更新
-                    if json_nickname is not None and db_nickname != json_nickname:
-                        set_clauses.append("nickname = %s")
-                        update_params.append(json_nickname)
-                    
-                    # 检查 base_url 是否需要更新
-                    if json_base_url is not None and db_base_url != json_base_url:
-                        set_clauses.append("base_url = %s")
-                        update_params.append(json_base_url)
-                    
-                    # 如果有任何字段需要更新，则添加到更新列表
-                    if set_clauses:
-                        update_params.append(db_id)  # WHERE 条件使用ID
-                        site_info_to_update.append((set_clauses, update_params))
-
-            # 更新站点基本信息
-            if site_info_to_update:
-                logging.info(
-                    f"正在根据 {SITES_DATA_FILE} 同步 {len(site_info_to_update)} 个站点的基本信息..."
-                )
-                for set_clauses, update_params in site_info_to_update:
-                    # 根据数据库类型使用正确的占位符
-                    placeholder = "%s" if self.db_type in ["mysql", "postgresql"] else "?"
-                    sql_update = f"UPDATE sites SET {', '.join(set_clauses)} WHERE id = {placeholder}"
-                    cursor.execute(sql_update, update_params)
-
-            # --- 步骤 4: [新增逻辑] 智能更新站点的 speed_limit 值 ---
-            # 只有当数据库中的值为0且JSON文件中的值不为0时才更新，保留用户手动设置的值
-            # 统一使用MB/s单位
-            speed_limit_data_to_update = []
+            # 删除已聚合的原始数据
+            delete_query = f"DELETE FROM traffic_stats WHERE stat_datetime < {ph}"
+            cursor.execute(delete_query, (cutoff_time_str,))
             
-            for site_data in sites_from_json:
-                json_site = site_data.get("site")
-                json_nickname = site_data.get("nickname")
-                json_base_url = site_data.get("base_url")
-                json_speed_limit = site_data.get("speed_limit", 0)
-                
-                if not json_site:
-                    continue
-                    
-                # 只有当JSON中有speed_limit值且不为0时才考虑更新
-                if json_speed_limit > 0:
-                    # 查询数据库中该站点当前的speed_limit值（基于site、nickname或base_url中的任何一个）
-                    cursor.execute(f"SELECT id, speed_limit FROM sites WHERE site = {self.get_placeholder()} OR nickname = {self.get_placeholder()} OR base_url = {self.get_placeholder()}", 
-                                  (json_site, json_nickname, json_base_url,))
-                    db_result = cursor.fetchone()
-                    
-                    if db_result:
-                        db_speed_limit = db_result["speed_limit"] if isinstance(db_result, dict) else db_result[1]
-                        # 只有当数据库中的值为0时才更新（保留用户手动设置的值）
-                        if db_speed_limit == 0:
-                            # 统一使用MB/s单位
-                            db_id = db_result["id"] if isinstance(db_result, dict) else db_result[0]
-                            speed_limit_data_to_update.append((int(json_speed_limit), db_id))
-
-            if speed_limit_data_to_update:
-                logging.info(
-                    f"正在根据 {SITES_DATA_FILE} 智能同步 {len(speed_limit_data_to_update)} 个站点的 speed_limit 值（仅更新未手动设置的站点）..."
-                )
-                ph = self.get_placeholder()
-                # SQL语句的 WHERE id = ? 会确保只更新数据库中已存在的站点
-                sql_update = f"UPDATE sites SET speed_limit = {ph} WHERE id = {ph}"
-                cursor.executemany(sql_update, speed_limit_data_to_update)
-
-            # 一次性提交所有更改
+            # 提交事务
             conn.commit()
-
-        self._sync_downloaders_from_config(cursor)
-        conn.commit()
-        cursor.close()
-        conn.close()
-        logging.info("数据库初始化和同步流程完成。")
+            
+            logging.info(f"成功聚合 {len(aggregated_rows)} 条小时数据，并清理了 {cursor.rowcount} 条原始数据。")
+        except Exception as e:
+            # 回滚事务
+            if conn:
+                conn.rollback()
+            logging.error(f"聚合小时流量数据时出错: {e}", exc_info=True)
+            raise
+        finally:
+            # 关闭游标和连接
+            if cursor:
+                cursor.close()
+            if conn:
+                conn.close()
 
     def _sync_downloaders_from_config(self, cursor):
         """从配置文件同步下载器列表到 downloader_clients 表。"""

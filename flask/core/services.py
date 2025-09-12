@@ -128,6 +128,10 @@ class DataTracker(Thread):
         self.torrent_update_counter = 0
         self.TORRENT_UPDATE_INTERVAL = 900
         self.clients = {}
+        
+        # 数据聚合任务相关变量
+        self.aggregation_counter = 0  # 用于计时的计数器
+        self.AGGREGATION_INTERVAL = 3600  # 聚合任务的执行间隔（秒），这里是1小时
 
     def _get_client(self, downloader_config):
         """智能获取或创建并缓存客户端实例，支持自动重连。"""
@@ -179,6 +183,18 @@ class DataTracker(Thread):
                     logging.info("客户端连接缓存已清空，将为种子更新任务重建连接。")
                     self._update_torrents_in_db()
                     self.torrent_update_counter = 0
+                    
+                # 累加计数器并检查是否达到执行条件
+                self.aggregation_counter += self.interval
+                if self.aggregation_counter >= self.AGGREGATION_INTERVAL:
+                    try:
+                        logging.info("开始执行小时数据聚合任务...")
+                        self.db_manager.aggregate_hourly_traffic()
+                        logging.info("小时数据聚合任务执行完成。")
+                    except Exception as e:
+                        logging.error(f"执行小时数据聚合任务时出错: {e}", exc_info=True)
+                    # 重置计数器
+                    self.aggregation_counter = 0
             except Exception as e:
                 logging.error(f"DataTracker 循环出错: {e}", exc_info=True)
             elapsed = time.monotonic() - start_time
