@@ -311,17 +311,11 @@ const handleSaveAndSync = async () => {
 const handleFetchAllPasskeys = async () => {
   isPasskeyActionLoading.value = true
   try {
-    // 首次尝试不使用代理
-    let response = await axios.post(`${API_BASE_URL}/sites/fetch_all_passkeys`, { use_proxy: false })
-    
-    // 检查响应中是否包含Connection reset by peer错误
-    const message = response.data.message || '';
-    if (!response.data.success && message.includes("Connection reset by peer")) {
-      // 如果包含该错误，则使用代理重试
-      ElMessage.warning('检测到连接重置错误，正在使用代理重试...')
-      response = await axios.post(`${API_BASE_URL}/sites/fetch_all_passkeys`, { use_proxy: true })
-    }
-    
+    const response = await axios.post(`${API_BASE_URL}/sites/fetch_all_passkeys`, {}, {
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    })
     if (response.data.success) {
       // 使用 HTML 格式显示消息，支持换行
       ElMessage.success({
