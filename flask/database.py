@@ -297,6 +297,140 @@ class DatabaseManager:
                           ("speed_limit", "INTEGER DEFAULT 0",
                            "INTEGER DEFAULT 0")]
 
+    def sync_sites_from_json(self):
+        """从 sites_data.json 同步站点数据到数据库"""
+        try:
+            # 读取 JSON 文件
+            with open(SITES_DATA_FILE, 'r', encoding='utf-8') as f:
+                sites_data = json.load(f)
+            
+            logging.info(f"从 {SITES_DATA_FILE} 加载了 {len(sites_data)} 个站点")
+            
+            # 获取数据库连接
+            conn = self._get_connection()
+            cursor = self._get_cursor(conn)
+            
+            try:
+                # 获取数据库中现有的所有站点
+                cursor.execute("SELECT id, site, nickname, base_url FROM sites")
+                existing_sites = {}
+                for row in cursor.fetchall():
+                    # 以site、nickname、base_url为键存储现有站点
+                    existing_sites[row['site']] = dict(row)
+                    existing_sites[row['nickname']] = dict(row)
+                    existing_sites[row['base_url']] = dict(row)
+                
+                updated_count = 0
+                added_count = 0
+                
+                # 遍历 JSON 中的站点数据
+                for site_info in sites_data:
+                    site_name = site_info.get('site')
+                    nickname = site_info.get('nickname')
+                    base_url = site_info.get('base_url')
+                    
+                    if not site_name or not nickname or not base_url:
+                        logging.warning(f"跳过无效的站点数据: {site_info}")
+                        continue
+                    
+                    # 检查站点是否已存在（基于site、nickname或base_url中的任何一个）
+                    existing_site = None
+                    if site_name in existing_sites:
+                        existing_site = existing_sites[site_name]
+                    elif nickname in existing_sites:
+                        existing_site = existing_sites[nickname]
+                    elif base_url in existing_sites:
+                        existing_site = existing_sites[base_url]
+                    
+                    if existing_site:
+                        # 根据数据库类型使用正确的标识符引用符
+                        if self.db_type == "postgresql":
+                            # 更新现有站点（除了speed_limit，保留数据库中的值）
+                            cursor.execute("""
+                                UPDATE sites 
+                                SET site = %s, nickname = %s, base_url = %s, special_tracker_domain = %s, 
+                                    "group" = %s, migration = %s 
+                                WHERE id = %s
+                            """, (
+                                site_info.get('site'),
+                                site_info.get('nickname'),
+                                site_info.get('base_url'),
+                                site_info.get('special_tracker_domain'),
+                                site_info.get('group'),
+                                site_info.get('migration', 0),
+                                existing_site['id']
+                            ))
+                        else:
+                            # 更新现有站点（除了speed_limit，保留数据库中的值）
+                            cursor.execute("""
+                                UPDATE sites 
+                                SET site = %s, nickname = %s, base_url = %s, special_tracker_domain = %s, 
+                                    `group` = %s, migration = %s 
+                                WHERE id = %s
+                            """, (
+                                site_info.get('site'),
+                                site_info.get('nickname'),
+                                site_info.get('base_url'),
+                                site_info.get('special_tracker_domain'),
+                                site_info.get('group'),
+                                site_info.get('migration', 0),
+                                existing_site['id']
+                            ))
+                        updated_count += 1
+                        logging.debug(f"更新了站点: {site_name}")
+                    else:
+                        # 根据数据库类型使用正确的标识符引用符
+                        if self.db_type == "postgresql":
+                            # 添加新站点
+                            cursor.execute("""
+                                INSERT INTO sites 
+                                (site, nickname, base_url, special_tracker_domain, "group", migration, speed_limit)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                            """, (
+                                site_info.get('site'),
+                                site_info.get('nickname'),
+                                site_info.get('base_url'),
+                                site_info.get('special_tracker_domain'),
+                                site_info.get('group'),
+                                site_info.get('migration', 0),
+                                site_info.get('speed_limit', 0)
+                            ))
+                        else:
+                            # 添加新站点
+                            cursor.execute("""
+                                INSERT INTO sites 
+                                (site, nickname, base_url, special_tracker_domain, `group`, migration, speed_limit)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                            """, (
+                                site_info.get('site'),
+                                site_info.get('nickname'),
+                                site_info.get('base_url'),
+                                site_info.get('special_tracker_domain'),
+                                site_info.get('group'),
+                                site_info.get('migration', 0),
+                                site_info.get('speed_limit', 0)
+                            ))
+                        added_count += 1
+                        logging.debug(f"添加了新站点: {site_name}")
+                
+                conn.commit()
+                logging.info(f"站点同步完成: {updated_count} 个更新, {added_count} 个新增")
+                return True
+                
+            except Exception as e:
+                conn.rollback()
+                logging.error(f"同步站点数据时出错: {e}", exc_info=True)
+                return False
+            finally:
+                if cursor:
+                    cursor.close()
+                if conn:
+                    conn.close()
+                    
+        except Exception as e:
+            logging.error(f"读取站点数据文件时出错: {e}", exc_info=True)
+            return False
+
         if self.db_type == "mysql":
             meta_cursor = conn.cursor()
             meta_cursor.execute(
