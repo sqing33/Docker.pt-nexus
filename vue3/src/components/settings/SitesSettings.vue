@@ -23,6 +23,12 @@
             </el-icon>
             <span>同步Cookie</span>
           </el-button>
+          <el-button type="success" size="large" @click="handleFetchAllPasskeys" :loading="isPasskeyActionLoading" style="margin-left: 10px;">
+            <el-icon>
+              <Refresh />
+            </el-icon>
+            <span>获取Passkey</span>
+          </el-button>
         </el-form-item>
       </el-form>
 
@@ -155,7 +161,8 @@ const isSaving = ref(false) // 用于站点编辑对话框的保存按钮
 // --- 站点管理状态 ---
 const sitesList = ref([]) // 存储从后端获取的原始列表
 const isSitesLoading = ref(false)
-const isCookieActionLoading = ref(false) // [新增] 用于新的“同步Cookie”按钮的加载状态
+const isCookieActionLoading = ref(false) // [新增] 用于新的"同步Cookie"按钮的加载状态
+const isPasskeyActionLoading = ref(false) // 用于获取Passkey按钮的加载状态
 const cookieCloudForm = ref({ url: '', key: '', e2e_password: '' })
 const searchQuery = ref('')
 const siteFilter = ref('active')
@@ -282,7 +289,12 @@ const handleSaveAndSync = async () => {
 
     // 4. 处理同步结果
     if (syncResponse.data.success) {
-      ElMessage.success(`配置已保存. ${syncResponse.data.message}`)
+      // 移除消息中"在 CookieCloud 中另有 X 个未匹配的 Cookie。"部分
+      let message = syncResponse.data.message;
+      if (message) {
+        message = message.replace(/在 CookieCloud 中另有 \d+ 个未匹配的 Cookie。?/, '');
+      }
+      ElMessage.success(`配置已保存. ${message || '同步完成！'}`)
       await fetchSites() // 同步成功后刷新站点列表
     } else {
       ElMessage.error(syncResponse.data.message || '同步失败，但配置已保存。')
@@ -292,6 +304,29 @@ const handleSaveAndSync = async () => {
     ElMessage.error(errorMessage)
   } finally {
     isCookieActionLoading.value = false
+  }
+}
+
+// [新增] 获取所有站点Passkey的方法
+const handleFetchAllPasskeys = async () => {
+  isPasskeyActionLoading.value = true
+  try {
+    const response = await axios.post(`${API_BASE_URL}/sites/fetch_all_passkeys`)
+    if (response.data.success) {
+      // 使用 HTML 格式显示消息，支持换行
+      ElMessage.success({
+        message: response.data.message,
+        dangerouslyUseHTMLString: true
+      })
+      await fetchSites() // 刷新站点列表以显示更新的Passkey状态
+    } else {
+      ElMessage.error(response.data.message || '获取Passkey失败！')
+    }
+  } catch (error) {
+    const msg = error.response?.data?.message || '请求失败，请检查网络或后端服务。'
+    ElMessage.error(msg)
+  } finally {
+    isPasskeyActionLoading.value = false
   }
 }
 
@@ -323,6 +358,11 @@ const handleSave = async () => {
   try {
     // 统一使用MB/s单位
     const siteData = JSON.parse(JSON.stringify(siteForm.value))
+    
+    // 自动过滤掉cookie最后的换行符
+    if (siteData.cookie) {
+      siteData.cookie = siteData.cookie.trim()
+    }
     
     let response
     if (dialogMode.value === 'add') {

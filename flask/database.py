@@ -169,14 +169,23 @@ class DatabaseManager:
         cursor = self._get_cursor(conn)
         ph = self.get_placeholder()
         try:
-            sql = f"INSERT INTO sites (site, nickname, base_url, special_tracker_domain, `group`, cookie, passkey, proxy, speed_limit) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})"
+            # 根据数据库类型使用正确的标识符引用符
+            if self.db_type == "postgresql":
+                sql = f"INSERT INTO sites (site, nickname, base_url, special_tracker_domain, \"group\", cookie, passkey, proxy, speed_limit) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})"
+            else:
+                sql = f"INSERT INTO sites (site, nickname, base_url, special_tracker_domain, `group`, cookie, passkey, proxy, speed_limit) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})"
+            # 去除cookie字符串首尾的换行符和多余空白字符
+            cookie = site_data.get("cookie")
+            if cookie:
+                cookie = cookie.strip()
+            
             params = (
                 site_data.get("site"),
                 site_data.get("nickname"),
                 site_data.get("base_url"),
                 site_data.get("special_tracker_domain"),
                 site_data.get("group"),
-                site_data.get("cookie"),
+                cookie,
                 site_data.get("passkey"),
                 int(site_data.get("proxy", 0)),
                 int(site_data.get("speed_limit", 0)),
@@ -203,13 +212,22 @@ class DatabaseManager:
         cursor = self._get_cursor(conn)
         ph = self.get_placeholder()
         try:
-            sql = f"UPDATE sites SET nickname = {ph}, base_url = {ph}, special_tracker_domain = {ph}, `group` = {ph}, cookie = {ph}, passkey = {ph}, proxy = {ph}, speed_limit = {ph} WHERE id = {ph}"
+            # 根据数据库类型使用正确的标识符引用符
+            if self.db_type == "postgresql":
+                sql = f"UPDATE sites SET nickname = {ph}, base_url = {ph}, special_tracker_domain = {ph}, \"group\" = {ph}, cookie = {ph}, passkey = {ph}, proxy = {ph}, speed_limit = {ph} WHERE id = {ph}"
+            else:
+                sql = f"UPDATE sites SET nickname = {ph}, base_url = {ph}, special_tracker_domain = {ph}, `group` = {ph}, cookie = {ph}, passkey = {ph}, proxy = {ph}, speed_limit = {ph} WHERE id = {ph}"
+            # 去除cookie字符串首尾的换行符和多余空白字符
+            cookie = site_data.get("cookie")
+            if cookie:
+                cookie = cookie.strip()
+            
             params = (
                 site_data.get("nickname"),
                 site_data.get("base_url"),
                 site_data.get("special_tracker_domain"),
                 site_data.get("group"),
-                site_data.get("cookie"),
+                cookie,
                 site_data.get("passkey"),
                 int(site_data.get("proxy", 0)),
                 int(site_data.get("speed_limit", 0)),
@@ -537,17 +555,17 @@ class DatabaseManager:
                     
                     # 检查 site 是否需要更新
                     if json_site is not None and db_site != json_site:
-                        set_clauses.append("site = ?")
+                        set_clauses.append("site = %s")
                         update_params.append(json_site)
                     
                     # 检查 nickname 是否需要更新
                     if json_nickname is not None and db_nickname != json_nickname:
-                        set_clauses.append("nickname = ?")
+                        set_clauses.append("nickname = %s")
                         update_params.append(json_nickname)
                     
                     # 检查 base_url 是否需要更新
                     if json_base_url is not None and db_base_url != json_base_url:
-                        set_clauses.append("base_url = ?")
+                        set_clauses.append("base_url = %s")
                         update_params.append(json_base_url)
                     
                     # 如果有任何字段需要更新，则添加到更新列表
@@ -561,7 +579,9 @@ class DatabaseManager:
                     f"正在根据 {SITES_DATA_FILE} 同步 {len(site_info_to_update)} 个站点的基本信息..."
                 )
                 for set_clauses, update_params in site_info_to_update:
-                    sql_update = f"UPDATE sites SET {', '.join(set_clauses)} WHERE id = ?"
+                    # 根据数据库类型使用正确的占位符
+                    placeholder = "%s" if self.db_type in ["mysql", "postgresql"] else "?"
+                    sql_update = f"UPDATE sites SET {', '.join(set_clauses)} WHERE id = {placeholder}"
                     cursor.execute(sql_update, update_params)
 
             # --- 步骤 4: [新增逻辑] 智能更新站点的 speed_limit 值 ---

@@ -7,10 +7,11 @@ import cloudscraper
 import yaml  # 需要安装 PyYAML 库
 from loguru import logger
 from abc import ABC, abstractmethod  # 用于定义抽象方法
-from utils import cookies_raw2jar, ensure_scheme, extract_tags_from_mediainfo
+from utils import cookies_raw2jar, ensure_scheme, extract_tags_from_mediainfo, extract_origin_from_description
 
 
 class BaseUploader(ABC):
+
     def __init__(self, site_name: str, site_info: dict, upload_data: dict):
         """
         通用的初始化方法
@@ -25,9 +26,12 @@ class BaseUploader(ABC):
         self.post_url = f"{base_url}/takeupload.php"
         self.timeout = 40
         self.headers = {
-            "origin": base_url,
-            "referer": f"{base_url}/upload.php",
-            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+            "origin":
+            base_url,
+            "referer":
+            f"{base_url}/upload.php",
+            "user-agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
         }
 
         # 加载该站点对应的配置文件
@@ -114,20 +118,32 @@ class BaseUploader(ABC):
         logger.info(f"拼接完成的主标题: {final_title}")
         return final_title
 
-    def _find_mapping(self, mapping_dict: dict, key_to_find: str, default_key: str = "default") -> str:
+    def _find_mapping(self,
+                      mapping_dict: dict,
+                      key_to_find: str,
+                      default_key: str = "default") -> str:
         """
         通用的映射查找函数，支持精确匹配、部分匹配和默认值。
         """
+        # 处理 key_to_find 可能是列表的情况
         if not mapping_dict or not key_to_find:
             return mapping_dict.get(default_key, "")
+        
+        # 如果 key_to_find 是列表，取第一个元素或将其转换为字符串
+        if isinstance(key_to_find, list):
+            if not key_to_find:
+                return mapping_dict.get(default_key, "")
+            # 取列表中的第一个非空元素，或者将整个列表转换为字符串
+            key_to_find = key_to_find[0] if key_to_find and key_to_find[0] else str(key_to_find)
 
         # 精确匹配
         for key, value in mapping_dict.items():
             if key.lower() == key_to_find.lower().strip():
                 return value
 
-        # 部分匹配
-        for key, value in mapping_dict.items():
+        # 部分匹配 (按 key 长度降序排列，优先匹配更长的 key)
+        sorted_items = sorted(mapping_dict.items(), key=lambda x: len(x[0]), reverse=True)
+        for key, value in sorted_items:
             if key.lower() in key_to_find.lower():
                 return value
 
@@ -210,31 +226,74 @@ class BaseUploader(ABC):
                     logger.error("目标站点 Cookie 为空，无法发布。")
                     return False, "目标站点 Cookie 未配置。"
                 cookie_jar = cookies_raw2jar(cleaned_cookie_str)
-                logger.info(f"正在向 {self.site_name} 站点提交发布请求...")
-                # 若站点启用代理且配置了全局代理地址，则通过代理请求
-                proxies = None
-                try:
-                    from config import config_manager
-                    use_proxy = bool(self.site_info.get("proxy"))
-                    conf = (config_manager.get() or {})
-                    # 优先使用转种设置中的代理地址，其次兼容旧的 network.proxy_url
-                    proxy_url = (conf.get("cross_seed", {})
-                                 or {}).get("proxy_url") or (conf.get(
-                                     "network", {}) or {}).get("proxy_url")
-                    if use_proxy and proxy_url:
-                        proxies = {"http": proxy_url, "https": proxy_url}
-                except Exception:
-                    proxies = None
-                response = self.scraper.post(
-                    self.post_url,
-                    headers=self.headers,
-                    cookies=cookie_jar,
-                    data=form_data,
-                    files=files,
-                    timeout=self.timeout,
-                    proxies=proxies,
-                )
-                response.raise_for_status()
+                # 添加重试机制
+                max_retries = 3
+                last_exception = None
+                
+                for attempt in range(max_retries):
+                    try:
+                        logger.info(f"正在向 {self.site_name} 站点提交发布请求... (尝试 {attempt + 1}/{max_retries})")
+                        # 若站点启用代理且配置了全局代理地址，则通过代理请求
+                        proxies = None
+                        try:
+                            from config import config_manager
+                            use_proxy = bool(self.site_info.get("proxy"))
+                            conf = (config_manager.get() or {})
+                            # 优先使用转种设置中的代理地址，其次兼容旧的 network.proxy_url
+                            proxy_url = (conf.get("cross_seed", {})
+                                         or {}).get("proxy_url") or (conf.get(
+                                             "network", {}) or {}).get("proxy_url")
+                            if use_proxy and proxy_url:
+                                proxies = {"http": proxy_url, "https": proxy_url}
+                        except Exception:
+                            proxies = None
+                        
+                        # 检查是否是重试并且 Connection reset by peer 错误，强制使用代理
+                        if attempt > 0 and last_exception and "Connection reset by peer" in str(last_exception):
+                            logger.info("检测到 Connection reset by peer 错误，强制使用代理重试...")
+                            try:
+                                from config import config_manager
+                                conf = (config_manager.get() or {})
+                                proxy_url = (conf.get("cross_seed", {})
+                                             or {}).get("proxy_url") or (conf.get(
+                                                 "network", {}) or {}).get("proxy_url")
+                                if proxy_url:
+                                    proxies = {"http": proxy_url, "https": proxy_url}
+                                    logger.info(f"使用代理重试: {proxy_url}")
+                            except Exception as proxy_error:
+                                logger.warning(f"代理设置失败: {proxy_error}")
+                        
+                        response = self.scraper.post(
+                            self.post_url,
+                            headers=self.headers,
+                            cookies=cookie_jar,
+                            data=form_data,
+                            files=files,
+                            timeout=self.timeout,
+                            proxies=proxies,
+                        )
+                        response.raise_for_status()
+                        
+                        # 成功则跳出循环
+                        last_exception = None
+                        break
+                        
+                    except Exception as e:
+                        last_exception = e
+                        logger.warning(f"第 {attempt + 1} 次尝试发布失败: {e}")
+                        
+                        # 如果不是最后一次尝试，等待一段时间后重试
+                        if attempt < max_retries - 1:
+                            import time
+                            wait_time = 2 ** attempt  # 指数退避
+                            logger.info(f"等待 {wait_time} 秒后进行第 {attempt + 2} 次尝试...")
+                            time.sleep(wait_time)
+                        else:
+                            logger.error("所有重试均已失败")
+                        
+                # 如果所有重试都失败了，重新抛出最后一个异常
+                if last_exception:
+                    raise last_exception
 
             # 4. 处理响应（这是通用的成功/失败判断逻辑）
             # 可以通过 "钩子" 方法处理个别站点的URL修正
