@@ -186,11 +186,11 @@ def update_site_cookie():
     nickname, cookie = data.get("nickname"), data.get("cookie")
     if not nickname or cookie is None:
         return jsonify({"success": False, "message": "必须提供站点昵称和 Cookie。"}), 400
-    
+
     # 去除cookie字符串首尾的换行符和多余空白字符
     if cookie:
         cookie = cookie.strip()
-    
+
     try:
         if db_manager.update_site_cookie(nickname, cookie):
             return jsonify({
@@ -208,6 +208,135 @@ def update_site_cookie():
     except Exception as e:
         logging.error(f"update_site_cookie 发生意外错误: {e}", exc_info=True)
         return jsonify({"success": False, "message": "服务器内部错误。"}), 500
+
+
+@management_bp.route("/sites/fetch_all_passkeys", methods=["POST"])
+def fetch_all_passkeys():
+    """获取所有有Cookie且可发布站点的Passkey并保存到数据库。"""
+    db_manager = management_bp.db_manager
+
+    try:
+        # 获取所有有Cookie且为可发布站点的信息
+        conn = db_manager._get_connection()
+        cursor = db_manager._get_cursor(conn)
+        cursor.execute(
+            "SELECT * FROM sites WHERE cookie IS NOT NULL AND cookie != '' AND (migration = 2 OR migration = 3)"
+        )
+        sites_info = cursor.fetchall()
+
+        if not sites_info:
+            return jsonify({
+                "success": False,
+                "message": "没有配置Cookie且为可发布站点的信息。"
+            }), 400
+
+        sites_info = [dict(site) for site in sites_info]
+        successful_count = 0
+        failed_sites = []
+
+        # 为每个站点获取Passkey
+        for site_info in sites_info:
+            try:
+                cookie = site_info.get("cookie")
+                base_url = site_info.get("base_url")
+                site_id = site_info.get("id")
+                site_nickname = site_info.get("nickname")
+
+                if not cookie:
+                    failed_sites.append(f"{site_nickname}(Cookie未配置)")
+                    continue
+
+                if not base_url:
+                    failed_sites.append(f"{site_nickname}(基础URL未配置)")
+                    continue
+
+                # 确保URL有协议前缀
+                if not base_url.startswith(("http://", "https://")):
+                    base_url = "https://" + base_url
+
+                # 构造请求头
+                headers = {
+                    "User-Agent":
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+                    "Cookie": cookie,
+                    "Referer": f"{base_url}/",
+                }
+
+                # 发送请求获取用户控制面板页面
+                import cloudscraper
+                scraper = cloudscraper.create_scraper()
+                try:
+                    response = scraper.get(f"{base_url}/usercp.php",
+                                           headers=headers,
+                                           timeout=30)
+                    response.raise_for_status()
+                except Exception as e:
+                    error_msg = str(e)
+                    if "403" in error_msg or "401" in error_msg:
+                        failed_sites.append(f"{site_nickname}(Cookie已过期或无效)")
+                    elif "timeout" in error_msg.lower(
+                    ) or "timed out" in error_msg.lower():
+                        failed_sites.append(f"{site_nickname}(请求超时)")
+                    elif "dns" in error_msg.lower():
+                        failed_sites.append(f"{site_nickname}(域名解析失败)")
+                    else:
+                        failed_sites.append(
+                            f"{site_nickname}(网络连接错误: {error_msg})")
+                    continue
+
+                # 从页面中提取Passkey
+                import re
+                passkey_pattern = r'<td[^>]*class="rowhead nowrap"[^>]*>\s*密钥\s*</td>\s*<td[^>]*class="rowfollow"[^>]*>\s*([a-f0-9]{32})\s*</td>'
+                match = re.search(passkey_pattern, response.text)
+
+                if not match:
+                    # 检查是否是因为重定向到登录页面
+                    if "login" in response.url or "login" in response.text.lower(
+                    ):
+                        failed_sites.append(
+                            f"{site_nickname}(Cookie已过期，被重定向到登录页)")
+                    else:
+                        failed_sites.append(f"{site_nickname}(页面中未找到Passkey)")
+                    continue
+
+                passkey = match.group(1)
+
+                # 更新数据库中的Passkey
+                cursor.execute("UPDATE sites SET passkey = %s WHERE id = %s",
+                               (passkey, site_id))
+                successful_count += 1
+
+            except Exception as e:
+                failed_sites.append(
+                    f"{site_info.get('nickname')}(处理异常: {str(e)})")
+                continue
+
+        conn.commit()
+
+        # 构造返回消息
+        message = f"成功获取 {successful_count} 个站点的 Passkey。"
+        if failed_sites:
+            message += f" 失败站点: {', '.join(failed_sites)}。"
+
+        return jsonify({
+            "success": True,
+            "message": message,
+            "successful_count": successful_count,
+            "failed_count": len(failed_sites),
+            "failed_sites": failed_sites
+        })
+
+    except Exception as e:
+        logging.error(f"fetch_all_passkeys 发生意外错误: {e}", exc_info=True)
+        return jsonify({
+            "success": False,
+            "message": f"获取Passkey失败: {str(e)}"
+        }), 500
+    finally:
+        if "conn" in locals() and conn:
+            if "cursor" in locals() and cursor:
+                cursor.close()
+            conn.close()
 
 
 # --- CookieCloud ---
@@ -359,7 +488,8 @@ def update_settings():
     if "network" in new_config:
         # 仅更新网络代理配置
         current_config.setdefault("network", {})
-        current_config["network"]["proxy_url"] = new_config["network"].get("proxy_url", "")
+        current_config["network"]["proxy_url"] = new_config["network"].get(
+            "proxy_url", "")
 
     if config_manager.save(current_config):
         if restart_needed:
@@ -438,13 +568,13 @@ def get_downloader_info_api():
     try:
         conn = db_manager._get_connection()
         cursor = db_manager._get_cursor(conn)
-        
+
         # 获取累计上传和下载量
         cursor.execute(
             "SELECT downloader_id, SUM(downloaded) as total_dl, SUM(uploaded) as total_ul FROM traffic_stats GROUP BY downloader_id"
         )
         totals = {r["downloader_id"]: dict(r) for r in cursor.fetchall()}
-        
+
         # 获取今日上传和下载量
         from datetime import datetime, timedelta
         # 使用更可靠的日期查询方式
@@ -466,7 +596,7 @@ def get_downloader_info_api():
                             WHERE DATE(stat_datetime) = DATE('now') 
                             GROUP BY downloader_id"""
             cursor.execute(today_query)
-            
+
         today_stats = {r["downloader_id"]: dict(r) for r in cursor.fetchall()}
     except Exception as e:
         logging.error(f"获取下载器统计信息时数据库出错: {e}", exc_info=True)
@@ -484,13 +614,13 @@ def get_downloader_info_api():
             continue
         client_config = next(
             (item for item in cfg_downloaders if item["id"] == d_id), None)
-        
+
         # 确保从数据库获取的值是数字类型
         today_dl = today_stats.get(d_id, {}).get("today_dl", 0)
         today_ul = today_stats.get(d_id, {}).get("today_ul", 0)
         total_dl = totals.get(d_id, {}).get("total_dl", 0)
         total_ul = totals.get(d_id, {}).get("total_ul", 0)
-        
+
         # 转换为整数（处理可能的字符串类型）
         try:
             today_dl = int(float(today_dl))
@@ -499,7 +629,7 @@ def get_downloader_info_api():
             total_ul = int(float(total_ul))
         except (ValueError, TypeError):
             today_dl = today_ul = total_dl = total_ul = 0
-            
+
         d_info["details"] = {
             "今日下载量": format_bytes(today_dl),
             "今日上传量": format_bytes(today_ul),

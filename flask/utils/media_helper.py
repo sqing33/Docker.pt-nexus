@@ -43,26 +43,30 @@ def _upload_to_pixhost(image_path: str):
 
     # 读取代理配置
     config = config_manager.get()
-    proxy_mode = config.get("cross_seed", {}).get("pixhost_proxy_mode", "retry")
+    proxy_mode = config.get("cross_seed", {}).get("pixhost_proxy_mode",
+                                                  "retry")
     global_proxy = config.get("network", {}).get("proxy_url")
 
     # 根据代理模式决定上传策略
     if proxy_mode == "always" and global_proxy:
         print(f"代理模式设置为总是使用代理，使用代理: {global_proxy}")
-        return _upload_to_pixhost_with_proxy(image_path, api_url, params, headers, global_proxy)
+        return _upload_to_pixhost_with_proxy(image_path, api_url, params,
+                                             headers, global_proxy)
     elif proxy_mode == "never":
         print("代理模式设置为不使用代理，直接上传")
         return _upload_to_pixhost_direct(image_path, api_url, params, headers)
     else:
         # 默认模式：失败时重试或没有配置代理时直接上传
         print("使用默认上传策略：先尝试直接上传")
-        result = _upload_to_pixhost_direct(image_path, api_url, params, headers)
-        
+        result = _upload_to_pixhost_direct(image_path, api_url, params,
+                                           headers)
+
         # 如果直接上传失败且配置了代理，则尝试代理上传
         if not result and global_proxy and proxy_mode == "retry":
             print("直接上传失败，尝试使用代理上传...")
-            result = _upload_to_pixhost_with_proxy(image_path, api_url, params, headers, global_proxy)
-        
+            result = _upload_to_pixhost_with_proxy(image_path, api_url, params,
+                                                   headers, global_proxy)
+
         return result
 
 
@@ -311,18 +315,22 @@ def upload_data_title(title: str, torrent_filename: str = ""):
     title = title.replace("（", "(").replace("）", ")")
     title = title.replace("'", "")
     title = re.sub(r"(\d+[pi])([A-Z])", r"\1 \2", title)
-    main_part = ""
-
-    # 2. 发布组解析
+    
+    # 2. 优先提取制作组信息
+    release_group = ""
+    main_part = title
+    
+    # 检查特殊制作组
     special_groups = ["mUHD-FRDS", "MNHD-FRDS", "DMG&VCB-Studio", "VCB-Studio"]
     found_special_group = False
     for group in special_groups:
         if title.endswith(f" {group}") or title.endswith(f"-{group}"):
-            params["release_info"] = group
+            release_group = group
             main_part = title[:-len(group) - 1].strip()
             found_special_group = True
             break
 
+    # 如果不是特殊制作组，使用通用模式匹配
     if not found_special_group:
         general_regex = re.compile(
             r"^(?P<main_part>.+?)(?:-(?P<internal_tag>[A-Za-z0-9@]+))?-(?P<release_group>[A-Za-z0-9@]+)$",
@@ -331,19 +339,19 @@ def upload_data_title(title: str, torrent_filename: str = ""):
         match = general_regex.match(title)
         if match:
             main_part = match.group("main_part").strip()
-            release_group = match.group("release_group")
+            release_group_name = match.group("release_group")
             internal_tag = match.group("internal_tag")
-            params["release_info"] = (f"{internal_tag}-{release_group}" if
-                                      internal_tag and "@" in internal_tag else
-                                      (f"{release_group} ({internal_tag})"
-                                       if internal_tag else release_group))
+            release_group = (f"{internal_tag}-{release_group_name}" if
+                           internal_tag and "@" in internal_tag else
+                           (f"{release_group_name} ({internal_tag})"
+                            if internal_tag else release_group_name))
         else:
-            main_part = title
+            # 检查是否以-NOGROUP结尾
             if title.upper().endswith("-NOGROUP"):
-                params["release_info"] = "NOGROUP"
+                release_group = "NOGROUP"
                 main_part = title[:-8].strip()
             else:
-                params["release_info"] = "N/A (无发布组)"
+                release_group = "N/A (无发布组)"
 
     # 3. 季集、年份提取
     season_match = re.search(
@@ -362,7 +370,7 @@ def upload_data_title(title: str, torrent_filename: str = ""):
         params["year"] = year_match.group(1)
         title_part = title_part.replace(year_match.group(0), " ", 1).strip()
 
-    # 4. 技术标签提取
+    # 4. 技术标签提取（排除已识别的制作组名称）
     tech_patterns_definitions = {
         "medium":
         r"UHDTV|UHD\s*Blu-?ray|Blu-ray|BluRay|WEB-DL|WEBrip|TVrip|DVDRip|HDTV",
@@ -380,7 +388,7 @@ def upload_data_title(title: str, torrent_filename: str = ""):
         "completion_status": r"Complete|COMPLETE",
         "video_format": r"3D|HSBS",
         "release_version": r"REMASTERED|REPACK|RERIP|PROPER|REPOST",
-        "quality_modifier": r"MAXPLUS|HQ|EXTENDED|REMUX|DIY|UNRATED|EE|MiniBD",
+        "quality_modifier": r"MAXPLUS|HQ|EXTENDED|REMUX|UNRATED|EE|MiniBD",
     }
     priority_order = [
         "completion_status",
@@ -438,7 +446,10 @@ def upload_data_title(title: str, torrent_filename: str = ""):
     if torrent_filename:
         print(f"开始从种子文件名补充参数: {torrent_filename}")
         # 预处理文件名：移除后缀，用空格替换点和其他常用分隔符
-        filename_base = re.sub(r'(\.original)?\.torrent', '', torrent_filename, flags=re.IGNORECASE)
+        filename_base = re.sub(r'(\.original)?\.torrent',
+                               '',
+                               torrent_filename,
+                               flags=re.IGNORECASE)
         filename_candidate = re.sub(r'[\._\[\]\(\)]', ' ', filename_base)
 
         # 再次遍历所有技术标签定义，以补充信息
@@ -448,31 +459,49 @@ def upload_data_title(title: str, torrent_filename: str = ""):
                 continue
 
             pattern = tech_patterns_definitions[key]
-            search_pattern = (re.compile(r"(?<!\w)(" + pattern + r")(?!\w)", re.IGNORECASE)
-                              if r"\b" not in pattern else re.compile(pattern, re.IGNORECASE))
+            search_pattern = (re.compile(r"(?<!\w)(" + pattern + r")(?!\w)",
+                                         re.IGNORECASE) if r"\b" not in pattern
+                              else re.compile(pattern, re.IGNORECASE))
 
             matches = list(search_pattern.finditer(filename_candidate))
             if matches:
                 # 提取所有匹配到的值
-                raw_values = [m.group(0).strip() if r"\b" in pattern else m.group(1).strip() for m in matches]
-                
+                raw_values = [
+                    m.group(0).strip()
+                    if r"\b" in pattern else m.group(1).strip()
+                    for m in matches
+                ]
+
                 # (复制主解析逻辑中的 audio 特殊处理)
-                processed_values = ([re.sub(r"(DD)\\+", r"\1+", val, flags=re.I) for val in raw_values]
-                                    if key == "audio" else raw_values)
+                processed_values = ([
+                    re.sub(r"(DD)\\+", r"\1+", val, flags=re.I)
+                    for val in raw_values
+                ] if key == "audio" else raw_values)
                 if key == "audio":
-                    processed_values = [re.sub(r"((?:FLAC|DDP|AV3A|AAC|LPCM|AC3|DD))(\d(?:\.\d)?)", r"\1 \2", val, flags=re.I)
-                                        for val in processed_values]
-                
+                    processed_values = [
+                        re.sub(
+                            r"((?:FLAC|DDP|AV3A|AAC|LPCM|AC3|DD))(\d(?:\.\d)?)",
+                            r"\1 \2",
+                            val,
+                            flags=re.I) for val in processed_values
+                    ]
+
                 # 取独一无二的值并按出现顺序排序
-                unique_processed = sorted(list(set(processed_values)), key=lambda x: filename_candidate.find(x.replace(" ", "")))
+                unique_processed = sorted(
+                    list(set(processed_values)),
+                    key=lambda x: filename_candidate.find(x.replace(" ", "")))
 
                 if unique_processed:
                     print(f"   [文件名补充] 找到缺失参数 '{key}': {unique_processed}")
                     # 将补充的参数存入 params 字典
-                    params[key] = unique_processed[0] if len(unique_processed) == 1 else unique_processed
-                    # 将新找到的标签也加入 all_found_tags，以便后续正确计算“无法识别”部分
+                    params[key] = unique_processed[0] if len(
+                        unique_processed) == 1 else unique_processed
+                    # 将新找到的标签也加入 all_found_tags，以便后续正确计算"无法识别"部分
                     all_found_tags.extend(unique_processed)
     # --- [新增] 结束 ---
+
+    # 将制作组信息添加到最后的参数中
+    params["release_info"] = release_group
 
     if "quality_modifier" in params:
         modifiers = params.pop("quality_modifier")
@@ -629,7 +658,7 @@ def upload_data_screenshot(source_info, save_path, torrent_name=None):
     hoster = config.get("cross_seed", {}).get("image_hoster", "pixhost")
     print(f"已选择图床服务: {hoster}")
     # -----------------------------
-    
+
     # 如果提供了种子名称，则构建完整的视频文件路径
     if torrent_name:
         full_video_path = os.path.join(save_path, torrent_name)
@@ -701,35 +730,41 @@ def upload_data_screenshot(source_info, save_path, torrent_name=None):
                     # --- [核心修改] 根据配置选择上传函数，并添加重试机制 ---
                     max_retries = 3
                     image_url = None
-                    
+
                     for attempt in range(max_retries):
                         try:
                             if hoster == "pixhost":
                                 image_url = _upload_to_pixhost(output_filename)
                             elif hoster == "agsv":
-                                image_url = _upload_to_agsv(output_filename,
-                                                            auth_token)
+                                image_url = _upload_to_agsv(
+                                    output_filename, auth_token)
                             else:
                                 print(f"警告: 未知的图床 '{hoster}'，将默认使用 pixhost。")
                                 image_url = _upload_to_pixhost(output_filename)
-                            
+
                             if image_url:
                                 uploaded_urls.append(image_url)
-                                print(f"第 {i+1} 张图片上传成功 (尝试 {attempt+1}/{max_retries})")
+                                print(
+                                    f"第 {i+1} 张图片上传成功 (尝试 {attempt+1}/{max_retries})"
+                                )
                                 break
                             else:
-                                print(f"第 {i+1} 张图片上传失败 (尝试 {attempt+1}/{max_retries})")
+                                print(
+                                    f"第 {i+1} 张图片上传失败 (尝试 {attempt+1}/{max_retries})"
+                                )
                                 if attempt < max_retries - 1:
                                     print(f"等待 2 秒后重试...")
                                     time.sleep(2)
-                                
+
                         except Exception as e:
-                            print(f"第 {i+1} 张图片上传出现异常 (尝试 {attempt+1}/{max_retries}): {e}")
+                            print(
+                                f"第 {i+1} 张图片上传出现异常 (尝试 {attempt+1}/{max_retries}): {e}"
+                            )
                             if attempt < max_retries - 1:
                                 print(f"等待 2 秒后重试...")
                                 time.sleep(2)
                             continue
-                    
+
                     if not image_url:
                         print(f"⚠️  第 {i+1} 张图片经过 {max_retries} 次尝试后仍然上传失败")
 
@@ -795,13 +830,15 @@ def upload_data_poster(douban_link: str, imdb_link: str):
 
         extracted_imdb_link = ""
         poster = ""
-        
+
         if format_data:
             # 提取IMDb链接
-            imdb_match = re.search(r'◎IMDb链接\s*(https?://www\.imdb\.com/title/tt\d+/)', format_data)
+            imdb_match = re.search(
+                r'◎IMDb链接\s*(https?://www\.imdb\.com/title/tt\d+/)',
+                format_data)
             if imdb_match:
                 extracted_imdb_link = imdb_match.group(1)
-            
+
             # 提取海报图片
             img_match = re.search(r'(\[img\].*?\[/img\])', format_data)
             if img_match:
@@ -836,7 +873,8 @@ def add_torrent_to_downloader(detail_page_url: str, save_path: str,
     # 1. 查找对应的站点配置
     conn = db_manager._get_connection()
     cursor = db_manager._get_cursor(conn)
-    cursor.execute("SELECT nickname, base_url, cookie, proxy, speed_limit FROM sites")
+    cursor.execute(
+        "SELECT nickname, base_url, cookie, proxy, speed_limit FROM sites")
     site_info = None
     for site in cursor.fetchall():
         # [修复] 确保 base_url 存在且不为空
@@ -887,8 +925,10 @@ def add_torrent_to_downloader(detail_page_url: str, save_path: str,
                 break  # Success, exit retry loop
             except Exception as e:
                 if attempt < max_retries - 1:
-                    logging.warning(f"Attempt {attempt + 1} failed to fetch details page: {e}. Retrying...")
-                    time.sleep(2 ** attempt)  # Exponential backoff
+                    logging.warning(
+                        f"Attempt {attempt + 1} failed to fetch details page: {e}. Retrying..."
+                    )
+                    time.sleep(2**attempt)  # Exponential backoff
                 else:
                     raise  # Re-raise the exception if all retries failed
         details_response.raise_for_status()
@@ -917,8 +957,10 @@ def add_torrent_to_downloader(detail_page_url: str, save_path: str,
                 break  # Success, exit retry loop
             except Exception as e:
                 if attempt < max_retries - 1:
-                    logging.warning(f"Attempt {attempt + 1} failed to download torrent: {e}. Retrying...")
-                    time.sleep(2 ** attempt)  # Exponential backoff
+                    logging.warning(
+                        f"Attempt {attempt + 1} failed to download torrent: {e}. Retrying..."
+                    )
+                    time.sleep(2**attempt)  # Exponential backoff
                 else:
                     raise  # Re-raise the exception if all retries failed
 
@@ -941,63 +983,80 @@ def add_torrent_to_downloader(detail_page_url: str, save_path: str,
         logging.error(msg)
         return False, msg
 
-    # 4. 添加到下载器 (核心修改在此！)
-    try:
-        from core.services import _prepare_api_config
+    # 4. 添加到下载器 (核心修改在此！) - 添加重试机制
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            from core.services import _prepare_api_config
 
-        api_config = _prepare_api_config(downloader_config)
-        client_name = downloader_config['name']
+            api_config = _prepare_api_config(downloader_config)
+            client_name = downloader_config['name']
 
-        if downloader_config['type'] == 'qbittorrent':
-            client = qbClient(**api_config)
-            client.auth_log_in()
-            
-            # 准备 qBittorrent 参数
-            qb_params = {
-                'torrent_files': torrent_content,
-                'save_path': save_path,
-                'is_paused': False,
-                'skip_checking': True
-            }
-            
-            # 如果站点设置了速度限制，则添加速度限制参数
-            # 数据库中存储的是MB/s，需要转换为bytes/s传递给下载器API
-            if site_info and site_info.get('speed_limit', 0) > 0:
-                speed_limit = int(site_info['speed_limit']) * 1024 * 1024  # 转换为 bytes/s
-                qb_params['upload_limit'] = speed_limit
-                logging.info(f"为站点 '{site_info['nickname']}' 设置上传速度限制: {site_info['speed_limit']} MB/s")
-            
-            result = client.torrents_add(**qb_params)
-            logging.info(f"已将种子添加到 qBittorrent '{client_name}': {result}")
+            if downloader_config['type'] == 'qbittorrent':
+                client = qbClient(**api_config)
+                client.auth_log_in()
 
-        elif downloader_config['type'] == 'transmission':
-            client = TrClient(**api_config)
-            
-            # 准备 Transmission 参数
-            tr_params = {
-                'torrent': torrent_content,
-                'download_dir': save_path,
-                'paused': False
-            }
-            
-            # 如果站点设置了速度限制，则添加速度限制参数
-            # 数据库中存储的是MB/s，需要转换为bytes/s传递给下载器API
-            if site_info and site_info.get('speed_limit', 0) > 0:
-                speed_limit = int(site_info['speed_limit']) * 1024 * 1024  # 转换为 bytes/s
-                tr_params['uploadLimit'] = speed_limit
-                tr_params['uploadLimited'] = True
-                logging.info(f"为站点 '{site_info['nickname']}' 设置上传速度限制: {site_info['speed_limit']} MB/s")
-            
-            result = client.add_torrent(**tr_params)
-            logging.info(
-                f"已将种子添加到 Transmission '{client_name}': ID={result.id}")
+                # 准备 qBittorrent 参数
+                qb_params = {
+                    'torrent_files': torrent_content,
+                    'save_path': save_path,
+                    'is_paused': False,
+                    'skip_checking': True
+                }
 
-        return True, f"成功将种子添加到下载器 '{client_name}'。"
+                # 如果站点设置了速度限制，则添加速度限制参数
+                # 数据库中存储的是MB/s，需要转换为bytes/s传递给下载器API
+                if site_info and site_info.get('speed_limit', 0) > 0:
+                    speed_limit = int(
+                        site_info['speed_limit']) * 1024 * 1024  # 转换为 bytes/s
+                    qb_params['upload_limit'] = speed_limit
+                    logging.info(
+                        f"为站点 '{site_info['nickname']}' 设置上传速度限制: {site_info['speed_limit']} MB/s"
+                    )
 
-    except Exception as e:
-        msg = f"添加到下载器 '{downloader_config['name']}' 时失败: {e}"
-        logging.error(msg, exc_info=True)
-        return False, msg
+                result = client.torrents_add(**qb_params)
+                logging.info(f"已将种子添加到 qBittorrent '{client_name}': {result}")
+
+            elif downloader_config['type'] == 'transmission':
+                client = TrClient(**api_config)
+
+                # 准备 Transmission 参数
+                tr_params = {
+                    'torrent': torrent_content,
+                    'download_dir': save_path,
+                    'paused': False
+                }
+
+                # 如果站点设置了速度限制，则添加速度限制参数
+                # 数据库中存储的是MB/s，需要转换为bytes/s传递给下载器API
+                if site_info and site_info.get('speed_limit', 0) > 0:
+                    speed_limit = int(
+                        site_info['speed_limit']) * 1024 * 1024  # 转换为 bytes/s
+                    tr_params['uploadLimit'] = speed_limit
+                    tr_params['uploadLimited'] = True
+                    logging.info(
+                        f"为站点 '{site_info['nickname']}' 设置上传速度限制: {site_info['speed_limit']} MB/s"
+                    )
+
+                result = client.add_torrent(**tr_params)
+                logging.info(
+                    f"已将种子添加到 Transmission '{client_name}': ID={result.id}")
+
+            return True, f"成功将种子添加到下载器 '{client_name}'。"
+
+        except Exception as e:
+            logging.warning(f"第 {attempt + 1} 次尝试添加种子到下载器失败: {e}")
+            
+            # 如果不是最后一次尝试，等待一段时间后重试
+            if attempt < max_retries - 1:
+                import time
+                wait_time = 2 ** attempt  # 指数退避
+                logging.info(f"等待 {wait_time} 秒后进行第 {attempt + 2} 次尝试...")
+                time.sleep(wait_time)
+            else:
+                msg = f"添加到下载器 '{downloader_config['name']}' 时失败: {e}"
+                logging.error(msg, exc_info=True)
+                return False, msg
 
 
 def extract_tags_from_mediainfo(mediainfo_text: str) -> list:
@@ -1024,7 +1083,7 @@ def extract_tags_from_mediainfo(mediainfo_text: str) -> list:
         'Dolby Vision': ['dolby vision', '杜比视界'],
         'HDR10+': ['hdr10+'],
         'HDR10': ['hdr10'],
-        'HDR': ['hdr'], # 作为通用 HDR 的备用选项
+        'HDR': ['hdr'],  # 作为通用 HDR 的备用选项
         'HDRVivid': ['hdr vivid'],
     }
 
@@ -1056,31 +1115,38 @@ def extract_tags_from_mediainfo(mediainfo_text: str) -> list:
                     found_tags.add('国语')
                 audio_section_lines = []  # 清空音频块
             continue
-            
+
         # 收集音频块的行
         if is_audio_section:
             audio_section_lines.append(line_stripped)
-            
+
         # 检查字幕标签 (仅在 Text 块中)
         if is_text_section:
             line_lower = line_stripped.lower()
-            if '中字' in tag_keywords_map and any(kw in line_lower for kw in tag_keywords_map['中字']):
+            if '中字' in tag_keywords_map and any(
+                    kw in line_lower for kw in tag_keywords_map['中字']):
                 found_tags.add('中字')
 
         # 检查 HDR 格式标签 (全局检查)
         line_lower = line_stripped.lower()
-        if 'dolby vision' in tag_keywords_map and any(kw in line_lower for kw in tag_keywords_map['Dolby Vision']):
+        if 'dolby vision' in tag_keywords_map and any(
+                kw in line_lower for kw in tag_keywords_map['Dolby Vision']):
             found_tags.add('Dolby Vision')
-        if 'hdr10+' in tag_keywords_map and any(kw in line_lower for kw in tag_keywords_map['HDR10+']):
+        if 'hdr10+' in tag_keywords_map and any(
+                kw in line_lower for kw in tag_keywords_map['HDR10+']):
             found_tags.add('HDR10+')
         # HDR10 要放在 HDR 之前检查，以获得更精确匹配
-        if 'hdr10' in tag_keywords_map and any(kw in line_lower for kw in tag_keywords_map['HDR10']):
+        if 'hdr10' in tag_keywords_map and any(
+                kw in line_lower for kw in tag_keywords_map['HDR10']):
             found_tags.add('HDR10')
-        elif 'hdr' in tag_keywords_map and any(kw in line_lower for kw in tag_keywords_map['HDR']):
+        elif 'hdr' in tag_keywords_map and any(
+                kw in line_lower for kw in tag_keywords_map['HDR']):
             # 避免重复添加，如果已有更具体的HDR格式，则不添加通用的'HDR'
-            if not any(hdr_tag in found_tags for hdr_tag in ['Dolby Vision', 'HDR10+', 'HDR10']):
+            if not any(hdr_tag in found_tags
+                       for hdr_tag in ['Dolby Vision', 'HDR10+', 'HDR10']):
                 found_tags.add('HDR')
-        if 'hdrvivid' in tag_keywords_map and any(kw in line_lower for kw in tag_keywords_map['HDRVivid']):
+        if 'hdrvivid' in tag_keywords_map and any(
+                kw in line_lower for kw in tag_keywords_map['HDRVivid']):
             # 注意：站点可能没有 HDRVivid 标签，但我们先提取出来
             found_tags.add('HDRVivid')
 
@@ -1104,12 +1170,13 @@ def _check_mandarin_in_audio_section(audio_lines):
         # 检查 Title: 中文 或 Language: Chinese
         if 'title:' in line.lower() and '中文' in line:
             return True
-        if 'language:' in line.lower() and ('chinese' in line.lower() or 'mandarin' in line.lower()):
+        if 'language:' in line.lower() and ('chinese' in line.lower()
+                                            or 'mandarin' in line.lower()):
             return True
         # 检查其他可能的国语标识
         if 'mandarin' in line.lower():
             return True
-            
+
     return False
 
 
@@ -1122,7 +1189,7 @@ def extract_origin_from_description(description_text: str) -> str:
     """
     if not description_text:
         return ""
-    
+
     # 使用正则表达式匹配 "◎产　　地　日本" 这种格式
     # 支持多种变体：◎产地、◎产　　地、◎国　　家等
     patterns = [
@@ -1131,7 +1198,7 @@ def extract_origin_from_description(description_text: str) -> str:
         r"◎\s*地\s*区\s*(.+?)(?:\s|$)",  # 匹配 ◎地区 日本
         r"制片国家/地区[:\s]+(.+?)(?:\s|$)",  # 匹配 制片国家/地区: 日本
     ]
-    
+
     for pattern in patterns:
         match = re.search(pattern, description_text)
         if match:
@@ -1144,11 +1211,12 @@ def extract_origin_from_description(description_text: str) -> str:
             if ',' in origin:
                 origin = origin.split(',')[0].strip()
             return origin
-    
+
     return ""
 
 
-def _upload_to_pixhost_direct(image_path: str, api_url: str, params: dict, headers: dict):
+def _upload_to_pixhost_direct(image_path: str, api_url: str, params: dict,
+                              headers: dict):
     """直接上传图片到Pixhost"""
     try:
         with open(image_path, 'rb') as f:
@@ -1176,29 +1244,27 @@ def _upload_to_pixhost_direct(image_path: str, api_url: str, params: dict, heade
         return None
 
 
-def _upload_to_pixhost_with_proxy(image_path: str, api_url: str, params: dict, headers: dict, proxy_url: str):
+def _upload_to_pixhost_with_proxy(image_path: str, api_url: str, params: dict,
+                                  headers: dict, proxy_url: str):
     """通过代理上传图片到Pixhost"""
     if not proxy_url:
         print("未配置全局代理，跳过代理上传")
         return None
-        
+
     print(f"使用代理: {proxy_url}")
     print(f"目标URL: {api_url}")
     print(f"上传文件: {image_path}")
-    
+
     try:
         # 使用标准HTTP代理方式
         with open(image_path, 'rb') as f:
             files = {'img': f}
-            
+
             # 设置代理
-            proxies = {
-                'http': proxy_url,
-                'https': proxy_url
-            }
-            
+            proxies = {'http': proxy_url, 'https': proxy_url}
+
             print(f"代理配置: {proxies}")
-            
+
             response = requests.post(api_url,
                                      data=params,
                                      files=files,

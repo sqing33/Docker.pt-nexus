@@ -307,6 +307,16 @@ class TorrentMigrator:
                 subtitle = re.sub(r"\s*\|\s*ARDTU.*", "", subtitle)
                 # 剔除以 "| A | By ATU" 开始及之后的所有内容
                 subtitle = re.sub(r"\s*\|\s*A\s*\|\s*By\s*ATU.*", "", subtitle)
+                # 剔除以 "|" 开头后跟制作组信息的内容（如 "| ABy ATU_Tool, Ldd"）
+                subtitle = re.sub(r"\s*\|\s*[Aa][Bb]y\s+\w+.*$", "", subtitle)
+                # 剔除以 "| By" 开头后跟制作组信息的内容
+                subtitle = re.sub(r"\s*\|\s*[Bb]y\s+\w+.*$", "", subtitle)
+                # 剔除以 "| A" 开头后跟制作组信息的内容
+                subtitle = re.sub(r"\s*\|\s*[Aa]\s+\w+.*$", "", subtitle)
+                # 剔除以 "| ATU" 或 "| DTU" 结尾的内容（不区分大小写）
+                subtitle = re.sub(r"\s*\|\s*[Aa][Tt][Uu]\s*$", "", subtitle)
+                subtitle = re.sub(r"\s*\|\s*[Dd][Tt][Uu]\s*$", "", subtitle)
+                subtitle = re.sub(r"\s*\|\s*[Pp][Tt][Ee][Rr]\s*$", "", subtitle)
             else:
                 subtitle = ""
             descr_container = soup.select_one("div#kdescr")

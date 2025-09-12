@@ -1,14 +1,14 @@
-# uploaders/sites/sewerpt.py
+# uploaders/sites/March.py
 
 from ..base import BaseUploader
 from loguru import logger
 
 
-class SewerptUploader(BaseUploader):
+class MarchUploader(BaseUploader):
 
     def _map_parameters(self) -> dict:
         """
-        实现sewerpt下水道站点的参数映射逻辑。
+        实现March三月传媒站点的参数映射逻辑。
         """
         mapped = {}
         tags = []
@@ -30,12 +30,12 @@ class SewerptUploader(BaseUploader):
         medium_str = title_params.get("媒介", "")
         mediainfo_str = self.upload_data.get("mediainfo", "")
         is_standard_mediainfo = "General" in mediainfo_str and "Complete name" in mediainfo_str
-        
+
         # 站点规则：有mediainfo的Blu-ray/DVD源盘rip都算Encode
         medium_field = self.config.get("form_fields",
                                        {}).get("medium", "medium_sel[4]")
         medium_mapping = self.config.get("mappings", {}).get("medium", {})
-        
+
         if is_standard_mediainfo and ('blu' in medium_str.lower()
                                       or 'dvd' in medium_str.lower()):
             mapped[medium_field] = "7"  # Encode
@@ -50,15 +50,7 @@ class SewerptUploader(BaseUploader):
         codec_mapping = self.config.get("mappings", {}).get("codec", {})
         mapped[codec_field] = self._find_mapping(codec_mapping, codec_str)
 
-        # 4. 音频编码映射
-        audio_str = title_params.get("音频编码", "")
-        audio_field = self.config.get("form_fields",
-                                      {}).get("audio_codec",
-                                              "audiocodec_sel[4]")
-        audio_mapping = self.config.get("mappings", {}).get("audio_codec", {})
-        mapped[audio_field] = self._find_mapping(audio_mapping, audio_str)
-
-        # 5. 分辨率映射
+        # 4. 分辨率映射
         resolution_str = title_params.get("分辨率", "")
         resolution_field = self.config.get("form_fields",
                                            {}).get("resolution",
@@ -68,7 +60,7 @@ class SewerptUploader(BaseUploader):
         mapped[resolution_field] = self._find_mapping(resolution_mapping,
                                                       resolution_str)
 
-        # 6. 制作组映射
+        # 5. 制作组映射
         release_group_str = str(title_params.get("制作组", "")).upper()
         team_field = self.config.get("form_fields",
                                      {}).get("team", "team_sel[4]")
@@ -76,7 +68,7 @@ class SewerptUploader(BaseUploader):
         mapped[team_field] = self._find_mapping(team_mapping,
                                                 release_group_str)
 
-        # 7. 标签映射
+        # 6. 标签映射
         combined_tags = self._collect_all_tags()
         tag_mapping = self.config.get("mappings", {}).get("tag", {})
 
@@ -87,9 +79,6 @@ class SewerptUploader(BaseUploader):
 
         # 去重并格式化
         for i, tag_id in enumerate(sorted(list(set(tags)))):
-            mapped[f"tags[4][{i}]"] = tag_id
-
-        # 8. 匿名发布字段（默认开启）
-        mapped["uplver"] = "yes"
+            mapped[f"tags[4][]"] = tag_id
 
         return mapped

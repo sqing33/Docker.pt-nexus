@@ -27,36 +27,64 @@ class Pt0ffccUploader(BaseUploader):
         
         # 2. 地区映射
         source_str = title_params.get("片源平台", "") or title_params.get("来源", "")
+        # 确保 source_str 是字符串而不是列表
+        if isinstance(source_str, list):
+            source_str = source_str[0] if source_str else ""
         source_field = self.config.get("form_fields", {}).get("source", "source_sel[4]")
         source_mapping = self.config.get("mappings", {}).get("source", {})
         mapped[source_field] = self._find_mapping(source_mapping, source_str)
         
         # 3. 分辨率映射
         resolution_str = title_params.get("分辨率", "")
+        # 确保 resolution_str 是字符串而不是列表
+        if isinstance(resolution_str, list):
+            resolution_str = resolution_str[0] if resolution_str else ""
         resolution_field = self.config.get("form_fields", {}).get("resolution", "standard_sel[4]")
         resolution_mapping = self.config.get("mappings", {}).get("resolution", {})
         mapped[resolution_field] = self._find_mapping(resolution_mapping, resolution_str)
         
         # 4. 媒介映射
         medium_str = title_params.get("媒介", "")
+        # 确保 medium_str 是字符串而不是列表
+        if isinstance(medium_str, list):
+            medium_str = medium_str[0] if medium_str else ""
+        mediainfo_str = self.upload_data.get("mediainfo", "")
+        is_standard_mediainfo = "General" in mediainfo_str and "Complete name" in mediainfo_str
+        
+        # 站点规则：有mediainfo的Blu-ray/DVD源盘rip都算Encode
         medium_field = self.config.get("form_fields", {}).get("medium", "medium_sel[4]")
         medium_mapping = self.config.get("mappings", {}).get("medium", {})
-        mapped[medium_field] = self._find_mapping(medium_mapping, medium_str)
+        
+        if is_standard_mediainfo and ('blu' in medium_str.lower()
+                                      or 'dvd' in medium_str.lower()):
+            mapped[medium_field] = "7"  # Encode
+        else:
+            mapped[medium_field] = self._find_mapping(medium_mapping, medium_str)
         
         # 5. 视频编码映射
         codec_str = title_params.get("视频编码", "")
+        # 确保 codec_str 是字符串而不是列表
+        if isinstance(codec_str, list):
+            codec_str = codec_str[0] if codec_str else ""
         codec_field = self.config.get("form_fields", {}).get("codec", "codec_sel[4]")
         codec_mapping = self.config.get("mappings", {}).get("codec", {})
         mapped[codec_field] = self._find_mapping(codec_mapping, codec_str)
         
         # 6. 音频编码映射
         audio_str = title_params.get("音频编码", "")
+        # 确保 audio_str 是字符串而不是列表
+        if isinstance(audio_str, list):
+            audio_str = audio_str[0] if audio_str else ""
         audio_field = self.config.get("form_fields", {}).get("audio_codec", "audiocodec_sel[4]")
         audio_mapping = self.config.get("mappings", {}).get("audio_codec", {})
         mapped[audio_field] = self._find_mapping(audio_mapping, audio_str)
         
         # 7. 制作组映射
-        release_group_str = str(title_params.get("制作组", "")).upper()
+        release_group_str = title_params.get("制作组", "")
+        # 确保 release_group_str 是字符串而不是列表
+        if isinstance(release_group_str, list):
+            release_group_str = release_group_str[0] if release_group_str else ""
+        release_group_str = str(release_group_str).upper()
         team_field = self.config.get("form_fields", {}).get("team", "team_sel[4]")
         team_mapping = self.config.get("mappings", {}).get("team", {})
         mapped[team_field] = self._find_mapping(team_mapping, release_group_str)

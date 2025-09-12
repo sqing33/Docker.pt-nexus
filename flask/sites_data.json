@@ -509,7 +509,7 @@
     "base_url": "carpt.net",
     "special_tracker_domain": null,
     "group": "CarPT",
-    "migration": 2,
+    "migration": 0,
     "speed_limit": 10
   },
   {
@@ -812,7 +812,7 @@
   {
     "site": "cspt",
     "nickname": "财神",
-    "base_url": "cspt.cc",
+    "base_url": "cspt.top",
     "special_tracker_domain": null,
     "group": "CSWEB,CSPT,HSWEB,HSPT",
     "migration": 3,
@@ -972,12 +972,12 @@
     "speed_limit": 0
   },
   {
-    "site": "duckboobee",
+    "site": "March",
     "nickname": "三月传媒",
     "base_url": "duckboobee.org",
     "special_tracker_domain": null,
-    "group": null,
-    "migration": 0,
+    "group": "3MWEB",
+    "migration": 2,
     "speed_limit": 0
   },
   {
