@@ -214,7 +214,9 @@ def update_site_cookie():
 def fetch_all_passkeys():
     """获取所有有Cookie且可发布站点的Passkey并保存到数据库。"""
     db_manager = management_bp.db_manager
-
+    # 获取请求参数，判断是否使用代理
+    use_proxy = request.json.get("use_proxy", False) if request.json else False
+    
     try:
         # 获取所有有Cookie且为可发布站点的信息
         conn = db_manager._get_connection()
@@ -265,10 +267,27 @@ def fetch_all_passkeys():
                 # 发送请求获取用户控制面板页面
                 import cloudscraper
                 scraper = cloudscraper.create_scraper()
+                
+                # 获取代理配置
+                proxies = None
+                if use_proxy:
+                    try:
+                        config_manager = management_bp.config_manager
+                        conf = (config_manager.get() or {})
+                        # 优先使用转种设置中的代理地址，其次兼容旧的 network.proxy_url
+                        proxy_url = (conf.get("cross_seed", {})
+                                     or {}).get("proxy_url") or (conf.get(
+                                         "network", {}) or {}).get("proxy_url")
+                        if proxy_url:
+                            proxies = {"http": proxy_url, "https": proxy_url}
+                    except Exception as e:
+                        logging.warning(f"代理设置失败: {e}")
+                
                 try:
                     response = scraper.get(f"{base_url}/usercp.php",
                                            headers=headers,
-                                           timeout=30)
+                                           timeout=30,
+                                           proxies=proxies)
                     response.raise_for_status()
                 except Exception as e:
                     error_msg = str(e)
@@ -279,6 +298,8 @@ def fetch_all_passkeys():
                         failed_sites.append(f"{site_nickname}(请求超时)")
                     elif "dns" in error_msg.lower():
                         failed_sites.append(f"{site_nickname}(域名解析失败)")
+                    elif "104" in error_msg and "Connection reset by peer" in error_msg:
+                        failed_sites.append(f"{site_nickname}(连接被重置: {error_msg})")
                     else:
                         failed_sites.append(
                             f"{site_nickname}(网络连接错误: {error_msg})")
