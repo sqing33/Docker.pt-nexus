@@ -891,7 +891,7 @@
     "speed_limit": 0
   },
   {
-    "site": "PTSkit",
+    "site": "ptskit",
     "nickname": "PTSkit",
     "base_url": "www.ptskit.org",
     "special_tracker_domain": "kqbhek",
@@ -900,7 +900,7 @@
     "speed_limit": 0
   },
   {
-    "site": "CBG",
+    "site": "cbg",
     "nickname": "藏宝阁",
     "base_url": "cangbao.ge",
     "special_tracker_domain": null,
@@ -909,7 +909,7 @@
     "speed_limit": 10
   },
   {
-    "site": "Tokyo",
+    "site": "tokyo",
     "nickname": "东京",
     "base_url": "www.tokyopt.xyz",
     "special_tracker_domain": null,
@@ -918,7 +918,7 @@
     "speed_limit": 0
   },
   {
-    "site": "Lajidui",
+    "site": "lajidui",
     "nickname": "垃圾堆",
     "base_url": "pt.lajidui.top",
     "special_tracker_domain": null,
@@ -927,7 +927,7 @@
     "speed_limit": 20
   },
   {
-    "site": "VCB-Studio",
+    "site": "vcb",
     "nickname": "VCB-Studio",
     "base_url": "VCB-Studio",
     "special_tracker_domain": null,
@@ -936,7 +936,7 @@
     "speed_limit": 0
   },
   {
-    "site": "BeiTai",
+    "site": "beitai",
     "nickname": "备胎",
     "base_url": "BeiTai",
     "special_tracker_domain": null,
@@ -954,7 +954,7 @@
     "speed_limit": 0
   },
   {
-    "site": "JPop",
+    "site": "jpop",
     "nickname": "鸡婆婆",
     "base_url": "jpopsuki.eu",
     "special_tracker_domain": null,
@@ -972,7 +972,7 @@
     "speed_limit": 0
   },
   {
-    "site": "March",
+    "site": "march",
     "nickname": "三月传媒",
     "base_url": "duckboobee.org",
     "special_tracker_domain": null,
@@ -981,7 +981,7 @@
     "speed_limit": 0
   },
   {
-    "site": "HDBao",
+    "site": "hdbao",
     "nickname": "红豆包",
     "base_url": "hdbao.cc",
     "special_tracker_domain": null,
@@ -990,7 +990,7 @@
     "speed_limit": 0
   },
   {
-    "site": "LongPT",
+    "site": "longpt",
     "nickname": "龙PT",
     "base_url": "longpt.org",
     "special_tracker_domain": null,
@@ -999,7 +999,7 @@
     "speed_limit": 0
   },
   {
-    "site": "Aling",
+    "site": "aling",
     "nickname": "爱玲",
     "base_url": "pt.aling.de",
     "special_tracker_domain": null,
@@ -1008,7 +1008,7 @@
     "speed_limit": 0
   },
   {
-    "site": "CD",
+    "site": "cdfile",
     "nickname": "CD",
     "base_url": "pt.cdfile.org",
     "special_tracker_domain": null,
@@ -1017,7 +1017,7 @@
     "speed_limit": 0
   },
   {
-    "site": "TU88",
+    "site": "tu88",
     "nickname": "TU88",
     "base_url": "pt.tu88.men",
     "special_tracker_domain": null,
@@ -1026,7 +1026,7 @@
     "speed_limit": 0
   },
   {
-    "site": "UltraHD",
+    "site": "ultrahd",
     "nickname": "UltraHD",
     "base_url": "ultrahd.net",
     "special_tracker_domain": null,
@@ -1044,7 +1044,7 @@
     "speed_limit": 0
   },
   {
-    "site": "PTFans",
+    "site": "ptfans",
     "nickname": "PTFans",
     "base_url": "ptfans.cc",
     "special_tracker_domain": null,
@@ -1071,7 +1071,7 @@
     "speed_limit": 0
   },
   {
-    "site": "Sunny",
+    "site": "sunny",
     "nickname": "Sunny",
     "base_url": "sunnypt.top",
     "special_tracker_domain": "sunnytk",
@@ -1098,7 +1098,7 @@
     "speed_limit": 20
   },
   {
-    "site": "SBPT",
+    "site": "sbpt",
     "nickname": "SBPT",
     "base_url": "sbpt.link",
     "special_tracker_domain": null,
@@ -1116,7 +1116,7 @@
     "speed_limit": 0
   },
   {
-    "site": "YHPP",
+    "site": "yhpp",
     "nickname": "YHPP",
     "base_url": "www.yhpp.cc",
     "special_tracker_domain": null,
@@ -1125,7 +1125,7 @@
     "speed_limit": 0
   },
   {
-    "site": "ASMR",
+    "site": "asmr",
     "nickname": "ASMR",
     "base_url": "www.asmrpt.org",
     "special_tracker_domain": null,
@@ -1134,7 +1134,7 @@
     "speed_limit": 0
   },
   {
-    "site": "TorrentHub",
+    "site": "torrenthub",
     "nickname": "TorrentHub",
     "base_url": "torrenthub.club",
     "special_tracker_domain": null,
