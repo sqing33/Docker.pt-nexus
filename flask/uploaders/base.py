@@ -39,7 +39,7 @@ class BaseUploader(ABC):
 
     def _load_site_config(self, site_name: str) -> dict:
         """加载站点的YAML配置文件"""
-        config_path = os.path.join('configs', f'{site_name}.yaml')
+        config_path = os.path.join(os.path.dirname(__file__), 'sites', 'configs', f'{site_name}.yaml')
         try:
             with open(config_path, 'r', encoding='utf-8') as f:
                 return yaml.safe_load(f)
@@ -341,3 +341,100 @@ class BaseUploader(ABC):
         都必须自己实现这个方法，以提供该站点的参数映射逻辑。
         """
         raise NotImplementedError("每个子类都必须实现 _map_parameters 方法")
+
+    def _map_parameters(self) -> dict:
+        """
+        通用的参数映射方法，子类可以重写以添加特殊处理
+        """
+        mapped = {}
+        tags = []
+
+        # 获取数据
+        source_params = self.upload_data.get("source_params", {})
+        title_components_list = self.upload_data.get("title_components", [])
+        title_params = {
+            item["key"]: item["value"]
+            for item in title_components_list if item.get("value")
+        }
+
+        # 1. 类型映射
+        source_type = source_params.get("类型") or ""
+        type_mapping = self.config.get("mappings", {}).get("type", {})
+        mapped["type"] = self._find_mapping(type_mapping, source_type)
+
+        # 2. 媒介映射
+        medium_str = title_params.get("媒介", "")
+        mediainfo_str = self.upload_data.get("mediainfo", "")
+        is_standard_mediainfo = "General" in mediainfo_str and "Complete name" in mediainfo_str
+
+        # 站点规则：有mediainfo的Blu-ray/DVD源盘rip都算Encode
+        medium_field = self.config.get("form_fields", {}).get("medium", "medium_sel[4]")
+        medium_mapping = self.config.get("mappings", {}).get("medium", {})
+
+        if is_standard_mediainfo and ('blu' in medium_str.lower() or 'dvd' in medium_str.lower()):
+            # 从配置文件中获取Encode的映射值
+            encode_value = medium_mapping.get("Encode", "7")  # 默认值为7
+            mapped[medium_field] = encode_value
+        else:
+            mapped[medium_field] = self._find_mapping(medium_mapping, medium_str)
+
+        # 3. 视频编码映射
+        codec_str = title_params.get("视频编码", "")
+        codec_field = self.config.get("form_fields", {}).get("codec", "codec_sel[4]")
+        codec_mapping = self.config.get("mappings", {}).get("codec", {})
+        mapped[codec_field] = self._find_mapping(codec_mapping, codec_str)
+
+        # 4. 音频编码映射
+        audio_str = title_params.get("音频编码", "")
+        audio_field = self.config.get("form_fields", {}).get("audio_codec", "audiocodec_sel[4]")
+        audio_mapping = self.config.get("mappings", {}).get("audio_codec", {})
+        mapped[audio_field] = self._find_mapping(audio_mapping, audio_str)
+
+        # 5. 分辨率映射
+        resolution_str = title_params.get("分辨率", "")
+        resolution_field = self.config.get("form_fields", {}).get("resolution", "standard_sel[4]")
+        resolution_mapping = self.config.get("mappings", {}).get("resolution", {})
+        mapped[resolution_field] = self._find_mapping(resolution_mapping, resolution_str)
+
+        # 6. 制作组映射
+        release_group_str = str(title_params.get("制作组", "")).upper()
+        team_field = self.config.get("form_fields", {}).get("team", "team_sel[4]")
+        team_mapping = self.config.get("mappings", {}).get("team", {})
+        mapped[team_field] = self._find_mapping(team_mapping, release_group_str)
+
+        # 7. 标签映射
+        combined_tags = self._collect_all_tags()
+        tag_mapping = self.config.get("mappings", {}).get("tag", {})
+
+        for tag_str in combined_tags:
+            tag_id = self._find_mapping(tag_mapping, tag_str)
+            if tag_id:
+                tags.append(tag_id)
+
+        # 去重并格式化
+        for i, tag_id in enumerate(sorted(list(set(tags)))):
+            mapped[f"tags[4][{i}]"] = tag_id
+
+        return mapped
+
+    @staticmethod
+    def upload(site_name: str, site_info: dict, upload_payload: dict):
+        """
+        通用的上传接口
+        """
+        try:
+            # 添加项目根目录到Python路径
+            import sys
+            import os
+            sys.path.append(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+            from .factory import create_uploader
+            uploader = create_uploader(site_name, site_info, upload_payload)
+            return uploader.execute_upload()
+        except Exception as e:
+            from loguru import logger
+            import traceback
+            logger.error(f"{site_name}上传器执行时发生错误: {e}")
+            logger.error(traceback.format_exc())
+            return False, f"请求异常: {e}"
