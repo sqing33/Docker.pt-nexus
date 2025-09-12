@@ -131,7 +131,7 @@ class DataTracker(Thread):
         
         # 数据聚合任务相关变量
         self.aggregation_counter = 0  # 用于计时的计数器
-        self.AGGREGATION_INTERVAL = 3600  # 聚合任务的执行间隔（秒），这里是1小时
+        self.AGGREGATION_INTERVAL = 21600  # 聚合任务的执行间隔（秒），这里是6小时
 
     def _get_client(self, downloader_config):
         """智能获取或创建并缓存客户端实例，支持自动重连。"""

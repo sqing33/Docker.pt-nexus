@@ -99,7 +99,15 @@ def create_app():
     app.register_blueprint(migrate_bp)
     app.register_blueprint(auth_bp)
 
-    # --- 步骤 4: 启动后台数据追踪服务 ---
+    # --- 步骤 4: 执行初始数据聚合 ---
+    logging.info("正在执行初始数据聚合...")
+    try:
+        db_manager.aggregate_hourly_traffic()
+        logging.info("初始数据聚合完成。")
+    except Exception as e:
+        logging.error(f"初始数据聚合失败: {e}")
+
+    # --- 步骤 5: 启动后台数据追踪服务 ---
     logging.info("正在启动后台数据追踪服务...")
     start_data_tracker(db_manager, config_manager)
 

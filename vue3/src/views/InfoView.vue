@@ -656,7 +656,7 @@ onMounted(async () => {
   await fetchAppSettings()
 
   if (!isRealtimeSpeedEnabled.value && speedDisplayMode.value === 'last_1_min') {
-    speedDisplayMode.value = 'last_12_hours'
+    speedDisplayMode.value = 'today'
   }
 
   await nextTick()
