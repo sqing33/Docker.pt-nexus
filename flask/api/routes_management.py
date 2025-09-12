@@ -268,8 +268,12 @@ def fetch_all_passkeys():
                 import cloudscraper
                 scraper = cloudscraper.create_scraper()
                 
-                # 获取代理配置
+                # 添加重试机制，类似uploaders/base.py中的实现
+                max_retries = 3
+                last_exception = None
                 proxies = None
+                
+                # 如果明确要求使用代理，则获取代理配置
                 if use_proxy:
                     try:
                         config_manager = management_bp.config_manager
@@ -280,17 +284,55 @@ def fetch_all_passkeys():
                                          "network", {}) or {}).get("proxy_url")
                         if proxy_url:
                             proxies = {"http": proxy_url, "https": proxy_url}
+                            logging.info(f"Using proxy: {proxy_url}")
                     except Exception as e:
                         logging.warning(f"代理设置失败: {e}")
                 
-                try:
-                    response = scraper.get(f"{base_url}/usercp.php",
-                                           headers=headers,
-                                           timeout=30,
-                                           proxies=proxies)
-                    response.raise_for_status()
-                except Exception as e:
-                    error_msg = str(e)
+                for attempt in range(max_retries):
+                    try:
+                        # 检查是否是重试并且 Connection reset by peer 错误，强制使用代理
+                        if attempt > 0 and last_exception and "Connection reset by peer" in str(last_exception):
+                            logging.info("检测到 Connection reset by peer 错误，强制使用代理重试...")
+                            try:
+                                config_manager = management_bp.config_manager
+                                conf = (config_manager.get() or {})
+                                # 优先使用转种设置中的代理地址，其次兼容旧的 network.proxy_url
+                                proxy_url = (conf.get("cross_seed", {})
+                                             or {}).get("proxy_url") or (conf.get(
+                                                 "network", {}) or {}).get("proxy_url")
+                                if proxy_url:
+                                    proxies = {"http": proxy_url, "https": proxy_url}
+                                    logging.info(f"使用代理重试: {proxy_url}")
+                            except Exception as proxy_error:
+                                logging.warning(f"代理设置失败: {proxy_error}")
+                        
+                        logging.info(f"正在获取 {site_nickname} 的Passkey... (尝试 {attempt + 1}/{max_retries})")
+                        response = scraper.get(f"{base_url}/usercp.php",
+                                               headers=headers,
+                                               timeout=30,
+                                               proxies=proxies)
+                        response.raise_for_status()
+                        
+                        # 成功则跳出循环
+                        last_exception = None
+                        break
+                        
+                    except Exception as e:
+                        last_exception = e
+                        logging.warning(f"第 {attempt + 1} 次尝试获取 {site_nickname} 的Passkey失败: {e}")
+                        
+                        # 如果不是最后一次尝试，等待一段时间后重试
+                        if attempt < max_retries - 1:
+                            import time
+                            wait_time = 2 ** attempt  # 指数退避
+                            logging.info(f"等待 {wait_time} 秒后进行第 {attempt + 2} 次尝试...")
+                            time.sleep(wait_time)
+                        else:
+                            logging.error(f"获取 {site_nickname} 的Passkey所有重试均已失败")
+                
+                # 如果所有重试都失败了，处理错误
+                if last_exception:
+                    error_msg = str(last_exception)
                     if "403" in error_msg or "401" in error_msg:
                         failed_sites.append(f"{site_nickname}(Cookie已过期或无效)")
                     elif "timeout" in error_msg.lower(
