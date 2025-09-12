@@ -579,7 +579,9 @@ class DatabaseManager:
         
         # 添加特殊日期保护逻辑
         # 确保不会聚合最近3天的数据，以防止数据丢失
-        safe_cutoff = datetime.now() - timedelta(days=3)
+        # 修改为按日计算，聚合到三天前的00:00:00
+        now = datetime.now()
+        safe_cutoff = (now - timedelta(days=3)).replace(hour=0, minute=0, second=0, microsecond=0)
         if cutoff_time > safe_cutoff:
             logging.info(f"为防止数据丢失，调整聚合截止时间为 {safe_cutoff}")
             cutoff_time = safe_cutoff
