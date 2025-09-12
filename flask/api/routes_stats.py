@@ -197,7 +197,10 @@ def get_chart_data_api():
             for dl in enabled_downloaders
         }
 
-        # 3. 填充数据
+        # 3. 填充数据 - 修复聚合表和原始表数据覆盖问题
+        # 使用累加方式处理相同时间段的数据，避免后者覆盖前者
+        processed_data = {}  # 记录已处理的(time_group, downloader_id)组合
+        
         for row in rows:
             downloader_id = row['downloader_id']
             # 只处理在当前配置中启用的下载器
@@ -207,10 +210,21 @@ def get_chart_data_api():
             time_group = row['time_group']
             if time_group in label_map:
                 idx = label_map[time_group]
-                datasets[downloader_id]['uploaded'][idx] = int(row['total_ul']
-                                                               or 0)
-                datasets[downloader_id]['downloaded'][idx] = int(
-                    row['total_dl'] or 0)
+                key = (time_group, downloader_id)
+                
+                # 获取当前行的数据
+                uploaded = int(row['total_ul'] or 0)
+                downloaded = int(row['total_dl'] or 0)
+                
+                # 如果该时间段和下载器的组合已经处理过，则累加数据
+                if key in processed_data:
+                    datasets[downloader_id]['uploaded'][idx] += uploaded
+                    datasets[downloader_id]['downloaded'][idx] += downloaded
+                else:
+                    # 首次处理该组合，直接赋值
+                    datasets[downloader_id]['uploaded'][idx] = uploaded
+                    datasets[downloader_id]['downloaded'][idx] = downloaded
+                    processed_data[key] = True
 
         return jsonify({
             "labels": labels,
