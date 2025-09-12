@@ -15,17 +15,26 @@
                 </button>
               </div>
             </el-tooltip>
-            <button @click="changeSpeedMode('last_12_hours')" :class="{ active: speedDisplayMode === 'last_12_hours' }">
-              近12小时
-            </button>
-            <button @click="changeSpeedMode('last_24_hours')" :class="{ active: speedDisplayMode === 'last_24_hours' }">
-              近24小时
-            </button>
             <button @click="changeSpeedMode('today')" :class="{ active: speedDisplayMode === 'today' }">
               今日
             </button>
             <button @click="changeSpeedMode('yesterday')" :class="{ active: speedDisplayMode === 'yesterday' }">
               昨日
+            </button>
+            <button @click="changeSpeedMode('this_week')" :class="{ active: speedDisplayMode === 'this_week' }">
+              本周
+            </button>
+            <button @click="changeSpeedMode('last_week')" :class="{ active: speedDisplayMode === 'last_week' }">
+              上周
+            </button>
+            <button @click="changeSpeedMode('this_month')" :class="{ active: speedDisplayMode === 'this_month' }">
+              本月
+            </button>
+            <button @click="changeSpeedMode('last_month')" :class="{ active: speedDisplayMode === 'last_month' }">
+              上月
+            </button>
+            <button @click="changeSpeedMode('all')" :class="{ active: speedDisplayMode === 'all' }">
+              全部
             </button>
           </div>
         </div>
@@ -88,10 +97,6 @@
             </button>
             <button @click="changeTrafficMode('last_month')" :class="{ active: trafficDisplayMode === 'last_month' }">
               上月
-            </button>
-            <button @click="changeTrafficMode('last_6_months')"
-              :class="{ active: trafficDisplayMode === 'last_6_months' }">
-              近半年
             </button>
             <button @click="changeTrafficMode('this_year')" :class="{ active: trafficDisplayMode === 'this_year' }">
               今年
@@ -156,15 +161,12 @@ const areSettingsLoading = ref(true)
 
 const displayModeTextMap = {
   last_1_min: '近1分钟',
-  last_12_hours: '近12小时',
-  last_24_hours: '近24小时',
   today: '今日',
   yesterday: '昨日',
   this_week: '本周',
   last_week: '上周',
   this_month: '本月',
   last_month: '上月',
-  last_6_months: '近半年',
   this_year: '今年',
   all: '全部',
 }

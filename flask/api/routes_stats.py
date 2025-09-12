@@ -33,11 +33,8 @@ def get_date_range_and_grouping(time_range_str, for_speed=False):
             (today_start.replace(day=1) - timedelta(days=1)).replace(day=1),
             "%Y-%m-%d",
         ),
-        "last_6_months": (now - timedelta(days=180), "%Y-%m"),
         "this_year": (today_start.replace(month=1, day=1), "%Y-%m"),
         "all": (datetime(1970, 1, 1), "%Y-%m"),
-        "last_12_hours": (now - timedelta(hours=12), None),
-        "last_24_hours": (now - timedelta(hours=24), None),
     }
     if time_range_str in ranges:
         start_dt, group_by_format_override = ranges[time_range_str]
@@ -52,9 +49,8 @@ def get_date_range_and_grouping(time_range_str, for_speed=False):
         end_dt = today_start.replace(day=1)
 
     if for_speed:
-        if time_range_str in [
-                "last_12_hours", "last_24_hours", "today", "yesterday"
-        ]:
+        # For speed data, we need higher resolution for shorter time ranges
+        if time_range_str in ["today", "yesterday"]:
             group_by_format = "%Y-%m-%d %H:%M"
         elif start_dt and (end_dt - start_dt).total_seconds() > 0:
             if group_by_format not in ["%Y-%m"]:
