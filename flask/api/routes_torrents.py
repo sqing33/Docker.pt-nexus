@@ -35,6 +35,23 @@ def get_downloaders_list():
         return jsonify({"error": "获取下载器列表失败"}), 500
 
 
+@torrents_bp.route("/all_downloaders")
+def get_all_downloaders():
+    """获取所有已配置的下载器列表（包括启用和禁用的）。"""
+    config_manager = torrents_bp.config_manager
+    try:
+        downloaders = config_manager.get().get("downloaders", [])
+        downloader_list = [{
+            "id": d["id"],
+            "name": d["name"],
+            "enabled": d.get("enabled", True)
+        } for d in downloaders]
+        return jsonify(downloader_list)
+    except Exception as e:
+        logging.error(f"get_all_downloaders 出错: {e}", exc_info=True)
+        return jsonify({"error": "获取所有下载器列表失败"}), 500
+
+
 @torrents_bp.route("/data")
 def get_data_api():
     """获取种子列表数据，支持分页、排序和多种筛选。"""
@@ -66,6 +83,10 @@ def get_data_api():
         site_configs = {row["nickname"]: dict(row) for row in cursor.fetchall()}
         # --- [新增] 结束 ---
 
+        # 获取所有目标站点（migration 为 2 或 3 的站点）
+        target_sites = {name for name, config in site_configs.items()
+                       if config.get("migration", 0) in [2, 3]}
+
         cursor.execute(
             "SELECT DISTINCT sites FROM torrents WHERE sites IS NOT NULL AND sites != ''"
         )
@@ -92,17 +113,23 @@ def get_data_api():
                 "state": set(),
                 "sites": defaultdict(dict),
                 "total_uploaded": 0,
-                "downloader_id": None,
+                "downloader_ids": [],  # 修改为数组以支持多个下载器
             })
         for t in torrents_raw:
-            agg = agg_torrents[t["name"]]
+            # 使用种子名称作为唯一标识，支持同一个种子在不同下载器中
+            # 即使保存路径不同，也认为是同一个种子
+            torrent_key = t['name']
+            agg = agg_torrents[torrent_key]
             if not agg["name"]:
                 agg.update({
                     "name": t["name"],
                     "save_path": t.get("save_path", ""),
                     "size": t.get("size", 0),
-                    "downloader_id": t.get("downloader_id"),
                 })
+            # 添加下载器ID到数组中（去重）
+            downloader_id = t.get("downloader_id")
+            if downloader_id and downloader_id not in agg["downloader_ids"]:
+                agg["downloader_ids"].append(downloader_id)
             agg["progress"] = max(agg.get("progress", 0), t.get("progress", 0))
             agg["state"].add(t.get("state", "N/A"))
             upload_for_this_hash = uploads_by_hash.get(t["hash"], 0)
@@ -123,6 +150,11 @@ def get_data_api():
 
         final_torrent_list = []
         for name, data in agg_torrents.items():
+            # 计算可以转种到的目标站点数量
+            # 目标站点是那些当前种子未存在于其上的目标站点
+            existing_sites = set(data.get("sites", {}).keys())
+            target_sites_count = len(target_sites - existing_sites)
+
             data.update({
                 "state":
                 ", ".join(sorted(list(data["state"]))),
@@ -134,8 +166,12 @@ def get_data_api():
                 len(data.get("sites", {})),
                 "total_site_count":
                 len(all_discovered_sites),
+                "target_sites_count":
+                target_sites_count,
+                "downloaderIds":
+                data.get("downloader_ids", []),
                 "downloaderId":
-                data.get("downloader_id")
+                data.get("downloader_ids", [None])[0] if data.get("downloader_ids") else None  # 保持向后兼容
             })
             final_torrent_list.append(data)
 
@@ -157,7 +193,7 @@ def get_data_api():
         if downloader_filters:
             filtered_list = [
                 t for t in filtered_list
-                if t.get("downloaderId") in downloader_filters
+                if any(downloader_id in downloader_filters for downloader_id in t.get("downloaderIds", []))
             ]
         if site_filter_existence != "all" and site_filter_names:
             site_filter_set = set(site_filter_names)

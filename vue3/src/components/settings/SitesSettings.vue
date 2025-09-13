@@ -23,7 +23,8 @@
             </el-icon>
             <span>同步Cookie</span>
           </el-button>
-          <el-button type="success" size="large" @click="handleFetchAllPasskeys" :loading="isPasskeyActionLoading" style="margin-left: 10px;">
+          <el-button type="success" size="large" @click="handleFetchAllPasskeys" :loading="isPasskeyActionLoading"
+            style="margin-left: 10px;">
             <el-icon>
               <Refresh />
             </el-icon>
@@ -51,8 +52,14 @@
         <el-table-column prop="group" label="官组" show-overflow-tooltip />
         <el-table-column label="限速" width="100" align="center">
           <template #default="scope">
-            <span v-if="scope.row.speed_limit > 0">{{ scope.row.speed_limit }} MB/s</span>
-            <span v-else>不限速</span>
+            <div style="display: flex; justify-content: center; align-items: center; width: 100%; height: 100%;">
+              <el-tag v-if="scope.row.speed_limit > 0" type="error" size="small">
+                {{ scope.row.speed_limit }} MB/s
+              </el-tag>
+              <el-tag v-else type="success" size="small">
+                不限速
+              </el-tag>
+            </div>
           </template>
         </el-table-column>
         <el-table-column prop="proxy" label="代理" width="70" align="center">
@@ -135,7 +142,8 @@
           <el-input v-model="siteForm.passkey" placeholder="站点的Passkey"></el-input>
         </el-form-item>
         <el-form-item label="上传限速 (MB/s)" prop="speed_limit">
-          <el-input-number v-model="siteForm.speed_limit" :min="0" :max="1000" placeholder="0 表示不限速" style="width: 100%"/>
+          <el-input-number v-model="siteForm.speed_limit" :min="0" :max="1000" placeholder="0 表示不限速"
+            style="width: 100%" />
           <div class="form-tip">单位为 MB/s，0 表示不限速</div>
         </el-form-item>
       </el-form>
@@ -362,12 +370,12 @@ const handleSave = async () => {
   try {
     // 统一使用MB/s单位
     const siteData = JSON.parse(JSON.stringify(siteForm.value))
-    
+
     // 自动过滤掉cookie最后的换行符
     if (siteData.cookie) {
       siteData.cookie = siteData.cookie.trim()
     }
-    
+
     let response
     if (dialogMode.value === 'add') {
       response = await axios.post(`${API_BASE_URL}/sites/add`, siteData)

@@ -470,12 +470,29 @@ class DataTracker(Thread):
                 logging.info(f"已批量处理 {len(upload_stats_to_upsert)} 条种子上传数据。")
             # 根据数据库类型使用正确的占位符
             placeholder = "%s" if self.db_manager.db_type in ["mysql", "postgresql"] else "?"
-            (cursor.execute(
-                "DELETE FROM torrents WHERE hash NOT IN ({})".format(",".join(
-                    [placeholder] *
-                    len(all_current_hashes))), tuple(all_current_hashes))
-             if all_current_hashes else cursor.execute("DELETE FROM torrents"))
-            logging.info(f"从 torrents 表中移除了 {cursor.rowcount} 个陈旧的种子。")
+
+            # 修改删除逻辑：只删除已从配置中删除的下载器的种子数据，保留已禁用下载器的种子数据
+            # 获取配置中所有下载器的ID（包括启用和禁用的）
+            all_configured_downloaders = {d["id"] for d in config.get("downloaders", [])}
+
+            # 获取当前数据库中存在的所有下载器ID
+            cursor.execute("SELECT DISTINCT downloader_id FROM torrents WHERE downloader_id IS NOT NULL")
+            existing_downloader_ids = {row["downloader_id"] for row in cursor.fetchall()}
+
+            # 计算应该删除种子数据的下载器ID（已从配置中删除的下载器）
+            deleted_downloader_ids = existing_downloader_ids - all_configured_downloaders
+
+            # 只删除已从配置中删除的下载器的种子数据，保留已禁用下载器的种子数据
+            if deleted_downloader_ids:
+                # 构建 WHERE 子句
+                downloader_placeholders = ",".join([placeholder] * len(deleted_downloader_ids))
+                delete_query = f"DELETE FROM torrents WHERE downloader_id IN ({downloader_placeholders})"
+                cursor.execute(delete_query, tuple(deleted_downloader_ids))
+                deleted_count = cursor.rowcount
+                logging.info(f"从 torrents 表中移除了 {deleted_count} 个已删除下载器的种子。")
+            else:
+                deleted_count = 0
+                logging.info("没有需要删除的已删除下载器的种子数据。")
             conn.commit()
             logging.info("种子数据库更新周期成功完成。")
         except Exception as e:
