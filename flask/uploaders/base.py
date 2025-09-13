@@ -148,7 +148,10 @@ class BaseUploader(ABC):
                               key=lambda x: len(x[0]),
                               reverse=True)
         for key, value in sorted_items:
-            if key.lower() in key_to_find.lower():
+            # 修改为双向部分匹配：
+            # 1. 如果 key 在 key_to_find 中 (例如 key="OurBits", key_to_find="7³ACG@OurBits")
+            # 2. 如果 key_to_find 在 key 中 (例如 key="7³ACG@OurBits", key_to_find="OurBits")
+            if key.lower() in key_to_find.lower() or key_to_find.lower() in key.lower():
                 return value
 
         # 返回默认值
@@ -452,6 +455,50 @@ class BaseUploader(ABC):
             mapped[f"tags[4][{i}]"] = tag_id
 
         return mapped
+
+    @staticmethod
+    def prepare_publish_params(site_name: str, site_info: dict, upload_payload: dict):
+        """
+        预构建完整的发布参数供前端预览
+        """
+        try:
+            # 添加项目根目录到Python路径
+            import sys
+            import os
+            sys.path.append(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+            from .factory import create_uploader
+            uploader = create_uploader(site_name, site_info, upload_payload)
+
+            # 构建预览参数
+            mapped_params = uploader._map_parameters()
+            description = uploader._build_description()
+            final_main_title = uploader._build_title()
+
+            # 准备通用的 form_data（与execute_upload中一致）
+            form_data = {
+                "name": final_main_title,
+                "small_descr": upload_payload.get("subtitle", ""),
+                "url": upload_payload.get("imdb_link", "") or "",
+                "descr": description,
+                "technical_info": upload_payload.get("mediainfo", ""),
+                "uplver": "no",  # 默认匿名上传
+                **mapped_params,  # 合并子类映射的特殊参数
+            }
+
+            return {
+                "form_data": form_data,
+                "mapped_params": mapped_params,
+                "final_main_title": final_main_title,
+                "description": description
+            }
+        except Exception as e:
+            from loguru import logger
+            import traceback
+            logger.error(f"{site_name}上传器预构建参数时发生错误: {e}")
+            logger.error(traceback.format_exc())
+            return {"error": f"参数构建异常: {e}"}
 
     @staticmethod
     def upload(site_name: str, site_info: dict, upload_payload: dict):

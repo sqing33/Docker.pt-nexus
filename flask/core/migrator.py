@@ -685,13 +685,13 @@ class TorrentMigrator:
                     value = title_params.get(key)
                     if value:
                         title_parts.append(" ".join(map(str, value)) if isinstance(value, list) else str(value))
-                
+
                 raw_main_part = " ".join(filter(None, title_parts))
                 main_part = re.sub(r'(?<!\d)\.(?!\d)', ' ', raw_main_part)
                 main_part = re.sub(r'\s+', ' ', main_part).strip()
                 release_group = title_params.get("制作组", "NOGROUP")
                 if "N/A" in release_group: release_group = "NOGROUP"
-                
+
                 # 对特殊制作组进行处理，不需要添加前缀连字符
                 special_groups = ["MNHD-FRDS", "mUHD-FRDS"]
                 if release_group in special_groups:
@@ -727,9 +727,47 @@ class TorrentMigrator:
                     "标签 (综合)": all_tags,
                     # 注: 不包含Mediainfo和完整简介，保持预览简洁
                 }
+
+                # 6. 构建完整的发布参数用于预览
+                # 创建一个模拟的upload_payload用于参数预构建
+                upload_payload = {
+                    "title_components": title_components,
+                    "subtitle": subtitle,
+                    "imdb_link": imdb_link,
+                    "intro": intro,
+                    "mediainfo": mediainfo,
+                    "source_params": source_params,
+                    "modified_torrent_path": ""  # 临时占位符
+                }
+
+                # 提取映射前的原始参数用于前端展示（无论是否有目标站点信息）
+                raw_params_for_preview = {
+                    "final_main_title": final_publish_parameters.get("主标题 (预览)", ""),
+                    "subtitle": subtitle,
+                    "imdb_link": imdb_link,
+                    "type": source_params.get("类型", ""),
+                    "medium": title_params.get("媒介", ""),
+                    "video_codec": title_params.get("视频编码", ""),
+                    "audio_codec": title_params.get("音频编码", ""),
+                    "resolution": title_params.get("分辨率", ""),
+                    "release_group": title_params.get("制作组", ""),
+                    "source": source_params.get("产地", "") or title_params.get("片源平台", ""),
+                    "tags": list(all_tags)
+                }
+
+                # 如果有目标站点信息，预构建完整的发布参数
+                complete_publish_params = {}
+                if self.target_site:
+                    from uploaders.base import BaseUploader
+                    complete_publish_params = BaseUploader.prepare_publish_params(
+                        site_name=self.target_site["site"],
+                        site_info=self.target_site,
+                        upload_payload=upload_payload
+                    )
             except Exception as e:
                 self.logger.error(f"构建发布参数预览时出错: {e}")
                 final_publish_parameters = {"error": "构建预览失败，请检查日志。"}
+                complete_publish_params = {"error": f"构建完整参数失败: {e}"}
             # --- [新增] 结束 ---
 
             self.logger.info("--- [步骤1] 种子信息获取和解析完成 ---")
@@ -744,7 +782,9 @@ class TorrentMigrator:
                 "mediainfo": mediainfo,
                 "source_params": source_params,
                 # --- [新增] ---
-                "final_publish_parameters": final_publish_parameters 
+                "final_publish_parameters": final_publish_parameters,
+                "complete_publish_params": complete_publish_params,
+                "raw_params_for_preview": raw_params_for_preview
             }
 
             return {

@@ -175,34 +175,67 @@
           <!-- 第三行：媒介音频等各种参数 -->
           <div class="preview-row params-row">
             <div class="row-label">参数信息：</div>
-            <div class="row-content params-content">
-              <div class="param-item">
-                <span class="param-label">类型：</span>
-                <span class="param-value">{{ torrentData.final_publish_parameters?.类型 || 'N/A' }}</span>
+            <div class="row-content">
+              <!-- IMDb链接和标签在同一行 -->
+              <div class="param-row">
+                <div class="param-item imdb-item half-width">
+                  <span class="param-label">IMDb链接：</span>
+                  <span :class="['param-value', { 'empty': !torrentData.raw_params_for_preview?.imdb_link || torrentData.raw_params_for_preview?.imdb_link === 'N/A' }]">
+                    {{ torrentData.raw_params_for_preview?.imdb_link || 'N/A' }}
+                  </span>
+                </div>
+                <div class="param-item tags-item half-width">
+                  <span class="param-label">标签：</span>
+                  <span :class="['param-value', { 'empty': !torrentData.raw_params_for_preview?.tags || torrentData.raw_params_for_preview?.tags?.length === 0 }]">
+                    {{ torrentData.raw_params_for_preview?.tags?.join(', ') || 'N/A' }}
+                  </span>
+                </div>
               </div>
-              <div class="param-item">
-                <span class="param-label">媒介：</span>
-                <span class="param-value">{{ torrentData.final_publish_parameters?.媒介 || 'N/A' }}</span>
-              </div>
-              <div class="param-item">
-                <span class="param-label">视频编码：</span>
-                <span class="param-value">{{ torrentData.final_publish_parameters?.['视频编码'] || 'N/A' }}</span>
-              </div>
-              <div class="param-item">
-                <span class="param-label">音频编码：</span>
-                <span class="param-value">{{ torrentData.final_publish_parameters?.['音频编码'] || 'N/A' }}</span>
-              </div>
-              <div class="param-item">
-                <span class="param-label">分辨率：</span>
-                <span class="param-value">{{ torrentData.final_publish_parameters?.分辨率 || 'N/A' }}</span>
-              </div>
-              <div class="param-item">
-                <span class="param-label">制作组：</span>
-                <span class="param-value">{{ torrentData.final_publish_parameters?.['制作组'] || 'N/A' }}</span>
-              </div>
-              <div class="param-item">
-                <span class="param-label">产地：</span>
-                <span class="param-value">{{ torrentData.final_publish_parameters?.产地 || 'N/A' }}</span>
+
+              <!-- 其他参数在第二行开始排列 -->
+              <div class="params-content">
+                <div class="param-item inline-param">
+                  <span class="param-label">类型：</span>
+                  <span :class="['param-value', { 'empty': !torrentData.raw_params_for_preview?.type || torrentData.raw_params_for_preview?.type === 'N/A' }]">
+                    {{ torrentData.raw_params_for_preview?.type || 'N/A' }}
+                  </span>
+                </div>
+                <div class="param-item inline-param">
+                  <span class="param-label">媒介：</span>
+                  <span :class="['param-value', { 'empty': !torrentData.raw_params_for_preview?.medium || torrentData.raw_params_for_preview?.medium === 'N/A' }]">
+                    {{ torrentData.raw_params_for_preview?.medium || 'N/A' }}
+                  </span>
+                </div>
+                <div class="param-item inline-param">
+                  <span class="param-label">视频编码：</span>
+                  <span :class="['param-value', { 'empty': !torrentData.raw_params_for_preview?.video_codec || torrentData.raw_params_for_preview?.video_codec === 'N/A' }]">
+                    {{ torrentData.raw_params_for_preview?.video_codec || 'N/A' }}
+                  </span>
+                </div>
+                <div class="param-item inline-param">
+                  <span class="param-label">音频编码：</span>
+                  <span :class="['param-value', { 'empty': !torrentData.raw_params_for_preview?.audio_codec || torrentData.raw_params_for_preview?.audio_codec === 'N/A' }]">
+                    {{ torrentData.raw_params_for_preview?.audio_codec || 'N/A' }}
+                  </span>
+                </div>
+                <div class="param-item inline-param">
+                  <span class="param-label">分辨率：</span>
+                  <span :class="['param-value', { 'empty': !torrentData.raw_params_for_preview?.resolution || torrentData.raw_params_for_preview?.resolution === 'N/A' }]">
+                    {{ torrentData.raw_params_for_preview?.resolution || 'N/A' }}
+                  </span>
+                </div>
+                <div class="param-item inline-param">
+                  <span class="param-label">制作组：</span>
+                  <span :class="['param-value', { 'empty': !torrentData.raw_params_for_preview?.release_group || torrentData.raw_params_for_preview?.release_group === 'N/A' }]">
+                    {{ torrentData.raw_params_for_preview?.release_group || 'N/A' }}
+                  </span>
+                </div>
+                <div class="param-item inline-param">
+                  <span class="param-label">产地/来源：</span>
+                  <span :class="['param-value', { 'empty': !torrentData.raw_params_for_preview?.source || torrentData.raw_params_for_preview?.source === 'N/A' }]">
+                    {{ torrentData.raw_params_for_preview?.source || 'N/A' }}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
@@ -250,6 +283,7 @@
               </div>
             </div>
           </div>
+
         </div>
       </div>
 
@@ -335,9 +369,18 @@
       <!-- 步骤 1 的按钮 -->
       <div v-if="activeStep === 1" class="button-group">
         <el-button @click="handlePreviousStep" :disabled="isLoading">上一步</el-button>
-        <el-button type="primary" @click="goToSelectSiteStep" :disabled="isLoading">
-          下一步：选择发布站点
-        </el-button>
+        <el-tooltip
+          :content="isScrolledToBottom ? '' : '请先滚动到页面底部'"
+          :disabled="isScrolledToBottom"
+          placement="top">
+          <el-button
+            type="primary"
+            @click="goToSelectSiteStep"
+            :disabled="isLoading || !isScrolledToBottom"
+            :class="{ 'scrolled-to-bottom': isScrolledToBottom }">
+            下一步：选择发布站点
+          </el-button>
+        </el-tooltip>
       </div>
       <!-- 步骤 2 的按钮 -->
       <div v-if="activeStep === 2" class="button-group">
@@ -369,8 +412,9 @@
 
 <script setup lang="ts">
 // ... 你的 <script setup> 部分完全保持不变 ...
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, nextTick, watch } from 'vue'
 import { ElNotification, ElMessageBox } from 'element-plus'
+import { ElTooltip } from 'element-plus'
 import axios from 'axios'
 import { Refresh, CircleCheckFilled, CircleCloseFilled, Close } from '@element-plus/icons-vue'
 
@@ -458,6 +502,72 @@ const parseImageUrls = (text: string) => {
 
 const activeStep = ref(0)
 const activeTab = ref('main')
+const isScrolledToBottom = ref(false)
+
+// 防抖函数
+const debounce = (func, wait) => {
+  let timeout
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout)
+      func(...args)
+    }
+    clearTimeout(timeout)
+    timeout = setTimeout(later, wait)
+  }
+}
+
+// 检查是否滚动到底部
+const checkIfScrolledToBottom = debounce(() => {
+  const panelContent = document.querySelector('.panel-content')
+  if (panelContent) {
+    const { scrollTop, scrollHeight, clientHeight } = panelContent
+    isScrolledToBottom.value = scrollTop + clientHeight >= scrollHeight - 5 // 5px的容差
+  }
+}, 100) // 100ms防抖
+
+// 添加滚动事件监听器
+const addScrollListener = () => {
+  const panelContent = document.querySelector('.panel-content')
+  if (panelContent) {
+    panelContent.addEventListener('scroll', checkIfScrolledToBottom)
+  }
+}
+
+// 移除滚动事件监听器
+const removeScrollListener = () => {
+  const panelContent = document.querySelector('.panel-content')
+  if (panelContent) {
+    panelContent.removeEventListener('scroll', checkIfScrolledToBottom)
+  }
+}
+
+// 在组件挂载时添加监听器
+onMounted(() => {
+  fetchSitesStatus();
+  fetchTorrentInfo();
+
+  // 在下一个tick添加滚动监听器，确保DOM已经渲染
+  nextTick(() => {
+    if (activeStep.value === 1) {
+      addScrollListener()
+      checkIfScrolledToBottom() // 初始检查
+    }
+  })
+})
+
+// 监听活动步骤的变化
+watch(activeStep, (newStep, oldStep) => {
+  if (oldStep === 1) {
+    removeScrollListener()
+  }
+  if (newStep === 1) {
+    nextTick(() => {
+      addScrollListener()
+      checkIfScrolledToBottom() // 初始检查
+    })
+  }
+})
 
 const steps = [
   { title: '核对种子详情' },
@@ -699,9 +809,33 @@ const fetchTorrentInfo = async () => {
   }
 }
 
-const goToPublishPreviewStep = () => {
-  activeStep.value = 1;
-}
+const goToPublishPreviewStep = async () => {
+  isLoading.value = true;
+  try {
+    // 将当前修改后的数据发送给后端进行更新
+    const response = await axios.post('/api/migrate/update_preview_data', {
+      task_id: taskId.value,
+      updated_data: torrentData.value
+    });
+
+    if (response.data.success) {
+      // 更新成功后，获取新的预览数据
+      torrentData.value = { ...torrentData.value, ...response.data.data };
+      activeStep.value = 1;
+    } else {
+      ElNotification.error({
+        title: '更新预览数据失败',
+        message: response.data.message || '未知错误',
+        duration: 0,
+        showClose: true,
+      });
+    }
+  } catch (error) {
+    handleApiError(error, '更新预览数据时发生网络错误');
+  } finally {
+    isLoading.value = false;
+  }
+};
 
 const goToSelectSiteStep = () => {
   activeStep.value = 2;
@@ -983,6 +1117,7 @@ onMounted(() => {
   overflow-y: auto;
   margin-top: 25px;
   padding: 24px;
+  position: relative;
 }
 
 /* 每个步骤内容的容器 */
@@ -1009,11 +1144,15 @@ onMounted(() => {
   z-index: 10;
 }
 
-.button-group {
-  display: flex;
-  justify-content: center;
-  gap: 16px;
+.button-group :deep(.el-button.is-disabled) {
+  cursor: not-allowed;
 }
+
+.button-group :deep(.el-button.is-disabled:hover) {
+  transform: none;
+}
+
+
 
 /* ======================================= */
 /*           [组件内部细节样式]            */
@@ -1314,26 +1453,179 @@ onMounted(() => {
 
 .preview-row {
   border: 1px solid #e4e7ed;
-  border-radius: 4px;
-  background-color: #fafafa;
+  border-radius: 8px;
+  background-color: #fff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  margin-bottom: 20px;
+  overflow: hidden;
 }
 
 .row-label {
-  font-weight: bold;
-  padding: 8px 12px;
+  font-weight: 600;
+  padding: 12px 16px;
   color: #303133;
   border-bottom: 1px solid #e4e7ed;
+  background-color: #f8f9fa;
+  border-radius: 8px 8px 0 0;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+}
+
+.row-label::before {
+  content: "";
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background-color: #409eff;
+  margin-right: 8px;
 }
 
 .row-content {
-  padding: 12px;
+  padding: 16px;
   background-color: #fff;
 }
 
 .params-content {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+  padding: 0;
+}
+
+.param-item {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  padding: 16px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.param-item:hover {
+  background-color: #fff;
+  border-color: #dee2e6;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
+}
+
+/* IMDb链接和标签在同一行的样式 */
+.param-row {
+  display: flex;
   gap: 16px;
+  margin-bottom: 16px;
+}
+
+/* 响应式布局：小屏幕上垂直排列 */
+@media (max-width: 768px) {
+  .param-row {
+    flex-direction: column;
+  }
+
+  .half-width {
+    width: 100%;
+  }
+}
+
+.half-width {
+  flex: 1;
+}
+
+.imdb-item {
+  background-color: #e3f2fd;
+  border-color: #bbdefb;
+}
+
+.imdb-item:hover {
+  background-color: #bbdefb;
+  border-color: #90caf9;
+}
+
+/* IMDb和标签项的内容布局 */
+.imdb-item,
+.tags-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.imdb-item .param-value,
+.tags-item .param-value {
+  word-break: break-all;
+  line-height: 1.4;
+}
+
+.tags-item {
+  background-color: #f3e5f5;
+  border-color: #ce93d8;
+}
+
+.tags-item:hover {
+  background-color: #ce93d8;
+  border-color: #ba68c8;
+}
+
+/* 标签值的特殊处理 */
+.tags-item .param-value {
+  flex-wrap: wrap;
+}
+
+/* 行内参数样式 */
+.inline-param {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  padding: 12px 16px;
+}
+
+.inline-param .param-label {
+  min-width: 80px;
+  margin-bottom: 0;
+  font-size: 14px;
+  padding-top: 2px;
+}
+
+.inline-param .param-value {
+  flex: 1;
+  margin-left: 8px;
+  font-size: 14px;
+  word-break: break-word;
+}
+
+.param-label {
+  font-weight: 600;
+  color: #495057;
+  font-size: 13px;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+}
+
+.param-label::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #409eff;
+  margin-right: 6px;
+}
+
+.param-value {
+  color: #212529;
+  font-size: 14px;
+  word-break: break-word;
+  line-height: 1.5;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+}
+
+.param-value.empty {
+  color: #909399;
+  font-style: italic;
 }
 
 .mediainfo-pre {
@@ -1522,6 +1814,7 @@ onMounted(() => {
 .status-text.error {
   color: #F56C6C;
 }
+
 
 /* --- 日志弹窗 --- */
 .log-card-overlay {
