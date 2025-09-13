@@ -14,14 +14,16 @@ from core.services import start_data_tracker, stop_data_tracker
 
 # --- 日志基础配置 ---
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format="%(asctime)s - [PID:%(process)d] - %(levelname)s - %(message)s")
+logging.info("=== Flask 应用日志系统已初始化 ===")
 
 
 def create_app():
     """
     应用工厂函数：创建并配置 Flask 应用实例。
     """
+    logging.info("Flask 应用正在创建中...")
     app = Flask(__name__, static_folder="/app/dist")
 
     # --- 配置 CORS 跨域支持 ---
@@ -134,7 +136,7 @@ if __name__ == "__main__":
     flask_app = create_app()
 
     # 从环境变量获取端口，如果未设置则使用默认值 15272
-    port = int(os.getenv("PORT", 15272))
+    port = int(os.getenv("PORT", 15273))
 
     logging.info(f"以开发模式启动 Flask 服务器，监听端口 http://0.0.0.0:{port} ...")
 

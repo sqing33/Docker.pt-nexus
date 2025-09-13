@@ -767,13 +767,11 @@ class TorrentMigrator:
             upload_payload["modified_torrent_path"] = modified_torrent_path
 
             self.logger.info(
-                f"正在加载目标站点上传模块: sites.{self.TARGET_UPLOAD_MODULE}")
-            upload_module = importlib.import_module(
-                f"sites.{self.TARGET_UPLOAD_MODULE}")
-            self.logger.success("上传模块加载成功！")
-
-            result, message = upload_module.upload(
-                site_info=self.target_site, upload_payload=upload_payload)
+                f"正在加载目标站点上传模块: uploaders.sites.{self.TARGET_UPLOAD_MODULE}")
+            # Use the base uploader's static upload method instead of calling directly on the module
+            from uploaders.base import BaseUploader
+            result, message = BaseUploader.upload(
+                site_name=self.target_site["site"], site_info=self.target_site, upload_payload=upload_payload)
             if result:
                 self.logger.success(f"发布成功！站点消息: {message}")
             else:
