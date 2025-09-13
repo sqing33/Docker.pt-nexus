@@ -63,9 +63,10 @@ def get_data_api():
         state_filters = json.loads(request.args.get("state_filters", "[]"))
         downloader_filters = json.loads(
             request.args.get("downloader_filters", "[]"))
-        site_filter_existence = request.args.get("siteFilterExistence", "all")
-        site_filter_names = json.loads(
-            request.args.get("siteFilterNames", "[]"))
+        exist_site_names = json.loads(
+            request.args.get("existSiteNames", "[]"))
+        not_exist_site_names = json.loads(
+            request.args.get("notExistSiteNames", "[]"))
         name_search = request.args.get("nameSearch", "").lower()
         sort_prop = request.args.get("sortProp")
         sort_order = request.args.get("sortOrder")
@@ -195,19 +196,22 @@ def get_data_api():
                 t for t in filtered_list
                 if any(downloader_id in downloader_filters for downloader_id in t.get("downloaderIds", []))
             ]
-        if site_filter_existence != "all" and site_filter_names:
-            site_filter_set = set(site_filter_names)
-            if site_filter_existence == "exists":
-                filtered_list = [
-                    t for t in filtered_list
-                    if site_filter_set.intersection(t.get("sites", {}).keys())
-                ]
-            elif site_filter_existence == "not-exists":
-                filtered_list = [
-                    t for t in filtered_list
-                    if not site_filter_set.intersection(
-                        t.get("sites", {}).keys())
-                ]
+        # 站点筛选逻辑：同时支持存在于和不存在于的筛选
+        # 种子必须存在于exist_site_names中的所有站点
+        if exist_site_names:
+            exist_site_set = set(exist_site_names)
+            filtered_list = [
+                t for t in filtered_list
+                if exist_site_set.issubset(set(t.get("sites", {}).keys()))
+            ]
+
+        # 种子必须不存在于not_exist_site_names中的任何站点
+        if not_exist_site_names:
+            not_exist_site_set = set(not_exist_site_names)
+            filtered_list = [
+                t for t in filtered_list
+                if not not_exist_site_set.intersection(set(t.get("sites", {}).keys()))
+            ]
 
         # Sorting logic
         if sort_prop and sort_order:
