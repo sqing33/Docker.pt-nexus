@@ -297,6 +297,60 @@ class DatabaseManager:
                           ("speed_limit", "INTEGER DEFAULT 0",
                            "INTEGER DEFAULT 0")]
 
+        if self.db_type == "mysql":
+            meta_cursor = conn.cursor()
+            meta_cursor.execute(
+                "SELECT column_name FROM INFORMATION_SCHEMA.COLUMNS WHERE table_schema = %s AND table_name = 'sites'",
+                (self.mysql_config.get("database"), ),
+            )
+            existing_columns = {
+                row[0].lower()
+                for row in meta_cursor.fetchall()
+            }
+            meta_cursor.close()
+            for col_name, _, mysql_type in columns_to_add:
+                if col_name.lower() not in existing_columns:
+                    logging.info(
+                        f"在 MySQL 'sites' 表中发现缺失列: '{col_name}'。正在添加...")
+                    cursor.execute(
+                        f"ALTER TABLE `sites` ADD COLUMN `{col_name}` {mysql_type}"
+                    )
+        elif self.db_type == "postgresql":
+            meta_cursor = conn.cursor(cursor_factory=RealDictCursor)
+            meta_cursor.execute(
+                "SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'sites'"
+            )
+            existing_columns = {
+                row["column_name"].lower()
+                for row in meta_cursor.fetchall()
+            }
+            meta_cursor.close()
+            for col_name, _, mysql_type in columns_to_add:
+                if col_name.lower() not in existing_columns:
+                    # PostgreSQL type mappings
+                    postgresql_type = {
+                        "TINYINT DEFAULT 0": "SMALLINT DEFAULT 0",
+                        "TINYINT NOT NULL DEFAULT 0": "SMALLINT NOT NULL DEFAULT 0",
+                    }.get(mysql_type, mysql_type)
+                    logging.info(
+                        f"在 PostgreSQL 'sites' 表中发现缺失列: '{col_name}'。正在添加...")
+                    cursor.execute(
+                        f"ALTER TABLE sites ADD COLUMN {col_name} {postgresql_type}"
+                    )
+        else:  # SQLite
+            cursor.execute("PRAGMA table_info(sites)")
+            existing_columns = {
+                row["name"].lower()
+                for row in cursor.fetchall()
+            }
+            for col_name, sqlite_type, _ in columns_to_add:
+                if col_name.lower() not in existing_columns:
+                    logging.info(
+                        f"在 SQLite 'sites' 表中发现缺失列: '{col_name}'。正在添加...")
+                    cursor.execute(
+                        f"ALTER TABLE sites ADD COLUMN {col_name} {sqlite_type}"
+                    )
+
     def sync_sites_from_json(self):
         """从 sites_data.json 同步站点数据到数据库"""
         try:
@@ -345,11 +399,11 @@ class DatabaseManager:
                     if existing_site:
                         # 根据数据库类型使用正确的标识符引用符
                         if self.db_type == "postgresql":
-                            # 更新现有站点（除了speed_limit，保留数据库中的值）
+                            # 更新现有站点（包括speed_limit）
                             cursor.execute("""
-                                UPDATE sites 
-                                SET site = %s, nickname = %s, base_url = %s, special_tracker_domain = %s, 
-                                    "group" = %s, migration = %s 
+                                UPDATE sites
+                                SET site = %s, nickname = %s, base_url = %s, special_tracker_domain = %s,
+                                    "group" = %s, migration = %s, speed_limit = %s
                                 WHERE id = %s
                             """, (
                                 site_info.get('site'),
@@ -358,14 +412,15 @@ class DatabaseManager:
                                 site_info.get('special_tracker_domain'),
                                 site_info.get('group'),
                                 site_info.get('migration', 0),
+                                site_info.get('speed_limit', 0),
                                 existing_site['id']
                             ))
                         else:
-                            # 更新现有站点（除了speed_limit，保留数据库中的值）
+                            # 更新现有站点（包括speed_limit）
                             cursor.execute("""
-                                UPDATE sites 
-                                SET site = %s, nickname = %s, base_url = %s, special_tracker_domain = %s, 
-                                    `group` = %s, migration = %s 
+                                UPDATE sites
+                                SET site = %s, nickname = %s, base_url = %s, special_tracker_domain = %s,
+                                    `group` = %s, migration = %s, speed_limit = %s
                                 WHERE id = %s
                             """, (
                                 site_info.get('site'),
@@ -374,6 +429,7 @@ class DatabaseManager:
                                 site_info.get('special_tracker_domain'),
                                 site_info.get('group'),
                                 site_info.get('migration', 0),
+                                site_info.get('speed_limit', 0),
                                 existing_site['id']
                             ))
                         updated_count += 1
@@ -560,6 +616,9 @@ class DatabaseManager:
         self._run_schema_migrations(conn, cursor)
         self._add_missing_columns(conn, cursor)
         conn.commit()
+
+        # 同步站点数据
+        self.sync_sites_from_json()
 
     def aggregate_hourly_traffic(self, retention_hours=48):
         """

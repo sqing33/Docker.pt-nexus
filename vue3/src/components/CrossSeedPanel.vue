@@ -308,6 +308,20 @@
 
       <!-- 步骤 3: 完成发布 -->
       <div v-if="activeStep === 3" class="step-container results-container">
+        <!-- 进度条显示 -->
+        <div class="progress-section" v-if="publishProgress.total > 0 || downloaderProgress.total > 0">
+          <div class="progress-item" v-if="publishProgress.total > 0">
+            <div class="progress-label">发布进度:</div>
+            <el-progress :percentage="Math.round((publishProgress.current / publishProgress.total) * 100)" :show-text="true" />
+            <div class="progress-text">{{ publishProgress.current }} / {{ publishProgress.total }}</div>
+          </div>
+          <div class="progress-item" v-if="downloaderProgress.total > 0">
+            <div class="progress-label">下载器添加进度:</div>
+            <el-progress :percentage="Math.round((downloaderProgress.current / downloaderProgress.total) * 100)" :show-text="true" />
+            <div class="progress-text">{{ downloaderProgress.current }} / {{ downloaderProgress.total }}</div>
+          </div>
+        </div>
+
         <div class="results-grid-container">
           <div v-for="result in finalResultsList" :key="result.siteName" class="result-card"
             :class="{ 'is-success': result.success, 'is-error': !result.success }">
@@ -503,6 +517,10 @@ const parseImageUrls = (text: string) => {
 const activeStep = ref(0)
 const activeTab = ref('main')
 const isScrolledToBottom = ref(false)
+
+// Progress tracking variables
+const publishProgress = ref({ current: 0, total: 0 })
+const downloaderProgress = ref({ current: 0, total: 0 })
 
 // 防抖函数
 const debounce = (func, wait) => {
@@ -865,6 +883,11 @@ const handlePublish = async () => {
   activeStep.value = 3
   isLoading.value = true
   finalResultsList.value = []
+
+  // Initialize progress tracking
+  publishProgress.value = { current: 0, total: selectedTargetSites.value.length }
+  downloaderProgress.value = { current: 0, total: 0 }
+
   ElNotification({
     title: '正在发布',
     message: `准备向 ${selectedTargetSites.value.length} 个站点发布种子...`,
@@ -915,6 +938,8 @@ const handlePublish = async () => {
         message: result.message
       })
     }
+    // Update publish progress
+    publishProgress.value.current++
     await new Promise(resolve => setTimeout(resolve, 1000))
   }
 
@@ -928,13 +953,15 @@ const handlePublish = async () => {
   logContent.value += '\n\n--- [开始自动添加任务] ---';
   const downloaderStatusMap: Record<string, { success: boolean, message: string, downloaderName: string }> = {};
 
-  for (const result of results) {
-    if (result.success && result.url) {
-      const downloaderStatus = await triggerAddToDownloader(result);
-      downloaderStatusMap[result.siteName] = downloaderStatus;
-    } else {
-      downloaderStatusMap[result.siteName] = { success: false, message: "发布失败，跳过添加到下载器", downloaderName: "" };
-    }
+  // Set downloader progress total
+  const successfulResults = results.filter(r => r.success && r.url);
+  downloaderProgress.value.total = successfulResults.length;
+
+  for (const result of successfulResults) {
+    const downloaderStatus = await triggerAddToDownloader(result);
+    downloaderStatusMap[result.siteName] = downloaderStatus;
+    // Update downloader progress
+    downloaderProgress.value.current++
   }
   logContent.value += '\n--- [自动添加任务结束] ---';
 
@@ -1815,6 +1842,35 @@ onMounted(() => {
   color: #F56C6C;
 }
 
+/* --- 进度条样式 --- */
+.progress-section {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-bottom: 30px;
+  padding: 20px;
+  background-color: #f5f7fa;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.progress-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.progress-label {
+  font-weight: 600;
+  color: #303133;
+  font-size: 14px;
+}
+
+.progress-text {
+  font-size: 12px;
+  color: #606266;
+  text-align: right;
+}
 
 /* --- 日志弹窗 --- */
 .log-card-overlay {
