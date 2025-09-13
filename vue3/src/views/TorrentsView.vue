@@ -98,7 +98,7 @@
           <div style="display: flex; justify-content: center; align-items: center; width: 100%; height: 100%;">
             <el-tag :type="getStateTagType(scope.row.state)" size="large">{{
               scope.row.state
-              }}</el-tag>
+            }}</el-tag>
           </div>
         </template>
       </el-table-column>
@@ -156,18 +156,19 @@
         <div class="filter-card-body">
           <el-divider content-position="left">站点筛选</el-divider>
           <div class="site-filter-container">
-            <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
-              <el-radio-group v-model="tempFilters.siteExistence">
-                <el-radio label="all">不过滤</el-radio>
-                <el-radio label="exists">存在于</el-radio>
-                <el-radio label="not-exists">不存在于</el-radio>
+            <div style="display:flex; align-items:center; gap:15px; margin-bottom:5px;">
+              <el-radio-group v-model="siteFilterMode" size="default">
+                <el-radio-button label="exist" class="compact-radio-button">存在于</el-radio-button>
+                <el-radio-button label="not-exist" class="compact-radio-button">不存在于</el-radio-button>
               </el-radio-group>
-              <el-input v-model="siteSearch" size="small" placeholder="搜索站点" clearable style="width:220px;" />
+              <el-input v-model="siteSearch" placeholder="搜索站点" clearable style="width:280px; font-size: 14px;"
+                size="default" />
             </div>
             <div class="site-checkbox-container">
-              <el-checkbox-group v-model="tempFilters.siteNames" :disabled="tempFilters.siteExistence === 'all'">
-                <el-checkbox v-for="site in filteredSiteOptions" :key="site" :label="site">{{
-                  site
+              <el-checkbox-group v-model="currentSiteNames">
+                <el-checkbox v-for="site in filteredSiteOptions" :key="site" :label="site"
+                  :disabled="!isSiteAvailable(site)" :class="{ 'disabled-site': !isSiteAvailable(site) }">{{
+                    site
                   }}</el-checkbox>
               </el-checkbox-group>
             </div>
@@ -187,7 +188,7 @@
           <el-checkbox-group v-model="tempFilters.states">
             <el-checkbox v-for="state in unique_states" :key="state" :label="state">{{
               state
-              }}</el-checkbox>
+            }}</el-checkbox>
           </el-checkbox-group>
         </div>
         <div class="filter-card-footer">
@@ -267,8 +268,8 @@ interface SiteStatus {
 interface ActiveFilters {
   paths: string[]
   states: string[]
-  siteExistence: 'all' | 'exists' | 'not-exists'
-  siteNames: string[]
+  existSiteNames: string[]
+  notExistSiteNames: string[]
   downloaderIds: string[]
 }
 interface PathNode {
@@ -298,11 +299,30 @@ const currentSort = ref<Sort>({ prop: 'name', order: 'ascending' })
 const activeFilters = reactive<ActiveFilters>({
   paths: [],
   states: [],
-  siteExistence: 'all',
-  siteNames: [],
+  existSiteNames: [],
+  notExistSiteNames: [],
   downloaderIds: [],
 })
 const tempFilters = reactive<ActiveFilters>({ ...activeFilters })
+
+// 站点筛选模式相关
+const siteFilterMode = ref<'exist' | 'not-exist'>('exist')
+
+// 计算当前显示的站点名称（根据筛选模式）
+const currentSiteNames = computed({
+  get: () => {
+    return siteFilterMode.value === 'exist'
+      ? tempFilters.existSiteNames
+      : tempFilters.notExistSiteNames
+  },
+  set: (val) => {
+    if (siteFilterMode.value === 'exist') {
+      tempFilters.existSiteNames = val
+    } else {
+      tempFilters.notExistSiteNames = val
+    }
+  }
+})
 const filterDialogVisible = ref<boolean>(false)
 
 const currentPage = ref<number>(1)
@@ -337,6 +357,29 @@ const filteredSiteOptions = computed(() => {
   const kw = siteSearch.value.toLowerCase()
   return sorted_all_sites.value.filter((s) => s.toLowerCase().includes(kw))
 })
+
+// 计算在当前模式下可选的站点（排除已在另一种模式下选择的站点）
+const availableSiteOptions = computed(() => {
+  const allSites = filteredSiteOptions.value
+  if (siteFilterMode.value === 'exist') {
+    // 在"存在于"模式下，排除已在"不存在于"中选择的站点
+    return allSites.filter(site => !tempFilters.notExistSiteNames.includes(site))
+  } else {
+    // 在"不存在于"模式下，排除已在"存在于"中选择的站点
+    return allSites.filter(site => !tempFilters.existSiteNames.includes(site))
+  }
+})
+
+// 检查特定站点在当前模式下是否可用
+const isSiteAvailable = (site: string) => {
+  if (siteFilterMode.value === 'exist') {
+    // 在"存在于"模式下，检查是否未在"不存在于"中选择
+    return !tempFilters.notExistSiteNames.includes(site)
+  } else {
+    // 在"不存在于"模式下，检查是否未在"存在于"中选择
+    return !tempFilters.existSiteNames.includes(site)
+  }
+}
 
 const progressColors = [
   { color: '#f56c6c', percentage: 80 },
@@ -380,6 +423,25 @@ const loadUiSettings = async () => {
     nameSearch.value = settings.name_search ?? '';
     if (settings.active_filters) {
       Object.assign(activeFilters, settings.active_filters);
+      // 确保新的站点筛选字段存在
+      if (!activeFilters.existSiteNames) {
+        activeFilters.existSiteNames = [];
+      }
+      if (!activeFilters.notExistSiteNames) {
+        activeFilters.notExistSiteNames = [];
+      }
+      // 兼容旧的数据结构
+      // 注意：TypeScript类型检查会报错，因为这些属性已不存在于接口定义中
+      // 但在运行时可能仍然存在旧数据，所以需要处理
+      const filters: any = activeFilters;
+      if (filters.siteExistence) {
+        // 旧的siteExistence字段不再使用
+        delete filters.siteExistence;
+      }
+      if (filters.siteNames) {
+        // 旧的siteNames字段不再使用
+        delete filters.siteNames;
+      }
     }
   } catch (e) {
     console.error('加载UI设置时出错:', e);
@@ -456,8 +518,8 @@ const fetchData = async () => {
       nameSearch: nameSearch.value,
       sortProp: currentSort.value.prop || 'name',
       sortOrder: currentSort.value.order || 'ascending',
-      siteFilterExistence: activeFilters.siteExistence,
-      siteFilterNames: JSON.stringify(activeFilters.siteNames),
+      existSiteNames: JSON.stringify(activeFilters.existSiteNames),
+      notExistSiteNames: JSON.stringify(activeFilters.notExistSiteNames),
       path_filters: JSON.stringify(activeFilters.paths || []),
       state_filters: JSON.stringify(activeFilters.states),
       downloader_filters: JSON.stringify(activeFilters.downloaderIds),
@@ -731,23 +793,41 @@ watch(nameSearch, () => {
   fetchData()
   saveUiSettings()
 })
-watch(
-  () => tempFilters.siteExistence,
-  (val) => {
-    if (val === 'all') {
-      tempFilters.siteNames = []
-    }
-  },
-)
+// 移除旧的监听器，现在不需要根据siteExistence值清空siteNames
 </script>
 
 <style scoped>
-/* ... (所有样式保持不变) ... */
 .torrents-view {
   height: 100%;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
+}
+
+.disabled-site {
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+
+.disabled-site :deep(.el-checkbox__input.is-disabled) {
+  opacity: 0.5;
+}
+
+.compact-radio-button :deep(.el-radio-button__inner) {
+  font-size: 14px;
+  padding: 8px 20px;
+  border-radius: 0;
+}
+
+.compact-radio-button:first-child :deep(.el-radio-button__inner) {
+  border-top-left-radius: 4px;
+  border-bottom-left-radius: 4px;
+}
+
+.compact-radio-button:last-child :deep(.el-radio-button__inner) {
+  border-top-right-radius: 4px;
+  border-bottom-right-radius: 4px;
+  margin-left: -1px;
 }
 
 :deep(.el-table__body .cell) {
