@@ -1,6 +1,7 @@
 <template>
   <div class="cross-seed-panel">
-    <div class="steps-header">
+    <!-- 1. 顶部步骤条 (固定) -->
+    <header class="panel-header">
       <div class="custom-steps">
         <div v-for="(step, index) in steps" :key="index" class="custom-step" :class="{
           'active': index === activeStep,
@@ -17,11 +18,12 @@
           <div class="step-connector" v-if="index < steps.length - 1"></div>
         </div>
       </div>
-    </div>
+    </header>
 
-    <div class="panel-content">
+    <!-- 2. 中间内容区 (自适应高度、可滚动) -->
+    <main class="panel-content">
       <!-- 步骤 0: 核对种子详情 -->
-      <div v-if="activeStep === 0" class="details-container">
+      <div v-if="activeStep === 0" class="step-container details-container">
         <el-tabs v-model="activeTab" type="border-card" class="details-tabs">
           <el-tab-pane label="主要信息" name="main">
             <div class="main-info-container">
@@ -126,17 +128,6 @@
               </el-form-item>
             </el-form>
           </el-tab-pane>
-          <el-tab-pane label="发布参数预览" name="publish-preview" class="params-pane">
-            <div class="code-block fill-height-pre">
-              <pre>{{ JSON.stringify(torrentData.final_publish_parameters, (key, value) => {
-                // 为了更好的可读性，如果简介或Mediainfo过长，则进行截断
-                if ((key === '简介 (完整BBCode)' || key === 'Mediainfo') && typeof value === 'string' && value.length > 1000) {
-                  return value.substring(0, 1000) + '\n\n... (内容过长，已截断显示)';
-                }
-                return value;
-              }, 2) }}</pre>
-            </div>
-          </el-tab-pane>
           <el-tab-pane label="已过滤声明" name="filtered-declarations" class="filtered-declarations-pane">
             <div class="filtered-declarations-container">
               <div class="filtered-declarations-header">
@@ -160,48 +151,107 @@
             </div>
           </el-tab-pane>
         </el-tabs>
-        <div class="button-group">
-          <el-button @click="$emit('cancel')">取消</el-button>
-          <el-button type="primary" @click="goToSelectSiteStep" :disabled="isLoading || !canProceedToNextStep">
-            下一步：选择发布站点
+      </div>
+
+      <!-- 步骤 1: 发布参数预览 -->
+      <div v-if="activeStep === 1" class="step-container publish-preview-container">
+        <div class="publish-preview-content">
+          <!-- 第一行：主标题 -->
+          <div class="preview-row main-title-row">
+            <div class="row-label">主标题：</div>
+            <div class="row-content main-title-content">
+              {{ torrentData.final_publish_parameters?.['主标题 (预览)'] || '暂无数据' }}
+            </div>
+          </div>
+
+          <!-- 第二行：副标题 -->
+          <div class="preview-row subtitle-row">
+            <div class="row-label">副标题：</div>
+            <div class="row-content subtitle-content">
+              {{ torrentData.subtitle || '暂无数据' }}
+            </div>
+          </div>
+
+          <!-- 第三行：媒介音频等各种参数 -->
+          <div class="preview-row params-row">
+            <div class="row-label">参数信息：</div>
+            <div class="row-content params-content">
+              <div class="param-item">
+                <span class="param-label">类型：</span>
+                <span class="param-value">{{ torrentData.final_publish_parameters?.类型 || 'N/A' }}</span>
+              </div>
+              <div class="param-item">
+                <span class="param-label">媒介：</span>
+                <span class="param-value">{{ torrentData.final_publish_parameters?.媒介 || 'N/A' }}</span>
+              </div>
+              <div class="param-item">
+                <span class="param-label">视频编码：</span>
+                <span class="param-value">{{ torrentData.final_publish_parameters?.['视频编码'] || 'N/A' }}</span>
+              </div>
+              <div class="param-item">
+                <span class="param-label">音频编码：</span>
+                <span class="param-value">{{ torrentData.final_publish_parameters?.['音频编码'] || 'N/A' }}</span>
+              </div>
+              <div class="param-item">
+                <span class="param-label">分辨率：</span>
+                <span class="param-value">{{ torrentData.final_publish_parameters?.分辨率 || 'N/A' }}</span>
+              </div>
+              <div class="param-item">
+                <span class="param-label">制作组：</span>
+                <span class="param-value">{{ torrentData.final_publish_parameters?.['制作组'] || 'N/A' }}</span>
+              </div>
+              <div class="param-item">
+                <span class="param-label">产地：</span>
+                <span class="param-value">{{ torrentData.final_publish_parameters?.产地 || 'N/A' }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 第四行：Mediainfo 可滚动区域 -->
+          <div class="preview-row mediainfo-row">
+            <div class="row-label">Mediainfo：</div>
+            <div class="row-content mediainfo-content scrollable-content">
+              <pre class="mediainfo-pre">{{ torrentData.mediainfo || '暂无数据' }}</pre>
+            </div>
+          </div>
+
+          <!-- 第五行：声明+简介全部内容 -->
+          <div class="preview-row description-row">
+            <div class="row-label">简介内容：</div>
+            <div class="row-content description-content">
+              <div class="description-section">
+                <div class="section-content">{{ torrentData.intro?.statement || '暂无声明' }}</div>
+              </div>
+              <div class="description-section">
+                <br />
+                <div class="section-content">{{ torrentData.intro?.body || '暂无正文' }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 步骤 2: 选择发布站点 -->
+      <div v-if="activeStep === 2" class="step-container site-selection-container">
+        <h3 class="selection-title">请选择要发布的目标站点</h3>
+        <p class="selection-subtitle">只有Cookie和Passkey均配置正常的站点才会在此处显示。已存在的站点已被自动禁用。</p>
+        <div class="select-all-container">
+          <el-button-group>
+            <el-button type="primary" @click="selectAllTargetSites">全选</el-button>
+            <el-button type="info" @click="clearAllTargetSites">清空</el-button>
+          </el-button-group>
+        </div>
+        <div class="site-buttons-group">
+          <el-button v-for="site in allSitesStatus.filter(s => s.is_target)" :key="site.name" class="site-button"
+            :type="selectedTargetSites.includes(site.name) ? 'success' : 'default'"
+            :disabled="!isTargetSiteSelectable(site.name)" @click="toggleSiteSelection(site.name)">
+            {{ site.name }}
           </el-button>
         </div>
       </div>
 
-      <!-- 步骤 1: 选择发布站点 -->
-      <div v-if="activeStep === 1" class="form-container">
-        <div class="site-selection-container">
-          <h3 class="selection-title">请选择要发布的目标站点 (可多选)</h3>
-          <div class="select-all-container">
-            <el-button @click="selectAllTargetSites" size="small" type="primary" plain>
-              全选
-            </el-button>
-            <el-button @click="clearAllTargetSites" size="small" type="danger" plain>
-              清空
-            </el-button>
-          </div>
-          <div class="site-buttons-group">
-            <el-button 
-              v-for="site in allSitesStatus.filter(s => s.is_target)" :key="site.name"
-              :type="selectedTargetSites.includes(site.name) ? 'primary' : 'default'"
-              :class="{ 'site-button': true, 'is-disabled': !isTargetSiteSelectable(site.name) }"
-              :disabled="!isTargetSiteSelectable(site.name)"
-              @click="toggleSiteSelection(site.name)">
-              {{ site.name }}
-            </el-button>
-          </div>
-        </div>
-        <div class="button-group">
-          <el-button @click="handlePreviousStep" :disabled="isLoading">上一步</el-button>
-          <el-button type="success" @click="handlePublish" :loading="isLoading"
-            :disabled="selectedTargetSites.length === 0">
-            确认并发布种子
-          </el-button>
-        </div>
-      </div>
-
-      <!-- 步骤 2: 完成发布 -->
-      <div v-if="activeStep === 2" class="form-container">
+      <!-- 步骤 3: 完成发布 -->
+      <div v-if="activeStep === 3" class="step-container results-container">
         <div class="results-grid-container">
           <div v-for="result in finalResultsList" :key="result.siteName" class="result-card"
             :class="{ 'is-success': result.success, 'is-error': !result.success }">
@@ -217,7 +267,7 @@
             <div v-if="result.isExisted" class="existed-tag">
               <el-tag type="warning" size="small">种子已存在</el-tag>
             </div>
-            
+
             <!-- 下载器添加状态 -->
             <div class="downloader-status" v-if="result.downloaderStatus">
               <div class="status-icon">
@@ -228,11 +278,13 @@
                   <CircleCloseFilled />
                 </el-icon>
               </div>
-              <span class="status-text" :class="{ 'success': result.downloaderStatus.success, 'error': !result.downloaderStatus.success }">
-                {{ result.downloaderStatus.success ? `成功将种子添加到下载器 '${result.downloaderStatus.downloaderName}'` : '添加失败' }}
+              <span class="status-text"
+                :class="{ 'success': result.downloaderStatus.success, 'error': !result.downloaderStatus.success }">
+                {{ result.downloaderStatus.success ? `成功将种子添加到下载器 '${result.downloaderStatus.downloaderName}'` : '添加失败'
+                }}
               </span>
             </div>
-            
+
             <!-- 操作按钮 -->
             <div class="card-extra">
               <el-button type="primary" size="small" @click="showSiteLog(result.siteName, result.logs)">
@@ -246,25 +298,55 @@
             </div>
           </div>
         </div>
-        <div class="button-group">
-          <el-button type="primary" @click="$emit('complete')">完成</el-button>
-        </div>
       </div>
-    </div>
-    <div v-if="showLogCard" class="log-card-overlay" @click="hideLog"></div>
-    <el-card v-if="showLogCard" class="log-card" shadow="xl">
-      <template #header>
-        <div class="card-header">
-          <span>操作日志</span>
-          <el-button type="danger" :icon="Close" circle @click="hideLog" />
-        </div>
-      </template>
-      <pre class="log-content-pre">{{ logContent }}</pre>
-    </el-card>
+    </main>
+
+    <!-- 3. 底部按钮栏 (固定) -->
+    <footer class="panel-footer">
+      <!-- 步骤 0 的按钮 -->
+      <div v-if="activeStep === 0" class="button-group">
+        <el-button @click="$emit('cancel')">取消</el-button>
+        <el-button type="primary" @click="goToPublishPreviewStep" :disabled="isLoading || !canProceedToNextStep">
+          下一步：发布参数预览
+        </el-button>
+      </div>
+      <!-- 步骤 1 的按钮 -->
+      <div v-if="activeStep === 1" class="button-group">
+        <el-button @click="handlePreviousStep" :disabled="isLoading">上一步</el-button>
+        <el-button type="primary" @click="goToSelectSiteStep" :disabled="isLoading">
+          下一步：选择发布站点
+        </el-button>
+      </div>
+      <!-- 步骤 2 的按钮 -->
+      <div v-if="activeStep === 2" class="button-group">
+        <el-button @click="handlePreviousStep" :disabled="isLoading">上一步</el-button>
+        <el-button type="primary" @click="handlePublish" :loading="isLoading"
+          :disabled="selectedTargetSites.length === 0">
+          立即发布
+        </el-button>
+      </div>
+      <!-- 步骤 3 的按钮 -->
+      <div v-if="activeStep === 3" class="button-group">
+        <el-button type="primary" @click="$emit('complete')">完成</el-button>
+      </div>
+    </footer>
   </div>
+
+  <!-- 日志弹窗 (保持不变) -->
+  <div v-if="showLogCard" class="log-card-overlay" @click="hideLog"></div>
+  <el-card v-if="showLogCard" class="log-card" shadow="xl">
+    <template #header>
+      <div class="card-header">
+        <span>操作日志</span>
+        <el-button type="danger" :icon="Close" circle @click="hideLog" />
+      </div>
+    </template>
+    <pre class="log-content-pre">{{ logContent }}</pre>
+  </el-card>
 </template>
 
 <script setup lang="ts">
+// ... 你的 <script setup> 部分完全保持不变 ...
 import { ref, onMounted, computed } from 'vue'
 import { ElNotification, ElMessageBox } from 'element-plus'
 import axios from 'axios'
@@ -298,8 +380,6 @@ const props = defineProps<{
 
 const emit = defineEmits(['complete', 'cancel']);
 
-// ======================= [核心修改点 1] =======================
-// 将 removed_ardtudeclarations 的初始值设为空数组 []
 const getInitialTorrentData = () => ({
   title_components: [] as { key: string, value: string }[],
   original_main_title: '',
@@ -309,7 +389,7 @@ const getInitialTorrentData = () => ({
   intro: { statement: '', poster: '', body: '', screenshots: '', removed_ardtudeclarations: [] },
   mediainfo: '',
   source_params: {},
-  final_publish_parameters: {}, // <-- [新增] 为新数据添加一个空的初始对象
+  final_publish_parameters: {},
 })
 
 const parseImageUrls = (text: string) => {
@@ -324,6 +404,7 @@ const activeTab = ref('main')
 
 const steps = [
   { title: '核对种子详情' },
+  { title: '发布参数预览' },
   { title: '选择发布站点' },
   { title: '完成发布' }
 ]
@@ -337,16 +418,12 @@ const isReparsing = ref(false)
 const reportedFailedScreenshots = ref(false)
 const logContent = ref('')
 const showLogCard = ref(false)
-// 添加下载器列表状态
-const downloaderList = ref<{id: string, name: string}[]>([])
+const downloaderList = ref<{ id: string, name: string }[]>([])
 const posterImages = computed(() => parseImageUrls(torrentData.value.intro.poster))
 const screenshotImages = computed(() => parseImageUrls(torrentData.value.intro.screenshots))
 
-// ======================= [核心修改点 2] =======================
-// 直接返回数组，不再执行 split 操作
 const filteredDeclarationsList = computed(() => {
   const removedDeclarations = torrentData.value.intro.removed_ardtudeclarations;
-  // 确保返回的是一个数组
   if (Array.isArray(removedDeclarations)) {
     return removedDeclarations;
   }
@@ -354,43 +431,26 @@ const filteredDeclarationsList = computed(() => {
 })
 const filteredDeclarationsCount = computed(() => filteredDeclarationsList.value.length)
 
-// const sourceSitesList = computed(() => allSitesStatus.value.filter(s => s.is_source));
-// 修改targetSitesList计算属性，排除当前种子已存在的站点
-// 检查目标站点是否可选（即种子是否已在该站点做种）
 const isTargetSiteSelectable = (siteName: string): boolean => {
-  // 如果没有torrent数据，所有站点都可选
   if (!props.torrent || !props.torrent.sites) {
     return true;
   }
-  
-  // 检查种子是否已在该站点做种
   return !props.torrent.sites[siteName];
 };
 
-// 检查是否可以进入下一步
 const canProceedToNextStep = computed(() => {
-  // 如果正在加载，不能进入下一步
-  if (isLoading.value) {
+  if (isLoading.value || isReparsing.value) {
     return false;
   }
-  
-  // 如果正在重新解析标题，不能进入下一步
-  if (isReparsing.value) {
-    return false;
-  }
-  
-  // 检查是否有截图正在上传（通过检查是否有失效截图的报告）
+
   if (reportedFailedScreenshots.value) {
-    // 如果有失效截图但截图预览区域没有图片，则说明还在上传中
     if (screenshotImages.value.length === 0 && torrentData.value.intro.screenshots) {
       return false;
     }
   }
-  
-  // 检查是否有无法识别的参数
+
   const titleComponents = torrentData.value.title_components;
   if (titleComponents && Array.isArray(titleComponents)) {
-    // 查找是否有"无法识别"的参数且值不为空
     const unrecognizedParam = titleComponents.find(
       param => param.key === "无法识别" && param.value && param.value.trim() !== ""
     );
@@ -398,12 +458,11 @@ const canProceedToNextStep = computed(() => {
       return false;
     }
   }
-  
-  // 检查是否已填写主要信息
+
   if (!torrentData.value.original_main_title || torrentData.value.original_main_title.trim() === "") {
     return false;
   }
-  
+
   return true;
 });
 
@@ -463,7 +522,6 @@ const handleImageError = async (url: string, type: 'poster' | 'screenshot', inde
     if (response.data.success) {
       if (type === 'screenshot' && response.data.screenshots) {
         torrentData.value.intro.screenshots = response.data.screenshots;
-        // 重置截图上传状态
         reportedFailedScreenshots.value = false;
         ElNotification.success({
           title: '截图已更新',
@@ -496,8 +554,6 @@ const fetchSitesStatus = async () => {
   try {
     const response = await axios.get('/api/sites/status');
     allSitesStatus.value = response.data;
-    
-    // 同时获取下载器列表
     const downloaderResponse = await axios.get('/api/downloaders_list');
     downloaderList.value = downloaderResponse.data;
   } catch (error) {
@@ -586,8 +642,12 @@ const fetchTorrentInfo = async () => {
   }
 }
 
-const goToSelectSiteStep = () => {
+const goToPublishPreviewStep = () => {
   activeStep.value = 1;
+}
+
+const goToSelectSiteStep = () => {
+  activeStep.value = 2;
 }
 
 const toggleSiteSelection = (siteName: string) => {
@@ -599,7 +659,6 @@ const toggleSiteSelection = (siteName: string) => {
   }
 }
 
-// 全选所有可选的目标站点
 const selectAllTargetSites = () => {
   const selectableSites = allSitesStatus.value
     .filter(s => s.is_target && isTargetSiteSelectable(s.name))
@@ -607,12 +666,12 @@ const selectAllTargetSites = () => {
   selectedTargetSites.value = selectableSites;
 }
 
-// 清空所有已选的目标站点
 const clearAllTargetSites = () => {
   selectedTargetSites.value = [];
 }
 
 const handlePublish = async () => {
+  activeStep.value = 3
   isLoading.value = true
   finalResultsList.value = []
   ElNotification({
@@ -623,8 +682,7 @@ const handlePublish = async () => {
   })
 
   const results = []
-  
-  // Sequential processing to prevent network overload
+
   for (const siteName of selectedTargetSites.value) {
     try {
       const response = await axios.post('/api/migrate/publish', {
@@ -632,24 +690,19 @@ const handlePublish = async () => {
         upload_data: torrentData.value,
         targetSite: siteName,
       })
-      
+
       const result = {
         siteName,
         message: getCleanMessage(response.data.logs || '发布成功'),
         ...response.data
       }
-      
-      // 检查是否是种子已存在的情况
+
       if (response.data.logs && response.data.logs.includes("种子已存在")) {
         result.isExisted = true;
       }
-      
       results.push(result)
-      
-      // Update UI with intermediate results
       finalResultsList.value = [...results]
-      
-      // Show individual success notification
+
       if (result.success) {
         ElNotification.success({
           title: `发布成功 - ${siteName}`,
@@ -664,18 +717,13 @@ const handlePublish = async () => {
         url: null,
         message: `发布到 ${siteName} 时发生网络错误。`
       }
-      
       results.push(result)
       finalResultsList.value = [...results]
-      
-      // Show individual error notification
       ElNotification.error({
         title: `发布失败 - ${siteName}`,
         message: result.message
       })
     }
-    
-    // Add a small delay between requests to reduce server load
     await new Promise(resolve => setTimeout(resolve, 1000))
   }
 
@@ -687,9 +735,8 @@ const handlePublish = async () => {
   })
 
   logContent.value += '\n\n--- [开始自动添加任务] ---';
-  // 创建一个映射来存储每个站点的下载器状态
   const downloaderStatusMap: Record<string, { success: boolean, message: string, downloaderName: string }> = {};
-  
+
   for (const result of results) {
     if (result.success && result.url) {
       const downloaderStatus = await triggerAddToDownloader(result);
@@ -700,11 +747,8 @@ const handlePublish = async () => {
   }
   logContent.value += '\n--- [自动添加任务结束] ---';
 
-  // Create separate logs for each site, including downloader status
   const siteLogs = results.map(r => {
     let logEntry = `--- Log for ${r.siteName} ---\n${r.logs || 'No logs available.'}`
-    
-    // Add downloader status to the log if available
     if (downloaderStatusMap[r.siteName]) {
       const status = downloaderStatusMap[r.siteName]
       logEntry += `\n\n--- Downloader Status for ${r.siteName} ---`
@@ -714,18 +758,15 @@ const handlePublish = async () => {
         logEntry += `\n❌ 失败: ${status.message}`
       }
     }
-    
     return logEntry
   })
   logContent.value = siteLogs.join('\n\n')
 
-  // 将下载器状态添加到结果中
   finalResultsList.value = results.map(result => ({
     ...result,
     downloaderStatus: downloaderStatusMap[result.siteName]
   }));
 
-  activeStep.value = 2
   isLoading.value = false
 }
 
@@ -737,20 +778,11 @@ const handlePreviousStep = () => {
 
 const getCleanMessage = (logs: string): string => {
   if (!logs || logs === '发布成功') return '发布成功'
-
-  // 检查是否包含种子已存在的信息
   if (logs.includes("种子已存在")) {
     return '种子已存在，发布成功'
   }
-
-  const lines = logs.split('\n').filter(line => {
-    return line && !line.includes('--- [步骤') && !line.includes('INFO - ---')
-  })
-
-  const cleanLines = lines.map(line => {
-    return line.replace(/^\d{2}:\d{2}:\d{2} - \w+ - /, '')
-  })
-
+  const lines = logs.split('\n').filter(line => line && !line.includes('--- [步骤') && !line.includes('INFO - ---'))
+  const cleanLines = lines.map(line => line.replace(/^\d{2}:\d{2}:\d{2} - \w+ - /, ''))
   return cleanLines.filter(Boolean).pop() || '发布成功'
 }
 
@@ -764,43 +796,33 @@ const triggerAddToDownloader = async (result: any) => {
     const msg = `[${result.siteName}] 警告: 未能获取到原始保存路径或下载器ID，已跳过自动添加任务。`;
     console.warn(msg);
     logContent.value += `\n${msg}`;
-    return { success: false, message: "未能获取到原始保存路径或下载器ID，已跳过自动添加任务。", downloaderName: "" };
+    return { success: false, message: "未能获取到原始保存路径或下载器ID", downloaderName: "" };
   }
 
-  // 获取默认下载器设置
   let targetDownloaderId = props.torrent.downloaderId;
-  let targetDownloaderName = "";
-  
+  let targetDownloaderName = "未知下载器";
+
   try {
-    // 获取配置以确定使用的下载器
     const configResponse = await axios.get('/api/settings');
     const config = configResponse.data;
     const defaultDownloaderId = config.cross_seed?.default_downloader;
-    
-    // 如果使用了默认下载器设置
     if (defaultDownloaderId) {
       targetDownloaderId = defaultDownloaderId;
-      // 查找下载器名称
-      const downloader = downloaderList.value.find(d => d.id === defaultDownloaderId);
-      targetDownloaderName = downloader ? downloader.name : "未知下载器";
-    } else {
-      // 使用源种子所在的下载器
-      const downloader = downloaderList.value.find(d => d.id === props.torrent.downloaderId);
-      targetDownloaderName = downloader ? downloader.name : "未知下载器";
     }
+    const downloader = downloaderList.value.find(d => d.id === targetDownloaderId);
+    if (downloader) targetDownloaderName = downloader.name;
+
   } catch (error) {
-    targetDownloaderName = "未知下载器";
+    // Ignore error
   }
 
-  logContent.value += `\n[${result.siteName}] 正在尝试将新种子添加到下载器...`;
+  logContent.value += `\n[${result.siteName}] 正在尝试将新种子添加到下载器 '${targetDownloaderName}'...`;
 
   try {
     const response = await axios.post('/api/migrate/add_to_downloader', {
       url: result.url,
       savePath: props.torrent.save_path,
-      downloaderPath: props.torrent.save_path,
-      downloaderId: props.torrent.downloaderId,
-      useDefaultDownloader: true, // 添加这个参数以使用默认下载器设置
+      downloaderId: targetDownloaderId,
     });
 
     if (response.data.success) {
@@ -812,8 +834,8 @@ const triggerAddToDownloader = async (result: any) => {
     }
   } catch (error: any) {
     const errorMessage = error.response?.data?.message || error.message;
-    logContent.value += `\n[${result.siteName}] 错误: 调用“添加到下载器”API失败: ${errorMessage}`;
-    return { success: false, message: `调用“添加到下载器”API失败: ${errorMessage}`, downloaderName: targetDownloaderName };
+    logContent.value += `\n[${result.siteName}] 错误: 调用API失败: ${errorMessage}`;
+    return { success: false, message: `调用API失败: ${errorMessage}`, downloaderName: targetDownloaderName };
   }
 }
 
@@ -822,19 +844,14 @@ const showLogs = async () => {
     ElNotification.warning('没有可用的任务日志')
     return
   }
-
   try {
     const response = await axios.get(`/api/migrate/logs/${taskId.value}`)
-    if (response.data.success) {
-      ElNotification.info({
-        title: '转种日志',
-        message: response.data.logs,
-        duration: 0,
-        showClose: true
-      })
-    } else {
-      ElNotification.error('获取日志失败')
-    }
+    ElNotification.info({
+      title: '转种日志',
+      message: response.data.logs,
+      duration: 0,
+      showClose: true
+    })
   } catch (error) {
     handleApiError(error, '获取日志时发生错误')
   }
@@ -844,12 +861,8 @@ const hideLog = () => {
   showLogCard.value = false
 }
 
-// 添加显示特定站点日志的函数
 const showSiteLog = (siteName: string, logs: string) => {
-  // 查找该站点的完整日志信息
   let siteLogContent = `--- Log for ${siteName} ---\n${logs || 'No logs available.'}`;
-  
-  // 添加下载器状态信息
   const siteResult = finalResultsList.value.find((result: any) => result.siteName === siteName);
   if (siteResult && siteResult.downloaderStatus) {
     const status = siteResult.downloaderStatus;
@@ -860,8 +873,6 @@ const showSiteLog = (siteName: string, logs: string) => {
       siteLogContent += `\n❌ 失败: ${status.message}`;
     }
   }
-  
-  // 使用与左上角查看日志相同的样式
   logContent.value = siteLogContent;
   showLogCard.value = true;
 }
@@ -873,34 +884,89 @@ onMounted(() => {
 </script>
 
 <style scoped>
-/* [所有样式保持不变] */
+/* ======================================= */
+/*        [核心布局样式 - 最终版]        */
+/* ======================================= */
+:root {
+  --header-height: 75px;
+  --footer-height: 70px;
+}
+
+/* 1. 主面板容器：使用相对定位创建上下文 */
 .cross-seed-panel {
+  position: relative;
+  height: 100%;
   width: 100%;
+  /* 为页头和页脚留出空间 */
+  padding-top: var(--header-height);
+  padding-bottom: var(--footer-height);
+  box-sizing: border-box;
+}
+
+/* 2. 顶部Header：绝对定位，固定在顶部 */
+.panel-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--header-height);
+  background-color: #ffffff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-bottom: 10px;
+  z-index: 10;
+}
+
+/* 3. 中间内容区：占据所有剩余空间，并启用滚动 */
+.panel-content {
+  height: 640px;
+  overflow-y: auto;
+  margin-top: 25px;
+  padding: 24px;
+}
+
+/* 每个步骤内容的容器 */
+.step-container {
   height: 100%;
   display: flex;
   flex-direction: column;
 }
 
-.steps-header {
+/* 4. 底部Footer：绝对定位，固定在底部 */
+.panel-footer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: var(--footer-height);
+  background-color: #ffffff;
+  border-top: 1px solid #e4e7ed;
+  box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.05);
   display: flex;
   align-items: center;
   justify-content: center;
-  position: relative;
-  margin: 0;
-  height: 75px;
-  width: 100%;
+  padding-top: 10px;
+  z-index: 10;
 }
 
-.steps-header .el-button {
-  position: absolute;
-  left: 0;
+.button-group {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
 }
 
+/* ======================================= */
+/*           [组件内部细节样式]            */
+/* ======================================= */
+
+/* --- 步骤条 --- */
 .custom-steps {
   display: flex;
   align-items: center;
   width: auto;
-  height: 100%;
   margin: 0 auto;
 }
 
@@ -908,11 +974,10 @@ onMounted(() => {
   display: flex;
   align-items: center;
   position: relative;
-  min-width: 0;
 }
 
 .custom-step:not(.last) {
-  flex: 1;
+  min-width: 150px;
 }
 
 .step-icon {
@@ -948,8 +1013,6 @@ onMounted(() => {
   font-size: 14px;
   color: #909399;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .custom-step.active .step-title {
@@ -969,65 +1032,46 @@ onMounted(() => {
   min-width: 40px;
 }
 
-.custom-step.last {
-  flex: 0 0 auto;
-}
-
-.custom-step.completed+.custom-step .step-connector,
-.custom-step.active+.custom-step .step-connector {
+.custom-step.completed+.custom-step .step-connector {
   background-color: #67c23a;
 }
 
-.panel-content {
-  flex: 1;
-  border: 1px solid #e4e7ed;
+/* --- 步骤 0: 核对详情 --- */
+.details-container {
+  background-color: #fff;
   border-radius: 8px;
-  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
-  transition: all 0.3s ease-in-out;
+  border: 1px solid #dcdfe6;
   overflow: hidden;
   display: flex;
-  flex-direction: column;
-}
-
-.details-container {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
 }
 
 .details-tabs {
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 0;
 }
 
 :deep(.el-tabs__content) {
   flex: 1;
   overflow: auto;
-  display: flex;
-  flex-direction: column;
+  padding: 20px;
 }
 
-.details-tabs .el-tab-pane {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
+:deep(.el-form-item) {
+  margin-bottom: 12px;
 }
 
 .fill-height-form {
-  height: 100%;
   display: flex;
   flex-direction: column;
+  min-height: 100%;
 }
 
 .is-flexible {
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 0;
+  min-height: 300px;
 }
 
 .is-flexible :deep(.el-form-item__content),
@@ -1036,44 +1080,64 @@ onMounted(() => {
 }
 
 .is-flexible :deep(.el-textarea__inner) {
-  height: 100%;
-  resize: none;
+  height: 100% !important;
+  resize: vertical;
 }
 
-.main-info-container,
-.screenshot-container {
+.full-width-form-column {
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.title-components-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px 16px;
+  margin-bottom: 20px;
+}
+
+.screenshot-container,
+.poster-statement-split {
   display: flex;
   gap: 24px;
-  height: 100%;
-  min-height: 0;
 }
 
+.poster-statement-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  height: 100%;
+}
+
+.left-panel,
+.right-panel,
 .form-column,
 .preview-column {
-  flex: 1;
   display: flex;
   flex-direction: column;
   min-width: 0;
 }
 
-.screenshot-container .screenshot-text-column {
+.screenshot-text-column {
   flex: 3;
-  min-width: 0;
 }
 
-.screenshot-container .screenshot-preview-column {
+.screenshot-preview-column {
   flex: 7;
-  min-width: 0;
 }
 
 .carousel-container {
   height: 100%;
-  display: flex;
-  flex-direction: column;
   background-color: #f5f7fa;
   border-radius: 4px;
-  border: 1px solid #e4e7ed;
-  padding: 0 10px;
+  padding: 10px;
+  min-height: 400px;
+}
+
+.carousel-image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
 }
 
 .carousel-image-wrapper {
@@ -1083,27 +1147,33 @@ onMounted(() => {
   height: 100%;
 }
 
-.carousel-image {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
-  border-radius: 4px;
-  border: 1px solid #e4e7ed;
-}
-
-.image-preview-pane {
+.poster-preview-section {
   flex: 1;
   border: 1px solid #dcdfe6;
   border-radius: 4px;
-  padding: 8px;
+  padding: 16px;
   background-color: #f8f9fa;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.preview-header {
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: #303133;
+  flex-shrink: 0;
+}
+
+.image-preview-container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .preview-image {
   max-width: 100%;
-  display: block;
-  margin-bottom: 8px;
+  max-height: 400px;
   border-radius: 4px;
   border: 1px solid #e4e7ed;
 }
@@ -1117,23 +1187,15 @@ onMounted(() => {
   font-size: 14px;
 }
 
-.params-pane {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
-
 .filtered-declarations-pane {
   display: flex;
   flex-direction: column;
-  height: 100%;
 }
 
 .filtered-declarations-container {
   flex: 1;
   display: flex;
   flex-direction: column;
-  height: 100%;
   overflow: hidden;
 }
 
@@ -1142,19 +1204,16 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 16px;
-  padding: 0 8px;
 }
 
 .filtered-declarations-header h3 {
   margin: 0;
-  color: #303133;
   font-size: 16px;
 }
 
 .filtered-declarations-content {
   flex: 1;
   overflow-y: auto;
-  padding: 0 8px;
 }
 
 .declaration-item {
@@ -1172,11 +1231,6 @@ onMounted(() => {
   margin-bottom: 8px;
 }
 
-.declaration-number {
-  font-weight: 600;
-  color: #606266;
-}
-
 .declaration-content {
   margin: 0;
   padding: 12px;
@@ -1186,109 +1240,86 @@ onMounted(() => {
   white-space: pre-wrap;
   word-break: break-all;
   font-size: 13px;
-  line-height: 1.4;
-  max-height: 200px;
-  overflow-y: auto;
 }
 
-.downloader-status {
+/* --- 步骤 1: 发布预览 --- */
+.publish-preview-container {
+  background: #fff;
+  border-radius: 8px;
+  padding: 5px 15px;
+}
+
+.publish-preview-content {
   display: flex;
-  align-items: center;
-  margin: 8px 0;
-  padding: 6px 12px;
-  border-radius: 4px;
-  background-color: #f5f7fa;
-  font-size: 14px;
+  flex-direction: column;
+  gap: 16px;
 }
 
-.status-icon {
-  margin-right: 6px;
-  display: flex;
-  align-items: center;
-}
-
-.status-text.success {
-  color: #67C23A;
-  font-weight: 500;
-}
-
-.status-text.error {
-  color: #F56C6C;
-  font-weight: 500;
-}
-
-.card-extra {
-  margin-top: 12px;
-  display: flex;
-  justify-content: center;
-  gap: 8px;
-}
-
-.site-log-dialog {
-  width: 600px;
-}
-
-.site-log-dialog .el-message-box__content {
-  padding: 20px;
-}
-
-.site-log-dialog .el-message-box__message {
-  white-space: pre-wrap;
-  font-family: 'Courier New', Courier, monospace;
-  font-size: 13px;
-  line-height: 1.5;
-  max-height: 400px;
-  overflow-y: auto;
-}
-
-.code-block {
-  background-color: #f8f9fa;
-  padding: 16px;
-  border-radius: 4px;
+.preview-row {
   border: 1px solid #e4e7ed;
+  border-radius: 4px;
+  background-color: #fafafa;
+}
+
+.row-label {
+  font-weight: bold;
+  padding: 8px 12px;
+  color: #303133;
+  border-bottom: 1px solid #e4e7ed;
+}
+
+.row-content {
+  padding: 12px;
+  background-color: #fff;
+}
+
+.params-content {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.mediainfo-pre {
   white-space: pre-wrap;
   word-break: break-all;
   font-family: 'Courier New', Courier, monospace;
   font-size: 13px;
-}
-
-.fill-height-pre {
-  flex: 1;
-  overflow: auto;
+  line-height: 1.5;
   margin: 0;
+  max-height: 300px;
+  overflow: auto;
 }
 
-.title-components-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px 16px;
-  margin-bottom: 20px;
+.section-content {
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.6;
 }
 
-:deep(.title-components-grid .el-form-item) {
-  margin-bottom: 0;
+.description-row {
+  margin-bottom: 30px;
 }
 
-:deep(.el-form-item) {
-  margin-bottom: 8px;
-}
-
-.form-container {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-
+/* --- 步骤 2: 选择站点 --- */
 .site-selection-container {
-  padding: 20px;
   text-align: center;
-  flex: 1;
+  background: #fff;
+  border-radius: 8px;
 }
 
 .selection-title {
-  margin-bottom: 24px;
-  color: #303133;
+  font-size: 20px;
   font-weight: 500;
+  color: #303133;
+}
+
+.selection-subtitle {
+  color: #909399;
+  margin: 8px 0 24px 0;
+}
+
+.select-all-container {
+  margin-bottom: 24px;
 }
 
 .site-buttons-group {
@@ -1298,36 +1329,28 @@ onMounted(() => {
   gap: 12px;
 }
 
-.select-all-container {
-  margin-bottom: 16px;
-  text-align: center;
-}
-
 .site-button {
   min-width: 120px;
-  transition: all 0.2s;
 }
 
 .site-button.is-disabled {
-  opacity: 0.5;
+  opacity: 0.6;
   cursor: not-allowed;
 }
 
+/* --- 步骤 3: 发布结果 --- */
 .results-grid-container {
-  flex: 1;
   display: flex;
   flex-wrap: wrap;
   gap: 20px;
   justify-content: center;
-  padding: 20px;
   align-content: flex-start;
-  overflow-y: auto;
-  max-height: 500px;
 }
 
 .result-card {
   width: 280px;
-  height: 180px;
+  height: 200px;
+  /* 增加一点高度以容纳下载器状态 */
   border-radius: 8px;
   border: 1px solid #e4e7ed;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
@@ -1335,9 +1358,9 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
   text-align: center;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+  background: #fff;
 }
 
 .result-card:hover {
@@ -1368,133 +1391,41 @@ onMounted(() => {
   margin-bottom: 8px;
 }
 
-.card-message {
-  font-size: 0.85rem;
-  color: #909399;
-  margin: 0 0 12px 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  line-height: 1.4;
-  height: calc(1.4em * 2);
-}
-
-.card-extra a {
-  font-size: 0.9rem;
-  color: #409EFF;
-  text-decoration: none;
-  font-weight: 500;
-}
-
-.card-extra a:hover {
-  text-decoration: underline;
-}
-
-.full-width-form-column {
-  width: 100%;
-  max-width: 900px;
-  margin: 0 auto;
-}
-
-.bottom-info-section {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.poster-statement-container {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
-.poster-statement-split {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 24px;
-  height: 100%;
-}
-
-.left-panel,
-.right-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.statement-item {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.statement-item :deep(.el-form-item__content) {
-  flex: 1;
-}
-
-.statement-item :deep(.el-textarea) {
-  height: 100%;
-}
-
-.poster-preview-section {
-  flex: 1;
-  border: 1px solid #dcdfe6;
-  border-radius: 4px;
-  padding: 16px;
-  background-color: #f8f9fa;
-  display: flex;
-  flex-direction: column;
-}
-
-.image-preview-container {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.preview-header {
-  font-weight: 600;
-  margin-bottom: 12px;
-  color: #303133;
-}
-
-.preview-image {
-  max-width: 100%;
-  max-height: 400px;
-  border-radius: 4px;
-  border: 1px solid #e4e7ed;
-}
-
-.preview-placeholder {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 100%;
-  color: #909399;
-  font-size: 14px;
-}
-
-.button-group {
+.card-extra {
   margin-top: auto;
-  padding: 16px;
+  /* 将按钮推到底部 */
+  padding-top: 8px;
   display: flex;
   justify-content: center;
-  gap: 16px;
-  border-top: 1px solid #e4e7ed;
-  background-color: #f8f9fa;
-  flex-shrink: 0;
+  gap: 8px;
 }
 
-.code-font :deep(.el-textarea__inner) {
-  font-family: 'Courier New', Courier, monospace;
-  font-size: 13px;
-  background-color: #f8f9fa;
+.downloader-status {
+  display: flex;
+  align-items: center;
+  margin: 4px 0 8px 0;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background-color: #f5f7fa;
+  font-size: 12px;
+  width: 100%;
 }
 
+.status-icon {
+  margin-right: 6px;
+  display: flex;
+  align-items: center;
+}
+
+.status-text.success {
+  color: #67C23A;
+}
+
+.status-text.error {
+  color: #F56C6C;
+}
+
+/* --- 日志弹窗 --- */
 .log-card-overlay {
   position: fixed;
   top: 0;
@@ -1536,5 +1467,11 @@ onMounted(() => {
   font-family: 'Courier New', Courier, monospace;
   font-size: 13px;
   color: #606266;
+}
+
+.code-font,
+.code-font :deep(.el-textarea__inner) {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 13px;
 }
 </style>
