@@ -51,7 +51,7 @@ mappings:
     'Encode': '10'
     'MiniBD': '11'
     'WEB-DL': '7'
-    'WEBRip': '7'
+    'WEBRip': '10'
     'WEB': '7'
     'HDTV': '4'
     'TVrip': '4'
@@ -127,7 +127,6 @@ mappings:
     "VCB-Studio": 2
     "儿童片": 17
     "LGBTQ+": 19
-    "禁转": 1
     "中字": 6
     "特效字幕": 20
     "国语": 5

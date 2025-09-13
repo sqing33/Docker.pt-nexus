@@ -54,7 +54,7 @@ mappings:
     'Remux': '6'
     'Encode': '7'
     'WEB-DL': '8'
-    'WEBRip': '8'
+    'WEBRip': '7'
     'WEB': '8'
     'HDTV': '9'
     'TV': '9'
@@ -176,11 +176,7 @@ mappings:
     "default": "30"
 
   tag:
-    "官方": 1
-    "首发": 2
     "完结": 3
-    "原创": 4
-    "禁转": 5
     "国语": 7
     "粤语": 8
     "中字": 9

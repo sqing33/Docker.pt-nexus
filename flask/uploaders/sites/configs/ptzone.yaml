@@ -57,7 +57,7 @@ mappings:
     'Remux': '3'
     'WEB-DL': '4'
     'WEB': '4'
-    'WEBRip': '4'
+    'WEBRip': '7'
     'HDTV': '5'
     'DVDR': '6'
     'Encode': '7'
@@ -115,7 +115,6 @@ mappings:
     "default": "5"
 
   tag:
-    "首发": 2
     "DIY": 4
     "国语": 5
     "中字": 6

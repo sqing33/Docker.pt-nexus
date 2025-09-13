@@ -59,7 +59,7 @@ mappings:
     'Encode': '7'
     'MiniBD': '4'
     'WEB-DL': '10'
-    'WEBRip': '10'
+    'WEBRip': '7'
     'WEB': '10'
     'HDTV': '5'
     'UHDTV': '12'
@@ -162,7 +162,6 @@ mappings:
     "default": "5"
 
   tag:
-    "首发": 2
     "DIY": 4
     "国语": 5
     "中字": 6

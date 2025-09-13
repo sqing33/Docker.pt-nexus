@@ -56,7 +56,7 @@ mappings:
     'Remux': '9'
     'Encode': '10'
     'WEB-DL': '11'
-    'WEBRip': '11'
+    'WEBRip': '10'
     'WEB': '11'
     'HDTV': '12'
     'TVrip': '12'

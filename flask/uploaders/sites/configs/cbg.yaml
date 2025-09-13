@@ -35,7 +35,7 @@ mappings:
     "Misc": "410"
     "未知": "410"
     "Unknown": "410"
-    "default": "0"
+    "default": "410"
 
   medium:
     'UHD Blu-ray': '9'
@@ -45,7 +45,7 @@ mappings:
     'Blu-ray': '7'
     'BD': '7'
     'WEB-DL': '6'
-    'WEBRip': '6'
+    'WEBRip': '3'
     'WEB': '6'
     'UHDTV': '5'
     'HDTV': '4'
@@ -121,7 +121,6 @@ mappings:
     "HDR": 13
     "高码": 12
     "零魔": 11
-    "禁转": 10
     "英字": 9
     "国语": 8
     "中字": 7

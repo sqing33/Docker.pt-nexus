@@ -1,0 +1,122 @@
+# CarPT站点的配置文件
+site_name: "CarPT"
+
+form_fields:
+  medium: "medium_sel[4]"
+  codec: "codec_sel[4]"
+  audio_codec: "audiocodec_sel[4]"
+  resolution: "standard_sel[4]"
+  team: "team_sel[4]"
+
+mappings:
+  type:
+    "Movies": "401"
+    "电影": "401"
+    "Driver": "401"
+    "Movie": "401"
+    "TV Series": "402"
+    "电视剧": "402"
+    "Animations": "403"
+    "动漫": "403"
+    "动画": "403"
+    "Anime": "403"
+    "TV Shows": "405"
+    "综艺": "405"
+    "Documentaries": "404"
+    "记录片": "404"
+    "纪录片": "404"
+    "Sports": "407"
+    "体育": "407"
+    "Music": "406"
+    "音乐": "406"
+    "其他": "407"
+    "Misc": "407"
+    "未知": "407"
+    "Unknown": "407"
+    "default": "407"
+
+  medium:
+    'UHD Blu-ray': '8'
+    'Blu-ray': '7'
+    'BD': '7'
+    'Remux': '9'
+    'Encode': '1'
+    'WEB-DL': '2'
+    'WEBRip': '1'
+    'WEB': '2'
+    'HDTV': '3'
+    'TVrip': '3'
+    'DVDRip': '4'
+    'CD': '5'
+    'Track': '5'
+    'Other': '6'
+    'default': '6'
+
+  codec:
+    'H.265': '2'
+    'HEVC': '2'
+    'x265': '2'
+    'H.264': '1'
+    'AVC': '1'
+    'x264': '1'
+    'VC-1': '4'
+    'MPEG-2': '3'
+    'MPEG-4': '5'
+    'Xvid': '5'
+    'Other': '6'
+    'default': '6'
+
+  audio_codec:
+    'TrueHD Atmos': '1'
+    'DTS:X': '2'
+    'DTS-HD MA': '2'
+    'DTS-HD HR': '2'
+    'DDP': '3'
+    'DD+': '3'
+    'E-AC3': '3'
+    'Atmos': '1'
+    'TrueHD': '1'
+    'DTS': '2'
+    'AC3': '3'
+    'DD': '3'
+    'LPCM': '4'
+    'FLAC': '5'
+    'APE': '8'
+    'WAV': '10'
+    'M4A': '7'
+    'MP3': '6'
+    'AAC': '7'
+    'OGG': '9'
+    'default': '9'
+
+  resolution:
+    '8K': '1'
+    '4320p': '1'
+    '4K': '1'
+    '2160p': '1'
+    'UHD': '1'
+    '1080p': '2'
+    '1080i': '2'
+    '720p': '3'
+    '720i': '3'
+    'SD': '4'
+    '480p': '4'
+    '480i': '4'
+    'default': '5'
+
+  team:
+    "CarPT": "1"
+    "WiKi": "2"
+    "CMCT": "3"
+    "M-team": "4"
+    "Other": "5"
+    "default": "5"
+
+  tag:
+    "禁转": 1
+    "首发": 2
+    "DIY": 4
+    "国语": 5
+    "中字": 6
+    "HDR": 7
+    "default": null
