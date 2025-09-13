@@ -58,6 +58,21 @@
       </el-table-column>
 
       <el-table-column prop="save_path" label="保存路径" width="250" show-overflow-tooltip />
+      <el-table-column label="下载器" width="200" align="center">
+        <template #default="scope">
+          <div v-if="scope.row.downloaderIds && scope.row.downloaderIds.length > 0">
+            <el-tag v-for="downloaderId in scope.row.downloaderIds"
+                   :key="downloaderId"
+                   size="small"
+                   style="margin: 2px;">
+              {{ getDownloaderName(downloaderId) }}
+            </el-tag>
+          </div>
+          <el-tag v-else type="info" size="small">
+            未知下载器
+          </el-tag>
+        </template>
+      </el-table-column>
       <el-table-column label="大小" prop="size_formatted" width="110" align="center" sortable="custom" />
 
       <el-table-column label="总上传量" prop="total_uploaded_formatted" width="130" align="center" sortable="custom" />
@@ -214,6 +229,7 @@ interface Torrent {
   total_uploaded: number
   total_uploaded_formatted: string
   downloaderId?: string
+  downloaderIds?: string[]
 }
 interface SiteStatus {
   name: string;
@@ -237,6 +253,7 @@ interface PathNode {
 interface Downloader {
   id: string;
   name: string;
+  enabled?: boolean;
 }
 
 // const router = useRouter();
@@ -272,6 +289,7 @@ const all_sites = ref<string[]>([])
 const site_link_rules = ref<Record<string, { base_url: string }>>({})
 const expandedRows = ref<string[]>([])
 const downloadersList = ref<Downloader[]>([]);
+const allDownloadersList = ref<Downloader[]>([]);
 
 const pathTreeRef = ref<InstanceType<typeof ElTree> | null>(null)
 const pathTreeData = ref<PathNode[]>([])
@@ -378,9 +396,13 @@ const buildPathTree = (paths: string[]): PathNode[] => {
 
 const fetchDownloadersList = async () => {
   try {
-    const response = await fetch('/api/downloaders_list');
+    const response = await fetch('/api/all_downloaders');
     if (!response.ok) throw new Error('无法获取下载器列表');
-    downloadersList.value = await response.json();
+    const allDownloaders = await response.json();
+    // 只显示启用的下载器在筛选器中
+    downloadersList.value = allDownloaders.filter((d: any) => d.enabled);
+    // 保存所有下载器信息用于显示
+    allDownloadersList.value = allDownloaders;
   } catch (e: any) {
     error.value = e.message;
   }
@@ -570,6 +592,18 @@ const getLink = (siteData: SiteData, siteName: string): string | null => {
   return null
 }
 const getTagType = (siteData: SiteData) => (siteData.comment ? 'success' : 'primary')
+
+const getDownloaderName = (downloaderId: string | null) => {
+  if (!downloaderId) return '未知下载器'
+  const downloader = allDownloadersList.value.find(d => d.id === downloaderId)
+  return downloader ? downloader.name : '未知下载器'
+}
+
+const getDisabledDownloaderIds = () => {
+  return allDownloadersList.value
+    .filter(d => d.enabled === false)
+    .map(d => d.id);
+}
 
 // 根据站点配置和可选性返回标签类型
 const getSiteTagType = (site: SiteStatus, isSelectable: boolean) => {
