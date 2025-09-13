@@ -12,7 +12,11 @@
       "Bash(python -c \"from qbittorrentapi import Client; help(Client.torrents_add)\")",
       "Bash(cat:*)",
       "Bash(python:*)",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(git add vue3/src/views/TorrentsView.vue)",
+      "Bash(curl -s \"http://localhost:5272/api/data?page=1&pageSize=5&sortProp=name&sortOrder=ascending\")",
+      "Bash(curl -s \"http://localhost:15273/api/data?page=1&pageSize=3&sortProp=name&sortOrder=ascending\")",
+      "WebFetch(domain:element-plus.org)"
     ],
     "deny": [],
     "ask": []

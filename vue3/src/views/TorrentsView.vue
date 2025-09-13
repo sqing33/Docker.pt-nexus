@@ -48,8 +48,7 @@
         </template>
       </el-table-column>
 
-      <el-table-column prop="site_count" label="做种站点数" sortable="custom" width="120" align="center"
-        header-align="center">
+      <el-table-column prop="site_count" label="做种数" sortable="custom" width="95" align="center" header-align="center">
         <template #default="scope">
           <span style="display: inline-block; width: 100%; text-align: center">
             {{ scope.row.site_count }} / {{ scope.row.total_site_count }}
@@ -57,43 +56,69 @@
         </template>
       </el-table-column>
 
-      <el-table-column prop="save_path" label="保存路径" width="250" show-overflow-tooltip />
-      <el-table-column label="下载器" width="200" align="center">
+      <el-table-column prop="save_path" label="保存路径" width="220" header-align="center">
         <template #default="scope">
-          <div v-if="scope.row.downloaderIds && scope.row.downloaderIds.length > 0">
-            <el-tag v-for="downloaderId in scope.row.downloaderIds"
-                   :key="downloaderId"
-                   size="small"
-                   style="margin: 2px;">
-              {{ getDownloaderName(downloaderId) }}
+          <div :title="scope.row.save_path"
+            style="width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            {{ shortenPath(scope.row.save_path, 30) }}
+          </div>
+        </template>
+      </el-table-column>
+      <el-table-column label="下载器" width="120" align="center" header-align="center">
+        <template #default="scope">
+          <div style="display: flex; justify-content: center; align-items: center; width: 100%; height: 100%;">
+            <div v-if="scope.row.downloaderIds && scope.row.downloaderIds.length > 0">
+              <el-tag v-for="downloaderId in sortedDownloaderIds(scope.row.downloaderIds)" :key="downloaderId"
+                size="small" :type="getDownloaderTagType(downloaderId)" style="margin: 2px;">
+                {{ getDownloaderName(downloaderId) }}
+              </el-tag>
+            </div>
+            <el-tag v-else type="info" size="small">
+              未知下载器
             </el-tag>
           </div>
-          <el-tag v-else type="info" size="small">
-            未知下载器
-          </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="大小" prop="size_formatted" width="110" align="center" sortable="custom" />
+      <el-table-column label="大小" prop="size_formatted" width="100" align="center" sortable="custom" />
 
-      <el-table-column label="总上传量" prop="total_uploaded_formatted" width="130" align="center" sortable="custom" />
-      <el-table-column label="进度" prop="progress" width="90" align="center" sortable="custom">
+      <el-table-column label="总上传量" prop="total_uploaded_formatted" width="100" align="center" sortable="custom" />
+      <el-table-column label="进度" prop="progress" width="120" align="center" sortable="custom">
         <template #default="scope">
-          <el-progress :percentage="scope.row.progress" :stroke-width="10" :color="progressColors" />
+          <div style="padding: 1px 0; width: 100%;">
+            <el-progress :percentage="scope.row.progress" :stroke-width="10" :color="progressColors" :show-text="false"
+              style="width: 100%;" />
+            <div style="text-align: center; font-size: 12px; margin-top: 5px; line-height: 1;">
+              {{ scope.row.progress }}%
+            </div>
+          </div>
         </template>
       </el-table-column>
-      <el-table-column label="状态" prop="state" width="90" align="center">
+      <el-table-column label="状态" prop="state" width="120" align="center" header-align="center">
         <template #default="scope">
-          <el-tag :type="getStateTagType(scope.row.state)" size="large">{{
-            scope.row.state
-          }}</el-tag>
+          <div style="display: flex; justify-content: center; align-items: center; width: 100%; height: 100%;">
+            <el-tag :type="getStateTagType(scope.row.state)" size="large">{{
+              scope.row.state
+              }}</el-tag>
+          </div>
         </template>
       </el-table-column>
 
-      <el-table-column label="操作" width="100" align="center">
+      <el-table-column label="可转种" width="80" align="center" header-align="center">
         <template #default="scope">
-          <el-button type="primary" size="small" @click.stop="startCrossSeed(scope.row)">
-            转种
-          </el-button>
+          <div style="display: flex; justify-content: center; align-items: center; width: 100%; height: 100%;">
+            <span v-if="scope.row.target_sites_count !== undefined">{{ scope.row.target_sites_count }}</span>
+            <span v-else>-</span>
+          </div>
+        </template>
+      </el-table-column>
+
+      <el-table-column label="操作" width="100" align="center" header-align="center">
+        <template #default="scope">
+          <div style="display: flex; justify-content: center; align-items: center; width: 100%; height: 100%;">
+            <el-button type="primary" size="small" @click.stop="startCrossSeed(scope.row)">
+              转种
+            </el-button>
+          </div>
         </template>
       </el-table-column>
     </el-table>
@@ -143,7 +168,7 @@
               <el-checkbox-group v-model="tempFilters.siteNames" :disabled="tempFilters.siteExistence === 'all'">
                 <el-checkbox v-for="site in filteredSiteOptions" :key="site" :label="site">{{
                   site
-                }}</el-checkbox>
+                  }}</el-checkbox>
               </el-checkbox-group>
             </div>
           </div>
@@ -162,7 +187,7 @@
           <el-checkbox-group v-model="tempFilters.states">
             <el-checkbox v-for="state in unique_states" :key="state" :label="state">{{
               state
-            }}</el-checkbox>
+              }}</el-checkbox>
           </el-checkbox-group>
         </div>
         <div class="filter-card-footer">
@@ -230,6 +255,7 @@ interface Torrent {
   total_uploaded_formatted: string
   downloaderId?: string
   downloaderIds?: string[]
+  target_sites_count?: number
 }
 interface SiteStatus {
   name: string;
@@ -599,6 +625,59 @@ const getDownloaderName = (downloaderId: string | null) => {
   return downloader ? downloader.name : '未知下载器'
 }
 
+const getDownloaderTagType = (downloaderId: string | null) => {
+  if (!downloaderId) return 'info'
+  // Generate a consistent color based on the downloader ID
+  const downloader = allDownloadersList.value.find(d => d.id === downloaderId)
+  if (!downloader) return 'info'
+
+  // Simple hash function to generate a consistent color index
+  let hash = 0
+  for (let i = 0; i < downloaderId.length; i++) {
+    hash = downloaderId.charCodeAt(i) + ((hash << 5) - hash)
+  }
+
+  // Map hash to Element Plus tag types
+  const types = ['primary', 'success', 'warning', 'danger', 'info']
+  return types[Math.abs(hash) % types.length]
+}
+
+const sortedDownloaderIds = (downloaderIds: string[]) => {
+  // Create a copy of the array to avoid modifying the original
+  const sortedIds = [...downloaderIds]
+
+  // Sort by downloader name for consistent ordering
+  return sortedIds.sort((a, b) => {
+    const nameA = getDownloaderName(a)
+    const nameB = getDownloaderName(b)
+    return nameA.localeCompare(nameB, 'zh-CN')
+  })
+}
+
+const shortenPath = (path: string, maxLength: number = 50) => {
+  if (!path || path.length <= maxLength) {
+    return path
+  }
+
+  // 对于路径，我们尝试保留开头和结尾的部分
+  const halfLength = Math.floor((maxLength - 3) / 2)
+
+  // 确保我们不会在路径分隔符中间截断
+  let start = path.substring(0, halfLength)
+  let end = path.substring(path.length - halfLength)
+
+  // 如果可能的话，尝试在路径分隔符处截断
+  const lastSeparatorInStart = start.lastIndexOf('/')
+  const firstSeparatorInEnd = end.indexOf('/')
+
+  if (lastSeparatorInStart > 0 && firstSeparatorInEnd >= 0) {
+    start = start.substring(0, lastSeparatorInStart)
+    end = end.substring(firstSeparatorInEnd + 1)
+  }
+
+  return `${start}...${end}`
+}
+
 const getDisabledDownloaderIds = () => {
   return allDownloadersList.value
     .filter(d => d.enabled === false)
@@ -671,10 +750,16 @@ watch(
   box-sizing: border-box;
 }
 
-:deep(.cell) {
+:deep(.el-table__body .cell) {
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+:deep(.el-table__header .cell) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .name-header-container {
