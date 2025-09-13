@@ -2,8 +2,9 @@
 
 import logging
 import uuid
+import re
 from flask import Blueprint, jsonify, request
-from utils import upload_data_title, upload_data_screenshot, upload_data_poster, add_torrent_to_downloader
+from utils import upload_data_title, upload_data_screenshot, upload_data_poster, add_torrent_to_downloader, extract_tags_from_mediainfo
 from core.migrator import TorrentMigrator
 
 # --- [新增] 导入 config_manager ---
@@ -385,3 +386,141 @@ def get_sites_status():
             if 'cursor' in locals() and cursor:
                 cursor.close()
             conn.close()
+
+
+@migrate_bp.route("/migrate/update_preview_data", methods=["POST"])
+def update_preview_data():
+    """更新预览数据"""
+    data = request.json
+    task_id = data.get("task_id")
+    updated_data = data.get("updated_data")
+
+    if not task_id or task_id not in MIGRATION_CACHE:
+        return jsonify({"success": False, "message": "错误：无效或已过期的任务ID。"}), 400
+
+    if not updated_data:
+        return jsonify({"success": False, "message": "错误：缺少更新数据。"}), 400
+
+    try:
+        # 获取缓存中的上下文
+        context = MIGRATION_CACHE[task_id]
+        source_info = context["source_info"]
+        original_torrent_path = context["original_torrent_path"]
+
+        # 更新 review_data 中的相关字段
+        review_data = context["review_data"].copy()
+        review_data["original_main_title"] = updated_data.get("original_main_title", review_data.get("original_main_title", ""))
+        review_data["title_components"] = updated_data.get("title_components", review_data.get("title_components", []))
+        review_data["subtitle"] = updated_data.get("subtitle", review_data.get("subtitle", ""))
+        review_data["imdb_link"] = updated_data.get("imdb_link", review_data.get("imdb_link", ""))
+        review_data["intro"] = updated_data.get("intro", review_data.get("intro", {}))
+        review_data["mediainfo"] = updated_data.get("mediainfo", review_data.get("mediainfo", ""))
+        review_data["source_params"] = updated_data.get("source_params", review_data.get("source_params", {}))
+
+        # 重新生成预览参数
+        # 这里我们需要重新构建完整的发布参数预览
+        try:
+            # 1. 重新解析标题组件
+            title_components = review_data.get("title_components", [])
+            if not title_components:
+                title_components = upload_data_title(review_data["original_main_title"])
+
+            # 2. 重新构建标题参数字典
+            title_params = {
+                item["key"]: item["value"]
+                for item in title_components if item.get("value")
+            }
+
+            # 3. 重新拼接主标题
+            order = [
+                "主标题", "年份", "季集", "剧集状态", "发布版本", "分辨率", "媒介",
+                "片源平台", "视频编码", "视频格式", "HDR格式", "色深", "帧率", "音频编码",
+            ]
+            title_parts = []
+            for key in order:
+                value = title_params.get(key)
+                if value:
+                    title_parts.append(" ".join(map(str, value)) if isinstance(value, list) else str(value))
+
+            raw_main_part = " ".join(filter(None, title_parts))
+            main_part = re.sub(r'(?<!\d)\.(?!\d)', ' ', raw_main_part)
+            main_part = re.sub(r'\s+', ' ', main_part).strip()
+            release_group = title_params.get("制作组", "NOGROUP")
+            if "N/A" in release_group:
+                release_group = "NOGROUP"
+
+            # 对特殊制作组进行处理，不需要添加前缀连字符
+            special_groups = ["MNHD-FRDS", "mUHD-FRDS"]
+            if release_group in special_groups:
+                preview_title = f"{main_part} {release_group}"
+            else:
+                preview_title = f"{main_part}-{release_group}"
+
+            # 4. 重新组合简介
+            full_description = (
+                f"{review_data['intro'].get('statement', '')}\n"
+                f"{review_data['intro'].get('poster', '')}\n"
+                f"{review_data['intro'].get('body', '')}\n"
+                f"{review_data['intro'].get('screenshots', '')}"
+            )
+
+            # 5. 重新收集标签
+            source_tags = set(review_data["source_params"].get("标签") or [])
+            mediainfo_tags = set(extract_tags_from_mediainfo(review_data["mediainfo"]))
+            all_tags = sorted(list(source_tags.union(mediainfo_tags)))
+
+            # 6. 重新组装预览字典
+            final_publish_parameters = {
+                "主标题 (预览)": preview_title,
+                "副标题": review_data["subtitle"],
+                "IMDb链接": review_data["imdb_link"],
+                "类型": review_data["source_params"].get("类型", "N/A"),
+                "媒介": title_params.get("媒介", "N/A"),
+                "视频编码": title_params.get("视频编码", "N/A"),
+                "音频编码": title_params.get("音频编码", "N/A"),
+                "分辨率": title_params.get("分辨率", "N/A"),
+                "制作组": title_params.get("制作组", "N/A"),
+                "产地": review_data["source_params"].get("产地", "N/A"),
+                "标签 (综合)": all_tags,
+            }
+
+            # 7. 提取映射前的原始参数用于前端展示
+            raw_params_for_preview = {
+                "final_main_title": preview_title,
+                "subtitle": review_data["subtitle"],
+                "imdb_link": review_data["imdb_link"],
+                "type": review_data["source_params"].get("类型", ""),
+                "medium": title_params.get("媒介", ""),
+                "video_codec": title_params.get("视频编码", ""),
+                "audio_codec": title_params.get("音频编码", ""),
+                "resolution": title_params.get("分辨率", ""),
+                "release_group": title_params.get("制作组", ""),
+                "source": review_data["source_params"].get("产地", "") or title_params.get("片源平台", ""),
+                "tags": list(all_tags)
+            }
+
+            # 更新 review_data 中的预览参数
+            review_data["final_publish_parameters"] = final_publish_parameters
+            review_data["raw_params_for_preview"] = raw_params_for_preview
+
+            # 更新缓存中的 review_data
+            MIGRATION_CACHE[task_id]["review_data"] = review_data
+
+            return jsonify({
+                "success": True,
+                "data": review_data,
+                "message": "预览数据更新成功"
+            })
+        except Exception as e:
+            logging.error(f"重新生成预览数据时发生错误: {e}", exc_info=True)
+            return jsonify({
+                "success": False,
+                "message": f"重新生成预览数据时发生错误: {e}"
+            }), 500
+
+    except Exception as e:
+        logging.error(f"update_preview_data 发生意外错误: {e}", exc_info=True)
+        return jsonify({
+            "success": False,
+            "message": f"服务器内部错误: {e}"
+        }), 500
