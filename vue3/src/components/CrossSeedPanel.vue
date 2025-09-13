@@ -219,12 +219,34 @@
           <div class="preview-row description-row">
             <div class="row-label">简介内容：</div>
             <div class="row-content description-content">
+              <!-- 声明内容 -->
               <div class="description-section">
-                <div class="section-content">{{ torrentData.intro?.statement || '暂无声明' }}</div>
+                <div class="section-content" v-html="parseBBCode(torrentData.intro?.statement) || '暂无声明'"></div>
               </div>
+
+              <!-- 海报图片 -->
+              <div class="description-section" v-if="posterImages.length > 0">
+                <div class="image-gallery">
+                  <img v-for="(url, index) in posterImages" :key="'poster-preview-' + index" :src="url"
+                    :alt="'海报 ' + (index + 1)" class="preview-image-inline" style="width: 200px;"
+                    @error="handleImageError(url, 'poster', index)" />
+                </div>
+              </div>
+
+              <!-- 简介正文 -->
               <div class="description-section">
                 <br />
-                <div class="section-content">{{ torrentData.intro?.body || '暂无正文' }}</div>
+                <div class="section-content" v-html="parseBBCode(torrentData.intro?.body) || '暂无正文'"></div>
+              </div>
+
+              <!-- 视频截图 -->
+              <div class="description-section" v-if="screenshotImages.length > 0">
+                <div class="section-title">视频截图:</div>
+                <div class="image-gallery">
+                  <img v-for="(url, index) in screenshotImages" :key="'screenshot-preview-' + index" :src="url"
+                    :alt="'截图 ' + (index + 1)" class="preview-image-inline"
+                    @error="handleImageError(url, 'screenshot', index)" />
+                </div>
               </div>
             </div>
           </div>
@@ -351,6 +373,41 @@ import { ref, onMounted, computed } from 'vue'
 import { ElNotification, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import { Refresh, CircleCheckFilled, CircleCloseFilled, Close } from '@element-plus/icons-vue'
+
+// BBCode 解析函数
+const parseBBCode = (text) => {
+  if (!text) return ''
+
+  // 处理 [quote] 标签
+  text = text.replace(/\[quote\]([\s\S]*?)\[\/quote\]/gi, '<blockquote>$1</blockquote>')
+
+  // 处理 [b] 标签
+  text = text.replace(/\[b\]([\s\S]*?)\[\/b\]/gi, '<strong>$1</strong>')
+
+  // 处理 [color] 标签
+  text = text.replace(/\[color=(\w+|\#[0-9a-fA-F]{3,6})\]([\s\S]*?)\[\/color\]/gi, '<span style="color: $1;">$2</span>')
+
+  // 处理 [size] 标签，映射到具体的像素值
+  text = text.replace(/\[size=(\d+)\]([\s\S]*?)\[\/size\]/gi, (match, size, content) => {
+    // 根据 size 值映射到具体的像素值
+    const sizeMap = {
+      '1': '12',
+      '2': '14',
+      '3': '16',
+      '4': '18',
+      '5': '24',
+      '6': '32',
+      '7': '48'
+    }
+    const pixelSize = sizeMap[size] || (parseInt(size) * 4)
+    return `<span style="font-size: ${pixelSize}px;">${content}</span>`
+  })
+
+  // 处理换行符
+  text = text.replace(/\n/g, '<br>')
+
+  return text
+}
 
 interface SiteStatus {
   name: string;
@@ -1039,8 +1096,8 @@ onMounted(() => {
 /* --- 步骤 0: 核对详情 --- */
 .details-container {
   background-color: #fff;
-  border-radius: 8px;
-  border: 1px solid #dcdfe6;
+  border-bottom: 1px solid #e4e7ed;
+  height: calc(100% - 1px);
   overflow: hidden;
   display: flex;
 }
@@ -1296,8 +1353,49 @@ onMounted(() => {
   line-height: 1.6;
 }
 
+/* BBCode 渲染样式 */
+.section-content :deep(blockquote) {
+  margin: 10px 0;
+  padding: 10px 15px;
+  border-left: 4px solid #409eff;
+  background-color: #f5f7fa;
+  color: #606266;
+}
+
+.section-content :deep(strong) {
+  font-weight: bold;
+}
+
+.section-content :deep(.bbcode-size-5) {
+  font-size: 18px;
+}
+
+.section-content :deep(.bbcode-size-4) {
+  font-size: 16px;
+}
+
 .description-row {
   margin-bottom: 30px;
+}
+
+.section-title {
+  font-weight: bold;
+  margin: 15px 0 10px 0;
+  color: #303133;
+}
+
+.image-gallery {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 10px 0;
+}
+
+.preview-image-inline {
+  width: 100%;
+  border-radius: 4px;
+  border: 1px solid #e4e7ed;
+  object-fit: contain;
 }
 
 /* --- 步骤 2: 选择站点 --- */
