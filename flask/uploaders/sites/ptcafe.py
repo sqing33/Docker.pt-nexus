@@ -2,6 +2,6 @@ from ..base import BaseUploader
 
 
 class PtcafeUploader(BaseUploader):
-    # ptcafe使用通用的 _map_parameters 方法，无需重写
+    # ptcafe使用通用的方法，无需重写
     pass
 

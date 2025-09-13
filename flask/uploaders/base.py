@@ -39,7 +39,8 @@ class BaseUploader(ABC):
 
     def _load_site_config(self, site_name: str) -> dict:
         """加载站点的YAML配置文件"""
-        config_path = os.path.join(os.path.dirname(__file__), 'sites', 'configs', f'{site_name}.yaml')
+        config_path = os.path.join(os.path.dirname(__file__), 'sites',
+                                   'configs', f'{site_name}.yaml')
         try:
             with open(config_path, 'r', encoding='utf-8') as f:
                 return yaml.safe_load(f)
@@ -128,13 +129,14 @@ class BaseUploader(ABC):
         # 处理 key_to_find 可能是列表的情况
         if not mapping_dict or not key_to_find:
             return mapping_dict.get(default_key, "")
-        
+
         # 如果 key_to_find 是列表，取第一个元素或将其转换为字符串
         if isinstance(key_to_find, list):
             if not key_to_find:
                 return mapping_dict.get(default_key, "")
             # 取列表中的第一个非空元素，或者将整个列表转换为字符串
-            key_to_find = key_to_find[0] if key_to_find and key_to_find[0] else str(key_to_find)
+            key_to_find = key_to_find[
+                0] if key_to_find and key_to_find[0] else str(key_to_find)
 
         # 精确匹配
         for key, value in mapping_dict.items():
@@ -142,7 +144,9 @@ class BaseUploader(ABC):
                 return value
 
         # 部分匹配 (按 key 长度降序排列，优先匹配更长的 key)
-        sorted_items = sorted(mapping_dict.items(), key=lambda x: len(x[0]), reverse=True)
+        sorted_items = sorted(mapping_dict.items(),
+                              key=lambda x: len(x[0]),
+                              reverse=True)
         for key, value in sorted_items:
             if key.lower() in key_to_find.lower():
                 return value
@@ -207,7 +211,7 @@ class BaseUploader(ABC):
                 "url": self.upload_data.get("imdb_link", "") or "",
                 "descr": description,
                 "technical_info": self.upload_data.get("mediainfo", ""),
-                "uplver": "yes",  # 默认匿名上传
+                "uplver": "no",  # 默认匿名上传
                 **mapped_params,  # 合并子类映射的特殊参数
             }
 
@@ -229,10 +233,12 @@ class BaseUploader(ABC):
                 # 添加重试机制
                 max_retries = 3
                 last_exception = None
-                
+
                 for attempt in range(max_retries):
                     try:
-                        logger.info(f"正在向 {self.site_name} 站点提交发布请求... (尝试 {attempt + 1}/{max_retries})")
+                        logger.info(
+                            f"正在向 {self.site_name} 站点提交发布请求... (尝试 {attempt + 1}/{max_retries})"
+                        )
                         # 若站点启用代理且配置了全局代理地址，则通过代理请求
                         proxies = None
                         try:
@@ -241,28 +247,38 @@ class BaseUploader(ABC):
                             conf = (config_manager.get() or {})
                             # 优先使用转种设置中的代理地址，其次兼容旧的 network.proxy_url
                             proxy_url = (conf.get("cross_seed", {})
-                                         or {}).get("proxy_url") or (conf.get(
-                                             "network", {}) or {}).get("proxy_url")
+                                         or {}).get("proxy_url") or (
+                                             conf.get("network", {})
+                                             or {}).get("proxy_url")
                             if use_proxy and proxy_url:
-                                proxies = {"http": proxy_url, "https": proxy_url}
+                                proxies = {
+                                    "http": proxy_url,
+                                    "https": proxy_url
+                                }
                         except Exception:
                             proxies = None
-                        
+
                         # 检查是否是重试并且 Connection reset by peer 错误，强制使用代理
-                        if attempt > 0 and last_exception and "Connection reset by peer" in str(last_exception):
-                            logger.info("检测到 Connection reset by peer 错误，强制使用代理重试...")
+                        if attempt > 0 and last_exception and "Connection reset by peer" in str(
+                                last_exception):
+                            logger.info(
+                                "检测到 Connection reset by peer 错误，强制使用代理重试...")
                             try:
                                 from config import config_manager
                                 conf = (config_manager.get() or {})
                                 proxy_url = (conf.get("cross_seed", {})
-                                             or {}).get("proxy_url") or (conf.get(
-                                                 "network", {}) or {}).get("proxy_url")
+                                             or {}).get("proxy_url") or (
+                                                 conf.get("network", {})
+                                                 or {}).get("proxy_url")
                                 if proxy_url:
-                                    proxies = {"http": proxy_url, "https": proxy_url}
+                                    proxies = {
+                                        "http": proxy_url,
+                                        "https": proxy_url
+                                    }
                                     logger.info(f"使用代理重试: {proxy_url}")
                             except Exception as proxy_error:
                                 logger.warning(f"代理设置失败: {proxy_error}")
-                        
+
                         response = self.scraper.post(
                             self.post_url,
                             headers=self.headers,
@@ -273,24 +289,25 @@ class BaseUploader(ABC):
                             proxies=proxies,
                         )
                         response.raise_for_status()
-                        
+
                         # 成功则跳出循环
                         last_exception = None
                         break
-                        
+
                     except Exception as e:
                         last_exception = e
                         logger.warning(f"第 {attempt + 1} 次尝试发布失败: {e}")
-                        
+
                         # 如果不是最后一次尝试，等待一段时间后重试
                         if attempt < max_retries - 1:
                             import time
-                            wait_time = 2 ** attempt  # 指数退避
-                            logger.info(f"等待 {wait_time} 秒后进行第 {attempt + 2} 次尝试...")
+                            wait_time = 2**attempt  # 指数退避
+                            logger.info(
+                                f"等待 {wait_time} 秒后进行第 {attempt + 2} 次尝试...")
                             time.sleep(wait_time)
                         else:
                             logger.error("所有重试均已失败")
-                        
+
                 # 如果所有重试都失败了，重新抛出最后一个异常
                 if last_exception:
                     raise last_exception
@@ -368,41 +385,60 @@ class BaseUploader(ABC):
         is_standard_mediainfo = "General" in mediainfo_str and "Complete name" in mediainfo_str
 
         # 站点规则：有mediainfo的Blu-ray/DVD源盘rip都算Encode
-        medium_field = self.config.get("form_fields", {}).get("medium", "medium_sel[4]")
+        medium_field = self.config.get("form_fields",
+                                       {}).get("medium", "medium_sel[4]")
         medium_mapping = self.config.get("mappings", {}).get("medium", {})
 
-        if is_standard_mediainfo and ('blu' in medium_str.lower() or 'dvd' in medium_str.lower()):
+        if is_standard_mediainfo and ('blu' in medium_str.lower()
+                                      or 'dvd' in medium_str.lower()):
             # 从配置文件中获取Encode的映射值
             encode_value = medium_mapping.get("Encode", "7")  # 默认值为7
             mapped[medium_field] = encode_value
         else:
-            mapped[medium_field] = self._find_mapping(medium_mapping, medium_str)
+            mapped[medium_field] = self._find_mapping(medium_mapping,
+                                                      medium_str)
 
         # 3. 视频编码映射
         codec_str = title_params.get("视频编码", "")
-        codec_field = self.config.get("form_fields", {}).get("codec", "codec_sel[4]")
+        codec_field = self.config.get("form_fields",
+                                      {}).get("codec", "codec_sel[4]")
         codec_mapping = self.config.get("mappings", {}).get("codec", {})
         mapped[codec_field] = self._find_mapping(codec_mapping, codec_str)
 
         # 4. 音频编码映射
         audio_str = title_params.get("音频编码", "")
-        audio_field = self.config.get("form_fields", {}).get("audio_codec", "audiocodec_sel[4]")
+        audio_field = self.config.get("form_fields",
+                                      {}).get("audio_codec",
+                                              "audiocodec_sel[4]")
         audio_mapping = self.config.get("mappings", {}).get("audio_codec", {})
         mapped[audio_field] = self._find_mapping(audio_mapping, audio_str)
 
         # 5. 分辨率映射
         resolution_str = title_params.get("分辨率", "")
-        resolution_field = self.config.get("form_fields", {}).get("resolution", "standard_sel[4]")
-        resolution_mapping = self.config.get("mappings", {}).get("resolution", {})
-        mapped[resolution_field] = self._find_mapping(resolution_mapping, resolution_str)
+        resolution_field = self.config.get("form_fields",
+                                           {}).get("resolution",
+                                                   "standard_sel[4]")
+        resolution_mapping = self.config.get("mappings",
+                                             {}).get("resolution", {})
+        mapped[resolution_field] = self._find_mapping(resolution_mapping,
+                                                      resolution_str)
 
         # 6. 制作组映射
         release_group_str = str(title_params.get("制作组", "")).upper()
-        team_field = self.config.get("form_fields", {}).get("team", "team_sel[4]")
+        team_field = self.config.get("form_fields",
+                                     {}).get("team", "team_sel[4]")
         team_mapping = self.config.get("mappings", {}).get("team", {})
-        mapped[team_field] = self._find_mapping(team_mapping, release_group_str)
+        mapped[team_field] = self._find_mapping(team_mapping,
+                                                release_group_str)
 
-        # 7. 标签映射
+        # 7. 地区/来源映射（如果配置文件中定义了source字段）
+        source_str = source_params.get("产地", "") or title_params.get("片源平台", "")
+        source_field = self.config.get("form_fields", {}).get("source", None)
+        if source_field:
+            source_mapping = self.config.get("mappings", {}).get("source", {})
+            mapped[source_field] = self._find_mapping(source_mapping, source_str)
+
+        # 8. 标签映射
         combined_tags = self._collect_all_tags()
         tag_mapping = self.config.get("mappings", {}).get("tag", {})
 
