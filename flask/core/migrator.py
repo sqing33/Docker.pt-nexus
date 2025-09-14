@@ -147,7 +147,8 @@ class TorrentMigrator:
 
     def search_and_get_torrent_id(self, torrent_name):
         search_url = f"{self.SOURCE_BASE_URL}/torrents.php"
-        params = {"incldead": "1", "search": torrent_name, "search_area": "0"}
+        search_torrent_name = re.sub(r'(?<!\d)\.|\.(?!\d\b)', ' ', torrent_name)
+        params = {"incldead": "1", "search": search_torrent_name, "search_area": "0", "search_mode": "2"}
         self.logger.info(f"正在源站 '{self.SOURCE_NAME}' 搜索种子: '{torrent_name}'")
         try:
             # 获取代理配置

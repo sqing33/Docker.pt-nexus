@@ -750,13 +750,19 @@ const fetchTorrentInfo = async () => {
   if (!props.sourceSite || !props.torrent) return;
 
   const siteDetails = props.torrent.sites[props.sourceSite];
-  const idMatch = siteDetails.comment.match(/id=(\d+)/);
-  if (!idMatch || !idMatch[1]) {
-    ElNotification.error(`无法从源站点 ${props.sourceSite} 的链接中提取种子ID。`);
-    emit('cancel');
-    return;
+  // 首先检查是否有存储的种子ID
+  let torrentId = siteDetails.torrentId || null;
+
+  // 如果没有存储的ID，则尝试从链接中提取
+  if (!torrentId) {
+    const idMatch = siteDetails.comment?.match(/id=(\d+)/);
+    if (!idMatch || !idMatch[1]) {
+      ElNotification.error(`无法从源站点 ${props.sourceSite} 的链接中提取种子ID。`);
+      emit('cancel');
+      return;
+    }
+    torrentId = idMatch[1];
   }
-  const torrentId = idMatch[1];
 
   isLoading.value = true
   ElNotification({

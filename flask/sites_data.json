@@ -59,7 +59,7 @@
     "base_url": "hdhome.org",
     "special_tracker_domain": null,
     "group": "HDHome",
-    "migration": 0,
+    "migration": 1,
     "speed_limit": 10
   },
   {
@@ -149,7 +149,7 @@
     "base_url": "springsunday.net",
     "special_tracker_domain": null,
     "group": "CMCT,CMCTV,7³ACG,Telesto,-shadow610",
-    "migration": 0,
+    "migration": 1,
     "speed_limit": 10
   },
   {
@@ -248,7 +248,7 @@
     "base_url": "pt.upxin.net",
     "special_tracker_domain": null,
     "group": "HDU",
-    "migration": 3,
+    "migration": 2,
     "speed_limit": 100
   },
   {
@@ -383,7 +383,7 @@
     "base_url": "audiences.me",
     "special_tracker_domain": null,
     "group": "ADE,Audies,ADWeb",
-    "migration": 0,
+    "migration": 1,
     "speed_limit": 10
   },
   {
@@ -410,7 +410,7 @@
     "base_url": "hhanclub.top",
     "special_tracker_domain": null,
     "group": "HHWEB",
-    "migration": 0,
+    "migration": 1,
     "speed_limit": 10
   },
   {
