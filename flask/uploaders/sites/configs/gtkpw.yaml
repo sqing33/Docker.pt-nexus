@@ -48,9 +48,9 @@ mappings:
     "default": "410"
 
   medium:
-    'UHD Blu-ray': '10'
     'Blu-ray': '1'
     'BluRay': '1'
+    'Blu-ray DIY': '1'
     'HD DVD': '2'
     'Remux': '3'
     'Encode': '7'
@@ -61,6 +61,7 @@ mappings:
     'HDTV': '5'
     'DVDR': '6'
     'CD': '8'
+    'UHD Blu-ray': '10'
     'Track': '9'
     'default': '5'
 

@@ -43,12 +43,10 @@ mappings:
     "default": "411"
 
   medium:
-    'UHD Blu-ray': '11'
     'Blu-ray': '1'
     'BD': '1'
+    'Blu-ray DIY': '1'
     'Remux': '3'
-    'UHD Remux': '15'
-    'UHD Remux TV': '16'
     'Remux TV': '12'
     'Encode': '7'
     'Encode TV': '14'
@@ -62,6 +60,9 @@ mappings:
     'DVD': '6'
     'MiniBD': '4'
     'CD': '8'
+    'UHD Blu-ray': '11'
+    'UHD Remux': '15'
+    'UHD Remux TV': '16'
     'Track': '9'
     'default': '0'
 

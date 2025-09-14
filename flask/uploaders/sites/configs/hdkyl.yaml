@@ -64,9 +64,9 @@ mappings:
     "default": "9"
 
   medium:
-    'UHD Blu-ray': '24'
     'Blu-ray': '25'
     'BD': '25'
+    'Blu-ray DIY': '25'
     'DVD': '27'
     'HDTV': '28'
     'Encode': '29'
@@ -76,6 +76,7 @@ mappings:
     'WEB': '31'
     'TVrip': '28'
     'Track': '32'
+    'UHD Blu-ray': '24'
     'CD': '33'
     'default': '34'
 

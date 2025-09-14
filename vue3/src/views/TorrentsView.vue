@@ -81,7 +81,7 @@
       </el-table-column>
       <el-table-column label="大小" prop="size_formatted" width="100" align="center" sortable="custom" />
 
-      <el-table-column label="总上传量" prop="total_uploaded_formatted" width="100" align="center" sortable="custom" />
+      <el-table-column label="总上传量" prop="total_uploaded_formatted" width="110" align="center" sortable="custom" />
       <el-table-column label="进度" prop="progress" width="120" align="center" sortable="custom">
         <template #default="scope">
           <div style="padding: 1px 0; width: 100%;">
@@ -98,7 +98,7 @@
           <div style="display: flex; justify-content: center; align-items: center; width: 100%; height: 100%;">
             <el-tag :type="getStateTagType(scope.row.state)" size="large">{{
               scope.row.state
-            }}</el-tag>
+              }}</el-tag>
           </div>
         </template>
       </el-table-column>
@@ -188,7 +188,7 @@
           <el-checkbox-group v-model="tempFilters.states">
             <el-checkbox v-for="state in unique_states" :key="state" :label="state">{{
               state
-            }}</el-checkbox>
+              }}</el-checkbox>
           </el-checkbox-group>
         </div>
         <div class="filter-card-footer">
