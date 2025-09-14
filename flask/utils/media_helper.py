@@ -243,28 +243,48 @@ def upload_data_mediaInfo(mediaInfo: str, save_path: str):
     ]
 
     # 2. BDInfo 格式的关键字
-    bdinfo_keywords = [
+    bdinfo_required_keywords = [
         "DISC INFO",
         "PLAYLIST REPORT",
+    ]
+
+    # 3. BDInfo 格式的可选关键字
+    bdinfo_optional_keywords = [
         "VIDEO:",
         "AUDIO:",
         "SUBTITLES:",
+        "FILES:",
         "Disc Label",
         "Disc Size",
+        "BDInfo:",
+        "Protection:",
+        "Codec",
+        "Bitrate",
+        "Language",
+        "Description",
     ]
 
-    is_standard_mediainfo = all(keyword in mediaInfo
-                                for keyword in standard_mediainfo_keywords)
-    is_bdinfo = all(keyword in mediaInfo for keyword in bdinfo_keywords)
+    # 检查是否为标准MediaInfo格式
+    mediainfo_matches = sum(1 for keyword in standard_mediainfo_keywords if keyword in mediaInfo)
+    is_standard_mediainfo = mediainfo_matches >= 3  # 至少匹配3个关键字
+
+    # 检查是否为BDInfo格式
+    bdinfo_required_matches = sum(1 for keyword in bdinfo_required_keywords if keyword in mediaInfo)
+    bdinfo_optional_matches = sum(1 for keyword in bdinfo_optional_keywords if keyword in mediaInfo)
+
+    # BDInfo需要匹配所有必要关键字，或者匹配部分必要关键字和足够的可选关键字
+    is_bdinfo = (bdinfo_required_matches == len(bdinfo_required_keywords)) or \
+                (bdinfo_required_matches >= 1 and bdinfo_optional_matches >= 2)
 
     if is_standard_mediainfo:
-        print("检测到标准 MediaInfo 格式，验证通过。")
+        print(f"检测到标准 MediaInfo 格式，验证通过。(匹配关键字数: {mediainfo_matches})")
         return mediaInfo
     elif is_bdinfo:
-        print("检测到 BDInfo 格式，验证通过。")
+        print(f"检测到 BDInfo 格式，验证通过。(必要关键字: {bdinfo_required_matches}/{len(bdinfo_required_keywords)}, 可选关键字: {bdinfo_optional_matches})")
         return mediaInfo
     else:
         print("提供的文本不是有效的 MediaInfo/BDInfo，将尝试从本地文件提取。")
+        print(f"MediaInfo匹配: {mediainfo_matches}/3, BDInfo必要关键字: {bdinfo_required_matches}/{len(bdinfo_required_keywords)}, 可选关键字: {bdinfo_optional_matches}")
         if not save_path:
             print("错误：未提供 save_path，无法从文件提取 MediaInfo。")
             return mediaInfo

@@ -909,6 +909,7 @@ const handlePublish = async () => {
         task_id: taskId.value,
         upload_data: torrentData.value,
         targetSite: siteName,
+        sourceSite: props.sourceSite
       })
 
       const result = {
@@ -1101,10 +1102,6 @@ const showSiteLog = (siteName: string, logs: string) => {
   showLogCard.value = true;
 }
 
-onMounted(() => {
-  fetchSitesStatus();
-  fetchTorrentInfo();
-});
 </script>
 
 <style scoped>

@@ -4,6 +4,7 @@ import logging
 import uuid
 import re
 from flask import Blueprint, jsonify, request
+from bs4 import BeautifulSoup
 from utils import upload_data_title, upload_data_screenshot, upload_data_poster, add_torrent_to_downloader, extract_tags_from_mediainfo, extract_origin_from_description
 from core.migrator import TorrentMigrator
 
@@ -112,6 +113,8 @@ def migrate_fetch_info():
                 "source_info": source_info,
                 "original_torrent_path": result["original_torrent_path"],
                 "review_data": result["review_data"],
+                "source_site_name": source_site_name,  # 添加源站点名称到缓存中
+                "source_torrent_id": search_term,  # 添加源种子ID到缓存中
             }
             return jsonify({
                 "success": True,
@@ -133,9 +136,9 @@ def migrate_fetch_info():
 def migrate_publish():
     db_manager = migrate_bp.db_manager
     data = request.json
-    task_id, upload_data, target_site_name = (data.get("task_id"),
-                                              data.get("upload_data"),
-                                              data.get("targetSite"))
+    task_id, upload_data, target_site_name, source_site_name = (
+        data.get("task_id"), data.get("upload_data"), data.get("targetSite"),
+        data.get("sourceSite"))
 
     if not task_id or task_id not in MIGRATION_CACHE:
         return jsonify({"success": False, "logs": "错误：无效或已过期的任务ID。"}), 400
@@ -157,10 +160,24 @@ def migrate_publish():
         source_info = context["source_info"]
         original_torrent_path = context["original_torrent_path"]
 
+        # 从缓存中获取源站点名称（如果前端没有传递）
+        if not source_site_name:
+            source_site_name = context.get("source_site_name", "")
+
+        # 特殊提取器处理已移至 migrator.py 中
+
         # 动态创建针对本次发布的 Migrator 实例
         migrator = TorrentMigrator(source_info,
                                    target_info,
                                    config_manager=config_manager)
+
+        # 使用特殊提取器处理数据（如果需要）
+        source_torrent_id = context.get("source_torrent_id", "unknown")
+        print(f"在publish阶段处理数据，源站点: {source_site_name}, 种子ID: {source_torrent_id}")
+        print(f"调用apply_special_extractor_if_needed前，upload_data中的mediainfo长度: {len(upload_data.get('mediainfo', '')) if upload_data.get('mediainfo') else 0}")
+        upload_data = migrator.apply_special_extractor_if_needed(upload_data, source_torrent_id)
+        print(f"publish阶段数据处理完成")
+        print(f"调用apply_special_extractor_if_needed后，upload_data中的mediainfo长度: {len(upload_data.get('mediainfo', '')) if upload_data.get('mediainfo') else 0}")
 
         # 1. 修改种子文件
         main_title = upload_data.get("original_main_title", "torrent")
@@ -422,12 +439,10 @@ def search_torrent_id():
             }), 404
 
         # 使用TorrentMigrator的搜索功能
-        migrator = TorrentMigrator(
-            source_site_info=source_info,
-            target_site_info=None,
-            search_term=torrent_name,
-            config_manager=config_manager
-        )
+        migrator = TorrentMigrator(source_site_info=source_info,
+                                   target_site_info=None,
+                                   search_term=torrent_name,
+                                   config_manager=config_manager)
 
         # 调用搜索方法获取种子ID
         torrent_id = migrator.search_and_get_torrent_id(torrent_name)
@@ -439,10 +454,7 @@ def search_torrent_id():
                 "message": "搜索成功"
             })
         else:
-            return jsonify({
-                "success": False,
-                "message": "未找到匹配的种子"
-            }), 404
+            return jsonify({"success": False, "message": "未找到匹配的种子"}), 404
 
     except Exception as e:
         logging.error(f"search_torrent_id 发生意外错误: {e}", exc_info=True)
