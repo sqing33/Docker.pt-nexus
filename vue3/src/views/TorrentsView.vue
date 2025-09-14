@@ -566,7 +566,7 @@ const startCrossSeed = (row: Torrent) => {
   sourceSelectionDialogVisible.value = true;
 };
 
-const confirmSourceSiteAndProceed = (sourceSite: any) => {
+const confirmSourceSiteAndProceed = async (sourceSite: any) => {
   const row = selectedTorrentForMigration.value;
   if (!row) {
     ElMessage.error('发生内部错误：未找到选中的种子信息。');
@@ -575,13 +575,47 @@ const confirmSourceSiteAndProceed = (sourceSite: any) => {
   }
 
   const siteDetails = row.sites[sourceSite.siteName];
-  const idMatch = siteDetails.comment.match(/id=(\d+)/);
-  if (!idMatch || !idMatch[1]) {
-    ElMessage.error(`无法从源站点 ${sourceSite.siteName} 的链接中提取种子ID。`);
-    sourceSelectionDialogVisible.value = false;
-    return;
+  const idMatch = siteDetails?.comment?.match(/id=(\d+)/);
+  let torrentId = null;
+
+  if (idMatch && idMatch[1]) {
+    // 如果能从链接中提取到ID，直接使用
+    torrentId = idMatch[1];
+  } else {
+    // 如果无法从链接中提取ID，使用种子名称进行搜索
+    try {
+      const response = await fetch('/api/migrate/search_torrent_id', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sourceSite: sourceSite.siteName,
+          torrentName: row.name
+        })
+      });
+
+      const result = await response.json();
+      if (result.success && result.torrent_id) {
+        torrentId = result.torrent_id;
+        ElMessage.success(`通过种子名称搜索成功获取到ID: ${torrentId}`);
+      } else {
+        ElMessage.error(`无法从源站点 ${sourceSite.siteName} 获取种子ID：${result.message || '搜索失败'}`);
+        sourceSelectionDialogVisible.value = false;
+        return;
+      }
+    } catch (error) {
+      ElMessage.error(`搜索种子ID时发生网络错误：${error.message}`);
+      sourceSelectionDialogVisible.value = false;
+      return;
+    }
   }
-  const torrentId = idMatch[1];
+
+  // 将获取到的种子ID存储起来，供后续使用
+  if (siteDetails) {
+    siteDetails.torrentId = torrentId;
+  }
+
   const sourceSiteName = sourceSite.siteName;
 
   ElMessage.success(`准备从站点 [${sourceSiteName}] 开始迁移种子...`);
