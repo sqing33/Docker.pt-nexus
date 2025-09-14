@@ -96,9 +96,9 @@ class TorrentMigrator:
             处理后的upload_data
         """
         print(f"检查是否需要应用特殊提取器处理，源站点: {self.SOURCE_NAME}")
-        # 检查是否需要使用特殊提取器处理"人人"站点数据
+        # 检查是否需要使用特殊提取器处理"人人"或"不可说"站点数据
         # 添加检查确保不会重复处理已标记的数据
-        if self.SOURCE_NAME == "人人":
+        if self.SOURCE_NAME == "人人" or self.SOURCE_NAME == "不可说":
             # 首先检查upload_data中是否已经有处理标志
             processed_flag = upload_data.get("special_extractor_processed", False)
             if not processed_flag:
@@ -106,7 +106,7 @@ class TorrentMigrator:
                 processed_flag = getattr(self, '_special_extractor_processed', False)
             print(f"检测到源站点为{self.SOURCE_NAME}，已处理标记: {processed_flag}")
             if processed_flag:
-                print(f"检测到源站点为{self.SOURCE_NAME}，但已在publish阶段处理过，跳过特殊提取器处理")
+                print(f"检测到源站点为{self.SOURCE_NAME}，但已在prepare_review_data阶段处理过，跳过特殊提取器处理")
                 return upload_data
             else:
                 try:
@@ -164,9 +164,13 @@ class TorrentMigrator:
                     print(f"构造的HTML内容长度: {len(html_content)}")
                     soup = BeautifulSoup(html_content, "html.parser")
 
-                    # 使用特殊提取器处理数据
-                    from core.extractors.audiences_special import AudiencesSpecialExtractor
-                    extractor = AudiencesSpecialExtractor(soup)
+                    # 根据源站点名称使用不同的特殊提取器处理数据
+                    if self.SOURCE_NAME == "人人":
+                        from core.extractors.audiences import AudiencesSpecialExtractor
+                        extractor = AudiencesSpecialExtractor(soup)
+                    elif self.SOURCE_NAME == "不可说":
+                        from core.extractors.ssd import SSDSpecialExtractor
+                        extractor = SSDSpecialExtractor(soup)
                     # 传递种子ID用于保存提取内容到本地文件
                     if not torrent_id:
                         torrent_id = upload_data.get("torrent_id", "unknown")
@@ -209,6 +213,16 @@ class TorrentMigrator:
                         upload_data["mediainfo"] = extracted_data["mediainfo"]
                         print(f"mediainfo更新前长度: {len(original_mediainfo) if original_mediainfo else 0}")
                         print(f"mediainfo更新后长度: {len(upload_data['mediainfo']) if upload_data['mediainfo'] else 0}")
+
+                    # 处理"不可说"站点的特殊主标题
+                    if self.SOURCE_NAME == "不可说" and "main_title" in extracted_data:
+                        print("更新'不可说'站点的主标题")
+                        # 更新review_data_payload中的original_main_title
+                        if "review_data" in upload_data:
+                            original_main_title = upload_data["review_data"].get("original_main_title", "")
+                            upload_data["review_data"]["original_main_title"] = extracted_data["main_title"]
+                            print(f"主标题更新前: {original_main_title}")
+                            print(f"主标题更新后: {extracted_data['main_title']}")
 
                     print(f"已使用特殊提取器处理来自{self.SOURCE_NAME}站点的数据")
                     # 标记已处理，避免重复处理
@@ -498,11 +512,12 @@ class TorrentMigrator:
             quotes = []
             images = []
             body = ""
-            
+            ardtu_declarations = []  # 初始化变量
+
             # 提取简介中的IMDb和豆瓣链接
             intro_imdb_link = ""
             intro_douban_link = ""
-            
+
             if descr_container:
                 descr_text = descr_container.get_text()
                 
@@ -575,7 +590,7 @@ class TorrentMigrator:
 
                 # 过滤掉 ARDTU 工具自动发布的声明和免责声明，但保留包含 "By ARDTU" 的组信息
                 filtered_quotes = []
-                ardtu_declarations = []
+                # ardtu_declarations 已在上方初始化，此处不再重复初始化
 
                 for quote in quotes:
                     # 检查是否为完整的 ARDTU 工具自动发布声明
@@ -764,27 +779,29 @@ class TorrentMigrator:
             full_description_text = f"{intro.get('statement', '')}\n{intro.get('body', '')}"
             origin_info = extract_origin_from_description(full_description_text)
 
-            # 7. 最后调用验证函数处理 mediainfo_text
-            mediainfo = upload_data_mediaInfo(
-                mediainfo_text if mediainfo_text else "未找到 Mediainfo 或 BDInfo",
-                self.save_path)
-            
             # --- [核心修改结束] ---
 
-            # 检查是否需要使用特殊提取器处理"人人"站点数据
+            # 检查是否需要使用特殊提取器处理"人人"或"不可说"站点数据
             # 添加检查确保不会重复处理已标记的数据
-            if self.SOURCE_NAME == "人人":
+            if self.SOURCE_NAME == "人人" or self.SOURCE_NAME == "不可说":
                 processed_flag = getattr(self, '_special_extractor_processed', False)
                 print(f"检测到源站点为{self.SOURCE_NAME}，已处理标记: {processed_flag}")
                 if processed_flag:
                     print(f"检测到源站点为{self.SOURCE_NAME}，但已处理过，跳过特殊提取器处理")
+                    # 直接使用特殊提取器处理过的结果
+                    mediainfo = upload_data_mediaInfo(
+                        mediainfo_text if mediainfo_text else "未找到 Mediainfo 或 BDInfo",
+                        self.save_path)
                 else:
                     try:
                         print(f"检测到源站点为{self.SOURCE_NAME}，尝试使用特殊提取器处理数据...")
-                        from core.extractors.audiences_special import AudiencesSpecialExtractor
-
-                        # 使用特殊提取器处理数据
-                        extractor = AudiencesSpecialExtractor(soup)
+                        # 根据源站点名称使用不同的特殊提取器处理数据
+                        if self.SOURCE_NAME == "人人":
+                            from core.extractors.audiences import AudiencesSpecialExtractor
+                            extractor = AudiencesSpecialExtractor(soup)
+                        elif self.SOURCE_NAME == "不可说":
+                            from core.extractors.ssd import SSDSpecialExtractor
+                            extractor = SSDSpecialExtractor(soup)
                         # 传递种子ID用于保存提取内容到本地文件
                         print(f"在prepare_review_data中调用特殊提取器，种子ID: {torrent_id}")
                         extracted_data = extractor.extract_all(torrent_id=torrent_id)
@@ -814,6 +831,18 @@ class TorrentMigrator:
                             print("更新mediainfo数据")
                             mediainfo = extracted_data["mediainfo"]
                             print(f"mediainfo更新后内容长度: {len(mediainfo) if mediainfo else 0}")
+                        elif self.SOURCE_NAME != "不可说":  # "不可说"站点可能没有标准的mediainfo结构
+                            # 如果特殊提取器没有提取到mediainfo，则使用公共方法处理
+                            print("特殊提取器未提取到mediainfo，使用公共方法处理")
+                            mediainfo = upload_data_mediaInfo(
+                                mediainfo_text if mediainfo_text else "未找到 Mediainfo 或 BDInfo",
+                                self.save_path)
+
+                        # 处理"不可说"站点的特殊主标题
+                        if self.SOURCE_NAME == "不可说" and "main_title" in extracted_data:
+                            print("更新'不可说'站点的主标题")
+                            original_main_title = extracted_data["main_title"]
+                            print(f"主标题更新后内容: {original_main_title}")
 
                         print(f"已使用特殊提取器处理来自{self.SOURCE_NAME}站点的数据")
                         # 标记已处理，避免重复处理
@@ -822,7 +851,15 @@ class TorrentMigrator:
                         print(f"使用特殊提取器处理{self.SOURCE_NAME}站点数据时发生错误: {e}")
                         import traceback
                         traceback.print_exc()
-                        # 如果特殊提取器失败，继续使用默认处理
+                        # 如果特殊提取器失败，使用默认处理
+                        mediainfo = upload_data_mediaInfo(
+                            mediainfo_text if mediainfo_text else "未找到 Mediainfo 或 BDInfo",
+                            self.save_path)
+            else:
+                # 非Audiences站点使用原有的处理方式
+                mediainfo = upload_data_mediaInfo(
+                    mediainfo_text if mediainfo_text else "未找到 Mediainfo 或 BDInfo",
+                    self.save_path)
 
             basic_info_td = soup.find("td", string="基本信息")
             basic_info_dict = {}

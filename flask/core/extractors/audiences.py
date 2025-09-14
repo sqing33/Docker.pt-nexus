@@ -6,7 +6,7 @@ Audiences特殊站点种子详情参数提取器
 
 import re
 from bs4 import BeautifulSoup
-from utils import extract_tags_from_mediainfo
+from utils import extract_tags_from_mediainfo, extract_origin_from_description
 from config import TEMP_DIR
 
 
@@ -18,21 +18,27 @@ class AudiencesSpecialExtractor:
 
     def extract_mediainfo(self):
         """
-        提取MediaInfo信息
-        处理多种格式：
-        1. <div class="hide">里的详细MediaInfo
-        2. <fieldset>里的BDInfo格式
-        3. <div class="spoiler-content">里的MediaInfo
-        4. <div class="nexus-media-info-raw">里的BDInfo
+        提取MediaInfo信息，专门针对Audiences站点从div.show > div.codemain中提取
         """
         mediainfo_text = ""
 
-        # 尝试从多个标准位置提取 MediaInfo 或 BDInfo
+        # 专门从div.show > div.codemain提取MediaInfo/BDInfo（优先处理Audiences站点）
+        show_elements = self.soup.select("div.show > div.codemain")
+        for element in show_elements:
+            content = element.get_text()
+            if content and content.strip():
+                # 清理内容确保格式正确
+                cleaned_content = self._clean_bdinfo_content(content)
+                # 检查是否包含MediaInfo或BDInfo特征
+                if self._is_valid_mediainfo(cleaned_content):
+                    mediainfo_text = cleaned_content
+                    print(f"在 div.show > div.codemain 中找到有效的MediaInfo/BDInfo，长度: {len(mediainfo_text)}")
+                    return mediainfo_text
+
+        # 如果在div.show中没有找到，尝试其他标准位置作为备选
         selectors = [
             "div.spoiler-content pre",
             "div.nexus-media-info-raw > pre",
-            "div.hide div.codemain",
-            "div.show div.codemain",
             "div.codemain",
             "pre"
         ]
@@ -42,26 +48,54 @@ class AudiencesSpecialExtractor:
             for element in elements:
                 content = element.get_text(strip=True)
                 if content:
+                    # 清理内容确保格式正确
+                    cleaned_content = self._clean_bdinfo_content(content)
                     # 检查是否包含MediaInfo或BDInfo特征
-                    if self._is_valid_mediainfo(content):
-                        mediainfo_text = content
+                    if self._is_valid_mediainfo(cleaned_content):
+                        mediainfo_text = cleaned_content
                         print(f"在 {selector} 中找到有效的MediaInfo/BDInfo，长度: {len(mediainfo_text)}")
                         return mediainfo_text
 
-        # 如果标准位置没有找到，尝试在简介的引用中查找
-        if not mediainfo_text:
-            descr_container = self.soup.select_one("div#kdescr")
-            if descr_container:
-                # 查找所有可能包含MediaInfo的区域
-                for element in descr_container.descendants:
-                    if element.name in ['div', 'pre', 'code']:
-                        content = element.get_text()
-                        if content and self._is_valid_mediainfo(content):
-                            mediainfo_text = content
-                            print(f"在简介中找到有效的MediaInfo/BDInfo，长度: {len(mediainfo_text)}")
-                            break
-
         return mediainfo_text
+
+    def _clean_bdinfo_content(self, content):
+        """
+        清理BDInfo内容，确保格式正确，移除额外的FILES部分
+        """
+        content = content.strip()
+
+        # 检查是否为BDInfo格式
+        if "DISC INFO" in content and "PLAYLIST REPORT" in content:
+            # 找到SUBTITLES部分的结束位置
+            subtitles_section = content.find("SUBTITLES:")
+            if subtitles_section != -1:
+                # 找到SUBTITLES部分之后的内容
+                subtitles_content = content[subtitles_section:]
+                # 找到SUBTITLES部分的结束（通常在下一个空行或FILES:之前）
+                subtitles_end = subtitles_content.find("\n\nFILES:")
+                if subtitles_end != -1:
+                    # 只返回到SUBTITLES结束的部分，排除FILES部分
+                    subtitles_part = subtitles_content[:subtitles_end]
+                    # 返回DISC INFO到SUBTITLES结束的部分
+                    disc_info_part = content[:subtitles_section]
+                    return (disc_info_part + subtitles_part).strip()
+                else:
+                    # 如果没有找到FILES:，检查是否有额外的空行
+                    # 找到SUBTITLES部分的最后一行
+                    lines = subtitles_content.split('\n')
+                    cleaned_lines = []
+                    for line in lines:
+                        # 如果遇到FILES:或明显的文件列表，则停止
+                        if line.strip().startswith("FILES:") or (line.strip() and ':\\' in line):
+                            break
+                        cleaned_lines.append(line)
+                    # 返回清理后的内容
+                    subtitles_part = '\n'.join(cleaned_lines)
+                    disc_info_part = content[:subtitles_section]
+                    return (disc_info_part + subtitles_part).strip()
+
+        # 如果不是BDInfo格式或者没有FILES部分，直接返回原内容
+        return content
 
     def _is_valid_mediainfo(self, content):
         """
@@ -238,25 +272,6 @@ class AudiencesSpecialExtractor:
             return subtitle
         return ""
 
-    def extract_origin_info(self, full_description_text):
-        """
-        从完整描述中提取产地信息
-        """
-        # 实现产地信息提取逻辑
-        patterns = [
-            r"[产]\s*地[:\s]+([^，,\n\r]+)",
-            r"[国]\s*家[:\s]+([^，,\n\r]+)",
-            r"[地]\s*区[:\s]+([^，,\n\r]+)"
-        ]
-
-        for pattern in patterns:
-            match = re.search(pattern, full_description_text)
-            if match:
-                return match.group(1).strip()
-
-        return ""
-
-
     def extract_detailed_params(self):
         """
         提取详细的参数信息，以文本格式返回所有参数名和对应的值
@@ -276,9 +291,9 @@ class AudiencesSpecialExtractor:
         # 提取MediaInfo
         mediainfo = self.extract_mediainfo()
 
-        # 提取产地信息
+        # 提取产地信息（使用公共方法）
         full_description_text = f"{intro.get('statement', '')}\n{intro.get('body', '')}"
-        origin_info = self.extract_origin_info(full_description_text)
+        origin_info = extract_origin_from_description(full_description_text)
 
         # 构建详细的参数字典
         detailed_params = {
@@ -329,9 +344,9 @@ class AudiencesSpecialExtractor:
         mediainfo = self.extract_mediainfo()
         print(f"MediaInfo提取完成: {len(mediainfo)} 字符")  # 添加调试信息
 
-        # 提取产地信息
+        # 提取产地信息（使用公共方法）
         full_description_text = f"{intro.get('statement', '')}\n{intro.get('body', '')}"
-        origin_info = self.extract_origin_info(full_description_text)
+        origin_info = extract_origin_from_description(full_description_text)
         print(f"产地信息提取完成: {origin_info}")  # 添加调试信息
 
         # 构建参数字典

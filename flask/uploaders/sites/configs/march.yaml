@@ -53,6 +53,7 @@ mappings:
     "default": "401"
 
   medium:
+    'BluRay': '1'
     'UHD Blu-ray': '1'
     'Blu-ray': '1'
     'BD': '1'

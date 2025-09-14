@@ -82,6 +82,7 @@ mappings:
   medium:
     "Blu-ray": "2"
     "BD": "2"
+    'BluRay': '2'
     'Blu-ray DIY': '2'
     "UHDTV": "3"
     "IPTV": "4"
