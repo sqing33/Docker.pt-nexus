@@ -68,7 +68,7 @@ class TorrentMigrator:
             self.TARGET_TRACKER_URL = f"{self.TARGET_BASE_URL}/announce.php"
             self.TARGET_PROXY = self.target_site.get("proxy", False)
 
-        self.temp_files = []
+        # Initialize scraper and logger
         session = requests.Session()
         session.verify = False
         self.scraper = cloudscraper.create_scraper(sess=session)
@@ -81,6 +81,149 @@ class TorrentMigrator:
         self.logger.add(self.log_handler,
                         format="{time:HH:mm:ss} - {level} - {message}",
                         level="DEBUG")
+
+        self.temp_files = []
+
+    def apply_special_extractor_if_needed(self, upload_data, torrent_id=None):
+        """
+        根据源站点名称决定是否使用特殊提取器处理数据
+
+        Args:
+            upload_data: 上传数据字典
+            torrent_id: 种子ID，用于保存提取内容到本地文件
+
+        Returns:
+            处理后的upload_data
+        """
+        print(f"检查是否需要应用特殊提取器处理，源站点: {self.SOURCE_NAME}")
+        # 检查是否需要使用特殊提取器处理"人人"站点数据
+        # 添加检查确保不会重复处理已标记的数据
+        if self.SOURCE_NAME == "人人":
+            # 首先检查upload_data中是否已经有处理标志
+            processed_flag = upload_data.get("special_extractor_processed", False)
+            if not processed_flag:
+                # 如果没有，检查实例变量
+                processed_flag = getattr(self, '_special_extractor_processed', False)
+            print(f"检测到源站点为{self.SOURCE_NAME}，已处理标记: {processed_flag}")
+            if processed_flag:
+                print(f"检测到源站点为{self.SOURCE_NAME}，但已在publish阶段处理过，跳过特殊提取器处理")
+                return upload_data
+            else:
+                try:
+                    print(f"检测到源站点为{self.SOURCE_NAME}，尝试使用特殊提取器处理数据...")
+
+                    # 从upload_data构造HTML内容用于提取器
+                    html_parts = []
+                    html_parts.append("<html><body>")
+
+                    # 添加基本信息表格（模拟原始页面结构）
+                    basic_info = upload_data.get("source_params", {})
+                    if basic_info:
+                        html_parts.append("<table>")
+                        html_parts.append("<tr><td>基本信息</td><td>")
+                        for key, value in basic_info.items():
+                            if value:
+                                html_parts.append(f"<div>{key}: {value}</div>")
+                        html_parts.append("</td></tr>")
+                        html_parts.append("</table>")
+
+                    # 添加标签信息
+                    tags = upload_data.get("source_params", {}).get("标签", [])
+                    if tags:
+                        html_parts.append("<table>")
+                        html_parts.append("<tr><td>标签</td><td>")
+                        for tag in tags:
+                            html_parts.append(f"<span>{tag}</span>")
+                        html_parts.append("</td></tr>")
+                        html_parts.append("</table>")
+
+                    # 添加副标题信息
+                    subtitle = upload_data.get("subtitle", "")
+                    if subtitle:
+                        html_parts.append("<table>")
+                        html_parts.append(
+                            f"<tr><td>副标题</td><td>{subtitle}</td></tr>")
+                        html_parts.append("</table>")
+
+                    # 添加简介内容
+                    intro_data = upload_data.get("intro", {})
+                    html_parts.append(
+                        f"<div id='kdescr'>{intro_data.get('statement', '')}{intro_data.get('body', '')}{intro_data.get('screenshots', '')}</div>"
+                    )
+
+                    # 添加MediaInfo内容
+                    mediainfo = upload_data.get("mediainfo", "")
+                    if mediainfo:
+                        html_parts.append(
+                            f"<div class='spoiler-content'><pre>{mediainfo}</pre></div>"
+                        )
+
+                    html_parts.append("</body></html>")
+
+                    html_content = "".join(html_parts)
+                    print(f"构造的HTML内容长度: {len(html_content)}")
+                    soup = BeautifulSoup(html_content, "html.parser")
+
+                    # 使用特殊提取器处理数据
+                    from core.extractors.audiences_special import AudiencesSpecialExtractor
+                    extractor = AudiencesSpecialExtractor(soup)
+                    # 传递种子ID用于保存提取内容到本地文件
+                    if not torrent_id:
+                        torrent_id = upload_data.get("torrent_id", "unknown")
+                    print(f"调用特殊提取器处理，种子ID: {torrent_id}")
+                    extracted_data = extractor.extract_all(torrent_id=torrent_id)
+                    print(f"特殊提取器返回数据: {extracted_data.keys() if extracted_data else 'None'}")
+
+                    # 使用特殊提取器的结果更新upload_data
+                    if "source_params" in extracted_data and extracted_data["source_params"]:
+                        print("更新source_params数据")
+                        original_source_params = upload_data.get("source_params", {}).copy()
+                        upload_data["source_params"] = {
+                            **upload_data.get("source_params", {}),
+                            **extracted_data["source_params"]
+                        }
+                        print(f"source_params更新前: {original_source_params}")
+                        print(f"source_params更新后: {upload_data['source_params']}")
+
+                    if "subtitle" in extracted_data and extracted_data["subtitle"]:
+                        print("更新subtitle数据")
+                        original_subtitle = upload_data.get("subtitle", "")
+                        upload_data["subtitle"] = extracted_data["subtitle"]
+                        print(f"subtitle更新前: {original_subtitle}")
+                        print(f"subtitle更新后: {upload_data['subtitle']}")
+
+                    if "intro" in extracted_data and extracted_data["intro"]:
+                        print("更新intro数据")
+                        # 合并intro数据，保留原有内容但用提取器的结果覆盖
+                        original_intro = upload_data.get("intro", {}).copy()
+                        upload_data["intro"] = {
+                            **upload_data.get("intro", {}),
+                            **extracted_data["intro"]
+                        }
+                        print(f"intro更新前: {original_intro}")
+                        print(f"intro更新后: {upload_data['intro']}")
+
+                    if "mediainfo" in extracted_data and extracted_data["mediainfo"]:
+                        print("更新mediainfo数据")
+                        original_mediainfo = upload_data.get("mediainfo", "")
+                        upload_data["mediainfo"] = extracted_data["mediainfo"]
+                        print(f"mediainfo更新前长度: {len(original_mediainfo) if original_mediainfo else 0}")
+                        print(f"mediainfo更新后长度: {len(upload_data['mediainfo']) if upload_data['mediainfo'] else 0}")
+
+                    print(f"已使用特殊提取器处理来自{self.SOURCE_NAME}站点的数据")
+                    # 标记已处理，避免重复处理
+                    self._special_extractor_processed = True
+                    # 同时在upload_data中添加标记
+                    upload_data["special_extractor_processed"] = True
+                except Exception as e:
+                    print(f"使用特殊提取器处理{self.SOURCE_NAME}站点数据时发生错误: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    # 如果特殊提取器失败，继续使用默认处理
+        else:
+            print(f"源站点 {self.SOURCE_NAME} 不需要特殊提取器处理")
+
+        return upload_data
 
     def cleanup(self):
         """清理所有临时文件"""
@@ -226,6 +369,7 @@ class TorrentMigrator:
         """第一步(新)：获取、解析信息，并下载原始种子文件，但不进行修改。"""
         try:
             self.logger.info(f"--- [步骤1] 开始获取种子信息 (源: {self.SOURCE_NAME}) ---")
+            print(f"开始prepare_review_data处理，源站点: {self.SOURCE_NAME}")
             torrent_id = (self.search_term if self.search_term.isdigit() else
                           self.search_and_get_torrent_id(self.search_term))
             if not torrent_id:
@@ -627,6 +771,59 @@ class TorrentMigrator:
             
             # --- [核心修改结束] ---
 
+            # 检查是否需要使用特殊提取器处理"人人"站点数据
+            # 添加检查确保不会重复处理已标记的数据
+            if self.SOURCE_NAME == "人人":
+                processed_flag = getattr(self, '_special_extractor_processed', False)
+                print(f"检测到源站点为{self.SOURCE_NAME}，已处理标记: {processed_flag}")
+                if processed_flag:
+                    print(f"检测到源站点为{self.SOURCE_NAME}，但已处理过，跳过特殊提取器处理")
+                else:
+                    try:
+                        print(f"检测到源站点为{self.SOURCE_NAME}，尝试使用特殊提取器处理数据...")
+                        from core.extractors.audiences_special import AudiencesSpecialExtractor
+
+                        # 使用特殊提取器处理数据
+                        extractor = AudiencesSpecialExtractor(soup)
+                        # 传递种子ID用于保存提取内容到本地文件
+                        print(f"在prepare_review_data中调用特殊提取器，种子ID: {torrent_id}")
+                        extracted_data = extractor.extract_all(torrent_id=torrent_id)
+                        print(f"特殊提取器返回数据: {extracted_data.keys() if extracted_data else 'None'}")
+
+                        # 使用特殊提取器的结果替换原有数据
+                        if "source_params" in extracted_data and extracted_data["source_params"]:
+                            print("更新source_params数据")
+                            # 确保source_params已初始化
+                            if 'source_params' not in locals():
+                                source_params = {}
+                            source_params.update(extracted_data["source_params"])
+                            print(f"source_params更新后内容: {source_params}")
+
+                        if "subtitle" in extracted_data and extracted_data["subtitle"]:
+                            print("更新subtitle数据")
+                            subtitle = extracted_data["subtitle"]
+                            print(f"subtitle更新后内容: {subtitle}")
+
+                        if "intro" in extracted_data and extracted_data["intro"]:
+                            print("更新intro数据")
+                            # 合并intro数据，保留原有内容但用提取器的结果覆盖
+                            intro = {**intro, **extracted_data["intro"]}
+                            print(f"intro更新后内容: {intro}")
+
+                        if "mediainfo" in extracted_data and extracted_data["mediainfo"]:
+                            print("更新mediainfo数据")
+                            mediainfo = extracted_data["mediainfo"]
+                            print(f"mediainfo更新后内容长度: {len(mediainfo) if mediainfo else 0}")
+
+                        print(f"已使用特殊提取器处理来自{self.SOURCE_NAME}站点的数据")
+                        # 标记已处理，避免重复处理
+                        self._special_extractor_processed = True
+                    except Exception as e:
+                        print(f"使用特殊提取器处理{self.SOURCE_NAME}站点数据时发生错误: {e}")
+                        import traceback
+                        traceback.print_exc()
+                        # 如果特殊提取器失败，继续使用默认处理
+
             basic_info_td = soup.find("td", string="基本信息")
             basic_info_dict = {}
             if basic_info_td and basic_info_td.find_next_sibling("td"):
@@ -785,7 +982,9 @@ class TorrentMigrator:
                 # --- [新增] ---
                 "final_publish_parameters": final_publish_parameters,
                 "complete_publish_params": complete_publish_params,
-                "raw_params_for_preview": raw_params_for_preview
+                "raw_params_for_preview": raw_params_for_preview,
+                # 添加特殊提取器处理标志
+                "special_extractor_processed": getattr(self, '_special_extractor_processed', False)
             }
 
             return {
