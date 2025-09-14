@@ -56,6 +56,7 @@ mappings:
     "default": "409"
 
   medium:
+    'BluRay': '2'
     'Blu-ray': '2'
     'BD': '2'
     'Blu-ray DIY': '2'

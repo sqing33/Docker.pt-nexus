@@ -1217,6 +1217,9 @@ def extract_origin_from_description(description_text: str) -> str:
         r"◎\s*国\s*家\s*(.+?)(?:\s|$)",  # 匹配 ◎国家 日本
         r"◎\s*地\s*区\s*(.+?)(?:\s|$)",  # 匹配 ◎地区 日本
         r"制片国家/地区[:\s]+(.+?)(?:\s|$)",  # 匹配 制片国家/地区: 日本
+        r"[产]\s*地[:\s]+([^，,\n\r]+)",
+        r"[国]\s*家[:\s]+([^，,\n\r]+)",
+        r"[地]\s*区[:\s]+([^，,\n\r]+)"
     ]
 
     for pattern in patterns:

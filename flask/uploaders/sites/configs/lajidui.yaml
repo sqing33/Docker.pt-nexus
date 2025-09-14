@@ -61,6 +61,7 @@ mappings:
     'Encode': '7'
     'Remux': '3'
     'HD DVD': '2'
+    'BluRay': '1'
     'Blu-ray': '1'
     'Blu-ray DIY': '1'
     'default': '11'

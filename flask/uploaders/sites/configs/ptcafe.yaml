@@ -45,6 +45,7 @@ mappings:
 
   medium:
     'Blu-ray': '4'
+    'BluRay': '4'
     'BD': '4'
     'Blu-ray DIY': '5'
     'Remux': '6'
