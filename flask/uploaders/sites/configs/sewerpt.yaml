@@ -31,6 +31,7 @@ mappings:
   medium:
     "Blu-ray": "1"
     "BD": "1"
+    'Blu-ray DIY': '1'
     "Remux": "3"
     "Encode": "7"
     "WEB-DL": "10"

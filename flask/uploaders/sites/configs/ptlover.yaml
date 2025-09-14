@@ -58,6 +58,7 @@ mappings:
     'UHD Blu-ray': '1'
     'Blu-ray': '1'
     'BD': '1'
+    'Blu-ray DIY': '1'
     'HD DVD': '2'
     'Remux': '3'
     'Encode': '7'

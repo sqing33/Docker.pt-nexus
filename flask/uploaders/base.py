@@ -119,10 +119,11 @@ class BaseUploader(ABC):
         logger.info(f"拼接完成的主标题: {final_title}")
         return final_title
 
-    def _find_mapping(self,
-                      mapping_dict: dict,
+    @staticmethod
+    def _find_mapping(mapping_dict: dict,
                       key_to_find: str,
-                      default_key: str = "default") -> str:
+                      default_key: str = "default",
+                      use_length_priority: bool = True) -> str:
         """
         通用的映射查找函数，支持精确匹配、部分匹配和默认值。
         """
@@ -143,10 +144,16 @@ class BaseUploader(ABC):
             if key.lower() == key_to_find.lower().strip():
                 return value
 
-        # 部分匹配 (按 key 长度降序排列，优先匹配更长的 key)
-        sorted_items = sorted(mapping_dict.items(),
-                              key=lambda x: len(x[0]),
-                              reverse=True)
+        # 部分匹配
+        if use_length_priority:
+            # 按 key 长度降序排列，优先匹配更长的 key (用于音频编码等场景)
+            sorted_items = sorted(mapping_dict.items(),
+                                  key=lambda x: len(x[0]),
+                                  reverse=True)
+        else:
+            # 按 YAML 中的顺序匹配 (用于媒介等场景)
+            sorted_items = list(mapping_dict.items())
+
         for key, value in sorted_items:
             # 修改为双向部分匹配：
             # 1. 如果 key 在 key_to_find 中 (例如 key="OurBits", key_to_find="7³ACG@OurBits")
@@ -386,6 +393,7 @@ class BaseUploader(ABC):
         medium_str = title_params.get("媒介", "")
         mediainfo_str = self.upload_data.get("mediainfo", "")
         is_standard_mediainfo = "General" in mediainfo_str and "Complete name" in mediainfo_str
+        is_bdinfo = "DISC INFO" in mediainfo_str and "PLAYLIST REPORT" in mediainfo_str
 
         # 站点规则：有mediainfo的Blu-ray/DVD源盘rip都算Encode
         medium_field = self.config.get("form_fields",
@@ -397,9 +405,16 @@ class BaseUploader(ABC):
             # 从配置文件中获取Encode的映射值
             encode_value = medium_mapping.get("Encode", "7")  # 默认值为7
             mapped[medium_field] = encode_value
+        elif is_bdinfo and ('blu' in medium_str.lower()
+                            or 'dvd' in medium_str.lower()):
+            # BDInfo格式的Blu-ray/DVD原盘应该映射为Blu-ray媒介
+            mapped[medium_field] = self._find_mapping(medium_mapping,
+                                                      medium_str,
+                                                      use_length_priority=False)
         else:
             mapped[medium_field] = self._find_mapping(medium_mapping,
-                                                      medium_str)
+                                                      medium_str,
+                                                      use_length_priority=False)
 
         # 3. 视频编码映射
         codec_str = title_params.get("视频编码", "")

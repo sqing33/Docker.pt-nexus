@@ -112,7 +112,7 @@ class CrabptUploader(BaseUploader):
                 mapped[medium_field] = encode_value
             else:
                 mapped[medium_field] = self._find_mapping(
-                    medium_mapping, medium_str)
+                    medium_mapping, medium_str, use_length_priority=False)
 
             # 视频编码映射
             codec_str = title_params.get("视频编码", "")

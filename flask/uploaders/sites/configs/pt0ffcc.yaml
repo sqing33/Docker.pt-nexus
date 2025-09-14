@@ -80,9 +80,9 @@ mappings:
     "default": "14"
 
   medium:
-    "UHD Blu-ray": "1"
     "Blu-ray": "2"
     "BD": "2"
+    'Blu-ray DIY': '2'
     "UHDTV": "3"
     "IPTV": "4"
     "Remux": "5"
@@ -96,6 +96,7 @@ mappings:
     "SACD": "13"
     "HD DVD": "14"
     "3D Blu-ray": "15"
+    "UHD Blu-ray": "1"
     "其它": "21"
     "Other": "21"
     "default": "21"

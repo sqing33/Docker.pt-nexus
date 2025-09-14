@@ -4,7 +4,7 @@ import logging
 import uuid
 import re
 from flask import Blueprint, jsonify, request
-from utils import upload_data_title, upload_data_screenshot, upload_data_poster, add_torrent_to_downloader, extract_tags_from_mediainfo
+from utils import upload_data_title, upload_data_screenshot, upload_data_poster, add_torrent_to_downloader, extract_tags_from_mediainfo, extract_origin_from_description
 from core.migrator import TorrentMigrator
 
 # --- [新增] 导入 config_manager ---
@@ -158,7 +158,9 @@ def migrate_publish():
         original_torrent_path = context["original_torrent_path"]
 
         # 动态创建针对本次发布的 Migrator 实例
-        migrator = TorrentMigrator(source_info, target_info, config_manager=config_manager)
+        migrator = TorrentMigrator(source_info,
+                                   target_info,
+                                   config_manager=config_manager)
 
         # 1. 修改种子文件
         main_title = upload_data.get("original_main_title", "torrent")
@@ -229,7 +231,10 @@ def migrate_torrent():
                 404,
             )
 
-        migrator = TorrentMigrator(source_info, target_info, search_term, config_manager=config_manager)
+        migrator = TorrentMigrator(source_info,
+                                   target_info,
+                                   search_term,
+                                   config_manager=config_manager)
         if hasattr(migrator, "run"):
             result = migrator.run()
             return jsonify(result)
@@ -288,15 +293,22 @@ def validate_media():
     imdb_link = source_info.get("imdb_link", '')
     douban_link = source_info.get("douban_link", '')
 
-    logging.warning(f"收到失效图片报告 - 类型: {image_type}, "
-                    f"来源信息: {source_info}，视频路径: {save_path}，种子名称: {torrent_name}")
+    logging.warning(
+        f"收到失效图片报告 - 类型: {image_type}, "
+        f"来源信息: {source_info}，视频路径: {save_path}，种子名称: {torrent_name}")
     if image_type == "screenshot":
-        screenshots = upload_data_screenshot(source_info, save_path, torrent_name)
+        screenshots = upload_data_screenshot(source_info, save_path,
+                                             torrent_name)
         return jsonify({"success": True, "screenshots": screenshots}), 200
     else:
-        status, posters, extracted_imdb_link = upload_data_poster(douban_link, imdb_link)
+        status, posters, extracted_imdb_link = upload_data_poster(
+            douban_link, imdb_link)
         if status:
-            return jsonify({"success": True, "posters": posters, "extracted_imdb_link": extracted_imdb_link}), 200
+            return jsonify({
+                "success": True,
+                "posters": posters,
+                "extracted_imdb_link": extracted_imdb_link
+            }), 200
         else:
             return jsonify({"success": False, "error": posters}), 400
 
@@ -315,11 +327,12 @@ def migrate_add_to_downloader():
 
     # 检查是否使用默认下载器
     use_default_downloader = data.get("useDefaultDownloader", False)
-    
+
     # 如果需要使用默认下载器，从配置中获取
     if use_default_downloader:
         config = config_manager.get()
-        default_downloader_id = config.get("cross_seed", {}).get("default_downloader")
+        default_downloader_id = config.get("cross_seed",
+                                           {}).get("default_downloader")
         # 只有当默认下载器ID不为空时才使用默认下载器
         if default_downloader_id:
             downloader_id = default_downloader_id
@@ -409,13 +422,26 @@ def update_preview_data():
 
         # 更新 review_data 中的相关字段
         review_data = context["review_data"].copy()
-        review_data["original_main_title"] = updated_data.get("original_main_title", review_data.get("original_main_title", ""))
-        review_data["title_components"] = updated_data.get("title_components", review_data.get("title_components", []))
-        review_data["subtitle"] = updated_data.get("subtitle", review_data.get("subtitle", ""))
-        review_data["imdb_link"] = updated_data.get("imdb_link", review_data.get("imdb_link", ""))
-        review_data["intro"] = updated_data.get("intro", review_data.get("intro", {}))
-        review_data["mediainfo"] = updated_data.get("mediainfo", review_data.get("mediainfo", ""))
-        review_data["source_params"] = updated_data.get("source_params", review_data.get("source_params", {}))
+        review_data["original_main_title"] = updated_data.get(
+            "original_main_title", review_data.get("original_main_title", ""))
+        review_data["title_components"] = updated_data.get(
+            "title_components", review_data.get("title_components", []))
+        review_data["subtitle"] = updated_data.get(
+            "subtitle", review_data.get("subtitle", ""))
+        review_data["imdb_link"] = updated_data.get(
+            "imdb_link", review_data.get("imdb_link", ""))
+        review_data["intro"] = updated_data.get("intro",
+                                                review_data.get("intro", {}))
+        review_data["mediainfo"] = updated_data.get(
+            "mediainfo", review_data.get("mediainfo", ""))
+        review_data["source_params"] = updated_data.get(
+            "source_params", review_data.get("source_params", {}))
+
+        # 重新提取产地信息
+        full_description_text = f"{review_data['intro'].get('statement', '')}\n{review_data['intro'].get('body', '')}"
+        origin_info = extract_origin_from_description(full_description_text)
+        if origin_info and "source_params" in review_data:
+            review_data["source_params"]["产地"] = origin_info
 
         # 重新生成预览参数
         # 这里我们需要重新构建完整的发布参数预览
@@ -423,7 +449,8 @@ def update_preview_data():
             # 1. 重新解析标题组件
             title_components = review_data.get("title_components", [])
             if not title_components:
-                title_components = upload_data_title(review_data["original_main_title"])
+                title_components = upload_data_title(
+                    review_data["original_main_title"])
 
             # 2. 重新构建标题参数字典
             title_params = {
@@ -433,14 +460,27 @@ def update_preview_data():
 
             # 3. 重新拼接主标题
             order = [
-                "主标题", "年份", "季集", "剧集状态", "发布版本", "分辨率", "媒介",
-                "片源平台", "视频编码", "视频格式", "HDR格式", "色深", "帧率", "音频编码",
+                "主标题",
+                "年份",
+                "季集",
+                "剧集状态",
+                "发布版本",
+                "分辨率",
+                "片源平台",
+                "媒介",
+                "视频编码",
+                "视频格式",
+                "HDR格式",
+                "色深",
+                "帧率",
+                "音频编码",
             ]
             title_parts = []
             for key in order:
                 value = title_params.get(key)
                 if value:
-                    title_parts.append(" ".join(map(str, value)) if isinstance(value, list) else str(value))
+                    title_parts.append(" ".join(map(str, value)) if isinstance(
+                        value, list) else str(value))
 
             raw_main_part = " ".join(filter(None, title_parts))
             main_part = re.sub(r'(?<!\d)\.(?!\d)', ' ', raw_main_part)
@@ -461,12 +501,12 @@ def update_preview_data():
                 f"{review_data['intro'].get('statement', '')}\n"
                 f"{review_data['intro'].get('poster', '')}\n"
                 f"{review_data['intro'].get('body', '')}\n"
-                f"{review_data['intro'].get('screenshots', '')}"
-            )
+                f"{review_data['intro'].get('screenshots', '')}")
 
             # 5. 重新收集标签
             source_tags = set(review_data["source_params"].get("标签") or [])
-            mediainfo_tags = set(extract_tags_from_mediainfo(review_data["mediainfo"]))
+            mediainfo_tags = set(
+                extract_tags_from_mediainfo(review_data["mediainfo"]))
             all_tags = sorted(list(source_tags.union(mediainfo_tags)))
 
             # 6. 重新组装预览字典
@@ -486,17 +526,29 @@ def update_preview_data():
 
             # 7. 提取映射前的原始参数用于前端展示
             raw_params_for_preview = {
-                "final_main_title": preview_title,
-                "subtitle": review_data["subtitle"],
-                "imdb_link": review_data["imdb_link"],
-                "type": review_data["source_params"].get("类型", ""),
-                "medium": title_params.get("媒介", ""),
-                "video_codec": title_params.get("视频编码", ""),
-                "audio_codec": title_params.get("音频编码", ""),
-                "resolution": title_params.get("分辨率", ""),
-                "release_group": title_params.get("制作组", ""),
-                "source": review_data["source_params"].get("产地", "") or title_params.get("片源平台", ""),
-                "tags": list(all_tags)
+                "final_main_title":
+                preview_title,
+                "subtitle":
+                review_data["subtitle"],
+                "imdb_link":
+                review_data["imdb_link"],
+                "type":
+                review_data["source_params"].get("类型", ""),
+                "medium":
+                title_params.get("媒介", ""),
+                "video_codec":
+                title_params.get("视频编码", ""),
+                "audio_codec":
+                title_params.get("音频编码", ""),
+                "resolution":
+                title_params.get("分辨率", ""),
+                "release_group":
+                title_params.get("制作组", ""),
+                "source":
+                review_data["source_params"].get("产地", "")
+                or title_params.get("片源平台", ""),
+                "tags":
+                list(all_tags)
             }
 
             # 更新 review_data 中的预览参数
@@ -520,7 +572,4 @@ def update_preview_data():
 
     except Exception as e:
         logging.error(f"update_preview_data 发生意外错误: {e}", exc_info=True)
-        return jsonify({
-            "success": False,
-            "message": f"服务器内部错误: {e}"
-        }), 500
+        return jsonify({"success": False, "message": f"服务器内部错误: {e}"}), 500

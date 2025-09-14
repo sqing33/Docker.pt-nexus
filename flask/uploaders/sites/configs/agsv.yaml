@@ -50,9 +50,9 @@ mappings:
     "default": "413"
 
   medium:
-    'UHD Blu-ray': '11'
     'Blu-ray': '1'
     'BD': '1'
+    'Blu-ray DIY': '1'
     'Remux': '3'
     'Encode': '7'
     'WEB-DL': '10'
@@ -62,6 +62,7 @@ mappings:
     'TVrip': '5'
     'DVD': '2'
     'CD': '8'
+    'UHD Blu-ray': '11'
     'Track': '12'
     'default': '13'
 
