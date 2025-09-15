@@ -96,9 +96,9 @@ class TorrentMigrator:
             处理后的upload_data
         """
         print(f"检查是否需要应用特殊提取器处理，源站点: {self.SOURCE_NAME}")
-        # 检查是否需要使用特殊提取器处理"人人"或"不可说"站点数据
+        # 检查是否需要使用特殊提取器处理"人人"、"不可说"或"憨憨"站点数据
         # 添加检查确保不会重复处理已标记的数据
-        if self.SOURCE_NAME == "人人" or self.SOURCE_NAME == "不可说":
+        if self.SOURCE_NAME == "人人" or self.SOURCE_NAME == "不可说" or self.SOURCE_NAME == "憨憨":
             # 首先检查upload_data中是否已经有处理标志
             processed_flag = upload_data.get("special_extractor_processed", False)
             if not processed_flag:
@@ -164,28 +164,17 @@ class TorrentMigrator:
                     print(f"构造的HTML内容长度: {len(html_content)}")
                     soup = BeautifulSoup(html_content, "html.parser")
 
-                    # 根据源站点名称使用不同的特殊提取器处理数据
-                    if self.SOURCE_NAME == "人人":
-                        from core.extractors.audiences import AudiencesSpecialExtractor
-                        extractor = AudiencesSpecialExtractor(soup)
-                    elif self.SOURCE_NAME == "不可说":
-                        from core.extractors.ssd import SSDSpecialExtractor
-                        extractor = SSDSpecialExtractor(soup)
-                    # 传递种子ID用于保存提取内容到本地文件
-                    if not torrent_id:
-                        torrent_id = upload_data.get("torrent_id", "unknown")
-                    print(f"调用特殊提取器处理，种子ID: {torrent_id}")
-                    extracted_data = extractor.extract_all(torrent_id=torrent_id)
-                    print(f"特殊提取器返回数据: {extracted_data.keys() if extracted_data else 'None'}")
+                    # 使用统一的数据提取方法
+                    extracted_data = self._extract_data_by_site_type(soup, torrent_id)
+                    print(f"特殊提取器返回数据键: {extracted_data.keys() if extracted_data else 'None'}")
 
                     # 使用特殊提取器的结果更新upload_data
                     if "source_params" in extracted_data and extracted_data["source_params"]:
                         print("更新source_params数据")
                         original_source_params = upload_data.get("source_params", {}).copy()
-                        upload_data["source_params"] = {
-                            **upload_data.get("source_params", {}),
-                            **extracted_data["source_params"]
-                        }
+                        # 合并source_params，但优先使用特殊提取器的结果
+                        merged_source_params = {**original_source_params, **extracted_data["source_params"]}
+                        upload_data["source_params"] = merged_source_params
                         print(f"source_params更新前: {original_source_params}")
                         print(f"source_params更新后: {upload_data['source_params']}")
 
@@ -201,7 +190,7 @@ class TorrentMigrator:
                         # 合并intro数据，保留原有内容但用提取器的结果覆盖
                         original_intro = upload_data.get("intro", {}).copy()
                         upload_data["intro"] = {
-                            **upload_data.get("intro", {}),
+                            **original_intro,
                             **extracted_data["intro"]
                         }
                         print(f"intro更新前: {original_intro}")
@@ -213,6 +202,13 @@ class TorrentMigrator:
                         upload_data["mediainfo"] = extracted_data["mediainfo"]
                         print(f"mediainfo更新前长度: {len(original_mediainfo) if original_mediainfo else 0}")
                         print(f"mediainfo更新后长度: {len(upload_data['mediainfo']) if upload_data['mediainfo'] else 0}")
+
+                    if "title" in extracted_data and extracted_data["title"]:
+                        print("更新title数据")
+                        original_title = upload_data.get("title", "")
+                        upload_data["title"] = extracted_data["title"]
+                        print(f"title更新前: {original_title}")
+                        print(f"title更新后: {upload_data['title']}")
 
                     # 移除了针对"不可说"站点的特殊主标题处理，现在统一处理所有站点
 
@@ -371,6 +367,308 @@ class TorrentMigrator:
                 exception=True).error(f"修改 .torrent 文件时发生严重错误: {e}")
             return None
 
+    def _extract_data_by_site_type(self, soup, torrent_id):
+        """
+        根据站点类型选择对应的提取器提取数据
+
+        Args:
+            soup: BeautifulSoup对象，包含种子详情页的HTML
+            torrent_id: 种子ID
+
+        Returns:
+            dict: 包含提取数据的字典
+        """
+        # 初始化默认数据结构
+        extracted_data = {
+            "title": "",
+            "subtitle": "",
+            "intro": {
+                "statement": "",
+                "poster": "",
+                "body": "",
+                "screenshots": "",
+                "removed_ardtudeclarations": [],
+                "imdb_link": "",
+                "douban_link": ""
+            },
+            "mediainfo": "",
+            "source_params": {
+                "类型": "",
+                "媒介": None,
+                "编码": None,
+                "音频编码": None,
+                "分辨率": None,
+                "制作组": None,
+                "标签": [],
+                "产地": ""
+            }
+        }
+
+        # 根据站点类型选择对应的提取器
+        if self.SOURCE_NAME in ["人人", "不可说", "憨憨"]:
+            try:
+                print(f"使用特殊提取器处理 {self.SOURCE_NAME} 站点数据")
+                if self.SOURCE_NAME == "人人":
+                    from core.extractors.audiences import AudiencesSpecialExtractor
+                    extractor = AudiencesSpecialExtractor(soup)
+                elif self.SOURCE_NAME == "不可说":
+                    from core.extractors.ssd import SSDSpecialExtractor
+                    extractor = SSDSpecialExtractor(soup)
+                elif self.SOURCE_NAME == "憨憨":
+                    from core.extractors.hhanclub import HHCLUBSpecialExtractor
+                    extractor = HHCLUBSpecialExtractor(soup)
+
+                # 调用特殊提取器
+                special_extracted_data = extractor.extract_all(torrent_id=torrent_id)
+                print(f"特殊提取器返回数据键: {special_extracted_data.keys() if special_extracted_data else 'None'}")
+
+                # 合并特殊提取器的数据到默认结构中
+                if special_extracted_data:
+                    # 合并title
+                    if "title" in special_extracted_data and special_extracted_data["title"]:
+                        extracted_data["title"] = special_extracted_data["title"]
+
+                    # 合并subtitle
+                    if "subtitle" in special_extracted_data and special_extracted_data["subtitle"]:
+                        extracted_data["subtitle"] = special_extracted_data["subtitle"]
+
+                    # 合并intro
+                    if "intro" in special_extracted_data and special_extracted_data["intro"]:
+                        # 合并intro字典的各个字段
+                        for key in extracted_data["intro"]:
+                            if key in special_extracted_data["intro"] and special_extracted_data["intro"][key]:
+                                extracted_data["intro"][key] = special_extracted_data["intro"][key]
+
+                    # 合并mediainfo
+                    if "mediainfo" in special_extracted_data and special_extracted_data["mediainfo"]:
+                        extracted_data["mediainfo"] = special_extracted_data["mediainfo"]
+
+                    # 合并source_params
+                    if "source_params" in special_extracted_data and special_extracted_data["source_params"]:
+                        for key in extracted_data["source_params"]:
+                            if key in special_extracted_data["source_params"] and special_extracted_data["source_params"][key] is not None:
+                                extracted_data["source_params"][key] = special_extracted_data["source_params"][key]
+
+                print(f"特殊提取器处理完成")
+                return extracted_data
+
+            except Exception as e:
+                print(f"使用特殊提取器处理 {self.SOURCE_NAME} 站点数据时发生错误: {e}")
+                import traceback
+                traceback.print_exc()
+                # 如果特殊提取器失败，继续使用公共提取器
+
+        # 使用公共提取器（默认提取器）
+        print(f"使用公共提取器处理 {self.SOURCE_NAME} 站点数据")
+        return self._extract_data_common(soup)
+
+    def _extract_data_common(self, soup):
+        """
+        使用公共方法提取数据
+
+        Args:
+            soup: BeautifulSoup对象，包含种子详情页的HTML
+
+        Returns:
+            dict: 包含提取数据的字典
+        """
+        extracted_data = {
+            "title": "",
+            "subtitle": "",
+            "intro": {
+                "statement": "",
+                "poster": "",
+                "body": "",
+                "screenshots": "",
+                "removed_ardtudeclarations": [],
+                "imdb_link": "",
+                "douban_link": ""
+            },
+            "mediainfo": "",
+            "source_params": {
+                "类型": "",
+                "媒介": None,
+                "编码": None,
+                "音频编码": None,
+                "分辨率": None,
+                "制作组": None,
+                "标签": [],
+                "产地": ""
+            }
+        }
+
+        # 从h1#top提取标题
+        h1_top = soup.select_one("h1#top")
+        if h1_top:
+            title = list(h1_top.stripped_strings)[0] if h1_top.stripped_strings else ""
+            # 统一处理标题中的点号，将点(.)替换为空格，但保留小数点格式(如 7.1)
+            title = re.sub(r'(?<!\d)\.|\.(?!\d\b)', ' ', title)
+            title = re.sub(r'\s+', ' ', title).strip()
+            extracted_data["title"] = title
+
+        # 提取副标题
+        subtitle_td = soup.find("td", string=re.compile(r"\s*副标题\s*"))
+        if subtitle_td and subtitle_td.find_next_sibling("td"):
+            subtitle = subtitle_td.find_next_sibling("td").get_text(strip=True)
+            # 剔除制作组信息
+            subtitle = re.sub(r"\s*\|\s*[Aa][Bb]y\s+\w+.*$", "", subtitle)
+            subtitle = re.sub(r"\s*\|\s*[Bb]y\s+\w+.*$", "", subtitle)
+            subtitle = re.sub(r"\s*\|\s*[Aa]\s+\w+.*$", "", subtitle)
+            subtitle = re.sub(r"\s*\|\s*[Aa][Tt][Uu]\s*$", "", subtitle)
+            subtitle = re.sub(r"\s*\|\s*[Dd][Tt][Uu]\s*$", "", subtitle)
+            subtitle = re.sub(r"\s*\|\s*[Pp][Tt][Ee][Rr]\s*$", "", subtitle)
+            extracted_data["subtitle"] = subtitle
+
+        # 提取简介信息
+        descr_container = soup.select_one("div#kdescr")
+        if descr_container:
+            # 提取IMDb和豆瓣链接
+            descr_text = descr_container.get_text()
+            imdb_link = ""
+            douban_link = ""
+
+            if imdb_match := re.search(r"(https?://www\.imdb\.com/title/tt\d+)", descr_text):
+                imdb_link = imdb_match.group(1)
+
+            if douban_match := re.search(r"(https?://movie\.douban\.com/subject/\d+)", descr_text):
+                douban_link = douban_match.group(1)
+
+            extracted_data["intro"]["imdb_link"] = imdb_link
+            extracted_data["intro"]["douban_link"] = douban_link
+
+            # 提取简介内容
+            descr_html_string = str(descr_container)
+            corrected_descr_html = re.sub(r'(<img[^>]*[^/])>', r'\1 />', descr_html_string)
+            descr_container_soup = BeautifulSoup(corrected_descr_html, "html.parser")
+            bbcode = self._html_to_bbcode(descr_container_soup)
+
+            # 清理连续的、中间无内容的 [quote] 标签
+            original_bbcode = bbcode
+            while True:
+                bbcode = re.sub(r"\[quote\]\s*\[quote\]", "[quote]", bbcode, flags=re.IGNORECASE)
+                bbcode = re.sub(r"\[/quote\]\s*\[/quote\]", "[/quote]", bbcode, flags=re.IGNORECASE)
+                if bbcode == original_bbcode:
+                    break
+                original_bbcode = bbcode
+
+            quotes = re.findall(r"\[quote\].*?\[/quote\]", bbcode, re.DOTALL)
+            images = re.findall(r"\[img\].*?\[/img\]", bbcode)
+
+            # 过滤掉不需要的声明
+            filtered_quotes = []
+            ardtu_declarations = []
+
+            for quote in quotes:
+                # 检查是否为不需要的声明
+                is_ardtutool_auto_publish = (
+                    "ARDTU工具自动发布" in quote and "有错误请评论或举报" in quote
+                    and any(tag in quote for tag in ["[size=7]", "[color=Red]"]))
+
+                is_disclaimer = (
+                    "郑重声明：" in quote and "本站提供的所有作品均是用户自行搜集并且上传" in quote
+                    and "禁止任何涉及商业盈利目的使用" in quote
+                    and any(tag in quote for tag in ["[size=3]", "[color=Red]"]))
+
+                is_csweb_disclaimer = (
+                    "财神CSWEB提供的所有资源均是在网上搜集且由用户上传" in quote
+                    and "不可用于任何形式的商业盈利活动" in quote
+                    and "请在下载后24小时内尽快删除" in quote)
+
+                is_by_ardtu_group_info = "By ARDTU" in quote and "官组作品" in quote
+                is_invalid_mediainfo = ".Release.Info" in quote and "ENCODER" in quote and "RELEASE NAME" in quote
+                has_atu_tool_signature = "| A | By ATU" in quote
+
+                if is_ardtutool_auto_publish or is_disclaimer or is_csweb_disclaimer:
+                    clean_content = re.sub(r"\[\/?quote\]", "", quote).strip()
+                    ardtu_declarations.append(clean_content)
+                elif is_by_ardtu_group_info:
+                    filtered_quote = re.sub(r"\s*By ARDTU\s*", "", quote)
+                    filtered_quotes.append(filtered_quote)
+                elif "ARDTU" in quote:
+                    clean_content = re.sub(r"\[\/?quote\]", "", quote).strip()
+                    ardtu_declarations.append(clean_content)
+                elif is_invalid_mediainfo:
+                    clean_content = re.sub(r"\[\/?quote\]", "", quote).strip()
+                    ardtu_declarations.append(clean_content)
+                elif has_atu_tool_signature:
+                    clean_content = re.sub(r"\[\/?quote\]", "", quote).strip()
+                    ardtu_declarations.append(clean_content)
+                else:
+                    filtered_quotes.append(quote)
+
+            quotes = filtered_quotes
+            body = (re.sub(r"\[quote\].*?\[/quote\]|\[img\].*?\[/img\]", "", bbcode, flags=re.DOTALL)
+                   .replace("\r", "").strip())
+
+            extracted_data["intro"]["statement"] = "\n".join(quotes)
+            extracted_data["intro"]["poster"] = images[0] if images else ""
+            extracted_data["intro"]["body"] = re.sub(r"\n{2,}", "\n", body)
+            extracted_data["intro"]["screenshots"] = "\n".join(images[1:])
+            extracted_data["intro"]["removed_ardtudeclarations"] = ardtu_declarations
+
+        # 提取MediaInfo
+        mediainfo_pre = soup.select_one("div.spoiler-content pre")
+        if not mediainfo_pre:
+            mediainfo_pre = soup.select_one("div.nexus-media-info-raw > pre")
+
+        mediainfo_text = mediainfo_pre.get_text(strip=True) if mediainfo_pre else ""
+        extracted_data["mediainfo"] = mediainfo_text
+
+        # 如果标准位置没有 MediaInfo，则在简介的引用中查找
+        if not mediainfo_text and extracted_data["intro"]["statement"]:
+            quotes = extracted_data["intro"]["statement"].split('\n')
+            found_mediainfo_in_quote = False
+            remaining_quotes = []
+
+            for quote in quotes:
+                is_mediainfo = ("General" in quote and "Video" in quote and "Audio" in quote)
+                is_bdinfo = ("DISC INFO" in quote and "PLAYLIST REPORT" in quote)
+
+                if not found_mediainfo_in_quote and (is_mediainfo or is_bdinfo):
+                    mediainfo_text = re.sub(r"\[/?quote\]", "", quote).strip()
+                    extracted_data["mediainfo"] = mediainfo_text
+                    found_mediainfo_in_quote = True
+                else:
+                    remaining_quotes.append(quote)
+
+            if found_mediainfo_in_quote:
+                extracted_data["intro"]["statement"] = "\n".join(remaining_quotes)
+
+        # 提取基本信息和标签
+        basic_info_td = soup.find("td", string="基本信息")
+        basic_info_dict = {}
+        if basic_info_td and basic_info_td.find_next_sibling("td"):
+            strings = list(basic_info_td.find_next_sibling("td").stripped_strings)
+            basic_info_dict = {
+                s.replace(":", "").strip(): strings[i + 1]
+                for i, s in enumerate(strings)
+                if ":" in s and i + 1 < len(strings)
+            }
+
+        tags_td = soup.find("td", string="标签")
+        tags = ([
+            s.get_text(strip=True)
+            for s in tags_td.find_next_sibling("td").find_all("span")
+        ] if tags_td and tags_td.find_next_sibling("td") else [])
+
+        type_text = basic_info_dict.get("类型", "")
+        type_match = re.search(r"[\(（](.*?)[\)）]", type_text)
+
+        extracted_data["source_params"]["类型"] = type_match.group(1) if type_match else type_text.split("/")[-1]
+        extracted_data["source_params"]["媒介"] = basic_info_dict.get("媒介")
+        extracted_data["source_params"]["编码"] = basic_info_dict.get("编码")
+        extracted_data["source_params"]["音频编码"] = basic_info_dict.get("音频编码")
+        extracted_data["source_params"]["分辨率"] = basic_info_dict.get("分辨率")
+        extracted_data["source_params"]["制作组"] = basic_info_dict.get("制作组")
+        extracted_data["source_params"]["标签"] = tags
+
+        # 提取产地信息
+        full_description_text = f"{extracted_data['intro']['statement']}\n{extracted_data['intro']['body']}"
+        origin_info = extract_origin_from_description(full_description_text)
+        extracted_data["source_params"]["产地"] = origin_info
+
+        return extracted_data
+
     def prepare_review_data(self):
         """第一步(新)：获取、解析信息，并下载原始种子文件，但不进行修改。"""
         try:
@@ -386,7 +684,7 @@ class TorrentMigrator:
             proxies = self._get_proxies(self.SOURCE_PROXY)
             if proxies:
                 self.logger.info(f"使用代理获取详情页: {proxies}")
-            
+
             response = self.scraper.get(
                 f"{self.SOURCE_BASE_URL}/details.php",
                 headers={"Cookie": self.SOURCE_COOKIE},
@@ -402,15 +700,16 @@ class TorrentMigrator:
 
             self.logger.success("详情页请求成功！")
 
-            soup = BeautifulSoup(response.text, "html.parser")
+            # 保存原始HTML到本地文件，用于调试和分析
+            try:
+                html_save_path = os.path.join(TEMP_DIR, f"torrent_{torrent_id}_details.html")
+                with open(html_save_path, "w", encoding="utf-8") as f:
+                    f.write(response.text)
+                self.logger.info(f"详情页HTML已保存到: {html_save_path}")
+            except Exception as e:
+                self.logger.warning(f"保存详情页HTML失败: {e}")
 
-            h1_top = soup.select_one("h1#top")
-            original_main_title = list(
-                h1_top.stripped_strings)[0] if h1_top else "未找到标题"
-            # 统一处理标题中的点号，将点(.)替换为空格，但保留小数点格式(如 7.1)
-            original_main_title = re.sub(r'(?<!\d)\.|\.(?!\d\b)', ' ', original_main_title)
-            original_main_title = re.sub(r'\s+', ' ', original_main_title).strip()
-            self.logger.info(f"获取到原始主标题: {original_main_title}")
+            soup = BeautifulSoup(response.text, "html.parser")
 
             # --- [核心修改 1] 开始 ---
             # 先下载种子文件，以便获取其准确的文件名
@@ -434,6 +733,22 @@ class TorrentMigrator:
                 if filename_match:
                     torrent_filename = filename_match.group(1)
 
+            # 使用统一的数据提取方法
+            extracted_data = self._extract_data_by_site_type(soup, torrent_id)
+
+            # 获取主标题
+            original_main_title = extracted_data.get("title", "")
+            if not original_main_title:
+                # 如果提取器没有返回标题，则从h1#top获取
+                h1_top = soup.select_one("h1#top")
+                original_main_title = list(
+                    h1_top.stripped_strings)[0] if h1_top else "未找到标题"
+                # 统一处理标题中的点号，将点(.)替换为空格，但保留小数点格式(如 7.1)
+                original_main_title = re.sub(r'(?<!\d)\.|\.(?!\d\b)', ' ', original_main_title)
+                original_main_title = re.sub(r'\s+', ' ', original_main_title).strip()
+
+            self.logger.info(f"获取到原始主标题: {original_main_title}")
+
             safe_filename_base = re.sub(r'[\\/*?:"<>|]', "_", original_main_title)[:150]
             original_torrent_path = os.path.join(
                 TEMP_DIR, f"{safe_filename_base}.original.torrent")
@@ -451,249 +766,44 @@ class TorrentMigrator:
             else:
                 self.logger.success("主标题成功解析为参数。")
 
-            subtitle_td = soup.find("td", string=re.compile(r"\s*副标题\s*"))
+            # 从提取的数据中获取其他信息
+            subtitle = extracted_data.get("subtitle", "")
+            intro = extracted_data.get("intro", {})
+            mediainfo_text = extracted_data.get("mediainfo", "")
+            source_params = extracted_data.get("source_params", {})
 
-            # 检查是否找到了标签，并且其后紧跟着一个 td 兄弟节点
-            if subtitle_td and subtitle_td.find_next_sibling("td"):
-                subtitle = subtitle_td.find_next_sibling("td").get_text(
-                    strip=True)
-                # 剔除以 "| ARDTU" 开始及之后的所有内容
-                subtitle = re.sub(r"\s*\|\s*ARDTU.*", "", subtitle)
-                # 剔除以 "| A | By ATU" 开始及之后的所有内容
-                subtitle = re.sub(r"\s*\|\s*A\s*\|\s*By\s*ATU.*", "", subtitle)
-                # 剔除以 "|" 开头后跟制作组信息的内容（如 "| ABy ATU_Tool, Ldd"）
-                subtitle = re.sub(r"\s*\|\s*[Aa][Bb]y\s+\w+.*$", "", subtitle)
-                # 剔除以 "| By" 开头后跟制作组信息的内容
-                subtitle = re.sub(r"\s*\|\s*[Bb]y\s+\w+.*$", "", subtitle)
-                # 剔除以 "| A" 开头后跟制作组信息的内容
-                subtitle = re.sub(r"\s*\|\s*[Aa]\s+\w+.*$", "", subtitle)
-                # 剔除以 "| ATU" 或 "| DTU" 结尾的内容（不区分大小写）
-                subtitle = re.sub(r"\s*\|\s*[Aa][Tt][Uu]\s*$", "", subtitle)
-                subtitle = re.sub(r"\s*\|\s*[Dd][Tt][Uu]\s*$", "", subtitle)
-                subtitle = re.sub(r"\s*\|\s*[Pp][Tt][Ee][Rr]\s*$", "", subtitle)
-            else:
-                subtitle = ""
+            # 提取IMDb和豆瓣链接
+            imdb_link = intro.get("imdb_link", "")
+            douban_link = intro.get("douban_link", "")
+
+            # 使用统一提取方法获取的数据
             descr_container = soup.select_one("div#kdescr")
 
-            imdb_link = ""
-            douban_link = ""
-            if descr_container:
-                descr_text = descr_container.get_text()
-                if imdb_match := re.search(
-                        r"(https?://www\.imdb\.com/title/tt\d+)",
-                        descr_text):
-                    imdb_link = imdb_match.group(1)
-                
-                # 提取豆瓣链接（从源站）
-                if douban_match := re.search(
-                        r"(https?://movie\.douban\.com/subject/\d+)",
-                        descr_text):
-                    douban_link = douban_match.group(1)
-
-            # --- [核心修改] MediaInfo 提取逻辑 ---
-
-            # 1. 首先尝试从标准位置提取 MediaInfo
-            mediainfo_pre = soup.select_one("div.spoiler-content pre")
-            if not mediainfo_pre:
-                self.logger.info("未找到常规 MediaInfo 结构，尝试解析 BDInfo 结构...")
-                mediainfo_pre = soup.select_one(
-                    "div.nexus-media-info-raw > pre")
-
-            mediainfo_text = mediainfo_pre.get_text(
-                strip=True) if mediainfo_pre else ""
-
-            # 2. 解析简介内容，并准备提取简介中的元素
-            intro = {}
-            quotes = []
+            # 从提取的数据中获取简介信息
+            intro_data = extracted_data.get("intro", {})
+            quotes = intro_data.get("statement", "").split('\n') if intro_data.get("statement") else []
             images = []
-            body = ""
-            ardtu_declarations = []  # 初始化变量
+            if intro_data.get("poster"):
+                images.append(intro_data.get("poster"))
+            if intro_data.get("screenshots"):
+                images.extend(intro_data.get("screenshots").split('\n'))
+            body = intro_data.get("body", "")
+            ardtu_declarations = intro_data.get("removed_ardtudeclarations", [])
 
-            # 提取简介中的IMDb和豆瓣链接
-            intro_imdb_link = ""
-            intro_douban_link = ""
-
-            if descr_container:
-                descr_text = descr_container.get_text()
-                
-                # 提取IMDb链接
-                imdb_link_match = re.search(r'◎IMDb链接\s*\[url=([^\]]+)\]([^\[]+)\[/url\]', descr_text)
-                if imdb_link_match:
-                    intro_imdb_link = imdb_link_match.group(1)  # 获取URL部分
-                
-                # 提取豆瓣链接
-                douban_link_match = re.search(r'◎豆瓣链接\s*\[url=([^\]]+)\]([^\[]+)\[/url\]', descr_text)
-                if douban_link_match:
-                    intro_douban_link = douban_link_match.group(1)  # 获取URL部分
-            
-            # 检查IMDb链接处理逻辑：源站提取的优先，不存在则使用简介中的
-            if not imdb_link and intro_imdb_link:
-                imdb_link = intro_imdb_link
-                self.logger.info(f"从简介中提取到IMDb链接: {imdb_link}")
-            elif imdb_link and not intro_imdb_link:
-                # 如果在简介中没有找到IMDb链接但源站提取到了，添加到简介中
-                self.logger.info(f"源站提取到IMDb链接但简介中缺失，将在简介中添加: {imdb_link}")
-                # 在body中添加IMDb链接信息
-                imdb_info = f"◎IMDb链接　[url={imdb_link}]{imdb_link}[/url]"
-                if body:
-                    body = f"{body}\n\n{imdb_info}"
-                else:
-                    body = imdb_info
-            
-            # 处理豆瓣链接：源站提取的优先，不存在则使用简介中的
-            if not douban_link and intro_douban_link:
-                douban_link = intro_douban_link
-                self.logger.info(f"从简介中提取到豆瓣链接: {douban_link}")
-            elif douban_link and not intro_douban_link:
-                # 如果在简介中没有找到豆瓣链接但源站提取到了，添加到简介中
-                self.logger.info(f"源站提取到豆瓣链接但简介中缺失，将在简介中添加: {douban_link}")
-                # 在body中添加豆瓣链接信息
-                douban_info = f"◎豆瓣链接　[url={douban_link}]{douban_link}[/url]"
-                if body:
-                    body = f"{body}\n\n{douban_info}"
-                else:
-                    body = douban_info
-
-            if descr_container:
-                descr_html_string = str(descr_container)
-                corrected_descr_html = re.sub(r'(<img[^>]*[^/])>', r'\1 />',
-                                              descr_html_string)
-                descr_container_soup = BeautifulSoup(corrected_descr_html,
-                                                     "html.parser")
-                bbcode = self._html_to_bbcode(descr_container_soup)
-                
-                # --- [新增修复代码] 开始 ---
-                # 清理连续的、中间无内容的 [quote] 标签，以修正源站错误的嵌套。
-                # 例如将 [quote][quote]...[/quote][/quote] 简化为 [quote]...[/quote]。
-                # 使用循环是为了处理可能存在的三层或更多层的连续嵌套。
-                original_bbcode = bbcode
-                while True:
-                    # 将连续的开标签 [quote][quote] 合并为一个
-                    bbcode = re.sub(r"\[quote\]\s*\[quote\]", "[quote]", bbcode, flags=re.IGNORECASE)
-                    # 将连续的闭标签 [/quote][/quote] 合并为一个
-                    bbcode = re.sub(r"\[/quote\]\s*\[/quote\]", "[/quote]", bbcode, flags=re.IGNORECASE)
-                    # 如果经过一轮替换后内容没有变化，说明已经清理干净，退出循环
-                    if bbcode == original_bbcode:
-                        break
-                    # 更新原始文本以进行下一轮检查
-                    original_bbcode = bbcode
-                # --- [新增修复代码] 结束 ---
-                
-                quotes = re.findall(r"\[quote\].*?\[/quote\]", bbcode,
-                                    re.DOTALL)
-                images = re.findall(r"\[img\].*?\[/img\]", bbcode)
-
-                # 过滤掉 ARDTU 工具自动发布的声明和免责声明，但保留包含 "By ARDTU" 的组信息
-                filtered_quotes = []
-                # ardtu_declarations 已在上方初始化，此处不再重复初始化
-
-                for quote in quotes:
-                    # 检查是否为完整的 ARDTU 工具自动发布声明
-                    is_ardtutool_auto_publish = (
-                        "ARDTU工具自动发布" in quote and "有错误请评论或举报" in quote
-                        and any(tag in quote
-                                for tag in ["[size=7]", "[color=Red]"]))
-
-                    # 检查是否为免责声明模板
-                    is_disclaimer = (
-                        "郑重声明：" in quote and "本站提供的所有作品均是用户自行搜集并且上传" in quote
-                        and "禁止任何涉及商业盈利目的使用" in quote
-                        and any(tag in quote
-                                for tag in ["[size=3]", "[color=Red]"]))
-
-                    # 检查是否为财神CSWEB免责声明
-                    is_csweb_disclaimer = (
-                        "财神CSWEB提供的所有资源均是在网上搜集且由用户上传" in quote
-                        and "不可用于任何形式的商业盈利活动" in quote
-                        and "请在下载后24小时内尽快删除" in quote)
-
-                    # 检查是否为 "By ARDTU" 结尾的组信息（需要过滤掉 "By ARDTU" 部分）
-                    is_by_ardtu_group_info = "By ARDTU" in quote and "官组作品" in quote
-
-                    # 检查是否为不规范的MediaInfo声明（以.Release.Info开头的块）
-                    is_invalid_mediainfo = ".Release.Info" in quote and "ENCODER" in quote and "RELEASE NAME" in quote
-
-                    # 检查是否包含 "| A | By ATU" 的声明
-                    has_atu_tool_signature = "| A | By ATU" in quote
-
-                    if is_ardtutool_auto_publish or is_disclaimer or is_csweb_disclaimer:
-                        # --- [核心修改] ---
-                        # 将整个 quote 块（去除首尾的 [quote] 标签）作为一个整体添加到声明列表
-                        clean_content = re.sub(r"\[\/?quote\]", "",
-                                               quote).strip()
-                        ardtu_declarations.append(
-                            clean_content)  # 使用 append 添加完整内容
-                    elif is_by_ardtu_group_info:
-                        # 过滤掉 "By ARDTU" 部分，保留官方组内容
-                        filtered_quote = re.sub(r"\s*By ARDTU\s*", "", quote)
-                        filtered_quotes.append(filtered_quote)
-                    elif "ARDTU" in quote:
-                        # --- [核心修改] ---
-                        # 其他包含 ARDTU 的声明也过滤掉，同样作为一个整体
-                        clean_content = re.sub(r"\[\/?quote\]", "",
-                                               quote).strip()
-                        ardtu_declarations.append(
-                            clean_content)  # 使用 append 添加完整内容
-                    elif is_invalid_mediainfo:
-                        # 过滤掉不规范的MediaInfo声明
-                        clean_content = re.sub(r"\[\/?quote\]", "",
-                                               quote).strip()
-                        ardtu_declarations.append(
-                            clean_content)  # 添加到已过滤声明列表
-                    elif has_atu_tool_signature:
-                        # 过滤掉包含 "| A | By ATU" 的声明
-                        clean_content = re.sub(r"\[\/?quote\]", "",
-                                               quote).strip()
-                        ardtu_declarations.append(
-                            clean_content)  # 添加到已过滤声明列表
-                    else:
-                        filtered_quotes.append(quote)
-
-                quotes = filtered_quotes
-                body = (re.sub(r"\[quote\].*?\[/quote\]|\[img\].*?\[/img\]",
-                               "",
-                               bbcode,
-                               flags=re.DOTALL).replace("\r", "").strip())
-
-            # 3. 如果标准位置没有 MediaInfo，则在简介的引用中查找
-            if not mediainfo_text and quotes:
-                self.logger.info("标准位置未找到 MediaInfo，正在尝试从简介的 [quote] 区块中提取...")
-                remaining_quotes = []
-                found_mediainfo_in_quote = False
-                for quote in quotes:
-                    # 检查 quote 内容是否符合 MediaInfo 或 BDInfo 的特征
-                    is_mediainfo = ("General" in quote and "Video" in quote
-                                    and "Audio" in quote)
-                    is_bdinfo = ("DISC INFO" in quote
-                                 and "PLAYLIST REPORT" in quote)
-
-                    if not found_mediainfo_in_quote and (is_mediainfo
-                                                         or is_bdinfo):
-                        # 去掉 [quote] 和 [/quote] 标签
-                        mediainfo_text = re.sub(r"\[/?quote\]", "",
-                                                quote).strip()
-                        self.logger.success("成功在简介中提取到 MediaInfo/BDInfo。")
-                        found_mediainfo_in_quote = True  # 确保只提取第一个匹配项
-                    else:
-                        remaining_quotes.append(quote)
-
-                # 更新 quotes 列表，移除已作为 mediainfo 的内容
-                quotes = remaining_quotes
-
-            # 4. 海报失效处理：优先尝试从豆瓣链接获取，如果没有豆瓣链接则尝试IMDb链接
+            # 如果海报失效，尝试从豆瓣或IMDb获取新海报
             from utils import upload_data_movie_info
-            
+
             # 检查当前海报是否有效（简单检查是否包含图片标签）
             current_poster_valid = bool(images and images[0] and "[img]" in images[0])
-            
+
             if not current_poster_valid:
                 self.logger.info("当前海报失效，尝试从豆瓣或IMDb获取新海报...")
-                
+
                 # 优先级1：如果有豆瓣链接，优先从豆瓣获取
                 if douban_link:
                     self.logger.info(f"尝试从豆瓣链接获取海报: {douban_link}")
                     poster_status, poster_content, description_content, extracted_imdb = upload_data_movie_info(douban_link, "")
-                    
+
                     if poster_status and poster_content:
                         # 成功获取到海报，更新images列表
                         if not images:
@@ -701,12 +811,12 @@ class TorrentMigrator:
                         else:
                             images[0] = poster_content
                         self.logger.success("成功从豆瓣获取到海报")
-                        
+
                         # 如果同时获取到IMDb链接且当前没有IMDb链接，也更新IMDb链接
                         if extracted_imdb and not imdb_link:
                             imdb_link = extracted_imdb
                             self.logger.info(f"通过豆瓣海报提取到IMDb链接: {imdb_link}")
-                            
+
                             # 将IMDb链接添加到简介中
                             imdb_info = f"◎IMDb链接　[url={imdb_link}]{imdb_link}[/url]"
                             douban_pattern = r"◎豆瓣链接　\[url=[^\]]+\][^\[]+\[/url\]"
@@ -719,12 +829,12 @@ class TorrentMigrator:
                                     body = imdb_info
                     else:
                         self.logger.warning(f"从豆瓣链接获取海报失败: {poster_content}")
-                
+
                 # 优先级2：如果没有豆瓣链接或豆瓣获取失败，尝试从IMDb链接获取
                 elif imdb_link and (not images or not images[0] or "[img]" not in images[0]):
                     self.logger.info(f"尝试从IMDb链接获取海报: {imdb_link}")
                     poster_status, poster_content, description_content, _ = upload_data_movie_info("", imdb_link)
-                    
+
                     if poster_status and poster_content:
                         # 成功获取到海报，更新images列表
                         if not images:
@@ -734,20 +844,20 @@ class TorrentMigrator:
                         self.logger.success("成功从IMDb获取到海报")
                     else:
                         self.logger.warning(f"从IMDb链接获取海报失败: {poster_content}")
-                
+
                 # 如果两种方式都失败了，记录日志
                 if not images or not images[0] or "[img]" not in images[0]:
                     self.logger.warning("无法从豆瓣或IMDb获取到有效的海报")
             else:
                 self.logger.info("当前海报有效，无需重新获取")
-                
+
                 # 即使海报有效，如果有豆瓣链接也可以尝试获取IMDb链接
                 if douban_link and not imdb_link:
                     poster_status, poster_content, description_content, extracted_imdb = upload_data_movie_info(douban_link, "")
                     if extracted_imdb:
                         imdb_link = extracted_imdb
                         self.logger.info(f"通过豆瓣提取到IMDb链接: {imdb_link}")
-                        
+
                         # 将IMDb链接添加到简介中
                         imdb_info = f"◎IMDb链接　[url={imdb_link}]{imdb_link}[/url]"
                         douban_pattern = r"◎豆瓣链接　\[url=[^\]]+\][^\[]+\[/url\]"
@@ -758,8 +868,8 @@ class TorrentMigrator:
                                 body = f"{body}\n\n{imdb_info}"
                             else:
                                 body = imdb_info
-            
-            # 5. 组装最终的 intro 字典
+
+            # 重新组装intro字典
             intro = {
                 "statement": "\n".join(quotes),
                 "poster": images[0] if images else "",
@@ -776,87 +886,19 @@ class TorrentMigrator:
 
             # --- [核心修改结束] ---
 
-            # 检查是否需要使用特殊提取器处理"人人"或"不可说"站点数据
-            # 添加检查确保不会重复处理已标记的数据
-            special_extractor_success = False
-            if self.SOURCE_NAME == "人人" or self.SOURCE_NAME == "不可说":
-                processed_flag = getattr(self, '_special_extractor_processed', False)
-                print(f"检测到源站点为{self.SOURCE_NAME}，已处理标记: {processed_flag}")
-                if processed_flag:
-                    print(f"检测到源站点为{self.SOURCE_NAME}，但已处理过，跳过特殊提取器处理")
-                    # 直接使用特殊提取器处理过的结果
-                    mediainfo = upload_data_mediaInfo(
-                        mediainfo_text if mediainfo_text else "未找到 Mediainfo 或 BDInfo",
-                        self.save_path)
-                    special_extractor_success = True
-                else:
-                    try:
-                        print(f"检测到源站点为{self.SOURCE_NAME}，尝试使用特殊提取器处理数据...")
-                        # 根据源站点名称使用不同的特殊提取器处理数据
-                        if self.SOURCE_NAME == "人人":
-                            from core.extractors.audiences import AudiencesSpecialExtractor
-                            extractor = AudiencesSpecialExtractor(soup)
-                        elif self.SOURCE_NAME == "不可说":
-                            from core.extractors.ssd import SSDSpecialExtractor
-                            extractor = SSDSpecialExtractor(soup)
-                        # 传递种子ID用于保存提取内容到本地文件
-                        print(f"在prepare_review_data中调用特殊提取器，种子ID: {torrent_id}")
-                        extracted_data = extractor.extract_all(torrent_id=torrent_id)
-                        print(f"特殊提取器返回数据: {extracted_data.keys() if extracted_data else 'None'}")
+            # 使用upload_data_mediaInfo处理mediainfo
+            mediainfo = upload_data_mediaInfo(
+                mediainfo_text if mediainfo_text else "未找到 Mediainfo 或 BDInfo",
+                self.save_path)
 
-                        # 使用特殊提取器的结果替换原有数据
-                        if "source_params" in extracted_data and extracted_data["source_params"]:
-                            print("更新source_params数据")
-                            # 确保source_params已初始化
-                            if 'source_params' not in locals():
-                                source_params = {}
-                            source_params.update(extracted_data["source_params"])
-                            print(f"source_params更新后内容: {source_params}")
+            # 提取产地信息并更新到source_params中（如果还没有）
+            if "产地" not in source_params or not source_params["产地"]:
+                full_description_text = f"{intro.get('statement', '')}\n{intro.get('body', '')}"
+                origin_info = extract_origin_from_description(full_description_text)
+                source_params["产地"] = origin_info
 
-                        if "subtitle" in extracted_data and extracted_data["subtitle"]:
-                            print("更新subtitle数据")
-                            subtitle = extracted_data["subtitle"]
-                            print(f"subtitle更新后内容: {subtitle}")
-
-                        if "intro" in extracted_data and extracted_data["intro"]:
-                            print("更新intro数据")
-                            # 合并intro数据，保留原有内容但用提取器的结果覆盖
-                            intro = {**intro, **extracted_data["intro"]}
-                            print(f"intro更新后内容: {intro}")
-
-                        if "mediainfo" in extracted_data and extracted_data["mediainfo"]:
-                            print("更新mediainfo数据")
-                            mediainfo = extracted_data["mediainfo"]
-                            print(f"mediainfo更新后内容长度: {len(mediainfo) if mediainfo else 0}")
-                        elif self.SOURCE_NAME != "不可说":  # "不可说"站点可能没有标准的mediainfo结构
-                            # 如果特殊提取器没有提取到mediainfo，则使用公共方法处理
-                            print("特殊提取器未提取到mediainfo，使用公共方法处理")
-                            mediainfo = upload_data_mediaInfo(
-                                mediainfo_text if mediainfo_text else "未找到 Mediainfo 或 BDInfo",
-                                self.save_path)
-
-                        # 移除了针对"不可说"站点的特殊主标题处理，现在统一处理所有站点
-
-                        print(f"已使用特殊提取器处理来自{self.SOURCE_NAME}站点的数据")
-                        # 标记已处理，避免重复处理
-                        self._special_extractor_processed = True
-                        special_extractor_success = True
-                    except Exception as e:
-                        print(f"使用特殊提取器处理{self.SOURCE_NAME}站点数据时发生错误: {e}")
-                        import traceback
-                        traceback.print_exc()
-                        # 如果特殊提取器失败，使用默认处理
-                        mediainfo = upload_data_mediaInfo(
-                            mediainfo_text if mediainfo_text else "未找到 Mediainfo 或 BDInfo",
-                            self.save_path)
-            else:
-                # 非Audiences站点使用原有的处理方式
-                mediainfo = upload_data_mediaInfo(
-                    mediainfo_text if mediainfo_text else "未找到 Mediainfo 或 BDInfo",
-                    self.save_path)
-
-            # 只有在特殊提取器未成功处理时，才从网页中提取基本信息
-            if not special_extractor_success:
+            # 如果source_params中缺少基本信息，从网页中提取
+            if not source_params.get("类型") or not source_params.get("媒介"):
                 basic_info_td = soup.find("td", string="基本信息")
                 basic_info_dict = {}
                 if basic_info_td and basic_info_td.find_next_sibling("td"):
@@ -876,64 +918,33 @@ class TorrentMigrator:
 
                 type_text = basic_info_dict.get("类型", "")
                 type_match = re.search(r"[\(（](.*?)[\)）]", type_text)
-                source_params = {
-                    "类型":
-                    type_match.group(1)
-                    if type_match else type_text.split("/")[-1],
-                    "媒介":
-                    basic_info_dict.get("媒介"),
-                    "编码":
-                    basic_info_dict.get("编码"),
-                    "音频编码":
-                    basic_info_dict.get("音频编码"),
-                    "分辨率":
-                    basic_info_dict.get("分辨率"),
-                    "制作组":
-                    basic_info_dict.get("制作组"),
-                    "标签":
-                    tags,
-                    "产地":
-                    origin_info,  # 添加产地信息
-                }
-            elif "source_params" not in locals():
-                # 如果特殊提取器成功但source_params未定义（理论上不应该发生），提供默认值
-                basic_info_td = soup.find("td", string="基本信息")
-                basic_info_dict = {}
-                if basic_info_td and basic_info_td.find_next_sibling("td"):
-                    strings = list(
-                        basic_info_td.find_next_sibling("td").stripped_strings)
-                    basic_info_dict = {
-                        s.replace(":", "").strip(): strings[i + 1]
-                        for i, s in enumerate(strings)
-                        if ":" in s and i + 1 < len(strings)
-                    }
 
-                tags_td = soup.find("td", string="标签")
-                tags = ([
-                    s.get_text(strip=True)
-                    for s in tags_td.find_next_sibling("td").find_all("span")
-                ] if tags_td and tags_td.find_next_sibling("td") else [])
-
-                type_text = basic_info_dict.get("类型", "")
-                type_match = re.search(r"[\(（](.*?)[\)）]", type_text)
+                # 只更新缺失的字段
+                if not source_params.get("类型"):
+                    source_params["类型"] = type_match.group(1) if type_match else type_text.split("/")[-1]
+                if not source_params.get("媒介"):
+                    source_params["媒介"] = basic_info_dict.get("媒介")
+                if not source_params.get("编码"):
+                    source_params["编码"] = basic_info_dict.get("编码")
+                if not source_params.get("音频编码"):
+                    source_params["音频编码"] = basic_info_dict.get("音频编码")
+                if not source_params.get("分辨率"):
+                    source_params["分辨率"] = basic_info_dict.get("分辨率")
+                if not source_params.get("制作组"):
+                    source_params["制作组"] = basic_info_dict.get("制作组")
+                if not source_params.get("标签"):
+                    source_params["标签"] = tags
+            # 确保source_params始终存在
+            if "source_params" not in locals() or not source_params:
                 source_params = {
-                    "类型":
-                    type_match.group(1)
-                    if type_match else type_text.split("/")[-1],
-                    "媒介":
-                    basic_info_dict.get("媒介"),
-                    "编码":
-                    basic_info_dict.get("编码"),
-                    "音频编码":
-                    basic_info_dict.get("音频编码"),
-                    "分辨率":
-                    basic_info_dict.get("分辨率"),
-                    "制作组":
-                    basic_info_dict.get("制作组"),
-                    "标签":
-                    tags,
-                    "产地":
-                    origin_info,  # 添加产地信息
+                    "类型": "",
+                    "媒介": None,
+                    "编码": None,
+                    "音频编码": None,
+                    "分辨率": None,
+                    "制作组": None,
+                    "标签": [],
+                    "产地": ""
                 }
 
             # 此处已提前下载种子文件，无需重复下载
