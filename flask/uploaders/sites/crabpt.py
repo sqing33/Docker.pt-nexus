@@ -1,6 +1,4 @@
 from ..base import BaseUploader
-import json
-import os
 import traceback
 from loguru import logger
 
@@ -183,18 +181,7 @@ class CrabptUploader(BaseUploader):
                 f"{intro.get('poster', '')}\n"
                 f"{intro.get('body', '')}\n"
                 f"{intro.get('screenshots', '')}")
-        
-        # 保存完整描述到文件用于调试
-        debug_file_path = "/app/Code/Dockerfile/Docker.pt-nexus/flask/data/crabpt_debug_description.txt"
-        try:
-            os.makedirs(os.path.dirname(debug_file_path), exist_ok=True)
-            with open(debug_file_path, "w", encoding="utf-8") as f:
-                f.write("=== CrabPT 描述调试信息 ===\n\n")
-                f.write(description)
-            logger.info(f"描述调试信息已保存到: {debug_file_path}")
-        except Exception as e:
-            logger.error(f"保存描述调试信息失败: {e}")
-            
+
         return description
 
     def execute_upload(self):
@@ -202,8 +189,6 @@ class CrabptUploader(BaseUploader):
         重写执行上传方法以添加调试信息和完整的参数支持
         """
         from loguru import logger
-        import os
-        import json
 
         logger.info(f"正在为 {self.site_name} 站点适配上传参数...")
         try:
@@ -226,21 +211,6 @@ class CrabptUploader(BaseUploader):
                 "original_main_title": self.upload_data.get("original_main_title", ""),
                 **mapped_params,  # 合并子类映射的特殊参数
             }
-
-            # 保存完整的表单数据用于调试
-            debug_file_path = "/app/Code/Dockerfile/Docker.pt-nexus/flask/data/crabpt_debug_form_data.txt"
-            try:
-                os.makedirs(os.path.dirname(debug_file_path), exist_ok=True)
-                with open(debug_file_path, "w", encoding="utf-8") as f:
-                    f.write("=== CrabPT 完整表单数据调试信息 ===\n\n")
-                    f.write("表单数据:\n")
-                    for key, value in form_data.items():
-                        f.write(f"  {key}: {value}\n")
-                    f.write("\n完整JSON:\n")
-                    json.dump(form_data, f, ensure_ascii=False, indent=2)
-                logger.info(f"完整表单数据调试信息已保存到: {debug_file_path}")
-            except Exception as e:
-                logger.error(f"保存完整表单数据调试信息失败: {e}")
 
             # 调用父类的execute_upload方法继续执行上传
             return super().execute_upload()

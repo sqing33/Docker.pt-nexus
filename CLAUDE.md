@@ -9,7 +9,7 @@ PT Nexus is a PT (Private Tracker) seed aggregation and analysis platform that c
 ## Technology Stack
 
 - **Frontend**: Vue 3 with TypeScript, Element Plus UI library, Vite build system
-- **Backend**: Python Flask API with SQLite/MySQL database support
+- **Backend**: Python Flask API with SQLite/MySQL/PostgreSQL database support
 - **Deployment**: Docker container with multi-stage build (Node.js for frontend build, Python for backend)
 
 ## Architecture
@@ -18,7 +18,7 @@ The application follows a client-server architecture with a clear separation bet
 
 1. **Frontend (vue3/)**: Vue 3 single-page application that communicates with the backend via REST API
 2. **Backend (flask/)**: Flask API server that handles data processing, storage, and business logic
-3. **Database**: Supports both SQLite (default) and MySQL backends
+3. **Database**: Supports SQLite (default), MySQL, and PostgreSQL backends
 4. **Data Collection**: Direct integration with qBittorrent and Transmission client APIs
 
 ## Key Components
@@ -26,7 +26,7 @@ The application follows a client-server architecture with a clear separation bet
 ### Backend Structure
 - `app.py`: Main Flask application entry point with app factory pattern
 - `config.py`: Configuration management with default values and file persistence
-- `database.py`: Database abstraction layer supporting SQLite and MySQL
+- `database.py`: Database abstraction layer supporting SQLite, MySQL, and PostgreSQL with schema migration capabilities
 - `api/`: REST API endpoints organized by functionality:
   - `routes_auth.py`: Authentication endpoints (JWT-based)
   - `routes_management.py`: System management and configuration
@@ -36,6 +36,7 @@ The application follows a client-server architecture with a clear separation bet
 - `core/`: Core services for data tracking and processing
 - `sites/`: Site-specific parsing and data extraction logic
 - `utils/`: Utility functions and helpers
+- `uploaders/`: Site-specific upload functionality for cross-seeding
 
 ### Frontend Structure
 - `src/main.ts`: Application entry point
@@ -124,7 +125,7 @@ The application uses a multi-stage Docker build process:
          - AUTH_USERNAME=admin
          - AUTH_PASSWORD=your_password
    ```
-   
+
    Then run:
    ```bash
    docker-compose up -d
@@ -215,12 +216,17 @@ Key environment variables for configuration:
 - `AUTH_PASSWORD_HASH`: Admin password bcrypt hash (preferred over plaintext password)
 
 **Database Settings:**
-- `DB_TYPE`: Database type (sqlite or mysql, default: sqlite)
+- `DB_TYPE`: Database type (sqlite, mysql, or postgresql, default: sqlite)
 - `MYSQL_HOST`: MySQL database host (when DB_TYPE=mysql)
 - `MYSQL_PORT`: MySQL database port (when DB_TYPE=mysql, default: 3306)
 - `MYSQL_DATABASE`: MySQL database name (when DB_TYPE=mysql)
 - `MYSQL_USER`: MySQL database username (when DB_TYPE=mysql)
 - `MYSQL_PASSWORD`: MySQL database password (when DB_TYPE=mysql)
+- `POSTGRES_HOST`: PostgreSQL database host (when DB_TYPE=postgresql)
+- `POSTGRES_PORT`: PostgreSQL database port (when DB_TYPE=postgresql, default: 5432)
+- `POSTGRES_DATABASE`: PostgreSQL database name (when DB_TYPE=postgresql)
+- `POSTGRES_USER`: PostgreSQL database username (when DB_TYPE=postgresql)
+- `POSTGRES_PASSWORD`: PostgreSQL database password (when DB_TYPE=postgresql)
 
 **System Settings:**
 - `TZ`: Timezone setting for the container (e.g., Asia/Shanghai)
@@ -236,7 +242,7 @@ Database migrations are handled in the `_run_schema_migrations` method in `datab
 - Removing deprecated columns (MySQL only, SQLite requires manual handling)
 - Automatic table creation on first run
 
-The system supports both SQLite (default) and MySQL backends. SQLite is recommended for single-user deployments, while MySQL is better for multi-user or high-traffic scenarios.
+The system supports SQLite (default), MySQL, and PostgreSQL backends. SQLite is recommended for single-user deployments, while MySQL/PostgreSQL are better for multi-user or high-traffic scenarios.
 
 ## API Endpoints
 

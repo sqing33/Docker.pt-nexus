@@ -1229,7 +1229,7 @@ def _check_mandarin_in_audio_section(audio_lines):
 def extract_origin_from_description(description_text: str) -> str:
     """
     从简介详情中提取产地信息。
-    
+
     :param description_text: 简介详情文本
     :return: 产地信息，例如 "日本"、"中国" 等
     """
@@ -1260,6 +1260,85 @@ def extract_origin_from_description(description_text: str) -> str:
             if ',' in origin:
                 origin = origin.split(',')[0].strip()
             return origin
+
+    return ""
+
+
+def extract_resolution_from_mediainfo(mediainfo_text: str) -> str:
+    """
+    从 MediaInfo 文本中提取分辨率信息。
+
+    :param mediainfo_text: 完整的 MediaInfo 报告字符串。
+    :return: 分辨率信息，例如 "720p"、"1080p"、"2160p" 等
+    """
+    if not mediainfo_text:
+        return ""
+
+    # 查找 Video 部分
+    video_section_match = re.search(r"Video[\s\S]*?(?=\n\n|\Z)", mediainfo_text)
+    if not video_section_match:
+        return ""
+
+    video_section = video_section_match.group(0)
+
+    # 查找分辨率信息
+    # 匹配格式如：Width                                 : 1 920 pixels
+    #            Height                                : 1 080 pixels
+    # 处理带空格的数字格式，如 "1 920" -> "1920"
+    width_match = re.search(r"[Ww]idth\s*:\s*(\d+)\s*(\d*)\s*pixels?", video_section)
+    height_match = re.search(r"[Hh]eight\s*:\s*(\d+)\s*(\d*)\s*pixels?", video_section)
+
+    width = None
+    height = None
+
+    if width_match:
+        # 处理带空格的数字格式，如 "1 920" -> "1920"
+        w_groups = width_match.groups()
+        if len(w_groups) >= 2 and w_groups[1]:
+            width = int(f"{w_groups[0]}{w_groups[1]}")
+        else:
+            width = int(w_groups[0]) if w_groups[0] else None
+
+    if height_match:
+        # 处理带空格的数字格式，如 "1 080" -> "1080"
+        h_groups = height_match.groups()
+        if len(h_groups) >= 2 and h_groups[1]:
+            height = int(f"{h_groups[0]}{h_groups[1]}")
+        else:
+            height = int(h_groups[0]) if h_groups[0] else None
+
+    # 如果没有找到标准格式，尝试其他格式
+    if not width or not height:
+        # 备用方法：查找类似 "1920 / 1080" 的格式
+        resolution_match = re.search(r"(\d{3,4})\s*/\s*(\d{3,4})", video_section)
+        if resolution_match:
+            width = int(resolution_match.group(1))
+            height = int(resolution_match.group(2))
+        else:
+            # 查找其他格式的分辨率信息
+            other_resolution_match = re.search(r"(\d{3,4})\s*[xX]\s*(\d{3,4})", mediainfo_text)
+            if other_resolution_match:
+                width = int(other_resolution_match.group(1))
+                height = int(other_resolution_match.group(2))
+
+    # 如果找到了宽度和高度，转换为标准格式
+    if width and height:
+        # 根据高度确定标准分辨率
+        if height <= 480:
+            return "480p"
+        elif height <= 576:
+            return "576p"
+        elif height <= 720:
+            return "720p"
+        elif height <= 1080:
+            return "1080p"
+        elif height <= 1440:
+            return "1440p"
+        elif height <= 2160:
+            return "2160p"
+        else:
+            # 对于其他非标准分辨率，返回原始高度加p
+            return f"{height}p"
 
     return ""
 
