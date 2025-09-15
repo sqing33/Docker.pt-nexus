@@ -545,7 +545,7 @@
     "base_url": "ptvicomo.net",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 0,
+    "migration": 1,
     "speed_limit": 10
   },
   {

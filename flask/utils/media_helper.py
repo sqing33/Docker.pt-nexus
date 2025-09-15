@@ -223,14 +223,18 @@ def _find_target_video_file(path: str) -> str | None:
 
 
 # --- [修改] 主函数，整合了新的文件查找逻辑 ---
-def upload_data_mediaInfo(mediaInfo: str, save_path: str):
+def upload_data_mediaInfo(mediaInfo: str,
+                          save_path: str,
+                          content_name: str = None):
     """
     检查传入的文本是有效的 MediaInfo 还是 BDInfo 格式。
     如果没有 MediaInfo 或 BDInfo 则尝试从 save_path 查找视频文件提取 MediaInfo。
+    【新增】支持传入 content_name 来构建更精确的搜索路径。
     """
     print("开始检查 MediaInfo/BDInfo 格式")
+    print(f"提供的 MediaInfo: {mediaInfo[:80]}...")  # 打印部分MediaInfo
 
-    # 1. 标准 MediaInfo 格式的关键字
+    # 1. (此部分代码不变) ...
     standard_mediainfo_keywords = [
         "General",
         "Video",
@@ -241,14 +245,7 @@ def upload_data_mediaInfo(mediaInfo: str, save_path: str):
         "Width",
         "Height",
     ]
-
-    # 2. BDInfo 格式的关键字
-    bdinfo_required_keywords = [
-        "DISC INFO",
-        "PLAYLIST REPORT",
-    ]
-
-    # 3. BDInfo 格式的可选关键字
+    bdinfo_required_keywords = ["DISC INFO", "PLAYLIST REPORT"]
     bdinfo_optional_keywords = [
         "VIDEO:",
         "AUDIO:",
@@ -263,16 +260,13 @@ def upload_data_mediaInfo(mediaInfo: str, save_path: str):
         "Language",
         "Description",
     ]
-
-    # 检查是否为标准MediaInfo格式
-    mediainfo_matches = sum(1 for keyword in standard_mediainfo_keywords if keyword in mediaInfo)
-    is_standard_mediainfo = mediainfo_matches >= 3  # 至少匹配3个关键字
-
-    # 检查是否为BDInfo格式
-    bdinfo_required_matches = sum(1 for keyword in bdinfo_required_keywords if keyword in mediaInfo)
-    bdinfo_optional_matches = sum(1 for keyword in bdinfo_optional_keywords if keyword in mediaInfo)
-
-    # BDInfo需要匹配所有必要关键字，或者匹配部分必要关键字和足够的可选关键字
+    mediainfo_matches = sum(1 for keyword in standard_mediainfo_keywords
+                            if keyword in mediaInfo)
+    is_standard_mediainfo = mediainfo_matches >= 3
+    bdinfo_required_matches = sum(1 for keyword in bdinfo_required_keywords
+                                  if keyword in mediaInfo)
+    bdinfo_optional_matches = sum(1 for keyword in bdinfo_optional_keywords
+                                  if keyword in mediaInfo)
     is_bdinfo = (bdinfo_required_matches == len(bdinfo_required_keywords)) or \
                 (bdinfo_required_matches >= 1 and bdinfo_optional_matches >= 2)
 
@@ -280,16 +274,27 @@ def upload_data_mediaInfo(mediaInfo: str, save_path: str):
         print(f"检测到标准 MediaInfo 格式，验证通过。(匹配关键字数: {mediainfo_matches})")
         return mediaInfo
     elif is_bdinfo:
-        print(f"检测到 BDInfo 格式，验证通过。(必要关键字: {bdinfo_required_matches}/{len(bdinfo_required_keywords)}, 可选关键字: {bdinfo_optional_matches})")
+        print(
+            f"检测到 BDInfo 格式，验证通过。(必要关键字: {bdinfo_required_matches}/{len(bdinfo_required_keywords)}, 可选关键字: {bdinfo_optional_matches})"
+        )
         return mediaInfo
     else:
         print("提供的文本不是有效的 MediaInfo/BDInfo，将尝试从本地文件提取。")
-        print(f"MediaInfo匹配: {mediainfo_matches}/3, BDInfo必要关键字: {bdinfo_required_matches}/{len(bdinfo_required_keywords)}, 可选关键字: {bdinfo_optional_matches}")
+        # ... (打印匹配信息的代码不变) ...
+
         if not save_path:
             print("错误：未提供 save_path，无法从文件提取 MediaInfo。")
             return mediaInfo
 
-        target_video_file = _find_target_video_file(save_path)
+        # --- 【核心修改】仿照截图逻辑，构建精确的搜索路径 ---
+        path_to_search = save_path  # 默认使用基础路径
+        if content_name:
+            # 如果提供了具体的内容名称（主标题），则拼接成一个更精确的路径
+            path_to_search = os.path.join(save_path, content_name)
+            print(f"已提供 content_name，将在精确路径中搜索: '{path_to_search}'")
+
+        # 使用新构建的路径来查找视频文件
+        target_video_file = _find_target_video_file(path_to_search)
 
         if not target_video_file:
             print("未能在指定路径中找到合适的视频文件，提取失败。")
@@ -297,11 +302,9 @@ def upload_data_mediaInfo(mediaInfo: str, save_path: str):
 
         try:
             print(f"准备使用 MediaInfo 工具从 '{target_video_file}' 提取...")
-
             media_info_parsed = MediaInfo.parse(target_video_file,
                                                 output="text",
                                                 full=False)
-
             print("从文件重新提取 MediaInfo 成功。")
             return str(media_info_parsed)
         except Exception as e:
@@ -335,11 +338,11 @@ def upload_data_title(title: str, torrent_filename: str = ""):
     title = title.replace("（", "(").replace("）", ")")
     title = title.replace("'", "")
     title = re.sub(r"(\d+[pi])([A-Z])", r"\1 \2", title)
-    
+
     # 2. 优先提取制作组信息
     release_group = ""
     main_part = title
-    
+
     # 检查特殊制作组
     special_groups = ["mUHD-FRDS", "MNHD-FRDS", "DMG&VCB-Studio", "VCB-Studio"]
     found_special_group = False
@@ -361,10 +364,10 @@ def upload_data_title(title: str, torrent_filename: str = ""):
             main_part = match.group("main_part").strip()
             release_group_name = match.group("release_group")
             internal_tag = match.group("internal_tag")
-            release_group = (f"{internal_tag}-{release_group_name}" if
-                           internal_tag and "@" in internal_tag else
-                           (f"{release_group_name} ({internal_tag})"
-                            if internal_tag else release_group_name))
+            release_group = (f"{internal_tag}-{release_group_name}"
+                             if internal_tag and "@" in internal_tag else
+                             (f"{release_group_name} ({internal_tag})"
+                              if internal_tag else release_group_name))
         else:
             # 检查是否以-NOGROUP结尾
             if title.upper().endswith("-NOGROUP"):
@@ -832,7 +835,8 @@ def upload_data_poster(douban_link: str, imdb_link: str):
     注意：此函数已废弃，请使用upload_data_movie_info替代。
     """
     # 调用新的统一函数获取所有信息
-    status, poster, description, imdb_link_result = upload_data_movie_info(douban_link, imdb_link)
+    status, poster, description, imdb_link_result = upload_data_movie_info(
+        douban_link, imdb_link)
 
     if status:
         return True, poster, imdb_link_result
@@ -882,7 +886,8 @@ def upload_data_movie_info(douban_link: str, imdb_link: str):
                 poster = img_match.group(1)
 
             # 提取简介内容（去除海报部分）
-            description = re.sub(r'\[img\].*?\[/img\]', '', format_data).strip()
+            description = re.sub(r'\[img\].*?\[/img\]', '',
+                                 format_data).strip()
             # 清理多余的空行
             description = re.sub(r'\n{3,}', '\n\n', description)
 
@@ -1087,11 +1092,11 @@ def add_torrent_to_downloader(detail_page_url: str, save_path: str,
 
         except Exception as e:
             logging.warning(f"第 {attempt + 1} 次尝试添加种子到下载器失败: {e}")
-            
+
             # 如果不是最后一次尝试，等待一段时间后重试
             if attempt < max_retries - 1:
                 import time
-                wait_time = 2 ** attempt  # 指数退避
+                wait_time = 2**attempt  # 指数退避
                 logging.info(f"等待 {wait_time} 秒后进行第 {attempt + 2} 次尝试...")
                 time.sleep(wait_time)
             else:
