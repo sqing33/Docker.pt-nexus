@@ -552,9 +552,17 @@ const startCrossSeed = (row: Torrent) => {
   const availableSources = Object.entries(row.sites)
     .map(([siteName, siteDetails]) => ({ siteName, ...siteDetails }))
     .filter(site => {
-      const hasDetailsLink = site.comment && site.comment.includes('details.php?id=');
+      // 检查站点是否配置为源站点
       const isSourceSite = site.migration === 1 || site.migration === 3;
-      return hasDetailsLink && isSourceSite;
+      if (!isSourceSite) return false;
+
+      // 检查是否有有效的种子ID或链接
+      // 1. 完整的详情页链接
+      const hasDetailsLink = site.comment && site.comment.includes('details.php?id=');
+      // 2. 只有种子ID的情况（纯数字）
+      const hasTorrentId = site.comment && /^\d+$/.test(site.comment.trim());
+
+      return hasDetailsLink || hasTorrentId;
     });
 
   if (availableSources.length === 0) {
@@ -575,14 +583,19 @@ const confirmSourceSiteAndProceed = async (sourceSite: any) => {
   }
 
   const siteDetails = row.sites[sourceSite.siteName];
-  const idMatch = siteDetails?.comment?.match(/id=(\d+)/);
   let torrentId = null;
 
+  // 首先检查是否能从链接中提取到ID
+  const idMatch = siteDetails?.comment?.match(/id=(\d+)/);
   if (idMatch && idMatch[1]) {
-    // 如果能从链接中提取到ID，直接使用
     torrentId = idMatch[1];
-  } else {
-    // 如果无法从链接中提取ID，使用种子名称进行搜索
+  }
+  // 检查注释是否只包含纯数字（种子ID）
+  else if (siteDetails?.comment && /^\d+$/.test(siteDetails.comment.trim())) {
+    torrentId = siteDetails.comment.trim();
+  }
+  // 如果以上都无法提取到ID，则使用种子名称进行搜索
+  else {
     try {
       const response = await fetch('/api/migrate/search_torrent_id', {
         method: 'POST',
