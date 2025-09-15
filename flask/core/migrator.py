@@ -214,15 +214,7 @@ class TorrentMigrator:
                         print(f"mediainfo更新前长度: {len(original_mediainfo) if original_mediainfo else 0}")
                         print(f"mediainfo更新后长度: {len(upload_data['mediainfo']) if upload_data['mediainfo'] else 0}")
 
-                    # 处理"不可说"站点的特殊主标题
-                    if self.SOURCE_NAME == "不可说" and "main_title" in extracted_data:
-                        print("更新'不可说'站点的主标题")
-                        # 更新review_data_payload中的original_main_title
-                        if "review_data" in upload_data:
-                            original_main_title = upload_data["review_data"].get("original_main_title", "")
-                            upload_data["review_data"]["original_main_title"] = extracted_data["main_title"]
-                            print(f"主标题更新前: {original_main_title}")
-                            print(f"主标题更新后: {extracted_data['main_title']}")
+                    # 移除了针对"不可说"站点的特殊主标题处理，现在统一处理所有站点
 
                     print(f"已使用特殊提取器处理来自{self.SOURCE_NAME}站点的数据")
                     # 标记已处理，避免重复处理
@@ -415,6 +407,9 @@ class TorrentMigrator:
             h1_top = soup.select_one("h1#top")
             original_main_title = list(
                 h1_top.stripped_strings)[0] if h1_top else "未找到标题"
+            # 统一处理标题中的点号，将点(.)替换为空格，但保留小数点格式(如 7.1)
+            original_main_title = re.sub(r'(?<!\d)\.|\.(?!\d\b)', ' ', original_main_title)
+            original_main_title = re.sub(r'\s+', ' ', original_main_title).strip()
             self.logger.info(f"获取到原始主标题: {original_main_title}")
 
             # --- [核心修改 1] 开始 ---
@@ -686,7 +681,7 @@ class TorrentMigrator:
                 quotes = remaining_quotes
 
             # 4. 海报失效处理：优先尝试从豆瓣链接获取，如果没有豆瓣链接则尝试IMDb链接
-            from utils import upload_data_poster
+            from utils import upload_data_movie_info
             
             # 检查当前海报是否有效（简单检查是否包含图片标签）
             current_poster_valid = bool(images and images[0] and "[img]" in images[0])
@@ -697,7 +692,7 @@ class TorrentMigrator:
                 # 优先级1：如果有豆瓣链接，优先从豆瓣获取
                 if douban_link:
                     self.logger.info(f"尝试从豆瓣链接获取海报: {douban_link}")
-                    poster_status, poster_content, extracted_imdb = upload_data_poster(douban_link, "")
+                    poster_status, poster_content, description_content, extracted_imdb = upload_data_movie_info(douban_link, "")
                     
                     if poster_status and poster_content:
                         # 成功获取到海报，更新images列表
@@ -728,7 +723,7 @@ class TorrentMigrator:
                 # 优先级2：如果没有豆瓣链接或豆瓣获取失败，尝试从IMDb链接获取
                 elif imdb_link and (not images or not images[0] or "[img]" not in images[0]):
                     self.logger.info(f"尝试从IMDb链接获取海报: {imdb_link}")
-                    poster_status, poster_content, _ = upload_data_poster("", imdb_link)
+                    poster_status, poster_content, description_content, _ = upload_data_movie_info("", imdb_link)
                     
                     if poster_status and poster_content:
                         # 成功获取到海报，更新images列表
@@ -748,7 +743,7 @@ class TorrentMigrator:
                 
                 # 即使海报有效，如果有豆瓣链接也可以尝试获取IMDb链接
                 if douban_link and not imdb_link:
-                    poster_status, poster_content, extracted_imdb = upload_data_poster(douban_link, "")
+                    poster_status, poster_content, description_content, extracted_imdb = upload_data_movie_info(douban_link, "")
                     if extracted_imdb:
                         imdb_link = extracted_imdb
                         self.logger.info(f"通过豆瓣提取到IMDb链接: {imdb_link}")
@@ -783,6 +778,7 @@ class TorrentMigrator:
 
             # 检查是否需要使用特殊提取器处理"人人"或"不可说"站点数据
             # 添加检查确保不会重复处理已标记的数据
+            special_extractor_success = False
             if self.SOURCE_NAME == "人人" or self.SOURCE_NAME == "不可说":
                 processed_flag = getattr(self, '_special_extractor_processed', False)
                 print(f"检测到源站点为{self.SOURCE_NAME}，已处理标记: {processed_flag}")
@@ -792,6 +788,7 @@ class TorrentMigrator:
                     mediainfo = upload_data_mediaInfo(
                         mediainfo_text if mediainfo_text else "未找到 Mediainfo 或 BDInfo",
                         self.save_path)
+                    special_extractor_success = True
                 else:
                     try:
                         print(f"检测到源站点为{self.SOURCE_NAME}，尝试使用特殊提取器处理数据...")
@@ -838,15 +835,12 @@ class TorrentMigrator:
                                 mediainfo_text if mediainfo_text else "未找到 Mediainfo 或 BDInfo",
                                 self.save_path)
 
-                        # 处理"不可说"站点的特殊主标题
-                        if self.SOURCE_NAME == "不可说" and "main_title" in extracted_data:
-                            print("更新'不可说'站点的主标题")
-                            original_main_title = extracted_data["main_title"]
-                            print(f"主标题更新后内容: {original_main_title}")
+                        # 移除了针对"不可说"站点的特殊主标题处理，现在统一处理所有站点
 
                         print(f"已使用特殊提取器处理来自{self.SOURCE_NAME}站点的数据")
                         # 标记已处理，避免重复处理
                         self._special_extractor_processed = True
+                        special_extractor_success = True
                     except Exception as e:
                         print(f"使用特殊提取器处理{self.SOURCE_NAME}站点数据时发生错误: {e}")
                         import traceback
@@ -861,44 +855,86 @@ class TorrentMigrator:
                     mediainfo_text if mediainfo_text else "未找到 Mediainfo 或 BDInfo",
                     self.save_path)
 
-            basic_info_td = soup.find("td", string="基本信息")
-            basic_info_dict = {}
-            if basic_info_td and basic_info_td.find_next_sibling("td"):
-                strings = list(
-                    basic_info_td.find_next_sibling("td").stripped_strings)
-                basic_info_dict = {
-                    s.replace(":", "").strip(): strings[i + 1]
-                    for i, s in enumerate(strings)
-                    if ":" in s and i + 1 < len(strings)
+            # 只有在特殊提取器未成功处理时，才从网页中提取基本信息
+            if not special_extractor_success:
+                basic_info_td = soup.find("td", string="基本信息")
+                basic_info_dict = {}
+                if basic_info_td and basic_info_td.find_next_sibling("td"):
+                    strings = list(
+                        basic_info_td.find_next_sibling("td").stripped_strings)
+                    basic_info_dict = {
+                        s.replace(":", "").strip(): strings[i + 1]
+                        for i, s in enumerate(strings)
+                        if ":" in s and i + 1 < len(strings)
+                    }
+
+                tags_td = soup.find("td", string="标签")
+                tags = ([
+                    s.get_text(strip=True)
+                    for s in tags_td.find_next_sibling("td").find_all("span")
+                ] if tags_td and tags_td.find_next_sibling("td") else [])
+
+                type_text = basic_info_dict.get("类型", "")
+                type_match = re.search(r"[\(（](.*?)[\)）]", type_text)
+                source_params = {
+                    "类型":
+                    type_match.group(1)
+                    if type_match else type_text.split("/")[-1],
+                    "媒介":
+                    basic_info_dict.get("媒介"),
+                    "编码":
+                    basic_info_dict.get("编码"),
+                    "音频编码":
+                    basic_info_dict.get("音频编码"),
+                    "分辨率":
+                    basic_info_dict.get("分辨率"),
+                    "制作组":
+                    basic_info_dict.get("制作组"),
+                    "标签":
+                    tags,
+                    "产地":
+                    origin_info,  # 添加产地信息
                 }
+            elif "source_params" not in locals():
+                # 如果特殊提取器成功但source_params未定义（理论上不应该发生），提供默认值
+                basic_info_td = soup.find("td", string="基本信息")
+                basic_info_dict = {}
+                if basic_info_td and basic_info_td.find_next_sibling("td"):
+                    strings = list(
+                        basic_info_td.find_next_sibling("td").stripped_strings)
+                    basic_info_dict = {
+                        s.replace(":", "").strip(): strings[i + 1]
+                        for i, s in enumerate(strings)
+                        if ":" in s and i + 1 < len(strings)
+                    }
 
-            tags_td = soup.find("td", string="标签")
-            tags = ([
-                s.get_text(strip=True)
-                for s in tags_td.find_next_sibling("td").find_all("span")
-            ] if tags_td and tags_td.find_next_sibling("td") else [])
+                tags_td = soup.find("td", string="标签")
+                tags = ([
+                    s.get_text(strip=True)
+                    for s in tags_td.find_next_sibling("td").find_all("span")
+                ] if tags_td and tags_td.find_next_sibling("td") else [])
 
-            type_text = basic_info_dict.get("类型", "")
-            type_match = re.search(r"[\(（](.*?)[\)）]", type_text)
-            source_params = {
-                "类型":
-                type_match.group(1)
-                if type_match else type_text.split("/")[-1],
-                "媒介":
-                basic_info_dict.get("媒介"),
-                "编码":
-                basic_info_dict.get("编码"),
-                "音频编码":
-                basic_info_dict.get("音频编码"),
-                "分辨率":
-                basic_info_dict.get("分辨率"),
-                "制作组":
-                basic_info_dict.get("制作组"),
-                "标签":
-                tags,
-                "产地":
-                origin_info,  # 添加产地信息
-            }
+                type_text = basic_info_dict.get("类型", "")
+                type_match = re.search(r"[\(（](.*?)[\)）]", type_text)
+                source_params = {
+                    "类型":
+                    type_match.group(1)
+                    if type_match else type_text.split("/")[-1],
+                    "媒介":
+                    basic_info_dict.get("媒介"),
+                    "编码":
+                    basic_info_dict.get("编码"),
+                    "音频编码":
+                    basic_info_dict.get("音频编码"),
+                    "分辨率":
+                    basic_info_dict.get("分辨率"),
+                    "制作组":
+                    basic_info_dict.get("制作组"),
+                    "标签":
+                    tags,
+                    "产地":
+                    origin_info,  # 添加产地信息
+                }
 
             # 此处已提前下载种子文件，无需重复下载
 

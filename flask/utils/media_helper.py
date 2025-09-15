@@ -829,6 +829,22 @@ def upload_data_poster(douban_link: str, imdb_link: str):
     """
     通过PT-Gen API获取电影信息的海报和IMDb链接。
     支持从豆瓣链接或IMDb链接获取信息。
+    注意：此函数已废弃，请使用upload_data_movie_info替代。
+    """
+    # 调用新的统一函数获取所有信息
+    status, poster, description, imdb_link_result = upload_data_movie_info(douban_link, imdb_link)
+
+    if status:
+        return True, poster, imdb_link_result
+    else:
+        return False, description, imdb_link_result
+
+
+def upload_data_movie_info(douban_link: str, imdb_link: str):
+    """
+    通过PT-Gen API获取电影信息的完整内容，包括海报、简介和IMDb链接。
+    支持从豆瓣链接或IMDb链接获取信息。
+    返回: (状态, 海报, 简介, IMDb链接)
     """
     pt_gen_api_url = 'https://api.iyuu.cn/App.Movie.Ptgen'
 
@@ -836,7 +852,7 @@ def upload_data_poster(douban_link: str, imdb_link: str):
     resource_url = douban_link or imdb_link
 
     if not resource_url:
-        return False, "未提供豆瓣或IMDb链接。", ""
+        return False, "", "", "未提供豆瓣或IMDb链接。"
 
     try:
         response = requests.get(f'{pt_gen_api_url}?url={resource_url}',
@@ -850,6 +866,7 @@ def upload_data_poster(douban_link: str, imdb_link: str):
 
         extracted_imdb_link = ""
         poster = ""
+        description = ""
 
         if format_data:
             # 提取IMDb链接
@@ -863,16 +880,20 @@ def upload_data_poster(douban_link: str, imdb_link: str):
             img_match = re.search(r'(\[img\].*?\[/img\])', format_data)
             if img_match:
                 poster = img_match.group(1)
-                return True, poster, extracted_imdb_link
-            else:
-                return False, "PT-Gen返回的简介中未找到图片标签。", extracted_imdb_link
+
+            # 提取简介内容（去除海报部分）
+            description = re.sub(r'\[img\].*?\[/img\]', '', format_data).strip()
+            # 清理多余的空行
+            description = re.sub(r'\n{3,}', '\n\n', description)
+
+            return True, poster, description, extracted_imdb_link
         else:
-            return False, "PT-Gen接口未返回有效的简介内容。", ""
+            return False, "", "", "PT-Gen接口未返回有效的简介内容。"
 
     except Exception as e:
         error_message = f"请求PT-Gen接口时发生错误: {e}"
         print(error_message)
-        return False, error_message, ""
+        return False, "", "", error_message
 
 
 # (确保文件顶部有 import bencoder, import json)

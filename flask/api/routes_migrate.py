@@ -318,7 +318,7 @@ def validate_media():
                                              torrent_name)
         return jsonify({"success": True, "screenshots": screenshots}), 200
     else:
-        status, posters, extracted_imdb_link = upload_data_poster(
+        status, posters, description, extracted_imdb_link = upload_data_movie_info(
             douban_link, imdb_link)
         if status:
             return jsonify({
@@ -593,20 +593,20 @@ def update_preview_data():
                 "imdb_link":
                 review_data["imdb_link"],
                 "type":
-                review_data["source_params"].get("类型", ""),
+                review_data["source_params"].get("类型") or "N/A",
                 "medium":
-                title_params.get("媒介", ""),
+                title_params.get("媒介", "N/A"),
                 "video_codec":
-                title_params.get("视频编码", ""),
+                title_params.get("视频编码", "N/A"),
                 "audio_codec":
-                title_params.get("音频编码", ""),
+                title_params.get("音频编码", "N/A"),
                 "resolution":
-                title_params.get("分辨率", ""),
+                title_params.get("分辨率", "N/A"),
                 "release_group":
-                title_params.get("制作组", ""),
+                title_params.get("制作组", "N/A"),
                 "source":
-                review_data["source_params"].get("产地", "")
-                or title_params.get("片源平台", ""),
+                review_data["source_params"].get("产地", "N/A")
+                or title_params.get("片源平台", "N/A"),
                 "tags":
                 list(all_tags)
             }
