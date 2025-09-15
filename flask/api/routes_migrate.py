@@ -5,7 +5,7 @@ import uuid
 import re
 from flask import Blueprint, jsonify, request
 from bs4 import BeautifulSoup
-from utils import upload_data_title, upload_data_screenshot, upload_data_poster, add_torrent_to_downloader, extract_tags_from_mediainfo, extract_origin_from_description
+from utils import upload_data_title, upload_data_screenshot, upload_data_poster, add_torrent_to_downloader, extract_tags_from_mediainfo, extract_origin_from_description, extract_resolution_from_mediainfo
 from core.migrator import TorrentMigrator
 
 # --- [新增] 导入 config_manager ---
@@ -517,6 +517,22 @@ def update_preview_data():
                 item["key"]: item["value"]
                 for item in title_components if item.get("value")
             }
+
+            # 3. 如果分辨率为空，尝试从MediaInfo中提取分辨率
+            resolution_from_title = title_params.get("分辨率")
+            if not resolution_from_title or resolution_from_title == "N/A":
+                resolution_from_mediainfo = extract_resolution_from_mediainfo(review_data["mediainfo"])
+                if resolution_from_mediainfo:
+                    # 更新标题参数中的分辨率
+                    title_params["分辨率"] = resolution_from_mediainfo
+                    # 同时更新title_components中的分辨率项
+                    for component in title_components:
+                        if component["key"] == "分辨率":
+                            component["value"] = resolution_from_mediainfo
+                            break
+                    else:
+                        # 如果没有找到分辨率项，添加一个新的
+                        title_components.append({"key": "分辨率", "value": resolution_from_mediainfo})
 
             # 3. 重新拼接主标题
             order = [
