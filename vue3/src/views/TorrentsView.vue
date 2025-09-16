@@ -10,25 +10,90 @@
       <!-- ... (其他列保持不变) ... -->
       <el-table-column type="expand" width="1">
         <template #default="props">
-          <div class="expand-content">
-            <template v-for="siteName in sorted_all_sites" :key="siteName">
-              <template v-if="props.row.sites[siteName]">
-                <a v-if="hasLink(props.row.sites[siteName], siteName)"
-                  :href="getLink(props.row.sites[siteName], siteName)!" target="_blank" style="text-decoration: none">
-                  <el-tag effect="dark" :type="getTagType(props.row.sites[siteName])" style="text-align: center">
-                    {{ siteName }}
-                    <div>({{ formatBytes(props.row.sites[siteName].uploaded) }})</div>
-                  </el-tag>
-                </a>
-                <el-tag v-else effect="dark" :type="getTagType(props.row.sites[siteName])" style="text-align: center">
-                  {{ siteName }}
-                  <div>({{ formatBytes(props.row.sites[siteName].uploaded) }})</div>
-                </el-tag>
+          <div class="expand-content"
+            :class="{ 'with-special-sites': props.row.sites['财神'] || props.row.sites['星陨阁'] }">
+            <!-- 所有站点容器 -->
+            <div class="all-sites-container">
+              <!-- 特殊站点容器 -->
+              <div v-if="props.row.sites['财神'] || props.row.sites['星陨阁']" class="special-sites-container">
+
+                <!-- 财神站点 -->
+                <div class="caishen-container">
+                  <!-- [修改] 使用 v-if/v-else 切换显示 -->
+                  <template v-if="props.row.sites['财神']">
+                    <!-- 当财神站点存在时，显示特效标签 (原有逻辑) -->
+                    <a v-if="hasLink(props.row.sites['财神'], '财神')" :href="getLink(props.row.sites['财神'], '财神')!"
+                      target="_blank" style="text-decoration: none">
+                      <div class="caishen-tag animated-tag">
+                        <div class="site-name">财神</div>
+                        <div class="site-upload-data">({{ formatBytes(props.row.sites['财神'].uploaded) }})</div>
+                      </div>
+                    </a>
+                    <div v-else class="caishen-tag animated-tag">
+                      <div class="site-name">财神</div>
+                      <div class="site-upload-data">({{ formatBytes(props.row.sites['财神'].uploaded) }})</div>
+                    </div>
+                  </template>
+                  <template v-else>
+                    <!-- 当财神站点不存在时，显示占位标签 -->
+                    <div class="special-site-placeholder">
+                      <div class="site-name">财神</div>
+                      <div class="site-upload-data">(0B)</div>
+                    </div>
+                  </template>
+                </div>
+
+                <!-- 星陨阁站点 -->
+                <div class="xingyunge-container">
+                  <!-- [修改] 使用 v-if/v-else 切换显示 -->
+                  <template v-if="props.row.sites['星陨阁']">
+                    <!-- 当星陨阁站点存在时，显示特效标签 (原有逻辑) -->
+                    <a v-if="hasLink(props.row.sites['星陨阁'], '星陨阁')" :href="getLink(props.row.sites['星陨阁'], '星陨阁')!"
+                      target="_blank" style="text-decoration: none">
+                      <div class="xingyunge-tag animated-tag-flame">
+                        <div class="site-name">星陨阁</div>
+                        <div class="site-upload-data">({{ formatBytes(props.row.sites['星陨阁'].uploaded) }})</div>
+                      </div>
+                    </a>
+                    <div v-else class="xingyunge-tag animated-tag-flame">
+                      <div class="site-name">星陨阁</div>
+                      <div class="site-upload-data">({{ formatBytes(props.row.sites['星陨阁'].uploaded) }})</div>
+                    </div>
+                  </template>
+                  <template v-else>
+                    <!-- 当星陨阁站点不存在时，显示占位标签 -->
+                    <div class="special-site-placeholder">
+                      <div class="site-name">星陨阁</div>
+                      <div class="site-upload-data">(0B)</div>
+                    </div>
+                  </template>
+                </div>
+
+              </div>
+
+              <!-- 其他站点 -->
+              <template v-for="(site, index) in getOtherSites(props.row.sites, all_sites)" :key="site.name">
+                <div class="other-site-item" :style="getSitePosition(index)">
+                  <a v-if="hasLink(site.data, site.name)" :href="getLink(site.data, site.name)!" target="_blank"
+                    style="text-decoration: none;width: 80px;">
+                    <div class="site-wrapper">
+                      <el-tag effect="dark" :type="getTagType(site.data)" class="other-site-tag"
+                        style="text-align: center">
+                        {{ site.name }}
+                        <div>({{ formatBytes(site.data.uploaded) }})</div>
+                      </el-tag>
+                    </div>
+                  </a>
+                  <div v-else class="site-wrapper">
+                    <el-tag effect="plain" :type="getTagType(site.data)" class="other-site-tag"
+                      style="text-align: center;width: 80px;">
+                      {{ site.name }}
+                      <div>({{ formatBytes(site.data.uploaded) }})</div>
+                    </el-tag>
+                  </div>
+                </div>
               </template>
-              <template v-else>
-                <el-tag type="info" effect="plain">{{ siteName }}</el-tag>
-              </template>
-            </template>
+            </div>
           </div>
         </template>
       </el-table-column>
@@ -245,6 +310,12 @@ interface SiteData {
   migration: number
   state: string
 }
+
+interface OtherSite {
+  name: string
+  data: SiteData
+}
+
 interface Torrent {
   name: string
   save_path: string
@@ -728,10 +799,13 @@ const getLink = (siteData: SiteData, siteName: string): string | null => {
   return null
 }
 const getTagType = (siteData: SiteData) => {
-  // 如果站点状态为未做种，显示为红色
-  if (siteData.state === '未做种') return 'danger'
-  // 如果有comment，显示为绿色；否则显示为蓝色
-  return siteData.comment ? 'success' : 'primary'
+  if (siteData.state === '未做种') {
+    return 'danger';
+  }
+  else if (siteData.comment) {
+    return 'success';
+  }
+  else return 'info';
 }
 
 const getDownloaderName = (downloaderId: string | null) => {
@@ -828,6 +902,65 @@ const tableRowClassName = ({ row }: { row: Torrent }) => {
   return expandedRows.value.includes(row.name) ? 'expanded-row' : ''
 }
 
+// 获取除了特殊站点外的其他站点，包括未做种的站点
+const getOtherSites = (sites: Record<string, SiteData>, allSiteNames: string[]): OtherSite[] => {
+  const specialSites = ['财神', '星陨阁'];
+  const otherSites: OtherSite[] = [];
+
+  // 添加所有在数据库中存在的站点
+  allSiteNames.forEach(siteName => {
+    if (!specialSites.includes(siteName)) {
+      // 如果站点在当前种子中存在，则使用实际数据
+      // 否则，创建一个表示“未添加”的占位站点
+      const siteData = sites[siteName] || {
+        uploaded: 0,
+        comment: '',
+        migration: 0,
+        state: '未添加' // <--- [修改] 使用一个明确的状态来表示占位
+      };
+
+      otherSites.push({
+        name: siteName,
+        data: siteData
+      });
+    }
+  });
+
+  return otherSites;
+}
+
+// 计算站点位置样式
+// 计算站点位置样式
+const getSitePosition = (index: number): { 'grid-row': number; 'grid-column': number } => {
+  let availablePositionCount = 0;
+  const maxRows = 20; // 您可以根据需要调整最大行数，以容纳更多站点
+
+  for (let row = 1; row <= maxRows; row++) {
+    for (let col = 1; col <= 20; col++) {
+      // 检查当前单元格是否位于为特殊站点保留的区域
+      // 根据您的CSS，特殊站点容器占据 grid-column: 9 / span 4 (即 9, 10, 11, 12列)
+      // 和 grid-row: 2 / span 2 (即 2, 3行)
+      const isReserved = col >= 9 && col <= 12 && row >= 2 && row <= 3;
+
+      if (!isReserved) {
+        // 如果不是保留区域，则这是一个可用的位置
+        if (availablePositionCount === index) {
+          // 当可用位置的计数等于当前站点的索引时，
+          // 我们就找到了这个站点应该放置的位置
+          return {
+            'grid-row': row,
+            'grid-column': col
+          };
+        }
+        availablePositionCount++;
+      }
+    }
+  }
+
+  // 如果循环结束还没找到位置（例如索引过大），提供一个默认的回退位置
+  return { 'grid-row': 1, 'grid-column': 1 };
+}
+
 // --- [修改] onMounted 启动逻辑 ---
 onMounted(async () => {
   // 1. 先加载保存的UI设置
@@ -912,12 +1045,223 @@ watch(nameSearch, () => {
   padding: 10px 20px;
   background-color: #fafcff;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+  grid-template-columns: repeat(20, 1fr);
+  grid-auto-rows: minmax(40px, auto);
   gap: 5px;
 }
 
+.expand-content.with-special-sites {
+  display: grid;
+  grid-template-columns: repeat(20, 1fr);
+  grid-auto-rows: minmax(40px, auto);
+  gap: 5px;
+  align-items: start;
+  justify-content: start;
+}
+
+/* 所有站点容器 */
+.all-sites-container {
+  display: contents;
+}
+
+
+/* 普通站点项 */
+.other-site-item {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 80px;
+}
+
+/* 特殊站点容器 */
+.special-sites-container {
+  grid-column: 9 / span 4;
+  grid-row: 2 / span 2;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  min-height: 80px;
+  font-size: 14px;
+  position: relative;
+  z-index: 1;
+}
+
+.caishen-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 0;
+  width: 180px;
+  height: 80px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.caishen-tag {
+  width: 100%;
+  height: 100%;
+  font-size: 20px;
+  font-weight: bold;
+  background: linear-gradient(45deg, #ffd700, #ffed4e, #ffd700);
+  color: #8b4513;
+  border: 3px solid #ffd700;
+  box-shadow: 0 0 15px #ffd700, 0 0 30px #ff8c00, 0 0 45px #ff4500;
+  position: relative;
+  overflow: hidden;
+  transform: scale(1);
+  transition: transform 0.3s ease;
+  text-shadow: 0 0 5px #fff, 0 0 10px #ffd700;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  white-space: nowrap;
+  text-align: center;
+  padding: 5px;
+}
+
+.caishen-tag:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 20px #ffd700, 0 0 40px #ff8c00, 0 0 60px #ff4500;
+}
+
+.caishen-tag div {
+  font-size: 14px;
+  font-weight: normal;
+  color: #daa520;
+  text-shadow: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  box-sizing: border-box;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.site-name {
+  font-size: 16px;
+  margin-bottom: 5px;
+}
+
+.special-site-placeholder {
+  width: 95px;
+  height: 60px;
+  border: 1px solid #C8C9CC;
+  color: #909399;
+  background-color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  box-sizing: border-box;
+  white-space: nowrap;
+  text-align: center;
+  padding: 5px;
+  border-radius: 4px;
+  /* 轻微的圆角 */
+  transition: all 0.3s ease;
+}
+
+.special-site-placeholder .site-upload-data {
+  font-size: 14px;
+  font-weight: normal;
+}
+
+.caishen-tag .site-upload-data {
+  width: 80px;
+  flex-shrink: 0;
+  font-size: 14px;
+  font-weight: normal;
+  color: #daa520;
+}
+
+.caishen-tag::before {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+  transform: rotate(45deg);
+  animation: shine 2s infinite;
+}
+
+.animated-tag {
+  animation: glow 1.5s ease-in-out infinite alternate, float 3s ease-in-out infinite;
+}
+
+.animated-tag-flame {
+  animation: glow-flame 1.5s ease-in-out infinite alternate, float 3s ease-in-out infinite;
+}
+
+
+@keyframes float {
+  0% {
+    transform: translateY(0) scale(1);
+  }
+
+  50% {
+    transform: translateY(-5px) scale(1.05);
+  }
+
+  100% {
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes glow {
+  0% {
+    box-shadow: 0 0 15px #ffd700, 0 0 30px #ff8c00, 0 0 45px #ff4500;
+  }
+
+  100% {
+    box-shadow: 0 0 25px #ffd700, 0 0 50px #ff8c00, 0 0 75px #ff4500;
+  }
+}
+
+@keyframes glow-flame {
+  0% {
+    box-shadow: 0 0 15px #ff4500, 0 0 30px #ff6347, 0 0 45px #ff0000;
+  }
+
+  100% {
+    box-shadow: 0 0 25px #ff4500, 0 0 50px #ff6347, 0 0 75px #ff0000;
+  }
+}
+
+
+@keyframes shine {
+  0% {
+    transform: translateX(-100%) translateY(-100%) rotate(45deg);
+  }
+
+  100% {
+    transform: translateX(100%) translateY(100%) rotate(45deg);
+  }
+}
+
+@keyframes flame-shine {
+  0% {
+    transform: translateX(-100%) translateY(-100%) rotate(45deg);
+    opacity: 0.5;
+  }
+
+  50% {
+    opacity: 0.8;
+  }
+
+  100% {
+    transform: translateX(100%) translateY(100%) rotate(45deg);
+    opacity: 0.5;
+  }
+}
+
 .expand-content :deep(.el-tag) {
-  height: 35px;
+  height: 32px;
   width: 100%;
   white-space: normal;
   text-align: center;
@@ -926,6 +1270,101 @@ watch(nameSearch, () => {
   align-items: center;
   line-height: 1.2;
   padding: 0;
+  font-size: 12px;
+}
+
+.expand-content.with-special-sites :deep(.other-site-tag) {
+  height: 40px;
+  font-size: 12px;
+}
+
+/* 站点包装器样式 */
+.expand-content.with-special-sites .site-wrapper {
+  /* 动态样式通过JavaScript设置 */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.expand-content :deep(.caishen-container .el-tag) {
+  height: 100%;
+  font-size: 20px;
+  font-weight: bold;
+}
+
+/* 星陨阁站点样式 */
+.xingyunge-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 0;
+  width: 180px;
+  height: 80px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.xingyunge-tag {
+  width: 100%;
+  height: 100%;
+  font-size: 20px;
+  font-weight: bold;
+  background: linear-gradient(45deg, #ff4500, #ff6347, #ff4500);
+  color: #ffffff;
+  border: 3px solid #ff4500;
+  box-shadow: 0 0 15px #ff4500, 0 0 30px #ff6347, 0 0 45px #ff0000;
+  position: relative;
+  overflow: hidden;
+  transform: scale(1);
+  transition: transform 0.3s ease;
+  text-shadow: 0 0 5px #fff, 0 0 10px #ff4500;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  white-space: nowrap;
+  text-align: center;
+  padding: 5px;
+}
+
+.xingyunge-tag:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 20px #ff4500, 0 0 40px #ff6347, 0 0 60px #ff0000;
+}
+
+.xingyunge-tag::before {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(45deg, transparent, rgba(255, 100, 0, 0.6), transparent);
+  transform: rotate(45deg);
+  animation: flame-shine 1.5s infinite;
+}
+
+.xingyunge-tag div {
+  font-size: 14px;
+  font-weight: normal;
+  color: #ffd700;
+  text-shadow: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  box-sizing: border-box;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.xingyunge-tag .site-upload-data {
+  width: 80px;
+  flex-shrink: 0;
+  font-size: 14px;
+  font-weight: normal;
+  color: #ffd700;
 }
 
 .el-table__row,
