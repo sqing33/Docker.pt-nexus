@@ -366,13 +366,17 @@ class DataTracker(Thread):
                 conn.close()
 
     def _update_torrents_in_db(self):
-        logging.info("开始更新数据库中的种子...")
+        logging.info("=== 开始更新数据库中的种子 ===")
+        print("【刷新线程】开始更新数据库中的种子...")
         config = self.config_manager.get()
         enabled_downloaders = [
             d for d in config.get("downloaders", []) if d.get("enabled")
         ]
+        print(f"【刷新线程】找到 {len(enabled_downloaders)} 个启用的下载器")
+        logging.info(f"找到 {len(enabled_downloaders)} 个启用的下载器")
         if not enabled_downloaders:
             logging.info("没有启用的下载器，跳过种子更新。")
+            print("【刷新线程】没有启用的下载器，跳过种子更新。")
             return
 
         core_domain_map, _, group_to_site_map_lower = load_site_maps_from_db(
@@ -382,12 +386,16 @@ class DataTracker(Thread):
         is_mysql = self.db_manager.db_type == "mysql"
 
         for downloader in enabled_downloaders:
+            print(f"【刷新线程】正在处理下载器: {downloader['name']} (类型: {downloader['type']})")
             torrents_list = []
             client_instance = None
             try:
                 client_instance = self._get_client(downloader)
-                if not client_instance: continue
+                if not client_instance:
+                    print(f"【刷新线程】无法连接到下载器 {downloader['name']}")
+                    continue
 
+                print(f"【刷新线程】正在从 {downloader['name']} 获取种子列表...")
                 if downloader["type"] == "qbittorrent":
                     torrents_list = client_instance.torrents_info(
                         status_filter="all")
@@ -399,13 +407,16 @@ class DataTracker(Thread):
                     ]
                     torrents_list = client_instance.get_torrents(
                         arguments=fields)
+                print(f"【刷新线程】从 '{downloader['name']}' 成功获取到 {len(torrents_list)} 个种子。")
                 logging.info(
                     f"从 '{downloader['name']}' 成功获取到 {len(torrents_list)} 个种子。"
                 )
             except Exception as e:
+                print(f"【刷新线程】未能从 '{downloader['name']}' 获取数据: {e}")
                 logging.error(f"未能从 '{downloader['name']}' 获取数据: {e}")
                 continue
 
+            print(f"【刷新线程】开始处理 {len(torrents_list)} 个种子...")
             for t in torrents_list:
                 t_info = self._normalize_torrent_info(t, downloader["type"],
                                                       client_instance)
@@ -440,7 +451,9 @@ class DataTracker(Thread):
                 if t_info["uploaded"] > 0:
                     upload_stats_to_upsert.append(
                         (t_info["hash"], downloader["id"], t_info["uploaded"]))
+            print(f"【刷新线程】完成处理下载器 {downloader['name']} 的种子，共收集到 {len(torrents_to_upsert)} 个唯一种子")
 
+        print(f"【刷新线程】开始将 {len(torrents_to_upsert)} 个种子和 {len(upload_stats_to_upsert)} 条上传统计写入数据库...")
         conn = None
         try:
             conn = self.db_manager._get_connection()
@@ -449,6 +462,7 @@ class DataTracker(Thread):
             if torrents_to_upsert:
                 params = [(*d.values(), now_str)
                           for d in torrents_to_upsert.values()]
+                print(f"【刷新线程】准备写入 {len(params)} 条种子主信息到数据库")
                 # 根据数据库类型使用正确的引号和冲突处理语法
                 if self.db_manager.db_type == "mysql":
                     sql = """INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, `group`, downloader_id, last_seen) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE name=VALUES(name), save_path=VALUES(save_path), size=VALUES(size), progress=VALUES(progress), state=VALUES(state), sites=VALUES(sites), details=VALUES(details), `group`=VALUES(`group`), downloader_id=VALUES(downloader_id), last_seen=VALUES(last_seen)"""
@@ -457,8 +471,10 @@ class DataTracker(Thread):
                 else:  # sqlite
                     sql = """INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, `group`, downloader_id, last_seen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(hash) DO UPDATE SET name=excluded.name, save_path=excluded.save_path, size=excluded.size, progress=excluded.progress, state=excluded.state, sites=excluded.sites, details=excluded.details, `group`=excluded.`group`, downloader_id=excluded.downloader_id, last_seen=excluded.last_seen"""
                 cursor.executemany(sql, params)
+                print(f"【刷新线程】已批量处理 {len(params)} 条种子主信息。")
                 logging.info(f"已批量处理 {len(params)} 条种子主信息。")
             if upload_stats_to_upsert:
+                print(f"【刷新线程】准备写入 {len(upload_stats_to_upsert)} 条种子上传数据到数据库")
                 # 根据数据库类型使用正确的占位符和冲突处理语法
                 if self.db_manager.db_type == "mysql":
                     sql_upload = """INSERT INTO torrent_upload_stats (hash, downloader_id, uploaded) VALUES (%s, %s, %s) ON DUPLICATE KEY UPDATE uploaded=VALUES(uploaded)"""
@@ -467,10 +483,12 @@ class DataTracker(Thread):
                 else:  # sqlite
                     sql_upload = """INSERT INTO torrent_upload_stats (hash, downloader_id, uploaded) VALUES (?, ?, ?) ON CONFLICT(hash, downloader_id) DO UPDATE SET uploaded=excluded.uploaded"""
                 cursor.executemany(sql_upload, upload_stats_to_upsert)
+                print(f"【刷新线程】已批量处理 {len(upload_stats_to_upsert)} 条种子上传数据。")
                 logging.info(f"已批量处理 {len(upload_stats_to_upsert)} 条种子上传数据。")
             # 根据数据库类型使用正确的占位符
             placeholder = "%s" if self.db_manager.db_type in ["mysql", "postgresql"] else "?"
 
+            print(f"【刷新线程】检查是否需要删除已移除下载器的种子数据...")
             # 修改删除逻辑：只删除已从配置中删除的下载器的种子数据，保留已禁用下载器的种子数据
             # 获取配置中所有下载器的ID（包括启用和禁用的）
             all_configured_downloaders = {d["id"] for d in config.get("downloaders", [])}
@@ -484,16 +502,20 @@ class DataTracker(Thread):
 
             # 只删除已从配置中删除的下载器的种子数据，保留已禁用下载器的种子数据
             if deleted_downloader_ids:
+                print(f"【刷新线程】发现 {len(deleted_downloader_ids)} 个已删除的下载器，将移除其种子数据")
                 # 构建 WHERE 子句
                 downloader_placeholders = ",".join([placeholder] * len(deleted_downloader_ids))
                 delete_query = f"DELETE FROM torrents WHERE downloader_id IN ({downloader_placeholders})"
                 cursor.execute(delete_query, tuple(deleted_downloader_ids))
                 deleted_count = cursor.rowcount
+                print(f"【刷新线程】从 torrents 表中移除了 {deleted_count} 个已删除下载器的种子。")
                 logging.info(f"从 torrents 表中移除了 {deleted_count} 个已删除下载器的种子。")
             else:
                 deleted_count = 0
+                print("【刷新线程】没有需要删除的已删除下载器的种子数据。")
                 logging.info("没有需要删除的已删除下载器的种子数据。")
             conn.commit()
+            print("【刷新线程】=== 种子数据库更新周期成功完成 ===")
             logging.info("种子数据库更新周期成功完成。")
         except Exception as e:
             logging.error(f"更新数据库中的种子失败: {e}", exc_info=True)
