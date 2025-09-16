@@ -86,7 +86,7 @@ mappings:
     'Atmos': '11'
     'TrueHD': '12'
     'LPCM': '13'
-    'DD/AC3': '15'
+    'DD': '15'
     'AC3': '15'
     'DDP/E-AC3': '16'
     'E-AC3': '16'

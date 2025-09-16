@@ -94,7 +94,11 @@ def get_data_api():
         all_discovered_sites = sorted(
             [row["sites"] for row in cursor.fetchall()])
 
-        cursor.execute("SELECT * FROM torrents")
+        # 明确指定查询列，确保包含新添加的列
+        if db_manager.db_type == "postgresql":
+            cursor.execute("SELECT hash, name, save_path, size, progress, state, sites, \"group\", details, downloader_id, last_seen, iyuu_last_check FROM torrents")
+        else:
+            cursor.execute("SELECT hash, name, save_path, size, progress, state, sites, `group`, details, downloader_id, last_seen, iyuu_last_check FROM torrents")
         torrents_raw = [dict(row) for row in cursor.fetchall()]
 
         cursor.execute(
@@ -141,6 +145,8 @@ def get_data_api():
                     agg["sites"][site_name].get("uploaded", 0) +
                     upload_for_this_hash)
                 agg["sites"][site_name]["comment"] = t.get("details")
+                # 添加站点状态
+                agg["sites"][site_name]["state"] = t.get("state", "N/A")
 
                 # --- [修改] 开始: 附加 migration 状态 ---
                 # 从预加载的配置中获取 migration 值，如果站点不存在则默认为 0

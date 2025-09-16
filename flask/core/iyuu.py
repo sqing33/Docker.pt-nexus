@@ -82,7 +82,7 @@ class IYUUThread(Thread):
 
             # 查询所有种子数据，只筛选体积大于1GB的种子（1GB = 1073741824字节）
             cursor.execute(
-                "SELECT hash, name, sites, size FROM torrents WHERE name IS NOT NULL AND name != '' AND size > 1073741824"
+                "SELECT hash, name, sites, size FROM torrents WHERE name IS NOT NULL AND name != '' AND size > 207374182"
             )
             torrents_raw = [dict(row) for row in cursor.fetchall()]
 
@@ -219,7 +219,7 @@ class IYUUThread(Thread):
             print(f"数据库中存在 {len(existing_sites)} 个配置站点")
 
             # 只处理前3个种子组用于测试
-            test_torrents = list(agg_torrents.items())[50:53]
+            test_torrents = list(agg_torrents.items())
 
             for i, (name, torrents) in enumerate(test_torrents):
                 if not self._is_running:  # 检查线程是否应该停止
@@ -305,10 +305,13 @@ class IYUUThread(Thread):
 
                         print(f"在torrents表中找到 {len(matched_sites)} 个已存在的站点")
 
-                    # 每次查询之间间隔30秒（除了最后一个）
+                        # 更新所有同名种子记录的iyuu_last_check时间
+                        self._update_iyuu_last_check(name, matched_sites)
+
+                    # 每次查询之间间隔5秒（除了最后一个）
                     if i < len(test_torrents) - 1:
-                        print("等待30秒后进行下一次查询...")
-                        for _ in range(30):  # 每秒检查一次是否需要停止
+                        print("等待5秒后进行下一次查询...")
+                        for _ in range(5):  # 每秒检查一次是否需要停止
                             if not self._is_running:
                                 return
                             time.sleep(1)
@@ -321,6 +324,193 @@ class IYUUThread(Thread):
 
         except Exception as e:
             logging.error(f"IYUU搜索执行出错: {e}", exc_info=True)
+
+    def _update_iyuu_last_check(self, torrent_name, matched_sites):
+        """更新所有同名种子记录的iyuu_last_check时间，并为没有details内容的记录填入详情链接"""
+        try:
+            conn = self.db_manager._get_connection()
+            cursor = self.db_manager._get_cursor(conn)
+            ph = self.db_manager.get_placeholder()
+
+            # 获取当前时间
+            from datetime import datetime
+            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+            # 获取数据库中该种子的所有现有记录
+            if self.db_manager.db_type == "postgresql":
+                cursor.execute(
+                    f"SELECT hash, sites, details FROM torrents WHERE name = {ph}",
+                    (torrent_name, ))
+            else:
+                cursor.execute(
+                    f"SELECT hash, sites, details FROM torrents WHERE name = {ph}",
+                    (torrent_name, ))
+            existing_records = [dict(row) for row in cursor.fetchall()]
+
+            updated_count = 0
+            filled_details_count = 0
+
+            # 为每条记录更新iyuu_last_check时间，并为没有details的记录填入详情链接
+            for record in existing_records:
+                site_name = record['sites']
+                current_details = record['details']
+                hash_value = record['hash']
+
+                # 构建更新参数
+                update_params = [current_time]  # iyuu_last_check时间
+                update_fields = [f"iyuu_last_check = {ph}"]
+
+                # 查找该站点在matched_sites中的详情链接
+                matched_site = next(
+                    (s for s in matched_sites if s['db_name'] == site_name),
+                    None)
+
+                # 如果当前记录没有details且IYUU返回了详情链接，则填入
+                if (not current_details
+                        or current_details.strip() == '') and matched_site:
+                    update_params.append(matched_site['url'])
+                    update_fields.append(f"details = {ph}")
+                    filled_details_count += 1
+
+                # 添加WHERE条件参数
+                update_params.extend([hash_value, torrent_name])
+
+                # 执行更新
+                if self.db_manager.db_type == "postgresql":
+                    cursor.execute(
+                        f"UPDATE torrents SET {', '.join(update_fields)} WHERE hash = {ph} AND name = {ph}",
+                        update_params)
+                else:
+                    cursor.execute(
+                        f"UPDATE torrents SET {', '.join(update_fields)} WHERE hash = {ph} AND name = {ph}",
+                        update_params)
+
+                updated_count += cursor.rowcount
+
+            conn.commit()
+            print(f"🔄 已更新 {updated_count} 条种子记录的iyuu_last_check时间")
+            if filled_details_count > 0:
+                print(f"✅ 已为 {filled_details_count} 条种子记录填入详情链接")
+
+        except Exception as e:
+            logging.error(f"更新种子记录iyuu_last_check时间和详情链接时出错: {e}",
+                          exc_info=True)
+        finally:
+            if 'cursor' in locals() and cursor:
+                cursor.close()
+            if 'conn' in locals() and conn:
+                conn.close()
+
+    def _add_missing_site_torrents(self, torrent_name, torrent_data,
+                                   matched_sites):
+        """为缺失站点添加种子记录"""
+        try:
+            conn = self.db_manager._get_connection()
+            cursor = self.db_manager._get_cursor(conn)
+            ph = self.db_manager.get_placeholder()
+
+            # 获取数据库中该种子已存在的所有站点记录
+            if self.db_manager.db_type == "postgresql":
+                cursor.execute(
+                    f"SELECT hash, sites, save_path, size, \"group\", details, downloader_id, progress, state FROM torrents WHERE name = {ph}",
+                    (torrent_name, ))
+            else:
+                cursor.execute(
+                    f"SELECT hash, sites, save_path, size, `group`, details, downloader_id, progress, state FROM torrents WHERE name = {ph}",
+                    (torrent_name, ))
+            existing_torrents = [dict(row) for row in cursor.fetchall()]
+
+            # 提取已存在的站点列表
+            existing_sites = set()
+            for t in existing_torrents:
+                site = t['sites']
+                if site:
+                    if ',' in site:
+                        site_list = site.split(',')
+                        existing_sites.update(s.strip() for s in site_list
+                                              if s.strip())
+                    else:
+                        existing_sites.add(site.strip())
+
+            # 获取IYUU返回的站点列表
+            iyuu_sites = {site['db_name'] for site in matched_sites}
+
+            # 找出缺失的站点
+            missing_sites = iyuu_sites - existing_sites
+
+            print(
+                f"发现 {len(missing_sites)} 个缺失的站点: {', '.join(missing_sites)}")
+
+            # 为每个缺失的站点添加记录
+            for site_name in missing_sites:
+                # 找到该站点的匹配信息
+                matched_site = next(
+                    (s for s in matched_sites if s['db_name'] == site_name),
+                    None)
+                if not matched_site:
+                    continue
+
+                # 使用现有种子信息创建新记录
+                existing_torrent = existing_torrents[
+                    0] if existing_torrents else torrent_data
+
+                # 获取当前时间
+                from datetime import datetime
+                current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+                # 为缺失站点的种子记录生成唯一hash
+                # 使用原始hash+站点名称+时间戳的组合来生成新的唯一hash
+                import hashlib
+                unique_string = f"{torrent_data['hash']}_{site_name}_{current_time}"
+                new_hash = hashlib.sha1(
+                    unique_string.encode('utf-8')).hexdigest()
+
+                if self.db_manager.db_type == "postgresql":
+                    cursor.execute(
+                        f"INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, \"group\", details, downloader_id, last_seen, iyuu_last_check) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})",
+                        (
+                            new_hash,  # 使用新生成的唯一hash
+                            torrent_name,
+                            existing_torrent.get('save_path', ''),
+                            existing_torrent.get('size', 0),
+                            0.0,  # 进度设为0，表示未下载
+                            '未做种',  # 状态设为未做种，表示未在客户端中
+                            site_name,
+                            existing_torrent.get('group', ''),
+                            matched_site['url'],  # 使用IYUU提供的详情链接
+                            existing_torrent.get('downloader_id', None),
+                            current_time,  # last_seen设为当前时间
+                            current_time  # iyuu_last_check设为当前时间
+                        ))
+                else:
+                    cursor.execute(
+                        f"INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, `group`, details, downloader_id, last_seen, iyuu_last_check) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})",
+                        (
+                            new_hash,  # 使用新生成的唯一hash
+                            torrent_name,
+                            existing_torrent.get('save_path', ''),
+                            existing_torrent.get('size', 0),
+                            0.0,  # 进度设为0，表示未下载
+                            '未做种',  # 状态设为未做种，表示未在客户端中
+                            site_name,
+                            existing_torrent.get('group', ''),
+                            matched_site['url'],  # 使用IYUU提供的详情链接
+                            existing_torrent.get('downloader_id', None),
+                            current_time,  # last_seen设为当前时间
+                            current_time  # iyuu_last_check设为当前时间
+                        ))
+                print(f"✅ 已为站点 '{site_name}' 添加种子记录")
+
+            conn.commit()
+            print(f"成功处理 {len(missing_sites)} 个缺失站点的种子记录")
+
+        except Exception as e:
+            logging.error(f"处理缺失站点种子记录时出错: {e}", exc_info=True)
+        finally:
+            if 'cursor' in locals() and cursor:
+                cursor.close()
+            if 'conn' in locals() and conn:
+                conn.close()
 
     def stop(self):
         """停止线程"""
