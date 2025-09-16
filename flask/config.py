@@ -72,7 +72,9 @@ class ConfigManager:
                         "downloaderIds": [],
                     }
                 }
-            }
+            },
+            # --- [新增] IYUU Token 设置 ---
+            "iyuu_token": ""
         }
 
     def load(self):
@@ -116,12 +118,9 @@ class ConfigManager:
                         "torrents_view"] = default_conf["ui_settings"][
                             "torrents_view"]
 
-                # --- [新增] 网络代理配置兼容 ---
-                if "network" not in self._config:
-                    self._config["network"] = default_conf["network"]
-                else:
-                    if "proxy_url" not in self._config["network"]:
-                        self._config["network"]["proxy_url"] = ""
+                # --- [新增] IYUU Token 配置兼容 ---
+                if "iyuu_token" not in self._config:
+                    self._config["iyuu_token"] = ""
 
                 # --- [新增] 认证配置兼容 ---
                 if "auth" not in self._config:
