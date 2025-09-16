@@ -36,6 +36,42 @@ class IYUUThread(Thread):
             elapsed = time.monotonic() - start_time
             time.sleep(max(0, self.interval - elapsed))
 
+    def _get_configured_sites(self):
+        """获取torrents表中已存在的站点列表"""
+        try:
+            conn = self.db_manager._get_connection()
+            cursor = self.db_manager._get_cursor(conn)
+
+            # 查询torrents表中所有不同的站点
+            cursor.execute(
+                "SELECT DISTINCT sites FROM torrents WHERE sites IS NOT NULL AND sites != ''"
+            )
+            sites_result = cursor.fetchall()
+
+            # 提取站点名称并去重
+            sites = set()
+            for row in sites_result:
+                site = row['sites']
+                if site:
+                    # 如果站点字段包含多个站点（用逗号分隔），则分割它们
+                    if ',' in site:
+                        site_list = site.split(',')
+                        sites.update(s.strip() for s in site_list if s.strip())
+                    else:
+                        sites.add(site.strip())
+
+            cursor.close()
+            conn.close()
+
+            sites_list = list(sites)
+            print(f"获取到 {len(sites_list)} 个已存在的站点")
+            print(f"站点列表: {', '.join(sites_list)}")
+
+            return sites_list
+        except Exception as e:
+            logging.error(f"获取torrents表中的站点信息时出错: {e}", exc_info=True)
+            return []
+
     def _process_torrents(self):
         """处理种子数据，按name列进行聚合"""
         print("=== 开始执行IYUU种子聚合任务 ===")
@@ -100,8 +136,12 @@ class IYUUThread(Thread):
 
             print(f"IYUU种子聚合结果已保存到: {output_file}")
 
-            # 执行IYUU搜索逻辑
-            self._perform_iyuu_search(agg_torrents)
+            # 获取已配置的站点列表
+            configured_sites = self._get_configured_sites()
+            print(f"数据库中存在 {len(configured_sites)} 个配置站点")
+
+            # 执行IYUU搜索逻辑，传递已配置的站点列表
+            self._perform_iyuu_search(agg_torrents, configured_sites)
 
             print("=== IYUU种子聚合任务执行完成 ===")
 
@@ -113,7 +153,29 @@ class IYUUThread(Thread):
                     cursor.close()
                 conn.close()
 
-    def _perform_iyuu_search(self, agg_torrents):
+    def _get_existing_sites(self):
+        """获取数据库中配置的站点信息"""
+        try:
+            conn = self.db_manager._get_connection()
+            cursor = self.db_manager._get_cursor(conn)
+
+            # 查询所有已配置的站点
+            cursor.execute("SELECT nickname, base_url, site FROM sites")
+            sites = {}
+            for row in cursor.fetchall():
+                # 以昵称为键存储站点信息
+                site_data = dict(row)
+                sites[site_data['nickname']] = site_data
+
+            cursor.close()
+            conn.close()
+
+            return sites
+        except Exception as e:
+            logging.error(f"获取数据库站点信息时出错: {e}", exc_info=True)
+            return {}
+
+    def _perform_iyuu_search(self, agg_torrents, configured_sites):
         """执行IYUU搜索逻辑"""
         try:
             # 获取IYUU token
@@ -126,15 +188,38 @@ class IYUUThread(Thread):
 
             print(f"开始执行IYUU搜索，共 {len(agg_torrents)} 个种子组")
 
-            # 获取站点信息
-            all_sites = get_all_sites(iyuu_token)
-            sid_sha1 = get_sid_sha1(iyuu_token, all_sites)
+            # 获取过滤后的sid_sha1和站点列表，只包含在torrents表中存在的站点
+            sid_sha1, all_sites = get_filtered_sid_sha1_and_sites(
+                iyuu_token, self.db_manager)
 
             # 创建站点映射
             sites_map = {site['id']: site for site in all_sites}
 
+            # 创建IYUU站点名称到数据库站点昵称的映射表
+            # 只包含需要映射的站点（IYUU名称与数据库昵称不同的情况）
+            site_name_mapping = {
+                # IYUU名称 -> 数据库昵称
+                "优堡": "我堡",
+                "观众": "人人",
+                "柠檬": "柠檬不酸",
+                "hdclone": "HDClone",
+                "我的PT(CC)": "我的PT",
+                "LongPT": "龙PT",
+                "March": "三月传媒",
+                "hdbao": "红豆包",
+                "LuckPT": "幸运",
+                "13city": "13City",
+                "PTSKit": "PTSkit",
+                "时光": "时光HDT",
+                "春天": "不可说",
+            }
+
+            # 获取数据库中现有的站点信息
+            existing_sites = self._get_existing_sites()
+            print(f"数据库中存在 {len(existing_sites)} 个配置站点")
+
             # 只处理前3个种子组用于测试
-            test_torrents = list(agg_torrents.items())[:3]
+            test_torrents = list(agg_torrents.items())[50:53]
 
             for i, (name, torrents) in enumerate(test_torrents):
                 if not self._is_running:  # 检查线程是否应该停止
@@ -153,20 +238,17 @@ class IYUUThread(Thread):
                     results = query_cross_seed(iyuu_token, selected_hash,
                                                sid_sha1)
 
-                    # 打印搜索结果
+                    # 打印搜索结果并筛选现有站点
                     if not results:
                         print(f"种子 {selected_hash[:8]}... 未在其他站点发现。")
                     else:
-                        print(
-                            f"种子 {selected_hash[:8]}... 在 {len(results)} 个地方发现！"
-                        )
-
+                        # 筛选出现在数据库中的站点
+                        matched_sites = []
                         for item in results:
                             sid = item.get("sid")
                             site_info = sites_map.get(sid)
 
                             if not site_info:
-                                print(f" - 在未知站点 (SID: {sid}) 发现")
                                 continue
 
                             scheme = "https" if site_info.get(
@@ -176,12 +258,52 @@ class IYUUThread(Thread):
                                     "{}", str(item.get("torrent_id")))
                             full_url = f"{scheme}://{site_info.get('base_url', '')}/{details_page}"
 
-                            site_name = site_info.get(
+                            # 获取IYUU站点名称
+                            iyuu_site_name = site_info.get(
                                 "nickname") or site_info.get(
                                     "site") or f"SID {sid}"
 
-                            print(f"✅ 站点: {site_name}")
-                            print(f"   链接: {full_url}")
+                            # 尝试映射到数据库中的站点名称
+                            db_site_name = site_name_mapping.get(
+                                iyuu_site_name, iyuu_site_name)
+
+                            # 检查站点是否在torrents表中存在的站点列表中
+                            if db_site_name in configured_sites:
+                                # 如果站点在数据库中也有配置信息，则使用它
+                                site_info_dict = existing_sites.get(
+                                    db_site_name, {})
+                                matched_sites.append({
+                                    'iyuu_name':
+                                    iyuu_site_name,
+                                    'db_name':
+                                    db_site_name,
+                                    'url':
+                                    full_url,
+                                    'site_info':
+                                    site_info_dict
+                                })
+
+                        # 只显示匹配到的已配置站点
+                        if matched_sites:
+                            print(
+                                f"种子 {selected_hash[:8]}... 在 {len(matched_sites)} 个已存在的站点发现！"
+                            )
+                            for site in matched_sites:
+                                iyuu_site_name = site['iyuu_name']
+                                db_site_name = site['db_name']
+                                full_url = site['url']
+
+                                if iyuu_site_name != db_site_name:
+                                    print(
+                                        f"✅ 匹配站点: {iyuu_site_name} -> {db_site_name}"
+                                    )
+                                else:
+                                    print(f"✅ 匹配站点: {iyuu_site_name}")
+                                print(f"   链接: {full_url}")
+                        else:
+                            print(f"种子 {selected_hash[:8]}... 未在任何已存在的站点发现。")
+
+                        print(f"在torrents表中找到 {len(matched_sites)} 个已存在的站点")
 
                     # 每次查询之间间隔30秒（除了最后一个）
                     if i < len(test_torrents) - 1:
@@ -210,6 +332,10 @@ class IYUUThread(Thread):
 API_BASE = "https://2025.iyuu.cn"
 CLIENT_VERSION = "8.2.0"
 
+# --- 请求频率控制 ---
+_last_request_time = 0
+_rate_limit_delay = 5.0  # 请求间隔时间（秒）
+
 # --- IYUU API 辅助函数 ---
 
 
@@ -221,7 +347,21 @@ def get_sha1_hex(text: str) -> str:
 def make_api_request(method: str, url: str, token: str, **kwargs) -> dict:
     """
     封装 API 请求，统一处理 headers 和错误。
+    【已修正】此函数现在能正确合并 headers。
     """
+    global _last_request_time, _rate_limit_delay
+
+    # 请求频率控制 - 确保请求之间有适当的延迟
+    current_time = time.time()
+    time_since_last_request = current_time - _last_request_time
+    if time_since_last_request < _rate_limit_delay:
+        sleep_time = _rate_limit_delay - time_since_last_request
+        print(f"请求频率控制: 等待 {sleep_time:.2f} 秒")
+        time.sleep(sleep_time)
+
+    # 更新最后请求时间
+    _last_request_time = time.time()
+
     # 基础 headers，包含 Token
     final_headers = {'Token': token}
 
@@ -259,24 +399,38 @@ def make_api_request(method: str, url: str, token: str, **kwargs) -> dict:
         raise Exception("无法解析服务器返回的 JSON 数据")
 
 
-def get_all_sites(token: str) -> list:
-    """获取 IYUU 支持的所有站点信息"""
-    print("正在获取 IYUU 支持的站点列表...")
+def get_supported_sites(token: str) -> list:
+    """获取 IYUU 支持的所有可辅种站点列表"""
+    print("正在获取 IYUU 支持的可辅种站点列表...")
     url = f"{API_BASE}/reseed/sites/index"
     response_data = make_api_request("GET", url, token)
     sites = response_data.get("data", {}).get("sites", [])
+    print(f"从API获取到的可辅种站点数量: {len(sites) if response_data.get('data') else 0}")
     if not sites:
-        raise Exception("未能获取到站点列表，请检查 Token 或 IYUU 服务状态。")
-    print(f"成功获取到 {len(sites)} 个站点信息。")
+        raise Exception("未能获取到可辅种站点列表，请检查 Token 或 IYUU 服务状态。")
+    print(f"成功获取到 {len(sites)} 个可辅种站点信息。")
     return sites
 
 
 def get_sid_sha1(token: str, all_sites: list) -> str:
     """根据站点列表上报并获取 sid_sha1"""
     print("正在生成站点校验哈希 (sid_sha1)...")
-    url = f"{API_BASE}/reseed/sites/reportExisting"
+    print(f"接收到的站点数量: {len(all_sites)}")
+
+    # 打印前几个站点的信息用于调试
+    for i, site in enumerate(all_sites[:5]):
+        print(f"站点 {i+1}: ID={site.get('id')}, 名称={site.get('nickname')}")
+
     site_ids = [site['id'] for site in all_sites]
+    print(f"提取的站点ID数量: {len(site_ids)}")
+
+    if not site_ids:
+        raise Exception("站点ID列表为空，无法生成sid_sha1")
+
     payload = {"sid_list": site_ids}
+    print(f"发送的payload: {payload}")
+
+    url = f"{API_BASE}/reseed/sites/reportExisting"
 
     # 这里的 headers 会被正确合并
     headers = {'Content-Type': 'application/json'}
@@ -291,6 +445,148 @@ def get_sid_sha1(token: str, all_sites: list) -> str:
         raise Exception("未能从 API 获取 sid_sha1。")
     print("成功生成 sid_sha1。")
     return sid_sha1
+
+
+def get_filtered_sid_sha1_and_sites(token: str, db_manager) -> tuple:
+    """获取过滤后的sid_sha1和站点列表，只包含在torrents表中存在的站点"""
+    print("=== 开始获取过滤后的sid_sha1和站点列表 ===")
+
+    # 1. 获取IYUU支持的所有可辅种站点
+    try:
+        supported_sites = get_supported_sites(token)
+        print(f"获取到 {len(supported_sites)} 个IYUU支持的可辅种站点")
+    except Exception as e:
+        logging.error(f"获取IYUU支持站点列表失败: {e}")
+        raise
+
+    # 在获取站点列表和后续请求之间添加额外延迟
+    print("等待额外延迟以避免请求频率过快...")
+    time.sleep(2)
+
+    # 2. 获取torrents表中存在的站点列表
+    try:
+        conn = db_manager._get_connection()
+        cursor = db_manager._get_cursor(conn)
+
+        # 查询torrents表中所有不同的站点
+        cursor.execute(
+            "SELECT DISTINCT sites FROM torrents WHERE sites IS NOT NULL AND sites != ''"
+        )
+        sites_result = cursor.fetchall()
+
+        # 提取站点名称并去重
+        torrent_sites = set()
+        for row in sites_result:
+            site = row['sites'] if isinstance(row, dict) else row[0]
+            if site:
+                # 如果站点字段包含多个站点（用逗号分隔），则分割它们
+                if ',' in site:
+                    site_list = site.split(',')
+                    torrent_sites.update(s.strip() for s in site_list
+                                         if s.strip())
+                else:
+                    torrent_sites.add(site.strip())
+
+        cursor.close()
+        conn.close()
+
+        torrent_sites_list = list(torrent_sites)
+        print(f"torrents表中存在的站点数量: {len(torrent_sites_list)}")
+        print(f"站点列表: {', '.join(torrent_sites_list)}")
+
+    except Exception as e:
+        logging.error(f"获取torrents表中的站点信息时出错: {e}", exc_info=True)
+        raise
+
+    # 3. 使用site_name_mapping映射替换nickname
+    site_name_mapping = {
+        # IYUU名称 -> 数据库昵称
+        "优堡": "我堡",
+        "观众": "人人",
+        "柠檬": "柠檬不酸",
+        "hdclone": "HDClone",
+        "我的PT(CC)": "我的PT",
+        "LongPT": "龙PT",
+        "March": "三月传媒",
+        "hdbao": "红豆包",
+        "LuckPT": "幸运",
+        "13city": "13City",
+        "PTSKit": "PTSkit",
+        "时光": "时光HDT",
+        "春天": "不可说",
+    }
+
+    # 创建反向映射 (数据库昵称 -> IYUU名称)
+    reverse_mapping = {v: k for k, v in site_name_mapping.items()}
+
+    # 4. 过滤出IYUU支持且在torrents表中存在的站点
+    filtered_site_ids = []
+    site_id_mapping = {}  # 用于存储站点ID映射
+    filtered_sites = []  # 用于存储过滤后的站点信息
+
+    for site in supported_sites:
+        iyuu_nickname = site.get('nickname')
+        iyuu_id = site.get('id')
+
+        if not iyuu_nickname or not iyuu_id:
+            continue
+
+        # 检查站点是否在torrents表中存在
+        # 先检查原始名称
+        if iyuu_nickname in torrent_sites_list:
+            filtered_site_ids.append(iyuu_id)
+            site_id_mapping[iyuu_nickname] = iyuu_id
+            filtered_sites.append(site)
+            continue
+
+        # 再检查映射后的名称
+        if iyuu_nickname in site_name_mapping:
+            db_nickname = site_name_mapping[iyuu_nickname]
+            if db_nickname in torrent_sites_list:
+                filtered_site_ids.append(iyuu_id)
+                site_id_mapping[db_nickname] = iyuu_id
+                filtered_sites.append(site)
+                continue
+
+        # 检查反向映射 (数据库中的名称是否需要映射到IYUU)
+        for db_site in torrent_sites_list:
+            if db_site in reverse_mapping and reverse_mapping[
+                    db_site] == iyuu_nickname:
+                filtered_site_ids.append(iyuu_id)
+                site_id_mapping[db_site] = iyuu_id
+                filtered_sites.append(site)
+                break
+
+    print(f"过滤后得到 {len(filtered_site_ids)} 个支持的站点ID")
+    print(f"站点ID列表: {filtered_site_ids}")
+
+    if not filtered_site_ids:
+        raise Exception("没有找到在torrents表中存在的IYUU支持站点")
+
+    # 在发送reportExisting请求前添加额外延迟
+    print("准备发送reportExisting请求，等待额外延迟...")
+    time.sleep(2)
+
+    # 5. 构建sid_sha1
+    try:
+        payload = {"sid_list": filtered_site_ids}
+        url = f"{API_BASE}/reseed/sites/reportExisting"
+
+        headers = {'Content-Type': 'application/json'}
+        response_data = make_api_request("POST",
+                                         url,
+                                         token,
+                                         json=payload,
+                                         headers=headers)
+
+        sid_sha1 = response_data.get("data", {}).get("sid_sha1")
+        if not sid_sha1:
+            raise Exception("未能从 API 获取 sid_sha1。")
+        print(f"成功生成过滤后的 sid_sha1: {sid_sha1}")
+        return sid_sha1, filtered_sites
+    except Exception as e:
+        logging.error(f"生成sid_sha1时出错: {e}")
+        raise
 
 
 def query_cross_seed(token: str, infohash: str, sid_sha1: str) -> list:

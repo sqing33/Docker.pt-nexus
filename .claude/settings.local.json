@@ -17,7 +17,8 @@
       "Bash(curl -s \"http://localhost:5272/api/data?page=1&pageSize=5&sortProp=name&sortOrder=ascending\")",
       "Bash(curl -s \"http://localhost:15273/api/data?page=1&pageSize=3&sortProp=name&sortOrder=ascending\")",
       "WebFetch(domain:element-plus.org)",
-      "Bash(timeout:*)"
+      "Bash(timeout:*)",
+      "WebFetch(domain:doc.iyuu.cn)"
     ],
     "deny": [],
     "ask": []
