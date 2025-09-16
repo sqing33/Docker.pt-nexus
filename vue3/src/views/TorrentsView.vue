@@ -243,6 +243,7 @@ interface SiteData {
   uploaded: number
   comment: string
   migration: number
+  state: string
 }
 interface Torrent {
   name: string
@@ -726,7 +727,12 @@ const getLink = (siteData: SiteData, siteName: string): string | null => {
   }
   return null
 }
-const getTagType = (siteData: SiteData) => (siteData.comment ? 'success' : 'primary')
+const getTagType = (siteData: SiteData) => {
+  // 如果站点状态为未做种，显示为红色
+  if (siteData.state === '未做种') return 'danger'
+  // 如果有comment，显示为绿色；否则显示为蓝色
+  return siteData.comment ? 'success' : 'primary'
+}
 
 const getDownloaderName = (downloaderId: string | null) => {
   if (!downloaderId) return '未知下载器'

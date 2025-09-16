@@ -115,6 +115,7 @@ def create_app():
     logging.info("正在启动后台数据追踪服务...")
     # 检查是否在调试模式下运行
     if os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
+        # logging.info("正在启动数据追踪线程...")
         # start_data_tracker(db_manager, config_manager)
 
         # --- 启动IYUU后台线程 ---

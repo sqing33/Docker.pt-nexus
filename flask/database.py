@@ -117,7 +117,7 @@ class DatabaseManager:
                 logging.info(f"'{col}' 列移除成功。")
 
     def _migrate_torrents_table(self, conn, cursor):
-        """检查并向 torrents 表添加 downloader_id 列。"""
+        """检查并向 torrents 表添加 downloader_id 和 iyuu_last_check 列。"""
         table_name = 'torrents'
         if self.db_type == 'mysql':
             cursor.execute(f"DESCRIBE {table_name}")
@@ -141,6 +141,23 @@ class DatabaseManager:
                 )
             conn.commit()
             logging.info("'downloader_id' 列添加成功。")
+
+        if 'iyuu_last_check' not in columns:
+            logging.info(f"正在向 '{table_name}' 表添加 'iyuu_last_check' 列...")
+            if self.db_type == 'mysql':
+                cursor.execute(
+                    f"ALTER TABLE {table_name} ADD COLUMN iyuu_last_check DATETIME NULL"
+                )
+            elif self.db_type == 'postgresql':
+                cursor.execute(
+                    f"ALTER TABLE {table_name} ADD COLUMN iyuu_last_check TIMESTAMP NULL"
+                )
+            else:  # sqlite
+                cursor.execute(
+                    f"ALTER TABLE {table_name} ADD COLUMN iyuu_last_check TEXT NULL"
+                )
+            conn.commit()
+            logging.info("'iyuu_last_check' 列添加成功。")
 
     def get_placeholder(self):
         """返回数据库类型对应的正确参数占位符。"""
@@ -560,7 +577,7 @@ class DatabaseManager:
                 "CREATE TABLE IF NOT EXISTS downloader_clients (id VARCHAR(36) PRIMARY KEY, name VARCHAR(255) NOT NULL, type VARCHAR(50) NOT NULL, last_total_dl BIGINT NOT NULL DEFAULT 0, last_total_ul BIGINT NOT NULL DEFAULT 0) ENGINE=InnoDB ROW_FORMAT=Dynamic"
             )
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS torrents (hash VARCHAR(40) PRIMARY KEY, name TEXT NOT NULL, save_path TEXT, size BIGINT, progress FLOAT, state VARCHAR(50), sites VARCHAR(255), `group` VARCHAR(255), details TEXT, downloader_id VARCHAR(36) NULL, last_seen DATETIME NOT NULL) ENGINE=InnoDB ROW_FORMAT=Dynamic"
+                "CREATE TABLE IF NOT EXISTS torrents (hash VARCHAR(40) PRIMARY KEY, name TEXT NOT NULL, save_path TEXT, size BIGINT, progress FLOAT, state VARCHAR(50), sites VARCHAR(255), `group` VARCHAR(255), details TEXT, downloader_id VARCHAR(36) NULL, last_seen DATETIME NOT NULL, iyuu_last_check DATETIME NULL) ENGINE=InnoDB ROW_FORMAT=Dynamic"
             )
             cursor.execute(
                 "CREATE TABLE IF NOT EXISTS torrent_upload_stats (hash VARCHAR(40) NOT NULL, downloader_id VARCHAR(36) NOT NULL, uploaded BIGINT DEFAULT 0, PRIMARY KEY (hash, downloader_id)) ENGINE=InnoDB ROW_FORMAT=Dynamic"
@@ -581,7 +598,7 @@ class DatabaseManager:
                 "CREATE TABLE IF NOT EXISTS downloader_clients (id VARCHAR(36) PRIMARY KEY, name VARCHAR(255) NOT NULL, type VARCHAR(50) NOT NULL, last_total_dl BIGINT NOT NULL DEFAULT 0, last_total_ul BIGINT NOT NULL DEFAULT 0)"
             )
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS torrents (hash VARCHAR(40) PRIMARY KEY, name TEXT NOT NULL, save_path TEXT, size BIGINT, progress REAL, state VARCHAR(50), sites VARCHAR(255), \"group\" VARCHAR(255), details TEXT, downloader_id VARCHAR(36), last_seen TIMESTAMP NOT NULL)"
+                "CREATE TABLE IF NOT EXISTS torrents (hash VARCHAR(40) PRIMARY KEY, name TEXT NOT NULL, save_path TEXT, size BIGINT, progress REAL, state VARCHAR(50), sites VARCHAR(255), \"group\" VARCHAR(255), details TEXT, downloader_id VARCHAR(36), last_seen TIMESTAMP NOT NULL, iyuu_last_check TIMESTAMP NULL)"
             )
             cursor.execute(
                 "CREATE TABLE IF NOT EXISTS torrent_upload_stats (hash VARCHAR(40) NOT NULL, downloader_id VARCHAR(36) NOT NULL, uploaded BIGINT DEFAULT 0, PRIMARY KEY (hash, downloader_id))"
@@ -602,7 +619,7 @@ class DatabaseManager:
                 "CREATE TABLE IF NOT EXISTS downloader_clients (id TEXT PRIMARY KEY, name TEXT NOT NULL, type TEXT NOT NULL, last_total_dl INTEGER NOT NULL DEFAULT 0, last_total_ul INTEGER NOT NULL DEFAULT 0)"
             )
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS torrents (hash TEXT PRIMARY KEY, name TEXT NOT NULL, save_path TEXT, size INTEGER, progress REAL, state TEXT, sites TEXT, `group` TEXT, details TEXT, downloader_id TEXT, last_seen TEXT NOT NULL)"
+                "CREATE TABLE IF NOT EXISTS torrents (hash TEXT PRIMARY KEY, name TEXT NOT NULL, save_path TEXT, size INTEGER, progress REAL, state TEXT, sites TEXT, `group` TEXT, details TEXT, downloader_id TEXT, last_seen TEXT NOT NULL, iyuu_last_check TEXT NULL)"
             )
             cursor.execute(
                 "CREATE TABLE IF NOT EXISTS torrent_upload_stats (hash TEXT NOT NULL, downloader_id TEXT NOT NULL, uploaded INTEGER DEFAULT 0, PRIMARY KEY (hash, downloader_id))"

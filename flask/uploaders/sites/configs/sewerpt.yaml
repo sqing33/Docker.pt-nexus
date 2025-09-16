@@ -67,6 +67,7 @@ mappings:
     "AAC": "6"
     "Other": "7"
     "AC3": "8"
+    "DD": "8"
     "E-AC3": "11"
     "ALAC": "9"
     "WAV": "10"
