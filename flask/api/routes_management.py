@@ -26,10 +26,22 @@ management_bp = Blueprint("management_api", __name__, url_prefix="/api")
 
 def reconcile_and_start_tracker():
     """一个辅助函数，用于协调数据并启动追踪器，通常在配置更改后调用。"""
+    # 检查是否在调试模式下运行
+    import os
+    if os.environ.get('WERKZEUG_RUN_MAIN') != 'true':
+        logging.info("检测到调试监控进程，跳过reconcile_and_start_tracker。")
+        return
+
     db_manager = management_bp.db_manager
     config_manager = management_bp.config_manager
     reconcile_historical_data(db_manager, config_manager.get())
     services.start_data_tracker(db_manager, config_manager)
+    # 启动IYUU线程
+    try:
+        from core.iyuu import start_iyuu_thread
+        start_iyuu_thread(db_manager, config_manager)
+    except Exception as e:
+        logging.error(f"启动IYUU线程失败: {e}", exc_info=True)
 
 
 # --- 站点管理 ---
@@ -562,6 +574,12 @@ def update_settings():
         if restart_needed:
             logging.info("配置已更新，将重启数据追踪服务...")
             services.stop_data_tracker()
+            # 停止IYUU线程
+            try:
+                from core.iyuu import stop_iyuu_thread
+                stop_iyuu_thread()
+            except Exception as e:
+                logging.error(f"停止IYUU线程失败: {e}", exc_info=True)
             management_bp.db_manager.init_db()
             reconcile_and_start_tracker()
             return jsonify({"message": "配置已成功保存和应用。"}), 200

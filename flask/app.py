@@ -3,6 +3,7 @@
 import os
 import logging
 import jwt  # type: ignore
+import atexit
 from typing import cast
 from flask import Flask, send_from_directory, request, jsonify
 from flask_cors import CORS
@@ -11,6 +12,7 @@ from flask_cors import CORS
 from config import get_db_config, config_manager
 from database import DatabaseManager, reconcile_historical_data
 from core.services import start_data_tracker, stop_data_tracker
+from core.iyuu import start_iyuu_thread, stop_iyuu_thread
 
 # --- 日志基础配置 ---
 logging.basicConfig(
@@ -111,7 +113,15 @@ def create_app():
 
     # --- 步骤 5: 启动后台数据追踪服务 ---
     logging.info("正在启动后台数据追踪服务...")
-    start_data_tracker(db_manager, config_manager)
+    # 检查是否在调试模式下运行
+    if os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
+        start_data_tracker(db_manager, config_manager)
+
+        # --- 启动IYUU后台线程 ---
+        logging.info("正在启动IYUU后台线程...")
+        start_iyuu_thread(db_manager, config_manager)
+    else:
+        logging.info("检测到调试监控进程，跳过后台线程启动。")
 
     # --- 步骤 5: 配置前端静态文件服务 ---
     # 这个路由处理所有非 API 请求，将其指向前端应用
@@ -134,6 +144,24 @@ def create_app():
 if __name__ == "__main__":
     # 通过应用工厂创建 Flask 应用
     flask_app = create_app()
+
+    # 注册应用退出时的清理函数
+    def cleanup():
+        logging.info("正在清理后台线程...")
+        try:
+            from core.services import stop_data_tracker
+            stop_data_tracker()
+        except Exception as e:
+            logging.error(f"停止数据追踪线程失败: {e}", exc_info=True)
+
+        try:
+            from core.iyuu import stop_iyuu_thread
+            stop_iyuu_thread()
+        except Exception as e:
+            logging.error(f"停止IYUU线程失败: {e}", exc_info=True)
+        logging.info("后台线程清理完成。")
+
+    atexit.register(cleanup)
 
     # 从环境变量获取端口，如果未设置则使用默认值 15272
     port = int(os.getenv("PORT", 15273))
