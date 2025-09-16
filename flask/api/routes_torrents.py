@@ -270,14 +270,19 @@ def get_data_api():
 @torrents_bp.route("/refresh_data", methods=["POST"])
 def refresh_data_api():
     """触发后台任务，立即刷新所有下载器的种子列表。"""
+    print("【API】收到刷新种子数据的请求")
     try:
         if services.data_tracker_thread and services.data_tracker_thread.is_alive(
         ):
+            print("【API】数据追踪服务正在运行，启动刷新线程")
             Thread(target=services.data_tracker_thread._update_torrents_in_db
                    ).start()
+            print("【API】后台刷新线程已启动")
             return jsonify({"message": "后台刷新已触发"}), 202
         else:
+            print("【API】数据追踪服务未运行，无法刷新")
             return jsonify({"message": "数据追踪服务未运行，无法刷新。"}), 400
     except Exception as e:
+        print(f"【API】触发刷新失败: {e}")
         logging.error(f"触发刷新失败: {e}")
         return jsonify({"error": "触发刷新失败"}), 500
