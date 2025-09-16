@@ -634,6 +634,13 @@ class DataTracker(Thread):
 def start_data_tracker(db_manager, config_manager):
     """初始化并启动全局 DataTracker 线程实例。"""
     global data_tracker_thread
+    # 检查是否在调试模式下运行，避免重复启动
+    import os
+    if os.environ.get('WERKZEUG_RUN_MAIN') != 'true':
+        # 在调试模式下，这是监控进程，不需要启动线程
+        logging.info("检测到调试监控进程，跳过DataTracker线程启动。")
+        return data_tracker_thread
+
     if data_tracker_thread is None or not data_tracker_thread.is_alive():
         data_tracker_thread = DataTracker(db_manager, config_manager)
         data_tracker_thread.start()
