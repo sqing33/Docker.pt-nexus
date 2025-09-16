@@ -554,6 +554,10 @@ def update_settings():
         current_config["network"]["proxy_url"] = new_config["network"].get(
             "proxy_url", "")
 
+    # 处理 iyuu_token 配置
+    if "iyuu_token" in new_config:
+        current_config["iyuu_token"] = new_config["iyuu_token"]
+
     if config_manager.save(current_config):
         if restart_needed:
             logging.info("配置已更新，将重启数据追踪服务...")
