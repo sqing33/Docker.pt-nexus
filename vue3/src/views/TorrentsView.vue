@@ -22,14 +22,15 @@
                   <!-- [修改] 使用 v-if/v-else 切换显示 -->
                   <template v-if="props.row.sites['财神'] && props.row.sites['财神'].state !== '不存在'">
                     <!-- 当财神站点存在且状态不为"不存在"时，显示特效标签 (原有逻辑) -->
-                    <a v-if="hasLink(props.row.sites['财神'], '财神') && props.row.sites['财神'].state !== '未做种'" :href="getLink(props.row.sites['财神'], '财神')!"
-                      target="_blank" style="text-decoration: none">
+                    <a v-if="hasLink(props.row.sites['财神'], '财神') && props.row.sites['财神'].state !== '未做种'"
+                      :href="getLink(props.row.sites['财神'], '财神')!" target="_blank" style="text-decoration: none">
                       <div class="caishen-tag animated-tag">
                         <div class="site-name">财神</div>
                         <div class="site-upload-data">({{ formatBytes(props.row.sites['财神'].uploaded) }})</div>
                       </div>
                     </a>
-                    <div v-else class="caishen-tag animated-tag" @click.stop="handleSpecialSiteClick(props.row.name, '财神', props.row.sites['财神'])">
+                    <div v-else class="caishen-tag animated-tag"
+                      @click.stop="handleSpecialSiteClick(props.row.name, '财神', props.row.sites['财神'])">
                       <div class="site-name">财神</div>
                       <div class="site-upload-data">({{ formatBytes(props.row.sites['财神'].uploaded) }})</div>
                     </div>
@@ -48,14 +49,15 @@
                   <!-- [修改] 使用 v-if/v-else 切换显示 -->
                   <template v-if="props.row.sites['星陨阁'] && props.row.sites['星陨阁'].state !== '不存在'">
                     <!-- 当星陨阁站点存在且状态不为"不存在"时，显示特效标签 (原有逻辑) -->
-                    <a v-if="hasLink(props.row.sites['星陨阁'], '星陨阁') && props.row.sites['星陨阁'].state !== '未做种'" :href="getLink(props.row.sites['星陨阁'], '星陨阁')!"
-                      target="_blank" style="text-decoration: none">
+                    <a v-if="hasLink(props.row.sites['星陨阁'], '星陨阁') && props.row.sites['星陨阁'].state !== '未做种'"
+                      :href="getLink(props.row.sites['星陨阁'], '星陨阁')!" target="_blank" style="text-decoration: none">
                       <div class="xingyunge-tag animated-tag-flame">
                         <div class="site-name">星陨阁</div>
                         <div class="site-upload-data">({{ formatBytes(props.row.sites['星陨阁'].uploaded) }})</div>
                       </div>
                     </a>
-                    <div v-else class="xingyunge-tag animated-tag-flame" @click.stop="handleSpecialSiteClick(props.row.name, '星陨阁', props.row.sites['星陨阁'])">
+                    <div v-else class="xingyunge-tag animated-tag-flame"
+                      @click.stop="handleSpecialSiteClick(props.row.name, '星陨阁', props.row.sites['星陨阁'])">
                       <div class="site-name">星陨阁</div>
                       <div class="site-upload-data">({{ formatBytes(props.row.sites['星陨阁'].uploaded) }})</div>
                     </div>
@@ -75,8 +77,8 @@
               <template v-for="(site, index) in getOtherSites(props.row.sites, all_sites)" :key="site.name">
                 <div class="other-site-item" :style="getSitePosition(index)">
                   <!-- 对于未做种状态的站点，使用可点击的div而不是链接 -->
-                  <a v-if="hasLink(site.data, site.name) && site.data.state !== '未做种'" :href="getLink(site.data, site.name)!" target="_blank"
-                    style="text-decoration: none;width: 80px;">
+                  <a v-if="hasLink(site.data, site.name) && site.data.state !== '未做种'"
+                    :href="getLink(site.data, site.name)!" target="_blank" style="text-decoration: none;width: 80px;">
                     <div class="site-wrapper">
                       <el-tag effect="dark" :type="getTagType(site.data)" class="other-site-tag"
                         style="text-align: center">
@@ -86,8 +88,9 @@
                     </div>
                   </a>
                   <div v-else class="site-wrapper">
-                    <el-tag effect="plain" :type="getTagType(site.data)" class="other-site-tag"
-                      style="text-align: center;width: 80px; cursor: pointer;" @click.stop="handleSiteClick(props.row.name, site)">
+                    <el-tag :effect="site.data.state !== '未做种' ? 'plain' : 'dark'" :type="getTagType(site.data)"
+                      class="other-site-tag" style="text-align: center;width: 80px; cursor: pointer;"
+                      @click.stop="handleSiteClick(props.row.name, site)">
                       {{ site.name }}
                       <div>({{ formatBytes(site.data.uploaded) }})</div>
                     </el-tag>
@@ -164,12 +167,13 @@
           <div style="display: flex; justify-content: center; align-items: center; width: 100%; height: 100%;">
             <el-tag :type="getStateTagType(scope.row.state)" size="large">{{
               scope.row.state
-              }}</el-tag>
+            }}</el-tag>
           </div>
         </template>
       </el-table-column>
 
-      <el-table-column label="可转种" width="80" align="center" header-align="center">
+      <el-table-column label="可转种" width="100" align="center" header-align="center" prop="target_sites_count"
+        sortable="custom">
         <template #default="scope">
           <div style="display: flex; justify-content: center; align-items: center; width: 100%; height: 100%;">
             <span v-if="scope.row.target_sites_count !== undefined">{{ scope.row.target_sites_count }}</span>
@@ -254,7 +258,7 @@
           <el-checkbox-group v-model="tempFilters.states">
             <el-checkbox v-for="state in unique_states" :key="state" :label="state">{{
               state
-              }}</el-checkbox>
+            }}</el-checkbox>
           </el-checkbox-group>
         </div>
         <div class="filter-card-footer">
@@ -282,7 +286,8 @@
           <p>当前状态: {{ selectedSite?.data.state }}</p>
           <div v-if="hasLink(selectedSite?.data, selectedSite?.name)" class="site-operation-link">
             <p class="label">详情页链接:</p>
-            <el-link :href="getLink(selectedSite?.data, selectedSite?.name)" target="_blank" type="primary" :underline="false">
+            <el-link :href="getLink(selectedSite?.data, selectedSite?.name)" target="_blank" type="primary"
+              :underline="false">
               {{ getLink(selectedSite?.data, selectedSite?.name) }}
             </el-link>
           </div>
@@ -1364,7 +1369,7 @@ watch(nameSearch, () => {
 }
 
 .expand-content :deep(.el-tag) {
-  height: 32px;
+  height: 40px;
   width: 100%;
   white-space: normal;
   text-align: center;
