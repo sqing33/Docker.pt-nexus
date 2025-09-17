@@ -7,6 +7,7 @@ import json
 import hashlib
 from threading import Thread
 from collections import defaultdict
+from datetime import datetime
 
 
 class IYUUThread(Thread):
@@ -17,11 +18,11 @@ class IYUUThread(Thread):
         self.db_manager = db_manager
         self.config_manager = config_manager
         self._is_running = True
-        # 设置为30秒运行一次
-        self.interval = 3000
+        # 设置为6小时运行一次
+        self.interval = 21600  # 6小时
 
     def run(self):
-        print("IYUUThread 线程已启动，每30秒执行一次种子聚合任务。")
+        print("IYUUThread 线程已启动，每6小时执行一次查询任务。")
         # 等待5秒再开始执行，避免与主程序启动冲突
         time.sleep(5)
 
@@ -64,17 +65,28 @@ class IYUUThread(Thread):
             conn.close()
 
             sites_list = list(sites)
-            print(f"获取到 {len(sites_list)} 个已存在的站点")
-            print(f"站点列表: {', '.join(sites_list)}")
+            log_iyuu_message(f"获取到 {len(sites_list)} 个已存在的站点", "INFO")
+            log_iyuu_message(f"站点列表: {', '.join(sites_list)}", "INFO")
 
             return sites_list
         except Exception as e:
             logging.error(f"获取torrents表中的站点信息时出错: {e}", exc_info=True)
             return []
 
-    def _process_torrents(self):
+    def _process_torrents(self, is_manual_trigger=False):
         """处理种子数据，按name列进行聚合"""
-        print("=== 开始执行IYUU种子聚合任务 ===")
+        # 检查是否启用自动查询（仅在自动触发时检查）
+        if not is_manual_trigger:
+            config = self.config_manager.get()
+            iyuu_settings = config.get("iyuu_settings", {})
+            auto_query_enabled = iyuu_settings.get("auto_query_enabled", True)
+
+            # 如果未启用自动查询，则跳过
+            if not auto_query_enabled:
+                log_iyuu_message("IYUU自动查询已禁用，跳过本次查询任务", "INFO")
+                return
+
+        log_iyuu_message("开始执行IYUU种子聚合任务", "INFO")
         conn = None
         try:
             conn = self.db_manager._get_connection()
@@ -154,17 +166,17 @@ class IYUUThread(Thread):
             with open(output_file, 'w', encoding='utf-8') as f:
                 f.writelines(output_lines)
 
-            print(f"IYUU种子聚合结果已保存到: {output_file}")
+            log_iyuu_message(f"IYUU种子聚合结果已保存到: {output_file}", "INFO")
 
             # 获取已配置的站点列表
             configured_sites = self._get_configured_sites()
-            print(f"数据库中存在 {len(configured_sites)} 个配置站点")
+            log_iyuu_message(f"数据库中存在 {len(configured_sites)} 个配置站点", "INFO")
 
             # 执行IYUU搜索逻辑，传递已配置的站点列表和所有种子信息
             self._perform_iyuu_search(agg_torrents, configured_sites,
                                       all_torrents)
 
-            print("=== IYUU种子聚合任务执行完成 ===")
+            log_iyuu_message("=== IYUU种子聚合任务执行完成 ===", "INFO")
 
         except Exception as e:
             logging.error(f"处理种子数据时出错: {e}", exc_info=True)
@@ -250,11 +262,15 @@ class IYUUThread(Thread):
                 if not self._is_running:  # 检查线程是否应该停止
                     break
 
-                # 检查是否需要进行IYUU查询（距离上次查询超过72小时或从未查询过）
-                if not self._should_query_iyuu(name):
-                    print(
-                        f"[{i+1}/{total_torrents}] 🔄 种子组 '{name}' 距离上次查询不足72小时，跳过查询"
-                    )
+                # 检查是否需要进行IYUU查询（距离上次查询超过设置的时间间隔或从未查询过）
+                # 获取设置的查询间隔时间（默认为72小时）
+                config = self.config_manager.get()
+                iyuu_settings = config.get("iyuu_settings", {})
+                query_interval_hours = iyuu_settings.get("query_interval_hours", 72)
+
+                if not self._should_query_iyuu(name, query_interval_hours):
+                    skip_message = f"[{i+1}/{total_torrents}] 🔄 种子组 '{name}' 距离上次查询不足{query_interval_hours}小时，跳过查询"
+                    log_iyuu_message(skip_message, "INFO")
                     continue
 
                 print(f"[{i+1}/{total_torrents}] 🔍 正在处理种子组: {name}")
@@ -265,35 +281,49 @@ class IYUUThread(Thread):
                 selected_hash = None
 
                 # 获取当前种子组的所有torrents，按站点过滤
-                filtered_torrents = [t for t in torrents if t.get('sites') and t['sites'] in configured_sites and t['sites'] not in ['青蛙', '柠檬不甜']]
+                filtered_torrents = [
+                    t for t in torrents
+                    if t.get('sites') and t['sites'] in configured_sites
+                    and t['sites'] not in ['青蛙', '柠檬不甜']
+                ]
 
                 # 如果没有支持的站点，则跳过
                 if not filtered_torrents:
-                    print(f"[{i+1}/{total_torrents}] ⚠️ 种子组 '{name}' 没有支持的站点，跳过查询")
+                    log_iyuu_message(
+                        f"[{i+1}/{total_torrents}] ⚠️ 种子组 '{name}' 没有支持的站点，跳过查询", "INFO"
+                    )
                     # 更新所有同名种子记录的iyuu_last_check时间（包括不支持IYUU的站点）
-                    self._update_iyuu_last_check(name, [], all_torrents.get(name, []))
+                    self._update_iyuu_last_check(name, [],
+                                                 all_torrents.get(name, []))
                     continue
 
-                for attempt in range(min(max_attempts, len(filtered_torrents))):
+                for attempt in range(min(max_attempts,
+                                         len(filtered_torrents))):
                     if attempt >= len(filtered_torrents):
                         break
 
                     selected_hash = filtered_torrents[attempt]['hash']
                     site_name = filtered_torrents[attempt]['sites']
-                    print(f"使用的hash [{attempt+1}/{min(max_attempts, len(filtered_torrents))}]: {selected_hash} (站点: {site_name})")
+                    log_iyuu_message(
+                        f"使用的hash [{attempt+1}/{min(max_attempts, len(filtered_torrents))}]: {selected_hash} (站点: {site_name})", "INFO"
+                    )
 
                     try:
                         # 执行搜索
                         results = query_cross_seed(iyuu_token, selected_hash,
                                                    sid_sha1)
                         # 如果成功查询到结果，则跳出循环
-                        print(f"[{i+1}/{total_torrents}] ✅ Hash {selected_hash[:8]}... 查询成功，停止尝试其他hash")
+                        log_iyuu_message(
+                            f"[{i+1}/{total_torrents}] ✅ Hash {selected_hash[:8]}... 查询成功，停止尝试其他hash", "INFO"
+                        )
                         break
                     except Exception as e:
                         error_msg = str(e)
                         # 如果是"未查询到可辅种数据"错误，则尝试下一个hash
                         if "未查询到可辅种数据" in error_msg or "400" in error_msg:
-                            print(f"[{i+1}/{total_torrents}] ⚠️  Hash {selected_hash[:8]}... 未查询到可辅种数据，尝试下一个hash...")
+                            log_iyuu_message(
+                                f"[{i+1}/{total_torrents}] ⚠️  Hash {selected_hash[:8]}... 未查询到可辅种数据，尝试下一个hash...", "INFO"
+                            )
                             continue
                         else:
                             # 其他错误则重新抛出
@@ -301,9 +331,12 @@ class IYUUThread(Thread):
 
                 # 如果所有尝试都失败了
                 if results is None:
-                    print(f"[{i+1}/{total_torrents}] ❌ 种子组 '{name}' 所有hash都未查询到可辅种数据")
+                    log_iyuu_message(
+                        f"[{i+1}/{total_torrents}] ❌ 种子组 '{name}' 所有hash都未查询到可辅种数据", "INFO"
+                    )
                     # 更新所有同名种子记录的iyuu_last_check时间（包括不支持IYUU的站点）
-                    self._update_iyuu_last_check(name, [], all_torrents.get(name, []))
+                    self._update_iyuu_last_check(name, [],
+                                                 all_torrents.get(name, []))
                     continue
 
                 # 如果成功查询到结果，继续处理
@@ -344,20 +377,16 @@ class IYUUThread(Thread):
                             site_info_dict = existing_sites.get(
                                 db_site_name, {})
                             matched_sites.append({
-                                'iyuu_name':
-                                iyuu_site_name,
-                                'db_name':
-                                db_site_name,
-                                'url':
-                                full_url,
-                                'site_info':
-                                site_info_dict
+                                'iyuu_name': iyuu_site_name,
+                                'db_name': db_site_name,
+                                'url': full_url,
+                                'site_info': site_info_dict
                             })
 
                     # 只显示匹配到的已配置站点
                     if matched_sites:
-                        print(
-                            f"[{i+1}/{total_torrents}] 种子 {selected_hash[:8]}... 在 {len(matched_sites)} 个已存在的站点发现！"
+                        log_iyuu_message(
+                            f"[{i+1}/{total_torrents}] 种子 {selected_hash[:8]}... 在 {len(matched_sites)} 个已存在的站点发现！", "INFO"
                         )
                         for site in matched_sites:
                             iyuu_site_name = site['iyuu_name']
@@ -365,23 +394,26 @@ class IYUUThread(Thread):
                             full_url = site['url']
 
                             if iyuu_site_name != db_site_name:
-                                print(
-                                    f"✅ 匹配站点: {iyuu_site_name} -> {db_site_name}"
+                                log_iyuu_message(
+                                    f"✅ 匹配站点: {iyuu_site_name} -> {db_site_name}", "INFO"
                                 )
                             else:
-                                print(f"✅ 匹配站点: {iyuu_site_name}")
-                            print(f"   链接: {full_url}")
+                                log_iyuu_message(f"✅ 匹配站点: {iyuu_site_name}", "INFO")
+                            log_iyuu_message(f"   链接: {full_url}", "INFO")
                     else:
-                        print(f"[{i+1}/{total_torrents}] 种子 {selected_hash[:8]}... 未在任何已存在的站点发现。")
+                        log_iyuu_message(
+                            f"[{i+1}/{total_torrents}] 种子 {selected_hash[:8]}... 未在任何已存在的站点发现。", "INFO"
+                        )
 
-                    print(f"在torrents表中找到 {len(matched_sites)} 个已存在的站点")
+                    log_iyuu_message(f"在torrents表中找到 {len(matched_sites)} 个已存在的站点", "INFO")
 
                     # 更新所有同名种子记录的iyuu_last_check时间（包括不支持IYUU的站点）
-                    self._update_iyuu_last_check(name, matched_sites, all_torrents.get(name, []))
+                    self._update_iyuu_last_check(name, matched_sites,
+                                                 all_torrents.get(name, []))
 
                 # 每次查询之间间隔5秒（除了最后一个）
                 if i < len(test_torrents) - 1:
-                    print(f"[{i+1}/{total_torrents}] 等待5秒后进行下一次查询...")
+                    log_iyuu_message(f"[{i+1}/{total_torrents}] 等待5秒后进行下一次查询...", "INFO")
                     for _ in range(5):  # 每秒检查一次是否需要停止
                         if not self._is_running:
                             return
@@ -390,8 +422,8 @@ class IYUUThread(Thread):
         except Exception as e:
             logging.error(f"IYUU搜索执行出错: {e}", exc_info=True)
 
-    def _should_query_iyuu(self, torrent_name):
-        """检查是否需要进行IYUU查询（距离上次查询超过72小时或从未查询过）"""
+    def _should_query_iyuu(self, torrent_name, query_interval_hours=72):
+        """检查是否需要进行IYUU查询（根据设置的时间间隔或从未查询过）"""
         try:
             conn = self.db_manager._get_connection()
             cursor = self.db_manager._get_cursor(conn)
@@ -433,8 +465,8 @@ class IYUUThread(Thread):
             now = datetime.now()
             time_diff = now - last_check
 
-            # 如果超过72小时，则应该查询
-            return time_diff > timedelta(hours=72)
+            # 如果超过设置的时间间隔，则应该查询
+            return time_diff > timedelta(hours=query_interval_hours)
 
         except Exception as e:
             logging.error(f"检查IYUU查询条件时出错: {e}", exc_info=True)
@@ -933,6 +965,27 @@ def query_cross_seed(token: str, infohash: str, sid_sha1: str) -> list:
 
 # 全局变量
 iyuu_thread = None
+
+# IYUU日志存储
+iyuu_logs = []
+
+
+def log_iyuu_message(message, level="INFO"):
+    """记录IYUU日志消息"""
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    log_entry = {
+        "timestamp": timestamp,
+        "level": level,
+        "message": message
+    }
+    iyuu_logs.append(log_entry)
+
+    # 限制日志数量，只保留最近100条
+    if len(iyuu_logs) > 100:
+        iyuu_logs.pop(0)
+
+    # 同时打印到控制台
+    print(f"[IYUU-{level}] {timestamp} {message}")
 
 
 def start_iyuu_thread(db_manager, config_manager):

@@ -10,16 +10,13 @@
       <div class="settings-card">
         <div class="card-header">
           <div class="header-content">
-            <el-icon class="header-icon"><User /></el-icon>
+            <el-icon class="header-icon">
+              <User />
+            </el-icon>
             <h3>账户信息</h3>
             <el-tag type="warning" v-if="mustChange" size="small">首次登录需修改</el-tag>
           </div>
-          <el-button
-            type="primary"
-            :loading="loading"
-            @click="onSubmit"
-            size="small"
-          >
+          <el-button type="primary" :loading="loading" @click="onSubmit" size="small">
             保存
           </el-button>
         </div>
@@ -27,39 +24,31 @@
         <div class="card-content">
           <el-form :model="form" label-position="top" class="settings-form">
             <el-form-item label="用户名" class="form-item">
-              <el-input
-                v-model="form.username"
-                placeholder="请输入用户名"
-                clearable
-              >
+              <el-input v-model="form.username" placeholder="请输入用户名" clearable>
                 <template #prefix>
-                  <el-icon><User /></el-icon>
+                  <el-icon>
+                    <User />
+                  </el-icon>
                 </template>
               </el-input>
             </el-form-item>
 
             <el-form-item label="当前密码" required class="form-item">
-              <el-input
-                v-model="form.old_password"
-                type="password"
-                placeholder="请输入当前密码"
-                show-password
-              >
+              <el-input v-model="form.old_password" type="password" placeholder="请输入当前密码" show-password>
                 <template #prefix>
-                  <el-icon><Lock /></el-icon>
+                  <el-icon>
+                    <Lock />
+                  </el-icon>
                 </template>
               </el-input>
             </el-form-item>
 
             <el-form-item label="新密码" class="form-item">
-              <el-input
-                v-model="form.password"
-                type="password"
-                placeholder="至少 6 位"
-                show-password
-              >
+              <el-input v-model="form.password" type="password" placeholder="至少 6 位" show-password>
                 <template #prefix>
-                  <el-icon><Key /></el-icon>
+                  <el-icon>
+                    <Key />
+                  </el-icon>
                 </template>
               </el-input>
               <div class="password-hint">
@@ -70,7 +59,9 @@
             <div class="form-spacer"></div>
 
             <el-text v-if="mustChange" type="warning" size="small" class="security-hint">
-              <el-icon size="12"><Warning /></el-icon>
+              <el-icon size="12">
+                <Warning />
+              </el-icon>
               为确保安全，请立即设置新用户名与密码
             </el-text>
           </el-form>
@@ -81,15 +72,12 @@
       <div class="settings-card">
         <div class="card-header">
           <div class="header-content">
-            <el-icon class="header-icon"><Setting /></el-icon>
+            <el-icon class="header-icon">
+              <Setting />
+            </el-icon>
             <h3>IYUU设置</h3>
           </div>
-          <el-button
-            type="primary"
-            :loading="savingIyuu"
-            @click="saveIyuuToken"
-            size="small"
-          >
+          <el-button type="primary" :loading="savingIyuu" @click="saveIyuuSettings" size="small">
             保存
           </el-button>
         </div>
@@ -97,33 +85,93 @@
         <div class="card-content">
           <el-form :model="iyuuForm" label-position="top" class="settings-form">
             <el-form-item label="IYUU Token" class="form-item">
-              <el-input
-                v-model="iyuuForm.token"
-                type="password"
-                placeholder="请输入IYUU Token"
-                show-password
-              >
+              <el-input v-model="iyuuForm.token" type="password" placeholder="请输入IYUU Token" show-password>
                 <template #prefix>
-                  <el-icon><Key /></el-icon>
+                  <el-icon>
+                    <Key />
+                  </el-icon>
                 </template>
               </el-input>
             </el-form-item>
 
+            <div style="flex: 1; display: flex; flex-direction: column; justify-content: center;">
+              <el-form-item label="自动查询与间隔" class="form-item">
+                <div
+                  style="display: flex; margin:auto;align-items: center; gap: 20px; justify-content: center; padding: 15px 0;">
+                  <el-switch v-model="iyuuForm.auto_query_enabled" active-text="启用" inactive-text="禁用" />
+                  <el-input-number v-model="iyuuForm.query_interval_hours" :min="1" :max="168" placeholder="小时"
+                    controls-position="right" style="width: 120px;" />
+                  <span>小时</span>
+                </div>
+              </el-form-item>
+
+              <el-form-item label class="form-item">
+                <div style="display: flex; margin:auto;gap: 20px; justify-content: center; padding: 15px 0;">
+                  <el-button type="success" @click="triggerIyuuQuery" size="default"
+                    style="font-size: 14px; padding: 12px 24px;">
+                    手动触发查询
+                  </el-button>
+                  <el-button type="primary" @click="showIyuuLogs" size="default"
+                    style="font-size: 14px; padding: 12px 24px;">
+                    查看日志
+                  </el-button>
+                </div>
+              </el-form-item>
+
+              <el-text type="info" size="small" style="display: block; text-align: center; margin: 10px 0;">
+                <el-icon size="12">
+                  <InfoFilled />
+                </el-icon>
+                种子查询页面的红色表示可辅种但未在做种
+              </el-text>
+            </div>
+
             <div class="form-spacer"></div>
 
             <el-text type="info" size="small" class="proxy-hint">
-              <el-icon size="12"><InfoFilled /></el-icon>
+              <el-icon size="12">
+                <InfoFilled />
+              </el-icon>
               用于与IYUU平台进行数据同步和通信的身份验证令牌
             </el-text>
           </el-form>
         </div>
       </div>
 
+      <!-- IYUU日志对话框 -->
+      <el-dialog v-model="iyuuLogsDialogVisible" title="IYUU 查询日志" width="800px" top="50px">
+        <div v-loading="loadingLogs" style="height: 500px; overflow-y: auto;">
+          <div v-if="iyuuLogs.length === 0" style="text-align: center; padding: 20px; color: #999;">
+            暂无日志记录
+          </div>
+          <div v-else>
+            <div v-for="(log, index) in iyuuLogs" :key="index"
+              style="padding: 8px 0; border-bottom: 1px solid #eee; font-size: 12px;">
+              <span style="color: #999; margin-right: 10px;">[{{ log.timestamp }}]</span>
+              <span :style="{
+                color: log.level === 'ERROR' ? '#F56C6C' :
+                  log.level === 'WARNING' ? '#E6A23C' :
+                    log.level === 'INFO' ? '#409EFF' : '#67C23A'
+              }">[{{ log.level }}]</span>
+              <span style="margin-left: 10px;">{{ log.message }}</span>
+            </div>
+          </div>
+        </div>
+        <template #footer>
+          <div style="text-align: right;">
+            <el-button @click="iyuuLogsDialogVisible = false">关闭</el-button>
+            <el-button type="primary" @click="showIyuuLogs">刷新</el-button>
+          </div>
+        </template>
+      </el-dialog>
+
       <!-- 图床设置卡片 -->
       <div class="settings-card">
         <div class="card-header">
           <div class="header-content">
-            <el-icon class="header-icon"><Picture /></el-icon>
+            <el-icon class="header-icon">
+              <Picture />
+            </el-icon>
             <h3>图床设置</h3>
           </div>
           <el-button type="primary" @click="saveCrossSeedSettings" :loading="savingCrossSeed" size="small">
@@ -135,12 +183,8 @@
           <el-form :model="settingsForm" label-position="top" class="settings-form">
             <el-form-item label="截图图床" class="form-item">
               <el-select v-model="settingsForm.image_hoster" placeholder="请选择图床服务">
-                <el-option
-                  v-for="item in imageHosterOptions"
-                  :key="item.value"
-                  :label="item.label"
-                  :value="item.value"
-                />
+                <el-option v-for="item in imageHosterOptions" :key="item.value" :label="item.label"
+                  :value="item.value" />
               </el-select>
             </el-form-item>
 
@@ -148,34 +192,29 @@
             <transition name="slide" mode="out-in">
               <div v-if="settingsForm.image_hoster === 'agsv'" key="agsv" class="credential-section">
                 <div class="credential-header">
-                  <el-icon class="credential-icon"><Lock /></el-icon>
+                  <el-icon class="credential-icon">
+                    <Lock />
+                  </el-icon>
                   <span class="credential-title">末日图床账号凭据</span>
                 </div>
 
                 <div class="credential-form">
                   <el-form-item label="邮箱" class="form-item compact">
-                    <el-input
-                      v-model="settingsForm.agsv_email"
-                      placeholder="请输入邮箱"
-                      size="small"
-                    />
+                    <el-input v-model="settingsForm.agsv_email" placeholder="请输入邮箱" size="small" />
                   </el-form-item>
 
                   <el-form-item label="密码" class="form-item compact">
-                    <el-input
-                      v-model="settingsForm.agsv_password"
-                      type="password"
-                      placeholder="请输入密码"
-                      show-password
-                      size="small"
-                    />
+                    <el-input v-model="settingsForm.agsv_password" type="password" placeholder="请输入密码" show-password
+                      size="small" />
                   </el-form-item>
                 </div>
               </div>
 
               <div v-else-if="settingsForm.image_hoster === 'pixhost'" key="pixhost" class="credential-section">
                 <div class="credential-header">
-                  <el-icon class="credential-icon"><Connection /></el-icon>
+                  <el-icon class="credential-icon">
+                    <Connection />
+                  </el-icon>
                   <span class="credential-title">Pixhost 代理设置</span>
                 </div>
 
@@ -188,7 +227,9 @@
                     </el-select>
                   </el-form-item>
                   <el-text type="info" size="small">
-                    <el-icon size="12"><InfoFilled /></el-icon>
+                    <el-icon size="12">
+                      <InfoFilled />
+                    </el-icon>
                     使用全局网络代理设置进行图片上传
                   </el-text>
                 </div>
@@ -206,7 +247,9 @@
       <div class="settings-card">
         <div class="card-header">
           <div class="header-content">
-            <el-icon class="header-icon"><Connection /></el-icon>
+            <el-icon class="header-icon">
+              <Connection />
+            </el-icon>
             <h3>网络代理设置</h3>
           </div>
           <el-button type="primary" @click="saveProxySettings" :loading="savingProxy" size="small">
@@ -217,12 +260,11 @@
         <div class="card-content">
           <el-form :model="settingsForm" label-position="top" class="settings-form">
             <el-form-item label="代理地址" class="form-item">
-              <el-input
-                v-model="settingsForm.proxy_url"
-                placeholder="例如：http://127.0.0.1:7890"
-              >
+              <el-input v-model="settingsForm.proxy_url" placeholder="例如：http://127.0.0.1:7890">
                 <template #prepend>
-                  <el-icon size="12"><Link /></el-icon>
+                  <el-icon size="12">
+                    <Link />
+                  </el-icon>
                 </template>
               </el-input>
             </el-form-item>
@@ -230,7 +272,9 @@
             <div class="form-spacer"></div>
 
             <el-text type="warning" size="small" class="proxy-hint">
-              <el-icon size="12"><Warning /></el-icon>
+              <el-icon size="12">
+                <Warning />
+              </el-icon>
               代理设置将应用于所有支持代理的站点请求
             </el-text>
           </el-form>
@@ -241,7 +285,9 @@
       <div class="settings-card">
         <div class="card-header">
           <div class="header-content">
-            <el-icon class="header-icon"><Document /></el-icon>
+            <el-icon class="header-icon">
+              <Document />
+            </el-icon>
             <h3>默认下载器设置</h3>
           </div>
           <el-button type="primary" @click="saveCrossSeedSettings" :loading="savingCrossSeed" size="small">
@@ -253,23 +299,17 @@
           <el-form :model="settingsForm" label-position="top" class="settings-form">
             <el-form-item label="默认下载器" class="form-item">
               <el-select v-model="settingsForm.default_downloader" placeholder="请选择默认下载器" clearable>
-                <el-option
-                  label="使用源种子所在的下载器"
-                  value=""
-                />
-                <el-option
-                  v-for="item in downloaderOptions"
-                  :key="item.id"
-                  :label="item.name"
-                  :value="item.id"
-                />
+                <el-option label="使用源种子所在的下载器" value="" />
+                <el-option v-for="item in downloaderOptions" :key="item.id" :label="item.name" :value="item.id" />
               </el-select>
             </el-form-item>
 
             <div class="form-spacer"></div>
 
             <el-text type="info" size="small" class="proxy-hint">
-              <el-icon size="12"><InfoFilled /></el-icon>
+              <el-icon size="12">
+                <InfoFilled />
+              </el-icon>
               转种完成后自动将种子添加到指定的下载器。选择"使用源种子所在的下载器"或不选择任何下载器，则添加到源种子所在的下载器。
             </el-text>
           </el-form>
@@ -280,13 +320,17 @@
       <div class="settings-card">
         <div class="card-header">
           <div class="header-content">
-            <el-icon class="header-icon"><Connection /></el-icon>
+            <el-icon class="header-icon">
+              <Connection />
+            </el-icon>
             <h3>认证设置</h3>
           </div>
         </div>
 
         <div class="card-content placeholder-content">
-          <el-icon class="placeholder-icon"><Connection /></el-icon>
+          <el-icon class="placeholder-icon">
+            <Connection />
+          </el-icon>
           <p class="placeholder-text">功能扩展中</p>
         </div>
       </div>
@@ -295,13 +339,17 @@
       <div class="settings-card">
         <div class="card-header">
           <div class="header-content">
-            <el-icon class="header-icon"><Document /></el-icon>
+            <el-icon class="header-icon">
+              <Document />
+            </el-icon>
             <h3>权限管理</h3>
           </div>
         </div>
 
         <div class="card-content placeholder-content">
-          <el-icon class="placeholder-icon"><Document /></el-icon>
+          <el-icon class="placeholder-icon">
+            <Document />
+          </el-icon>
           <p class="placeholder-text">功能扩展中</p>
         </div>
       </div>
@@ -310,13 +358,17 @@
       <div class="settings-card">
         <div class="card-header">
           <div class="header-content">
-            <el-icon class="header-icon"><Setting /></el-icon>
+            <el-icon class="header-icon">
+              <Setting />
+            </el-icon>
             <h3>功能扩展</h3>
           </div>
         </div>
 
         <div class="card-content placeholder-content">
-          <el-icon class="placeholder-icon"><Setting /></el-icon>
+          <el-icon class="placeholder-icon">
+            <Setting />
+          </el-icon>
           <p class="placeholder-text">功能扩展中</p>
         </div>
       </div>
@@ -339,8 +391,17 @@ const form = ref({ old_password: '', username: '', password: '' })
 
 // IYUU设置相关
 const iyuuForm = reactive({
-  token: ''
+  token: '',
+  query_interval_hours: 72,
+  auto_query_enabled: true
 })
+
+// IYUU日志接口
+interface IYUULog {
+  timestamp: string;
+  level: string;
+  message: string;
+}
 
 // 转种设置相关
 interface CrossSeedSettings {
@@ -370,10 +431,15 @@ const imageHosterOptions = [
 ];
 
 // 下载器选项
-const downloaderOptions = ref<{id: string, name: string}[]>([]);
+const downloaderOptions = ref<{ id: string, name: string }[]>([]);
 
 // 实际的 token 值，用于在保存时判断是否需要更新
 const actualIyuuToken = ref('')
+
+// IYUU日志相关
+const iyuuLogsDialogVisible = ref(false)
+const iyuuLogs = ref<IYUULog[]>([])
+const loadingLogs = ref(false)
 
 // 获取所有设置
 const fetchSettings = async () => {
@@ -396,6 +462,12 @@ const fetchSettings = async () => {
       actualIyuuToken.value = config.iyuu_token
       // 显示为隐藏状态（用星号代替）
       iyuuForm.token = config.iyuu_token ? '********' : ''
+    }
+
+    // 获取IYUU设置
+    if (config.iyuu_settings) {
+      iyuuForm.query_interval_hours = config.iyuu_settings.query_interval_hours || 72
+      iyuuForm.auto_query_enabled = config.iyuu_settings.auto_query_enabled !== false // 默认为true
     }
 
     // 获取转种设置
@@ -424,35 +496,78 @@ const resetForm = () => {
   form.value = { old_password: '', username: currentUsername.value, password: '' }
 }
 
-// 保存IYUU Token
-const saveIyuuToken = async () => {
+// 保存IYUU设置
+const saveIyuuSettings = async () => {
   savingIyuu.value = true
   try {
     // 保存 iyuu token 设置
     // 如果显示的是星号，表示没有更改，不需要更新token
-    if (iyuuForm.token === '********') {
-      ElMessage.success('IYUU Token 已保存！')
-      savingIyuu.value = false
-      return
+    if (iyuuForm.token !== '********') {
+      const tokenSettings = {
+        iyuu_token: iyuuForm.token
+      }
+      await axios.post('/api/settings', tokenSettings)
+      // 保存成功后，显示星号而不是明文
+      if (iyuuForm.token) {
+        iyuuForm.token = '********'
+      } else {
+        iyuuForm.token = ''
+      }
+      actualIyuuToken.value = iyuuForm.token
     }
 
-    const settings = {
-      iyuu_token: iyuuForm.token
+    // 保存IYUU其他设置
+    const iyuuSettings = {
+      query_interval_hours: iyuuForm.query_interval_hours,
+      auto_query_enabled: iyuuForm.auto_query_enabled
     }
 
-    await axios.post('/api/settings', settings)
-    // 保存成功后，显示星号而不是明文
-    if (iyuuForm.token) {
-      iyuuForm.token = '********'
-    } else {
-      iyuuForm.token = ''
-    }
-    ElMessage.success('IYUU Token 已保存！')
+    await axios.post('/api/iyuu/settings', iyuuSettings)
+    ElMessage.success('IYUU 设置已保存！')
   } catch (error: any) {
     const errorMessage = error.response?.data?.error || '保存失败。'
     ElMessage.error(errorMessage)
   } finally {
     savingIyuu.value = false
+  }
+}
+
+// 手动触发IYUU查询
+const triggerIyuuQuery = async () => {
+  try {
+    // 立即显示触发成功的提示
+    ElMessage.success('IYUU 查询已触发，请稍后查看结果。')
+
+    // 异步触发后端查询，不等待结果
+    axios.post('/api/iyuu/trigger_query').catch(error => {
+      // 如果后台查询失败，记录错误但不显示给用户
+      console.error('IYUU 查询后台执行失败:', error)
+    })
+  } catch (error: any) {
+    const errorMessage = error.response?.data?.message || '触发查询失败。'
+    ElMessage.error(errorMessage)
+  }
+}
+
+// 查看IYUU日志
+const showIyuuLogs = async () => {
+  loadingLogs.value = true
+  iyuuLogsDialogVisible.value = true
+
+  try {
+    const response = await axios.get('/api/iyuu/logs')
+    if (response.data.success) {
+      iyuuLogs.value = response.data.logs || []
+    } else {
+      ElMessage.error(response.data.message || '获取日志失败')
+      iyuuLogs.value = []
+    }
+  } catch (error: any) {
+    const errorMessage = error.response?.data?.message || '获取日志失败'
+    ElMessage.error(errorMessage)
+    iyuuLogs.value = []
+  } finally {
+    loadingLogs.value = false
   }
 }
 
@@ -550,6 +665,8 @@ onMounted(() => {
   padding: 20px;
   background-color: var(--el-bg-color-page);
   min-height: 100%;
+  overflow-y: auto;
+  height: 100%;
 }
 
 .page-header {
@@ -560,7 +677,7 @@ onMounted(() => {
   font-size: 20px;
   font-weight: 600;
   color: var(--el-text-color-primary);
-  margin-bottom: 4px;
+  margin: 0;
 }
 
 .page-description {

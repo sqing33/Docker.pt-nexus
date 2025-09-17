@@ -786,3 +786,74 @@ def save_ui_settings():
         return jsonify({"success": True, "message": "UI 设置已成功保存。"})
     else:
         return jsonify({"success": False, "message": "无法保存 UI 设置。"}), 500
+
+
+# --- [新增] IYUU 设置接口 ---
+@management_bp.route("/iyuu/settings", methods=["GET"])
+def get_iyuu_settings():
+    """获取IYUU相关设置。"""
+    config_manager = management_bp.config_manager
+    # 提供一个安全的默认值
+    default_settings = {
+        "query_interval_hours": 72,
+        "auto_query_enabled": True
+    }
+    # 从配置中获取IYUU设置，如果不存在则使用默认值
+    settings = config_manager.get().get("iyuu_settings", default_settings)
+    return jsonify(settings)
+
+
+@management_bp.route("/iyuu/settings", methods=["POST"])
+def save_iyuu_settings():
+    """保存IYUU相关设置。"""
+    config_manager = management_bp.config_manager
+    new_settings = request.json
+
+    current_config = config_manager.get()
+
+    # 更新IYUU设置
+    current_config["iyuu_settings"] = new_settings
+
+    if config_manager.save(current_config):
+        # 重启IYUU线程以应用新设置
+        try:
+            from core.iyuu import stop_iyuu_thread, start_iyuu_thread
+            stop_iyuu_thread()
+            start_iyuu_thread(management_bp.db_manager, config_manager)
+        except Exception as e:
+            logging.error(f"重启IYUU线程失败: {e}", exc_info=True)
+
+        return jsonify({"success": True, "message": "IYUU 设置已成功保存。"})
+    else:
+        return jsonify({"success": False, "message": "无法保存 IYUU 设置。"}), 500
+
+
+@management_bp.route("/iyuu/trigger_query", methods=["POST"])
+def trigger_iyuu_query():
+    """手动触发IYUU查询。"""
+    db_manager = management_bp.db_manager
+    config_manager = management_bp.config_manager
+
+    try:
+        # 导入并启动IYUU查询
+        from core.iyuu import IYUUThread, log_iyuu_message
+        log_iyuu_message("手动触发IYUU查询", "INFO")
+        iyuu_thread = IYUUThread(db_manager, config_manager)
+        # 手动触发查询，绕过自动查询检查
+        iyuu_thread._process_torrents(is_manual_trigger=True)
+
+        return jsonify({"success": True, "message": "IYUU 查询已成功触发。"})
+    except Exception as e:
+        logging.error(f"手动触发IYUU查询失败: {e}", exc_info=True)
+        return jsonify({"success": False, "message": f"触发IYUU查询失败: {str(e)}"}), 500
+
+
+@management_bp.route("/iyuu/logs", methods=["GET"])
+def get_iyuu_logs():
+    """获取IYUU日志。"""
+    try:
+        from core.iyuu import iyuu_logs
+        return jsonify({"success": True, "logs": iyuu_logs})
+    except Exception as e:
+        logging.error(f"获取IYUU日志失败: {e}", exc_info=True)
+        return jsonify({"success": False, "message": f"获取IYUU日志失败: {str(e)}"}), 500
