@@ -11,31 +11,31 @@
       <el-table-column type="expand" width="1">
         <template #default="props">
           <div class="expand-content"
-            :class="{ 'with-special-sites': props.row.sites['财神'] || props.row.sites['星陨阁'] }">
+            :class="{ 'with-special-sites': (props.row.sites['财神'] && props.row.sites['财神'].state !== '不存在') || (props.row.sites['星陨阁'] && props.row.sites['星陨阁'].state !== '不存在') }">
             <!-- 所有站点容器 -->
             <div class="all-sites-container">
               <!-- 特殊站点容器 -->
-              <div v-if="props.row.sites['财神'] || props.row.sites['星陨阁']" class="special-sites-container">
+              <div class="special-sites-container">
 
                 <!-- 财神站点 -->
                 <div class="caishen-container">
                   <!-- [修改] 使用 v-if/v-else 切换显示 -->
-                  <template v-if="props.row.sites['财神']">
-                    <!-- 当财神站点存在时，显示特效标签 (原有逻辑) -->
-                    <a v-if="hasLink(props.row.sites['财神'], '财神')" :href="getLink(props.row.sites['财神'], '财神')!"
+                  <template v-if="props.row.sites['财神'] && props.row.sites['财神'].state !== '不存在'">
+                    <!-- 当财神站点存在且状态不为"不存在"时，显示特效标签 (原有逻辑) -->
+                    <a v-if="hasLink(props.row.sites['财神'], '财神') && props.row.sites['财神'].state !== '未做种'" :href="getLink(props.row.sites['财神'], '财神')!"
                       target="_blank" style="text-decoration: none">
                       <div class="caishen-tag animated-tag">
                         <div class="site-name">财神</div>
                         <div class="site-upload-data">({{ formatBytes(props.row.sites['财神'].uploaded) }})</div>
                       </div>
                     </a>
-                    <div v-else class="caishen-tag animated-tag">
+                    <div v-else class="caishen-tag animated-tag" @click.stop="handleSpecialSiteClick(props.row.name, '财神', props.row.sites['财神'])">
                       <div class="site-name">财神</div>
                       <div class="site-upload-data">({{ formatBytes(props.row.sites['财神'].uploaded) }})</div>
                     </div>
                   </template>
                   <template v-else>
-                    <!-- 当财神站点不存在时，显示占位标签 -->
+                    <!-- 当财神站点不存在或状态为"不存在"时，显示占位标签 -->
                     <div class="special-site-placeholder">
                       <div class="site-name">财神</div>
                       <div class="site-upload-data">(0B)</div>
@@ -46,22 +46,22 @@
                 <!-- 星陨阁站点 -->
                 <div class="xingyunge-container">
                   <!-- [修改] 使用 v-if/v-else 切换显示 -->
-                  <template v-if="props.row.sites['星陨阁']">
-                    <!-- 当星陨阁站点存在时，显示特效标签 (原有逻辑) -->
-                    <a v-if="hasLink(props.row.sites['星陨阁'], '星陨阁')" :href="getLink(props.row.sites['星陨阁'], '星陨阁')!"
+                  <template v-if="props.row.sites['星陨阁'] && props.row.sites['星陨阁'].state !== '不存在'">
+                    <!-- 当星陨阁站点存在且状态不为"不存在"时，显示特效标签 (原有逻辑) -->
+                    <a v-if="hasLink(props.row.sites['星陨阁'], '星陨阁') && props.row.sites['星陨阁'].state !== '未做种'" :href="getLink(props.row.sites['星陨阁'], '星陨阁')!"
                       target="_blank" style="text-decoration: none">
                       <div class="xingyunge-tag animated-tag-flame">
                         <div class="site-name">星陨阁</div>
                         <div class="site-upload-data">({{ formatBytes(props.row.sites['星陨阁'].uploaded) }})</div>
                       </div>
                     </a>
-                    <div v-else class="xingyunge-tag animated-tag-flame">
+                    <div v-else class="xingyunge-tag animated-tag-flame" @click.stop="handleSpecialSiteClick(props.row.name, '星陨阁', props.row.sites['星陨阁'])">
                       <div class="site-name">星陨阁</div>
                       <div class="site-upload-data">({{ formatBytes(props.row.sites['星陨阁'].uploaded) }})</div>
                     </div>
                   </template>
                   <template v-else>
-                    <!-- 当星陨阁站点不存在时，显示占位标签 -->
+                    <!-- 当星陨阁站点不存在或状态为"不存在"时，显示占位标签 -->
                     <div class="special-site-placeholder">
                       <div class="site-name">星陨阁</div>
                       <div class="site-upload-data">(0B)</div>
@@ -74,7 +74,8 @@
               <!-- 其他站点 -->
               <template v-for="(site, index) in getOtherSites(props.row.sites, all_sites)" :key="site.name">
                 <div class="other-site-item" :style="getSitePosition(index)">
-                  <a v-if="hasLink(site.data, site.name)" :href="getLink(site.data, site.name)!" target="_blank"
+                  <!-- 对于未做种状态的站点，使用可点击的div而不是链接 -->
+                  <a v-if="hasLink(site.data, site.name) && site.data.state !== '未做种'" :href="getLink(site.data, site.name)!" target="_blank"
                     style="text-decoration: none;width: 80px;">
                     <div class="site-wrapper">
                       <el-tag effect="dark" :type="getTagType(site.data)" class="other-site-tag"
@@ -86,7 +87,7 @@
                   </a>
                   <div v-else class="site-wrapper">
                     <el-tag effect="plain" :type="getTagType(site.data)" class="other-site-tag"
-                      style="text-align: center;width: 80px;">
+                      style="text-align: center;width: 80px; cursor: pointer;" @click.stop="handleSiteClick(props.row.name, site)">
                       {{ site.name }}
                       <div>({{ formatBytes(site.data.uploaded) }})</div>
                     </el-tag>
@@ -263,6 +264,36 @@
       </el-card>
     </div>
 
+    <!-- 站点操作弹窗 -->
+    <div v-if="siteOperationDialogVisible" class="filter-overlay" @click.self="siteOperationDialogVisible = false">
+      <el-card class="filter-card" style="max-width: 400px;">
+        <template #header>
+          <div class="filter-card-header">
+            <span>站点操作</span>
+            <el-button type="danger" circle @click="siteOperationDialogVisible = false" plain>X</el-button>
+          </div>
+        </template>
+        <div class="site-operation-body">
+          <div class="torrent-name-container">
+            <p class="label">种子名称:</p>
+            <p class="torrent-name">{{ selectedTorrentName }}</p>
+          </div>
+          <p>站点名称: {{ selectedSite?.name }}</p>
+          <p>当前状态: {{ selectedSite?.data.state }}</p>
+          <div v-if="hasLink(selectedSite?.data, selectedSite?.name)" class="site-operation-link">
+            <p class="label">详情页链接:</p>
+            <el-link :href="getLink(selectedSite?.data, selectedSite?.name)" target="_blank" type="primary" :underline="false">
+              {{ getLink(selectedSite?.data, selectedSite?.name) }}
+            </el-link>
+          </div>
+          <div class="site-operation-buttons">
+            <el-button @click="siteOperationDialogVisible = false">取消</el-button>
+            <el-button type="primary" @click="setSiteNotExist">设为不存在</el-button>
+          </div>
+        </div>
+      </el-card>
+    </div>
+
     <!-- 源站点选择弹窗 -->
     <div v-if="sourceSelectionDialogVisible" class="filter-overlay">
       <el-card class="filter-card" style="max-width: 600px;">
@@ -417,6 +448,11 @@ const allSourceSitesStatus = ref<SiteStatus[]>([]);
 const selectedTorrentForMigration = ref<Torrent | null>(null);
 const crossSeedDialogVisible = ref<boolean>(false);
 const selectedSourceSite = ref<string>('');
+
+// 站点操作弹窗相关
+const siteOperationDialogVisible = ref<boolean>(false);
+const selectedTorrentName = ref<string>('');
+const selectedSite = ref<OtherSite | null>(null);
 
 const sorted_all_sites = computed(() => {
   const collator = new Intl.Collator('zh-CN', { numeric: true })
@@ -721,6 +757,63 @@ const closeCrossSeedDialog = () => {
   selectedSourceSite.value = '';
 };
 
+// 处理站点点击事件
+const handleSiteClick = (torrentName: string, site: OtherSite) => {
+  // 只有当站点状态为"未做种"时才显示操作弹窗
+  if (site.data.state === '未做种') {
+    selectedTorrentName.value = torrentName;
+    selectedSite.value = site;
+    siteOperationDialogVisible.value = true;
+  }
+};
+
+// 处理特殊站点点击事件
+const handleSpecialSiteClick = (torrentName: string, siteName: string, siteData: SiteData) => {
+  // 只有当站点状态为"未做种"时才显示操作弹窗
+  if (siteData.state === '未做种') {
+    selectedTorrentName.value = torrentName;
+    selectedSite.value = {
+      name: siteName,
+      data: siteData
+    };
+    siteOperationDialogVisible.value = true;
+  }
+};
+
+// 设置站点为不存在
+const setSiteNotExist = async () => {
+  if (!selectedTorrentName.value || !selectedSite.value) {
+    ElMessage.error('缺少必要的参数');
+    return;
+  }
+
+  try {
+    const response = await fetch('/api/sites/set_not_exist', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        torrent_name: selectedTorrentName.value,
+        site_name: selectedSite.value.name
+      })
+    });
+
+    if (response.ok) {
+      ElMessage.success('站点状态已成功设置为不存在');
+      siteOperationDialogVisible.value = false;
+      // 重新加载数据以反映更改
+      fetchData();
+    } else {
+      const result = await response.json();
+      ElMessage.error(result.error || '设置站点状态失败');
+    }
+  } catch (error) {
+    console.error('设置站点状态时出错:', error);
+    ElMessage.error('设置站点状态时发生错误');
+  }
+};
+
 const handleCrossSeedComplete = () => {
   ElMessage.success('转种操作已完成！');
   closeCrossSeedDialog();
@@ -801,6 +894,9 @@ const getLink = (siteData: SiteData, siteName: string): string | null => {
 const getTagType = (siteData: SiteData) => {
   if (siteData.state === '未做种') {
     return 'danger';
+  }
+  else if (siteData.state === '不存在') {
+    return 'info';
   }
   else if (siteData.comment) {
     return 'success';
@@ -902,17 +998,24 @@ const tableRowClassName = ({ row }: { row: Torrent }) => {
   return expandedRows.value.includes(row.name) ? 'expanded-row' : ''
 }
 
-// 获取除了特殊站点外的其他站点，包括未做种的站点
+// 获取除了特殊站点外的其他站点，包括未做种的站点，但排除状态为"不存在"的站点
 const getOtherSites = (sites: Record<string, SiteData>, allSiteNames: string[]): OtherSite[] => {
   const specialSites = ['财神', '星陨阁'];
   const otherSites: OtherSite[] = [];
 
-  // 添加所有在数据库中存在的站点
+  // 添加所有在数据库中存在的站点，但排除状态为"不存在"的站点
   allSiteNames.forEach(siteName => {
     if (!specialSites.includes(siteName)) {
       // 如果站点在当前种子中存在，则使用实际数据
-      // 否则，创建一个表示“未添加”的占位站点
-      const siteData = sites[siteName] || {
+      const siteData = sites[siteName];
+
+      // 如果站点数据存在且状态为"不存在"，则跳过该站点
+      if (siteData && siteData.state === '不存在') {
+        return;
+      }
+
+      // 否则，创建一个表示"未添加"的占位站点
+      const finalSiteData = siteData || {
         uploaded: 0,
         comment: '',
         migration: 0,
@@ -921,7 +1024,7 @@ const getOtherSites = (sites: Record<string, SiteData>, allSiteNames: string[]):
 
       otherSites.push({
         name: siteName,
-        data: siteData
+        data: finalSiteData
       });
     }
   });
@@ -1528,6 +1631,57 @@ watch(nameSearch, () => {
 
 .site-list-box .site-tag.is-selectable:hover {
   filter: brightness(1.1);
+}
+
+/* 站点操作弹窗样式 */
+.site-operation-body {
+  padding: 20px;
+}
+
+.site-operation-body p {
+  margin: 10px 0;
+}
+
+.torrent-name-container {
+  margin: 10px 0;
+}
+
+.torrent-name-container .label {
+  font-weight: bold;
+  margin-bottom: 5px;
+}
+
+.torrent-name {
+  word-wrap: break-word;
+  word-break: break-all;
+  white-space: normal;
+  max-height: 100px;
+  overflow-y: auto;
+  padding: 5px;
+  background-color: #f5f7fa;
+  border-radius: 4px;
+}
+
+.site-operation-link {
+  margin: 15px 0;
+}
+
+.site-operation-link .label {
+  font-weight: bold;
+  margin-bottom: 5px;
+}
+
+.site-operation-link :deep(.el-link) {
+  word-wrap: break-word;
+  word-break: break-all;
+  white-space: normal;
+}
+
+.site-operation-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
 }
 
 /* 转种弹窗样式 */
