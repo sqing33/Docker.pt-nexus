@@ -48,6 +48,7 @@ def create_app():
     from api.routes_torrents import torrents_bp
     from api.routes_migrate import migrate_bp
     from api.routes_auth import auth_bp
+    from api.routes_sites import sites_bp
 
     # 将核心服务实例注入到每个蓝图中，以便路由函数可以访问
     # 使用 setattr 避免类型检查器报错
@@ -59,6 +60,7 @@ def create_app():
     setattr(torrents_bp, "config_manager", config_manager)
     setattr(migrate_bp, "db_manager", db_manager)
     setattr(migrate_bp, "config_manager", config_manager)  # 迁移模块也可能需要配置信息
+    setattr(sites_bp, "db_manager", db_manager)
 
     # 认证中间件：默认开启，校验所有 /api/* 请求（排除 /api/auth/*）
 
@@ -102,6 +104,7 @@ def create_app():
     app.register_blueprint(torrents_bp)
     app.register_blueprint(migrate_bp)
     app.register_blueprint(auth_bp)
+    app.register_blueprint(sites_bp)
 
     # --- 步骤 4: 执行初始数据聚合 ---
     logging.info("正在执行初始数据聚合...")

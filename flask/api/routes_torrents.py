@@ -94,11 +94,11 @@ def get_data_api():
         all_discovered_sites = sorted(
             [row["sites"] for row in cursor.fetchall()])
 
-        # 明确指定查询列，确保包含新添加的列
+        # 明确指定查询列，确保包含新添加的列，并排除状态为"不存在"的记录
         if db_manager.db_type == "postgresql":
-            cursor.execute("SELECT hash, name, save_path, size, progress, state, sites, \"group\", details, downloader_id, last_seen, iyuu_last_check FROM torrents")
+            cursor.execute("SELECT hash, name, save_path, size, progress, state, sites, \"group\", details, downloader_id, last_seen, iyuu_last_check FROM torrents WHERE state != %s", ("不存在",))
         else:
-            cursor.execute("SELECT hash, name, save_path, size, progress, state, sites, `group`, details, downloader_id, last_seen, iyuu_last_check FROM torrents")
+            cursor.execute("SELECT hash, name, save_path, size, progress, state, sites, `group`, details, downloader_id, last_seen, iyuu_last_check FROM torrents WHERE state != %s", ("不存在",))
         torrents_raw = [dict(row) for row in cursor.fetchall()]
 
         cursor.execute(
