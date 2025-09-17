@@ -3,29 +3,23 @@
   <el-container class="settings-container">
     <el-aside width="200px" class="settings-aside">
       <el-menu :default-active="route.path" class="settings-menu" router>
+        <el-menu-item index="/settings/general">
+          <el-icon>
+            <Setting />
+          </el-icon>
+          <span>设置</span>
+        </el-menu-item>
         <el-menu-item index="/settings/downloader">
           <el-icon>
             <Download />
           </el-icon>
           <span>下载器</span>
         </el-menu-item>
-        <el-menu-item index="/settings/user">
-          <el-icon>
-            <User />
-          </el-icon>
-          <span>用户管理</span>
-        </el-menu-item>
         <el-menu-item index="/settings/cookie">
           <el-icon>
             <Tickets />
           </el-icon>
           <span>站点管理</span>
-        </el-menu-item>
-        <el-menu-item index="/settings/crossseed">
-          <el-icon>
-            <Operation />
-          </el-icon>
-          <span>转种设置</span>
         </el-menu-item>
       </el-menu>
     </el-aside>
@@ -38,7 +32,7 @@
 
 <script setup>
 import { useRoute } from 'vue-router'
-import { Download, User, Tickets, Operation } from '@element-plus/icons-vue'
+import { Download, Setting, Tickets } from '@element-plus/icons-vue'
 
 const route = useRoute()
 </script>

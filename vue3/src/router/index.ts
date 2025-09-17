@@ -30,27 +30,22 @@ const router = createRouter({
       path: '/settings',
       name: 'settings',
       component: () => import('../views/SettingsView.vue'),
-      redirect: '/settings/downloader',
+      redirect: '/settings/general',
       children: [
+        {
+          path: 'general',
+          name: 'settings-general',
+          component: () => import('../components/settings/GeneralSettings.vue'),
+        },
         {
           path: 'downloader',
           name: 'settings-downloader',
           component: () => import('../components/settings/DownloaderSettings.vue'),
         },
         {
-          path: 'user',
-          name: 'settings-user',
-          component: () => import('../components/settings/UserSettings.vue'),
-        },
-        {
           path: 'cookie',
           name: 'settings-cookie',
           component: () => import('../components/settings/SitesSettings.vue'),
-        },
-        {
-          path: 'crossseed',
-          name: 'settings-crossseed',
-          component: () => import('../components/settings/CrossSeedSettings.vue'),
         },
       ],
     },
