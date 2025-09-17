@@ -74,7 +74,12 @@ class ConfigManager:
                 }
             },
             # --- [新增] IYUU Token 设置 ---
-            "iyuu_token": ""
+            "iyuu_token": "",
+            # --- [新增] IYUU 功能设置 ---
+            "iyuu_settings": {
+                "query_interval_hours": 72,
+                "auto_query_enabled": True
+            }
         }
 
     def load(self):
@@ -121,6 +126,19 @@ class ConfigManager:
                 # --- [新增] IYUU Token 配置兼容 ---
                 if "iyuu_token" not in self._config:
                     self._config["iyuu_token"] = ""
+
+                # --- [新增] IYUU 功能设置兼容 ---
+                if "iyuu_settings" not in self._config:
+                    self._config["iyuu_settings"] = {
+                        "query_interval_hours": 72,
+                        "auto_query_enabled": True
+                    }
+                else:
+                    # 如果已有 iyuu_settings，检查是否缺少新字段
+                    if "query_interval_hours" not in self._config["iyuu_settings"]:
+                        self._config["iyuu_settings"]["query_interval_hours"] = 72
+                    if "auto_query_enabled" not in self._config["iyuu_settings"]:
+                        self._config["iyuu_settings"]["auto_query_enabled"] = True
 
                 # --- [新增] 认证配置兼容 ---
                 if "auth" not in self._config:

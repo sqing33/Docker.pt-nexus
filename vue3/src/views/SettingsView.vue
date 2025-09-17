@@ -56,6 +56,6 @@ const route = useRoute()
   display: flex;
   flex-direction: column;
   /* 确保子组件可以正确地 flex 布局 */
-  overflow: hidden;
+  overflow: auto;
 }
 </style>
