@@ -228,7 +228,7 @@ def get_data_api():
             }
             sort_key = sort_key_map.get(sort_prop, sort_prop)
             if sort_key in [
-                    "size", "progress", "total_uploaded", "site_count"
+                    "size", "progress", "total_uploaded", "site_count", "target_sites_count"
             ]:
                 filtered_list.sort(key=lambda x: x.get(sort_key, 0),
                                    reverse=reverse)
