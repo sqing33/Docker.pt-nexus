@@ -9,6 +9,15 @@ from loguru import logger
 from abc import ABC, abstractmethod
 from utils import cookies_raw2jar, ensure_scheme, extract_tags_from_mediainfo, extract_origin_from_description
 
+# [新增] 定义一个全局的、固定的音频编码回退层级地图
+# 键: 更精确的格式, 值: 它的下一个回退选项
+AUDIO_CODEC_FALLBACK_MAP = {
+    "audio.truehd_atmos": "audio.truehd",
+    "audio.dtsx": "audio.dts_hd_ma",
+    "audio.dts_hd_ma": "audio.dts",
+    "audio.ddp": "audio.ac3",
+}
+
 
 class BaseUploader(ABC):
     """
@@ -180,70 +189,48 @@ class BaseUploader(ABC):
                       default_key: str = "default",
                       use_length_priority: bool = True) -> str:
         """
-        通用的映射查找函数，支持精确匹配、部分匹配和默认值。
-        支持优先级匹配：当key_to_find是列表时，按顺序尝试匹配。
+        通用的映射查找函数，现在具备基于 AUDIO_CODEC_FALLBACK_MAP 的自动回退能力。
         """
-        # 处理 key_to_find 可能是列表的情况（优先级匹配）
         if not mapping_dict or not key_to_find:
             return mapping_dict.get(default_key, "")
 
-        # 如果 key_to_find 是列表，按优先级顺序尝试匹配
-        if isinstance(key_to_find, list):
-            if not key_to_find:
-                return mapping_dict.get(default_key, "")
+        current_key = str(key_to_find)
 
-            # 按顺序尝试列表中的每个元素
-            for priority_key in key_to_find:
-                if priority_key:  # 跳过空值
-                    # 精确匹配
-                    for key, value in mapping_dict.items():
-                        if key.lower() == str(priority_key).lower().strip():
-                            return value
+        # 启动一个循环，用于尝试当前key及其所有回退key
+        while current_key:
+            # 1. 尝试对 current_key 进行直接匹配（精确或部分）
+            # 精确匹配
+            for key, value in mapping_dict.items():
+                if str(key).lower() == current_key.lower().strip():
+                    logger.debug(
+                        f"映射查找成功 (精确匹配): '{current_key}' -> '{value}'")
+                    return value
 
-                    # 部分匹配
-                    if use_length_priority:
-                        # 按 key 长度降序排列，优先匹配更长的 key
-                        sorted_items = sorted(mapping_dict.items(),
-                                              key=lambda x: len(x[0]),
-                                              reverse=True)
-                    else:
-                        # 按 YAML 中的顺序匹配
-                        sorted_items = list(mapping_dict.items())
+            # 部分匹配
+            sorted_items = sorted(
+                mapping_dict.items(), key=lambda x: len(x[0]),
+                reverse=True) if use_length_priority else list(
+                    mapping_dict.items())
+            for key, value in sorted_items:
+                if str(key).lower() in current_key.lower(
+                ) or current_key.lower() in str(key).lower():
+                    logger.debug(
+                        f"映射查找成功 (部分匹配): '{current_key}' -> '{value}'")
+                    return value
 
-                    for key, value in sorted_items:
-                        # 双向部分匹配
-                        if key.lower() in str(priority_key).lower() or str(
-                                priority_key).lower() in key.lower():
-                            return value
+            # 2. 如果直接匹配失败，查找下一个回退选项
+            original_key = current_key
+            current_key = AUDIO_CODEC_FALLBACK_MAP.get(current_key)
 
-            # 如果所有优先级选项都未匹配，返回默认值
-            return mapping_dict.get(default_key, "")
+            if current_key:
+                logger.debug(
+                    f"直接匹配 '{original_key}' 失败, 尝试回退到 '{current_key}'...")
+            else:
+                # 如果没有更多的回退选项，循环将在此处终止
+                logger.debug(f"'{original_key}' 无更多回退选项。")
 
-        # 如果 key_to_find 是字符串，使用原有的匹配逻辑
-        # 精确匹配
-        for key, value in mapping_dict.items():
-            if key.lower() == key_to_find.lower().strip():
-                return value
-
-        # 部分匹配
-        if use_length_priority:
-            # 按 key 长度降序排列，优先匹配更长的 key (用于音频编码等场景)
-            sorted_items = sorted(mapping_dict.items(),
-                                  key=lambda x: len(x[0]),
-                                  reverse=True)
-        else:
-            # 按 YAML 中的顺序匹配 (用于媒介等场景)
-            sorted_items = list(mapping_dict.items())
-
-        for key, value in sorted_items:
-            # 修改为双向部分匹配：
-            # 1. 如果 key 在 key_to_find 中 (例如 key="OurBits", key_to_find="7³ACG@OurBits")
-            # 2. 如果 key_to_find 在 key 中 (例如 key="7³ACG@OurBits", key_to_find="OurBits")
-            if key.lower() in key_to_find.lower() or key_to_find.lower(
-            ) in key.lower():
-                return value
-
-        # 返回默认值
+        # 如果循环结束仍未找到任何匹配项，返回默认值
+        logger.debug(f"所有尝试均失败，为 '{key_to_find}' 使用默认值。")
         return mapping_dict.get(default_key, "")
 
     def _map_standardized_params(self, standardized_params: dict) -> dict:
@@ -253,8 +240,7 @@ class BaseUploader(ABC):
         mapped_params = {}
         tags = []
 
-        # 添加调试信息
-        print(f"DEBUG: 标准化参数: {standardized_params}")
+        logger.debug(f"DEBUG: 标准化参数: {standardized_params}")
 
         # 处理类型映射
         content_type = standardized_params.get("type", "")
@@ -266,41 +252,33 @@ class BaseUploader(ABC):
         mediainfo_str = self.upload_data.get("mediainfo", "")
         is_standard_mediainfo = "General" in mediainfo_str and "Complete name" in mediainfo_str
         is_bdinfo = "DISC INFO" in mediainfo_str and "PLAYLIST REPORT" in mediainfo_str
-
         medium_field = self.config.get("form_fields",
                                        {}).get("medium", "medium_sel[4]")
         medium_mapping = self.mappings.get("medium", {})
-
-        if is_standard_mediainfo and ('blu' in medium_str.lower()
-                                      or 'dvd' in medium_str.lower()):
-            # 从配置文件中获取Encode的映射值
-            encode_value = medium_mapping.get("Encode", "7")  # 默认值为7
+        if is_standard_mediainfo and ('blu' in str(medium_str).lower()
+                                      or 'dvd' in str(medium_str).lower()):
+            encode_value = medium_mapping.get("Encode", "7")
             mapped_params[medium_field] = encode_value
-        elif is_bdinfo and ('blu' in medium_str.lower()
-                            or 'dvd' in medium_str.lower()):
-            # BDInfo格式的Blu-ray/DVD原盘应该映射为Blu-ray媒介
+        elif is_bdinfo and ('blu' in str(medium_str).lower()
+                            or 'dvd' in str(medium_str).lower()):
             mapped_params[medium_field] = self._find_mapping(
                 medium_mapping, medium_str, use_length_priority=False)
         else:
             mapped_params[medium_field] = self._find_mapping(
                 medium_mapping, medium_str, use_length_priority=False)
+
+        # [修改] 简化所有映射调用，直接传递标准化参数即可，无需硬编码
+        # _find_mapping 函数会自动处理字符串或列表
 
         # 处理视频编码映射
         codec_str = standardized_params.get("video_codec", "")
         codec_field = self.config.get("form_fields",
                                       {}).get("video_codec", "codec_sel[4]")
         codec_mapping = self.mappings.get("video_codec", {})
-
-        # 对于视频编码，使用优先级匹配 ["x265", "h265"]
-        if codec_str == "video.x265":
-            # 创建优先级列表：先尝试x265，如果失败则回退到h265
-            codec_priority = ["x265", "X265", "h265", "H.265", "HEVC"]
-            codec_result = self._find_mapping(codec_mapping, codec_priority)
-        else:
-            codec_result = self._find_mapping(codec_mapping, codec_str)
-
-        mapped_params[codec_field] = codec_result
-        print(f"DEBUG: 视频编码映射 '{codec_str}' -> '{codec_result}'")
+        mapped_params[codec_field] = self._find_mapping(
+            codec_mapping, codec_str)
+        logger.debug(
+            f"DEBUG: 视频编码映射 '{codec_str}' -> '{mapped_params[codec_field]}'")
 
         # 处理音频编码映射
         audio_str = standardized_params.get("audio_codec", "")
@@ -310,6 +288,8 @@ class BaseUploader(ABC):
         audio_mapping = self.mappings.get("audio_codec", {})
         mapped_params[audio_field] = self._find_mapping(
             audio_mapping, audio_str)
+        logger.debug(
+            f"DEBUG: 音频编码映射 '{audio_str}' -> '{mapped_params[audio_field]}'")
 
         # 处理分辨率映射
         resolution_str = standardized_params.get("resolution", "")
@@ -328,7 +308,7 @@ class BaseUploader(ABC):
         mapped_params[team_field] = self._find_mapping(team_mapping,
                                                        release_group_str)
 
-        # 处理地区/来源映射（如果配置文件中定义了source字段）
+        # 处理地区/来源映射
         source_str = standardized_params.get("source", "")
         source_field = self.config.get("form_fields", {}).get("source", None)
         if source_field:
@@ -339,13 +319,10 @@ class BaseUploader(ABC):
         # 处理标签映射
         tag_mapping = self.mappings.get("tag", {})
         combined_tags = self._collect_all_tags()
-
         for tag_str in combined_tags:
             tag_id = self._find_mapping(tag_mapping, tag_str)
             if tag_id:
                 tags.append(tag_id)
-
-        # 去重并格式化标签
         for i, tag_id in enumerate(sorted(list(set(tags)))):
             mapped_params[f"tags[4][{i}]"] = tag_id
 
@@ -353,92 +330,82 @@ class BaseUploader(ABC):
 
     def _build_title(self, standardized_params: dict) -> str:
         """
-        根据 title_components 参数，按照站点的规则拼接主标题。
-        此方法现在直接使用传入的、已正确标准化的参数。
+        [修正] 根据 title_components 和 source_params 中的原始值拼接主标题，
+        仅在原始值缺失时才参考 standardized_params，并智能处理制作组。
         """
-        # 不再自己调用解析函数，因为这会导致使用错误的(目标站)配置进行二次标准化
-        # standardized_params = self._parse_source_data()
-
         logger.info(f"开始拼接主标题，标准化参数: {standardized_params}")
 
-        # 获取原始参数值用于标题构建
-        source_params = self.upload_data.get("source_params", {})
-        title_components_list = self.upload_data.get("title_components", [])
-
-        # 构建原始值映射
+        # 1. 构建一个包含所有最原始信息的查找表
         original_values = {}
-        for component in title_components_list:
+        # 优先从标题组件中获取，因为它们通常更准确
+        for component in self.upload_data.get("title_components", []):
             key = component.get("key")
             value = component.get("value")
             if key and value:
-                original_values[key] = value
+                original_values[key] = str(value)
 
-        order = [
-            "title",
-            "season_episode",
-            "year",
-            "status",
-            "edition",
-            "resolution",
-            "platform",
-            "medium",
-            "video_codec",
-            "video_format",
-            "hdr_format",
-            "bit_depth",
-            "frame_rate",
-            "audio_codec",
-        ]
+        # 用 source_params 中的信息作为补充
+        source_params = self.upload_data.get("source_params", {})
+        # 中文键到 title_components 英文键的映射
+        source_key_map = {
+            "类型": "类型", "媒介": "媒介", "视频编码": "视频编码",
+            "音频编码": "音频编码", "分辨率": "分辨率", "制作组": "制作组",
+        }
+        for chinese_key, english_key in source_key_map.items():
+            if english_key not in original_values and chinese_key in source_params:
+                original_values[english_key] = str(source_params[chinese_key])
+
+        logger.debug(f"用于构建标题的原始值查找表: {original_values}")
+
+        # 2. 定义标题各部分的拼接顺序和对应的原始值键
+        # 键是标准参数名，值是原始值查找表中的键
+        order_map = {
+            "title": "主标题",
+            "season_episode": "季集",
+            "year": "年份",
+            "status": "剧集状态",
+            "edition": "发布版本",
+            "resolution": "分辨率",
+            "platform": "片源平台",
+            "medium": "媒介",
+            "video_codec": "视频编码",
+            "video_format": "视频格式",
+            "hdr_format": "HDR格式",
+            "bit_depth": "色深",
+            "frame_rate": "帧率",
+            "audio_codec": "音频编码",
+        }
 
         title_parts = []
-        for key in order:
-            # 优先使用原始值，如果没有则使用标准化值
-            if key == "title":
-                value = original_values.get("主标题") or original_values.get(
-                    "标题") or standardized_params.get(key)
-            elif key == "video_codec":
-                value = original_values.get("视频编码") or original_values.get(
-                    "视频编码") or standardized_params.get(key)
-            elif key == "audio_codec":
-                value = original_values.get("音频编码") or standardized_params.get(
-                    key)
-            elif key == "medium":
-                value = original_values.get("媒介") or standardized_params.get(
-                    key)
-            elif key == "resolution":
-                value = original_values.get("分辨率") or standardized_params.get(
-                    key)
-            elif key == "team":
-                value = original_values.get("制作组") or standardized_params.get(
-                    key)
-            else:
-                value = standardized_params.get(key)
-
+        for key in order_map:
+            original_key = order_map[key]
+            # 优先从原始值查找表中获取值
+            value = original_values.get(original_key)
             if value:
-                if isinstance(value, list):
-                    title_parts.append(" ".join(map(str, value)))
-                else:
-                    title_parts.append(str(value))
+                title_parts.append(value)
+            # 如果原始值没有，才考虑从 standardized_params 中获取（但不建议，此处省略以保证标题纯净）
 
-        # [修改] 使用正则表达式替换分隔符，以保护数字中的小数点（例如 5.1）
+        # 3. 拼接主标题部分
         raw_main_part = " ".join(filter(None, title_parts))
-        # r'(?<!\d)\.(?!\d)' 的意思是：匹配一个点，但前提是它的前面和后面都不是数字
         main_part = re.sub(r'(?<!\d)\.(?!\d)', ' ', raw_main_part)
-        # 额外清理，将可能产生的多个空格合并为一个
         main_part = re.sub(r'\s+', ' ', main_part).strip()
 
-        release_group = standardized_params.get("team", "NOGROUP")
-        if "N/A" in release_group:
-            release_group = "NOGROUP"
+        # 4. [核心修正] 单独处理制作组，永远使用原始值
+        release_group = original_values.get("制作组", "NOGROUP").strip()
 
-        # 对特殊制作组进行处理，不需要添加前缀连字符
-        special_groups = ["MNHD-FRDS", "mUHD-FRDS"]
-        if release_group in special_groups:
-            final_title = f"{main_part} {release_group}"
+        # 如果原始制作组为空或无效，则不添加后缀
+        if not release_group or release_group.lower() in ["na", "n/a", "nogroup"]:
+            final_title = main_part
         else:
-            final_title = f"{main_part}-{release_group}"
+            # 对特殊制作组进行处理，不需要添加前缀连字符
+            special_groups = ["MNHD-FRDS", "mUHD-FRDS"]
+            if release_group in special_groups:
+                final_title = f"{main_part} {release_group}"
+            else:
+                final_title = f"{main_part}-{release_group}"
+
         final_title = re.sub(r"\s{2,}", " ", final_title).strip()
-        logger.info(f"拼接完成的主标题: {final_title}")
+        logger.info(f"拼接完成的主标题 (修正后): {final_title}")
         return final_title
 
     def _build_description(self) -> str:
@@ -527,16 +494,35 @@ class BaseUploader(ABC):
             # 保存所有参数到文件用于测试
             import json
             import time
+            import re
             from config import DATA_DIR
 
             # 创建 tmp 目录如果不存在
             tmp_dir = os.path.join(DATA_DIR, "tmp")
             os.makedirs(tmp_dir, exist_ok=True)
 
+            # 获取种子名称作为文件夹名
+            torrent_path = self.upload_data.get("modified_torrent_path", "")
+            if torrent_path:
+                torrent_name = os.path.basename(torrent_path)
+                if torrent_name.endswith('.torrent'):
+                    torrent_name = torrent_name[:-8]  # 移除 .torrent 扩展名
+                # 移除 .modified.时间戳 后缀
+                if '.modified.' in torrent_name:
+                    torrent_name = torrent_name.split('.modified.')[0]
+                # 清理文件名中的非法字符
+                torrent_name = re.sub(r'[\\/:*?"<>|]', '_', torrent_name)
+            else:
+                torrent_name = "unknown_torrent"
+
+            # 创建以种子名称命名的子目录
+            torrent_dir = os.path.join(tmp_dir, torrent_name)
+            os.makedirs(torrent_dir, exist_ok=True)
+
             # 生成唯一文件名
             timestamp = int(time.time())
             filename = f"upload_params_{self.site_name}_{timestamp}.json"
-            filepath = os.path.join(tmp_dir, filename)
+            filepath = os.path.join(torrent_dir, filename)
 
             # 准备要保存的数据
             save_data = {

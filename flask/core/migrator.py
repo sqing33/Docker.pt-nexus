@@ -22,6 +22,22 @@ from utils import ensure_scheme, upload_data_mediaInfo, upload_data_title, extra
 # 导入新的Extractor和ParameterMapper
 from core.extractors.extractor import Extractor, ParameterMapper
 
+# [新增] 定义音频编码的层级（权重），数字越大越优先
+AUDIO_CODEC_HIERARCHY = {
+    # Top Tier (最精确)
+    "audio.truehd_atmos": 5, "audio.dtsx": 5,
+    # High Tier (无损次世代)
+    "audio.truehd": 4, "audio.dts_hd_ma": 4,
+    # Mid Tier (有损次世代 / 无损)
+    "audio.ddp": 3, "audio.dts": 3, "audio.flac": 3, "audio.lpcm": 3,
+    # Standard Tier (核心/普通)
+    "audio.ac3": 2,
+    # Low Tier (有损)
+    "audio.aac": 1, "audio.mp3": 1, "audio.alac": 1, "audio.ape": 1, "audio.m4a": 1, "audio.wav": 1,
+    # Other/Default
+    "audio.other": 0,
+}
+
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
@@ -779,6 +795,30 @@ class TorrentMigrator:
             standardized_params = self._standardize_parameters(
                 extracted_data, title_components)
 
+            # [新增] 音频编码择优逻辑
+            try:
+                # 1. 单独为标题组件中的音频编码进行一次标准化
+                audio_from_title_raw = next((item['value'] for item in title_components if item.get('key') == '音频编码'), None)
+                if audio_from_title_raw:
+                    # 借用 ParameterMapper 的能力来标准化这个单独的值
+                    temp_extracted = {'source_params': {'音频编码': audio_from_title_raw}}
+                    temp_standardized = self.parameter_mapper.map_parameters(self.SOURCE_NAME, temp_extracted)
+                    audio_from_title_standard = temp_standardized.get('audio_codec')
+
+                    # 2. 对比层级并覆盖
+                    if audio_from_title_standard:
+                        audio_from_params_standard = standardized_params.get('audio_codec')
+
+                        title_rank = AUDIO_CODEC_HIERARCHY.get(audio_from_title_standard, 0)
+                        params_rank = AUDIO_CODEC_HIERARCHY.get(audio_from_params_standard, -1)
+
+                        if title_rank > params_rank:
+                            self.logger.info(f"音频编码优化：使用标题中的 '{audio_from_title_standard}' (层级 {title_rank}) 覆盖了参数中的 '{audio_from_params_standard}' (层级 {params_rank})。")
+                            standardized_params['audio_codec'] = audio_from_title_standard
+            except Exception as e:
+                self.logger.warning(f"音频编码择优处理时发生错误: {e}")
+            # [新增结束]
+
             # 输出标准化参数以供前端预览
             final_publish_parameters = {
                 "主标题 (预览)": standardized_params.get("title", ""),
@@ -787,7 +827,7 @@ class TorrentMigrator:
                 "类型": standardized_params.get("type", ""),
                 "媒介": standardized_params.get("medium", ""),
                 "视频编码": standardized_params.get("video_codec", ""),
-                "音频编码": standardized_params.get("audio_codec", ""),
+                "音频编码": standardized_params.get("audio_codec", ""),  # [注意] 这里现在会使用优化后的值
                 "分辨率": standardized_params.get("resolution", ""),
                 "制作组": standardized_params.get("team", ""),
                 "产地": standardized_params.get("source", ""),

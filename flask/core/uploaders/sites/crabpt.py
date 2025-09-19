@@ -201,10 +201,29 @@ class CrabptUploader(SpecialUploader):
             tmp_dir = os.path.join(DATA_DIR, "tmp")
             os.makedirs(tmp_dir, exist_ok=True)
 
+            # 获取种子名称作为文件夹名
+            torrent_path = self.upload_data.get("modified_torrent_path", "")
+            if torrent_path:
+                torrent_name = os.path.basename(torrent_path)
+                if torrent_name.endswith('.torrent'):
+                    torrent_name = torrent_name[:-8]  # 移除 .torrent 扩展名
+                # 移除 .modified.时间戳 后缀
+                if '.modified.' in torrent_name:
+                    torrent_name = torrent_name.split('.modified.')[0]
+                # 清理文件名中的非法字符
+                import re
+                torrent_name = re.sub(r'[\\/:*?"<>|]', '_', torrent_name)
+            else:
+                torrent_name = "unknown_torrent"
+
+            # 创建以种子名称命名的子目录
+            torrent_dir = os.path.join(tmp_dir, torrent_name)
+            os.makedirs(torrent_dir, exist_ok=True)
+
             # 生成唯一文件名
             timestamp = int(time.time())
             filename = f"upload_params_{self.site_name}_{timestamp}.json"
-            filepath = os.path.join(tmp_dir, filename)
+            filepath = os.path.join(torrent_dir, filename)
 
             # 准备要保存的数据
             save_data = {
