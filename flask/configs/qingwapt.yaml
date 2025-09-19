@@ -1,0 +1,233 @@
+# QingwaPT站点的配置文件
+# 基于三层解耦模型重构，包含source_parsers和标准化的mappings
+
+site_name: "QingwaPT"
+
+# 表单字段定义 - 定义站点上传表单中各字段的标识符
+form_fields:
+  medium: "source_sel[4]"
+  codec: "codec_sel[4]"
+  audio_codec: "audiocodec_sel[4]"
+  resolution: "standard_sel[4]"
+  team: "team_sel[4]"
+  category: "type"  # 类别字段映射到type参数
+
+# 标准化键映射 - 定义源文本到标准化键的映射规则
+# source_parsers部分：定义如何从原始数据解析出标准化参数
+source_parsers:
+  source_params:
+    type:
+      source_key: "类型"
+    medium:
+      source_key: "媒介"
+    video_codec:
+      source_key: "视频编码"
+    audio_codec:
+      source_key: "音频编码"
+    resolution:
+      source_key: "分辨率"
+    team:
+      source_key: "制作组"
+    source:
+      source_key: "产地"
+
+  title_components:
+    title:
+      source_key: "主标题"
+    season_episode:
+      source_key: "季集"
+    year:
+      source_key: "年份"
+    status:
+      source_key: "剧集状态"
+    resolution:
+      source_key: "分辨率"
+    platform:
+      source_key: "片源平台"
+    medium:
+      source_key: "媒介"
+    video_codec:
+      source_key: "视频编码"
+    video_format:
+      source_key: "视频格式"
+    hdr_format:
+      source_key: "HDR格式"
+    frame_rate:
+      source_key: "帧率"
+    audio_codec:
+      source_key: "音频编码"
+    team:
+      source_key: "制作组"
+
+  # 标准化键映射规则（从原始文本到标准化键）
+  standard_keys:
+    type:
+      "电影": "category.movie"
+      "剧集": "category.tv_series"
+      "综艺": "category.tv_shows"
+      "动漫": "category.animation"
+      "纪录片": "category.documentaries"
+      "MV": "category.music_video"
+      "体育": "category.sports"
+      "音乐": "category.music"
+      "短剧": "category.short_play"
+      "其他": "category.other"
+
+    medium:
+      "UHD Blu-ray": "medium.uhd_bluray"
+      "Blu-ray": "medium.bluray"
+      "Remux": "medium.remux"
+      "Encode": "medium.encode"
+      "WEB-DL": "medium.webdl"
+      "HDTV": "medium.hdtv"
+      "DVD": "medium.dvd"
+      "CD": "medium.cd"
+      "MiniBD": "medium.minibd"
+      "Track": "medium.track"
+      "Other": "medium.other"
+
+    video_codec:
+      "H.264/AVC": "codec.h264"
+      "H.265/HEVC": "codec.h265"
+      "VC-1": "codec.vc1"
+      "MPEG-2": "codec.mpeg2"
+      "AV1": "codec.av1"
+      "MPEG-4": "codec.mpeg4"
+      "VP9": "codec.vp9"
+      "Other": "codec.other"
+
+    audio_codec:
+      "DTS:X": "audio.dtsx"
+      "DTS": "audio.dts"
+      "DTS-HD MA": "audio.dts_hd_ma"
+      "DTS-HD HRA": "audio.dts_hd_hra"
+      "TrueHD Atmos": "audio.truehd_atmos"
+      "TrueHD": "audio.truehd"
+      "LPCM": "audio.lpcm"
+      "DD/AC3": "audio.ac3"
+      "DDP/E-AC3": "audio.ddp"
+      "FLAC": "audio.flac"
+      "AAC": "audio.aac"
+      "APE": "audio.ape"
+      "WAV": "audio.wav"
+      "MP3": "audio.mp3"
+      "M4A": "audio.m4a"
+      "OPUS": "audio.opus"
+      "AV3A": "audio.av3a"
+      "Other": "audio.other"
+
+    resolution:
+      "8K/4320p": "resolution.r4320p"
+      "4K/2160p": "resolution.r2160p"
+      "2K/1440p": "resolution.r1440p"
+      "1080p": "resolution.r1080p"
+      "1080i": "resolution.r1080i"
+      "720p": "resolution.r720p"
+      "SD": "resolution.sd"
+      "Other": "resolution.other"
+
+    team:
+      "FROG": "team.frog"
+      "FROGE": "team.froge"
+      "FROGWeb": "team.frogweb"
+      "CatEDU": "team.catedu"
+      "Other": "team.other"
+
+# 参数映射规则 - 定义如何将标准化键映射到站点特定参数
+mappings:
+  type:
+    "category.movie": "401"
+    "category.tv_series": "402"
+    "category.tv_shows": "403"
+    "category.animation": "405"
+    "category.documentaries": "404"
+    "category.music_video": "406"
+    "category.sports": "407"
+    "category.music": "408"
+    "category.short_play": "412"
+    "category.other": "409"
+    "default": "409"
+
+  medium:
+    "medium.uhd_bluray": "1"
+    "medium.bluray": "8"
+    "medium.remux": "9"
+    "medium.encode": "10"
+    "medium.webdl": "7"
+    "medium.hdtv": "4"
+    "medium.dvd": "2"
+    "medium.cd": "3"
+    "medium.minibd": "11"
+    "medium.track": "5"
+    "medium.other": "6"
+    "default": "6"
+
+  codec:
+    "codec.h264": "1"
+    "codec.h265": "6"
+    "codec.vc1": "2"
+    "codec.mpeg2": "4"
+    "codec.av1": "7"
+    "codec.mpeg4": "3"
+    "codec.vp9": "8"
+    "codec.other": "5"
+    "default": "5"
+
+  audio_codec:
+    "audio.dtsx": "9"
+    "audio.dts": "14"
+    "audio.dts_hd_ma": "10"
+    "audio.dts_hd_hra": "21"
+    "audio.truehd_atmos": "11"
+    "audio.truehd": "12"
+    "audio.lpcm": "13"
+    "audio.ac3": "15"
+    "audio.ddp": "16"
+    "audio.flac": "1"
+    "audio.aac": "17"
+    "audio.ape": "18"
+    "audio.wav": "19"
+    "audio.mp3": "4"
+    "audio.m4a": "8"
+    "audio.opus": "20"
+    "audio.av3a": "22"
+    "audio.other": "7"
+    "default": "7"
+
+  resolution:
+    "resolution.r4320p": "6"
+    "resolution.r2160p": "7"
+    "resolution.r1440p": "8"
+    "resolution.r1080p": "1"
+    "resolution.r1080i": "2"
+    "resolution.r720p": "3"
+    "resolution.sd": "4"
+    "resolution.other": "5"
+    "default": "5"
+
+  team:
+    "team.frog": "6"
+    "team.froge": "7"
+    "team.frogweb": "8"
+    "team.catedu": "10"
+    "team.other": "5"
+    "default": "5"
+
+  tag:
+    "禁转": 1
+    "VCB-Studio": 2
+    "儿童片": 17
+    "LGBTQ+": 19
+    "中字": 6
+    "特效字幕": 20
+    "国语": 5
+    "粤语": 8
+    "完结": 14
+    "系列合集": 10
+    "原生原盘": 11
+    "DIY": 4
+    "Remux": 15
+    "杜比视界": 12
+    "HDR10+": 13
+    "HDR": 7
+    "default": null

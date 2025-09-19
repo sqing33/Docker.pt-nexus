@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-PT Nexus is a PT (Private Tracker) seed aggregation and analysis platform that collects and analyzes torrent data from qBittorrent and Transmission clients. The application provides traffic statistics, seed management, and site/group analytics through a web interface.
+PT Nexus is a PT (Private Tracker) seed aggregation and analysis platform that collects and analyzes torrent data from qBittorrent and Transmission clients. The application provides traffic statistics, seed management, site/group analytics, and cross-seeding functionality through a web interface.
 
 ## Technology Stack
 
@@ -33,10 +33,12 @@ The application follows a client-server architecture with a clear separation bet
   - `routes_stats.py`: Traffic statistics and analytics
   - `routes_torrents.py`: Torrent data management
   - `routes_migrate.py`: Cross-seed functionality
+  - `routes_sites.py`: Site management functionality
 - `core/`: Core services for data tracking and processing
+- `core/services.py`: Main data tracking service that polls downloaders for torrent and traffic data
+- `core/uploaders/`: Site-specific upload functionality for cross-seeding
 - `sites/`: Site-specific parsing and data extraction logic
 - `utils/`: Utility functions and helpers
-- `uploaders/`: Site-specific upload functionality for cross-seeding
 
 ### Frontend Structure
 - `src/main.ts`: Application entry point
@@ -44,6 +46,7 @@ The application follows a client-server architecture with a clear separation bet
 - `src/router/`: Vue Router configuration
 - `src/views/`: Page-level components (TorrentsView, SitesView, etc.)
 - `src/components/`: Reusable UI components
+- `src/components/settings/`: Settings page components
 
 ## Common Development Tasks
 
@@ -267,13 +270,47 @@ Main API routes (all prefixed with /api):
   - `GET /api/stats/groups`: Get group statistics
   - `GET /api/stats/speed`: Get speed statistics
   - `GET /api/stats/charts`: Get chart data for visualization
+  - `GET /api/stats/chart_data`: Get historical traffic chart data
+  - `GET /api/stats/speed_data`: Get current real-time speeds
+  - `GET /api/stats/recent_speed_data`: Get recent speed data for real-time curves
+  - `GET /api/stats/speed_chart_data`: Get historical speed chart data
 - `/api/torrents/*`: Torrent data management
-  - `GET /api/torrents`: Get list of torrents with filtering options
-  - `GET /api/torrents/<id>`: Get details for a specific torrent
-  - `DELETE /api/torrents/<id>`: Delete a torrent
+  - `GET /api/torrents/data`: Get list of torrents with filtering options
+  - `GET /api/torrents/downloaders_list`: Get list of enabled downloaders
+  - `GET /api/torrents/all_downloaders`: Get list of all downloaders (enabled and disabled)
+  - `POST /api/torrents/refresh_data`: Trigger immediate refresh of torrent data
 - `/api/migrate/*`: Cross-seed functionality
   - `GET /api/migrate/sites_list`: Get source and target sites for migration
   - `POST /api/migrate/check`: Check if a torrent exists on target site
   - `POST /api/migrate/upload`: Upload torrent to target site
+- `/api/sites/*`: Site management
+  - `GET /api/sites/list`: Get list of all sites
+  - `POST /api/sites/add`: Add a new site
+  - `PUT /api/sites/update/<id>`: Update an existing site
+  - `DELETE /api/sites/delete/<id>`: Delete a site
+  - `POST /api/sites/sync_from_json`: Sync sites from sites_data.json file
 
 All API endpoints (except auth) require JWT authentication via Bearer token in Authorization header.
+
+## Core Functionality
+
+### Data Collection and Tracking
+The core service in `core/services.py` periodically polls configured downloaders (qBittorrent and Transmission) to collect:
+- Torrent information (hash, name, size, progress, state, save path)
+- Traffic statistics (uploaded/downloaded bytes, upload/download speeds)
+- Site information from torrent comments/trackers
+
+### Database Schema
+The application uses several key tables:
+- `traffic_stats`: Stores raw traffic data with timestamps
+- `traffic_stats_hourly`: Stores aggregated hourly traffic data
+- `downloader_clients`: Stores downloader configuration and baseline data
+- `torrents`: Stores torrent information with site associations
+- `torrent_upload_stats`: Stores upload statistics per torrent
+- `sites`: Stores site configuration including cookies, passkeys, and migration settings
+
+### Cross-Seeding Functionality
+The migrate functionality allows users to:
+- Check if torrents exist on target sites
+- Upload torrents to target sites for cross-seeding
+- Manage site-specific upload configurations

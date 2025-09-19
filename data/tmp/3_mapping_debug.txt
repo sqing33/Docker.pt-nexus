@@ -1,0 +1,217 @@
+源站点名称: 青蛙
+实际加载的配置文件名: 青蛙.yaml
+站点配置是否存在: True
+站点配置内容:
+form_fields:
+  audio_codec: audiocodec_sel[4]
+  category: type
+  codec: codec_sel[4]
+  medium: source_sel[4]
+  resolution: standard_sel[4]
+  team: team_sel[4]
+mappings:
+  audio_codec:
+    audio.aac: '17'
+    audio.ac3: '15'
+    audio.ape: '18'
+    audio.av3a: '22'
+    audio.ddp: '16'
+    audio.dts: '14'
+    audio.dts_hd_hra: '21'
+    audio.dts_hd_ma: '10'
+    audio.dtsx: '9'
+    audio.flac: '1'
+    audio.lpcm: '13'
+    audio.m4a: '8'
+    audio.mp3: '4'
+    audio.opus: '20'
+    audio.other: '7'
+    audio.truehd: '12'
+    audio.truehd_atmos: '11'
+    audio.wav: '19'
+    default: '7'
+  codec:
+    codec.av1: '7'
+    codec.h264: '1'
+    codec.h265: '6'
+    codec.mpeg2: '4'
+    codec.mpeg4: '3'
+    codec.other: '5'
+    codec.vc1: '2'
+    codec.vp9: '8'
+    default: '5'
+  medium:
+    default: '6'
+    medium.bluray: '8'
+    medium.cd: '3'
+    medium.dvd: '2'
+    medium.encode: '10'
+    medium.hdtv: '4'
+    medium.minibd: '11'
+    medium.other: '6'
+    medium.remux: '9'
+    medium.track: '5'
+    medium.uhd_bluray: '1'
+    medium.webdl: '7'
+  resolution:
+    default: '5'
+    resolution.other: '5'
+    resolution.r1080i: '2'
+    resolution.r1080p: '1'
+    resolution.r2k: '8'
+    resolution.r4k: '7'
+    resolution.r720p: '3'
+    resolution.r8k: '6'
+    resolution.sd: '4'
+  tag:
+    DIY: 4
+    HDR: 7
+    HDR10+: 13
+    LGBTQ+: 19
+    Remux: 15
+    VCB-Studio: 2
+    default: null
+    中字: 6
+    儿童片: 17
+    原生原盘: 11
+    国语: 5
+    完结: 14
+    杜比视界: 12
+    特效字幕: 20
+    禁转: 1
+    粤语: 8
+    系列合集: 10
+  team:
+    default: '5'
+    team.catedu: '10'
+    team.frog: '6'
+    team.froge: '7'
+    team.frogweb: '8'
+    team.other: '5'
+  type:
+    category.animation: '405'
+    category.documentaries: '404'
+    category.movie: '401'
+    category.music: '408'
+    category.music_video: '406'
+    category.other: '409'
+    category.short_drama: '412'
+    category.sports: '407'
+    category.tv_series: '402'
+    category.tv_shows: '403'
+    default: '409'
+site_name: Qingwapt
+source_parsers:
+  source_params:
+    audio_codec:
+      source_key: 音频编码
+    medium:
+      source_key: 媒介
+    resolution:
+      source_key: 分辨率
+    source:
+      source_key: 产地
+    team:
+      source_key: 制作组
+    type:
+      source_key: 类型
+    video_codec:
+      source_key: 视频编码
+  standard_keys:
+    audio_codec:
+      AAC: audio.aac
+      APE: audio.ape
+      AV3A: audio.av3a
+      DD/AC3: audio.ac3
+      DDP/E-AC3: audio.ddp
+      DTS: audio.dts
+      DTS-HD HRA: audio.dts_hd_hra
+      DTS-HD MA: audio.dts_hd_ma
+      DTS:X: audio.dtsx
+      FLAC: audio.flac
+      LPCM: audio.lpcm
+      M4A: audio.m4a
+      MP3: audio.mp3
+      OPUS: audio.opus
+      Other: audio.other
+      TrueHD: audio.truehd
+      TrueHD Atmos: audio.truehd_atmos
+      WAV: audio.wav
+    medium:
+      Blu-ray: medium.bluray
+      CD: medium.cd
+      DVD: medium.dvd
+      Encode: medium.encode
+      HDTV: medium.hdtv
+      MiniBD: medium.minibd
+      Other: medium.other
+      Remux: medium.remux
+      Track: medium.track
+      UHD Blu-ray: medium.uhd_bluray
+      WEB-DL: medium.webdl
+    resolution:
+      1080i: resolution.r1080i
+      1080p: resolution.r1080p
+      2K/1440p: resolution.r2k
+      4K/2160p: resolution.r4k
+      720p: resolution.r720p
+      8K/4320p: resolution.r8k
+      Other: resolution.other
+      SD: resolution.sd
+    team:
+      CatEDU: team.catedu
+      FROG: team.frog
+      FROGE: team.froge
+      FROGWeb: team.frogweb
+      Other: team.other
+    type:
+      MV: category.music_video
+      体育: category.sports
+      其他: category.other
+      剧集: category.tv_series
+      动漫: category.animation
+      电影: category.movie
+      短剧: category.short_drama
+      纪录片: category.documentaries
+      综艺: category.tv_shows
+      音乐: category.music
+    video_codec:
+      AV1: codec.av1
+      H.264/AVC: codec.h264
+      H.265/HEVC: codec.h265
+      MPEG-2: codec.mpeg2
+      MPEG-4: codec.mpeg4
+      Other: codec.other
+      VC-1: codec.vc1
+      VP9: codec.vp9
+  title_components:
+    audio_codec:
+      source_key: 音频编码
+    bit_depth:
+      source_key: 色深
+    edition:
+      source_key: 发布版本
+    frame_rate:
+      source_key: 帧率
+    hdr_format:
+      source_key: HDR格式
+    medium:
+      source_key: 媒介
+    platform:
+      source_key: 片源平台
+    resolution:
+      source_key: 分辨率
+    season_episode:
+      source_key: 季集
+    status:
+      source_key: 剧集状态
+    team:
+      source_key: 制作组
+    title:
+      source_key: 主标题
+    video_codec:
+      source_key: 视频编码
+    video_format:
+      source_key: 视频格式
+    year:
+      source_key: 年份

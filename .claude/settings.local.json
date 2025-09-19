@@ -18,7 +18,21 @@
       "Bash(curl -s \"http://localhost:15273/api/data?page=1&pageSize=3&sortProp=name&sortOrder=ascending\")",
       "WebFetch(domain:element-plus.org)",
       "Bash(timeout:*)",
-      "WebFetch(domain:doc.iyuu.cn)"
+      "WebFetch(domain:doc.iyuu.cn)",
+      "Bash(for:*)",
+      "Bash(do:*)",
+      "Bash(done:*)",
+      "Bash(pkill:*)",
+      "Bash(kill:*)",
+      "Bash(xargs cat:*)",
+      "Bash(echo:*)",
+      "Bash(grep:*)",
+      "Bash(then echo \"=== $site.yaml ===\" grep -E \"(video_codec|source:|resolution)\" \"/app/Code/Dockerfile/Docker.pt-nexus/flask/configs/$site.yaml\")",
+      "Bash(head:*)",
+      "Bash(if [ -f \"/app/Code/Dockerfile/Docker.pt-nexus/flask/configs/hdtime.yaml\" ])",
+      "Bash(then)",
+      "Bash(else)",
+      "Bash(fi)"
     ],
     "deny": [],
     "ask": []

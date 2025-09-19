@@ -1,0 +1,256 @@
+# AGSV站点的配置文件
+# 基于三层解耦模型重构，包含source_parsers和标准化的mappings
+
+site_name: "AGSV"
+
+# 表单字段定义 - 定义站点上传表单中各字段的标识符
+form_fields:
+  medium: "medium_sel[4]"
+  codec: "codec_sel[4]"
+  audio_codec: "audiocodec_sel[4]"
+  resolution: "standard_sel[4]"
+  team: "team_sel[4]"
+  category: "type"  # 类别字段映射到type参数
+
+# 标准化键映射 - 定义源文本到标准化键的映射规则
+# source_parsers部分：定义如何从原始数据解析出标准化参数
+source_parsers:
+  source_params:
+    type:
+      source_key: "类型"
+    medium:
+      source_key: "媒介"
+    video_codec:
+      source_key: "视频编码"
+    audio_codec:
+      source_key: "音频编码"
+    resolution:
+      source_key: "分辨率"
+    team:
+      source_key: "制作组"
+    source:
+      source_key: "产地"
+
+  title_components:
+    title:
+      source_key: "主标题"
+    season_episode:
+      source_key: "季集"
+    year:
+      source_key: "年份"
+    status:
+      source_key: "剧集状态"
+    edition:
+      source_key: "发布版本"
+    resolution:
+      source_key: "分辨率"
+    platform:
+      source_key: "片源平台"
+    medium:
+      source_key: "媒介"
+    video_codec:
+      source_key: "视频编码"
+    video_format:
+      source_key: "视频格式"
+    hdr_format:
+      source_key: "HDR格式"
+    bit_depth:
+      source_key: "色深"
+    frame_rate:
+      source_key: "帧率"
+    audio_codec:
+      source_key: "音频编码"
+    team:
+      source_key: "制作组"
+
+  # 标准化键映射规则（从原始文本到标准化键）
+  standard_keys:
+    type:
+      "电影": "category.movie"
+      "电视剧": "category.tv_series"
+      "综艺": "category.tv_shows"
+      "学习": "category.ebook"
+      "动漫": "category.animation"
+      "音乐": "category.music"
+      "体育": "category.sports"
+      "纪录片": "category.documentaries"
+      "软件": "category.software"
+      "游戏": "category.games"
+      "其他": "category.other"
+
+    medium:
+      "UHD Blu-ray": "medium.uhd_bluray"
+      "Blu-ray": "medium.bluray"
+      "Remux": "medium.remux"
+      "Encode": "medium.encode"
+      "WEB-DL": "medium.webdl"
+      "HDTV": "medium.hdtv"
+      "DVD": "medium.dvd"
+      "CD": "medium.cd"
+      "Track": "medium.track"
+      "Other": "medium.other"
+
+    video_codec:
+      "H.264/AVC": "codec.h264"
+      "H.265/HEVC": "codec.h265"
+      "x264": "codec.x264"
+      "x265": "codec.x265"
+      "VC-1": "codec.vc1"
+      "MPEG-2": "codec.mpeg2"
+      "AV1": "codec.av1"
+      "VP9": "codec.vp9"
+      "Xvid": "codec.xvid"
+      "Other": "codec.other"
+
+    audio_codec:
+      "FLAC": "audio.flac"
+      "MP3": "audio.mp3"
+      "WAV": "audio.wav"
+      "M4A": "audio.m4a"
+      "DTS": "audio.dts"
+      "DTS-HD MA": "audio.dts_hd_ma"
+      "DTS:X": "audio.dtsx"
+      "TrueHD": "audio.truehd"
+      "LPCM": "audio.lpcm"
+      "DD/AC3": "audio.ac3"
+      "DDP/E-AC3": "audio.ddp"
+      "TrueHD Atmos": "audio.truehd_atmos"
+      "APE": "audio.ape"
+      "AAC": "audio.aac"
+      "ALAC": "audio.alac"
+      "OGG": "audio.ogg"
+      "Other": "audio.other"
+
+    resolution:
+      "8K": "resolution.r8k"
+      "4K": "resolution.r4k"
+      "2160p": "resolution.r2160p"
+      "1440p": "resolution.r1440p"
+      "1080p": "resolution.r1080p"
+      "1080i": "resolution.r1080i"
+      "720p": "resolution.r720p"
+      "480p": "resolution.r480p"
+      "480i": "resolution.r480p"
+      "Other": "resolution.other"
+
+    team:
+      "AGSVPT": "team.agsvpt"
+      "AGSVWEB": "team.agsvweb"
+      "AGSVMUS": "team.agsvmus"
+      "GodDramas": "team.goddramas"
+      "RL": "team.rl"
+      "BeiTai": "team.beitai"
+      "DYZ": "team.dyz"
+      "Hares": "team.hares"
+      "CatEDU": "team.catedu"
+      "Pack": "team.pack"
+      "Other": "team.other"
+
+# 参数映射规则 - 定义如何将标准化键映射到站点特定参数
+mappings:
+  type:
+    "category.movie": "401"
+    "category.tv_series": "402"
+    "category.tv_shows": "403"
+    "category.animation": "405"
+    "category.documentaries": "404"
+    "category.music": "406"
+    "category.sports": "407"
+    "category.ebook": "415"
+    "category.software": "413"
+    "category.games": "413"
+    "category.other": "413"
+    "default": "413"
+
+  medium:
+    "medium.uhd_bluray": "11"
+    "medium.bluray": "1"
+    "medium.remux": "3"
+    "medium.encode": "7"
+    "medium.webdl": "10"
+    "medium.hdtv": "5"
+    "medium.dvd": "2"
+    "medium.cd": "8"
+    "medium.track": "12"
+    "medium.other": "13"
+    "default": "13"
+
+  codec:
+    "codec.h264": "1"
+    "codec.h265": "6"
+    "codec.x264": "1"
+    "codec.x265": "6"
+    "codec.vc1": "2"
+    "codec.mpeg2": "4"
+    "codec.av1": "12"
+    "codec.vp9": "10"
+    "codec.xvid": "11"
+    "codec.other": "5"
+    "default": "5"
+
+  audio_codec:
+    "audio.flac": "1"
+    "audio.mp3": "4"
+    "audio.wav": "15"
+    "audio.m4a": "16"
+    "audio.dts": "3"
+    "audio.dts_hd_ma": "8"
+    "audio.dtsx": "18"
+    "audio.truehd": "9"
+    "audio.lpcm": "10"
+    "audio.ac3": "11"
+    "audio.ddp": "19"
+    "audio.truehd_atmos": "17"
+    "audio.ape": "2"
+    "audio.aac": "6"
+    "audio.alac": "20"
+    "audio.ogg": "7"
+    "audio.other": "7"
+    "default": "7"
+
+  resolution:
+    "resolution.r8k": "6"
+    "resolution.r4k": "5"
+    "resolution.r2160p": "5"
+    "resolution.r1440p": "5"
+    "resolution.r1080p": "1"
+    "resolution.r1080i": "1"
+    "resolution.r720p": "3"
+    "resolution.r480p": "4"
+    "resolution.other": "8"
+    "default": "8"
+
+  team:
+    "team.agsvpt": "6"
+    "team.agsvweb": "21"
+    "team.agsvmus": "20"
+    "team.goddramas": "23"
+    "team.rl": "31"
+    "team.beitai": "30"
+    "team.dyz": "28"
+    "team.hares": "29"
+    "team.catedu": "24"
+    "team.pack": "16"
+    "team.other": "22"
+    "default": "22"
+
+  tag:
+    "粤语": 21
+    "国语": 5
+    "美剧": 31
+    "韩剧": 26
+    "英字": 20
+    "中字": 6
+    "分集": 48
+    "完结": 19
+    "应求": 18
+    "大包": 22
+    "特效": 47
+    "超分": 49
+    "补帧": 50
+    "DIY": 4
+    "HDR": 7
+    "杜比": 13
+    "合并": 51
+    "方舟": 52
+    "default": null

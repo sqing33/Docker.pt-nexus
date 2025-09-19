@@ -240,7 +240,7 @@
     "special_tracker_domain": null,
     "group": "U2",
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 25
   },
   {
     "site": "upxin",
@@ -437,7 +437,7 @@
     "base_url": "ptchina.org",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 2,
+    "migration": 0,
     "speed_limit": 10
   },
   {
@@ -590,7 +590,7 @@
     "base_url": "pt.gtkpw.xyz",
     "special_tracker_domain": "gtkpw",
     "group": null,
-    "migration": 2,
+    "migration": 0,
     "speed_limit": 10
   },
   {
@@ -707,7 +707,7 @@
     "base_url": "ptzone.xyz",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 2,
+    "migration": 0,
     "speed_limit": 10
   },
   {

@@ -1243,6 +1243,9 @@ def extract_origin_from_description(description_text: str) -> str:
         r"◎\s*国\s*家\s*(.+?)(?:\s|$)",  # 匹配 ◎国家 日本
         r"◎\s*地\s*区\s*(.+?)(?:\s|$)",  # 匹配 ◎地区 日本
         r"制片国家/地区[:\s]+(.+?)(?:\s|$)",  # 匹配 制片国家/地区: 日本
+        r"制片国家[:\s]+(.+?)(?:\s|$)",  # 匹配 制片国家: 日本
+        r"国家[:\s]+(.+?)(?:\s|$)",  # 匹配 国家: 日本
+        r"产地[:\s]+(.+?)(?:\s|$)",  # 匹配 产地: 日本
         r"[产]\s*地[:\s]+([^，,\n\r]+)",
         r"[国]\s*家[:\s]+([^，,\n\r]+)",
         r"[地]\s*区[:\s]+([^，,\n\r]+)"
@@ -1254,11 +1257,8 @@ def extract_origin_from_description(description_text: str) -> str:
             origin = match.group(1).strip()
             # 清理可能的多余字符
             origin = re.sub(r'[\[\]【】\(\)]', '', origin).strip()
-            # 如果匹配到的是多个地区，只取第一个
-            if '/' in origin:
-                origin = origin.split('/')[0].strip()
-            if ',' in origin:
-                origin = origin.split(',')[0].strip()
+            # 移除常见的分隔符，如" / "、","等
+            origin = re.split(r'\s*/\s*|\s*,\s*|\s*;\s*|\s*&\s*', origin)[0].strip()
             return origin
 
     return ""

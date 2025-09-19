@@ -1,0 +1,198 @@
+# Zmpt站点的配置文件
+# 基于三层解耦模型重构，包含source_parsers和标准化的mappings
+
+site_name: "ZmPT"
+
+# 表单字段定义 - 定义站点上传表单中各字段的标识符
+form_fields:
+  medium: "medium_sel[4]"
+  audio_codec: "audiocodec_sel[4]"
+  resolution: "standard_sel[4]"
+  team: "team_sel[4]"
+  category: "type"  # 类别字段映射到type参数
+
+# 标准化键映射 - 定义源文本到标准化键的映射规则
+# source_parsers部分：定义如何从原始数据解析出标准化参数
+source_parsers:
+  source_params:
+    type:
+      source_key: "类型"
+    medium:
+      source_key: "媒介"
+    video_codec:
+      source_key: "视频编码"
+    audio_codec:
+      source_key: "音频编码"
+    resolution:
+      source_key: "分辨率"
+    team:
+      source_key: "制作组"
+
+  title_components:
+    title:
+      source_key: "主标题"
+    season_episode:
+      source_key: "季集"
+    year:
+      source_key: "年份"
+    status:
+      source_key: "剧集状态"
+    edition:
+      source_key: "发布版本"
+    resolution:
+      source_key: "分辨率"
+    platform:
+      source_key: "片源平台"
+    medium:
+      source_key: "媒介"
+    video_format:
+      source_key: "视频格式"
+    hdr_format:
+      source_key: "HDR格式"
+    bit_depth:
+      source_key: "色深"
+    frame_rate:
+      source_key: "帧率"
+    audio_codec:
+      source_key: "音频编码"
+    team:
+      source_key: "制作组"
+
+  # 标准化键映射规则（从原始文本到标准化键）
+  standard_keys:
+    type:
+      "其他": "category.other"
+      "纪录片": "category.documentaries"
+      "动漫": "category.animation"
+      "短剧": "category.short_play"
+      "电影": "category.movie"
+      "电视剧": "category.tv_series"
+      "综艺": "category.tv_shows"
+      "音乐": "category.music"
+      "有声书": "category.audiobook"
+      "软件": "category.software"
+      "游戏": "category.game"
+
+    medium:
+      "Blu-ray": "medium.bluray"
+      "Remux": "medium.remux"
+      "Encode": "medium.encode"
+      "MiniBD": "medium.minibd"
+      "HDTV": "medium.hdtv"
+      "DVDR": "medium.dvdr"
+      "DVD": "medium.dvd"
+      "CD": "medium.cd"
+      "WEB-DL": "medium.webdl"
+      "Other": "medium.other"
+
+    audio_codec:
+      "FLAC": "audio.flac"
+      "APE": "audio.ape"
+      "DTS": "audio.dts"
+      "OGG": "audio.ogg"
+      "AC3": "audio.ac3"
+      "AAC": "audio.aac"
+      "MP3": "audio.mp3"
+      "ALAC": "audio.alac"
+      "WAV": "audio.wav"
+      "Other": "audio.other"
+
+    resolution:
+      "480p": "resolution.r480p"
+      "720p": "resolution.r720p"
+      "1080p/1080i": "resolution.r1080p"
+      "2K/1440p": "resolution.r1440p"
+      "4K/2160p": "resolution.r2160p"
+      "8K/4320p": "resolution.r4320p"
+      "Other": "resolution.other"
+
+    team:
+      "Other": "team.other"
+      "ZmWeb": "team.zmweb"
+      "ZmPT": "team.zmpt"
+      "ZmMusic": "team.zmmusic"
+      "ZmAudio": "team.zmaudio"
+      "DYZ-Movie": "team.dyztv"
+      "GodDramas": "team.goddramas"
+      "RL/RL4B": "team.rl"
+
+# 参数映射规则 - 定义如何将标准化键映射到站点特定参数
+mappings:
+  type:
+    "category.other": "409"
+    "category.documentaries": "422"
+    "category.animation": "417"
+    "category.short_play": "427"
+    "category.movie": "401"
+    "category.tv_series": "402"
+    "category.tv_shows": "403"
+    "category.music": "423"
+    "category.audiobook": "424"
+    "category.software": "425"
+    "category.game": "426"
+    "default": "409"
+
+  medium:
+    "medium.bluray": "1"
+    "medium.remux": "3"
+    "medium.encode": "7"
+    "medium.minibd": "4"
+    "medium.hdtv": "5"
+    "medium.dvdr": "6"
+    "medium.dvd": "6"
+    "medium.cd": "8"
+    "medium.webdl": "10"
+    "medium.other": "12"
+    "default": "12"
+
+  audio_codec:
+    "audio.flac": "1"
+    "audio.ape": "2"
+    "audio.dts": "3"
+    "audio.ogg": "5"
+    "audio.ac3": "8"
+    "audio.aac": "6"
+    "audio.mp3": "4"
+    "audio.alac": "9"
+    "audio.wav": "10"
+    "audio.other": "7"
+    "default": "7"
+
+  resolution:
+    "resolution.r480p": "7"
+    "resolution.r720p": "8"
+    "resolution.r1080p": "1"
+    "resolution.r1440p": "6"
+    "resolution.r2160p": "5"
+    "resolution.r4320p": "9"
+    "resolution.other": "9"
+    "default": "9"
+
+  team:
+    "team.other": "5"
+    "team.zmweb": "7"
+    "team.zmpt": "6"
+    "team.zmmusic": "8"
+    "team.zmaudio": "11"
+    "team.dyztv": "9"
+    "team.goddramas": "10"
+    "team.rl": "12"
+    "default": "5"
+
+  tag:
+    "驻站": 17
+    "禁转": 1
+    "国语": 5
+    "粤语": 15
+    "中字": 6
+    "DIY": 4
+    "杜比": 14
+    "HDR": 7
+    "无损": 16
+    "首发": 2
+    "短剧": 13
+    "汉化": 11
+    "完结": 12
+    "分集": 8
+    "纯享版": 18
+    "default": null
