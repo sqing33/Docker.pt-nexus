@@ -189,7 +189,7 @@ class BaseUploader(ABC):
                       default_key: str = "default",
                       use_length_priority: bool = True) -> str:
         """
-        通用的映射查找函数，现在具备基于 AUDIO_CODEC_FALLBACK_MAP 的自动回退能力。
+        [修正] 通用的映射查找函数，使用正则表达式的单词边界来防止错误的子字符串匹配。
         """
         if not mapping_dict or not key_to_find:
             return mapping_dict.get(default_key, "")
@@ -198,27 +198,42 @@ class BaseUploader(ABC):
 
         # 启动一个循环，用于尝试当前key及其所有回退key
         while current_key:
-            # 1. 尝试对 current_key 进行直接匹配（精确或部分）
-            # 精确匹配
+            # 1. 尝试精确匹配
             for key, value in mapping_dict.items():
                 if str(key).lower() == current_key.lower().strip():
-                    logger.debug(
-                        f"映射查找成功 (精确匹配): '{current_key}' -> '{value}'")
+                    logger.debug(f"映射查找成功 (精确匹配): '{current_key}' -> '{value}'")
                     return value
 
-            # 部分匹配
+            # 2. [核心修正] 如果精确匹配失败，尝试使用带单词边界的正则进行部分匹配
+            # 这样可以匹配 'DTS' in 'DTS-HD' 但不会匹配 'DTS' in 'DTSX'
             sorted_items = sorted(
                 mapping_dict.items(), key=lambda x: len(x[0]),
                 reverse=True) if use_length_priority else list(
                     mapping_dict.items())
-            for key, value in sorted_items:
-                if str(key).lower() in current_key.lower(
-                ) or current_key.lower() in str(key).lower():
-                    logger.debug(
-                        f"映射查找成功 (部分匹配): '{current_key}' -> '{value}'")
-                    return value
 
-            # 2. 如果直接匹配失败，查找下一个回退选项
+            try:
+                # 构造一个安全的正则表达式，匹配整个单词
+                # e.g., 'dts' -> r'\bdts\b'
+                # e.g., 'dts-hd' -> r'\bdts-hd\b'
+                escaped_current_key = re.escape(current_key.lower())
+                pattern = r'\b' + escaped_current_key + r'\b'
+
+                for key, value in sorted_items:
+                    # 我们只检查一种情况：要查找的键(current_key)是否作为"单词"出现在字典键(key)中
+                    # 例如，查找 'dts' 是否是 'dts-hd' 的一部分
+                    if re.search(pattern, str(key).lower()):
+                         logger.debug(f"映射查找成功 (正则部分匹配): '{current_key}' in '{key}' -> '{value}'")
+                         return value
+
+            except re.error:
+                 # 正则表达式编译错误时，回退到简单的 in 检查，以防万一
+                 for key, value in sorted_items:
+                    if current_key.lower() in str(key).lower():
+                        logger.debug(f"映射查找成功 (回退部分匹配): '{current_key}' in '{key}' -> '{value}'")
+                        return value
+
+
+            # 3. 如果所有匹配都失败，查找下一个回退选项
             original_key = current_key
             current_key = AUDIO_CODEC_FALLBACK_MAP.get(current_key)
 
@@ -226,7 +241,6 @@ class BaseUploader(ABC):
                 logger.debug(
                     f"直接匹配 '{original_key}' 失败, 尝试回退到 '{current_key}'...")
             else:
-                # 如果没有更多的回退选项，循环将在此处终止
                 logger.debug(f"'{original_key}' 无更多回退选项。")
 
         # 如果循环结束仍未找到任何匹配项，返回默认值
@@ -348,8 +362,12 @@ class BaseUploader(ABC):
         source_params = self.upload_data.get("source_params", {})
         # 中文键到 title_components 英文键的映射
         source_key_map = {
-            "类型": "类型", "媒介": "媒介", "视频编码": "视频编码",
-            "音频编码": "音频编码", "分辨率": "分辨率", "制作组": "制作组",
+            "类型": "类型",
+            "媒介": "媒介",
+            "视频编码": "视频编码",
+            "音频编码": "音频编码",
+            "分辨率": "分辨率",
+            "制作组": "制作组",
         }
         for chinese_key, english_key in source_key_map.items():
             if english_key not in original_values and chinese_key in source_params:
@@ -394,7 +412,9 @@ class BaseUploader(ABC):
         release_group = original_values.get("制作组", "NOGROUP").strip()
 
         # 如果原始制作组为空或无效，则不添加后缀
-        if not release_group or release_group.lower() in ["na", "n/a", "nogroup"]:
+        if not release_group or release_group.lower() in [
+                "na", "n/a", "nogroup"
+        ]:
             final_title = main_part
         else:
             # 对特殊制作组进行处理，不需要添加前缀连字符
@@ -553,113 +573,113 @@ class BaseUploader(ABC):
                 logger.error(f"保存参数到文件失败: {save_error}")
 
             # 执行实际发布 【已注释，用于测试模式】
-            # torrent_path = self.upload_data["modified_torrent_path"]
-            # with open(torrent_path, "rb") as torrent_file:
-            #     files = {
-            #         "file": (
-            #             os.path.basename(torrent_path),
-            #             torrent_file,
-            #             "application/x-bittorent",
-            #         ),
-            #         "nfo": ("", b"", "application/octet-stream"),
-            #     }
-            #     cleaned_cookie_str = self.site_info.get("cookie", "").strip()
-            #     if not cleaned_cookie_str:
-            #         logger.error("目标站点 Cookie 为空，无法发布。")
-            #         return False, "目标站点 Cookie 未配置。"
-            #     cookie_jar = cookies_raw2jar(cleaned_cookie_str)
-            #     # 添加重试机制
-            #     max_retries = 3
-            #     last_exception = None
+            torrent_path = self.upload_data["modified_torrent_path"]
+            with open(torrent_path, "rb") as torrent_file:
+                files = {
+                    "file": (
+                        os.path.basename(torrent_path),
+                        torrent_file,
+                        "application/x-bittorent",
+                    ),
+                    "nfo": ("", b"", "application/octet-stream"),
+                }
+                cleaned_cookie_str = self.site_info.get("cookie", "").strip()
+                if not cleaned_cookie_str:
+                    logger.error("目标站点 Cookie 为空，无法发布。")
+                    return False, "目标站点 Cookie 未配置。"
+                cookie_jar = cookies_raw2jar(cleaned_cookie_str)
+                # 添加重试机制
+                max_retries = 3
+                last_exception = None
 
-            #     for attempt in range(max_retries):
-            #         try:
-            #             logger.info(
-            #                 f"正在向 {self.site_name} 站点提交发布请求... (尝试 {attempt + 1}/{max_retries})"
-            #             )
-            #             # 若站点启用代理且配置了全局代理地址，则通过代理请求
-            #             proxies = None
-            #             try:
-            #                 from config import config_manager
-            #                 use_proxy = bool(self.site_info.get("proxy"))
-            #                 conf = (config_manager.get() or {})
-            #                 # 优先使用转种设置中的代理地址，其次兼容旧的 network.proxy_url
-            #                 proxy_url = (conf.get("cross_seed", {})
-            #                              or {}).get("proxy_url") or (
-            #                                  conf.get("network", {})
-            #                                  or {}).get("proxy_url")
-            #                 if use_proxy and proxy_url:
-            #                     proxies = {
-            #                         "http": proxy_url,
-            #                         "https": proxy_url
-            #                     }
-            #             except Exception:
-            #                 proxies = None
+                for attempt in range(max_retries):
+                    try:
+                        logger.info(
+                            f"正在向 {self.site_name} 站点提交发布请求... (尝试 {attempt + 1}/{max_retries})"
+                        )
+                        # 若站点启用代理且配置了全局代理地址，则通过代理请求
+                        proxies = None
+                        try:
+                            from config import config_manager
+                            use_proxy = bool(self.site_info.get("proxy"))
+                            conf = (config_manager.get() or {})
+                            # 优先使用转种设置中的代理地址，其次兼容旧的 network.proxy_url
+                            proxy_url = (conf.get("cross_seed", {})
+                                         or {}).get("proxy_url") or (
+                                             conf.get("network", {})
+                                             or {}).get("proxy_url")
+                            if use_proxy and proxy_url:
+                                proxies = {
+                                    "http": proxy_url,
+                                    "https": proxy_url
+                                }
+                        except Exception:
+                            proxies = None
 
-            #             # 检查是否是重试并且 Connection reset by peer 错误，强制使用代理
-            #             if attempt > 0 and last_exception and "Connection reset by peer" in str(
-            #                     last_exception):
-            #                 logger.info(
-            #                     "检测到 Connection reset by peer 错误，强制使用代理重试...")
-            #                 try:
-            #                     from config import config_manager
-            #                     conf = (config_manager.get() or {})
-            #                     proxy_url = (conf.get("cross_seed", {})
-            #                                  or {}).get("proxy_url") or (
-            #                                      conf.get("network", {})
-            #                                      or {}).get("proxy_url")
-            #                     if proxy_url:
-            #                         proxies = {
-            #                             "http": proxy_url,
-            #                             "https": proxy_url
-            #                         }
-            #                         logger.info(f"使用代理重试: {proxy_url}")
-            #                 except Exception as proxy_error:
-            #                     logger.warning(f"代理设置失败: {proxy_error}")
+                        # 检查是否是重试并且 Connection reset by peer 错误，强制使用代理
+                        if attempt > 0 and last_exception and "Connection reset by peer" in str(
+                                last_exception):
+                            logger.info(
+                                "检测到 Connection reset by peer 错误，强制使用代理重试...")
+                            try:
+                                from config import config_manager
+                                conf = (config_manager.get() or {})
+                                proxy_url = (conf.get("cross_seed", {})
+                                             or {}).get("proxy_url") or (
+                                                 conf.get("network", {})
+                                                 or {}).get("proxy_url")
+                                if proxy_url:
+                                    proxies = {
+                                        "http": proxy_url,
+                                        "https": proxy_url
+                                    }
+                                    logger.info(f"使用代理重试: {proxy_url}")
+                            except Exception as proxy_error:
+                                logger.warning(f"代理设置失败: {proxy_error}")
 
-            #             response = self.scraper.post(
-            #                 self.post_url,
-            #                 headers=self.headers,
-            #                 cookies=cookie_jar,
-            #                 data=form_data,
-            #                 files=files,
-            #                 timeout=self.timeout,
-            #                 proxies=proxies,
-            #             )
-            #             response.raise_for_status()
+                        response = self.scraper.post(
+                            self.post_url,
+                            headers=self.headers,
+                            cookies=cookie_jar,
+                            data=form_data,
+                            files=files,
+                            timeout=self.timeout,
+                            proxies=proxies,
+                        )
+                        response.raise_for_status()
 
-            #             # 成功则跳出循环
-            #             last_exception = None
-            #             break
+                        # 成功则跳出循环
+                        last_exception = None
+                        break
 
-            #         except Exception as e:
-            #             last_exception = e
-            #             logger.warning(f"第 {attempt + 1} 次尝试发布失败: {e}")
+                    except Exception as e:
+                        last_exception = e
+                        logger.warning(f"第 {attempt + 1} 次尝试发布失败: {e}")
 
-            #             # 如果不是最后一次尝试，等待一段时间后重试
-            #             if attempt < max_retries - 1:
-            #                 import time
-            #                 wait_time = 2**attempt  # 指数退避
-            #                 logger.info(
-            #                     f"等待 {wait_time} 秒后进行第 {attempt + 2} 次尝试...")
-            #                 time.sleep(wait_time)
-            #             else:
-            #                 logger.error("所有重试均已失败")
+                        # 如果不是最后一次尝试，等待一段时间后重试
+                        if attempt < max_retries - 1:
+                            import time
+                            wait_time = 2**attempt  # 指数退避
+                            logger.info(
+                                f"等待 {wait_time} 秒后进行第 {attempt + 2} 次尝试...")
+                            time.sleep(wait_time)
+                        else:
+                            logger.error("所有重试均已失败")
 
-            #     # 如果所有重试都失败了，重新抛出最后一个异常
-            #     if last_exception:
-            #         raise last_exception
+                # 如果所有重试都失败了，重新抛出最后一个异常
+                if last_exception:
+                    raise last_exception
 
             # 测试模式：模拟成功响应
-            logger.info("测试模式：跳过实际发布，模拟成功响应")
-            success_url = f"https://demo.site.test/details.php?id=12345&uploaded=1&test=true"
-            response = type(
-                'MockResponse', (), {
-                    'url': success_url,
-                    'text':
-                    f'<html><body>发布成功！种子ID: 12345 - TEST MODE</body></html>',
-                    'raise_for_status': lambda: None
-                })()
+            # logger.info("测试模式：跳过实际发布，模拟成功响应")
+            # success_url = f"https://demo.site.test/details.php?id=12345&uploaded=1&test=true"
+            # response = type(
+            #     'MockResponse', (), {
+            #         'url': success_url,
+            #         'text':
+            #         f'<html><body>发布成功！种子ID: 12345 - TEST MODE</body></html>',
+            #         'raise_for_status': lambda: None
+            #     })()
 
             # 4. 处理响应（这是通用的成功/失败判断逻辑）
             # 可以通过 "钩子" 方法处理个别站点的URL修正

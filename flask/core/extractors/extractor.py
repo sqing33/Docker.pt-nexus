@@ -394,8 +394,28 @@ class Extractor:
         return "".join(content)
 
 
+# [新增] 定义音频编码的层级（权重），数字越大越优先
+AUDIO_CODEC_HIERARCHY = {
+    # Top Tier (最精确)
+    "audio.truehd_atmos": 5, "audio.dtsx": 5,
+    # High Tier (无损次世代)
+    "audio.truehd": 4, "audio.dts_hd_ma": 4,
+    # Mid Tier (有损次世代 / 无损)
+    "audio.ddp": 3, "audio.dts": 3, "audio.flac": 3, "audio.lpcm": 3,
+    # Standard Tier (核心/普通)
+    "audio.ac3": 2,
+    # Low Tier (有损)
+    "audio.aac": 1, "audio.mp3": 1, "audio.alac": 1, "audio.ape": 1, "audio.m4a": 1, "audio.wav": 1,
+    # Other/Default
+    "audio.other": 0,
+}
+
+
 class ParameterMapper:
-    """Handles mapping of extracted parameters to standardized formats using the three-layer decoupling model"""
+    """
+    [修正] Handles mapping of extracted parameters to standardized formats,
+    with corrected logic for global and site-specific mappings.
+    """
 
     def __init__(self):
         pass
@@ -403,40 +423,20 @@ class ParameterMapper:
     def load_site_config(self, site_name: str) -> Dict[str, Any]:
         """
         Load site configuration from YAML file
-
-        Args:
-            site_name: Name of the site
-
-        Returns:
-            Dict with site configuration
         """
         try:
-            # 站点名称映射，处理中文名称到配置文件名的映射
             site_name_mapping = {
-                "财神": "cspt",
-                "财神站": "cspt",
-                "Cspt": "cspt",
-                "LuckPT": "luckpt",
-                "幸运": "luckpt",
-                "Audiences": "audiences",
-                "HHClub": "hhclub",
-                "13City": "13city",
-                "Qingwapt": "qingwapt",
-                "青蛙": "qingwapt"
+                "财神": "cspt", "财神站": "cspt", "Cspt": "cspt",
+                "LuckPT": "luckpt", "幸运": "luckpt", "Audiences": "audiences",
+                "HHClub": "hhclub", "13City": "13city", "Qingwapt": "qingwapt", "青蛙": "qingwapt"
             }
-
-            # 获取实际的配置文件名
             actual_site_name = site_name_mapping.get(site_name, site_name)
-
-            # Convert site name to config file name
             config_filename = f"{actual_site_name.lower().replace(' ', '_').replace('-', '_')}.yaml"
             config_path = os.path.join(CONFIG_DIR, config_filename)
-
             if os.path.exists(config_path):
                 with open(config_path, 'r', encoding='utf-8') as f:
                     return yaml.safe_load(f) or {}
             else:
-                # 如果特定站点配置不存在，尝试加载默认配置
                 return {}
         except Exception:
             return {}
@@ -444,581 +444,83 @@ class ParameterMapper:
     def map_parameters(self, site_name: str,
                        extracted_params: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Map extracted parameters to standardized format using site configuration with three-layer decoupling model
-
-        Args:
-            site_name: Name of the target site
-            extracted_params: Raw parameters extracted from source site
-
-        Returns:
-            Dict with standardized parameters
+        [修正] Map extracted parameters to standardized format.
+        This version ensures that global_mappings are correctly applied.
         """
-        # Load site configuration
         site_config = self.load_site_config(site_name)
-
-        # 保存调试信息
-        import os
-        tmp_dir = "data/tmp"
-        os.makedirs(tmp_dir, exist_ok=True)
-        with open(os.path.join(tmp_dir, "3_mapping_debug.txt"),
-                  "w",
-                  encoding="utf-8") as f:
-            f.write(f"源站点名称: {site_name}\n")
-            f.write(
-                f"实际加载的配置文件名: {site_name.lower().replace(' ', '_').replace('-', '_')}.yaml\n"
-            )
-            f.write(f"站点配置是否存在: {bool(site_config)}\n")
-            if site_config:
-                f.write("站点配置内容:\n")
-                import yaml
-                f.write(yaml.dump(site_config, allow_unicode=True))
-            else:
-                f.write("未找到站点配置\n")
-
-        # Check if the config uses the new three-layer structure
         source_parsers = site_config.get("source_parsers", {})
-        mappings = site_config.get("mappings", {})
-        standard_keys = source_parsers.get("standard_keys", {})
+        site_standard_keys = source_parsers.get("standard_keys", {})
 
-        # Initialize standardized parameters
-        standardized_params = {}
-
-        # Get source_params from extracted_params
         source_params = extracted_params.get("source_params", {})
+        title_components = extracted_params.get("title_components", [])
 
-        def standardize_raw_value(raw_value, param_key):
-            """
-            标准化原始值，主要用于视频编码、音频编码等参数的大小写统一
-            """
-            if not raw_value or not str(raw_value).strip():
-                return raw_value
+        # 辅助函数：将原始值转换为标准键的核心逻辑
+        def get_standard_key_for_value(raw_value: str, param_key: str) -> str:
+            if not raw_value:
+                return None
 
             value_str = str(raw_value).strip()
 
-            # 对于视频编码相关的参数，统一转换为标准格式
-            if param_key in ["video_codec", "codec"]:
-                # 常见的编码格式标准化
-                value_lower = value_str.lower()
-                # 特殊处理一些常见的编码格式，保持标准写法
-                if value_lower in ["h.264", "h264", "avc"]:
-                    return "H.264"
-                elif value_lower in ["h.265", "h265", "hevc"]:
-                    return "H.265"
-                elif value_lower in ["x264"]:
-                    return "x264"
-                elif value_lower in ["x265"]:
-                    return "x265"
-                else:
-                    return value_lower  # 其他情况转换为小写
+            # 优先级 1: 尝试在全局映射中查找
+            global_mappings = GLOBAL_MAPPINGS.get(param_key, {})
+            for source_text, standard_key in global_mappings.items():
+                # 使用精确匹配优先，然后是部分匹配
+                if source_text.lower() == value_str.lower():
+                    return standard_key
+            # 如果没有精确匹配，再尝试部分匹配（防止WiKi匹配到WiKibbs等）
+            for source_text, standard_key in global_mappings.items():
+                if source_text.lower() in value_str.lower():
+                    return standard_key
 
-            # 对于音频编码相关的参数，转换为标准格式
-            elif param_key in ["audio_codec"]:
-                value_lower = value_str.lower()
-                if value_lower in ["ac3", "dd"]:
-                    return "AC3"
-                elif value_lower in ["ddp", "e-ac3"]:
-                    return "DDP"
-                elif value_lower in ["truehd"]:
-                    return "TrueHD"
-                elif value_lower in ["dts"]:
-                    return "DTS"
-                elif value_lower in ["dtshd", "dts-hd"]:
-                    return "DTS-HD"
-                elif value_lower in ["flac"]:
-                    return "FLAC"
-                elif value_lower in ["aac"]:
-                    return "AAC"
-                else:
-                    return value_str  # 保持原样
+            # 优先级 2: 尝试在源站点特定的映射中查找
+            site_mappings = site_standard_keys.get(param_key, {})
+            for source_text, standard_key in site_mappings.items():
+                 if source_text.lower() in value_str.lower():
+                    return standard_key
 
-            # 对于制作组参数，保持原始大小写用于全局映射匹配
-            elif param_key in ["team"]:
-                return value_str  # 保持原始值，不进行大小写转换
+            # 如果都找不到，返回一个默认值或处理过的原始值
+            if param_key == "team":
+                return "team.other" # 制作组找不到映射时，明确返回 team.other
+            return value_str # 其他参数返回原始值
 
-            # 其他参数保持原样
-            return value_str
+        # 1. 分别从 source_params 和 title_components 提取并标准化
+        source_standard_values = {}
+        source_params_config = source_parsers.get("source_params", {})
+        for param_key, config in source_params_config.items():
+            raw_value = source_params.get(config.get("source_key"))
+            if raw_value:
+                source_standard_values[param_key] = get_standard_key_for_value(raw_value, param_key)
 
-        # Get title components from extracted_params
-        title_components = extracted_params.get("title_components", [])
+        title_standard_values = {}
+        title_components_config = source_parsers.get("title_components", {})
+        title_params = {item["key"]: item["value"] for item in title_components}
+        for param_key, config in title_components_config.items():
+            raw_value = title_params.get(config.get("source_key"))
+            if raw_value:
+                title_standard_values[param_key] = get_standard_key_for_value(raw_value, param_key)
 
-        # 如果配置文件使用新的三层结构，则使用新的映射逻辑
-        if source_parsers and mappings:
-            # 处理 source_params
-            source_params_config = source_parsers.get("source_params", {})
-            for param_key, param_config in source_params_config.items():
-                source_key = param_config.get("source_key")
-                if source_key and source_key in source_params:
-                    raw_value = source_params[source_key]
-                    # 保存原始值用于预览和标题构建
-                    if isinstance(raw_value, str):
-                        original_value = raw_value
-                    else:
-                        original_value = str(
-                            raw_value) if raw_value is not None else ""
+        # 2. 合并决策
+        final_standardized_params = source_standard_values.copy()
 
-                    # 标准化原始值用于映射
-                    standardized_raw_value = standardize_raw_value(
-                        raw_value, param_key)
-                    if standardized_raw_value and str(
-                            standardized_raw_value).strip():
-                        # 应用标准化键映射
-                        if param_key in standard_keys:
-                            param_mappings = standard_keys[param_key]
-                            mapped = False
-                            for source_text, standardized_key in param_mappings.items(
-                            ):
-                                # 改进的匹配逻辑，支持部分匹配
-                                if (str(source_text).strip().lower()
-                                        == str(standardized_raw_value).strip(
-                                        ).lower()
-                                        or str(source_text).strip().lower()
-                                        in str(standardized_raw_value).strip(
-                                        ).lower() or str(standardized_raw_value
-                                                         ).strip().lower()
-                                        in str(source_text).strip().lower()):
-                                    standardized_params[
-                                        param_key] = standardized_key
-                                    mapped = True
-                                    break
-                            if not mapped:
-                                # 如果没有找到匹配项，尝试使用全局映射
-                                if param_key in GLOBAL_MAPPINGS:
-                                    global_mappings = GLOBAL_MAPPINGS[
-                                        param_key]
-                                    for source_text, standardized_key in global_mappings.items(
-                                    ):
-                                        if (str(source_text).strip().lower()
-                                                == str(standardized_raw_value
-                                                       ).strip().lower() or
-                                                str(source_text).strip().lower(
-                                                ) in str(standardized_raw_value
-                                                         ).strip().lower()
-                                                or str(standardized_raw_value
-                                                       ).strip().lower()
-                                                in str(source_text).strip(
-                                                ).lower()):
-                                            standardized_params[
-                                                param_key] = standardized_key
-                                            mapped = True
-                                            break
+        for key, title_value in title_standard_values.items():
+            if not title_value: continue
 
-                                if not mapped:
-                                    # 为不同字段类型提供默认标准键
-                                    default_keys = {
-                                        "type": "category.other",
-                                        "medium": "medium.other",
-                                        "video_codec": "video.other",
-                                        "audio_codec": "audio.other",
-                                        "resolution": "resolution.other",
-                                        "team": "team.other",
-                                        "source": "source.other",
-                                        "processing": "processing.other"
-                                    }
-                                    standardized_params[
-                                        param_key] = default_keys.get(
-                                            param_key, standardized_raw_value)
-                        else:
-                            # 如果没有standard_keys配置，尝试使用全局映射
-                            mapped = False
-                            if param_key in GLOBAL_MAPPINGS:
-                                global_mappings = GLOBAL_MAPPINGS[param_key]
-                                for source_text, standardized_key in global_mappings.items(
-                                ):
-                                    if (str(source_text).strip().lower()
-                                            == str(standardized_raw_value
-                                                   ).strip().lower() or
-                                            str(source_text).strip().lower()
-                                            in str(standardized_raw_value
-                                                   ).strip().lower()
-                                            or str(standardized_raw_value).
-                                            strip().lower() in str(
-                                                source_text).strip().lower()):
-                                        standardized_params[
-                                            param_key] = standardized_key
-                                        mapped = True
-                                        break
+            # [核心修正] 制作组（team）总是优先使用标题中的信息
+            if key == 'team':
+                final_standardized_params[key] = title_value
+                continue
 
-                            if not mapped:
-                                # 如果没有找到匹配项，使用标准化后的原始值
-                                standardized_params[
-                                    param_key] = standardized_raw_value
+            # 音频编码使用择优逻辑
+            if key == 'audio_codec':
+                source_value = final_standardized_params.get(key)
+                title_rank = AUDIO_CODEC_HIERARCHY.get(title_value, 0)
+                source_rank = AUDIO_CODEC_HIERARCHY.get(source_value, -1)
+                if title_rank > source_rank:
+                    final_standardized_params[key] = title_value
+                continue
 
-            # 处理 title_components
-            title_components_config = source_parsers.get(
-                "title_components", {})
-            title_key_mapping = {}
-            for param_key, param_config in title_components_config.items():
-                source_key = param_config.get("source_key")
-                if source_key:
-                    title_key_mapping[source_key] = param_key
+            # 其他参数作为补充
+            if key not in final_standardized_params:
+                final_standardized_params[key] = title_value
 
-            # 应用标题组件参数（补充模式）
-            for component in title_components:
-                key = component.get("key")
-                value = component.get("value")
-                if key and value and key in title_key_mapping:
-                    standard_key = title_key_mapping[key]
-
-                    # 只有当source_params中没有该字段时才使用title_components中的值
-                    # 或者当source_params中的值为空/N/A时才使用title_components中的值
-                    source_value = standardized_params.get(standard_key)
-                    if not source_value or source_value == "N/A" or source_value == "None":
-                        # 标准化原始值
-                        standardized_value = standardize_raw_value(
-                            value, standard_key)
-                        # 应用标准化键映射
-                        if standard_key in standard_keys:
-                            param_mappings = standard_keys[standard_key]
-                            mapped = False
-                            for source_text, standardized_key in param_mappings.items(
-                            ):
-                                # 改进的匹配逻辑，支持部分匹配
-                                if (str(source_text).strip().lower() == str(
-                                        standardized_value).strip().lower()
-                                        or str(source_text).strip().lower()
-                                        in str(standardized_value).strip(
-                                        ).lower() or
-                                        str(standardized_value).strip().lower(
-                                        ) in str(source_text).strip().lower()):
-                                    # 添加调试信息
-                                    standardized_params[
-                                        standard_key] = standardized_key
-                                    mapped = True
-                                    break
-                            if not mapped:
-                                # 如果没有找到匹配项，尝试使用全局映射
-                                if standard_key in GLOBAL_MAPPINGS:
-                                    global_mappings = GLOBAL_MAPPINGS[
-                                        standard_key]
-                                    for source_text, standardized_key in global_mappings.items(
-                                    ):
-                                        if (str(source_text).strip().lower()
-                                                == str(standardized_value
-                                                       ).strip().lower() or
-                                                str(source_text).strip().lower(
-                                                ) in str(standardized_value
-                                                         ).strip().lower() or
-                                                str(standardized_value).strip(
-                                                ).lower() in str(source_text).
-                                                strip().lower()):
-                                            standardized_params[
-                                                standard_key] = standardized_key
-                                            mapped = True
-                                            break
-
-                                if not mapped:
-                                    # 如果仍然没有找到匹配项，使用标准化后的值
-                                    standardized_params[
-                                        standard_key] = standardized_value
-                        else:
-                            # 如果没有standard_keys配置，尝试使用全局映射
-                            mapped = False
-                            if standard_key in GLOBAL_MAPPINGS:
-                                global_mappings = GLOBAL_MAPPINGS[standard_key]
-                                for source_text, standardized_key in global_mappings.items(
-                                ):
-                                    if (str(source_text).strip().lower()
-                                            == str(standardized_value).strip(
-                                            ).lower() or
-                                            str(source_text).strip().lower()
-                                            in str(standardized_value).strip(
-                                            ).lower()
-                                            or str(standardized_value).strip(
-                                            ).lower() in str(
-                                                source_text).strip().lower()):
-                                        standardized_params[
-                                            standard_key] = standardized_key
-                                        mapped = True
-                                        break
-
-                            if not mapped:
-                                # 如果没有找到匹配项，使用标准化后的值
-                                standardized_params[
-                                    standard_key] = standardized_value
-
-        else:
-            # 如果配置文件使用旧的结构，则使用旧的映射逻辑（为了向后兼容）
-            # Get extractors configuration
-            extractors_config = site_config.get("extractors", {})
-
-            # 中文字段名到英文字段名的映射
-            chinese_to_english_mapping = {
-                "类型": "type",
-                "媒介": "medium",
-                "视频编码": "video_codec",
-                "音频编码": "audio_codec",
-                "分辨率": "resolution",
-                "制作组": "team",
-                "标签": "tags",
-                "产地": "source"
-            }
-
-            # Map source parameters
-            for chinese_key, english_key in chinese_to_english_mapping.items():
-                # Look for the parameter in source_params
-                raw_value = source_params.get(chinese_key)
-                if raw_value and str(raw_value).strip():
-                    # Find matching mapping in extractors_config
-                    if english_key in extractors_config:
-                        mappings = extractors_config[english_key]
-                        # Find matching mapping
-                        mapped = False
-                        for source_text, standardized_key in mappings.items():
-                            # 改进的匹配逻辑，支持部分匹配
-                            if (str(source_text).strip().lower()
-                                    == str(raw_value).strip().lower()
-                                    or str(source_text).strip().lower()
-                                    in str(raw_value).strip().lower()
-                                    or str(raw_value).strip().lower()
-                                    in str(source_text).strip().lower()):
-                                standardized_params[
-                                    english_key] = standardized_key
-                                mapped = True
-                                break
-                        # 如果没有找到匹配项，根据字段类型提供默认的标准键值
-                        if not mapped:
-                            # 为不同字段类型提供默认标准键
-                            default_keys = {
-                                "type": "category.other",
-                                "medium": "medium.other",
-                                "video_codec": "video.other",
-                                "audio_codec": "audio.other",
-                                "resolution": "resolution.other",
-                                "team": "team.other",
-                                "source": "source.other"
-                            }
-                            standardized_params[
-                                english_key] = default_keys.get(
-                                    english_key, raw_value)
-                    else:
-                        # 如果没有对应的extractors配置，根据字段类型提供默认标准键
-                        default_keys = {
-                            "type": "category.other",
-                            "medium": "medium.other",
-                            "video_codec": "video.other",
-                            "audio_codec": "audio.other",
-                            "resolution": "resolution.other",
-                            "team": "team.other",
-                            "source": "source.other"
-                        }
-                        standardized_params[english_key] = default_keys.get(
-                            english_key, raw_value)
-
-            # Map title components to standardized parameters (补充模式)
-            title_key_mapping = {
-                "主标题": "title",
-                "季集": "season_episode",
-                "年份": "year",
-                "剧集状态": "status",
-                "发布版本": "edition",
-                "分辨率": "resolution",
-                "媒介": "medium",
-                "片源平台": "platform",
-                "视频编码": "video_codec",  # 映射到video_codec
-                "视频格式": "video_format",
-                "HDR格式": "hdr_format",
-                "色深": "bit_depth",
-                "帧率": "frame_rate",
-                "音频编码": "audio_codec",
-                "制作组": "team"
-            }
-
-            # Apply title component parameter as补充 (只补充source_params中没有的字段)
-            for component in title_components:
-                key = component.get("key")
-                value = component.get("value")
-                if key and value and key in title_key_mapping:
-                    standard_key = title_key_mapping[key]
-
-                    # 只有当source_params中没有该字段时才使用title_components中的值
-                    # 或者当source_params中的值为空/N/A时才使用title_components中的值
-                    source_value = standardized_params.get(standard_key)
-                    if not source_value or source_value == "N/A" or source_value == "None":
-                        # Apply special transformations
-                        if key == "视频编码":
-                            value = str(value).upper() if value else value
-                        elif key == "制作组":
-                            value = str(value).upper() if value else value
-
-                        # 如果有extractors配置，进行映射
-                        if standard_key in extractors_config:
-                            mappings = extractors_config[standard_key]
-                            mapped = False
-                            for source_text, standardized_key in mappings.items(
-                            ):
-                                if (str(source_text).strip().lower()
-                                        == str(value).strip().lower()
-                                        or str(source_text).strip().lower()
-                                        in str(value).strip().lower()
-                                        or str(value).strip().lower()
-                                        in str(source_text).strip().lower()):
-                                    standardized_params[
-                                        standard_key] = standardized_key
-                                    mapped = True
-                                    break
-                            if not mapped:
-                                # 如果没有找到匹配项，尝试使用全局映射
-                                if standard_key in GLOBAL_MAPPINGS:
-                                    global_mappings = GLOBAL_MAPPINGS[
-                                        standard_key]
-                                    for source_text, standardized_key in global_mappings.items(
-                                    ):
-                                        if (str(source_text).strip().lower()
-                                                == str(value).strip().lower()
-                                                or str(source_text).strip(
-                                                ).lower()
-                                                in str(value).strip().lower()
-                                                or str(value).strip().lower()
-                                                in str(source_text).strip(
-                                                ).lower()):
-                                            standardized_params[
-                                                standard_key] = standardized_key
-                                            mapped = True
-                                            break
-
-                                if not mapped:
-                                    # 如果仍然没有找到匹配项，根据字段类型提供默认的标准键值
-                                    default_keys = {
-                                        "type": "category.other",
-                                        "medium": "medium.other",
-                                        "video_codec": "video.other",
-                                        "audio_codec": "audio.other",
-                                        "resolution": "resolution.other",
-                                        "team": "team.other",
-                                        "source": "source.other"
-                                    }
-                                    standardized_params[
-                                        standard_key] = default_keys.get(
-                                            standard_key, value)
-                        else:
-                            # 在新的三层解耦模型中，需要应用standard_keys映射
-                            if standard_key in standard_keys:
-                                param_mappings = standard_keys[standard_key]
-                                mapped = False
-                                for source_text, standardized_key in param_mappings.items(
-                                ):
-                                    # 改进的匹配逻辑，支持部分匹配
-                                    if (str(source_text).strip().lower()
-                                            == str(value).strip().lower() or
-                                            str(source_text).strip().lower()
-                                            in str(value).strip().lower()
-                                            or str(value).strip().lower() in
-                                            str(source_text).strip().lower()):
-                                        # 添加调试信息
-                                        standardized_params[
-                                            standard_key] = standardized_key
-                                        mapped = True
-                                        break
-                                if not mapped:
-                                    # 如果没有找到匹配项，尝试使用全局映射
-                                    if standard_key in GLOBAL_MAPPINGS:
-                                        global_mappings = GLOBAL_MAPPINGS[
-                                            standard_key]
-                                        for source_text, standardized_key in global_mappings.items(
-                                        ):
-                                            if (str(source_text).strip().lower(
-                                            ) == str(value).strip().lower()
-                                                    or str(source_text).strip(
-                                                    ).lower() in str(
-                                                        value).strip().lower()
-                                                    or
-                                                    str(value).strip().lower()
-                                                    in str(source_text).strip(
-                                                    ).lower()):
-                                                standardized_params[
-                                                    standard_key] = standardized_key
-                                                mapped = True
-                                                break
-
-                                    if not mapped:
-                                        # 如果仍然没有找到匹配项，应用默认标准化键
-                                        default_keys = {
-                                            "type": "category.other",
-                                            "medium": "medium.other",
-                                            "video_codec": "video.other",
-                                            "audio_codec": "audio.other",
-                                            "resolution": "resolution.other",
-                                            "team": "team.other",
-                                            "source": "source.other",
-                                            "processing": "processing.other"
-                                        }
-                                        default_key = default_keys.get(
-                                            standard_key, value)
-                                        standardized_params[
-                                            standard_key] = default_key
-                            else:
-                                # 如果没有standard_keys配置，尝试使用全局映射
-                                mapped = False
-                                if standard_key in GLOBAL_MAPPINGS:
-                                    global_mappings = GLOBAL_MAPPINGS[
-                                        standard_key]
-                                    for source_text, standardized_key in global_mappings.items(
-                                    ):
-                                        if (str(source_text).strip().lower()
-                                                == str(value).strip().lower()
-                                                or str(source_text).strip(
-                                                ).lower()
-                                                in str(value).strip().lower()
-                                                or str(value).strip().lower()
-                                                in str(source_text).strip(
-                                                ).lower()):
-                                            standardized_params[
-                                                standard_key] = standardized_key
-                                            mapped = True
-                                            break
-
-                                if not mapped:
-                                    # 如果没有找到匹配项，应用默认标准化键
-                                    default_keys = {
-                                        "type": "category.other",
-                                        "medium": "medium.other",
-                                        "video_codec": "video.other",
-                                        "audio_codec": "audio.other",
-                                        "resolution": "resolution.other",
-                                        "team": "team.other",
-                                        "source": "source.other",
-                                        "processing": "processing.other"
-                                    }
-                                    default_key = default_keys.get(
-                                        standard_key, value)
-                                    standardized_params[
-                                        standard_key] = default_key
-
-        # Special handling for tags - combine from different sources
-        combined_tags = set()
-
-        # Add tags from source_params
-        source_tags = source_params.get("标签", [])
-        if source_tags:
-            if isinstance(source_tags, list):
-                combined_tags.update(source_tags)
-            else:
-                combined_tags.add(source_tags)
-
-        # Add tags from mediainfo if available
-        mediainfo_text = extracted_params.get("mediainfo", "")
-        if mediainfo_text:
-            from utils import extract_tags_from_mediainfo
-            tags_from_mediainfo = set(
-                extract_tags_from_mediainfo(mediainfo_text))
-            combined_tags.update(tags_from_mediainfo)
-
-        if combined_tags:
-            standardized_params["tags"] = list(combined_tags)
-
-        # Handle IMDb and Douban links
-        intro_data = extracted_params.get("intro", {})
-        if intro_data.get("imdb_link"):
-            standardized_params["imdb_link"] = intro_data["imdb_link"]
-        if intro_data.get("douban_link"):
-            standardized_params["douban_link"] = intro_data["douban_link"]
-
-        # Handle description information
-        standardized_params["description"] = {
-            "statement": intro_data.get("statement", ""),
-            "poster": intro_data.get("poster", ""),
-            "body": intro_data.get("body", ""),
-            "screenshots": intro_data.get("screenshots", "")
-        }
-
-        return standardized_params
+        return final_standardized_params
