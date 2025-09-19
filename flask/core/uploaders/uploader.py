@@ -351,13 +351,13 @@ class BaseUploader(ABC):
 
         return mapped_params
 
-    def _build_title(self) -> str:
+    def _build_title(self, standardized_params: dict) -> str:
         """
         根据 title_components 参数，按照站点的规则拼接主标题。
-        使用原始参数值而不是标准化键
+        此方法现在直接使用传入的、已正确标准化的参数。
         """
-        # 使用标准化参数构建标题，但优先使用原始值
-        standardized_params = self._parse_source_data()
+        # 不再自己调用解析函数，因为这会导致使用错误的(目标站)配置进行二次标准化
+        # standardized_params = self._parse_source_data()
 
         logger.info(f"开始拼接主标题，标准化参数: {standardized_params}")
 
@@ -495,14 +495,22 @@ class BaseUploader(ABC):
         """
         logger.info(f"正在为 {self.site_name} 站点适配上传参数...")
         try:
-            # 1. 解析源数据为标准化参数
-            standardized_params = self._parse_source_data()
+            # 1. 直接从 upload_data 中获取由 migrator 准备好的标准化参数
+            standardized_params = self.upload_data.get("standardized_params",
+                                                       {})
+
+            # 添加回退和警告逻辑，以防 standardized_params 未被传递
+            if not standardized_params:
+                logger.warning(
+                    "在 upload_data 中未找到 'standardized_params'，回退到旧的、可能不准确的解析逻辑。请检查前端请求。"
+                )
+                standardized_params = self._parse_source_data()
 
             # 2. 将标准化参数映射为站点特定参数
             mapped_params = self._map_standardized_params(standardized_params)
 
             description = self._build_description()
-            final_main_title = self._build_title()
+            final_main_title = self._build_title(standardized_params)
             logger.info("参数适配完成。")
 
             # 3. 准备通用的 form_data
@@ -659,11 +667,13 @@ class BaseUploader(ABC):
             # 测试模式：模拟成功响应
             logger.info("测试模式：跳过实际发布，模拟成功响应")
             success_url = f"https://demo.site.test/details.php?id=12345&uploaded=1&test=true"
-            response = type('MockResponse', (), {
-                'url': success_url,
-                'text': f'<html><body>发布成功！种子ID: 12345 - TEST MODE</body></html>',
-                'raise_for_status': lambda: None
-            })()
+            response = type(
+                'MockResponse', (), {
+                    'url': success_url,
+                    'text':
+                    f'<html><body>发布成功！种子ID: 12345 - TEST MODE</body></html>',
+                    'raise_for_status': lambda: None
+                })()
 
             # 4. 处理响应（这是通用的成功/失败判断逻辑）
             # 可以通过 "钩子" 方法处理个别站点的URL修正
@@ -730,12 +740,16 @@ class BaseUploader(ABC):
             from .uploader import create_uploader
             uploader = create_uploader(site_name, site_info, upload_payload)
 
-            # 构建预览参数
-            standardized_params = uploader._parse_source_data()
+            # 直接从 payload 获取正确的 standardized_params，而不是重新解析
+            standardized_params = upload_payload.get("standardized_params", {})
+            if not standardized_params:
+                logger.warning("预览参数构建：在 payload 中未找到 'standardized_params'。")
+                # 在预览场景下，即使没有也继续，让用户在前端看到可能不完整的数据
+
             mapped_params = uploader._map_standardized_params(
                 standardized_params)
             description = uploader._build_description()
-            final_main_title = uploader._build_title()
+            final_main_title = uploader._build_title(standardized_params)
 
             # 准备通用的 form_data（与execute_upload中一致）
             form_data = {
@@ -793,7 +807,11 @@ class CommonUploader(BaseUploader):
         """
         实现抽象方法，使用基类的通用映射逻辑
         """
-        standardized_params = self._parse_source_data()
+        # 这个方法在新的流程下，其内部逻辑已合并到 execute_upload 中
+        # 它本身不应再被直接调用，但为保持结构完整性，我们让它返回正确映射后的参数
+        standardized_params = self.upload_data.get("standardized_params", {})
+        if not standardized_params:
+            standardized_params = self._parse_source_data()  # Fallback
         mapped_params = self._map_standardized_params(standardized_params)
         return mapped_params
 
