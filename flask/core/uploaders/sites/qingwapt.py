@@ -12,7 +12,7 @@ class QingwaptUploader(BaseUploader):
         """
         import re
         from loguru import logger
-        
+
         components_list = self.upload_data.get("title_components", [])
         components = {
             item["key"]: item["value"]
@@ -23,7 +23,7 @@ class QingwaptUploader(BaseUploader):
         # QingwAPT 特定的标题顺序
         order = [
             "主标题",
-            "季集", 
+            "季集",
             "年份",
             "剧集状态",
             "分辨率",
@@ -61,8 +61,8 @@ class QingwaptUploader(BaseUploader):
             final_title = f"{main_part} {release_group}"
         else:
             # QingwAPT 使用不同的分隔符
-            final_title = f"{main_part} @{release_group}"
-            
+            final_title = f"{main_part}-{release_group}"
+
         final_title = re.sub(r"\s{2,}", " ", final_title).strip()
         logger.info(f"拼接完成的主标题: {final_title}")
         return final_title

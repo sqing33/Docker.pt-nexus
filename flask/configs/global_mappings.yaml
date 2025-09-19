@@ -218,6 +218,10 @@ global_standard_keys:
     "CatEDU": "team.catedu"
     "GodDramas": "team.goddramas"
     "StarfallWeb": "team.starfallweb"
+    "CarPT": "team.carpt"
+    "WiKi": "team.wiki"
+    "CMCT": "team.cmct"
+    "M-team": "team.mteam"
     "N/A": "team.other"
     "Other": "team.other"
 
