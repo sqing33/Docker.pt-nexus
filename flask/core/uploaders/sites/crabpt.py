@@ -260,10 +260,19 @@ class CrabptUploader(SpecialUploader):
 
         logger.info(f"正在为 {self.site_name} 站点适配上传参数...")
         try:
-            # 1. 调用由子类实现的 _map_parameters 方法
+            # 1. 直接从 upload_data 中获取由 migrator 准备好的标准化参数
+            standardized_params = self.upload_data.get("standardized_params", {})
+
+            # 添加回退和警告逻辑，以防 standardized_params 未被传递
+            if not standardized_params:
+                logger.warning(
+                    "在 upload_data 中未找到 'standardized_params'，回退到旧的、可能不准确的解析逻辑。请检查前端请求。"
+                )
+
+            # 2. 调用由子类实现的 _map_parameters 方法
             mapped_params = self._map_parameters()
             description = self._build_description()
-            final_main_title = self._build_title()
+            final_main_title = self._build_title(standardized_params)
             logger.info("参数适配完成。")
 
             # 2. 准备完整的 form_data，包含 CrabPT 站点需要的所有参数

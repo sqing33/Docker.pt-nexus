@@ -68,7 +68,9 @@ class DatabaseManager:
             cursor.execute(f"DESCRIBE {table_name}")
             columns = {row['Field'].lower() for row in cursor.fetchall()}
         elif self.db_type == 'postgresql':
-            cursor.execute("SELECT column_name FROM information_schema.columns WHERE table_name = %s AND table_schema = 'public'", (table_name,))
+            cursor.execute(
+                "SELECT column_name FROM information_schema.columns WHERE table_name = %s AND table_schema = 'public'",
+                (table_name, ))
             columns = {row['column_name'].lower() for row in cursor.fetchall()}
         else:  # sqlite
             cursor.execute(f"PRAGMA table_info({table_name})")
@@ -123,7 +125,9 @@ class DatabaseManager:
             cursor.execute(f"DESCRIBE {table_name}")
             columns = {row['Field'].lower() for row in cursor.fetchall()}
         elif self.db_type == 'postgresql':
-            cursor.execute("SELECT column_name FROM information_schema.columns WHERE table_name = %s AND table_schema = 'public'", (table_name,))
+            cursor.execute(
+                "SELECT column_name FROM information_schema.columns WHERE table_name = %s AND table_schema = 'public'",
+                (table_name, ))
             columns = {row['column_name'].lower() for row in cursor.fetchall()}
         else:  # sqlite
             cursor.execute(f"PRAGMA table_info({table_name})")
@@ -195,7 +199,7 @@ class DatabaseManager:
             cookie = site_data.get("cookie")
             if cookie:
                 cookie = cookie.strip()
-            
+
             params = (
                 site_data.get("site"),
                 site_data.get("nickname"),
@@ -238,7 +242,7 @@ class DatabaseManager:
             cookie = site_data.get("cookie")
             if cookie:
                 cookie = cookie.strip()
-            
+
             params = (
                 site_data.get("nickname"),
                 site_data.get("base_url"),
@@ -305,14 +309,13 @@ class DatabaseManager:
     def _add_missing_columns(self, conn, cursor):
         """检查并向 sites 表添加缺失的列，实现自动化的数据库迁移。"""
         logging.info("正在检查 'sites' 表的结构完整性...")
-        columns_to_add = [("cookie", "TEXT", "TEXT"),
-                          ("passkey", "TEXT", "VARCHAR(255)"),
-                          ("migration", "INTEGER DEFAULT 0",
-                           "TINYINT DEFAULT 0"),
-                          ("proxy", "INTEGER NOT NULL DEFAULT 0",
-                           "TINYINT NOT NULL DEFAULT 0"),
-                          ("speed_limit", "INTEGER DEFAULT 0",
-                           "INTEGER DEFAULT 0")]
+        columns_to_add = [
+            ("cookie", "TEXT", "TEXT"), ("passkey", "TEXT", "VARCHAR(255)"),
+            ("migration", "INTEGER DEFAULT 0", "TINYINT DEFAULT 0"),
+            ("proxy", "INTEGER NOT NULL DEFAULT 0",
+             "TINYINT NOT NULL DEFAULT 0"),
+            ("speed_limit", "INTEGER DEFAULT 0", "INTEGER DEFAULT 0")
+        ]
 
         if self.db_type == "mysql":
             meta_cursor = conn.cursor()
@@ -346,8 +349,10 @@ class DatabaseManager:
                 if col_name.lower() not in existing_columns:
                     # PostgreSQL type mappings
                     postgresql_type = {
-                        "TINYINT DEFAULT 0": "SMALLINT DEFAULT 0",
-                        "TINYINT NOT NULL DEFAULT 0": "SMALLINT NOT NULL DEFAULT 0",
+                        "TINYINT DEFAULT 0":
+                        "SMALLINT DEFAULT 0",
+                        "TINYINT NOT NULL DEFAULT 0":
+                        "SMALLINT NOT NULL DEFAULT 0",
                     }.get(mysql_type, mysql_type)
                     logging.info(
                         f"在 PostgreSQL 'sites' 表中发现缺失列: '{col_name}'。正在添加...")
@@ -374,36 +379,42 @@ class DatabaseManager:
             # 读取 JSON 文件
             with open(SITES_DATA_FILE, 'r', encoding='utf-8') as f:
                 sites_data = json.load(f)
-            
+
             logging.info(f"从 {SITES_DATA_FILE} 加载了 {len(sites_data)} 个站点")
-            
+
             # 获取数据库连接
             conn = self._get_connection()
             cursor = self._get_cursor(conn)
-            
+
             try:
-                # 获取数据库中现有的所有站点
-                cursor.execute("SELECT id, site, nickname, base_url FROM sites")
+                # [修改] 查询时额外获取 speed_limit 字段，用于后续逻辑判断
+                cursor.execute(
+                    "SELECT id, site, nickname, base_url, speed_limit FROM sites"
+                )
                 existing_sites = {}
                 for row in cursor.fetchall():
                     # 以site、nickname、base_url为键存储现有站点
-                    existing_sites[row['site']] = dict(row)
-                    existing_sites[row['nickname']] = dict(row)
-                    existing_sites[row['base_url']] = dict(row)
-                
+                    # 将整行数据存起来，方便后续获取 speed_limit
+                    row_dict = dict(row)
+                    existing_sites[row['site']] = row_dict
+                    if row['nickname']:
+                        existing_sites[row['nickname']] = row_dict
+                    if row['base_url']:
+                        existing_sites[row['base_url']] = row_dict
+
                 updated_count = 0
                 added_count = 0
-                
+
                 # 遍历 JSON 中的站点数据
                 for site_info in sites_data:
                     site_name = site_info.get('site')
                     nickname = site_info.get('nickname')
                     base_url = site_info.get('base_url')
-                    
+
                     if not site_name or not nickname or not base_url:
                         logging.warning(f"跳过无效的站点数据: {site_info}")
                         continue
-                    
+
                     # 检查站点是否已存在（基于site、nickname或base_url中的任何一个）
                     existing_site = None
                     if site_name in existing_sites:
@@ -412,84 +423,89 @@ class DatabaseManager:
                         existing_site = existing_sites[nickname]
                     elif base_url in existing_sites:
                         existing_site = existing_sites[base_url]
-                    
+
                     if existing_site:
-                        # 根据数据库类型使用正确的标识符引用符
+                        # --- [核心修改逻辑] ---
+                        # 获取数据库中当前的 speed_limit
+                        db_speed_limit = existing_site.get('speed_limit', 0)
+                        # 获取 JSON 文件中的 speed_limit
+                        json_speed_limit = site_info.get('speed_limit', 0)
+
+                        # 默认使用数据库中现有的值
+                        final_speed_limit = db_speed_limit
+
+                        # 如果数据库值为0，且JSON值不为0，则采纳JSON的值
+                        if db_speed_limit == 0 and json_speed_limit != 0:
+                            final_speed_limit = json_speed_limit
+                        # --- [核心修改逻辑结束] ---
+
+                        # 构建更新语句，不包含 cookie, passkey, proxy
                         if self.db_type == "postgresql":
-                            # 更新现有站点（包括speed_limit）
-                            cursor.execute("""
+                            update_sql = """
                                 UPDATE sites
                                 SET site = %s, nickname = %s, base_url = %s, special_tracker_domain = %s,
                                     "group" = %s, migration = %s, speed_limit = %s
                                 WHERE id = %s
-                            """, (
-                                site_info.get('site'),
-                                site_info.get('nickname'),
-                                site_info.get('base_url'),
-                                site_info.get('special_tracker_domain'),
-                                site_info.get('group'),
-                                site_info.get('migration', 0),
-                                site_info.get('speed_limit', 0),
-                                existing_site['id']
-                            ))
+                            """
                         else:
-                            # 更新现有站点（包括speed_limit）
-                            cursor.execute("""
+                            update_sql = """
                                 UPDATE sites
                                 SET site = %s, nickname = %s, base_url = %s, special_tracker_domain = %s,
                                     `group` = %s, migration = %s, speed_limit = %s
                                 WHERE id = %s
-                            """, (
+                            """
+
+                        # 执行更新，传入经过逻辑判断后的 final_speed_limit
+                        cursor.execute(
+                            update_sql,
+                            (
                                 site_info.get('site'),
                                 site_info.get('nickname'),
                                 site_info.get('base_url'),
                                 site_info.get('special_tracker_domain'),
                                 site_info.get('group'),
                                 site_info.get('migration', 0),
-                                site_info.get('speed_limit', 0),
-                                existing_site['id']
-                            ))
+                                final_speed_limit,  # 使用条件判断后的最终值
+                                existing_site['id']))
                         updated_count += 1
                         logging.debug(f"更新了站点: {site_name}")
                     else:
                         # 根据数据库类型使用正确的标识符引用符
                         if self.db_type == "postgresql":
                             # 添加新站点
-                            cursor.execute("""
+                            cursor.execute(
+                                """
                                 INSERT INTO sites 
                                 (site, nickname, base_url, special_tracker_domain, "group", migration, speed_limit)
                                 VALUES (%s, %s, %s, %s, %s, %s, %s)
-                            """, (
-                                site_info.get('site'),
-                                site_info.get('nickname'),
-                                site_info.get('base_url'),
-                                site_info.get('special_tracker_domain'),
-                                site_info.get('group'),
-                                site_info.get('migration', 0),
-                                site_info.get('speed_limit', 0)
-                            ))
+                            """, (site_info.get('site'),
+                                  site_info.get('nickname'),
+                                  site_info.get('base_url'),
+                                  site_info.get('special_tracker_domain'),
+                                  site_info.get('group'),
+                                  site_info.get('migration', 0),
+                                  site_info.get('speed_limit', 0)))
                         else:
                             # 添加新站点
-                            cursor.execute("""
+                            cursor.execute(
+                                """
                                 INSERT INTO sites 
                                 (site, nickname, base_url, special_tracker_domain, `group`, migration, speed_limit)
                                 VALUES (%s, %s, %s, %s, %s, %s, %s)
-                            """, (
-                                site_info.get('site'),
-                                site_info.get('nickname'),
-                                site_info.get('base_url'),
-                                site_info.get('special_tracker_domain'),
-                                site_info.get('group'),
-                                site_info.get('migration', 0),
-                                site_info.get('speed_limit', 0)
-                            ))
+                            """, (site_info.get('site'),
+                                  site_info.get('nickname'),
+                                  site_info.get('base_url'),
+                                  site_info.get('special_tracker_domain'),
+                                  site_info.get('group'),
+                                  site_info.get('migration', 0),
+                                  site_info.get('speed_limit', 0)))
                         added_count += 1
                         logging.debug(f"添加了新站点: {site_name}")
-                
+
                 conn.commit()
                 logging.info(f"站点同步完成: {updated_count} 个更新, {added_count} 个新增")
                 return True
-                
+
             except Exception as e:
                 conn.rollback()
                 logging.error(f"同步站点数据时出错: {e}", exc_info=True)
@@ -499,64 +515,10 @@ class DatabaseManager:
                     cursor.close()
                 if conn:
                     conn.close()
-                    
+
         except Exception as e:
             logging.error(f"读取站点数据文件时出错: {e}", exc_info=True)
             return False
-
-        if self.db_type == "mysql":
-            meta_cursor = conn.cursor()
-            meta_cursor.execute(
-                "SELECT column_name FROM INFORMATION_SCHEMA.COLUMNS WHERE table_schema = %s AND table_name = 'sites'",
-                (self.mysql_config.get("database"), ),
-            )
-            existing_columns = {
-                row[0].lower()
-                for row in meta_cursor.fetchall()
-            }
-            meta_cursor.close()
-            for col_name, _, mysql_type in columns_to_add:
-                if col_name.lower() not in existing_columns:
-                    logging.info(
-                        f"在 MySQL 'sites' 表中发现缺失列: '{col_name}'。正在添加...")
-                    cursor.execute(
-                        f"ALTER TABLE `sites` ADD COLUMN `{col_name}` {mysql_type}"
-                    )
-        elif self.db_type == "postgresql":
-            meta_cursor = conn.cursor(cursor_factory=RealDictCursor)
-            meta_cursor.execute(
-                "SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'sites'"
-            )
-            existing_columns = {
-                row["column_name"].lower()
-                for row in meta_cursor.fetchall()
-            }
-            meta_cursor.close()
-            for col_name, _, mysql_type in columns_to_add:
-                if col_name.lower() not in existing_columns:
-                    # PostgreSQL type mappings
-                    postgresql_type = {
-                        "TINYINT DEFAULT 0": "SMALLINT DEFAULT 0",
-                        "TINYINT NOT NULL DEFAULT 0": "SMALLINT NOT NULL DEFAULT 0",
-                    }.get(mysql_type, mysql_type)
-                    logging.info(
-                        f"在 PostgreSQL 'sites' 表中发现缺失列: '{col_name}'。正在添加...")
-                    cursor.execute(
-                        f"ALTER TABLE sites ADD COLUMN {col_name} {postgresql_type}"
-                    )
-        else:  # SQLite
-            cursor.execute("PRAGMA table_info(sites)")
-            existing_columns = {
-                row["name"].lower()
-                for row in cursor.fetchall()
-            }
-            for col_name, sqlite_type, _ in columns_to_add:
-                if col_name.lower() not in existing_columns:
-                    logging.info(
-                        f"在 SQLite 'sites' 表中发现缺失列: '{col_name}'。正在添加...")
-                    cursor.execute(
-                        f"ALTER TABLE sites ADD COLUMN {col_name} {sqlite_type}"
-                    )
 
     def init_db(self):
         """确保数据库表存在，并根据 sites_data.json 同步站点数据。"""
@@ -649,34 +611,37 @@ class DatabaseManager:
                                   在此时间之前的原始数据将被聚合和删除。
         """
         from datetime import datetime, timedelta
-        
+
         # 计算聚合和清理的边界时间
         cutoff_time = datetime.now() - timedelta(hours=retention_hours)
-        
+
         # 添加特殊日期保护逻辑
         # 确保不会聚合最近3天的数据，以防止数据丢失
         # 修改为按日计算，聚合到三天前的00:00:00
         now = datetime.now()
-        safe_cutoff = (now - timedelta(days=3)).replace(hour=0, minute=0, second=0, microsecond=0)
+        safe_cutoff = (now - timedelta(days=3)).replace(hour=0,
+                                                        minute=0,
+                                                        second=0,
+                                                        microsecond=0)
         if cutoff_time > safe_cutoff:
             logging.info(f"为防止数据丢失，调整聚合截止时间为 {safe_cutoff}")
             cutoff_time = safe_cutoff
-            
+
         cutoff_time_str = cutoff_time.strftime("%Y-%m-%d %H:%M:%S")
         ph = self.get_placeholder()
-        
+
         conn = None
         cursor = None
-        
+
         try:
             conn = self._get_connection()
             cursor = self._get_cursor(conn)
-            
+
             # 开始事务
             if self.db_type == "postgresql":
                 # PostgreSQL 需要显式开始事务
                 cursor.execute("BEGIN")
-            
+
             # 根据数据库类型生成时间截断函数
             if self.db_type == "mysql":
                 time_group_fn = "DATE_FORMAT(stat_datetime, '%Y-%m-%d %H:00:00')"
@@ -684,7 +649,7 @@ class DatabaseManager:
                 time_group_fn = "DATE_TRUNC('hour', stat_datetime)"
             else:  # sqlite
                 time_group_fn = "STRFTIME('%Y-%m-%d %H:00:00', stat_datetime)"
-            
+
             # 执行聚合查询：从原始表中按小时分组计算聚合值
             aggregate_query = f"""
                 SELECT 
@@ -699,16 +664,16 @@ class DatabaseManager:
                 WHERE stat_datetime < {ph}
                 GROUP BY hour_group, downloader_id
             """
-            
-            cursor.execute(aggregate_query, (cutoff_time_str,))
+
+            cursor.execute(aggregate_query, (cutoff_time_str, ))
             aggregated_rows = cursor.fetchall()
-            
+
             # 如果没有数据需要聚合，则直接返回
             if not aggregated_rows:
                 logging.info("没有需要聚合的数据。")
                 conn.commit()
                 return
-            
+
             # 批量插入聚合数据到 traffic_stats_hourly 表中
             # 使用 UPSERT 机制处理重复数据
             if self.db_type == "mysql":
@@ -749,31 +714,35 @@ class DatabaseManager:
                     avg_download_speed = ((traffic_stats_hourly.avg_download_speed * traffic_stats_hourly.samples) + (excluded.avg_download_speed * excluded.samples)) / (traffic_stats_hourly.samples + excluded.samples),
                     samples = traffic_stats_hourly.samples + excluded.samples
                 """
-            
+
             # 准备插入参数
             upsert_params = [
-                (
-                    row["hour_group"] if isinstance(row, dict) else row[0],
-                    row["downloader_id"] if isinstance(row, dict) else row[1],
-                    int(row["total_uploaded"] if isinstance(row, dict) else row[2]),
-                    int(row["total_downloaded"] if isinstance(row, dict) else row[3]),
-                    int(row["avg_upload_speed"] if isinstance(row, dict) else row[4]),
-                    int(row["avg_download_speed"] if isinstance(row, dict) else row[5]),
-                    int(row["samples"] if isinstance(row, dict) else row[6])
-                )
+                (row["hour_group"] if isinstance(row, dict) else row[0],
+                 row["downloader_id"] if isinstance(row, dict) else row[1],
+                 int(row["total_uploaded"] if isinstance(row, dict) else row[2]
+                     ),
+                 int(row["total_downloaded"] if isinstance(row, dict
+                                                           ) else row[3]),
+                 int(row["avg_upload_speed"] if isinstance(row, dict
+                                                           ) else row[4]),
+                 int(row["avg_download_speed"] if isinstance(row, dict
+                                                             ) else row[5]),
+                 int(row["samples"] if isinstance(row, dict) else row[6]))
                 for row in aggregated_rows
             ]
-            
+
             cursor.executemany(upsert_sql, upsert_params)
-            
+
             # 删除已聚合的原始数据
             delete_query = f"DELETE FROM traffic_stats WHERE stat_datetime < {ph}"
-            cursor.execute(delete_query, (cutoff_time_str,))
-            
+            cursor.execute(delete_query, (cutoff_time_str, ))
+
             # 提交事务
             conn.commit()
-            
-            logging.info(f"成功聚合 {len(aggregated_rows)} 条小时数据，并清理了 {cursor.rowcount} 条原始数据。")
+
+            logging.info(
+                f"成功聚合 {len(aggregated_rows)} 条小时数据，并清理了 {cursor.rowcount} 条原始数据。"
+            )
         except Exception as e:
             # 回滚事务
             if conn:
