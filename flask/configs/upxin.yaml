@@ -6,7 +6,7 @@ site_name: "Upxin"
 # 表单字段定义 - 定义站点上传表单中各字段的标识符
 form_fields:
   medium: "medium_sel"
-  codec: "codec_sel"
+  video_codec: "codec_sel"
   audio_codec: "audiocodec_sel"
   resolution: "standard_sel"
   team: "team_sel"
@@ -115,17 +115,17 @@ source_parsers:
       "Other": "medium.other"
 
     video_codec:
-      "H.265": "codec.h265"
-      "HEVC": "codec.h265"
-      "x265": "codec.x265"
-      "H.264": "codec.h264"
-      "AVC": "codec.h264"
-      "x264": "codec.x264"
-      "VC-1": "codec.vc1"
-      "XviD": "codec.xvid"
-      "MPEG-2": "codec.mpeg2"
-      "MPEG": "codec.mpeg"
-      "Other": "codec.other"
+      "H.265": "video.h265"
+      "HEVC": "video.h265"
+      "x265": "video.x265"
+      "H.264": "video.h264"
+      "AVC": "video.h264"
+      "x264": "video.x264"
+      "VC-1": "video.vc1"
+      "XviD": "video.xvid"
+      "MPEG-2": "video.mpeg2"
+      "MPEG": "video.mpeg"
+      "Other": "video.other"
 
     audio_codec:
       "DTS:X": "audio.dtsx"
@@ -228,15 +228,15 @@ mappings:
     "medium.other": "0"
     "default": "0"
 
-  codec:
-    "codec.h264": "1"
-    "codec.h265": "14"
-    "codec.x264": "16"
-    "codec.vc1": "2"
-    "codec.xvid": "3"
-    "codec.mpeg2": "18"
-    "codec.mpeg": "18"
-    "codec.other": "5"
+  video_codec:
+    "video.h264": "1"
+    "video.h265": "14"
+    "video.x264": "16"
+    "video.vc1": "2"
+    "video.xvid": "3"
+    "video.mpeg2": "18"
+    "video.mpeg": "18"
+    "video.other": "5"
     "default": "5"
 
   audio_codec:

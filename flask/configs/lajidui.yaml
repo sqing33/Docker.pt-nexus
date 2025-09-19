@@ -7,7 +7,7 @@ site_name: "Lajidui"
 form_fields:
   medium: "medium_sel[4]"
   processing: "processing_sel[4]"
-  codec: "codec_sel[4]"
+  video_codec: "codec_sel[4]"
   resolution: "standard_sel[4]"
   audio_codec: "audiocodec_sel[4]"
   source: "source_sel[4]"
@@ -119,13 +119,13 @@ source_parsers:
       "Other": "format.other"
 
     video_codec:
-      "AV1": "codec.av1"
-      "H.265": "codec.h265"
-      "H.264": "codec.h264"
-      "VC-1": "codec.vc1"
-      "Xvid": "codec.xvid"
-      "MPEG-2": "codec.mpeg2"
-      "Other": "codec.other"
+      "AV1": "video.av1"
+      "H.265": "video.h265"
+      "H.264": "video.h264"
+      "VC-1": "video.vc1"
+      "Xvid": "video.xvid"
+      "MPEG-2": "video.mpeg2"
+      "Other": "video.other"
 
     resolution:
       "8k": "resolution.r8k"
@@ -240,14 +240,14 @@ mappings:
     "format.other": "17"
     "default": "17"
 
-  codec:
-    "codec.av1": "6"
-    "codec.h265": "7"
-    "codec.h264": "1"
-    "codec.vc1": "2"
-    "codec.xvid": "3"
-    "codec.mpeg2": "4"
-    "codec.other": "5"
+  video_codec:
+    "video.av1": "6"
+    "video.h265": "7"
+    "video.h264": "1"
+    "video.vc1": "2"
+    "video.xvid": "3"
+    "video.mpeg2": "4"
+    "video.other": "5"
     "default": "5"
 
   resolution:

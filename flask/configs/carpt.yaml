@@ -6,7 +6,7 @@ site_name: "CarPT"
 # 表单字段定义 - 定义站点上传表单中各字段的标识符
 form_fields:
   medium: "medium_sel[4]"
-  codec: "codec_sel[4]"
+  video_codec: "codec_sel[4]"
   audio_codec: "audiocodec_sel[4]"
   resolution: "standard_sel[4]"
   source: "source_sel[4]"
@@ -87,12 +87,12 @@ source_parsers:
       "Other": "medium.other"
 
     video_codec:
-      "H.264/AVC/x264": "codec.h264"
-      "H.265/HEVC/x265": "codec.h265"
-      "MPEG-2": "codec.mpeg2"
-      "VC-1": "codec.vc1"
-      "Xvid": "codec.xvid"
-      "Other": "codec.other"
+      "H.264/AVC/x264": "video.h264"
+      "H.265/HEVC/x265": "video.h265"
+      "MPEG-2": "video.mpeg2"
+      "VC-1": "video.vc1"
+      "Xvid": "video.xvid"
+      "Other": "video.other"
 
     audio_codec:
       "TrueHD": "audio.truehd"
@@ -144,13 +144,13 @@ mappings:
     "medium.other": "6"
     "default": "6"
 
-  codec:
-    "codec.h264": "1"
-    "codec.h265": "2"
-    "codec.mpeg2": "3"
-    "codec.vc1": "4"
-    "codec.xvid": "5"
-    "codec.other": "6"
+  video_codec:
+    "video.h264": "1"
+    "video.h265": "2"
+    "video.mpeg2": "3"
+    "video.vc1": "4"
+    "video.xvid": "5"
+    "video.other": "6"
     "default": "6"
 
   audio_codec:

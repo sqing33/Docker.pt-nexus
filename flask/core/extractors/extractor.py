@@ -607,7 +607,7 @@ class ParameterMapper:
                                     default_keys = {
                                         "type": "category.other",
                                         "medium": "medium.other",
-                                        "video_codec": "codec.other",
+                                        "video_codec": "video.other",
                                         "audio_codec": "audio.other",
                                         "resolution": "resolution.other",
                                         "team": "team.other",
@@ -745,7 +745,7 @@ class ParameterMapper:
             chinese_to_english_mapping = {
                 "类型": "type",
                 "媒介": "medium",
-                "视频编码": "codec",
+                "视频编码": "video_codec",
                 "音频编码": "audio_codec",
                 "分辨率": "resolution",
                 "制作组": "team",
@@ -781,7 +781,7 @@ class ParameterMapper:
                             default_keys = {
                                 "type": "category.other",
                                 "medium": "medium.other",
-                                "codec": "codec.other",
+                                "video_codec": "video.other",
                                 "audio_codec": "audio.other",
                                 "resolution": "resolution.other",
                                 "team": "team.other",
@@ -795,7 +795,7 @@ class ParameterMapper:
                         default_keys = {
                             "type": "category.other",
                             "medium": "medium.other",
-                            "codec": "codec.other",
+                            "video_codec": "video.other",
                             "audio_codec": "audio.other",
                             "resolution": "resolution.other",
                             "team": "team.other",
@@ -881,7 +881,7 @@ class ParameterMapper:
                                     default_keys = {
                                         "type": "category.other",
                                         "medium": "medium.other",
-                                        "codec": "codec.other",
+                                        "video_codec": "video.other",
                                         "audio_codec": "audio.other",
                                         "resolution": "resolution.other",
                                         "team": "team.other",
@@ -935,7 +935,7 @@ class ParameterMapper:
                                         default_keys = {
                                             "type": "category.other",
                                             "medium": "medium.other",
-                                            "video_codec": "codec.other",
+                                            "video_codec": "video.other",
                                             "audio_codec": "audio.other",
                                             "resolution": "resolution.other",
                                             "team": "team.other",
@@ -972,7 +972,7 @@ class ParameterMapper:
                                     default_keys = {
                                         "type": "category.other",
                                         "medium": "medium.other",
-                                        "video_codec": "codec.other",
+                                        "video_codec": "video.other",
                                         "audio_codec": "audio.other",
                                         "resolution": "resolution.other",
                                         "team": "team.other",

@@ -6,7 +6,7 @@ site_name: "Novahd"
 # 表单字段定义 - 定义站点上传表单中各字段的标识符
 form_fields:
   medium: "medium_sel[4]"
-  codec: "codec_sel[4]"
+  video_codec: "codec_sel[4]"
   audio_codec: "audiocodec_sel[4]"
   resolution: "standard_sel[4]"
   team: "team_sel[4]"
@@ -89,12 +89,12 @@ source_parsers:
       "Blu-ray": "medium.bluray"
 
     video_codec:
-      "H264/x264/AVC": "codec.h264"
-      "VC-1": "codec.vc1"
-      "Xvid": "codec.xvid"
-      "MPEG-2": "codec.mpeg2"
-      "Other": "codec.other"
-      "H265/HEVC/x265": "codec.h265"
+      "H264/x264/AVC": "video.h264"
+      "VC-1": "video.vc1"
+      "Xvid": "video.xvid"
+      "MPEG-2": "video.mpeg2"
+      "Other": "video.other"
+      "H265/HEVC/x265": "video.h265"
 
     audio_codec:
       "FLAC": "audio.flac"
@@ -167,13 +167,13 @@ mappings:
     "medium.bluray": "1"
     "default": "16"
 
-  codec:
-    "codec.h264": "1"
-    "codec.vc1": "2"
-    "codec.xvid": "3"
-    "codec.mpeg2": "4"
-    "codec.other": "5"
-    "codec.h265": "6"
+  video_codec:
+    "video.h264": "1"
+    "video.vc1": "2"
+    "video.xvid": "3"
+    "video.mpeg2": "4"
+    "video.other": "5"
+    "video.h265": "6"
     "default": "5"
 
   audio_codec:

@@ -7,7 +7,7 @@ site_name: "HDKyl"
 form_fields:
   processing: "processing_sel[4]"
   medium: "medium_sel[4]"
-  codec: "codec_sel[4]"
+  video_codec: "codec_sel[4]"
   audio_codec: "audiocodec_sel[4]"
   resolution: "standard_sel[4]"
   source: "source_sel[4]"
@@ -111,13 +111,13 @@ source_parsers:
       "Other": "medium.other"
 
     video_codec:
-      "H.265/HEVC": "codec.h265"
-      "H.264/AVC": "codec.h264"
-      "VC-1": "codec.vc1"
-      "Xvid": "codec.xvid"
-      "MPEG-2/MPEG-4": "codec.mpeg"
-      "AV1": "codec.av1"
-      "Other": "codec.other"
+      "H.265/HEVC": "video.h265"
+      "H.264/AVC": "video.h264"
+      "VC-1": "video.vc1"
+      "Xvid": "video.xvid"
+      "MPEG-2/MPEG-4": "video.mpeg"
+      "AV1": "video.av1"
+      "Other": "video.other"
 
     audio_codec:
       "DTS-HD MA": "audio.dts_hd_ma"
@@ -243,15 +243,15 @@ mappings:
     "medium.other": "34"
     "default": "29"
 
-  codec:
-    "codec.h265": "6"
-    "codec.x265": "6"
-    "codec.h264": "1"
-    "codec.vc1": "2"
-    "codec.xvid": "3"
-    "codec.mpeg": "4"
-    "codec.av1": "7"
-    "codec.other": "5"
+  video_codec:
+    "video.h265": "6"
+    "video.x265": "6"
+    "video.h264": "1"
+    "video.vc1": "2"
+    "video.xvid": "3"
+    "video.mpeg": "4"
+    "video.av1": "7"
+    "video.other": "5"
     "default": "5"
 
   audio_codec:

@@ -6,7 +6,7 @@ site_name: "CrabPT"
 # 表单字段定义 - 定义站点上传表单中各字段的标识符
 form_fields:
   medium: "source_sel[4]"
-  codec: "codec_sel[4]"
+  video_codec: "codec_sel[4]"
   audio_codec: "audiocodec_sel[4]"
   resolution: "standard_sel[4]"
   team: "team_sel[4]"
@@ -104,14 +104,14 @@ source_parsers:
       "Xvid": "medium.xvid"
 
     video_codec:
-      "AV1": "codec.av1"
-      "VP9": "codec.vp9"
-      "H.266/VVC": "codec.h266"
-      "HEVC/H.265/x265": "codec.h265"
-      "AVC/H.264/x264": "codec.h264"
-      "Other": "codec.other"
-      "VC-1": "codec.vc1"
-      "MPEG": "codec.mpeg"
+      "AV1": "video.av1"
+      "VP9": "video.vp9"
+      "H.266/VVC": "video.h266"
+      "HEVC/H.265/x265": "video.h265"
+      "AVC/H.264/x264": "video.h264"
+      "Other": "video.other"
+      "VC-1": "video.vc1"
+      "MPEG": "video.mpeg"
 
     audio_codec:
       "ALAC": "audio.alac"
@@ -218,15 +218,15 @@ mappings:
     "medium.xvid": "11"
     "default": "1"
 
-  codec:
-    "codec.av1": "6"
-    "codec.vp9": "5"
-    "codec.h266": "4"
-    "codec.h265": "3"
-    "codec.h264": "2"
-    "codec.other": "1"
-    "codec.vc1": "14"
-    "codec.mpeg": "15"
+  video_codec:
+    "video.av1": "6"
+    "video.vp9": "5"
+    "video.h266": "4"
+    "video.h265": "3"
+    "video.h264": "2"
+    "video.other": "1"
+    "video.vc1": "14"
+    "video.mpeg": "15"
     "default": "1"
 
   audio_codec:

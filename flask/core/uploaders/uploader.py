@@ -288,11 +288,11 @@ class BaseUploader(ABC):
         # 处理视频编码映射
         codec_str = standardized_params.get("video_codec", "")
         codec_field = self.config.get("form_fields",
-                                      {}).get("codec", "codec_sel[4]")
-        codec_mapping = self.mappings.get("codec", {})
+                                      {}).get("video_codec", "codec_sel[4]")
+        codec_mapping = self.mappings.get("video_codec", {})
 
         # 对于视频编码，使用优先级匹配 ["x265", "h265"]
-        if codec_str == "codec.x265":
+        if codec_str == "video.x265":
             # 创建优先级列表：先尝试x265，如果失败则回退到h265
             codec_priority = ["x265", "X265", "h265", "H.265", "HEVC"]
             codec_result = self._find_mapping(codec_mapping, codec_priority)

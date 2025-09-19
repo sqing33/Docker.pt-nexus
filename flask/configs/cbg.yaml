@@ -6,7 +6,7 @@ site_name: "Cangbao"
 # 表单字段定义 - 定义站点上传表单中各字段的标识符
 form_fields:
   medium: "medium_sel[4]"
-  codec: "codec_sel[4]"
+  video_codec: "codec_sel[4]"
   audio_codec: "audiocodec_sel[4]"
   resolution: "standard_sel[4]"
   team: "team_sel[4]"
@@ -89,15 +89,15 @@ source_parsers:
       "VCD": "medium.vcd"
 
     video_codec:
-      "AV1": "codec.av1"
-      "HEVC": "codec.h265"
-      "VP9": "codec.vp9"
-      "AVC": "codec.h264"
-      "VC-1": "codec.vc1"
-      "MPEG-4": "codec.mpeg4"
-      "MPEG-2": "codec.mpeg2"
-      "MPEG-1": "codec.mpeg1"
-      "H.261": "codec.h261"
+      "AV1": "video.av1"
+      "HEVC": "video.h265"
+      "VP9": "video.vp9"
+      "AVC": "video.h264"
+      "VC-1": "video.vc1"
+      "MPEG-4": "video.mpeg4"
+      "MPEG-2": "video.mpeg2"
+      "MPEG-1": "video.mpeg1"
+      "H.261": "video.h261"
 
     audio_codec:
       "PCM": "audio.pcm"
@@ -151,16 +151,16 @@ mappings:
     "medium.vcd": "1"
     "default": "0"
 
-  codec:
-    "codec.av1": "9"
-    "codec.h265": "8"
-    "codec.vp9": "7"
-    "codec.h264": "6"
-    "codec.vc1": "5"
-    "codec.mpeg4": "4"
-    "codec.mpeg2": "3"
-    "codec.mpeg1": "2"
-    "codec.h261": "1"
+  video_codec:
+    "video.av1": "9"
+    "video.h265": "8"
+    "video.vp9": "7"
+    "video.h264": "6"
+    "video.vc1": "5"
+    "video.mpeg4": "4"
+    "video.mpeg2": "3"
+    "video.mpeg1": "2"
+    "video.h261": "1"
     "default": "0"
 
   audio_codec:

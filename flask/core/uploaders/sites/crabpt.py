@@ -115,8 +115,10 @@ class CrabptUploader(SpecialUploader):
             # 视频编码映射
             codec_str = title_params.get("视频编码", "")
             codec_field = self.config.get("form_fields",
-                                          {}).get("codec", "codec_sel[4]")
-            codec_mapping = self.config.get("mappings", {}).get("codec", {})
+                                          {}).get("video_codec",
+                                                  "codec_sel[4]")
+            codec_mapping = self.config.get("mappings",
+                                            {}).get("video_codec", {})
             mapped[codec_field] = self._find_mapping(codec_mapping, codec_str)
 
             # 音频编码映射
@@ -178,13 +180,14 @@ class CrabptUploader(SpecialUploader):
         """
         intro = self.upload_data.get("intro", {})
         description = (f"{intro.get('statement', '')}\n"
-                f"{intro.get('poster', '')}\n"
-                f"{intro.get('body', '')}\n"
-                f"{intro.get('screenshots', '')}")
+                       f"{intro.get('poster', '')}\n"
+                       f"{intro.get('body', '')}\n"
+                       f"{intro.get('screenshots', '')}")
 
         return description
 
-    def _save_upload_parameters(self, form_data, mapped_params, final_main_title, description):
+    def _save_upload_parameters(self, form_data, mapped_params,
+                                final_main_title, description):
         """
         保存上传参数到tmp目录，用于调试和测试
         """
@@ -212,10 +215,14 @@ class CrabptUploader(SpecialUploader):
                 "final_main_title": final_main_title,
                 "description": description,
                 "upload_data_summary": {
-                    "subtitle": self.upload_data.get("subtitle", ""),
-                    "imdb_link": self.upload_data.get("imdb_link", ""),
-                    "mediainfo_length": len(self.upload_data.get("mediainfo", "")),
-                    "modified_torrent_path": self.upload_data.get("modified_torrent_path", ""),
+                    "subtitle":
+                    self.upload_data.get("subtitle", ""),
+                    "imdb_link":
+                    self.upload_data.get("imdb_link", ""),
+                    "mediainfo_length":
+                    len(self.upload_data.get("mediainfo", "")),
+                    "modified_torrent_path":
+                    self.upload_data.get("modified_torrent_path", ""),
                 }
             }
 
@@ -242,20 +249,29 @@ class CrabptUploader(SpecialUploader):
 
             # 2. 准备完整的 form_data，包含 CrabPT 站点需要的所有参数
             form_data = {
-                "name": final_main_title,
-                "small_descr": self.upload_data.get("subtitle", ""),
-                "url": self.upload_data.get("imdb_link", "") or "",
-                "descr": description,
-                "technical_info": self.upload_data.get("mediainfo", ""),
-                "uplver": "yes",  # 默认匿名上传
+                "name":
+                final_main_title,
+                "small_descr":
+                self.upload_data.get("subtitle", ""),
+                "url":
+                self.upload_data.get("imdb_link", "") or "",
+                "descr":
+                description,
+                "technical_info":
+                self.upload_data.get("mediainfo", ""),
+                "uplver":
+                "yes",  # 默认匿名上传
                 # 添加 CrabPT 站点可能需要的额外参数
-                "douban_link": self.upload_data.get("douban_link", ""),
-                "original_main_title": self.upload_data.get("original_main_title", ""),
+                "douban_link":
+                self.upload_data.get("douban_link", ""),
+                "original_main_title":
+                self.upload_data.get("original_main_title", ""),
                 **mapped_params,  # 合并子类映射的特殊参数
             }
 
             # 保存所有参数到文件用于调试和测试
-            self._save_upload_parameters(form_data, mapped_params, final_main_title, description)
+            self._save_upload_parameters(form_data, mapped_params,
+                                         final_main_title, description)
 
             # 调用父类的execute_upload方法继续执行上传
             return super().execute_upload()

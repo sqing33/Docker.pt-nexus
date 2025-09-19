@@ -6,7 +6,7 @@ site_name: "Luckpt"
 # 表单字段定义 - 定义站点上传表单中各字段的标识符
 form_fields:
   medium: "medium_sel[4]"
-  codec: "codec_sel[4]"
+  video_codec: "codec_sel[4]"
   audio_codec: "audiocodec_sel[4]"
   resolution: "standard_sel[4]"
   team: "team_sel[4]"
@@ -94,13 +94,13 @@ source_parsers:
       "Other": "medium.other"
 
     video_codec:
-      "H.264/AVC": "codec.h264"
-      "H.265/HEVC": "codec.h265"
-      "VC-1": "codec.vc1"
-      "MPEG-2": "codec.mpeg2"
-      "AV1": "codec.av1"
-      "MPEG-4/XviD": "codec.xvid"
-      "Other": "codec.other"
+      "H.264/AVC": "video.h264"
+      "H.265/HEVC": "video.h265"
+      "VC-1": "video.vc1"
+      "MPEG-2": "video.mpeg2"
+      "AV1": "video.av1"
+      "MPEG-4/XviD": "video.xvid"
+      "Other": "video.other"
 
     audio_codec:
       "FLAC": "audio.flac"
@@ -181,14 +181,14 @@ mappings:
     "medium.other": "13"
     "default": "13"
 
-  codec:
-    "codec.h264": "1"
-    "codec.h265": "6"
-    "codec.vc1": "3"
-    "codec.mpeg2": "4"
-    "codec.av1": "2"
-    "codec.xvid": "12"
-    "codec.other": "5"
+  video_codec:
+    "video.h264": "1"
+    "video.h265": "6"
+    "video.vc1": "3"
+    "video.mpeg2": "4"
+    "video.av1": "2"
+    "video.xvid": "12"
+    "video.other": "5"
     "default": "5"
 
   audio_codec:
