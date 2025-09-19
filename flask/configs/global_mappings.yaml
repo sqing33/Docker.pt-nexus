@@ -1,0 +1,256 @@
+# 全局标准化键映射配置
+# 定义从原始文本到标准化键的全局映射规则
+
+global_standard_keys:
+  # 类型映射
+  type:
+    "电影": "category.movie"
+    "电视剧": "category.tv_series"
+    "综艺": "category.tv_shows"
+    "动漫": "category.animation"
+    "MV": "category.music_video"
+    "HQ音乐": "category.music"
+    "音乐": "category.music"
+    "电子书": "category.ebook"
+    "纪录片": "category.documentaries"
+    "体育": "category.sports"
+    "短剧": "category.playlet"
+    "学习": "category.study"
+    "软件": "category.software"
+    "Game/游戏": "category.game"
+    "电子书": "category.ebook"
+
+    "其他": "category.other"
+    "Animation": "category.animation"
+    "Movie": "category.movie"
+    "TV Series": "category.tv_series"
+    "TV Shows": "category.tv_shows"
+    "Documentaries": "category.documentaries"
+    "Music Video": "category.music_video"
+    "Music": "category.music"
+    "Ebook": "category.ebook"
+    "Sports": "category.sports"
+    "Other": "category.other"
+
+  # 媒介映射
+  medium:
+    "Blu-ray": "medium.bluray"
+    "UHD Blu-ray": "medium.uhd_bluray"
+    "Remux": "medium.remux"
+    "Encode": "medium.encode"
+    "MiniBD": "medium.minibd"
+    "WEB-DL": "medium.webdl"
+    "WEBRip": "medium.webrip"
+    "HDTV": "medium.hdtv"
+    "DVD": "medium.dvd"
+    "DVDR": "medium.dvdr"
+    "CD": "medium.cd"
+    "Track": "medium.track"
+    "Other": "medium.other"
+
+  # 视频编码映射
+  video_codec:
+    "H.264/AVC": "codec.h264"
+    "H.265/HEVC": "codec.h265"
+    "x264": "codec.h264"
+    "h264": "codec.h264"
+    "x265": "codec.x265"  # 保留x265作为独立的编码类型
+    "h265": "codec.h265"
+    "VC-1": "codec.vc1"
+    "MPEG-2": "codec.mpeg2"
+    "AV1": "codec.av1"
+    "VP9": "codec.vp9"
+    "Xvid": "codec.xvid"
+    "Other": "codec.other"
+
+  # 音频编码映射
+  audio_codec:
+    "FLAC": "audio.flac"
+    "APE": "audio.ape"
+    "DTS": "audio.dts"
+    "DTS-HD": "audio.dts_hd_ma"
+    "DTS-HD MA": "audio.dts_hd_ma"
+    "DTS-HD HR": "audio.dts_hd_hr"
+    "DTS:X": "audio.dtsx"
+    "DTS-X": "audio.dtsx"
+    "MP3": "audio.mp3"
+    "OGG": "audio.ogg"
+    "AAC": "audio.aac"
+    "AC3": "audio.ac3"
+    "DD": "audio.ac3"
+    "DD/AC3": "audio.ac3"
+    "TrueHD": "audio.truehd"
+    "TrueHD Atmos": "audio.truehd_atmos"
+    "DDP": "audio.ddp"
+    "DDP/E-AC3": "audio.ddp"
+    "MPEG": "audio.mpeg"
+    "E-AC3": "audio.ddp"
+    "Opus": "audio.opus"
+    "LPCM": "audio.lpcm"
+    "M4A": "audio.m4a"
+    "WAV": "audio.wav"
+    "Other": "audio.other"
+
+  # 分辨率映射
+  resolution:
+    "8K": "resolution.r8k"
+    "4K": "resolution.r4k"
+    "2160p": "resolution.r2160p"
+    "1080p": "resolution.r1080p"
+    "1080i": "resolution.r1080i"
+    "720p": "resolution.r720p"
+    "480p": "resolution.r480p"
+    "Other": "resolution.other"
+
+  #  地区映射
+  source:
+    # 中国相关地区
+    "中国": "source.china"
+    "中国大陆": "source.china"
+    "CN": "source.china"
+    "CN/中国": "source.china"
+    "内地": "source.china"
+    "大陆": "source.china"
+
+    # 香港
+    "香港": "source.hongkong"
+    "HK": "source.hongkong"
+    "HK/香港": "source.hongkong"
+    "中国香港": "source.hongkong"
+
+    # 台湾
+    "台湾": "source.taiwan"
+    "TW": "source.taiwan"
+    "TW/台湾": "source.taiwan"
+    "中国台湾": "source.taiwan"
+
+    # 美国
+    "美国": "source.usa"
+    "USA": "source.usa"
+    "US": "source.usa"
+    "US/美国": "source.usa"
+    "America": "source.usa"
+
+    # 日本
+    "日本": "source.japan"
+    "JP": "source.japan"
+    "JPN": "source.japan"
+    "JPN/日本": "source.japan"
+
+    # 韩国
+    "韩国": "source.korea"
+    "KR": "source.korea"
+    "Korea": "source.korea"
+    "Kr/韩国": "source.korea"
+
+    # 英国
+    "英国": "source.uk"
+    "UK": "source.uk"
+    "GB": "source.uk"
+    "GB/英国": "source.uk"
+
+    # 法国
+    "法国": "source.france"
+    "FR": "source.france"
+    "FR/法国": "source.france"
+
+    # 德国
+    "德国": "source.germany"
+    "DE": "source.germany"
+    "DE/德国": "source.germany"
+
+    # 其他欧洲国家
+    "欧洲": "source.europe"
+    "EU": "source.europe"
+    "EU/欧洲": "source.europe"
+
+    # 印度
+    "印度": "source.india"
+    "IN": "source.india"
+    "IN/印度": "source.india"
+
+    # 俄罗斯
+    "俄罗斯": "source.russia"
+    "RU": "source.russia"
+    "RU/俄罗斯": "source.russia"
+
+    # 加拿大
+    "加拿大": "source.canada"
+    "CA": "source.canada"
+    "CA/加拿大": "source.canada"
+
+    # 巴西
+    "巴西": "source.brazil"
+    "BR": "source.brazil"
+    "BR/巴西": "source.brazil"
+
+    # 瑞典
+    "瑞典": "source.sweden"
+    "SE": "source.sweden"
+    "SE/瑞典": "source.sweden"
+
+    # 丹麦
+    "丹麦": "source.denmark"
+    "DK": "source.denmark"
+    "DK/丹麦": "source.denmark"
+
+    # 泰国
+    "泰国": "source.thailand"
+    "TH": "source.thailand"
+    "TH/泰国": "source.thailand"
+
+    # 其他
+    "其他": "source.other"
+    "Other": "source.other"
+    "Other/其他": "source.other"
+
+  # 制作组映射
+  team:
+    "CSPT": "team.cspt"
+    "CSWEB": "team.csweb"
+    "HSPT": "team.hspt"
+    "HSWEB": "team.hsweb"
+    "HDK": "team.hdk"
+    "HDKWeb": "team.hdkweb"
+    "HDKGame": "team.hdkgame"
+    "Kylin": "team.kylin"
+    "RedLeaves": "team.redleaves"
+    "CatEDU": "team.catedu"
+    "GodDramas": "team.goddramas"
+    "StarfallWeb": "team.starfallweb"
+    "N/A": "team.other"
+    "Other": "team.other"
+
+  # 标签映射
+  tag:
+      "官种": "tag.官种"
+      "驻站": "tag.驻站"
+      "禁转": "tag.禁转"
+      "首发": "tag.首发"
+      "DIY": "tag.DIY"
+      "国语": "tag.国语"
+      "中字": "tag.中字"
+      "HDR": "tag.HDR"
+      "独家": "tag.独家"
+      "自压": "tag.自压"
+      "重制": "tag.重制"
+      "外挂字幕": "tag.外挂字幕"
+      "Remux": "tag.Remux"
+      "大包": "tag.大包"
+      "超分": "tag.超分"
+      "补帧": "tag.补帧"
+      "粤语": "tag.粤语"
+      "特效": "tag.特效"
+      "杜比": "tag.杜比"
+      "喜剧": "tag.喜剧"
+      "分集": "tag.分集"
+      "完结": "tag.完结"
+      "儿童": "tag.儿童"
+      "特效字幕": "tag.特效字幕"
+      "英字": "tag.英字"
+      "中字": "tag.中字"
+      "Dolby Vision": "tag.Dolby_Vision"
+      "Blu-ray": "tag.Blu-ray"
+      "LIVE现场": "tag.LIVE现场"
+      "4 K": "tag.4K"
+      "default": null

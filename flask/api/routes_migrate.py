@@ -167,17 +167,29 @@ def migrate_publish():
         # 特殊提取器处理已移至 migrator.py 中
 
         # 动态创建针对本次发布的 Migrator 实例
+        # 修复：添加缺失的search_term和save_path参数
         migrator = TorrentMigrator(source_info,
                                    target_info,
+                                   search_term=context.get(
+                                       "source_torrent_id", ""),
+                                   save_path=upload_data.get("save_path", "")
+                                   or upload_data.get("savePath", ""),
                                    config_manager=config_manager)
 
         # 使用特殊提取器处理数据（如果需要）
         source_torrent_id = context.get("source_torrent_id", "unknown")
-        print(f"在publish阶段处理数据，源站点: {source_site_name}, 种子ID: {source_torrent_id}")
-        print(f"调用apply_special_extractor_if_needed前，upload_data中的mediainfo长度: {len(upload_data.get('mediainfo', '')) if upload_data.get('mediainfo') else 0}")
-        upload_data = migrator.apply_special_extractor_if_needed(upload_data, source_torrent_id)
+        print(
+            f"在publish阶段处理数据，源站点: {source_site_name}, 种子ID: {source_torrent_id}"
+        )
+        print(
+            f"调用apply_special_extractor_if_needed前，upload_data中的mediainfo长度: {len(upload_data.get('mediainfo', '')) if upload_data.get('mediainfo') else 0}"
+        )
+        upload_data = migrator.apply_special_extractor_if_needed(
+            upload_data, source_torrent_id)
         print(f"publish阶段数据处理完成")
-        print(f"调用apply_special_extractor_if_needed后，upload_data中的mediainfo长度: {len(upload_data.get('mediainfo', '')) if upload_data.get('mediainfo') else 0}")
+        print(
+            f"调用apply_special_extractor_if_needed后，upload_data中的mediainfo长度: {len(upload_data.get('mediainfo', '')) if upload_data.get('mediainfo') else 0}"
+        )
 
         # 1. 修改种子文件
         main_title = upload_data.get("original_main_title", "torrent")
@@ -521,7 +533,8 @@ def update_preview_data():
             # 3. 如果分辨率为空，尝试从MediaInfo中提取分辨率
             resolution_from_title = title_params.get("分辨率")
             if not resolution_from_title or resolution_from_title == "N/A":
-                resolution_from_mediainfo = extract_resolution_from_mediainfo(review_data["mediainfo"])
+                resolution_from_mediainfo = extract_resolution_from_mediainfo(
+                    review_data["mediainfo"])
                 if resolution_from_mediainfo:
                     # 更新标题参数中的分辨率
                     title_params["分辨率"] = resolution_from_mediainfo
@@ -532,13 +545,18 @@ def update_preview_data():
                             break
                     else:
                         # 如果没有找到分辨率项，添加一个新的
-                        title_components.append({"key": "分辨率", "value": resolution_from_mediainfo})
+                        title_components.append({
+                            "key":
+                            "分辨率",
+                            "value":
+                            resolution_from_mediainfo
+                        })
 
             # 3. 重新拼接主标题
             order = [
                 "主标题",
-                "年份",
                 "季集",
+                "年份",
                 "剧集状态",
                 "发布版本",
                 "分辨率",
@@ -600,31 +618,77 @@ def update_preview_data():
                 "标签 (综合)": all_tags,
             }
 
-            # 7. 提取映射前的原始参数用于前端展示
+            # 使用新的Extractor和ParameterMapper来处理参数映射
+            source_site_name = context.get("source_site_name", "")
+
+            # 创建一个模拟的HTML soup对象用于提取器
+            # 由于我们已经有提取的数据，我们可以创建一个简单的soup对象
+            from bs4 import BeautifulSoup
+            mock_html = f"<html><body><h1 id='top'>{review_data.get('title', '')}</h1></body></html>"
+            mock_soup = BeautifulSoup(mock_html, 'html.parser')
+
+            # 初始化提取器
+            from core.extractors.extractor import Extractor, ParameterMapper
+            extractor = Extractor()
+            mapper = ParameterMapper()
+
+            # 创建提取数据结构，模拟从网页提取的数据
+            extracted_data = {
+                "title": review_data.get("title", ""),
+                "subtitle": review_data.get("subtitle", ""),
+                "intro": review_data.get("intro", {}),
+                "mediainfo": review_data.get("mediainfo", ""),
+                "source_params": review_data.get("source_params", {}),
+                "title_components": title_components
+            }
+
+            # 使用ParameterMapper映射参数
+            standardized_params = mapper.map_parameters(
+                source_site_name, extracted_data)
+
+            # 保存参数到文件用于调试
+            import os
+            tmp_dir = "data/tmp"
+            os.makedirs(tmp_dir, exist_ok=True)
+
+            # 保存标准化参数到文件
+            with open(os.path.join(tmp_dir, "2.txt"), "w",
+                      encoding="utf-8") as f:
+                f.write(f"源站点名称: {source_site_name}\n")
+                f.write("最终标准化参数（使用新映射系统）:\n")
+                for key, value in standardized_params.items():
+                    f.write(f"{key}: {value}\n")
+                # 添加调试信息
+                f.write(f"\n调试信息:\n")
+                f.write(
+                    f"video_codec值: {standardized_params.get('video_codec', '未找到')}\n"
+                )
+                f.write(f"codec值: {standardized_params.get('codec', '未找到')}\n")
+
+            # 用于预览显示标准化键对应的内容
+            preview_video_codec = standardized_params.get(
+                "video_codec", "codec.other")
+            preview_audio_codec = standardized_params.get(
+                "audio_codec", "audio.other")
+            preview_medium = standardized_params.get("medium", "medium.other")
+            preview_resolution = standardized_params.get(
+                "resolution", "resolution.other")
+            preview_team = standardized_params.get("team", "team.other")
+            preview_type = standardized_params.get("type", "category.other")
+            preview_source = standardized_params.get("source", "N/A")
+
             raw_params_for_preview = {
-                "final_main_title":
-                preview_title,
-                "subtitle":
-                review_data["subtitle"],
-                "imdb_link":
-                review_data["imdb_link"],
-                "type":
-                review_data["source_params"].get("类型") or "N/A",
-                "medium":
-                title_params.get("媒介", "N/A"),
-                "video_codec":
-                title_params.get("视频编码", "N/A"),
-                "audio_codec":
-                title_params.get("音频编码", "N/A"),
-                "resolution":
-                title_params.get("分辨率", "N/A"),
-                "release_group":
-                title_params.get("制作组", "N/A"),
-                "source":
-                review_data["source_params"].get("产地", "N/A")
-                or title_params.get("片源平台", "N/A"),
-                "tags":
-                list(all_tags)
+                "final_main_title": preview_title,
+                "subtitle": review_data["subtitle"],
+                "imdb_link": review_data["imdb_link"],
+                "type": preview_type,
+                "medium": preview_medium,
+                "video_codec": preview_video_codec,
+                "audio_codec": preview_audio_codec,
+                "resolution": preview_resolution,
+                "release_group": preview_team,
+                "source": preview_source,
+                "tags": list(all_tags)
             }
 
             # 更新 review_data 中的预览参数

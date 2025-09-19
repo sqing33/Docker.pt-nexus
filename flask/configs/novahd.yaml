@@ -1,0 +1,241 @@
+# Novahd站点的配置文件
+# 基于三层解耦模型重构，包含source_parsers和标准化的mappings
+
+site_name: "Novahd"
+
+# 表单字段定义 - 定义站点上传表单中各字段的标识符
+form_fields:
+  medium: "medium_sel[4]"
+  codec: "codec_sel[4]"
+  audio_codec: "audiocodec_sel[4]"
+  resolution: "standard_sel[4]"
+  team: "team_sel[4]"
+  category: "type"  # 类别字段映射到type参数
+
+# 标准化键映射 - 定义源文本到标准化键的映射规则
+# source_parsers部分：定义如何从原始数据解析出标准化参数
+source_parsers:
+  source_params:
+    type:
+      source_key: "类型"
+    medium:
+      source_key: "媒介"
+    video_codec:
+      source_key: "视频编码"
+    audio_codec:
+      source_key: "音频编码"
+    resolution:
+      source_key: "分辨率"
+    team:
+      source_key: "制作组"
+
+  title_components:
+    title:
+      source_key: "主标题"
+    season_episode:
+      source_key: "季集"
+    year:
+      source_key: "年份"
+    status:
+      source_key: "剧集状态"
+    edition:
+      source_key: "发布版本"
+    resolution:
+      source_key: "分辨率"
+    platform:
+      source_key: "片源平台"
+    medium:
+      source_key: "媒介"
+    video_codec:
+      source_key: "视频编码"
+    video_format:
+      source_key: "视频格式"
+    hdr_format:
+      source_key: "HDR格式"
+    bit_depth:
+      source_key: "色深"
+    frame_rate:
+      source_key: "帧率"
+    audio_codec:
+      source_key: "音频编码"
+    team:
+      source_key: "制作组"
+
+  # 标准化键映射规则（从原始文本到标准化键）
+  standard_keys:
+    type:
+      "Movies/电影": "category.movie"
+      "TV Series/电视剧": "category.tv_series"
+      "TV Shows/综艺": "category.tv_shows"
+      "Documentaries/记录片": "category.documentaries"
+      "Animations/动漫、动画": "category.animation"
+      "MV/演唱会": "category.music_video"
+      "Sports/体育": "category.sports"
+      "Music/音乐": "category.music"
+      "Othes/其他": "category.other"
+
+    medium:
+      "DVD": "medium.dvd"
+      "WEB-DL": "medium.webdl"
+      "UHD Blu-ray": "medium.uhd_bluray"
+      "Track": "medium.track"
+      "CD": "medium.cd"
+      "DVDR": "medium.dvdr"
+      "HDTV": "medium.hdtv"
+      "MiniBD": "medium.minibd"
+      "Encode": "medium.encode"
+      "Remux": "medium.remux"
+      "HD DVD": "medium.hddvd"
+      "Blu-ray": "medium.bluray"
+
+    video_codec:
+      "H264/x264/AVC": "codec.h264"
+      "VC-1": "codec.vc1"
+      "Xvid": "codec.xvid"
+      "MPEG-2": "codec.mpeg2"
+      "Other": "codec.other"
+      "H265/HEVC/x265": "codec.h265"
+
+    audio_codec:
+      "FLAC": "audio.flac"
+      "APE": "audio.ape"
+      "DTS": "audio.dts"
+      "MP3": "audio.mp3"
+      "OGG": "audio.ogg"
+      "AAC": "audio.aac"
+      "ALAC": "audio.alac"
+      "TrueHD Atmos": "audio.truehd_atmos"
+      "DDP/E-AC3": "audio.ddp"
+      "DD/AC3": "audio.ac3"
+      "LPCM": "audio.lpcm"
+      "TrueHD": "audio.truehd"
+      "DTS-HD MA": "audio.dts_hd_ma"
+      "DTS:X": "audio.dtsx"
+      "Other": "audio.other"
+
+    resolution:
+      "1080p": "resolution.r1080p"
+      "1080i": "resolution.r1080i"
+      "720p": "resolution.r720p"
+      "SD": "resolution.sd"
+      "2160p/4K": "resolution.r2160p"
+      "4320p/8K": "resolution.r4320p"
+
+    team:
+      "HDSky": "team.hdsky"
+      "CHD": "team.chd"
+      "MySiLU": "team.mysilu"
+      "WiKi": "team.wiki"
+      "Other": "team.other"
+      "FRDS": "team.frds"
+      "beAst": "team.beast"
+      "CMCT": "team.cmct"
+      "TLF": "team.tlf"
+      "M-Team": "team.mteam"
+      "BeiTai": "team.beitai"
+      "AGSV": "team.agsv"
+      "HDHome": "team.hdhome"
+      "TTG": "team.ttg"
+      "NHDWeb": "team.nhdweb"
+
+# 参数映射规则 - 定义如何将标准化键映射到站点特定参数
+mappings:
+  type:
+    "category.movie": "401"
+    "category.tv_series": "402"
+    "category.tv_shows": "403"
+    "category.documentaries": "404"
+    "category.animation": "405"
+    "category.music_video": "406"
+    "category.sports": "407"
+    "category.music": "409"
+    "category.other": "410"
+    "default": "410"
+
+  medium:
+    "medium.dvd": "12"
+    "medium.webdl": "11"
+    "medium.uhd_bluray": "10"
+    "medium.track": "9"
+    "medium.cd": "8"
+    "medium.dvdr": "6"
+    "medium.hdtv": "5"
+    "medium.minibd": "4"
+    "medium.encode": "7"
+    "medium.remux": "3"
+    "medium.hddvd": "2"
+    "medium.bluray": "1"
+    "default": "16"
+
+  codec:
+    "codec.h264": "1"
+    "codec.vc1": "2"
+    "codec.xvid": "3"
+    "codec.mpeg2": "4"
+    "codec.other": "5"
+    "codec.h265": "6"
+    "default": "5"
+
+  audio_codec:
+    "audio.flac": "1"
+    "audio.ape": "2"
+    "audio.dts": "3"
+    "audio.mp3": "4"
+    "audio.ogg": "5"
+    "audio.aac": "6"
+    "audio.alac": "7"
+    "audio.truehd_atmos": "8"
+    "audio.ddp": "9"
+    "audio.ac3": "10"
+    "audio.lpcm": "11"
+    "audio.truehd": "12"
+    "audio.dts_hd_ma": "13"
+    "audio.dtsx": "14"
+    "audio.other": "15"
+    "default": "15"
+
+  resolution:
+    "resolution.r1080p": "1"
+    "resolution.r1080i": "2"
+    "resolution.r720p": "3"
+    "resolution.sd": "4"
+    "resolution.r2160p": "5"
+    "resolution.r4320p": "6"
+    "default": "6"
+
+  team:
+    "team.hdsky": "1"
+    "team.chd": "2"
+    "team.mysilu": "3"
+    "team.wiki": "4"
+    "team.other": "5"
+    "team.frds": "6"
+    "team.beast": "7"
+    "team.cmct": "8"
+    "team.tlf": "9"
+    "team.mteam": "10"
+    "team.beitai": "11"
+    "team.agsv": "12"
+    "team.hdhome": "13"
+    "team.ttg": "14"
+    "team.nhdweb": "15"
+    "default": "5"
+
+  tag:
+    "禁转": 1
+    "首发": 2
+    "DIY": 4
+    "国语": 5
+    "中字": 6
+    "HDR": 7
+    "连载": 18
+    "番组": 17
+    "特效": 15
+    "杜比": 14
+    "大包": 13
+    "应求": 12
+    "英字": 11
+    "完结": 10
+    "分集": 9
+    "驻站": 8
+    "default": null

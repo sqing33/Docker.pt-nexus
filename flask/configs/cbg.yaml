@@ -1,0 +1,214 @@
+# Cangbao站点的配置文件
+# 基于三层解耦模型重构，包含source_parsers和标准化的mappings
+
+site_name: "Cangbao"
+
+# 表单字段定义 - 定义站点上传表单中各字段的标识符
+form_fields:
+  medium: "medium_sel[4]"
+  codec: "codec_sel[4]"
+  audio_codec: "audiocodec_sel[4]"
+  resolution: "standard_sel[4]"
+  team: "team_sel[4]"
+  category: "type"  # 类别字段映射到type参数
+
+# 标准化键映射 - 定义源文本到标准化键的映射规则
+# source_parsers部分：定义如何从原始数据解析出标准化参数
+source_parsers:
+  source_params:
+    type:
+      source_key: "类型"
+    medium:
+      source_key: "媒体"
+    video_codec:
+      source_key: "视频编码"
+    audio_codec:
+      source_key: "音频"
+    resolution:
+      source_key: "分辨率"
+    team:
+      source_key: "制作组"
+    source:
+      source_key: "产地"
+
+  title_components:
+    title:
+      source_key: "主标题"
+    season_episode:
+      source_key: "季集"
+    year:
+      source_key: "年份"
+    status:
+      source_key: "剧集状态"
+    edition:
+      source_key: "发布版本"
+    resolution:
+      source_key: "分辨率"
+    platform:
+      source_key: "片源平台"
+    medium:
+      source_key: "媒体"
+    video_codec:
+      source_key: "视频编码"
+    video_format:
+      source_key: "视频格式"
+    hdr_format:
+      source_key: "HDR格式"
+    bit_depth:
+      source_key: "色深"
+    frame_rate:
+      source_key: "帧率"
+    audio_codec:
+      source_key: "音频编码"
+    team:
+      source_key: "制作组"
+
+  # 标准化键映射规则（从原始文本到标准化键）
+  standard_keys:
+    type:
+      "电影": "category.movie"
+      "剧集": "category.tv_series"
+      "短剧": "category.short_series"
+      "动画": "category.animation"
+      "动漫": "category.anime"
+      "儿童": "category.children"
+      "综艺": "category.tv_shows"
+      "纪录": "category.documentaries"
+      "音乐": "category.music"
+      "书籍": "category.books"
+
+    medium:
+      "UHD": "medium.uhd_bluray"
+      "Remux": "medium.remux"
+      "Blu-ray": "medium.bluray"
+      "WEB-DL": "medium.webdl"
+      "UHDTV": "medium.uhdtv"
+      "HDTV": "medium.hdtv"
+      "Encode": "medium.encode"
+      "DVD": "medium.dvd"
+      "VCD": "medium.vcd"
+
+    video_codec:
+      "AV1": "codec.av1"
+      "HEVC": "codec.h265"
+      "VP9": "codec.vp9"
+      "AVC": "codec.h264"
+      "VC-1": "codec.vc1"
+      "MPEG-4": "codec.mpeg4"
+      "MPEG-2": "codec.mpeg2"
+      "MPEG-1": "codec.mpeg1"
+      "H.261": "codec.h261"
+
+    audio_codec:
+      "PCM": "audio.pcm"
+      "TrueHD": "audio.truehd"
+      "FLAC": "audio.flac"
+      "Opus": "audio.opus"
+      "DDP": "audio.ddp"
+      "AAC": "audio.aac"
+      "DTS": "audio.dts"
+      "AC3": "audio.ac3"
+      "MP3": "audio.mp3"
+
+    resolution:
+      "4320p": "resolution.r4320p"
+      "2160p": "resolution.r2160p"
+      "1440p": "resolution.r1440p"
+      "1080p": "resolution.r1080p"
+      "720p": "resolution.r720p"
+      "540p": "resolution.r540p"
+      "480P": "resolution.r480p"
+
+    team:
+      "NONE": "team.none"
+      "CBGWT": "team.cbgwt"
+      "CBGER": "team.cbger"
+
+# 参数映射规则 - 定义如何将标准化键映射到站点特定参数
+mappings:
+  type:
+    "category.movie": "401"
+    "category.tv_series": "402"
+    "category.short_series": "403"
+    "category.animation": "404"
+    "category.anime": "405"
+    "category.children": "406"
+    "category.tv_shows": "407"
+    "category.documentaries": "408"
+    "category.music": "409"
+    "category.books": "410"
+    "default": "410"
+
+  medium:
+    "medium.uhd_bluray": "9"
+    "medium.remux": "8"
+    "medium.bluray": "7"
+    "medium.webdl": "6"
+    "medium.uhdtv": "5"
+    "medium.hdtv": "4"
+    "medium.encode": "3"
+    "medium.dvd": "2"
+    "medium.vcd": "1"
+    "default": "0"
+
+  codec:
+    "codec.av1": "9"
+    "codec.h265": "8"
+    "codec.vp9": "7"
+    "codec.h264": "6"
+    "codec.vc1": "5"
+    "codec.mpeg4": "4"
+    "codec.mpeg2": "3"
+    "codec.mpeg1": "2"
+    "codec.h261": "1"
+    "default": "0"
+
+  audio_codec:
+    "audio.pcm": "9"
+    "audio.truehd": "8"
+    "audio.flac": "7"
+    "audio.opus": "6"
+    "audio.ddp": "5"
+    "audio.aac": "4"
+    "audio.dts": "3"
+    "audio.ac3": "2"
+    "audio.mp3": "1"
+    "default": "0"
+
+  resolution:
+    "resolution.r4320p": "7"
+    "resolution.r2160p": "6"
+    "resolution.r1440p": "5"
+    "resolution.r1080p": "4"
+    "resolution.r720p": "3"
+    "resolution.r540p": "2"
+    "resolution.r480p": "1"
+    "default": "0"
+
+  team:
+    "team.none": "1"
+    "team.cbgwt": "2"
+    "team.cbger": "3"
+    "default": "1"
+
+  tag:
+    "合集": 20
+    "官方": 19
+    "原声": 18
+    "DIY": 17
+    "特效": 16
+    "原盘": 15
+    "DV": 14
+    "HDR": 13
+    "高码": 12
+    "零魔": 11
+    "禁转": 10
+    "英字": 9
+    "国语": 8
+    "中字": 7
+    "驻站": 5
+    "分集": 4
+    "完结": 3
+    "自购": 2
+    "首发": 1
+    "default": null

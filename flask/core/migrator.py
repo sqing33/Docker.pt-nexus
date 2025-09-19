@@ -13,9 +13,14 @@ import requests
 import urllib3
 import traceback
 import importlib
+import yaml
 from io import StringIO
-from config import TEMP_DIR
+from typing import Dict, Any, Optional, List
+from config import TEMP_DIR, DATA_DIR
 from utils import ensure_scheme, upload_data_mediaInfo, upload_data_title, extract_tags_from_mediainfo, extract_origin_from_description
+
+# 导入新的Extractor和ParameterMapper
+from core.extractors.extractor import Extractor, ParameterMapper
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -39,7 +44,7 @@ class LoguruHandler(StringIO):
 
 
 class TorrentMigrator:
-    """一个用于将种子从一个PT站点迁移到另一个站点的工具类。"""
+    """重构后的TorrentMigrator类，使用三层解耦模型实现参数标准化。"""
 
     def __init__(self,
                  source_site_info,
@@ -85,6 +90,34 @@ class TorrentMigrator:
 
         self.temp_files = []
 
+        # 初始化新的Extractor和ParameterMapper
+        self.extractor = Extractor()
+        self.parameter_mapper = ParameterMapper()
+
+        # 加载源站点配置（如果存在）
+        self.source_config = self._load_source_site_config()
+
+    def _load_source_site_config(self) -> Dict[str, Any]:
+        """
+        加载源站点的YAML配置文件，用于解析source_parsers
+        """
+        try:
+            # 假设源站点配置文件路径与目标站点类似
+            config_path = os.path.join(
+                DATA_DIR,
+                f"{self.SOURCE_NAME.lower().replace(' ', '_').replace('-', '_')}.yaml"
+            )
+            if os.path.exists(config_path):
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    return yaml.safe_load(f) or {}
+            else:
+                self.logger.warning(
+                    f"未找到源站点 {self.SOURCE_NAME} 的配置文件 {config_path}")
+                return {}
+        except Exception as e:
+            self.logger.warning(f"加载源站点配置文件时出错: {e}")
+            return {}
+
     def apply_special_extractor_if_needed(self, upload_data, torrent_id=None):
         """
         根据源站点名称决定是否使用特殊提取器处理数据
@@ -99,7 +132,8 @@ class TorrentMigrator:
         print(f"检查是否需要应用特殊提取器处理，源站点: {self.SOURCE_NAME}")
         # 检查是否需要使用特殊提取器处理"人人"、"不可说"或"憨憨"站点数据
         # 添加检查确保不会重复处理已标记的数据
-        if self.SOURCE_NAME == "人人" or self.SOURCE_NAME == "不可说" or self.SOURCE_NAME == "憨憨":
+        special_sites = ["人人", "不可说", "憨憨"]
+        if self.SOURCE_NAME in special_sites:
             # 首先检查upload_data中是否已经有处理标志
             processed_flag = upload_data.get("special_extractor_processed",
                                              False)
@@ -405,366 +439,34 @@ class TorrentMigrator:
         Returns:
             dict: 包含提取数据的字典
         """
-        # 初始化默认数据结构
-        extracted_data = {
-            "title": "",
-            "subtitle": "",
-            "intro": {
-                "statement": "",
-                "poster": "",
-                "body": "",
-                "screenshots": "",
-                "removed_ardtudeclarations": [],
-                "imdb_link": "",
-                "douban_link": ""
-            },
-            "mediainfo": "",
-            "source_params": {
-                "类型": "",
-                "媒介": None,
-                "编码": None,
-                "音频编码": None,
-                "分辨率": None,
-                "制作组": None,
-                "标签": [],
-                "产地": ""
-            }
-        }
+        # 使用新的Extractor类来处理提取
+        return self.extractor.extract(soup, self.SOURCE_NAME, torrent_id)
 
-        # 根据站点类型选择对应的提取器
-        if self.SOURCE_NAME in ["人人", "不可说", "憨憨"]:
-            try:
-                print(f"使用特殊提取器处理 {self.SOURCE_NAME} 站点数据")
-                if self.SOURCE_NAME == "人人":
-                    from core.extractors.audiences import AudiencesSpecialExtractor
-                    extractor = AudiencesSpecialExtractor(soup)
-                elif self.SOURCE_NAME == "不可说":
-                    from core.extractors.ssd import SSDSpecialExtractor
-                    extractor = SSDSpecialExtractor(soup)
-                elif self.SOURCE_NAME == "憨憨":
-                    from core.extractors.hhanclub import HHCLUBSpecialExtractor
-                    extractor = HHCLUBSpecialExtractor(soup)
-
-                # 调用特殊提取器
-                special_extracted_data = extractor.extract_all(
-                    torrent_id=torrent_id)
-                print(
-                    f"特殊提取器返回数据键: {special_extracted_data.keys() if special_extracted_data else 'None'}"
-                )
-
-                # 合并特殊提取器的数据到默认结构中
-                if special_extracted_data:
-                    # 合并title
-                    if "title" in special_extracted_data and special_extracted_data[
-                            "title"]:
-                        extracted_data["title"] = special_extracted_data[
-                            "title"]
-
-                    # 合并subtitle
-                    if "subtitle" in special_extracted_data and special_extracted_data[
-                            "subtitle"]:
-                        extracted_data["subtitle"] = special_extracted_data[
-                            "subtitle"]
-
-                    # 合并intro
-                    if "intro" in special_extracted_data and special_extracted_data[
-                            "intro"]:
-                        # 合并intro字典的各个字段
-                        for key in extracted_data["intro"]:
-                            if key in special_extracted_data[
-                                    "intro"] and special_extracted_data[
-                                        "intro"][key]:
-                                extracted_data["intro"][
-                                    key] = special_extracted_data["intro"][key]
-
-                    # 合并mediainfo
-                    if "mediainfo" in special_extracted_data and special_extracted_data[
-                            "mediainfo"]:
-                        extracted_data["mediainfo"] = special_extracted_data[
-                            "mediainfo"]
-
-                    # 合并source_params
-                    if "source_params" in special_extracted_data and special_extracted_data[
-                            "source_params"]:
-                        for key in extracted_data["source_params"]:
-                            if key in special_extracted_data[
-                                    "source_params"] and special_extracted_data[
-                                        "source_params"][key] is not None:
-                                extracted_data["source_params"][
-                                    key] = special_extracted_data[
-                                        "source_params"][key]
-
-                print(f"特殊提取器处理完成")
-                return extracted_data
-
-            except Exception as e:
-                print(f"使用特殊提取器处理 {self.SOURCE_NAME} 站点数据时发生错误: {e}")
-                import traceback
-                traceback.print_exc()
-                # 如果特殊提取器失败，继续使用公共提取器
-
-        # 使用公共提取器（默认提取器）
-        print(f"使用公共提取器处理 {self.SOURCE_NAME} 站点数据")
-        return self._extract_data_common(soup)
-
-    def _extract_data_common(self, soup):
+    def _standardize_parameters(
+            self, extracted_data: Dict[str, Any],
+            title_components: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
-        使用公共方法提取数据
+        使用ParameterMapper将提取的数据映射为标准化参数
 
         Args:
-            soup: BeautifulSoup对象，包含种子详情页的HTML
+            extracted_data: 从源站点提取的原始数据
+            title_components: 解析后的标题组件
 
         Returns:
-            dict: 包含提取数据的字典
+            standardized_params: 标准化后的参数字典
         """
-        extracted_data = {
-            "title": "",
-            "subtitle": "",
-            "intro": {
-                "statement": "",
-                "poster": "",
-                "body": "",
-                "screenshots": "",
-                "removed_ardtudeclarations": [],
-                "imdb_link": "",
-                "douban_link": ""
-            },
-            "mediainfo": "",
-            "source_params": {
-                "类型": "",
-                "媒介": None,
-                "编码": None,
-                "音频编码": None,
-                "分辨率": None,
-                "制作组": None,
-                "标签": [],
-                "产地": ""
-            }
-        }
+        # 将标题组件添加到提取的数据中，以便ParameterMapper可以处理
+        extracted_data_with_components = extracted_data.copy()
+        extracted_data_with_components["title_components"] = title_components
 
-        # 从h1#top提取标题
-        h1_top = soup.select_one("h1#top")
-        if h1_top:
-            title = list(
-                h1_top.stripped_strings)[0] if h1_top.stripped_strings else ""
-            title = re.sub(r'(?<!\d)\.|\.(?!\d\b)', ' ', title)
-            title = re.sub(r'\s+', ' ', title).strip()
-            extracted_data["title"] = title
+        # 使用ParameterMapper进行参数映射
+        standardized_params = self.parameter_mapper.map_parameters(
+            self.SOURCE_NAME, extracted_data_with_components)
 
-        # 提取副标题
-        subtitle_td = soup.find("td", string=re.compile(r"\s*副标题\s*"))
-        if subtitle_td and subtitle_td.find_next_sibling("td"):
-            subtitle = subtitle_td.find_next_sibling("td").get_text(strip=True)
-            subtitle = re.sub(r"\s*\|\s*[Aa][Bb]y\s+\w+.*$", "", subtitle)
-            subtitle = re.sub(r"\s*\|\s*[Bb]y\s+\w+.*$", "", subtitle)
-            subtitle = re.sub(r"\s*\|\s*[Aa]\s+\w+.*$", "", subtitle)
-            subtitle = re.sub(r"\s*\|\s*[Aa][Tt][Uu]\s*$", "", subtitle)
-            subtitle = re.sub(r"\s*\|\s*[Dd][Tt][Uu]\s*$", "", subtitle)
-            subtitle = re.sub(r"\s*\|\s*[Pp][Tt][Ee][Rr]\s*$", "", subtitle)
-            extracted_data["subtitle"] = subtitle
-
-        # 提取简介信息
-        descr_container = soup.select_one("div#kdescr")
-        if descr_container:
-            # 提取IMDb和豆瓣链接
-            descr_text = descr_container.get_text()
-            imdb_link = ""
-            douban_link = ""
-
-            if imdb_match := re.search(
-                    r"(https?://www\.imdb\.com/title/tt\d+)", descr_text):
-                imdb_link = imdb_match.group(1)
-
-            if douban_match := re.search(
-                    r"(https?://movie\.douban\.com/subject/\d+)", descr_text):
-                douban_link = douban_match.group(1)
-
-            extracted_data["intro"]["imdb_link"] = imdb_link
-            extracted_data["intro"]["douban_link"] = douban_link
-
-            # 提取简介内容
-            descr_html_string = str(descr_container)
-            corrected_descr_html = re.sub(r'</?br\s*/?>',
-                                          '<br/>',
-                                          descr_html_string,
-                                          flags=re.IGNORECASE)
-            corrected_descr_html = re.sub(r'(<img[^>]*[^/])>', r'\1 />',
-                                          corrected_descr_html)
-            try:
-                descr_container_soup = BeautifulSoup(corrected_descr_html,
-                                                     "lxml")
-            except ImportError:
-                descr_container_soup = BeautifulSoup(corrected_descr_html,
-                                                     "html.parser")
-
-            bbcode = self._html_to_bbcode(descr_container_soup)
-
-            original_bbcode = bbcode
-            while True:
-                bbcode = re.sub(r"\[quote\]\s*\[quote\]",
-                                "[quote]",
-                                bbcode,
-                                flags=re.IGNORECASE)
-                bbcode = re.sub(r"\[/quote\]\s*\[/quote\]",
-                                "[/quote]",
-                                bbcode,
-                                flags=re.IGNORECASE)
-                if bbcode == original_bbcode:
-                    break
-                original_bbcode = bbcode
-
-            images = re.findall(r"\[img\].*?\[/img\]", bbcode)
-
-            # 新逻辑：区分海报前后的[quote]内容
-            # 找到海报的位置
-            poster_index = bbcode.find(images[0]) if images else -1
-
-            # 分别提取海报前和海报后的引用内容
-            quotes_before_poster = []
-            quotes_after_poster = []
-
-            # 使用正则表达式查找所有引用，同时记录它们的位置
-            for match in re.finditer(r"\[quote\].*?\[/quote\]", bbcode, re.DOTALL):
-                quote_content = match.group(0)
-                quote_start = match.start()
-
-                # 判断引用是在海报前还是海报后
-                if poster_index != -1 and quote_start < poster_index:
-                    # 海报前的引用
-                    quotes_before_poster.append(quote_content)
-                else:
-                    # 海报后的引用或者是没有海报的情况
-                    quotes_after_poster.append(quote_content)
-
-            final_statement_quotes = []
-            ardtu_declarations = []
-            mediainfo_from_quote = ""
-            found_mediainfo_in_quote = False
-            quotes_for_body = []  # 用于存储应该放在简介和截图之间的引用
-
-            # 处理海报前的引用（声明部分）
-            for quote in quotes_before_poster:
-                is_mediainfo = ("General" in quote and "Video" in quote
-                                and "Audio" in quote)
-                is_bdinfo = ("DISC INFO" in quote
-                             and "PLAYLIST REPORT" in quote)
-                is_release_info_style = ".Release.Info" in quote and "ENCODER" in quote
-
-                if not found_mediainfo_in_quote and (is_mediainfo or is_bdinfo
-                                                     or is_release_info_style):
-                    mediainfo_from_quote = re.sub(r"\[/?quote\]",
-                                                  "",
-                                                  quote,
-                                                  flags=re.IGNORECASE).strip()
-                    found_mediainfo_in_quote = True
-                    continue
-
-                is_ardtutool_auto_publish = ("ARDTU工具自动发布" in quote)
-                is_disclaimer = ("郑重声明：" in quote)
-                is_csweb_disclaimer = ("财神CSWEB提供的所有资源均是在网上搜集且由用户上传" in quote)
-                is_by_ardtu_group_info = "By ARDTU" in quote and "官组作品" in quote
-                has_atu_tool_signature = "| A | By ATU" in quote
-
-                if is_ardtutool_auto_publish or is_disclaimer or is_csweb_disclaimer or has_atu_tool_signature:
-                    clean_content = re.sub(r"\[\/?quote\]", "", quote).strip()
-                    ardtu_declarations.append(clean_content)
-                elif is_by_ardtu_group_info:
-                    filtered_quote = re.sub(r"\s*By ARDTU\s*", "", quote)
-                    final_statement_quotes.append(filtered_quote)
-                elif "ARDTU" in quote:
-                    clean_content = re.sub(r"\[\/?quote\]", "", quote).strip()
-                    ardtu_declarations.append(clean_content)
-                else:
-                    final_statement_quotes.append(quote)
-
-            # 处理海报后的引用（放在简介和截图之间）
-            for quote in quotes_after_poster:
-                # 这些引用将直接添加到body中合适的位置
-                quotes_for_body.append(quote)
-
-            # 移除所有引用和图片来获取body内容
-            body = (re.sub(r"\[quote\].*?\[/quote\]|\[img\].*?\[/img\]",
-                           "",
-                           bbcode,
-                           flags=re.DOTALL).replace("\r", "").strip())
-
-            # 将海报后的引用内容添加到body的合适位置（在简介和截图之间）
-            if quotes_for_body:
-                # 简单地将这些引用添加到body的末尾
-                # 实际项目中可能需要更复杂的逻辑来确定确切位置
-                body = body + "\n\n" + "\n".join(quotes_for_body)
-
-            # 【新增】格式化 statement 字符串，合并多余换行
-            statement_string = "\n".join(final_statement_quotes)
-            if statement_string:
-                # 将3个及以上的换行符替换为2个（保留段落间距），然后去除首尾空白
-                statement_string = re.sub(r'(\r?\n){3,}', r'\n\n',
-                                          statement_string).strip()
-
-            extracted_data["intro"]["statement"] = statement_string
-            extracted_data["intro"]["poster"] = images[0] if images else ""
-            extracted_data["intro"]["body"] = re.sub(r"\n{2,}", "\n", body)
-            extracted_data["intro"]["screenshots"] = "\n".join(images[1:]) if len(images) > 1 else ""
-            extracted_data["intro"][
-                "removed_ardtudeclarations"] = ardtu_declarations
-
-        # 提取MediaInfo
-        mediainfo_pre = soup.select_one(
-            "div.spoiler-content pre, div.nexus-media-info-raw > pre")
-        mediainfo_text = mediainfo_pre.get_text(
-            strip=True) if mediainfo_pre else ""
-
-        if not mediainfo_text and mediainfo_from_quote:
-            self.logger.info("在简介的引用(quote)中找到了MediaInfo。")
-            mediainfo_text = mediainfo_from_quote
-
-        # 【新增】格式化 mediainfo 字符串，去除所有空行
-        if mediainfo_text:
-            # 将2个及以上的换行符替换为1个，使其紧凑
-            mediainfo_text = re.sub(r'(\r?\n){2,}', r'\n',
-                                    mediainfo_text).strip()
-
-        extracted_data["mediainfo"] = mediainfo_text
-
-        # 提取基本信息和标签
-        basic_info_td = soup.find("td", string="基本信息")
-        basic_info_dict = {}
-        if basic_info_td and basic_info_td.find_next_sibling("td"):
-            strings = list(
-                basic_info_td.find_next_sibling("td").stripped_strings)
-            basic_info_dict = {
-                s.replace(":", "").strip(): strings[i + 1]
-                for i, s in enumerate(strings)
-                if ":" in s and i + 1 < len(strings)
-            }
-
-        tags_td = soup.find("td", string="标签")
-        tags = ([
-            s.get_text(strip=True)
-            for s in tags_td.find_next_sibling("td").find_all("span")
-        ] if tags_td and tags_td.find_next_sibling("td") else [])
-
-        type_text = basic_info_dict.get("类型", "")
-        type_match = re.search(r"[\(（](.*?)[\)）]", type_text)
-
-        extracted_data["source_params"]["类型"] = type_match.group(
-            1) if type_match else type_text.split("/")[-1]
-        extracted_data["source_params"]["媒介"] = basic_info_dict.get("媒介")
-        extracted_data["source_params"]["编码"] = basic_info_dict.get("编码")
-        extracted_data["source_params"]["音频编码"] = basic_info_dict.get("音频编码")
-        extracted_data["source_params"]["分辨率"] = basic_info_dict.get("分辨率")
-        extracted_data["source_params"]["制作组"] = basic_info_dict.get("制作组")
-        extracted_data["source_params"]["标签"] = tags
-
-        # 提取产地信息
-        full_description_text = f"{extracted_data['intro']['statement']}\n{extracted_data['intro']['body']}"
-        origin_info = extract_origin_from_description(full_description_text)
-        extracted_data["source_params"]["产地"] = origin_info
-
-        return extracted_data
+        return standardized_params
 
     def prepare_review_data(self):
-        """第一步(新)：获取、解析信息，并下载原始种子文件，但不进行修改。"""
+        """重构后的方法：获取、解析信息，并输出标准化参数。"""
         try:
             self.logger.info(f"--- [步骤1] 开始获取种子信息 (源: {self.SOURCE_NAME}) ---")
             print(f"开始prepare_review_data处理，源站点: {self.SOURCE_NAME}")
@@ -853,7 +555,10 @@ class TorrentMigrator:
 
             if not title_components:
                 self.logger.warning("主标题解析失败，将使用原始标题作为回退。")
-                title_components = {"主标题": original_main_title, "无法识别": "解析失败"}
+                title_components = [{
+                    "key": "主标题",
+                    "value": original_main_title
+                }]
             else:
                 self.logger.success("主标题成功解析为参数。")
 
@@ -995,10 +700,12 @@ class TorrentMigrator:
             import urllib.parse
             processed_torrent_name = urllib.parse.unquote(torrent_filename)
             if processed_torrent_name.endswith('.torrent'):
-                processed_torrent_name = processed_torrent_name[:-8]  # 去除.torrent扩展名
+                processed_torrent_name = processed_torrent_name[:
+                                                                -8]  # 去除.torrent扩展名
 
             # 过滤掉文件名中的站点信息（如[HDHome]、[HDSpace]等）
-            processed_torrent_name = re.sub(r'^\[[^\]]+\]\.', '', processed_torrent_name)
+            processed_torrent_name = re.sub(r'^\[[^\]]+\]\.', '',
+                                            processed_torrent_name)
 
             # 使用upload_data_mediaInfo处理mediainfo
             mediainfo = upload_data_mediaInfo(
@@ -1042,8 +749,8 @@ class TorrentMigrator:
                         1) if type_match else type_text.split("/")[-1]
                 if not source_params.get("媒介"):
                     source_params["媒介"] = basic_info_dict.get("媒介")
-                if not source_params.get("编码"):
-                    source_params["编码"] = basic_info_dict.get("编码")
+                if not source_params.get("视频编码"):
+                    source_params["视频编码"] = basic_info_dict.get("视频编码")
                 if not source_params.get("音频编码"):
                     source_params["音频编码"] = basic_info_dict.get("音频编码")
                 if not source_params.get("分辨率"):
@@ -1057,7 +764,7 @@ class TorrentMigrator:
                 source_params = {
                     "类型": "",
                     "媒介": None,
-                    "编码": None,
+                    "视频编码": None,
                     "音频编码": None,
                     "分辨率": None,
                     "制作组": None,
@@ -1067,135 +774,58 @@ class TorrentMigrator:
 
             # 此处已提前下载种子文件，无需重复下载
 
-            # --- [新增] 开始: 构建最终发布参数预览对象 ---
-            try:
-                # 1. 将 title_components 列表转换为更易于使用的字典
-                title_params = {
-                    item["key"]: item["value"]
-                    for item in title_components if item.get("value")
-                }
+            # --- [三层解耦模型核心实现] 开始: 构建标准化参数 ---
+            # 使用三层解耦模型标准化参数
+            standardized_params = self._standardize_parameters(
+                extracted_data, title_components)
 
-                # 2. 模拟拼接最终的主标题 (逻辑与 sites/*.py 中的 _build_title 一致)
-                order = [
-                    "主标题",
-                    "年份",
-                    "季集",
-                    "剧集状态",
-                    "发布版本",
-                    "分辨率",
-                    "媒介",
-                    "片源平台",
-                    "视频编码",
-                    "视频格式",
-                    "HDR格式",
-                    "色深",
-                    "帧率",
-                    "音频编码",
-                ]
-                title_parts = []
-                for key in order:
-                    value = title_params.get(key)
-                    if value:
-                        title_parts.append(
-                            " ".join(map(str, value)) if isinstance(
-                                value, list) else str(value))
+            # 输出标准化参数以供前端预览
+            final_publish_parameters = {
+                "主标题 (预览)": standardized_params.get("title", ""),
+                "副标题": subtitle,
+                "IMDb链接": standardized_params.get("imdb_link", ""),
+                "类型": standardized_params.get("type", ""),
+                "媒介": standardized_params.get("medium", ""),
+                "视频编码": standardized_params.get("video_codec", ""),
+                "音频编码": standardized_params.get("audio_codec", ""),
+                "分辨率": standardized_params.get("resolution", ""),
+                "制作组": standardized_params.get("team", ""),
+                "产地": standardized_params.get("source", ""),
+                "标签": standardized_params.get("tags", []),
+            }
 
-                raw_main_part = " ".join(filter(None, title_parts))
-                main_part = re.sub(r'(?<!\d)\.(?!\d)', ' ', raw_main_part)
-                main_part = re.sub(r'\s+', ' ', main_part).strip()
-                release_group = title_params.get("制作组", "NOGROUP")
-                if "N/A" in release_group: release_group = "NOGROUP"
+            # 构建完整的发布参数用于预览（兼容现有BaseUploader）
+            complete_publish_params = {
+                "title_components": title_components,
+                "subtitle": subtitle,
+                "imdb_link": standardized_params.get("imdb_link", ""),
+                "douban_link": standardized_params.get("douban_link", ""),
+                "intro": standardized_params.get("description", {}),
+                "mediainfo": mediainfo,
+                "source_params": source_params,
+                "modified_torrent_path": "",  # 临时占位符
+                # 添加标准化参数供预览
+                "standardized_params": standardized_params
+            }
 
-                # 对特殊制作组进行处理，不需要添加前缀连字符
-                special_groups = ["MNHD-FRDS", "mUHD-FRDS"]
-                if release_group in special_groups:
-                    preview_title = f"{main_part} {release_group}"
-                else:
-                    preview_title = f"{main_part}-{release_group}"
-
-                # 3. 组合最终的简介 (逻辑与 sites/*.py 中的 _build_description 一致)
-                full_description = (f"{intro.get('statement', '')}\n"
-                                    f"{intro.get('poster', '')}\n"
-                                    f"{intro.get('body', '')}\n"
-                                    f"{intro.get('screenshots', '')}")
-
-                # 4. 整合所有来源的标签
-                source_tags = set(source_params.get("标签") or [])
-                mediainfo_tags = set(extract_tags_from_mediainfo(mediainfo))
-                all_tags = sorted(list(source_tags.union(mediainfo_tags)))
-
-                # 5. 组装最终的预览字典 (不包含Mediainfo和完整简介，保持简洁)
-                final_publish_parameters = {
-                    "主标题 (预览)": preview_title,
-                    "副标题": subtitle,
-                    "IMDb链接": imdb_link,
-                    "类型": source_params.get("类型", "N/A"),
-                    "媒介": title_params.get("媒介", "N/A"),
-                    "视频编码": title_params.get("视频编码", "N/A"),
-                    "音频编码": title_params.get("音频编码", "N/A"),
-                    "分辨率": title_params.get("分辨率", "N/A"),
-                    "制作组": title_params.get("制作组", "N/A"),
-                    "产地": source_params.get("产地", "N/A"),
-                    "标签 (综合)": all_tags,
-                    # 注: 不包含Mediainfo和完整简介，保持预览简洁
-                }
-
-                # 6. 构建完整的发布参数用于预览
-                # 创建一个模拟的upload_payload用于参数预构建
-                upload_payload = {
-                    "title_components": title_components,
-                    "subtitle": subtitle,
-                    "imdb_link": imdb_link,
-                    "intro": intro,
-                    "mediainfo": mediainfo,
-                    "source_params": source_params,
-                    "modified_torrent_path": ""  # 临时占位符
-                }
-
-                # 提取映射前的原始参数用于前端展示（无论是否有目标站点信息）
-                raw_params_for_preview = {
-                    "final_main_title":
-                    final_publish_parameters.get("主标题 (预览)", ""),
-                    "subtitle":
-                    subtitle,
-                    "imdb_link":
-                    imdb_link,
-                    "type":
-                    source_params.get("类型", ""),
-                    "medium":
-                    title_params.get("媒介", ""),
-                    "video_codec":
-                    title_params.get("视频编码", ""),
-                    "audio_codec":
-                    title_params.get("音频编码", ""),
-                    "resolution":
-                    title_params.get("分辨率", ""),
-                    "release_group":
-                    title_params.get("制作组", ""),
-                    "source":
-                    source_params.get("产地", "")
-                    or title_params.get("片源平台", ""),
-                    "tags":
-                    list(all_tags)
-                }
-
-                # 如果有目标站点信息，预构建完整的发布参数
-                complete_publish_params = {}
-                if self.target_site:
-                    from uploaders.base import BaseUploader
-                    complete_publish_params = BaseUploader.prepare_publish_params(
-                        site_name=self.target_site["site"],
-                        site_info=self.target_site,
-                        upload_payload=upload_payload)
-            except Exception as e:
-                self.logger.error(f"构建发布参数预览时出错: {e}")
-                final_publish_parameters = {"error": "构建预览失败，请检查日志。"}
-                complete_publish_params = {"error": f"构建完整参数失败: {e}"}
-            # --- [新增] 结束 ---
+            # 创建前端预览参数
+            raw_params_for_preview = {
+                "final_main_title": standardized_params.get("title", ""),
+                "subtitle": subtitle,
+                "imdb_link": standardized_params.get("imdb_link", ""),
+                "type": standardized_params.get("type", ""),
+                "medium": standardized_params.get("medium", ""),
+                "video_codec": standardized_params.get("video_codec", ""),
+                "audio_codec": standardized_params.get("audio_codec", ""),
+                "resolution": standardized_params.get("resolution", ""),
+                "release_group": standardized_params.get("team", ""),
+                "source": standardized_params.get("source", ""),
+                "tags": standardized_params.get("tags", [])
+            }
+            # --- [三层解耦模型核心实现] 结束 ---
 
             self.logger.info("--- [步骤1] 种子信息获取和解析完成 ---")
 
-            # 将新构建的预览对象添加到返回数据中
             review_data_payload = {
                 "original_main_title":
                 original_main_title,
@@ -1211,7 +841,9 @@ class TorrentMigrator:
                 mediainfo,
                 "source_params":
                 source_params,
-                # --- [新增] ---
+                # 标准化参数
+                "standardized_params":
+                standardized_params,
                 "final_publish_parameters":
                 final_publish_parameters,
                 "complete_publish_params":
@@ -1245,7 +877,7 @@ class TorrentMigrator:
             self.logger.info(
                 f"正在加载目标站点上传模块: uploaders.sites.{self.TARGET_UPLOAD_MODULE}")
             # Use the base uploader's static upload method instead of calling directly on the module
-            from uploaders.base import BaseUploader
+            from core.uploaders.uploader import BaseUploader
             result, message = BaseUploader.upload(
                 site_name=self.target_site["site"],
                 site_info=self.target_site,

@@ -1,0 +1,437 @@
+# CrabPT站点的配置文件
+# 基于三层解耦模型重构，包含source_parsers和标准化的mappings
+
+site_name: "CrabPT"
+
+# 表单字段定义 - 定义站点上传表单中各字段的标识符
+form_fields:
+  medium: "source_sel[4]"
+  codec: "codec_sel[4]"
+  audio_codec: "audiocodec_sel[4]"
+  resolution: "standard_sel[4]"
+  team: "team_sel[4]"
+  processing: "processing_sel[4]"
+  category: "type"
+  special_codec: "codec_sel[6]"
+  special_audio_codec: "audiocodec_sel[6]"
+  special_team: "team_sel[6]"
+  special_processing: "processing_sel[6]"
+  special_category: "type"
+
+# 标准化键映射 - 定义源文本到标准化键的映射规则
+# source_parsers部分：定义如何从原始数据解析出标准化参数
+source_parsers:
+  source_params:
+    type:
+      source_key: "类型"
+    medium:
+      source_key: "媒介"
+    video_codec:
+      source_key: "视频编码"
+    audio_codec:
+      source_key: "音频编码"
+    resolution:
+      source_key: "分辨率"
+    team:
+      source_key: "制作组"
+    processing:
+      source_key: "地区"
+    source:
+      source_key: "产地"
+
+  title_components:
+    title:
+      source_key: "主标题"
+    season_episode:
+      source_key: "季集"
+    year:
+      source_key: "年份"
+    status:
+      source_key: "剧集状态"
+    edition:
+      source_key: "发布版本"
+    resolution:
+      source_key: "分辨率"
+    platform:
+      source_key: "片源平台"
+    medium:
+      source_key: "媒介"
+    video_codec:
+      source_key: "视频编码"
+    video_format:
+      source_key: "视频格式"
+    hdr_format:
+      source_key: "HDR格式"
+    bit_depth:
+      source_key: "色深"
+    frame_rate:
+      source_key: "帧率"
+    audio_codec:
+      source_key: "音频编码"
+    team:
+      source_key: "制作组"
+
+  # 标准化键映射规则（从原始文本到标准化键）
+  standard_keys:
+    type:
+      "电影": "category.movie"
+      "电视剧": "category.tv_series"
+      "短剧": "category.playlet"
+      "音乐": "category.music"
+      "动漫": "category.anime"
+      "MV": "category.music_video"
+      "综艺": "category.tv_shows"
+      "体育竞技": "category.sports"
+      "其他": "category.other"
+      "纪录片": "category.documentary"
+      "漫画": "category.cartoon"
+      "游戏": "category.game"
+      "学习": "category.study"
+      "有声书": "category.audiobook"
+      "电子书": "category.ebook"
+
+    medium:
+      "CD": "medium.cd"
+      "HDTV": "medium.hdtv"
+      "WEB-DL": "medium.webdl"
+      "Encode": "medium.encode"
+      "Remux": "medium.remux"
+      "UHD Blu-ray": "medium.uhd_bluray"
+      "BluRay": "medium.bluray"
+      "Other": "medium.other"
+      "MVC": "medium.mvc"
+      "ProRes": "medium.prores"
+      "Xvid": "medium.xvid"
+
+    video_codec:
+      "AV1": "codec.av1"
+      "VP9": "codec.vp9"
+      "H.266/VVC": "codec.h266"
+      "HEVC/H.265/x265": "codec.h265"
+      "AVC/H.264/x264": "codec.h264"
+      "Other": "codec.other"
+      "VC-1": "codec.vc1"
+      "MPEG": "codec.mpeg"
+
+    audio_codec:
+      "ALAC": "audio.alac"
+      "APE": "audio.ape"
+      "WAV": "audio.wav"
+      "FLAC": "audio.flac"
+      "MPEG": "audio.mpeg"
+      "DTS:X": "audio.dtsx"
+      "LPCM": "audio.lpcm"
+      "TrueHD": "audio.truehd"
+      "DTS": "audio.dts"
+      "DDP/E-AC3": "audio.ddp"
+      "DD/AC3": "audio.ac3"
+      "AAC": "audio.aac"
+      "Other": "audio.other"
+      "DTS-HD": "audio.dts_hd"
+      "DTS-HD MA": "audio.dts_hd_ma"
+      "OGG": "audio.ogg"
+      "DSD": "audio.dsd"
+      "Opus": "audio.opus"
+      "Atmos": "audio.atmos"
+
+    resolution:
+      "8K": "resolution.r8k"
+      "4K/2160p": "resolution.r2160p"
+      "1080p/1080i": "resolution.r1080p"
+      "720p": "resolution.r720p"
+      "Other": "resolution.other"
+
+    team:
+      "AGSVWEB": "team.agsvweb"
+      "DYZ-WEB": "team.dyz_web"
+      "DYZ-Movie": "team.dyz_movie"
+      "DYZ-TV": "team.dyz_tv"
+      "UBits": "team.ubits"
+      "HHWEB": "team.hhweb"
+      "FRDS": "team.frds"
+      "XHB": "team.xhb"
+      "OurBits": "team.ourbits"
+      "WiKi": "team.wiki"
+      "HDS": "team.hds"
+      "CHD": "team.chd"
+      "Other": "team.other"
+      "Audiences": "team.audiences"
+      "ZmWeb": "team.zmweb"
+      "MTeam": "team.mteam"
+      "HDVWEB": "team.hdvweb"
+      "HDHome": "team.hdhome"
+      "QHstudIo": "team.qhstudio"
+      "beAst": "team.beast"
+      "tlf": "team.tlf"
+      "FROGWeb": "team.frogweb"
+      "FROG": "team.frog"
+      "CMCT": "team.cmct"
+      "ADWeb": "team.adweb"
+      "PiGoNF": "team.pigonf"
+      "PigoWeb": "team.pigoweb"
+      "PigoHD": "team.pigohd"
+      "HDFans": "team.hdfans"
+      "UBWEB": "team.ubweb"
+      "FFans": "team.ffans"
+      "Pter": "team.pter"
+
+    processing:
+      "印度（India）": "processing.india"
+      "韩国（KR）": "processing.korea"
+      "日本（JP）": "processing.japan"
+      "欧美（EU/US）": "processing.western"
+      "港台（HK/TW）": "processing.hktw"
+      "中国大陆（CN）": "processing.china"
+      "其他（Other）": "processing.other"
+
+# 参数映射规则 - 定义如何将标准化键映射到站点特定参数
+mappings:
+  type:
+    "category.movie": "401"
+    "category.tv_series": "402"
+    "category.playlet": "413"
+    "category.music": "408"
+    "category.anime": "405"
+    "category.music_video": "406"
+    "category.tv_shows": "403"
+    "category.sports": "407"
+    "category.other": "409"
+    "category.documentary": "404"
+    "category.cartoon": "415"
+    "category.game": "414"
+    "category.study": "412"
+    "category.audiobook": "411"
+    "category.ebook": "410"
+    "default": "409"
+
+  medium:
+    "medium.cd": "8"
+    "medium.hdtv": "7"
+    "medium.webdl": "6"
+    "medium.encode": "5"
+    "medium.remux": "4"
+    "medium.uhd_bluray": "3"
+    "medium.bluray": "2"
+    "medium.other": "1"
+    "medium.mvc": "9"
+    "medium.prores": "10"
+    "medium.xvid": "11"
+    "default": "1"
+
+  codec:
+    "codec.av1": "6"
+    "codec.vp9": "5"
+    "codec.h266": "4"
+    "codec.h265": "3"
+    "codec.h264": "2"
+    "codec.other": "1"
+    "codec.vc1": "14"
+    "codec.mpeg": "15"
+    "default": "1"
+
+  audio_codec:
+    "audio.alac": "16"
+    "audio.ape": "12"
+    "audio.wav": "11"
+    "audio.flac": "10"
+    "audio.mpeg": "9"
+    "audio.dtsx": "8"
+    "audio.lpcm": "7"
+    "audio.truehd": "6"
+    "audio.dts": "5"
+    "audio.ddp": "4"
+    "audio.ac3": "3"
+    "audio.aac": "2"
+    "audio.other": "1"
+    "audio.dts_hd": "15"
+    "audio.dts_hd_ma": "17"
+    "audio.ogg": "21"
+    "audio.dsd": "23"
+    "audio.opus": "24"
+    "audio.atmos": "26"
+    "default": "1"
+
+  resolution:
+    "resolution.r8k": "5"
+    "resolution.r2160p": "4"
+    "resolution.r1080p": "3"
+    "resolution.r720p": "2"
+    "resolution.other": "1"
+    "default": "1"
+
+  processing:
+    "processing.india": "7"
+    "processing.korea": "6"
+    "processing.japan": "5"
+    "processing.western": "4"
+    "processing.hktw": "3"
+    "processing.china": "2"
+    "processing.other": "1"
+    "default": "1"
+
+  team:
+    "team.agsvweb": "15"
+    "team.dyz_web": "11"
+    "team.dyz_movie": "12"
+    "team.dyz_tv": "13"
+    "team.ubits": "9"
+    "team.hhweb": "8"
+    "team.frds": "7"
+    "team.xhb": "6"
+    "team.ourbits": "5"
+    "team.wiki": "4"
+    "team.hds": "3"
+    "team.chd": "2"
+    "team.other": "1"
+    "team.audiences": "10"
+    "team.zmweb": "16"
+    "team.mteam": "37"
+    "team.hdvweb": "36"
+    "team.hdhome": "35"
+    "team.qhstudio": "34"
+    "team.beast": "33"
+    "team.tlf": "32"
+    "team.frogweb": "30"
+    "team.frog": "29"
+    "team.cmct": "27"
+    "team.adweb": "25"
+    "team.pigonf": "23"
+    "team.pigoweb": "22"
+    "team.pigohd": "21"
+    "team.hdfans": "20"
+    "team.ubweb": "19"
+    "team.ffans": "18"
+    "team.pter": "17"
+    "default": "1"
+
+  format:
+    "format.epub": "8"
+    "format.azw3": "9"
+    "format.mobi": "10"
+    "format.pdf": "11"
+    "format.zip": "12"
+    "format.epub_azw3_mobi": "13"
+    "format.txt": "7"
+    "format.other": "1"
+    "default": "1"
+
+  special_audio_codec:
+    "audio.ogg": "14"
+    "audio.m4a": "13"
+    "audio.aac": "2"
+    "audio.dts_hd": "15"
+    "audio.dts_hd_ma": "17"
+    "audio.dsd": "23"
+    "audio.atmos": "26"
+    "audio.other": "1"
+    "default": "1"
+
+  special_team:
+    "team.agsvweb": "15"
+    "team.dyz_web": "11"
+    "team.dyz_movie": "12"
+    "team.dyz_tv": "13"
+    "team.ubits": "9"
+    "team.hhweb": "8"
+    "team.frds": "7"
+    "team.xhb": "6"
+    "team.ourbits": "5"
+    "team.wiki": "4"
+    "team.hds": "3"
+    "team.chd": "2"
+    "team.other": "1"
+    "team.audiences": "10"
+    "team.zmweb": "16"
+    "team.hongye": "38"
+    "team.beast": "33"
+    "team.tlf": "32"
+    "team.frogweb": "30"
+    "team.frog": "29"
+    "team.cmct": "27"
+    "team.adweb": "25"
+    "team.qhstudio": "24"
+    "team.pigonf": "23"
+    "team.pigoweb": "22"
+    "team.pigohd": "21"
+    "team.hdfans": "20"
+    "team.ubweb": "19"
+    "team.ffans": "18"
+    "team.pter": "17"
+    "default": "1"
+
+  tag:
+    "合集大包": 19
+    "禁转": 1
+    "自购": 2
+    "原盘DIY": 4
+    "国语": 5
+    "粤语": 6
+    "中字": 7
+    "分集": 9
+    "完结": 8
+    "HDR": 11
+    "特效字幕": 10
+    "Dolby Vision": 12
+    "Dolby Atmos": 13
+    "未完结": 59
+    "ASMR": 50
+    "武侠": 48
+    "灾难": 47
+    "冒险": 46
+    "奇幻": 45
+    "犯罪": 44
+    "战争": 43
+    "历史": 42
+    "纪录": 41
+    "恐怖": 40
+    "惊悚": 39
+    "悬疑": 38
+    "动画": 37
+    "科幻": 36
+    "爱情": 35
+    "动作": 34
+    "喜剧": 33
+    "剧情": 32
+    "短剧": 25
+    "AGSV": 24
+    "Audiences": 23
+    "驻站": 22
+    "伦理": 20
+    "default": null
+
+  special_tag:
+    "无限流": 62
+    "穿越重生": 61
+    "传记名著": 60
+    "文学出版": 56
+    "外语有声": 55
+    "相声评书": 57
+    "言情小说": 58
+    "灵异悬疑": 30
+    "历史军事": 53
+    "电台节目": 52
+    "传统戏曲": 51
+    "都市异能": 31
+    "武侠仙侠": 29
+    "科幻末日": 28
+    "游戏竞技": 27
+    "奇幻玄幻": 26
+    "知识普及": 17
+    "历史架空": 14
+    "合集大包": 19
+    "禁转": 1
+    "自购": 2
+    "中字": 7
+    "分集": 9
+    "完结": 8
+    "军事": 18
+    "财经": 16
+    "网文": 15
+    "未完结": 59
+    "轻小说": 54
+    "灾难": 47
+    "犯罪": 44
+    "动画": 37
+    "科幻": 36
+    "条漫": 21
+    "default": null
