@@ -6,7 +6,7 @@ site_name: "QingwaPT"
 # 表单字段定义 - 定义站点上传表单中各字段的标识符
 form_fields:
   medium: "source_sel[4]"
-  codec: "codec_sel[4]"
+  video_codec: "codec_sel[4]"
   audio_codec: "audiocodec_sel[4]"
   resolution: "standard_sel[4]"
   team: "team_sel[4]"
@@ -87,14 +87,14 @@ source_parsers:
       "Other": "medium.other"
 
     video_codec:
-      "H.264/AVC": "codec.h264"
-      "H.265/HEVC": "codec.h265"
-      "VC-1": "codec.vc1"
-      "MPEG-2": "codec.mpeg2"
-      "AV1": "codec.av1"
-      "MPEG-4": "codec.mpeg4"
-      "VP9": "codec.vp9"
-      "Other": "codec.other"
+      "H.264/AVC": "video.h264"
+      "H.265/HEVC": "video.h265"
+      "VC-1": "video.vc1"
+      "MPEG-2": "video.mpeg2"
+      "AV1": "video.av1"
+      "MPEG-4": "video.mpeg4"
+      "VP9": "video.vp9"
+      "Other": "video.other"
 
     audio_codec:
       "DTS:X": "audio.dtsx"
@@ -162,15 +162,15 @@ mappings:
     "medium.other": "6"
     "default": "6"
 
-  codec:
-    "codec.h264": "1"
-    "codec.h265": "6"
-    "codec.vc1": "2"
-    "codec.mpeg2": "4"
-    "codec.av1": "7"
-    "codec.mpeg4": "3"
-    "codec.vp9": "8"
-    "codec.other": "5"
+  video_codec:
+    "video.h264": "1"
+    "video.h265": "6"
+    "video.vc1": "2"
+    "video.mpeg2": "4"
+    "video.av1": "7"
+    "video.mpeg4": "3"
+    "video.vp9": "8"
+    "video.other": "5"
     "default": "5"
 
   audio_codec:

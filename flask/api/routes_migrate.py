@@ -667,7 +667,7 @@ def update_preview_data():
 
             # 用于预览显示标准化键对应的内容
             preview_video_codec = standardized_params.get(
-                "video_codec", "codec.other")
+                "video_codec", "video.other")
             preview_audio_codec = standardized_params.get(
                 "audio_codec", "audio.other")
             preview_medium = standardized_params.get("medium", "medium.other")

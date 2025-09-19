@@ -6,7 +6,7 @@ site_name: "Ptcafe"
 # 表单字段定义 - 定义站点上传表单中各字段的标识符
 form_fields:
   medium: "medium_sel[4]"
-  codec: "codec_sel[4]"
+  video_codec: "codec_sel[4]"
   audio_codec: "audiocodec_sel[4]"
   resolution: "standard_sel[4]"
   source: "source_sel[4]"
@@ -93,17 +93,17 @@ source_parsers:
       "Other": "medium.other"
 
     video_codec:
-      "H.265/HEVC": "codec.h265"
-      "H.264/AVC": "codec.h264"
-      "X265": "codec.x265"
-      "X264": "codec.x264"
-      "VC-1": "codec.vc1"
-      "MPEG-2": "codec.mpeg2"
-      "MPEG-4": "codec.mpeg4"
-      "XVID": "codec.xvid"
-      "VP9": "codec.vp9"
-      "DIVX": "codec.divx"
-      "Other": "codec.other"
+      "H.265/HEVC": "video.h265"
+      "H.264/AVC": "video.h264"
+      "X265": "video.x265"
+      "X264": "video.x264"
+      "VC-1": "video.vc1"
+      "MPEG-2": "video.mpeg2"
+      "MPEG-4": "video.mpeg4"
+      "XVID": "video.xvid"
+      "VP9": "video.vp9"
+      "DIVX": "video.divx"
+      "Other": "video.other"
 
     audio_codec:
       "DTS-HDMA:X 7.1": "audio.dts_hdma_x71"
@@ -204,18 +204,18 @@ mappings:
     "medium.other": "13"
     "default": "13"
 
-  codec:
-    "codec.h265": "1"
-    "codec.h264": "2"
-    "codec.x265": "3"
-    "codec.x264": "4"
-    "codec.vc1": "5"
-    "codec.mpeg2": "6"
-    "codec.mpeg4": "7"
-    "codec.xvid": "8"
-    "codec.vp9": "9"
-    "codec.divx": "10"
-    "codec.other": "11"
+  video_codec:
+    "video.h265": "1"
+    "video.h264": "2"
+    "video.x265": "3"
+    "video.x264": "4"
+    "video.vc1": "5"
+    "video.mpeg2": "6"
+    "video.mpeg4": "7"
+    "video.xvid": "8"
+    "video.vp9": "9"
+    "video.divx": "10"
+    "video.other": "11"
     "default": "11"
 
   audio_codec:

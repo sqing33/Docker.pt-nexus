@@ -6,7 +6,7 @@ site_name: "March"
 # 表单字段定义 - 定义站点上传表单中各字段的标识符
 form_fields:
   medium: "medium_sel[4]"
-  codec: "codec_sel[4]"
+  video_codec: "codec_sel[4]"
   resolution: "standard_sel[4]"
   team: "team_sel[4]"
   category: "type"  # 类别字段映射到type参数
@@ -80,16 +80,16 @@ source_parsers:
       "Blu-Ray": "medium.bluray"
 
     video_codec:
-      "H.264": "codec.h264"
-      "HEVC": "codec.h265"
-      "H.265": "codec.h265"
-      "MPEG-2": "codec.mpeg2"
-      "MPEG-4": "codec.mpeg4"
-      "X.264": "codec.x264"
-      "X.265": "codec.x265"
-      "XVID": "codec.xvid"
-      "AV1": "codec.av1"
-      "Other": "codec.other"
+      "H.264": "video.h264"
+      "HEVC": "video.h265"
+      "H.265": "video.h265"
+      "MPEG-2": "video.mpeg2"
+      "MPEG-4": "video.mpeg4"
+      "X.264": "video.x264"
+      "X.265": "video.x265"
+      "XVID": "video.xvid"
+      "AV1": "video.av1"
+      "Other": "video.other"
 
     resolution:
       "1080p": "resolution.r1080p"
@@ -138,16 +138,16 @@ mappings:
     "medium.bluray": "1"
     "default": "4"
 
-  codec:
-    "codec.h264": "1"
-    "codec.h265": "2"
-    "codec.mpeg2": "4"
-    "codec.mpeg4": "5"
-    "codec.x264": "6"
-    "codec.x265": "7"
-    "codec.xvid": "9"
-    "codec.av1": "10"
-    "codec.other": "11"
+  video_codec:
+    "video.h264": "1"
+    "video.h265": "2"
+    "video.mpeg2": "4"
+    "video.mpeg4": "5"
+    "video.x264": "6"
+    "video.x265": "7"
+    "video.xvid": "9"
+    "video.av1": "10"
+    "video.other": "11"
     "default": "11"
 
   resolution:

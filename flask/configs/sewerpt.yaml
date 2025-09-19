@@ -6,7 +6,7 @@ site_name: "SewerPT"
 # 表单字段定义 - 定义站点上传表单中各字段的标识符
 form_fields:
   medium: "medium_sel[4]"
-  codec: "codec_sel[4]"
+  video_codec: "codec_sel[4]"
   audio_codec: "audiocodec_sel[4]"
   resolution: "standard_sel[4]"
   team: "team_sel[4]"
@@ -95,16 +95,16 @@ source_parsers:
       "Other": "medium.other"
 
     video_codec:
-      "AVC": "codec.h264"
-      "H.264": "codec.h264"
-      "x264": "codec.x264"
-      "HEVC": "codec.h265"
-      "H.265": "codec.h265"
-      "x265": "codec.x265"
-      "VC-1": "codec.vc1"
-      "Xvid": "codec.xvid"
-      "MPEG-2": "codec.mpeg2"
-      "Other": "codec.other"
+      "AVC": "video.h264"
+      "H.264": "video.h264"
+      "x264": "video.x264"
+      "HEVC": "video.h265"
+      "H.265": "video.h265"
+      "x265": "video.x265"
+      "VC-1": "video.vc1"
+      "Xvid": "video.xvid"
+      "MPEG-2": "video.mpeg2"
+      "Other": "video.other"
 
     audio_codec:
       "FLAC": "audio.flac"
@@ -169,15 +169,15 @@ mappings:
     "medium.other": "11"
     "default": "11"
 
-  codec:
-    "codec.h264": "1"
-    "codec.x264": "1"
-    "codec.h265": "6"
-    "codec.x265": "6"
-    "codec.vc1": "2"
-    "codec.xvid": "3"
-    "codec.mpeg2": "4"
-    "codec.other": "5"
+  video_codec:
+    "video.h264": "1"
+    "video.x264": "1"
+    "video.h265": "6"
+    "video.x265": "6"
+    "video.vc1": "2"
+    "video.xvid": "3"
+    "video.mpeg2": "4"
+    "video.other": "5"
     "default": "5"
 
   audio_codec:
