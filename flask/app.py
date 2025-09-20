@@ -62,6 +62,9 @@ def create_app():
     setattr(migrate_bp, "config_manager", config_manager)  # 迁移模块也可能需要配置信息
     setattr(sites_bp, "db_manager", db_manager)
 
+    # 将数据库管理器添加到应用配置中，以便在其他地方可以通过current_app访问
+    app.config['DB_MANAGER'] = db_manager
+
     # 认证中间件：默认开启，校验所有 /api/* 请求（排除 /api/auth/*）
 
     def _get_jwt_secret() -> str:

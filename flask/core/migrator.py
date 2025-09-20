@@ -19,6 +19,9 @@ from typing import Dict, Any, Optional, List
 from config import TEMP_DIR, DATA_DIR
 from utils import ensure_scheme, upload_data_mediaInfo, upload_data_title, extract_tags_from_mediainfo, extract_origin_from_description
 
+# 导入种子参数模型
+from models.seed_parameter import SeedParameter
+
 # 导入新的Extractor和ParameterMapper
 from core.extractors.extractor import Extractor, ParameterMapper
 
@@ -76,6 +79,7 @@ class TorrentMigrator:
 
         self.SOURCE_BASE_URL = ensure_scheme(self.source_site.get("base_url"))
         self.SOURCE_NAME = self.source_site["nickname"]
+        self.SOURCE_SITE_CODE = self.source_site["site"]  # 添加英文站点名
         self.SOURCE_COOKIE = self.source_site["cookie"]
         self.SOURCE_PROXY = self.source_site.get("proxy", False)
 
@@ -118,17 +122,17 @@ class TorrentMigrator:
         加载源站点的YAML配置文件，用于解析source_parsers
         """
         try:
-            # 假设源站点配置文件路径与目标站点类似
+            # 使用英文站点名构造配置文件名
             config_path = os.path.join(
                 DATA_DIR,
-                f"{self.SOURCE_NAME.lower().replace(' ', '_').replace('-', '_')}.yaml"
+                f"{self.SOURCE_SITE_CODE.lower().replace(' ', '_').replace('-', '_')}.yaml"
             )
             if os.path.exists(config_path):
                 with open(config_path, 'r', encoding='utf-8') as f:
                     return yaml.safe_load(f) or {}
             else:
                 self.logger.warning(
-                    f"未找到源站点 {self.SOURCE_NAME} 的配置文件 {config_path}")
+                    f"未找到源站点 {self.SOURCE_NAME} ({self.SOURCE_SITE_CODE}) 的配置文件 {config_path}")
                 return {}
         except Exception as e:
             self.logger.warning(f"加载源站点配置文件时出错: {e}")
@@ -490,6 +494,11 @@ class TorrentMigrator:
                           self.search_and_get_torrent_id(self.search_term))
             if not torrent_id:
                 raise Exception("未能获取到种子ID，请检查种子名称或ID是否正确。")
+
+            # 初始化种子参数模型
+            # 修复：从配置管理器中获取数据库管理器
+            from flask import current_app
+            seed_param_model = SeedParameter(current_app.config['DB_MANAGER'])
 
             self.logger.info(f"正在获取种子(ID: {torrent_id})的详细信息...")
             # 获取代理配置
@@ -894,6 +903,33 @@ class TorrentMigrator:
                 "special_extractor_processed":
                 getattr(self, '_special_extractor_processed', False)
             }
+
+            # 保存参数到数据库
+            seed_parameters = {
+                "title": original_main_title,
+                "subtitle": subtitle,
+                "imdb_link": imdb_link,
+                "douban_link": douban_link,
+                "type": source_params.get("类型"),
+                "medium": source_params.get("媒介"),
+                "video_codec": source_params.get("视频编码"),
+                "audio_codec": source_params.get("音频编码"),
+                "resolution": source_params.get("分辨率"),
+                "team": source_params.get("制作组"),
+                "source": source_params.get("产地"),
+                "tags": source_params.get("标签", []),
+                "poster": intro.get("poster"),
+                "screenshots": intro.get("screenshots"),
+                "description": f"{intro.get('statement', '')}\n{intro.get('body', '')}",
+                "mediainfo": mediainfo
+            }
+
+            # 保存到JSON文件，使用英文站点名作为标识
+            save_result = seed_param_model.save_parameters(torrent_id, self.SOURCE_SITE_CODE, seed_parameters)
+            if save_result:
+                self.logger.info(f"种子参数已保存到JSON文件: {torrent_id} from {self.SOURCE_NAME} ({self.SOURCE_SITE_CODE})")
+            else:
+                self.logger.warning(f"种子参数保存到JSON文件失败: {torrent_id} from {self.SOURCE_NAME} ({self.SOURCE_SITE_CODE})")
 
             return {
                 "review_data": review_data_payload,

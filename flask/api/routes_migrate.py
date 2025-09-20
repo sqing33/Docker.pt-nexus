@@ -8,6 +8,9 @@ from bs4 import BeautifulSoup
 from utils import upload_data_title, upload_data_screenshot, upload_data_poster, add_torrent_to_downloader, extract_tags_from_mediainfo, extract_origin_from_description, extract_resolution_from_mediainfo
 from core.migrator import TorrentMigrator
 
+# 导入种子参数模型
+from models.seed_parameter import SeedParameter
+
 # --- [新增] 导入 config_manager ---
 # 确保能够访问到全局的 config_manager 实例
 from config import config_manager

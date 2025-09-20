@@ -183,7 +183,43 @@ class HHCLUBSpecialExtractor:
                     elif "制作组" in key: basic_info_dict["制作组"] = value
                     elif "发布者" in key: basic_info_dict["发布者"] = value
                     elif "发布时间" in key: basic_info_dict["发布时间"] = value
+
+        # 如果没有提取到制作组信息，尝试从标题中提取
+        if not basic_info_dict.get("制作组"):
+            basic_info_dict["制作组"] = self._extract_group_from_title()
+
         return basic_info_dict
+
+    def _extract_group_from_title(self):
+        """
+        从标题中提取制作组信息
+        """
+        # 提取主标题
+        container = self._find_section_container("标题")
+        original_main_title = container.get_text(strip=True) if container else ""
+
+        # 从标题中提取制作组的正则表达式
+        # 匹配常见的制作组格式，例如: [ABC] 或 -ABC 或 [ABC-RIP] 等
+        group_patterns = [
+            r'^\[(\w+(?:-\w+)*)\]',  # 开头的 [制作组] 格式
+            r'-([A-Z]+(?:-[A-Z]+)*)$',  # 结尾的 -制作组 格式
+            r'\[([A-Z]+(?:-[A-Z]+)*)\]$',  # 结尾的 [制作组] 格式
+        ]
+
+        for pattern in group_patterns:
+            match = re.search(pattern, original_main_title)
+            if match:
+                return match.group(1)
+
+        # 如果以上模式都不匹配，尝试查找标题中的制作组标识
+        # 匹配常见的制作组缩写（大写字母组合）
+        general_group_pattern = r'\b([A-Z]{2,}(?:-[A-Z]+)*)\b'
+        matches = re.findall(general_group_pattern, original_main_title)
+        if matches:
+            # 返回第一个匹配的制作组（通常在标题开头的更可能是制作组）
+            return matches[0]
+
+        return None
 
     def extract_tags(self):
         """
