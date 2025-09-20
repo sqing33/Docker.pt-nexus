@@ -904,32 +904,47 @@ class TorrentMigrator:
                 getattr(self, '_special_extractor_processed', False)
             }
 
-            # 保存参数到数据库
+            # [此部分为核心修改]
+            # ------------------------------------------------------------------------------------------
+            # 保存参数到数据库。
+            # 直接使用前面 ParameterMapper 生成的 standardized_params 字典，
+            # 它已经包含了所有映射好的标准化参数。
+
+            # 1. 先构建包含非标准化信息的字典
             seed_parameters = {
                 "title": original_main_title,
                 "subtitle": subtitle,
                 "imdb_link": imdb_link,
                 "douban_link": douban_link,
-                "type": source_params.get("类型"),
-                "medium": source_params.get("媒介"),
-                "video_codec": source_params.get("视频编码"),
-                "audio_codec": source_params.get("音频编码"),
-                "resolution": source_params.get("分辨率"),
-                "team": source_params.get("制作组"),
-                "source": source_params.get("产地"),
-                "tags": source_params.get("标签", []),
                 "poster": intro.get("poster"),
                 "screenshots": intro.get("screenshots"),
-                "description": f"{intro.get('statement', '')}\n{intro.get('body', '')}",
-                "mediainfo": mediainfo
+                "description": f"{intro.get('statement', '')}\n{intro.get('body', '')}".strip(),
+                "mediainfo": mediainfo,
+                # 标签(tags)通常直接使用源站的值，不参与标准化
+                "tags": source_params.get("标签", []),
             }
+
+            # 2. 将 standardized_params 中所有标准化的键值对合并进来。
+            #    这里的 .get() 会返回 'category.movie' 这样的完整字符串。
+            seed_parameters.update({
+                "type": standardized_params.get("type"),
+                "medium": standardized_params.get("medium"),
+                "video_codec": standardized_params.get("video_codec"),
+                "audio_codec": standardized_params.get("audio_codec"),
+                "resolution": standardized_params.get("resolution"),
+                "team": standardized_params.get("team"),
+                "source": standardized_params.get("source"),
+                # 如果您的 standardized_params 中还包含 processing 等其他字段，也一并加入
+                "processing": standardized_params.get("processing"),
+            })
+            # ------------------------------------------------------------------------------------------
 
             # 保存到JSON文件，使用英文站点名作为标识
             save_result = seed_param_model.save_parameters(torrent_id, self.SOURCE_SITE_CODE, seed_parameters)
             if save_result:
-                self.logger.info(f"种子参数已保存到JSON文件: {torrent_id} from {self.SOURCE_NAME} ({self.SOURCE_SITE_CODE})")
+                self.logger.info(f"种子参数(使用标准化键)已保存到JSON文件: {torrent_id} from {self.SOURCE_NAME} ({self.SOURCE_SITE_CODE})")
             else:
-                self.logger.warning(f"种子参数保存到JSON文件失败: {torrent_id} from {self.SOURCE_NAME} ({self.SOURCE_SITE_CODE})")
+                self.logger.warning(f"种子参数(使用标准化键)保存到JSON文件失败: {torrent_id} from {self.SOURCE_NAME} ({self.SOURCE_SITE_CODE})")
 
             return {
                 "review_data": review_data_payload,

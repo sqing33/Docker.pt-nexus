@@ -397,15 +397,25 @@ class Extractor:
 # [新增] 定义音频编码的层级（权重），数字越大越优先
 AUDIO_CODEC_HIERARCHY = {
     # Top Tier (最精确)
-    "audio.truehd_atmos": 5, "audio.dtsx": 5,
+    "audio.truehd_atmos": 5,
+    "audio.dtsx": 5,
     # High Tier (无损次世代)
-    "audio.truehd": 4, "audio.dts_hd_ma": 4,
+    "audio.truehd": 4,
+    "audio.dts_hd_ma": 4,
     # Mid Tier (有损次世代 / 无损)
-    "audio.ddp": 3, "audio.dts": 3, "audio.flac": 3, "audio.lpcm": 3,
+    "audio.ddp": 3,
+    "audio.dts": 3,
+    "audio.flac": 3,
+    "audio.lpcm": 3,
     # Standard Tier (核心/普通)
     "audio.ac3": 2,
     # Low Tier (有损)
-    "audio.aac": 1, "audio.mp3": 1, "audio.alac": 1, "audio.ape": 1, "audio.m4a": 1, "audio.wav": 1,
+    "audio.aac": 1,
+    "audio.mp3": 1,
+    "audio.alac": 1,
+    "audio.ape": 1,
+    "audio.m4a": 1,
+    "audio.wav": 1,
     # Other/Default
     "audio.other": 0,
 }
@@ -426,9 +436,17 @@ class ParameterMapper:
         """
         try:
             site_name_mapping = {
-                "财神": "cspt", "财神站": "cspt", "Cspt": "cspt",
-                "LuckPT": "luckpt", "幸运": "luckpt", "Audiences": "audiences",
-                "HHClub": "hhclub", "13City": "13city", "Qingwapt": "qingwapt", "青蛙": "qingwapt"
+                "财神": "cspt",
+                "财神站": "cspt",
+                "Cspt": "cspt",
+                "LuckPT": "luckpt",
+                "幸运": "luckpt",
+                "Audiences": "audiences",
+                "HHClub": "hhclub",
+                "13City": "13city",
+                "Qingwapt": "qingwapt",
+                "青蛙": "qingwapt",
+                "不可说": "ssd"
             }
             actual_site_name = site_name_mapping.get(site_name, site_name)
             config_filename = f"{actual_site_name.lower().replace(' ', '_').replace('-', '_')}.yaml"
@@ -475,13 +493,13 @@ class ParameterMapper:
             # 优先级 2: 尝试在源站点特定的映射中查找
             site_mappings = site_standard_keys.get(param_key, {})
             for source_text, standard_key in site_mappings.items():
-                 if source_text.lower() in value_str.lower():
+                if source_text.lower() in value_str.lower():
                     return standard_key
 
             # 如果都找不到，返回一个默认值或处理过的原始值
             if param_key == "team":
-                return "team.other" # 制作组找不到映射时，明确返回 team.other
-            return value_str # 其他参数返回原始值
+                return "team.other"  # 制作组找不到映射时，明确返回 team.other
+            return value_str  # 其他参数返回原始值
 
         # 1. 分别从 source_params 和 title_components 提取并标准化
         source_standard_values = {}
@@ -489,15 +507,20 @@ class ParameterMapper:
         for param_key, config in source_params_config.items():
             raw_value = source_params.get(config.get("source_key"))
             if raw_value:
-                source_standard_values[param_key] = get_standard_key_for_value(raw_value, param_key)
+                source_standard_values[param_key] = get_standard_key_for_value(
+                    raw_value, param_key)
 
         title_standard_values = {}
         title_components_config = source_parsers.get("title_components", {})
-        title_params = {item["key"]: item["value"] for item in title_components}
+        title_params = {
+            item["key"]: item["value"]
+            for item in title_components
+        }
         for param_key, config in title_components_config.items():
             raw_value = title_params.get(config.get("source_key"))
             if raw_value:
-                title_standard_values[param_key] = get_standard_key_for_value(raw_value, param_key)
+                title_standard_values[param_key] = get_standard_key_for_value(
+                    raw_value, param_key)
 
         # 2. 合并决策
         final_standardized_params = source_standard_values.copy()
