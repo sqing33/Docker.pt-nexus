@@ -982,16 +982,16 @@ class TorrentMigrator:
             })
             # ------------------------------------------------------------------------------------------
 
-            # 保存到JSON文件，使用英文站点名作为标识
+            # 保存到数据库（优先）和JSON文件（后备），使用英文站点名作为标识
             save_result = seed_param_model.save_parameters(
                 torrent_id, self.SOURCE_SITE_CODE, seed_parameters)
             if save_result:
                 self.logger.info(
-                    f"种子参数(使用标准化键)已保存到JSON文件: {torrent_id} from {self.SOURCE_NAME} ({self.SOURCE_SITE_CODE})"
+                    f"种子参数(使用标准化键)已保存: {torrent_id} from {self.SOURCE_NAME} ({self.SOURCE_SITE_CODE})"
                 )
             else:
                 self.logger.warning(
-                    f"种子参数(使用标准化键)保存到JSON文件失败: {torrent_id} from {self.SOURCE_NAME} ({self.SOURCE_SITE_CODE})"
+                    f"种子参数(使用标准化键)保存失败: {torrent_id} from {self.SOURCE_NAME} ({self.SOURCE_SITE_CODE})"
                 )
 
             return {

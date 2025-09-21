@@ -38,6 +38,191 @@ class SeedParameter:
 
     def save_parameters(self, torrent_id: str, site_name: str, parameters: Dict[str, Any]) -> bool:
         """
+        保存种子参数到数据库（优先）和JSON文件（后备）
+
+        Args:
+            torrent_id: 种子ID
+            site_name: 站点名称
+            parameters: 参数字典
+
+        Returns:
+            bool: 保存是否成功
+        """
+        try:
+            # 添加时间戳
+            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            parameters["created_at"] = current_time
+            parameters["updated_at"] = current_time
+            parameters["torrent_id"] = torrent_id
+            parameters["site_name"] = site_name
+
+            # 优先保存到数据库
+            if self.db_manager:
+                db_success = self._save_to_database(torrent_id, site_name, parameters)
+                if db_success:
+                    logging.info(f"种子参数已保存到数据库: {torrent_id} from {site_name}")
+                    return True
+                else:
+                    logging.warning(f"保存种子参数到数据库失败，回退到JSON文件: {torrent_id} from {site_name}")
+
+            # 回退到JSON文件存储
+            return self._save_to_json_file(torrent_id, site_name, parameters)
+
+        except Exception as e:
+            logging.error(f"保存种子参数失败: {e}", exc_info=True)
+            return False
+
+    def _save_to_database(self, torrent_id: str, site_name: str, parameters: Dict[str, Any]) -> bool:
+        """
+        保存种子参数到数据库（使用UPSERT避免重复键冲突）
+
+        Args:
+            torrent_id: 种子ID
+            site_name: 站点名称
+            parameters: 参数字典
+
+        Returns:
+            bool: 保存是否成功
+        """
+        try:
+            conn = self.db_manager._get_connection()
+            cursor = self.db_manager._get_cursor(conn)
+            ph = self.db_manager.get_placeholder()
+
+            # 处理tags字段（列表转换为字符串）
+            tags = parameters.get("tags", [])
+            if isinstance(tags, list):
+                tags = json.dumps(tags, ensure_ascii=False)
+            else:
+                tags = str(tags) if tags else ""
+
+            # 根据数据库类型构建UPSERT SQL
+            if self.db_manager.db_type == "postgresql":
+                # PostgreSQL使用ON CONFLICT DO UPDATE
+                insert_sql = f"""
+                    INSERT INTO seed_parameters
+                    (torrent_id, site_name, title, subtitle, imdb_link, douban_link, type, medium,
+                     video_codec, audio_codec, resolution, team, source, tags, poster, screenshots,
+                     description, mediainfo, created_at, updated_at)
+                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+                    ON CONFLICT (torrent_id, site_name)
+                    DO UPDATE SET
+                        title = EXCLUDED.title,
+                        subtitle = EXCLUDED.subtitle,
+                        imdb_link = EXCLUDED.imdb_link,
+                        douban_link = EXCLUDED.douban_link,
+                        type = EXCLUDED.type,
+                        medium = EXCLUDED.medium,
+                        video_codec = EXCLUDED.video_codec,
+                        audio_codec = EXCLUDED.audio_codec,
+                        resolution = EXCLUDED.resolution,
+                        team = EXCLUDED.team,
+                        source = EXCLUDED.source,
+                        tags = EXCLUDED.tags,
+                        poster = EXCLUDED.poster,
+                        screenshots = EXCLUDED.screenshots,
+                        description = EXCLUDED.description,
+                        mediainfo = EXCLUDED.mediainfo,
+                        updated_at = EXCLUDED.updated_at
+                """
+            elif self.db_manager.db_type == "mysql":
+                # MySQL使用ON DUPLICATE KEY UPDATE
+                insert_sql = f"""
+                    INSERT INTO seed_parameters
+                    (torrent_id, site_name, title, subtitle, imdb_link, douban_link, type, medium,
+                     video_codec, audio_codec, resolution, team, source, tags, poster, screenshots,
+                     description, mediainfo, created_at, updated_at)
+                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+                    ON DUPLICATE KEY UPDATE
+                        title = VALUES(title),
+                        subtitle = VALUES(subtitle),
+                        imdb_link = VALUES(imdb_link),
+                        douban_link = VALUES(douban_link),
+                        type = VALUES(type),
+                        medium = VALUES(medium),
+                        video_codec = VALUES(video_codec),
+                        audio_codec = VALUES(audio_codec),
+                        resolution = VALUES(resolution),
+                        team = VALUES(team),
+                        source = VALUES(source),
+                        tags = VALUES(tags),
+                        poster = VALUES(poster),
+                        screenshots = VALUES(screenshots),
+                        description = VALUES(description),
+                        mediainfo = VALUES(mediainfo),
+                        updated_at = VALUES(updated_at)
+                """
+            else:  # SQLite
+                # SQLite使用ON CONFLICT DO UPDATE
+                insert_sql = f"""
+                    INSERT INTO seed_parameters
+                    (torrent_id, site_name, title, subtitle, imdb_link, douban_link, type, medium,
+                     video_codec, audio_codec, resolution, team, source, tags, poster, screenshots,
+                     description, mediainfo, created_at, updated_at)
+                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+                    ON CONFLICT (torrent_id, site_name)
+                    DO UPDATE SET
+                        title = excluded.title,
+                        subtitle = excluded.subtitle,
+                        imdb_link = excluded.imdb_link,
+                        douban_link = excluded.douban_link,
+                        type = excluded.type,
+                        medium = excluded.medium,
+                        video_codec = excluded.video_codec,
+                        audio_codec = excluded.audio_codec,
+                        resolution = excluded.resolution,
+                        team = excluded.team,
+                        source = excluded.source,
+                        tags = excluded.tags,
+                        poster = excluded.poster,
+                        screenshots = excluded.screenshots,
+                        description = excluded.description,
+                        mediainfo = excluded.mediainfo,
+                        updated_at = excluded.updated_at
+                """
+
+            # 准备参数
+            params = (
+                torrent_id,
+                site_name,
+                parameters.get("title", ""),
+                parameters.get("subtitle", ""),
+                parameters.get("imdb_link", ""),
+                parameters.get("douban_link", ""),
+                parameters.get("type", ""),
+                parameters.get("medium", ""),
+                parameters.get("video_codec", ""),
+                parameters.get("audio_codec", ""),
+                parameters.get("resolution", ""),
+                parameters.get("team", ""),
+                parameters.get("source", ""),
+                tags,
+                parameters.get("poster", ""),
+                parameters.get("screenshots", ""),
+                parameters.get("description", ""),
+                parameters.get("mediainfo", ""),
+                parameters["created_at"],
+                parameters["updated_at"]
+            )
+
+            cursor.execute(insert_sql, params)
+            conn.commit()
+
+            return True
+
+        except Exception as e:
+            logging.error(f"保存种子参数到数据库失败: {e}", exc_info=True)
+            if conn:
+                conn.rollback()
+            return False
+        finally:
+            if cursor:
+                cursor.close()
+            if conn:
+                conn.close()
+
+    def _save_to_json_file(self, torrent_id: str, site_name: str, parameters: Dict[str, Any]) -> bool:
+        """
         保存种子参数到JSON文件
 
         Args:
@@ -52,13 +237,6 @@ class SeedParameter:
             # 获取文件路径
             json_file_path = self._get_json_file_path(torrent_id, site_name)
 
-            # 添加时间戳
-            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            parameters["created_at"] = current_time
-            parameters["updated_at"] = current_time
-            parameters["torrent_id"] = torrent_id
-            parameters["site_name"] = site_name
-
             # 保存到JSON文件
             with open(json_file_path, 'w', encoding='utf-8') as f:
                 json.dump(parameters, f, ensure_ascii=False, indent=2)
@@ -71,6 +249,82 @@ class SeedParameter:
             return False
 
     def get_parameters(self, torrent_id: str, site_name: str) -> Optional[Dict[str, Any]]:
+        """
+        从数据库（优先）或JSON文件获取种子参数
+
+        Args:
+            torrent_id: 种子ID
+            site_name: 站点名称
+
+        Returns:
+            Dict[str, Any]: 参数字典，如果未找到则返回None
+        """
+        try:
+            # 优先从数据库读取
+            if self.db_manager:
+                db_params = self._get_from_database(torrent_id, site_name)
+                if db_params:
+                    logging.info(f"种子参数已从数据库加载: {torrent_id} from {site_name}")
+                    return db_params
+                else:
+                    logging.warning(f"从数据库未找到种子参数，尝试从JSON文件读取: {torrent_id} from {site_name}")
+
+            # 回退到JSON文件读取
+            return self._get_from_json_file(torrent_id, site_name)
+
+        except Exception as e:
+            logging.error(f"获取种子参数失败: {e}", exc_info=True)
+            return None
+
+    def _get_from_database(self, torrent_id: str, site_name: str) -> Optional[Dict[str, Any]]:
+        """
+        从数据库获取种子参数
+
+        Args:
+            torrent_id: 种子ID
+            site_name: 站点名称
+
+        Returns:
+            Dict[str, Any]: 参数字典，如果未找到则返回None
+        """
+        try:
+            conn = self.db_manager._get_connection()
+            cursor = self.db_manager._get_cursor(conn)
+            ph = self.db_manager.get_placeholder()
+
+            select_sql = f"""
+                SELECT * FROM seed_parameters
+                WHERE torrent_id = {ph} AND site_name = {ph}
+                ORDER BY updated_at DESC LIMIT 1
+            """
+
+            cursor.execute(select_sql, (torrent_id, site_name))
+            row = cursor.fetchone()
+
+            if row:
+                parameters = dict(row)
+
+                # 解析tags字段（如果存在）
+                if "tags" in parameters and isinstance(parameters["tags"], str):
+                    try:
+                        parameters["tags"] = json.loads(parameters["tags"])
+                    except json.JSONDecodeError:
+                        parameters["tags"] = []
+
+                return parameters
+
+            return None
+
+        except Exception as e:
+            logging.error(f"从数据库获取种子参数失败: {e}", exc_info=True)
+            return None
+        finally:
+            if cursor:
+                cursor.close()
+            if conn:
+                conn.close()
+
+    def _get_from_json_file(self, torrent_id: str, site_name: str) -> Optional[Dict[str, Any]]:
         """
         从JSON文件获取种子参数
 
