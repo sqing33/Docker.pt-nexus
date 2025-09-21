@@ -315,86 +315,7 @@ class DatabaseManager:
             cursor.close()
             conn.close()
 
-    def _migrate_seed_parameters_table(self, conn, cursor):
-        """检查并向 seed_parameters 表添加缺失的列，实现自动化的数据库迁移。"""
-        logging.info("正在检查 'seed_parameters' 表的结构完整性...")
-        columns_to_add = [
-            ("title", "TEXT", "TEXT"),
-            ("subtitle", "TEXT", "TEXT"),
-            ("imdb_link", "TEXT", "TEXT"),
-            ("douban_link", "TEXT", "TEXT"),
-            ("type", "VARCHAR(100)", "VARCHAR(100)"),
-            ("medium", "VARCHAR(100)", "VARCHAR(100)"),
-            ("video_codec", "VARCHAR(100)", "VARCHAR(100)"),
-            ("audio_codec", "VARCHAR(100)", "VARCHAR(100)"),
-            ("resolution", "VARCHAR(100)", "VARCHAR(100)"),
-            ("team", "VARCHAR(100)", "VARCHAR(100)"),
-            ("source", "VARCHAR(100)", "VARCHAR(100)"),
-            ("tags", "TEXT", "TEXT"),
-            ("poster", "TEXT", "TEXT"),
-            ("screenshots", "TEXT", "TEXT"),
-            ("description", "TEXT", "TEXT"),
-            ("mediainfo", "TEXT", "TEXT"),
-            ("created_at", "TIMESTAMP NOT NULL", "DATETIME NOT NULL"),
-            ("updated_at", "TIMESTAMP NOT NULL", "DATETIME NOT NULL")
-        ]
-
-        if self.db_type == "mysql":
-            meta_cursor = conn.cursor()
-            meta_cursor.execute(
-                "SELECT column_name FROM INFORMATION_SCHEMA.COLUMNS WHERE table_schema = %s AND table_name = 'seed_parameters'",
-                (self.mysql_config.get("database"), ),
-            )
-            existing_columns = {
-                row[0].lower()
-                for row in meta_cursor.fetchall()
-            }
-            meta_cursor.close()
-            for col_name, _, mysql_type in columns_to_add:
-                if col_name.lower() not in existing_columns:
-                    logging.info(
-                        f"在 MySQL 'seed_parameters' 表中发现缺失列: '{col_name}'。正在添加...")
-                    cursor.execute(
-                        f"ALTER TABLE `seed_parameters` ADD COLUMN `{col_name}` {mysql_type}"
-                    )
-        elif self.db_type == "postgresql":
-            meta_cursor = conn.cursor(cursor_factory=RealDictCursor)
-            meta_cursor.execute(
-                "SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'seed_parameters'"
-            )
-            existing_columns = {
-                row["column_name"].lower()
-                for row in meta_cursor.fetchall()
-            }
-            meta_cursor.close()
-            for col_name, _, mysql_type in columns_to_add:
-                if col_name.lower() not in existing_columns:
-                    # PostgreSQL type mappings
-                    postgresql_type = {
-                        "VARCHAR(100)": "VARCHAR(100)",
-                        "DATETIME NOT NULL": "TIMESTAMP NOT NULL",
-                        "TEXT": "TEXT",
-                        "TIMESTAMP NOT NULL": "TIMESTAMP NOT NULL"
-                    }.get(mysql_type, mysql_type)
-                    logging.info(
-                        f"在 PostgreSQL 'seed_parameters' 表中发现缺失列: '{col_name}'。正在添加...")
-                    cursor.execute(
-                        f"ALTER TABLE seed_parameters ADD COLUMN {col_name} {postgresql_type}"
-                    )
-        else:  # SQLite
-            cursor.execute("PRAGMA table_info(seed_parameters)")
-            existing_columns = {
-                row["name"].lower()
-                for row in cursor.fetchall()
-            }
-            for col_name, sqlite_type, _ in columns_to_add:
-                if col_name.lower() not in existing_columns:
-                    logging.info(
-                        f"在 SQLite 'seed_parameters' 表中发现缺失列: '{col_name}'。正在添加...")
-                    cursor.execute(
-                        f"ALTER TABLE seed_parameters ADD COLUMN {col_name} {sqlite_type}"
-                    )
-
+    
     def _add_missing_columns(self, conn, cursor):
         """检查并向 sites 表添加缺失的列，实现自动化的数据库迁移。"""
         logging.info("正在检查 'sites' 表的结构完整性...")
@@ -638,7 +559,7 @@ class DatabaseManager:
             )
             # 创建种子参数表，用于存储从源站点提取的种子参数
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS seed_parameters (id INTEGER NOT NULL AUTO_INCREMENT, torrent_id VARCHAR(255) NOT NULL, site_name VARCHAR(255) NOT NULL, title TEXT, subtitle TEXT, imdb_link TEXT, douban_link TEXT, type VARCHAR(100), medium VARCHAR(100), video_codec VARCHAR(100), audio_codec VARCHAR(100), resolution VARCHAR(100), team VARCHAR(100), source VARCHAR(100), tags TEXT, poster TEXT, screenshots TEXT, description TEXT, mediainfo TEXT, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, PRIMARY KEY (id), UNIQUE KEY seed_parameters_torrent_id_site_name_key (torrent_id, site_name)) ENGINE=InnoDB ROW_FORMAT=DYNAMIC"
+                "CREATE TABLE IF NOT EXISTS seed_parameters (id INTEGER NOT NULL AUTO_INCREMENT, torrent_id VARCHAR(255) NOT NULL, site_name VARCHAR(255) NOT NULL, title TEXT, subtitle TEXT, imdb_link TEXT, douban_link TEXT, type VARCHAR(100), medium VARCHAR(100), video_codec VARCHAR(100), audio_codec VARCHAR(100), resolution VARCHAR(100), team VARCHAR(100), source VARCHAR(100), tags TEXT, poster TEXT, screenshots TEXT, statement TEXT, body TEXT, mediainfo TEXT, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, PRIMARY KEY (id), UNIQUE KEY seed_parameters_torrent_id_site_name_key (torrent_id, site_name)) ENGINE=InnoDB ROW_FORMAT=DYNAMIC"
             )
         # 表创建逻辑 (PostgreSQL)
         elif self.db_type == "postgresql":
@@ -663,7 +584,7 @@ class DatabaseManager:
             )
             # 创建种子参数表，用于存储从源站点提取的种子参数
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS seed_parameters (id SERIAL PRIMARY KEY, torrent_id VARCHAR(255) NOT NULL, site_name VARCHAR(255) NOT NULL, title TEXT, subtitle TEXT, imdb_link TEXT, douban_link TEXT, type VARCHAR(100), medium VARCHAR(100), video_codec VARCHAR(100), audio_codec VARCHAR(100), resolution VARCHAR(100), team VARCHAR(100), source VARCHAR(100), tags TEXT, poster TEXT, screenshots TEXT, description TEXT, mediainfo TEXT, created_at TIMESTAMP NOT NULL, updated_at TIMESTAMP NOT NULL, CONSTRAINT seed_parameters_torrent_id_site_name_key UNIQUE (torrent_id, site_name))"
+                "CREATE TABLE IF NOT EXISTS seed_parameters (id SERIAL PRIMARY KEY, torrent_id VARCHAR(255) NOT NULL, site_name VARCHAR(255) NOT NULL, title TEXT, subtitle TEXT, imdb_link TEXT, douban_link TEXT, type VARCHAR(100), medium VARCHAR(100), video_codec VARCHAR(100), audio_codec VARCHAR(100), resolution VARCHAR(100), team VARCHAR(100), source VARCHAR(100), tags TEXT, poster TEXT, screenshots TEXT, statement TEXT, body TEXT, mediainfo TEXT, created_at TIMESTAMP NOT NULL, updated_at TIMESTAMP NOT NULL, CONSTRAINT seed_parameters_torrent_id_site_name_key UNIQUE (torrent_id, site_name))"
             )
         # 表创建逻辑 (SQLite)
         else:
@@ -688,14 +609,13 @@ class DatabaseManager:
             )
             # 创建种子参数表，用于存储从源站点提取的种子参数
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS seed_parameters (id INTEGER PRIMARY KEY AUTOINCREMENT, torrent_id TEXT NOT NULL, site_name TEXT NOT NULL, title TEXT, subtitle TEXT, imdb_link TEXT, douban_link TEXT, type TEXT, medium TEXT, video_codec TEXT, audio_codec TEXT, resolution TEXT, team TEXT, source TEXT, tags TEXT, poster TEXT, screenshots TEXT, description TEXT, mediainfo TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE (torrent_id, site_name))"
+                "CREATE TABLE IF NOT EXISTS seed_parameters (id INTEGER PRIMARY KEY AUTOINCREMENT, torrent_id TEXT NOT NULL, site_name TEXT NOT NULL, title TEXT, subtitle TEXT, imdb_link TEXT, douban_link TEXT, type TEXT, medium TEXT, video_codec TEXT, audio_codec TEXT, resolution TEXT, team TEXT, source TEXT, tags TEXT, poster TEXT, screenshots TEXT, statement TEXT, body TEXT, mediainfo TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE (torrent_id, site_name))"
             )
 
         conn.commit()
         self._migrate_torrents_table(conn, cursor)
         self._run_schema_migrations(conn, cursor)
         self._add_missing_columns(conn, cursor)
-        self._migrate_seed_parameters_table(conn, cursor)
         conn.commit()
 
         # 同步站点数据

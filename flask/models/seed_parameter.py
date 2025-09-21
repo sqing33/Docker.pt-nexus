@@ -103,8 +103,8 @@ class SeedParameter:
                     INSERT INTO seed_parameters
                     (torrent_id, site_name, title, subtitle, imdb_link, douban_link, type, medium,
                      video_codec, audio_codec, resolution, team, source, tags, poster, screenshots,
-                     description, mediainfo, created_at, updated_at)
-                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+                     statement, body, mediainfo, created_at, updated_at)
+                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
                     ON CONFLICT (torrent_id, site_name)
                     DO UPDATE SET
                         title = EXCLUDED.title,
@@ -121,7 +121,8 @@ class SeedParameter:
                         tags = EXCLUDED.tags,
                         poster = EXCLUDED.poster,
                         screenshots = EXCLUDED.screenshots,
-                        description = EXCLUDED.description,
+                        statement = EXCLUDED.statement,
+                        body = EXCLUDED.body,
                         mediainfo = EXCLUDED.mediainfo,
                         updated_at = EXCLUDED.updated_at
                 """
@@ -131,8 +132,8 @@ class SeedParameter:
                     INSERT INTO seed_parameters
                     (torrent_id, site_name, title, subtitle, imdb_link, douban_link, type, medium,
                      video_codec, audio_codec, resolution, team, source, tags, poster, screenshots,
-                     description, mediainfo, created_at, updated_at)
-                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+                     statement, body, mediainfo, created_at, updated_at)
+                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
                     ON DUPLICATE KEY UPDATE
                         title = VALUES(title),
                         subtitle = VALUES(subtitle),
@@ -148,7 +149,8 @@ class SeedParameter:
                         tags = VALUES(tags),
                         poster = VALUES(poster),
                         screenshots = VALUES(screenshots),
-                        description = VALUES(description),
+                        statement = VALUES(statement),
+                        body = VALUES(body),
                         mediainfo = VALUES(mediainfo),
                         updated_at = VALUES(updated_at)
                 """
@@ -158,8 +160,8 @@ class SeedParameter:
                     INSERT INTO seed_parameters
                     (torrent_id, site_name, title, subtitle, imdb_link, douban_link, type, medium,
                      video_codec, audio_codec, resolution, team, source, tags, poster, screenshots,
-                     description, mediainfo, created_at, updated_at)
-                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+                     statement, body, mediainfo, created_at, updated_at)
+                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
                     ON CONFLICT (torrent_id, site_name)
                     DO UPDATE SET
                         title = excluded.title,
@@ -176,7 +178,8 @@ class SeedParameter:
                         tags = excluded.tags,
                         poster = excluded.poster,
                         screenshots = excluded.screenshots,
-                        description = excluded.description,
+                        statement = excluded.statement,
+                        body = excluded.body,
                         mediainfo = excluded.mediainfo,
                         updated_at = excluded.updated_at
                 """
@@ -199,7 +202,8 @@ class SeedParameter:
                 tags,
                 parameters.get("poster", ""),
                 parameters.get("screenshots", ""),
-                parameters.get("description", ""),
+                parameters.get("statement", ""),
+                parameters.get("body", ""),
                 parameters.get("mediainfo", ""),
                 parameters["created_at"],
                 parameters["updated_at"]

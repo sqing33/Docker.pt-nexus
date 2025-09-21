@@ -951,9 +951,10 @@ class TorrentMigrator:
                 intro.get("poster"),
                 "screenshots":
                 intro.get("screenshots"),
-                "description":
-                f"{intro.get('statement', '')}\n{intro.get('body', '')}".strip(
-                ),
+                "statement":
+                intro.get("statement", "").strip(),
+                "body":
+                intro.get("body", "").strip(),
                 "mediainfo":
                 mediainfo,
                 # [修正] 从 standardized_params 获取已经标准化的标签
