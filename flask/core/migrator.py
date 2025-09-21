@@ -28,15 +28,25 @@ from core.extractors.extractor import Extractor, ParameterMapper
 # [新增] 定义音频编码的层级（权重），数字越大越优先
 AUDIO_CODEC_HIERARCHY = {
     # Top Tier (最精确)
-    "audio.truehd_atmos": 5, "audio.dtsx": 5,
+    "audio.truehd_atmos": 5,
+    "audio.dtsx": 5,
     # High Tier (无损次世代)
-    "audio.truehd": 4, "audio.dts_hd_ma": 4,
+    "audio.truehd": 4,
+    "audio.dts_hd_ma": 4,
     # Mid Tier (有损次世代 / 无损)
-    "audio.ddp": 3, "audio.dts": 3, "audio.flac": 3, "audio.lpcm": 3,
+    "audio.ddp": 3,
+    "audio.dts": 3,
+    "audio.flac": 3,
+    "audio.lpcm": 3,
     # Standard Tier (核心/普通)
     "audio.ac3": 2,
     # Low Tier (有损)
-    "audio.aac": 1, "audio.mp3": 1, "audio.alac": 1, "audio.ape": 1, "audio.m4a": 1, "audio.wav": 1,
+    "audio.aac": 1,
+    "audio.mp3": 1,
+    "audio.alac": 1,
+    "audio.ape": 1,
+    "audio.m4a": 1,
+    "audio.wav": 1,
     # Other/Default
     "audio.other": 0,
 }
@@ -132,7 +142,8 @@ class TorrentMigrator:
                     return yaml.safe_load(f) or {}
             else:
                 self.logger.warning(
-                    f"未找到源站点 {self.SOURCE_NAME} ({self.SOURCE_SITE_CODE}) 的配置文件 {config_path}")
+                    f"未找到源站点 {self.SOURCE_NAME} ({self.SOURCE_SITE_CODE}) 的配置文件 {config_path}"
+                )
                 return {}
         except Exception as e:
             self.logger.warning(f"加载源站点配置文件时出错: {e}")
@@ -481,7 +492,8 @@ class TorrentMigrator:
 
         # 使用ParameterMapper进行参数映射
         standardized_params = self.parameter_mapper.map_parameters(
-            self.SOURCE_NAME, extracted_data_with_components)
+            self.SOURCE_NAME, self.SOURCE_SITE_CODE,
+            extracted_data_with_components)
 
         return standardized_params
 
@@ -807,23 +819,37 @@ class TorrentMigrator:
             # [新增] 音频编码择优逻辑
             try:
                 # 1. 单独为标题组件中的音频编码进行一次标准化
-                audio_from_title_raw = next((item['value'] for item in title_components if item.get('key') == '音频编码'), None)
+                audio_from_title_raw = next(
+                    (item['value'] for item in title_components
+                     if item.get('key') == '音频编码'), None)
                 if audio_from_title_raw:
                     # 借用 ParameterMapper 的能力来标准化这个单独的值
-                    temp_extracted = {'source_params': {'音频编码': audio_from_title_raw}}
-                    temp_standardized = self.parameter_mapper.map_parameters(self.SOURCE_NAME, temp_extracted)
-                    audio_from_title_standard = temp_standardized.get('audio_codec')
+                    temp_extracted = {
+                        'source_params': {
+                            '音频编码': audio_from_title_raw
+                        }
+                    }
+                    temp_standardized = self.parameter_mapper.map_parameters(
+                        self.SOURCE_NAME, temp_extracted)
+                    audio_from_title_standard = temp_standardized.get(
+                        'audio_codec')
 
                     # 2. 对比层级并覆盖
                     if audio_from_title_standard:
-                        audio_from_params_standard = standardized_params.get('audio_codec')
+                        audio_from_params_standard = standardized_params.get(
+                            'audio_codec')
 
-                        title_rank = AUDIO_CODEC_HIERARCHY.get(audio_from_title_standard, 0)
-                        params_rank = AUDIO_CODEC_HIERARCHY.get(audio_from_params_standard, -1)
+                        title_rank = AUDIO_CODEC_HIERARCHY.get(
+                            audio_from_title_standard, 0)
+                        params_rank = AUDIO_CODEC_HIERARCHY.get(
+                            audio_from_params_standard, -1)
 
                         if title_rank > params_rank:
-                            self.logger.info(f"音频编码优化：使用标题中的 '{audio_from_title_standard}' (层级 {title_rank}) 覆盖了参数中的 '{audio_from_params_standard}' (层级 {params_rank})。")
-                            standardized_params['audio_codec'] = audio_from_title_standard
+                            self.logger.info(
+                                f"音频编码优化：使用标题中的 '{audio_from_title_standard}' (层级 {title_rank}) 覆盖了参数中的 '{audio_from_params_standard}' (层级 {params_rank})。"
+                            )
+                            standardized_params[
+                                'audio_codec'] = audio_from_title_standard
             except Exception as e:
                 self.logger.warning(f"音频编码择优处理时发生错误: {e}")
             # [新增结束]
@@ -836,7 +862,8 @@ class TorrentMigrator:
                 "类型": standardized_params.get("type", ""),
                 "媒介": standardized_params.get("medium", ""),
                 "视频编码": standardized_params.get("video_codec", ""),
-                "音频编码": standardized_params.get("audio_codec", ""),  # [注意] 这里现在会使用优化后的值
+                "音频编码": standardized_params.get("audio_codec",
+                                                ""),  # [注意] 这里现在会使用优化后的值
                 "分辨率": standardized_params.get("resolution", ""),
                 "制作组": standardized_params.get("team", ""),
                 "产地": standardized_params.get("source", ""),
@@ -912,38 +939,60 @@ class TorrentMigrator:
 
             # 1. 先构建包含非标准化信息的字典
             seed_parameters = {
-                "title": original_main_title,
-                "subtitle": subtitle,
-                "imdb_link": imdb_link,
-                "douban_link": douban_link,
-                "poster": intro.get("poster"),
-                "screenshots": intro.get("screenshots"),
-                "description": f"{intro.get('statement', '')}\n{intro.get('body', '')}".strip(),
-                "mediainfo": mediainfo,
+                "title":
+                original_main_title,
+                "subtitle":
+                subtitle,
+                "imdb_link":
+                imdb_link,
+                "douban_link":
+                douban_link,
+                "poster":
+                intro.get("poster"),
+                "screenshots":
+                intro.get("screenshots"),
+                "description":
+                f"{intro.get('statement', '')}\n{intro.get('body', '')}".strip(
+                ),
+                "mediainfo":
+                mediainfo,
                 # [修正] 从 standardized_params 获取已经标准化的标签
-                "tags": standardized_params.get("tags", []),
+                "tags":
+                standardized_params.get("tags", []),
             }
 
             # 2. 将 standardized_params 中所有标准化的键值对合并进来。
             #    这里的 .get() 会返回 'category.movie' 这样的完整字符串。
             seed_parameters.update({
-                "type": standardized_params.get("type"),
-                "medium": standardized_params.get("medium"),
-                "video_codec": standardized_params.get("video_codec"),
-                "audio_codec": standardized_params.get("audio_codec"),
-                "resolution": standardized_params.get("resolution"),
-                "team": standardized_params.get("team"),
-                "source": standardized_params.get("source"),
+                "type":
+                standardized_params.get("type"),
+                "medium":
+                standardized_params.get("medium"),
+                "video_codec":
+                standardized_params.get("video_codec"),
+                "audio_codec":
+                standardized_params.get("audio_codec"),
+                "resolution":
+                standardized_params.get("resolution"),
+                "team":
+                standardized_params.get("team"),
+                "source":
+                standardized_params.get("source"),
                 # 移除单独的processing参数保存，统一使用source参数
             })
             # ------------------------------------------------------------------------------------------
 
             # 保存到JSON文件，使用英文站点名作为标识
-            save_result = seed_param_model.save_parameters(torrent_id, self.SOURCE_SITE_CODE, seed_parameters)
+            save_result = seed_param_model.save_parameters(
+                torrent_id, self.SOURCE_SITE_CODE, seed_parameters)
             if save_result:
-                self.logger.info(f"种子参数(使用标准化键)已保存到JSON文件: {torrent_id} from {self.SOURCE_NAME} ({self.SOURCE_SITE_CODE})")
+                self.logger.info(
+                    f"种子参数(使用标准化键)已保存到JSON文件: {torrent_id} from {self.SOURCE_NAME} ({self.SOURCE_SITE_CODE})"
+                )
             else:
-                self.logger.warning(f"种子参数(使用标准化键)保存到JSON文件失败: {torrent_id} from {self.SOURCE_NAME} ({self.SOURCE_SITE_CODE})")
+                self.logger.warning(
+                    f"种子参数(使用标准化键)保存到JSON文件失败: {torrent_id} from {self.SOURCE_NAME} ({self.SOURCE_SITE_CODE})"
+                )
 
             return {
                 "review_data": review_data_payload,

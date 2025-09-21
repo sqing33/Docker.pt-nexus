@@ -501,143 +501,12 @@ class ParameterMapper:
 
         return mapped_tags
 
-    def load_site_config(self, site_name: str) -> Dict[str, Any]:
+    def load_site_config(self, site: str) -> Dict[str, Any]:
         """
         Load site configuration from YAML file
         """
         try:
-            # 站点中文昵称到英文简称的映射字典
-            site_name_mapping = {
-                "朋友": "keepfrds",
-                "铂金家": "pthome",
-                "馒头": "m-team",
-                "天空": "hdsky",
-                "北洋": "tjupt",
-                "猫站": "pter",
-                "家园": "hdhome",
-                "学校": "btschool",
-                "我堡": "ourbits",
-                "他吹吹风": "torrentccf",
-                "听听歌": "ttg",
-                "南洋": "nanyangpt",
-                "城市": "hdcity",
-                "老师": "nicept",
-                "52pt": "52pt",
-                "吐鲁番": "eastgame",
-                "不可说": "ssd",
-                "聆音": "soulvoice",
-                "彩虹岛": "chdbits",
-                "烧包": "ptsbao",
-                "好大": "hdarea",
-                "时光HDT": "hdtime",
-                "1ptba": "1ptba",
-                "兽": "hd4fans",
-                "皇后": "opencd",
-                "开心": "joyhd",
-                "幼儿园": "dmhy",
-                "好多油": "upxin",
-                "奥申": "oshen",
-                "蝶粉": "discfan",
-                "北邮人": "byr",
-                "海豚": "dicmusic",
-                "天雪": "skyeysnow",
-                "葡萄": "pt",
-                "路": "hdroute",
-                "海胆": "haidan",
-                "红豆饭": "hdfans",
-                "龙之家": "dragonhd",
-                "百川": "hitpt",
-                "海豹": "greatposterwall",
-                "普斯特": "hdpost",
-                "蝴蝶": "hudbt",
-                "人人": "audiences",
-                "猪猪": "piggo",
-                "冬樱": "wintersakura",
-                "憨憨": "hhanclub",
-                "自由农场": "pt0ffcc",
-                "红叶": "redleaves",
-                "铂金学院": "ptchina",
-                "朱雀": "zhuque",
-                "织梦": "zmpt",
-                "肉丝": "rousi",
-                "莫妮卡": "monikadesign",
-                "大青虫": "cyanbug",
-                "UBits": "ubits",
-                "熊猫": "pandapt",
-                "车站": "carpt",
-                "打胶": "dajiao",
-                "影": "shadowflow",
-                "末日": "agsv",
-                "象岛": "ptvicomo",
-                "青蛙": "qingwapt",
-                "杏坛": "xingtan",
-                "麒麟": "hdkyl",
-                "爱萝莉": "ilolicon",
-                "GTK": "gtkpw",
-                "悟空": "wukongwendao",
-                "okpt": "okpt",
-                "蟹黄堡": "crabpt",
-                "冰淇淋": "icc2022",
-                "杜比": "hddolby",
-                "龟站": "kamept",
-                "咖啡": "ptcafe",
-                "ToSky": "tosky",
-                "YemaPT": "yemapt",
-                "劳改所": "ptlgs",
-                "柠檬不酸": "lemonhd",
-                "浦园": "njtupt",
-                "PTzone": "ptzone",
-                "HDClone": "hdclone",
-                "库非": "kufei",
-                "AFun": "ptlover",
-                "回声": "hspt",
-                "伞": "sanpro",
-                "海棠": "htpt",
-                "下水道": "sewerpt",
-                "RailgunPT": "bilibili",
-                "GGPT": "gamegamept",
-                "雨": "raingfh",
-                "星陨阁": "xingyunge",
-                "财神": "cspt",
-                "唐门": "tmpt",
-                "我的PT": "mypt",
-                "时间ptt": "pttime",
-                "柠檬不甜": "lemon",
-                "13City": "13city",
-                "幸运": "luckpt",
-                "思齐": "siqi",
-                "好学": "hxpt",
-                "PTSkit": "ptskit",
-                "藏宝阁": "cbg",
-                "东京": "tokyo",
-                "垃圾堆": "lajidui",
-                "VCB-Studio": "vcb",
-                "备胎": "beitai",
-                "喵": "azusa",
-                "鸡婆婆": "jpop",
-                "playlet": "playletpt",
-                "三月传媒": "march",
-                "红豆包": "hdbao",
-                "龙PT": "longpt",
-                "爱玲": "aling",
-                "CD": "cdfile",
-                "TU88": "tu88",
-                "UltraHD": "ultrahd",
-                "52movie": "52movie",
-                "PTFans": "ptfans",
-                "太乙": "tey",
-                "itzmx": "itzmx",
-                "Sunny": "sunny",
-                "樱花": "ying",
-                "NovaHD": "novahd",
-                "SBPT": "sbpt",
-                "未来幻境": "jivon",
-                "YHPP": "yhpp",
-                "ASMR": "asmr",
-                "TorrentHub": "torrenthub"
-            }
-            actual_site_name = site_name_mapping.get(site_name, site_name)
-            config_filename = f"{actual_site_name.lower().replace(' ', '_').replace('-', '_')}.yaml"
+            config_filename = f"{site.lower().replace(' ', '_').replace('-', '_')}.yaml"
             config_path = os.path.join(CONFIG_DIR, config_filename)
             if os.path.exists(config_path):
                 with open(config_path, 'r', encoding='utf-8') as f:
@@ -647,13 +516,13 @@ class ParameterMapper:
         except Exception:
             return {}
 
-    def map_parameters(self, site_name: str,
+    def map_parameters(self, site_name: str, site: str,
                        extracted_params: Dict[str, Any]) -> Dict[str, Any]:
         """
         [修正] Map extracted parameters to standardized format.
         This version ensures that global_mappings are correctly applied.
         """
-        site_config = self.load_site_config(site_name)
+        site_config = self.load_site_config(site)
         source_parsers = site_config.get("source_parsers", {})
         site_standard_keys = source_parsers.get("standard_keys", {})
 

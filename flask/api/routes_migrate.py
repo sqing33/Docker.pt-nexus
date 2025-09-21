@@ -647,7 +647,7 @@ def update_preview_data():
 
             # 使用ParameterMapper映射参数
             standardized_params = mapper.map_parameters(
-                source_site_name, extracted_data)
+                source_site_name, '', extracted_data)
 
             # 保存参数到文件用于调试
             import os
