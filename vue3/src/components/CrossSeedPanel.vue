@@ -128,6 +128,119 @@
               </el-form-item>
             </el-form>
           </el-tab-pane>
+
+          <el-tab-pane label="标准参数" name="standard-params">
+            <div class="standard-params-container">
+              <el-form label-position="top" class="fill-height-form">
+                <div class="standard-params-grid">
+                  <el-form-item label="类型 (type)">
+                    <el-select v-model="torrentData.standardized_params.type" placeholder="请选择类型" clearable>
+                      <el-option
+                        v-for="(label, value) in reverseMappings.type"
+                        :key="value"
+                        :label="label"
+                        :value="value"
+                      />
+                    </el-select>
+                  </el-form-item>
+
+                  <el-form-item label="媒介 (medium)">
+                    <el-select v-model="torrentData.standardized_params.medium" placeholder="请选择媒介" clearable>
+                      <el-option
+                        v-for="(label, value) in reverseMappings.medium"
+                        :key="value"
+                        :label="label"
+                        :value="value"
+                      />
+                    </el-select>
+                  </el-form-item>
+
+                  <el-form-item label="视频编码 (video_codec)">
+                    <el-select v-model="torrentData.standardized_params.video_codec" placeholder="请选择视频编码" clearable>
+                      <el-option
+                        v-for="(label, value) in reverseMappings.video_codec"
+                        :key="value"
+                        :label="label"
+                        :value="value"
+                      />
+                    </el-select>
+                  </el-form-item>
+
+                  <el-form-item label="音频编码 (audio_codec)">
+                    <el-select v-model="torrentData.standardized_params.audio_codec" placeholder="请选择音频编码" clearable>
+                      <el-option
+                        v-for="(label, value) in reverseMappings.audio_codec"
+                        :key="value"
+                        :label="label"
+                        :value="value"
+                      />
+                    </el-select>
+                  </el-form-item>
+
+                  <el-form-item label="分辨率 (resolution)">
+                    <el-select v-model="torrentData.standardized_params.resolution" placeholder="请选择分辨率" clearable>
+                      <el-option
+                        v-for="(label, value) in reverseMappings.resolution"
+                        :key="value"
+                        :label="label"
+                        :value="value"
+                      />
+                    </el-select>
+                  </el-form-item>
+
+                  <el-form-item label="制作组 (team)">
+                    <el-select v-model="torrentData.standardized_params.team" placeholder="请选择制作组" clearable filterable allow-create default-first-option>
+                      <el-option
+                        v-for="(label, value) in reverseMappings.team"
+                        :key="value"
+                        :label="label"
+                        :value="value"
+                      />
+                    </el-select>
+                  </el-form-item>
+
+                  <el-form-item label="产地 (source)">
+                    <el-select v-model="torrentData.standardized_params.source" placeholder="请选择产地" clearable>
+                      <el-option
+                        v-for="(label, value) in reverseMappings.source"
+                        :key="value"
+                        :label="label"
+                        :value="value"
+                      />
+                    </el-select>
+                  </el-form-item>
+
+                  <el-form-item label="标签 (tags)">
+                    <el-select
+                      v-model="torrentData.standardized_params.tags"
+                      multiple
+                      filterable
+                      allow-create
+                      default-first-option
+                      placeholder="请选择或输入标签"
+                      style="width: 100%"
+                    >
+                      <el-option
+                        v-for="(label, value) in reverseMappings.tags"
+                        :key="value"
+                        :label="label"
+                        :value="value"
+                      />
+                    </el-select>
+                  </el-form-item>
+                </div>
+
+                <div class="params-info-section">
+                  <el-alert
+                    title="标准参数说明"
+                    type="info"
+                    :closable="false"
+                    description="这些参数将用于生成发布到目标站点的标准化格式，请根据实际情况选择或修改。选项从后端配置加载，确保与各站点标准保持一致。"
+                  />
+                </div>
+              </el-form>
+            </div>
+          </el-tab-pane>
           <el-tab-pane label="已过滤声明" name="filtered-declarations" class="filtered-declarations-pane">
             <div class="filtered-declarations-container">
               <div class="filtered-declarations-header">
@@ -160,7 +273,7 @@
           <div class="preview-row main-title-row">
             <div class="row-label">主标题：</div>
             <div class="row-content main-title-content">
-              {{ torrentData.final_publish_parameters?.['主标题 (预览)'] || '暂无数据' }}
+              {{ torrentData.final_publish_parameters?.['主标题 (预览)'] || torrentData.original_main_title || '暂无数据' }}
             </div>
           </div>
 
@@ -180,14 +293,14 @@
               <div class="param-row">
                 <div class="param-item imdb-item half-width">
                   <span class="param-label">IMDb链接：</span>
-                  <span :class="['param-value', { 'empty': !torrentData.raw_params_for_preview?.imdb_link || torrentData.raw_params_for_preview?.imdb_link === 'N/A' }]">
-                    {{ torrentData.raw_params_for_preview?.imdb_link || 'N/A' }}
+                  <span :class="['param-value', { 'empty': !torrentData.imdb_link || torrentData.imdb_link === 'N/A' }]">
+                    {{ torrentData.imdb_link || 'N/A' }}
                   </span>
                 </div>
                 <div class="param-item tags-item half-width">
                   <span class="param-label">标签：</span>
-                  <span :class="['param-value', { 'empty': !torrentData.raw_params_for_preview?.tags || torrentData.raw_params_for_preview?.tags?.length === 0 }]">
-                    {{ torrentData.raw_params_for_preview?.tags?.join(', ') || 'N/A' }}
+                  <span :class="['param-value', { 'empty': !getMappedTags() || getMappedTags().length === 0 }]">
+                    {{ getMappedTags().join(', ') || 'N/A' }}
                   </span>
                 </div>
               </div>
@@ -196,44 +309,44 @@
               <div class="params-content">
                 <div class="param-item inline-param">
                   <span class="param-label">类型：</span>
-                  <span :class="['param-value', { 'empty': !torrentData.raw_params_for_preview?.type || torrentData.raw_params_for_preview?.type === 'N/A' }]">
-                    {{ torrentData.raw_params_for_preview?.type || 'N/A' }}
+                  <span :class="['param-value', { 'empty': !getMappedValue('type') }]">
+                    {{ getMappedValue('type') || 'N/A' }}
                   </span>
                 </div>
                 <div class="param-item inline-param">
                   <span class="param-label">媒介：</span>
-                  <span :class="['param-value', { 'empty': !torrentData.raw_params_for_preview?.medium || torrentData.raw_params_for_preview?.medium === 'N/A' }]">
-                    {{ torrentData.raw_params_for_preview?.medium || 'N/A' }}
+                  <span :class="['param-value', { 'empty': !getMappedValue('medium') }]">
+                    {{ getMappedValue('medium') || 'N/A' }}
                   </span>
                 </div>
                 <div class="param-item inline-param">
                   <span class="param-label">视频编码：</span>
-                  <span :class="['param-value', { 'empty': !torrentData.raw_params_for_preview?.video_codec || torrentData.raw_params_for_preview?.video_codec === 'N/A' }]">
-                    {{ torrentData.raw_params_for_preview?.video_codec || 'N/A' }}
+                  <span :class="['param-value', { 'empty': !getMappedValue('video_codec') }]">
+                    {{ getMappedValue('video_codec') || 'N/A' }}
                   </span>
                 </div>
                 <div class="param-item inline-param">
                   <span class="param-label">音频编码：</span>
-                  <span :class="['param-value', { 'empty': !torrentData.raw_params_for_preview?.audio_codec || torrentData.raw_params_for_preview?.audio_codec === 'N/A' }]">
-                    {{ torrentData.raw_params_for_preview?.audio_codec || 'N/A' }}
+                  <span :class="['param-value', { 'empty': !getMappedValue('audio_codec') }]">
+                    {{ getMappedValue('audio_codec') || 'N/A' }}
                   </span>
                 </div>
                 <div class="param-item inline-param">
                   <span class="param-label">分辨率：</span>
-                  <span :class="['param-value', { 'empty': !torrentData.raw_params_for_preview?.resolution || torrentData.raw_params_for_preview?.resolution === 'N/A' }]">
-                    {{ torrentData.raw_params_for_preview?.resolution || 'N/A' }}
+                  <span :class="['param-value', { 'empty': !getMappedValue('resolution') }]">
+                    {{ getMappedValue('resolution') || 'N/A' }}
                   </span>
                 </div>
                 <div class="param-item inline-param">
                   <span class="param-label">制作组：</span>
-                  <span :class="['param-value', { 'empty': !torrentData.raw_params_for_preview?.release_group || torrentData.raw_params_for_preview?.release_group === 'N/A' }]">
-                    {{ torrentData.raw_params_for_preview?.release_group || 'N/A' }}
+                  <span :class="['param-value', { 'empty': !getMappedValue('team') }]">
+                    {{ getMappedValue('team') || 'N/A' }}
                   </span>
                 </div>
                 <div class="param-item inline-param">
                   <span class="param-label">产地/来源：</span>
-                  <span :class="['param-value', { 'empty': !torrentData.raw_params_for_preview?.source || torrentData.raw_params_for_preview?.source === 'N/A' }]">
-                    {{ torrentData.raw_params_for_preview?.source || 'N/A' }}
+                  <span :class="['param-value', { 'empty': !getMappedValue('source') }]">
+                    {{ getMappedValue('source') || 'N/A' }}
                   </span>
                 </div>
               </div>
@@ -469,6 +582,7 @@ const parseBBCode = (text) => {
 
 interface SiteStatus {
   name: string;
+  site: string;
   has_cookie: boolean;
   has_passkey: boolean;
   is_source: boolean;
@@ -504,7 +618,19 @@ const getInitialTorrentData = () => ({
   intro: { statement: '', poster: '', body: '', screenshots: '', removed_ardtudeclarations: [] },
   mediainfo: '',
   source_params: {},
+  standardized_params: {
+    type: '',
+    medium: '',
+    video_codec: '',
+    audio_codec: '',
+    resolution: '',
+    team: '',
+    source: '',
+    tags: [] as string[]
+  },
   final_publish_parameters: {},
+  complete_publish_params: {},
+  raw_params_for_preview: {}
 })
 
 const parseImageUrls = (text: string) => {
@@ -604,6 +730,19 @@ const reportedFailedScreenshots = ref(false)
 const logContent = ref('')
 const showLogCard = ref(false)
 const downloaderList = ref<{ id: string, name: string }[]>([])
+
+// 反向映射表，用于将标准值映射到中文显示名称
+const reverseMappings = ref({
+  type: {},
+  medium: {},
+  video_codec: {},
+  audio_codec: {},
+  resolution: {},
+  source: {},
+  team: {},
+  tags: {}
+})
+
 const posterImages = computed(() => parseImageUrls(torrentData.value.intro.poster))
 const screenshotImages = computed(() => parseImageUrls(torrentData.value.intro.screenshots))
 
@@ -833,6 +972,16 @@ const fetchTorrentInfo = async () => {
         throw new Error('数据库返回的种子信息不完整');
       }
 
+      // 从后端响应中提取反向映射表
+      if (dbResponse.data.reverse_mappings) {
+        reverseMappings.value = dbResponse.data.reverse_mappings;
+        console.log('成功加载反向映射表:', reverseMappings.value);
+        console.log('type映射数量:', Object.keys(reverseMappings.value.type || {}).length);
+        console.log('当前standardized_params:', dbData.standardized_params);
+      } else {
+        console.warn('后端未返回反向映射表，将使用空的默认映射');
+      }
+
       // 从数据库返回的数据中提取相关信息
       torrentData.value = {
         original_main_title: dbData.title,
@@ -845,17 +994,28 @@ const fetchTorrentInfo = async () => {
           poster: dbData.poster || '',
           body: dbData.body || '',
           screenshots: dbData.screenshots || '',
-          removed_ardtudeclarations: dbData.removed_ardtudeclarations || [],
-          imdb_link: dbData.imdb_link,
-          douban_link: dbData.douban_link
+          removed_ardtudeclarations: dbData.removed_ardtudeclarations || []
         },
         mediainfo: dbData.mediainfo || '',
         source_params: dbData.source_params || {},
-        standardized_params: dbData.standardized_params || {},
+        standardized_params: {
+          type: dbData.type || '',
+          medium: dbData.medium || '',
+          video_codec: dbData.video_codec || '',
+          audio_codec: dbData.audio_codec || '',
+          resolution: dbData.resolution || '',
+          team: dbData.team || '',
+          source: dbData.source || '',
+          tags: dbData.tags || []
+        },
         final_publish_parameters: dbData.final_publish_parameters || {},
         complete_publish_params: dbData.complete_publish_params || {},
         raw_params_for_preview: dbData.raw_params_for_preview || {}
       };
+
+      console.log('设置torrentData.standardized_params:', torrentData.value.standardized_params);
+      console.log('检查绑定 - type:', torrentData.value.standardized_params.type);
+      console.log('检查绑定 - medium:', torrentData.value.standardized_params.medium);
 
       // 如果数据库中有task_id信息，也可以设置（使用英文站点名）
       taskId.value = `db_${torrentId}_${englishSiteName}`;
@@ -988,6 +1148,14 @@ const fetchTorrentInfo = async () => {
           throw new Error('数据库返回的种子信息不完整');
         }
 
+        // 从后端响应中提取反向映射表
+        if (dbResponseAfterStore.data.reverse_mappings) {
+          reverseMappings.value = dbResponseAfterStore.data.reverse_mappings;
+          console.log('成功加载反向映射表:', reverseMappings.value);
+        } else {
+          console.warn('后端未返回反向映射表，将使用空的默认映射');
+        }
+
         ElNotification.success({
           title: '抓取成功',
           message: dbError ? '种子信息已成功抓取，请核对。由于数据库读取失败，数据未持久化存储。' : '种子信息已成功抓取并存储到数据库，请核对。'
@@ -1004,13 +1172,20 @@ const fetchTorrentInfo = async () => {
             poster: dbData.poster || '',
             body: dbData.body || '',
             screenshots: dbData.screenshots || '',
-            removed_ardtudeclarations: dbData.removed_ardtudeclarations || [],
-            imdb_link: dbData.imdb_link,
-            douban_link: dbData.douban_link
+            removed_ardtudeclarations: dbData.removed_ardtudeclarations || []
           },
           mediainfo: dbData.mediainfo || '',
           source_params: dbData.source_params || {},
-          standardized_params: dbData.standardized_params || {},
+          standardized_params: {
+            type: dbData.type || '',
+            medium: dbData.medium || '',
+            video_codec: dbData.video_codec || '',
+            audio_codec: dbData.audio_codec || '',
+            resolution: dbData.resolution || '',
+            team: dbData.team || '',
+            source: dbData.source || '',
+            tags: dbData.tags || []
+          },
           final_publish_parameters: dbData.final_publish_parameters || {},
           complete_publish_params: dbData.complete_publish_params || {},
           raw_params_for_preview: dbData.raw_params_for_preview || {}
@@ -1176,8 +1351,12 @@ const goToPublishPreviewStep = async () => {
       body: torrentData.value.intro.body,
       mediainfo: torrentData.value.mediainfo,
       source_params: torrentData.value.source_params,
-      title_components: torrentData.value.title_components
+      title_components: torrentData.value.title_components,
+      // 包含用户修改的标准参数
+      standardized_params: torrentData.value.standardized_params
     };
+
+    console.log('发送到后端的标准参数:', torrentData.value.standardized_params);
 
     // 调用新的更新接口
     const response = await axios.post('/api/migrate/update_db_seed_info', {
@@ -1190,7 +1369,13 @@ const goToPublishPreviewStep = async () => {
 
     if (response.data.success) {
       // 更新成功后，获取重新标准化后的参数
-      const { standardized_params, final_publish_parameters, complete_publish_params, raw_params_for_preview } = response.data;
+      const { standardized_params, final_publish_parameters, complete_publish_params, raw_params_for_preview, reverse_mappings: updatedReverseMappings } = response.data;
+
+      // 更新反向映射表（如果后端返回了更新的映射表）
+      if (updatedReverseMappings) {
+        reverseMappings.value = updatedReverseMappings;
+        console.log('成功更新反向映射表:', reverseMappings.value);
+      }
 
       // 更新本地数据，保留用户修改的内容
       torrentData.value = {
@@ -1425,6 +1610,30 @@ const triggerAddToDownloader = async (result: any) => {
     return { success: false, message: `调用API失败: ${errorMessage}`, downloaderName: targetDownloaderName };
   }
 }
+
+// 辅助函数：获取映射后的中文值
+const getMappedValue = (category: string) => {
+  const standardizedParams = torrentData.value.standardized_params;
+  if (!standardizedParams || !reverseMappings.value) return 'N/A';
+
+  const standardValue = standardizedParams[category];
+  if (!standardValue) return 'N/A';
+
+  const mappings = reverseMappings.value[category];
+  if (!mappings) return standardValue;
+
+  return mappings[standardValue] || standardValue;
+};
+
+// 辅助函数：获取映射后的标签列表
+const getMappedTags = () => {
+  const standardizedParams = torrentData.value.standardized_params;
+  if (!standardizedParams || !standardizedParams.tags || !reverseMappings.value.tags) return [];
+
+  return standardizedParams.tags.map(tag => {
+    return reverseMappings.value.tags[tag] || tag;
+  });
+};
 
 const showLogs = async () => {
   if (!taskId.value) {

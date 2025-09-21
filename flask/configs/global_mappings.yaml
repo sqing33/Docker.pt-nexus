@@ -93,8 +93,10 @@ global_standard_keys:
 
   # 分辨率映射
   resolution:
-    "8K": "resolution.r8k"
-    "4K": "resolution.r4k"
+    "8K": "resolution.r4320p"
+    "4K": "resolution.r2160p"
+    "2K": "resolution.r1440p"
+    "4320p": "resolution.r4320p"
     "2160p": "resolution.r2160p"
     "1080p": "resolution.r1080p"
     "1080i": "resolution.r1080i"

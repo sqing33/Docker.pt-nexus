@@ -91,10 +91,15 @@ def get_db_seed_info():
 
             if parameters:
                 logging.info(f"成功从数据库读取种子信息: {torrent_id} from {site_name}")
+
+                # 生成反向映射表（从标准键到中文显示名称的映射）
+                reverse_mappings = generate_reverse_mappings()
+
                 return jsonify({
                     "success": True,
                     "data": parameters,
-                    "source": "database"
+                    "source": "database",
+                    "reverse_mappings": reverse_mappings
                 })
             else:
                 logging.info(f"数据库中未找到种子信息: {torrent_id} from {site_name}")
@@ -113,6 +118,190 @@ def get_db_seed_info():
     except Exception as e:
         logging.error(f"get_db_seed_info发生意外错误: {e}", exc_info=True)
         return jsonify({"success": False, "message": f"服务器内部错误: {str(e)}"}), 500
+
+
+def generate_reverse_mappings():
+    """生成从标准键到中文显示名称的反向映射"""
+    try:
+        # 读取全局映射配置
+        import yaml
+        import os
+
+        # 首先尝试从global_mappings.yaml读取
+        global_mappings_path = os.path.join(os.path.dirname(__file__), '../configs/global_mappings.yaml')
+        global_mappings = {}
+
+        if os.path.exists(global_mappings_path):
+            try:
+                with open(global_mappings_path, 'r', encoding='utf-8') as f:
+                    config_data = yaml.safe_load(f)
+                    global_mappings = config_data.get('global_standard_keys', {})
+                logging.info(f"成功从global_mappings.yaml读取配置，包含{len(global_mappings)}个类别")
+            except Exception as e:
+                logging.warning(f"读取global_mappings.yaml失败: {e}，将使用配置文件中的设置")
+
+        # 如果YAML文件读取失败，从配置管理器获取
+        if not global_mappings:
+            config = config_manager.get()
+            global_mappings = config.get('global_standard_keys', {})
+
+        reverse_mappings = {
+            'type': {},
+            'medium': {},
+            'video_codec': {},
+            'audio_codec': {},
+            'resolution': {},
+            'source': {},
+            'team': {},
+            'tags': {}
+        }
+
+        # 为每个类别生成反向映射
+        categories_mapping = {
+            'type': global_mappings.get('type', {}),
+            'medium': global_mappings.get('medium', {}),
+            'video_codec': global_mappings.get('video_codec', {}),
+            'audio_codec': global_mappings.get('audio_codec', {}),
+            'resolution': global_mappings.get('resolution', {}),
+            'source': global_mappings.get('source', {}),
+            'team': global_mappings.get('team', {}),
+            'tags': global_mappings.get('tag', {})  # 注意这里YAML中是'tag'而不是'tags'
+        }
+
+        # 创建反向映射：从标准值到中文名称
+        for category, mappings in categories_mapping.items():
+            if category == 'tags':
+                # 标签特殊处理，提取中文名作为键，标准值作为值
+                for chinese_name, standard_value in mappings.items():
+                    if standard_value:  # 过滤掉null值
+                        reverse_mappings['tags'][standard_value] = chinese_name
+            else:
+                # 其他类别正常处理
+                for chinese_name, standard_value in mappings.items():
+                    if standard_value and standard_value not in reverse_mappings[category]:
+                        reverse_mappings[category][standard_value] = chinese_name
+
+        # 只在必要时添加固定映射项作为后备，避免覆盖YAML配置
+        add_fallback_mappings(reverse_mappings)
+
+        logging.info(f"成功生成反向映射表: { {k: len(v) for k, v in reverse_mappings.items()} }")
+        return reverse_mappings
+
+    except Exception as e:
+        logging.error(f"生成反向映射表失败: {e}", exc_info=True)
+        # 返回空的反向映射表作为后备
+        return {
+            'type': {},
+            'medium': {},
+            'video_codec': {},
+            'audio_codec': {},
+            'resolution': {},
+            'source': {},
+            'team': {},
+            'tags': {}
+        }
+
+
+def add_fallback_mappings(reverse_mappings):
+    """添加后备映射项，仅在YAML配置缺失时使用"""
+
+    # 检查各个类别是否为空，如果为空则添加基础映射
+    if not reverse_mappings['type']:
+        logging.warning("type映射为空，添加基础后备映射")
+        reverse_mappings['type'].update({
+            'category.movie': '电影',
+            'category.tv_series': '剧集',
+            'category.animation': '动画',
+            'category.documentaries': '纪录片',
+            'category.music': '音乐',
+            'category.other': '其他'
+        })
+
+    if not reverse_mappings['medium']:
+        logging.warning("medium映射为空，添加基础后备映射")
+        reverse_mappings['medium'].update({
+            'medium.bluray': 'Blu-ray',
+            'medium.uhd_bluray': 'UHD Blu-ray',
+            'medium.remux': 'Remux',
+            'medium.encode': 'Encode',
+            'medium.webdl': 'WEB-DL',
+            'medium.webrip': 'WebRip',
+            'medium.hdtv': 'HDTV',
+            'medium.dvd': 'DVD',
+            'medium.other': '其他'
+        })
+
+    if not reverse_mappings['video_codec']:
+        logging.warning("video_codec映射为空，添加基础后备映射")
+        reverse_mappings['video_codec'].update({
+            'video.h264': 'H.264/AVC',
+            'video.h265': 'H.265/HEVC',
+            'video.x265': 'x265',
+            'video.vc1': 'VC-1',
+            'video.mpeg2': 'MPEG-2',
+            'video.av1': 'AV1',
+            'video.other': '其他'
+        })
+
+    if not reverse_mappings['audio_codec']:
+        logging.warning("audio_codec映射为空，添加基础后备映射")
+        reverse_mappings['audio_codec'].update({
+            'audio.flac': 'FLAC',
+            'audio.dts': 'DTS',
+            'audio.dts_hd_ma': 'DTS-HD MA',
+            'audio.dtsx': 'DTS:X',
+            'audio.truehd': 'TrueHD',
+            'audio.truehd_atmos': 'TrueHD Atmos',
+            'audio.ac3': 'AC-3',
+            'audio.ddp': 'E-AC-3',
+            'audio.aac': 'AAC',
+            'audio.mp3': 'MP3',
+            'audio.other': '其他'
+        })
+
+    if not reverse_mappings['resolution']:
+        logging.warning("resolution映射为空，添加基础后备映射")
+        reverse_mappings['resolution'].update({
+            'resolution.r8k': '8K',
+            'resolution.r4k': '4K',
+            'resolution.r2160p': '2160p',
+            'resolution.r1080p': '1080p',
+            'resolution.r1080i': '1080i',
+            'resolution.r720p': '720p',
+            'resolution.r480p': '480p',
+            'resolution.other': '其他'
+        })
+
+    if not reverse_mappings['source']:
+        logging.warning("source映射为空，添加基础后备映射")
+        reverse_mappings['source'].update({
+            'source.china': '中国',
+            'source.hongkong': '香港',
+            'source.taiwan': '台湾',
+            'source.usa': '美国',
+            'source.uk': '英国',
+            'source.japan': '日本',
+            'source.korea': '韩国',
+            'source.other': '其他'
+        })
+
+    if not reverse_mappings['team']:
+        logging.warning("team映射为空，添加基础后备映射")
+        reverse_mappings['team'].update({
+            'team.other': '其他'
+        })
+
+    if not reverse_mappings['tags']:
+        logging.warning("tags映射为空，添加基础后备映射")
+        reverse_mappings['tags'].update({
+            'tag.DIY': 'DIY',
+            'tag.中字': '中字',
+            'tag.HDR': 'HDR',
+            'tag.官种': '官种',
+            'tag.首发': '首发'
+        })
+
+
 
 
 # 新增：专门负责数据抓取和存储的API接口
@@ -230,32 +419,42 @@ def update_db_seed_info():
 
             logging.info(f"开始更新种子参数: {torrent_id} from {site_name} ({english_site_name})")
 
-            # 重新进行参数标准化（模拟ParameterMapper的处理）
-            # 需要构造extracted_data格式用于映射
-            extracted_data = {
-                'title': updated_parameters.get('title', ''),
-                'subtitle': updated_parameters.get('subtitle', ''),
-                'imdb_link': updated_parameters.get('imdb_link', ''),
-                'douban_link': updated_parameters.get('douban_link', ''),
-                'intro': {
-                    'statement': updated_parameters.get('statement', ''),
-                    'poster': updated_parameters.get('poster', ''),
-                    'body': updated_parameters.get('body', ''),
-                    'screenshots': updated_parameters.get('screenshots', ''),
+            # 检查用户是否提供了修改的标准参数
+            user_standardized_params = updated_parameters.get('standardized_params', {})
+
+            if user_standardized_params:
+                # 用户已经修改了标准参数，优先使用用户的修改
+                logging.info("使用用户修改的标准参数")
+                standardized_params = user_standardized_params
+            else:
+                # 用户没有修改标准参数，重新进行参数标准化
+                logging.info("用户未修改标准参数，重新进行自动标准化")
+                # 重新进行参数标准化（模拟ParameterMapper的处理）
+                # 需要构造extracted_data格式用于映射
+                extracted_data = {
+                    'title': updated_parameters.get('title', ''),
+                    'subtitle': updated_parameters.get('subtitle', ''),
                     'imdb_link': updated_parameters.get('imdb_link', ''),
-                    'douban_link': updated_parameters.get('douban_link', '')
-                },
-                'mediainfo': updated_parameters.get('mediainfo', ''),
-                'source_params': updated_parameters.get('source_params', {}),
-                'title_components': updated_parameters.get('title_components', [])
-            }
+                    'douban_link': updated_parameters.get('douban_link', ''),
+                    'intro': {
+                        'statement': updated_parameters.get('statement', ''),
+                        'poster': updated_parameters.get('poster', ''),
+                        'body': updated_parameters.get('body', ''),
+                        'screenshots': updated_parameters.get('screenshots', ''),
+                        'imdb_link': updated_parameters.get('imdb_link', ''),
+                        'douban_link': updated_parameters.get('douban_link', '')
+                    },
+                    'mediainfo': updated_parameters.get('mediainfo', ''),
+                    'source_params': updated_parameters.get('source_params', {}),
+                    'title_components': updated_parameters.get('title_components', [])
+                }
 
-            # 使用ParameterMapper重新标准化参数
-            from core.extractors.extractor import ParameterMapper
-            mapper = ParameterMapper()
+                # 使用ParameterMapper重新标准化参数
+                from core.extractors.extractor import ParameterMapper
+                mapper = ParameterMapper()
 
-            # 重新标准化参数
-            standardized_params = mapper.map_parameters(site_name, english_site_name, extracted_data)
+                # 重新标准化参数
+                standardized_params = mapper.map_parameters(site_name, english_site_name, extracted_data)
 
             # 保存标准化后的参数到数据库
             # 构造完整的存储参数
@@ -330,12 +529,17 @@ def update_db_seed_info():
 
             if update_result:
                 logging.info(f"种子参数更新成功: {torrent_id} from {site_name} ({english_site_name})")
+
+                # 生成反向映射表（从标准键到中文显示名称的映射）
+                reverse_mappings = generate_reverse_mappings()
+
                 return jsonify({
                     "success": True,
                     "standardized_params": standardized_params,
                     "final_publish_parameters": final_parameters["final_publish_parameters"],
                     "complete_publish_params": final_parameters["complete_publish_params"],
                     "raw_params_for_preview": final_parameters["raw_params_for_preview"],
+                    "reverse_mappings": reverse_mappings,
                     "message": "参数更新并标准化成功"
                 })
             else:

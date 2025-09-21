@@ -112,9 +112,9 @@ class Extractor:
         if h1_top:
             title = list(
                 h1_top.stripped_strings)[0] if h1_top.stripped_strings else ""
-            # Normalize title (replace dots with spaces, but preserve decimal points)
+            # Normalize title (replace dots with spaces, but preserve decimal points and codec formats)
             import re
-            title = re.sub(r'(?<!\d)\.|\.(?!\d\b)', ' ', title)
+            title = re.sub(r'(?<!\d)(?<!H)(?<!x)\.|\.(?!\d\b)(?!264)(?!265)', ' ', title)
             title = re.sub(r'\s+', ' ', title).strip()
             extracted_data["title"] = title
 
