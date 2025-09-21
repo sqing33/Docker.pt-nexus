@@ -62,12 +62,63 @@ def save_cross_seed_settings():
 
 
 # ===================================================================
-#                          原有迁移 API
+#                         原有迁移 API
 # ===================================================================
 
 
-@migrate_bp.route("/migrate/fetch_info", methods=["POST"])
-def migrate_fetch_info():
+# 新增：从数据库读取种子信息的API接口
+@migrate_bp.route("/migrate/get_db_seed_info", methods=["GET"])
+def get_db_seed_info():
+    """从数据库读取种子信息用于展示"""
+    try:
+        torrent_id = request.args.get('torrent_id')
+        site_name = request.args.get('site_name')
+
+        if not torrent_id or not site_name:
+            return jsonify({
+                "success": False,
+                "message": "错误：torrent_id和site_name参数不能为空"
+            }), 400
+
+        db_manager = migrate_bp.db_manager
+
+        # 从数据库读取
+        try:
+            # 初始化种子参数模型
+            from models.seed_parameter import SeedParameter
+            seed_param_model = SeedParameter(db_manager)
+            parameters = seed_param_model.get_parameters(torrent_id, site_name)
+
+            if parameters:
+                logging.info(f"成功从数据库读取种子信息: {torrent_id} from {site_name}")
+                return jsonify({
+                    "success": True,
+                    "data": parameters,
+                    "source": "database"
+                })
+            else:
+                logging.info(f"数据库中未找到种子信息: {torrent_id} from {site_name}")
+                return jsonify({
+                    "success": False,
+                    "message": "数据库中未找到种子信息"
+                }), 404
+
+        except Exception as e:
+            logging.error(f"从数据库读取种子信息失败: {e}", exc_info=True)
+            return jsonify({
+                "success": False,
+                "message": f"数据库读取失败: {str(e)}"
+            }), 500
+
+    except Exception as e:
+        logging.error(f"get_db_seed_info发生意外错误: {e}", exc_info=True)
+        return jsonify({"success": False, "message": f"服务器内部错误: {str(e)}"}), 500
+
+
+# 新增：专门负责数据抓取和存储的API接口
+@migrate_bp.route("/migrate/fetch_and_store", methods=["POST"])
+def migrate_fetch_and_store():
+    """专门负责种子信息抓取和存储，不返回预览数据"""
     db_manager = migrate_bp.db_manager
     data = request.json
     source_site_name, search_term, save_path = (data.get("sourceSite"),
@@ -75,16 +126,17 @@ def migrate_fetch_info():
                                                 data.get("savePath", ""))
 
     if not all([source_site_name, search_term]):
-        return jsonify({"success": False, "logs": "错误：源站点和搜索词不能为空。"}), 400
+        return jsonify({"success": False, "message": "错误：源站点和搜索词不能为空。"}), 400
 
     try:
+        # 获取站点信息并获取英文站点名
         source_info = db_manager.get_site_by_nickname(source_site_name)
 
         if not source_info or not source_info.get("cookie"):
             return (
                 jsonify({
                     "success": False,
-                    "logs": f"错误：源站点 '{source_site_name}' 配置不完整。"
+                    "message": f"错误：源站点 '{source_site_name}' 配置不完整。"
                 }),
                 404,
             )
@@ -95,10 +147,13 @@ def migrate_fetch_info():
             return (
                 jsonify({
                     "success": False,
-                    "logs": f"错误：站点 '{source_site_name}' 不允许作为源站点进行迁移。"
+                    "message": f"错误：站点 '{source_site_name}' 不允许作为源站点进行迁移。"
                 }),
                 403,
             )
+
+        # 获取英文站点名作为唯一标识符
+        english_site_name = source_info.get("site", source_site_name.lower())
 
         # 初始化 Migrator 时不传入目标站点信息
         migrator = TorrentMigrator(source_site_info=source_info,
@@ -106,29 +161,288 @@ def migrate_fetch_info():
                                    search_term=search_term,
                                    save_path=save_path,
                                    config_manager=config_manager)
-        # 调用只获取信息和原始种子的方法
+
+        # 调用数据抓取和信息提取（这会自动保存到数据库）
         result = migrator.prepare_review_data()
 
         if "review_data" in result:
             task_id = str(uuid.uuid4())
-            # 缓存必要信息，而不是整个 migrator 实例
+            # 只缓存必要信息，包括原始种子路径用于发布
             MIGRATION_CACHE[task_id] = {
                 "source_info": source_info,
                 "original_torrent_path": result["original_torrent_path"],
-                "review_data": result["review_data"],
-                "source_site_name": source_site_name,  # 添加源站点名称到缓存中
-                "source_torrent_id": search_term,  # 添加源种子ID到缓存中
+                "source_site_name": english_site_name,  # 使用英文站点名作为唯一标识符
+                "source_torrent_id": search_term,
             }
+
+            logging.info(f"种子信息抓取并存储成功: {search_term} from {source_site_name} ({english_site_name})")
             return jsonify({
                 "success": True,
                 "task_id": task_id,
-                "data": result["review_data"],
+                "message": "种子信息已成功保存到数据库",
                 "logs": result["logs"],
             })
         else:
             return jsonify({
                 "success": False,
-                "logs": result.get("logs", "未知错误")
+                "message": result.get("logs", "未知错误")
+            })
+    except Exception as e:
+        logging.error(f"migrate_fetch_and_store 发生意外错误: {e}", exc_info=True)
+        return jsonify({"success": False, "message": f"服务器内部错误: {e}"}), 500
+
+
+# 新增：更新数据库种子参数并重新标准化的API接口
+@migrate_bp.route("/migrate/update_db_seed_info", methods=["POST"])
+def update_db_seed_info():
+    """更新数据库中的参数并重新标准化"""
+    try:
+        data = request.json
+        torrent_id = data.get('torrent_id')
+        site_name = data.get('site_name')
+        updated_parameters = data.get('updated_parameters')
+
+        if not all([torrent_id, site_name, updated_parameters]):
+            return jsonify({
+                "success": False,
+                "message": "错误：缺少必要参数（torrent_id、site_name、updated_parameters）"
+            }), 400
+
+        db_manager = migrate_bp.db_manager
+
+        try:
+            # 更新数据库
+            from models.seed_parameter import SeedParameter
+            seed_param_model = SeedParameter(db_manager)
+
+            # 获取站点信息以获取英文站点名
+            source_info = db_manager.get_site_by_nickname(site_name)
+            if source_info:
+                english_site_name = source_info.get("site", site_name.lower())
+            else:
+                # 如果找不到站点信息，使用映射关系
+                site_mapping = {
+                    '人人': 'audiences',
+                    '不可说': 'ssd',
+                    '憨憨': 'hhanclub'
+                }
+                english_site_name = site_mapping.get(site_name, site_name.lower())
+
+            logging.info(f"开始更新种子参数: {torrent_id} from {site_name} ({english_site_name})")
+
+            # 重新进行参数标准化（模拟ParameterMapper的处理）
+            # 需要构造extracted_data格式用于映射
+            extracted_data = {
+                'title': updated_parameters.get('title', ''),
+                'subtitle': updated_parameters.get('subtitle', ''),
+                'imdb_link': updated_parameters.get('imdb_link', ''),
+                'douban_link': updated_parameters.get('douban_link', ''),
+                'intro': {
+                    'statement': updated_parameters.get('statement', ''),
+                    'poster': updated_parameters.get('poster', ''),
+                    'body': updated_parameters.get('body', ''),
+                    'screenshots': updated_parameters.get('screenshots', ''),
+                    'imdb_link': updated_parameters.get('imdb_link', ''),
+                    'douban_link': updated_parameters.get('douban_link', '')
+                },
+                'mediainfo': updated_parameters.get('mediainfo', ''),
+                'source_params': updated_parameters.get('source_params', {}),
+                'title_components': updated_parameters.get('title_components', [])
+            }
+
+            # 使用ParameterMapper重新标准化参数
+            from core.extractors.extractor import ParameterMapper
+            mapper = ParameterMapper()
+
+            # 重新标准化参数
+            standardized_params = mapper.map_parameters(site_name, english_site_name, extracted_data)
+
+            # 保存标准化后的参数到数据库
+            # 构造完整的存储参数
+            final_parameters = {
+                "title": updated_parameters.get('title', ''),
+                "subtitle": updated_parameters.get('subtitle', ''),
+                "imdb_link": updated_parameters.get('imdb_link', ''),
+                "douban_link": updated_parameters.get('douban_link', ''),
+                "poster": updated_parameters.get('poster', ''),
+                "screenshots": updated_parameters.get('screenshots', ''),
+                "statement": updated_parameters.get('statement', ''),
+                "body": updated_parameters.get('body', ''),
+                "mediainfo": updated_parameters.get('mediainfo', ''),
+                "type": standardized_params.get('type', ''),
+                "medium": standardized_params.get('medium', ''),
+                "video_codec": standardized_params.get('video_codec', ''),
+                "audio_codec": standardized_params.get('audio_codec', ''),
+                "resolution": standardized_params.get('resolution', ''),
+                "team": standardized_params.get('team', ''),
+                "source": standardized_params.get('source', ''),
+                "tags": standardized_params.get('tags', []),
+
+                # 添加标准化后的参数
+                "standardized_params": standardized_params,
+                "final_publish_parameters": {
+                    "主标题 (预览)": standardized_params.get("title", ""),
+                    "副标题": updated_parameters.get('subtitle', ''),
+                    "IMDb链接": standardized_params.get("imdb_link", ""),
+                    "类型": standardized_params.get("type", ""),
+                    "媒介": standardized_params.get("medium", ""),
+                    "视频编码": standardized_params.get("video_codec", ""),
+                    "音频编码": standardized_params.get("audio_codec", ""),
+                    "分辨率": standardized_params.get("resolution", ""),
+                    "制作组": standardized_params.get("team", ""),
+                    "产地": standardized_params.get("source", ""),
+                    "标签": standardized_params.get("tags", []),
+                },
+                "complete_publish_params": {
+                    "title_components": updated_parameters.get('title_components', []),
+                    "subtitle": updated_parameters.get('subtitle', ''),
+                    "imdb_link": standardized_params.get("imdb_link", ""),
+                    "douban_link": standardized_params.get("douban_link", ""),
+                    "intro": {
+                        "statement": updated_parameters.get('statement', ''),
+                        "poster": updated_parameters.get('poster', ''),
+                        "body": updated_parameters.get('body', ''),
+                        "screenshots": updated_parameters.get('screenshots', ''),
+                        "removed_ardtudeclarations": updated_parameters.get('removed_ardtudeclarations', []),
+                        "imdb_link": updated_parameters.get('imdb_link', ''),
+                        "douban_link": updated_parameters.get('douban_link', '')
+                    },
+                    "mediainfo": updated_parameters.get('mediainfo', ''),
+                    "source_params": updated_parameters.get('source_params', {}),
+                    "standardized_params": standardized_params
+                },
+                "raw_params_for_preview": {
+                    "final_main_title": standardized_params.get("title", ""),
+                    "subtitle": updated_parameters.get('subtitle', ''),
+                    "imdb_link": standardized_params.get("imdb_link", ""),
+                    "type": standardized_params.get("type", ""),
+                    "medium": standardized_params.get("medium", ""),
+                    "video_codec": standardized_params.get("video_codec", ""),
+                    "audio_codec": standardized_params.get("audio_codec", ""),
+                    "resolution": standardized_params.get("resolution", ""),
+                    "release_group": standardized_params.get("team", ""),
+                    "source": standardized_params.get("source", ""),
+                    "tags": standardized_params.get("tags", [])
+                }
+            }
+
+            update_result = seed_param_model.update_parameters(torrent_id, english_site_name, final_parameters)
+
+            if update_result:
+                logging.info(f"种子参数更新成功: {torrent_id} from {site_name} ({english_site_name})")
+                return jsonify({
+                    "success": True,
+                    "standardized_params": standardized_params,
+                    "final_publish_parameters": final_parameters["final_publish_parameters"],
+                    "complete_publish_params": final_parameters["complete_publish_params"],
+                    "raw_params_for_preview": final_parameters["raw_params_for_preview"],
+                    "message": "参数更新并标准化成功"
+                })
+            else:
+                logging.warning(f"种子参数更新失败: {torrent_id} from {site_name} ({english_site_name})")
+                return jsonify({
+                    "success": False,
+                    "message": "参数更新失败"
+                }), 500
+
+        except Exception as e:
+            logging.error(f"更新种子参数失败: {e}", exc_info=True)
+            return jsonify({
+                "success": False,
+                "message": f"更新失败: {str(e)}"
+            }), 500
+
+    except Exception as e:
+        logging.error(f"update_db_seed_info发生意外错误: {e}", exc_info=True)
+        return jsonify({"success": False, "message": f"服务器内部错误: {str(e)}"}), 500
+
+
+# 保留原fetch_info接口作为向后兼容，但内部调用新的fetch_and_store + get_db_seed_info
+@migrate_bp.route("/migrate/fetch_info", methods=["POST"])
+def migrate_fetch_info():
+    """原接口，保持向后兼容（现在内部调用新的断点架构）"""
+    db_manager = migrate_bp.db_manager
+    data = request.json
+    source_site_name, search_term, save_path = (data.get("sourceSite"),
+                                                data.get("searchTerm"),
+                                                data.get("savePath", ""))
+
+    if not all([source_site_name, search_term]):
+        return jsonify({"success": False, "logs": "错误：源站点和搜索词不能为空。"}), 400
+
+    try:
+        # 第一步：调用fetch_and_store抓取并存储数据
+        from flask import request as flask_request
+        import json
+
+        # 模拟调用fetch_and_store
+        store_data = {
+            "sourceSite": source_site_name,
+            "searchTerm": search_term,
+            "savePath": save_path
+        }
+
+        # 直接调用fetch_and_store函数
+        with flask_request._fake_request('/api/migrate/fetch_and_store', 'POST', data=json.dumps(store_data),
+                                       headers={'Content-Type': 'application/json'}):
+            store_result = migrate_fetch_and_store()
+
+        store_response_data = store_result.get_json()
+
+        if not store_response_data.get("success"):
+            return jsonify({
+                "success": False,
+                "logs": store_response_data.get("message", "数据抓取失败")
+            })
+
+        # 第二步：从数据库读取数据
+        from models.seed_parameter import SeedParameter
+        seed_param_model = SeedParameter(db_manager)
+        parameters = seed_param_model.get_parameters(search_term, source_site_name)
+
+        if parameters:
+            task_id = store_response_data.get("task_id")
+
+            # 缓存必要信息用于发布
+            MIGRATION_CACHE[task_id] = {
+                "source_info": db_manager.get_site_by_nickname(source_site_name),
+                "original_torrent_path": None,  # 将在发布时重新获取
+                "source_site_name": source_site_name,
+                "source_torrent_id": search_term,
+            }
+
+            # 构造兼容原有格式的响应
+            return jsonify({
+                "success": True,
+                "task_id": task_id,
+                "data": {
+                    "original_main_title": parameters.get("title", ""),
+                    "title_components": parameters.get("title_components", []),
+                    "subtitle": parameters.get("subtitle", ""),
+                    "imdb_link": parameters.get("imdb_link", ""),
+                    "douban_link": parameters.get("douban_link", ""),
+                    "intro": {
+                        "statement": parameters.get("statement", ""),
+                        "poster": parameters.get("poster", ""),
+                        "body": parameters.get("body", ""),
+                        "screenshots": parameters.get("screenshots", ""),
+                        "removed_ardtudeclarations": parameters.get("removed_ardtudeclarations", []),
+                        "imdb_link": parameters.get("imdb_link", ""),
+                        "douban_link": parameters.get("douban_link", "")
+                    },
+                    "mediainfo": parameters.get("mediainfo", ""),
+                    "source_params": parameters.get("source_params", {}),
+                    "standardized_params": parameters.get("standardized_params", {}),
+                    "final_publish_parameters": parameters.get("final_publish_parameters", {}),
+                    "complete_publish_params": parameters.get("complete_publish_params", {}),
+                    "raw_params_for_preview": parameters.get("raw_params_for_preview", {}),
+                },
+                "logs": store_response_data.get("logs", "")
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "logs": "数据抓取成功但从数据库读取失败"
             })
     except Exception as e:
         logging.error(f"migrate_fetch_info 发生意外错误: {e}", exc_info=True)
@@ -396,9 +710,9 @@ def get_sites_status():
         conn = db_manager._get_connection()
         cursor = db_manager._get_cursor(conn)
 
-        # 从数据库查询所有站点的关键信息
+        # 从数据库查询所有站点的关键信息，包括英文站点名
         cursor.execute(
-            "SELECT nickname, cookie, passkey, migration FROM sites WHERE nickname IS NOT NULL AND nickname != ''"
+            "SELECT nickname, site, cookie, passkey, migration FROM sites WHERE nickname IS NOT NULL AND nickname != ''"
         )
         sites_from_db = cursor.fetchall()
 
@@ -414,6 +728,7 @@ def get_sites_status():
 
             site_info = {
                 "name": nickname,
+                "site": row.get("site"),  # 添加英文站点名
                 "has_cookie": bool(row.get("cookie")),
                 "has_passkey": bool(row.get("passkey")),
                 "is_source": migration_status in [1, 3],

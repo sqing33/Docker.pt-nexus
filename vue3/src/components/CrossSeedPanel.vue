@@ -735,6 +735,40 @@ const handleImageError = async (url: string, type: 'poster' | 'screenshot', inde
   }
 }
 
+// 通过中文站点名获取英文站点名，用于数据库查询
+const getEnglishSiteName = async (chineseSiteName: string): Promise<string> => {
+  // 首先尝试从已加载的 allSitesStatus 中获取
+  const siteInfo = allSitesStatus.value.find((s: any) => s.name === chineseSiteName);
+  if (siteInfo?.site) {
+    return siteInfo.site;
+  }
+
+  // 如果 allSitesStatus 还没有加载，直接调用接口获取站点信息
+  try {
+    const response = await axios.get('/api/sites/status');
+    allSitesStatus.value = response.data;
+
+    // 再次尝试从更新的 allSitesStatus 中获取
+    const updatedSiteInfo = allSitesStatus.value.find((s: any) => s.name === chineseSiteName);
+    if (updatedSiteInfo?.site) {
+      return updatedSiteInfo.site;
+    }
+  } catch (error) {
+    console.warn('获取站点状态失败:', error);
+  }
+
+  // 最后后备方案：使用常见的站点映射
+  const commonSiteMapping: Record<string, string> = {
+    '人人': 'audiences',
+    '不可说': 'ssd',
+    '憨憨': 'hhanclub',
+    '财神': 'cspt'
+    // 可以添加更多常见映射
+  };
+
+  return commonSiteMapping[chineseSiteName] || chineseSiteName.toLowerCase();
+};
+
 const fetchSitesStatus = async () => {
   try {
     const response = await axios.get('/api/sites/status');
@@ -767,24 +801,66 @@ const fetchTorrentInfo = async () => {
   isLoading.value = true
   ElNotification({
     title: '正在获取',
-    message: '正在从源站点抓取种子信息，请稍候...',
+    message: '正在读取种子信息，请稍候...',
     type: 'info',
     duration: 0,
   })
 
+  let dbError = null;
+
+  // 步骤1: 尝试从数据库读取种子信息
   try {
-    const response = await axios.post('/api/migrate/fetch_info', {
-      sourceSite: props.sourceSite,
-      searchTerm: torrentId,
-      savePath: props.torrent.save_path,
-    })
+    const englishSiteName = await getEnglishSiteName(props.sourceSite);
+    console.log(`尝试从数据库读取种子信息: ${torrentId} from ${props.sourceSite} (${englishSiteName})`);
+    const dbResponse = await axios.get('/api/migrate/get_db_seed_info', {
+      params: {
+        torrent_id: torrentId,
+        site_name: englishSiteName
+      },
+      timeout: 10000 // 10秒超时
+    });
 
-    ElNotification.closeAll()
-    if (response.data.success) {
-      ElNotification.success({ title: '获取成功', message: '种子信息已成功加载，请核对。' })
-      torrentData.value = response.data.data
-      taskId.value = response.data.task_id
+    if (dbResponse.data.success) {
+      ElNotification.closeAll();
+      ElNotification.success({
+        title: '读取成功',
+        message: '种子信息已从数据库成功加载，请核对。'
+      });
 
+      // 验证数据库返回的数据完整性
+      const dbData = dbResponse.data.data;
+      if (!dbData || !dbData.title) {
+        throw new Error('数据库返回的种子信息不完整');
+      }
+
+      // 从数据库返回的数据中提取相关信息
+      torrentData.value = {
+        original_main_title: dbData.title,
+        title_components: dbData.title_components || [],
+        subtitle: dbData.subtitle,
+        imdb_link: dbData.imdb_link,
+        douban_link: dbData.douban_link,
+        intro: {
+          statement: dbData.statement || '',
+          poster: dbData.poster || '',
+          body: dbData.body || '',
+          screenshots: dbData.screenshots || '',
+          removed_ardtudeclarations: dbData.removed_ardtudeclarations || [],
+          imdb_link: dbData.imdb_link,
+          douban_link: dbData.douban_link
+        },
+        mediainfo: dbData.mediainfo || '',
+        source_params: dbData.source_params || {},
+        standardized_params: dbData.standardized_params || {},
+        final_publish_parameters: dbData.final_publish_parameters || {},
+        complete_publish_params: dbData.complete_publish_params || {},
+        raw_params_for_preview: dbData.raw_params_for_preview || {}
+      };
+
+      // 如果数据库中有task_id信息，也可以设置（使用英文站点名）
+      taskId.value = `db_${torrentId}_${englishSiteName}`;
+
+      // 自动提取链接的逻辑保持不变
       if ((!torrentData.value.imdb_link || !torrentData.value.douban_link) && torrentData.value.intro.body) {
         let imdbExtracted = false;
         let doubanExtracted = false;
@@ -814,47 +890,333 @@ const fetchTorrentInfo = async () => {
           });
         }
       }
-      activeStep.value = 0
+
+      activeStep.value = 0;
+      return;
     } else {
-      ElNotification.error({
-        title: '获取失败',
-        message: response.data.logs,
-        duration: 0,
-        showClose: true,
-      })
+      // 数据库中不存在该记录，这是正常情况，不需要记录为错误
+      console.log('数据库中没有找到种子信息，开始抓取数据...');
+    }
+  } catch (error) {
+    // 捕获数据库读取错误，但继续执行抓取逻辑
+    dbError = error;
+    console.log('从数据库读取失败，开始抓取数据...', error);
+
+    // 区分网络错误和其他错误
+    if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+      console.warn('数据库读取超时，将尝试直接抓取数据...');
+    } else if (error.response?.status >= 500) {
+      console.warn('数据库服务器错误，将尝试直接抓取数据...');
+    } else {
+      console.warn('数据库读取发生未知错误，将尝试直接抓取数据...');
+    }
+  }
+
+  // 步骤2: 如果数据库中没有数据，则进行抓取和存储
+  try {
+    ElNotification.closeAll();
+    ElNotification({
+      title: '正在抓取',
+      message: '正在从源站点抓取种子信息并存储到数据库...',
+      type: 'info',
+      duration: 0,
+    });
+
+    // 如果有数据库错误，显示警告信息
+    if (dbError) {
+      console.warn(`由于数据库读取失败（${dbError.message}），正在直接抓取数据...`);
+      ElNotification.warning({
+        title: '数据库读取失败',
+        message: '正在尝试直接抓取数据，请稍候...',
+        duration: 3000,
+      });
+    }
+
+    const storeResponse = await axios.post('/api/migrate/fetch_and_store', {
+      sourceSite: props.sourceSite,
+      searchTerm: torrentId,
+      savePath: props.torrent.save_path,
+    }, {
+      timeout: 60000 // 60秒超时，用于抓取和存储
+    });
+
+    if (storeResponse.data.success) {
+      // 抓取成功后，立即从数据库读取数据
+      console.log('数据抓取成功，立即从数据库读取...');
+      let dbReadAttempt = 0;
+      const maxDbReadAttempts = 3;
+      let dbResponseAfterStore = null;
+
+      // 重试机制：多次尝试从数据库读取
+      while (dbReadAttempt < maxDbReadAttempts) {
+        dbReadAttempt++;
+        try {
+          const retryEnglishSiteName = await getEnglishSiteName(props.sourceSite);
+          console.log(`重试从数据库读取种子信息: ${torrentId} from ${props.sourceSite} (${retryEnglishSiteName})`);
+          dbResponseAfterStore = await axios.get('/api/migrate/get_db_seed_info', {
+            params: {
+              torrent_id: torrentId,
+              site_name: retryEnglishSiteName
+            },
+            timeout: 10000 // 10秒超时
+          });
+
+          if (dbResponseAfterStore.data.success) {
+            break; // 成功读取，退出重试循环
+          } else {
+            console.warn(`数据库读取第${dbReadAttempt}次失败：${dbResponseAfterStore.data.message}`);
+            if (dbReadAttempt < maxDbReadAttempts) {
+              await new Promise(resolve => setTimeout(resolve, 1000)); // 等待1秒后重试
+            }
+          }
+        } catch (readError) {
+          console.warn(`数据库读取第${dbReadAttempt}次失败：`, readError);
+          if (dbReadAttempt < maxDbReadAttempts) {
+            await new Promise(resolve => setTimeout(resolve, 1000)); // 等待1秒后重试
+          } else {
+            throw readError; // 重试次数用尽，抛出错误
+          }
+        }
+      }
+
+      if (dbResponseAfterStore && dbResponseAfterStore.data.success) {
+        ElNotification.closeAll();
+
+        // 验证数据完整性
+        const dbData = dbResponseAfterStore.data.data;
+        if (!dbData || !dbData.title) {
+          throw new Error('数据库返回的种子信息不完整');
+        }
+
+        ElNotification.success({
+          title: '抓取成功',
+          message: dbError ? '种子信息已成功抓取，请核对。由于数据库读取失败，数据未持久化存储。' : '种子信息已成功抓取并存储到数据库，请核对。'
+        });
+
+        torrentData.value = {
+          original_main_title: dbData.title,
+          title_components: dbData.title_components || [],
+          subtitle: dbData.subtitle,
+          imdb_link: dbData.imdb_link,
+          douban_link: dbData.douban_link,
+          intro: {
+            statement: dbData.statement || '',
+            poster: dbData.poster || '',
+            body: dbData.body || '',
+            screenshots: dbData.screenshots || '',
+            removed_ardtudeclarations: dbData.removed_ardtudeclarations || [],
+            imdb_link: dbData.imdb_link,
+            douban_link: dbData.douban_link
+          },
+          mediainfo: dbData.mediainfo || '',
+          source_params: dbData.source_params || {},
+          standardized_params: dbData.standardized_params || {},
+          final_publish_parameters: dbData.final_publish_parameters || {},
+          complete_publish_params: dbData.complete_publish_params || {},
+          raw_params_for_preview: dbData.raw_params_for_preview || {}
+        };
+
+        taskId.value = storeResponse.data.task_id;
+
+        // 自动提取链接的逻辑保持不变
+        if ((!torrentData.value.imdb_link || !torrentData.value.douban_link) && torrentData.value.intro.body) {
+          let imdbExtracted = false;
+          let doubanExtracted = false;
+          if (!torrentData.value.imdb_link) {
+            const imdbRegex = /(https?:\/\/www\.imdb\.com\/title\/tt\d+)/;
+            const imdbMatch = torrentData.value.intro.body.match(imdbRegex);
+            if (imdbMatch && imdbMatch[1]) {
+              torrentData.value.imdb_link = imdbMatch[1];
+              imdbExtracted = true;
+            }
+          }
+          if (!torrentData.value.douban_link) {
+            const doubanRegex = /(https:\/\/movie\.douban\.com\/subject\/\d+)/;
+            const doubanMatch = torrentData.value.intro.body.match(doubanRegex);
+            if (doubanMatch && doubanMatch[1]) {
+              torrentData.value.douban_link = doubanMatch[1];
+              doubanExtracted = true;
+            }
+          }
+          if (imdbExtracted || doubanExtracted) {
+            const messages = [];
+            if (imdbExtracted) messages.push('IMDb链接');
+            if (doubanExtracted) messages.push('豆瓣链接');
+            ElNotification.info({
+              title: '自动填充',
+              message: `已从简介正文中自动提取并填充 ${messages.join(' 和 ')}。`
+            });
+          }
+        }
+
+        activeStep.value = 0;
+      } else {
+        ElNotification.closeAll();
+        ElNotification.error({
+          title: '读取失败',
+          message: `数据抓取成功但数据库读取失败，已重试${maxDbReadAttempts}次。请检查数据库连接或稍后重试。`,
+          duration: 0,
+          showClose: true,
+        });
+        emit('cancel');
+      }
+    } else {
+      ElNotification.closeAll();
+      const errorMessage = storeResponse.data.message || '抓取种子信息失败';
+
+      // 如果是数据库相关的错误，提供更详细的建议
+      if (errorMessage.includes('数据库') || dbError) {
+        ElNotification.error({
+          title: '抓取失败',
+          message: `${errorMessage}。可能由于数据库连接问题导致，请检查数据库状态。`,
+          duration: 0,
+          showClose: true,
+        });
+      } else {
+        ElNotification.error({
+          title: '抓取失败',
+          message: errorMessage,
+          duration: 0,
+          showClose: true,
+        });
+      }
       emit('cancel');
     }
   } catch (error) {
-    ElNotification.closeAll()
-    handleApiError(error, '获取种子信息时发生网络错误')
+    ElNotification.closeAll();
+
+    // 区分不同类型的错误并提供更具体的错误信息
+    if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+      ElNotification.error({
+        title: '请求超时',
+        message: '抓取种子信息超时，请检查网络连接或稍后重试。',
+        duration: 0,
+        showClose: true,
+      });
+    } else if (error.response?.status === 404) {
+      ElNotification.error({
+        title: '资源未找到',
+        message: '在源站点未找到指定的种子，请检查种子ID是否正确。',
+        duration: 0,
+        showClose: true,
+      });
+    } else if (error.response?.status >= 500) {
+      ElNotification.error({
+        title: '服务器错误',
+        message: '后端服务器发生错误，请稍后重试或联系管理员。',
+        duration: 0,
+        showClose: true,
+      });
+    } else {
+      // 使用原有的错误处理
+      handleApiError(error, '获取种子信息时发生网络错误');
+    }
     emit('cancel');
   } finally {
-    isLoading.value = false
+    isLoading.value = false;
   }
 }
 
 const goToPublishPreviewStep = async () => {
   isLoading.value = true;
   try {
-    // 将当前修改后的数据发送给后端进行更新
-    const response = await axios.post('/api/migrate/update_preview_data', {
-      task_id: taskId.value,
-      updated_data: torrentData.value
+    ElNotification({
+      title: '正在处理',
+      message: '正在更新参数并生成预览...',
+      type: 'info',
+      duration: 0,
     });
 
+    // 从taskId中提取torrent_id和site_name
+    // taskId可能格式: db_${torrentId}_${siteName} 或原始task_id
+    let torrentId, siteName;
+
+    if (taskId.value && taskId.value.startsWith('db_')) {
+      // 数据库模式: db_${torrentId}_${siteName}
+      const parts = taskId.value.split('_');
+      if (parts.length >= 3) {
+        torrentId = parts[1];
+        siteName = parts.slice(2).join('_'); // 处理站点名称中可能有下划线的情况
+      }
+    } else {
+      // 回退模式：需要从props中获取
+      const siteDetails = props.torrent.sites[props.sourceSite];
+      torrentId = siteDetails.torrentId || null;
+      siteName = await getEnglishSiteName(props.sourceSite);
+
+      if (!torrentId) {
+        const idMatch = siteDetails.comment?.match(/id=(\d+)/);
+        if (idMatch && idMatch[1]) {
+          torrentId = idMatch[1];
+        }
+      }
+    }
+
+    if (!torrentId || !siteName) {
+      ElNotification.error({
+        title: '参数错误',
+        message: '无法获取种子ID或站点名称',
+        duration: 0,
+        showClose: true,
+      });
+      return;
+    }
+
+    console.log(`更新种子参数: ${torrentId} from ${siteName}`);
+
+    // 构建更新的参数
+    const updatedParameters = {
+      title: torrentData.value.original_main_title,
+      subtitle: torrentData.value.subtitle,
+      imdb_link: torrentData.value.imdb_link,
+      douban_link: torrentData.value.douban_link,
+      poster: torrentData.value.intro.poster,
+      screenshots: torrentData.value.intro.screenshots,
+      statement: torrentData.value.intro.statement,
+      body: torrentData.value.intro.body,
+      mediainfo: torrentData.value.mediainfo,
+      source_params: torrentData.value.source_params,
+      title_components: torrentData.value.title_components
+    };
+
+    // 调用新的更新接口
+    const response = await axios.post('/api/migrate/update_db_seed_info', {
+      torrent_id: torrentId,
+      site_name: siteName,
+      updated_parameters: updatedParameters
+    });
+
+    ElNotification.closeAll();
+
     if (response.data.success) {
-      // 更新成功后，获取新的预览数据
-      torrentData.value = { ...torrentData.value, ...response.data.data };
+      // 更新成功后，获取重新标准化后的参数
+      const { standardized_params, final_publish_parameters, complete_publish_params, raw_params_for_preview } = response.data;
+
+      // 更新本地数据，保留用户修改的内容
+      torrentData.value = {
+        ...torrentData.value,
+        standardized_params: standardized_params || {},
+        final_publish_parameters: final_publish_parameters || {},
+        complete_publish_params: complete_publish_params || {},
+        raw_params_for_preview: raw_params_for_preview || {}
+      };
+
+      ElNotification.success({
+        title: '更新成功',
+        message: '参数已更新并重新标准化，请核对预览内容。'
+      });
+
       activeStep.value = 1;
     } else {
       ElNotification.error({
-        title: '更新预览数据失败',
-        message: response.data.message || '未知错误',
+        title: '更新失败',
+        message: response.data.message || '更新参数失败',
         duration: 0,
         showClose: true,
       });
     }
   } catch (error) {
+    ElNotification.closeAll();
     handleApiError(error, '更新预览数据时发生网络错误');
   } finally {
     isLoading.value = false;
