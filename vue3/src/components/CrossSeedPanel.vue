@@ -50,9 +50,6 @@
                     <el-form-item label="副标题">
                       <el-input v-model="torrentData.subtitle" />
                     </el-form-item>
-                    <el-form-item label="IMDb链接">
-                      <el-input v-model="torrentData.imdb_link" />
-                    </el-form-item>
                   </div>
                 </el-form>
               </div>
@@ -92,7 +89,20 @@
             <div class="screenshot-container">
               <div class="form-column screenshot-text-column">
                 <el-form label-position="top" class="fill-height-form">
-                  <el-form-item label="截图" class="is-flexible">
+                  <el-form-item class="is-flexible">
+                    <template #label>
+                      <div class="form-label-with-button">
+                        <span>截图</span>
+                        <el-button
+                          :icon="Refresh"
+                          @click="refreshScreenshots"
+                          :loading="isRefreshingScreenshots"
+                          size="small"
+                          type="primary">
+                          重新获取
+                        </el-button>
+                      </div>
+                    </template>
                     <el-input type="textarea" v-model="torrentData.intro.screenshots" :rows="20" />
                   </el-form-item>
                 </el-form>
@@ -116,8 +126,27 @@
           </el-tab-pane>
           <el-tab-pane label="简介详情" name="intro">
             <el-form label-position="top" class="fill-height-form">
-              <el-form-item label="正文" class="is-flexible">
-                <el-input type="textarea" v-model="torrentData.intro.body" :rows="20" />
+              <el-form-item class="is-flexible">
+                <template #label>
+                  <div class="form-label-with-button">
+                    <span>正文</span>
+                    <el-button
+                      :icon="Refresh"
+                      @click="refreshIntro"
+                      :loading="isRefreshingIntro"
+                      size="small"
+                      type="primary">
+                      重新获取
+                    </el-button>
+                  </div>
+                </template>
+                <el-input type="textarea" v-model="torrentData.intro.body" :rows="18" />
+              </el-form-item>
+              <el-form-item label="豆瓣链接" v-if="torrentData.douban_link">
+                <el-input v-model="torrentData.douban_link" placeholder="请输入豆瓣电影链接" />
+              </el-form-item>
+              <el-form-item label="IMDb链接" v-if="torrentData.imdb_link">
+                <el-input v-model="torrentData.imdb_link" placeholder="请输入IMDb电影链接" />
               </el-form-item>
             </el-form>
           </el-tab-pane>
@@ -726,6 +755,8 @@ const torrentData = ref(getInitialTorrentData())
 const taskId = ref<string | null>(null)
 const finalResultsList = ref<any[]>([])
 const isReparsing = ref(false)
+const isRefreshingScreenshots = ref(false)
+const isRefreshingIntro = ref(false)
 const reportedFailedScreenshots = ref(false)
 const logContent = ref('')
 const showLogCard = ref(false)
@@ -789,6 +820,116 @@ const canProceedToNextStep = computed(() => {
 
   return true;
 });
+
+const refreshIntro = async () => {
+  if (!torrentData.value.douban_link && !torrentData.value.imdb_link) {
+    ElNotification.warning('没有豆瓣或IMDb链接，无法重新获取简介。');
+    return;
+  }
+
+  isRefreshingIntro.value = true;
+  ElNotification.info({
+    title: '正在重新获取',
+    message: '正在从豆瓣/IMDb重新获取简介...',
+    duration: 0
+  });
+
+  const payload = {
+    type: 'intro',
+    source_info: {
+      main_title: torrentData.value.original_main_title,
+      source_site: props.sourceSite,
+      imdb_link: torrentData.value.imdb_link,
+      douban_link: torrentData.value.douban_link,
+    }
+  };
+
+  try {
+    const response = await axios.post('/api/media/validate', payload);
+    ElNotification.closeAll();
+
+    if (response.data.success && response.data.intro) {
+      torrentData.value.intro.body = response.data.intro;
+
+      // 如果返回了新的IMDb链接，也更新它
+      if (response.data.extracted_imdb_link && !torrentData.value.imdb_link) {
+        torrentData.value.imdb_link = response.data.extracted_imdb_link;
+      }
+
+      ElNotification.success({
+        title: '重新获取成功',
+        message: '已成功从豆瓣/IMDb获取并更新了简介内容。',
+      });
+    } else {
+      ElNotification.error({
+        title: '重新获取失败',
+        message: response.data.error || '无法从豆瓣/IMDb获取简介。',
+      });
+    }
+  } catch (error: any) {
+    ElNotification.closeAll();
+    const errorMsg = error.response?.data?.error || '重新获取简介时发生网络错误';
+    ElNotification.error({
+      title: '操作失败',
+      message: errorMsg,
+    });
+  } finally {
+    isRefreshingIntro.value = false;
+  }
+};
+
+const refreshScreenshots = async () => {
+  if (!torrentData.value.original_main_title) {
+    ElNotification.warning('标题为空，无法重新获取截图。');
+    return;
+  }
+
+  isRefreshingScreenshots.value = true;
+  ElNotification.info({
+    title: '正在重新获取',
+    message: '正在从视频重新生成截图...',
+    duration: 0
+  });
+
+  const payload = {
+    type: 'screenshot',
+    source_info: {
+      main_title: torrentData.value.original_main_title,
+      source_site: props.sourceSite,
+      imdb_link: torrentData.value.imdb_link,
+      douban_link: torrentData.value.douban_link,
+    },
+    savePath: props.torrent.save_path,
+    torrentName: props.torrent.name
+  };
+
+  try {
+    const response = await axios.post('/api/media/validate', payload);
+    ElNotification.closeAll();
+
+    if (response.data.success && response.data.screenshots) {
+      torrentData.value.intro.screenshots = response.data.screenshots;
+      ElNotification.success({
+        title: '重新获取成功',
+        message: '已成功生成并加载了新的截图。',
+      });
+    } else {
+      ElNotification.error({
+        title: '重新获取失败',
+        message: response.data.error || '无法从后端获取新的截图。',
+      });
+    }
+  } catch (error: any) {
+    ElNotification.closeAll();
+    const errorMsg = error.response?.data?.error || '重新获取截图时发生网络错误';
+    ElNotification.error({
+      title: '操作失败',
+      message: errorMsg,
+    });
+  } finally {
+    isRefreshingScreenshots.value = false;
+  }
+};
 
 const reparseTitle = async () => {
   if (!torrentData.value.original_main_title) {
@@ -1013,6 +1154,22 @@ const fetchTorrentInfo = async () => {
         raw_params_for_preview: dbData.raw_params_for_preview || {}
       };
 
+      // 如果没有解析过的标题组件，自动解析主标题
+      if ((!dbData.title_components || dbData.title_components.length === 0) && dbData.title) {
+        try {
+          const parseResponse = await axios.post('/api/utils/parse_title', { title: dbData.title });
+          if (parseResponse.data.success) {
+            torrentData.value.title_components = parseResponse.data.components;
+            ElNotification.info({
+              title: '标题解析',
+              message: '已自动解析主标题为组件信息。'
+            });
+          }
+        } catch (error) {
+          console.warn('自动解析标题失败:', error);
+        }
+      }
+
       console.log('设置torrentData.standardized_params:', torrentData.value.standardized_params);
       console.log('检查绑定 - type:', torrentData.value.standardized_params.type);
       console.log('检查绑定 - medium:', torrentData.value.standardized_params.medium);
@@ -1190,6 +1347,22 @@ const fetchTorrentInfo = async () => {
           complete_publish_params: dbData.complete_publish_params || {},
           raw_params_for_preview: dbData.raw_params_for_preview || {}
         };
+
+        // 如果没有解析过的标题组件，自动解析主标题
+        if ((!dbData.title_components || dbData.title_components.length === 0) && dbData.title) {
+          try {
+            const parseResponse = await axios.post('/api/utils/parse_title', { title: dbData.title });
+            if (parseResponse.data.success) {
+              torrentData.value.title_components = parseResponse.data.components;
+              ElNotification.info({
+                title: '标题解析',
+                message: '已自动解析主标题为组件信息。'
+              });
+            }
+          } catch (error) {
+            console.warn('自动解析标题失败:', error);
+          }
+        }
 
         taskId.value = storeResponse.data.task_id;
 
@@ -1883,13 +2056,19 @@ const showSiteLog = (siteName: string, logs: string) => {
 
 .full-width-form-column {
   width: 100%;
-  max-width: 900px;
   margin: 0 auto;
 }
 
 .title-components-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px 16px;
+  margin-bottom: 20px;
+}
+
+.standard-params-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 12px 16px;
   margin-bottom: 20px;
 }
@@ -2488,6 +2667,21 @@ const showSiteLog = (siteName: string, logs: string) => {
   font-family: 'Courier New', Courier, monospace;
   font-size: 13px;
   color: #606266;
+}
+
+/* 表单标签中的按钮样式 */
+.form-label-with-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.form-label-with-button .el-button {
+  font-size: 12px;
+  padding: 4px 12px;
+  height: 28px;
+  border-radius: 4px;
 }
 
 .code-font,

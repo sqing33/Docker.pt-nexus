@@ -5,7 +5,7 @@ import uuid
 import re
 from flask import Blueprint, jsonify, request
 from bs4 import BeautifulSoup
-from utils import upload_data_title, upload_data_screenshot, upload_data_poster, add_torrent_to_downloader, extract_tags_from_mediainfo, extract_origin_from_description, extract_resolution_from_mediainfo
+from utils import upload_data_title, upload_data_screenshot, upload_data_poster, upload_data_movie_info, add_torrent_to_downloader, extract_tags_from_mediainfo, extract_origin_from_description, extract_resolution_from_mediainfo
 from core.migrator import TorrentMigrator
 
 # 导入种子参数模型
@@ -833,24 +833,25 @@ def parse_title_utility():
 
 @migrate_bp.route("/media/validate", methods=["POST"])
 def validate_media():
-    """接收前端发送的失效图片信息。"""
+    """接收前端发送的失效图片信息或简介重新获取请求。"""
     data = request.json
 
-    image_type = data.get("type")
+    media_type = data.get("type")
     source_info = data.get("source_info")
     save_path = data.get("savePath")
     torrent_name = data.get("torrentName")
-    imdb_link = source_info.get("imdb_link", '')
-    douban_link = source_info.get("douban_link", '')
+    imdb_link = source_info.get("imdb_link", '') if source_info else ''
+    douban_link = source_info.get("douban_link", '') if source_info else ''
 
-    logging.warning(
-        f"收到失效图片报告 - 类型: {image_type}, "
+    logging.info(
+        f"收到媒体处理请求 - 类型: {media_type}, "
         f"来源信息: {source_info}，视频路径: {save_path}，种子名称: {torrent_name}")
-    if image_type == "screenshot":
+
+    if media_type == "screenshot":
         screenshots = upload_data_screenshot(source_info, save_path,
                                              torrent_name)
         return jsonify({"success": True, "screenshots": screenshots}), 200
-    else:
+    elif media_type == "poster":
         status, posters, description, extracted_imdb_link = upload_data_movie_info(
             douban_link, imdb_link)
         if status:
@@ -861,6 +862,20 @@ def validate_media():
             }), 200
         else:
             return jsonify({"success": False, "error": posters}), 400
+    elif media_type == "intro":
+        # 处理简介重新获取请求
+        status, posters, description, extracted_imdb_link = upload_data_movie_info(
+            douban_link, imdb_link)
+        if status:
+            return jsonify({
+                "success": True,
+                "intro": description,
+                "extracted_imdb_link": extracted_imdb_link
+            }), 200
+        else:
+            return jsonify({"success": False, "error": description}), 400
+    else:
+        return jsonify({"success": False, "error": f"不支持的媒体类型: {media_type}"}), 400
 
 
 @migrate_bp.route("/migrate/add_to_downloader", methods=["POST"])
