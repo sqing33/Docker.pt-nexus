@@ -305,6 +305,10 @@ class Extractor:
             for s in tags_td.find_next_sibling("td").find_all("span")
         ] if tags_td and tags_td.find_next_sibling("td") else [])
 
+        # 添加去重处理，保持顺序
+        if tags:
+            tags = list(dict.fromkeys(tags))
+
         type_text = basic_info_dict.get("类型", "")
         type_match = re.search(r"[\(（](.*?)[\)）]", type_text)
 
@@ -430,23 +434,207 @@ class ParameterMapper:
     def __init__(self):
         pass
 
+    def _map_tags(self, raw_tags, site_name: str):
+        """
+        将原始标签映射到站点特定格式
+        """
+        if not raw_tags:
+            return []
+
+        # 首先尝试使用站点特定配置
+        site_config = self.load_site_config(site_name)
+        site_mappings = site_config.get("mappings", {}).get("tag", {})
+
+        # 确保我们总是有全局映射作为后备
+        global_tag_mappings = GLOBAL_MAPPINGS.get("tag", {})
+
+        mapped_tags = []
+        unmapped_tags = []
+
+        for raw_tag in raw_tags:
+            mapped_tag = None
+            # 首先尝试站点特定映射的精确匹配
+            for source_text, standard_key in site_mappings.items():
+                if source_text.lower() == raw_tag.lower():
+                    mapped_tag = standard_key
+                    break
+
+            # 如果没有精确匹配，尝试站点特定映射的部分匹配
+            if not mapped_tag:
+                for source_text, standard_key in site_mappings.items():
+                    if (source_text.lower() in raw_tag.lower()
+                            or raw_tag.lower() in source_text.lower()
+                        ) and standard_key is not None:
+                        mapped_tag = standard_key
+                        break
+
+            # 如果站点特定映射没有找到，尝试全局映射
+            if not mapped_tag:
+                # 全局映射的精确匹配
+                for source_text, standard_key in global_tag_mappings.items():
+                    if source_text.lower() == raw_tag.lower(
+                    ) and standard_key is not None:
+                        mapped_tag = standard_key
+                        break
+
+                # 全局映射的部分匹配
+                if not mapped_tag:
+                    for source_text, standard_key in global_tag_mappings.items(
+                    ):
+                        if ((source_text.lower() in raw_tag.lower()
+                             or raw_tag.lower() in source_text.lower())
+                                and standard_key is not None):
+                            mapped_tag = standard_key
+                            break
+
+            # 如果找到映射，使用映射值；否则保留原始值
+            if mapped_tag:
+                mapped_tags.append(mapped_tag)
+            else:
+                # 保留原始标签但记录未映射
+                mapped_tags.append(raw_tag)
+                unmapped_tags.append(raw_tag)
+
+        # 记录未映射的标签
+        if unmapped_tags:
+            print(f"警告：站点 {site_name} 的以下标签未在配置中定义: {unmapped_tags}")
+
+        return mapped_tags
+
     def load_site_config(self, site_name: str) -> Dict[str, Any]:
         """
         Load site configuration from YAML file
         """
         try:
+            # 站点中文昵称到英文简称的映射字典
             site_name_mapping = {
-                "财神": "cspt",
-                "财神站": "cspt",
-                "Cspt": "cspt",
-                "LuckPT": "luckpt",
-                "幸运": "luckpt",
-                "Audiences": "audiences",
-                "HHClub": "hhclub",
-                "13City": "13city",
-                "Qingwapt": "qingwapt",
+                "朋友": "keepfrds",
+                "铂金家": "pthome",
+                "馒头": "m-team",
+                "天空": "hdsky",
+                "北洋": "tjupt",
+                "猫站": "pter",
+                "家园": "hdhome",
+                "学校": "btschool",
+                "我堡": "ourbits",
+                "他吹吹风": "torrentccf",
+                "听听歌": "ttg",
+                "南洋": "nanyangpt",
+                "城市": "hdcity",
+                "老师": "nicept",
+                "52pt": "52pt",
+                "吐鲁番": "eastgame",
+                "不可说": "ssd",
+                "聆音": "soulvoice",
+                "彩虹岛": "chdbits",
+                "烧包": "ptsbao",
+                "好大": "hdarea",
+                "时光HDT": "hdtime",
+                "1ptba": "1ptba",
+                "兽": "hd4fans",
+                "皇后": "opencd",
+                "开心": "joyhd",
+                "幼儿园": "dmhy",
+                "好多油": "upxin",
+                "奥申": "oshen",
+                "蝶粉": "discfan",
+                "北邮人": "byr",
+                "海豚": "dicmusic",
+                "天雪": "skyeysnow",
+                "葡萄": "pt",
+                "路": "hdroute",
+                "海胆": "haidan",
+                "红豆饭": "hdfans",
+                "龙之家": "dragonhd",
+                "百川": "hitpt",
+                "海豹": "greatposterwall",
+                "普斯特": "hdpost",
+                "蝴蝶": "hudbt",
+                "人人": "audiences",
+                "猪猪": "piggo",
+                "冬樱": "wintersakura",
+                "憨憨": "hhanclub",
+                "自由农场": "pt0ffcc",
+                "红叶": "redleaves",
+                "铂金学院": "ptchina",
+                "朱雀": "zhuque",
+                "织梦": "zmpt",
+                "肉丝": "rousi",
+                "莫妮卡": "monikadesign",
+                "大青虫": "cyanbug",
+                "UBits": "ubits",
+                "熊猫": "pandapt",
+                "车站": "carpt",
+                "打胶": "dajiao",
+                "影": "shadowflow",
+                "末日": "agsv",
+                "象岛": "ptvicomo",
                 "青蛙": "qingwapt",
-                "不可说": "ssd"
+                "杏坛": "xingtan",
+                "麒麟": "hdkyl",
+                "爱萝莉": "ilolicon",
+                "GTK": "gtkpw",
+                "悟空": "wukongwendao",
+                "okpt": "okpt",
+                "蟹黄堡": "crabpt",
+                "冰淇淋": "icc2022",
+                "杜比": "hddolby",
+                "龟站": "kamept",
+                "咖啡": "ptcafe",
+                "ToSky": "tosky",
+                "YemaPT": "yemapt",
+                "劳改所": "ptlgs",
+                "柠檬不酸": "lemonhd",
+                "浦园": "njtupt",
+                "PTzone": "ptzone",
+                "HDClone": "hdclone",
+                "库非": "kufei",
+                "AFun": "ptlover",
+                "回声": "hspt",
+                "伞": "sanpro",
+                "海棠": "htpt",
+                "下水道": "sewerpt",
+                "RailgunPT": "bilibili",
+                "GGPT": "gamegamept",
+                "雨": "raingfh",
+                "星陨阁": "xingyunge",
+                "财神": "cspt",
+                "唐门": "tmpt",
+                "我的PT": "mypt",
+                "时间ptt": "pttime",
+                "柠檬不甜": "lemon",
+                "13City": "13city",
+                "幸运": "luckpt",
+                "思齐": "siqi",
+                "好学": "hxpt",
+                "PTSkit": "ptskit",
+                "藏宝阁": "cbg",
+                "东京": "tokyo",
+                "垃圾堆": "lajidui",
+                "VCB-Studio": "vcb",
+                "备胎": "beitai",
+                "喵": "azusa",
+                "鸡婆婆": "jpop",
+                "playlet": "playletpt",
+                "三月传媒": "march",
+                "红豆包": "hdbao",
+                "龙PT": "longpt",
+                "爱玲": "aling",
+                "CD": "cdfile",
+                "TU88": "tu88",
+                "UltraHD": "ultrahd",
+                "52movie": "52movie",
+                "PTFans": "ptfans",
+                "太乙": "tey",
+                "itzmx": "itzmx",
+                "Sunny": "sunny",
+                "樱花": "ying",
+                "NovaHD": "novahd",
+                "SBPT": "sbpt",
+                "未来幻境": "jivon",
+                "YHPP": "yhpp",
+                "ASMR": "asmr",
+                "TorrentHub": "torrenthub"
             }
             actual_site_name = site_name_mapping.get(site_name, site_name)
             config_filename = f"{actual_site_name.lower().replace(' ', '_').replace('-', '_')}.yaml"
@@ -545,5 +733,23 @@ class ParameterMapper:
             # 其他参数作为补充
             if key not in final_standardized_params:
                 final_standardized_params[key] = title_value
+
+        # 添加processing参数到source参数的映射
+        # 如果存在processing参数但没有source参数，则将processing映射为source
+        if "processing" in final_standardized_params and "source" not in final_standardized_params:
+            final_standardized_params["source"] = final_standardized_params[
+                "processing"]
+        elif "source" not in final_standardized_params:
+            # 如果两者都不存在，尝试从原始参数中获取
+            processing_value = source_params.get(
+                "区域")  # 13city.yaml中定义的source_key
+            if processing_value:
+                final_standardized_params[
+                    "source"] = get_standard_key_for_value(
+                        processing_value, "source")
+
+        # 处理标签映射 - 使用站点特定的标签映射
+        final_standardized_params["tags"] = self._map_tags(
+            source_params.get("标签", []), site_name)
 
         return final_standardized_params

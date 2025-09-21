@@ -920,8 +920,8 @@ class TorrentMigrator:
                 "screenshots": intro.get("screenshots"),
                 "description": f"{intro.get('statement', '')}\n{intro.get('body', '')}".strip(),
                 "mediainfo": mediainfo,
-                # 标签(tags)通常直接使用源站的值，不参与标准化
-                "tags": source_params.get("标签", []),
+                # [修正] 从 standardized_params 获取已经标准化的标签
+                "tags": standardized_params.get("tags", []),
             }
 
             # 2. 将 standardized_params 中所有标准化的键值对合并进来。
@@ -934,8 +934,7 @@ class TorrentMigrator:
                 "resolution": standardized_params.get("resolution"),
                 "team": standardized_params.get("team"),
                 "source": standardized_params.get("source"),
-                # 如果您的 standardized_params 中还包含 processing 等其他字段，也一并加入
-                "processing": standardized_params.get("processing"),
+                # 移除单独的processing参数保存，统一使用source参数
             })
             # ------------------------------------------------------------------------------------------
 

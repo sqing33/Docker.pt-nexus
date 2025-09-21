@@ -10,7 +10,7 @@ form_fields:
   audio_codec: "audiocodec_sel[4]"
   resolution: "standard_sel[4]"
   team: "team_sel[4]"
-  processing: "processing_sel[4]"
+  source: "processing_sel[4]"
   category: "type"  # 类别字段映射到type参数
 
 # 标准化键映射 - 定义源文本到标准化键的映射规则
@@ -29,10 +29,8 @@ source_parsers:
       source_key: "分辨率"
     team:
       source_key: "制作组"
-    processing:
-      source_key: "区域"
     source:
-      source_key: "产地"
+      source_key: "区域"
 
   title_components:
     title:
@@ -157,14 +155,14 @@ source_parsers:
       "52pt": "team.pt52"
       "AilMWeb": "team.ailmweb"
 
-    processing:
-      "中国（含港澳台）": "processing.china"
-      "日本": "processing.japan"
-      "泰国": "processing.thailand"
-      "印度": "processing.india"
-      "韩国": "processing.korea"
-      "欧美": "processing.western"
-      "Other（其他）": "processing.other"
+    source:
+      "中国（含港澳台）": "source.china"
+      "日本": "source.japan"
+      "泰国": "source.thailand"
+      "印度": "source.india"
+      "韩国": "source.korea"
+      "欧美": "source.western"
+      "Other（其他）": "source.other"
 
 # 参数映射规则 - 定义如何将标准化键映射到站点特定参数
 mappings:
@@ -238,14 +236,14 @@ mappings:
     "resolution.other": "5"
     "default": "5"
 
-  processing:
-    "processing.china": "1"
-    "processing.japan": "2"
-    "processing.thailand": "3"
-    "processing.india": "4"
-    "processing.korea": "5"
-    "processing.western": "6"
-    "processing.other": "7"
+  source:
+    "source.china": "1"
+    "source.japan": "2"
+    "source.thailand": "3"
+    "source.india": "4"
+    "source.korea": "5"
+    "source.western": "6"
+    "source.other": "7"
     "default": "7"
 
   team:

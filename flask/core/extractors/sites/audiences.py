@@ -338,6 +338,10 @@ class AudiencesSpecialExtractor:
         # 提取标签
         tags = self.extract_tags()
 
+        # 添加去重处理，保持顺序
+        if tags:
+            tags = list(dict.fromkeys(tags))
+
         # 提取副标题
         subtitle = self.extract_subtitle()
 
