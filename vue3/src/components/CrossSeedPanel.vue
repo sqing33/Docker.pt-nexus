@@ -40,16 +40,104 @@
                       </el-input>
                     </el-form-item>
                     <div class="title-components-grid">
-                      <el-form-item v-for="param in torrentData.title_components" :key="param.key" :label="param.key">
+                      <el-form-item v-for="param in filteredTitleComponents" :key="param.key" :label="param.key">
                         <el-input v-model="param.value" />
                       </el-form-item>
                     </div>
                   </div>
 
                   <div class="bottom-info-section">
-                    <el-form-item label="副标题">
-                      <el-input v-model="torrentData.subtitle" />
-                    </el-form-item>
+                    <div class="subtitle-unrecognized-grid">
+                      <!-- 副标题占3列 -->
+                      <div class="subtitle-section">
+                        <el-form-item label="副标题">
+                          <el-input v-model="torrentData.subtitle" />
+                        </el-form-item>
+                      </div>
+                      <!-- 无法识别占2列 -->
+                      <div class="unrecognized-section">
+                        <el-form-item v-if="unrecognizedComponent" :key="unrecognizedComponent.key"
+                          :label="unrecognizedComponent.key">
+                          <el-input v-model="unrecognizedComponent.value" />
+                        </el-form-item>
+                      </div>
+                    </div>
+
+                    <!-- 标准参数区域 -->
+                    <div class="standard-params-section">
+                      <!-- 第一行：类型、媒介、视频编码、音频编码、分辨率 -->
+                      <div class="standard-params-grid">
+                        <el-form-item label="类型 (type)">
+                          <el-select v-model="torrentData.standardized_params.type" placeholder="请选择类型" clearable>
+                            <el-option v-for="(label, value) in reverseMappings.type" :key="value" :label="label"
+                              :value="value" />
+                          </el-select>
+                        </el-form-item>
+
+                        <el-form-item label="媒介 (medium)">
+                          <el-select v-model="torrentData.standardized_params.medium" placeholder="请选择媒介" clearable>
+                            <el-option v-for="(label, value) in reverseMappings.medium" :key="value" :label="label"
+                              :value="value" />
+                          </el-select>
+                        </el-form-item>
+
+                        <el-form-item label="视频编码 (video_codec)">
+                          <el-select v-model="torrentData.standardized_params.video_codec" placeholder="请选择视频编码"
+                            clearable>
+                            <el-option v-for="(label, value) in reverseMappings.video_codec" :key="value" :label="label"
+                              :value="value" />
+                          </el-select>
+                        </el-form-item>
+
+                        <el-form-item label="音频编码 (audio_codec)">
+                          <el-select v-model="torrentData.standardized_params.audio_codec" placeholder="请选择音频编码"
+                            clearable>
+                            <el-option v-for="(label, value) in reverseMappings.audio_codec" :key="value" :label="label"
+                              :value="value" />
+                          </el-select>
+                        </el-form-item>
+
+                        <el-form-item label="分辨率 (resolution)">
+                          <el-select v-model="torrentData.standardized_params.resolution" placeholder="请选择分辨率"
+                            clearable>
+                            <el-option v-for="(label, value) in reverseMappings.resolution" :key="value" :label="label"
+                              :value="value" />
+                          </el-select>
+                        </el-form-item>
+                      </div>
+
+                      <!-- 第二行：制作组、产地、标签特殊布局 -->
+                      <div class="standard-params-grid second-row">
+                        <el-form-item label="制作组 (team)">
+                          <el-select v-model="torrentData.standardized_params.team" placeholder="请选择制作组" clearable
+                            filterable allow-create default-first-option>
+                            <el-option v-for="(label, value) in reverseMappings.team" :key="value" :label="label"
+                              :value="value" />
+                          </el-select>
+                        </el-form-item>
+
+                        <el-form-item label="产地 (source)">
+                          <el-select v-model="torrentData.standardized_params.source" placeholder="请选择产地" clearable>
+                            <el-option v-for="(label, value) in reverseMappings.source" :key="value" :label="label"
+                              :value="value" />
+                          </el-select>
+                        </el-form-item>
+
+                        <el-form-item label="标签 (tags)" class="tags-wide-item">
+                          <el-select v-model="torrentData.standardized_params.tags" multiple filterable allow-create
+                            default-first-option placeholder="请选择或输入标签" style="width: 100%">
+                            <el-option v-for="(label, value) in reverseMappings.tags" :key="value" :label="label"
+                              :value="value" />
+                          </el-select>
+                        </el-form-item>
+
+                        <!-- 占位符1：保持5列结构 -->
+                        <div class="placeholder-item"></div>
+
+                        <!-- 占位符2：保持5列结构 -->
+                        <div class="placeholder-item"></div>
+                      </div>
+                    </div>
                   </div>
                 </el-form>
               </div>
@@ -93,12 +181,8 @@
                     <template #label>
                       <div class="form-label-with-button">
                         <span>截图</span>
-                        <el-button
-                          :icon="Refresh"
-                          @click="refreshScreenshots"
-                          :loading="isRefreshingScreenshots"
-                          size="small"
-                          type="primary">
+                        <el-button :icon="Refresh" @click="refreshScreenshots" :loading="isRefreshingScreenshots"
+                          size="small" type="primary">
                           重新获取
                         </el-button>
                       </div>
@@ -130,11 +214,7 @@
                 <template #label>
                   <div class="form-label-with-button">
                     <span>正文</span>
-                    <el-button
-                      :icon="Refresh"
-                      @click="refreshIntro"
-                      :loading="isRefreshingIntro"
-                      size="small"
+                    <el-button :icon="Refresh" @click="refreshIntro" :loading="isRefreshingIntro" size="small"
                       type="primary">
                       重新获取
                     </el-button>
@@ -158,118 +238,6 @@
             </el-form>
           </el-tab-pane>
 
-          <el-tab-pane label="标准参数" name="standard-params">
-            <div class="standard-params-container">
-              <el-form label-position="top" class="fill-height-form">
-                <div class="standard-params-grid">
-                  <el-form-item label="类型 (type)">
-                    <el-select v-model="torrentData.standardized_params.type" placeholder="请选择类型" clearable>
-                      <el-option
-                        v-for="(label, value) in reverseMappings.type"
-                        :key="value"
-                        :label="label"
-                        :value="value"
-                      />
-                    </el-select>
-                  </el-form-item>
-
-                  <el-form-item label="媒介 (medium)">
-                    <el-select v-model="torrentData.standardized_params.medium" placeholder="请选择媒介" clearable>
-                      <el-option
-                        v-for="(label, value) in reverseMappings.medium"
-                        :key="value"
-                        :label="label"
-                        :value="value"
-                      />
-                    </el-select>
-                  </el-form-item>
-
-                  <el-form-item label="视频编码 (video_codec)">
-                    <el-select v-model="torrentData.standardized_params.video_codec" placeholder="请选择视频编码" clearable>
-                      <el-option
-                        v-for="(label, value) in reverseMappings.video_codec"
-                        :key="value"
-                        :label="label"
-                        :value="value"
-                      />
-                    </el-select>
-                  </el-form-item>
-
-                  <el-form-item label="音频编码 (audio_codec)">
-                    <el-select v-model="torrentData.standardized_params.audio_codec" placeholder="请选择音频编码" clearable>
-                      <el-option
-                        v-for="(label, value) in reverseMappings.audio_codec"
-                        :key="value"
-                        :label="label"
-                        :value="value"
-                      />
-                    </el-select>
-                  </el-form-item>
-
-                  <el-form-item label="分辨率 (resolution)">
-                    <el-select v-model="torrentData.standardized_params.resolution" placeholder="请选择分辨率" clearable>
-                      <el-option
-                        v-for="(label, value) in reverseMappings.resolution"
-                        :key="value"
-                        :label="label"
-                        :value="value"
-                      />
-                    </el-select>
-                  </el-form-item>
-
-                  <el-form-item label="制作组 (team)">
-                    <el-select v-model="torrentData.standardized_params.team" placeholder="请选择制作组" clearable filterable allow-create default-first-option>
-                      <el-option
-                        v-for="(label, value) in reverseMappings.team"
-                        :key="value"
-                        :label="label"
-                        :value="value"
-                      />
-                    </el-select>
-                  </el-form-item>
-
-                  <el-form-item label="产地 (source)">
-                    <el-select v-model="torrentData.standardized_params.source" placeholder="请选择产地" clearable>
-                      <el-option
-                        v-for="(label, value) in reverseMappings.source"
-                        :key="value"
-                        :label="label"
-                        :value="value"
-                      />
-                    </el-select>
-                  </el-form-item>
-
-                  <el-form-item label="标签 (tags)">
-                    <el-select
-                      v-model="torrentData.standardized_params.tags"
-                      multiple
-                      filterable
-                      allow-create
-                      default-first-option
-                      placeholder="请选择或输入标签"
-                      style="width: 100%"
-                    >
-                      <el-option
-                        v-for="(label, value) in reverseMappings.tags"
-                        :key="value"
-                        :label="label"
-                        :value="value"
-                      />
-                    </el-select>
-                  </el-form-item>
-                </div>
-
-                <div class="params-info-section">
-                  <el-alert
-                    title="标准参数说明"
-                    type="info"
-                    :closable="false"
-                    description="这些参数将用于生成发布到目标站点的标准化格式，请根据实际情况选择或修改。选项从后端配置加载，确保与各站点标准保持一致。"
-                  />
-                </div>
-              </el-form>
-            </div>
-          </el-tab-pane>
           <el-tab-pane label="已过滤声明" name="filtered-declarations" class="filtered-declarations-pane">
             <div class="filtered-declarations-container">
               <div class="filtered-declarations-header">
@@ -322,7 +290,8 @@
               <div class="param-row">
                 <div class="param-item imdb-item half-width">
                   <span class="param-label">IMDb链接：</span>
-                  <span :class="['param-value', { 'empty': !torrentData.imdb_link || torrentData.imdb_link === 'N/A' }]">
+                  <span
+                    :class="['param-value', { 'empty': !torrentData.imdb_link || torrentData.imdb_link === 'N/A' }]">
                     {{ torrentData.imdb_link || 'N/A' }}
                   </span>
                 </div>
@@ -454,12 +423,14 @@
         <div class="progress-section" v-if="publishProgress.total > 0 || downloaderProgress.total > 0">
           <div class="progress-item" v-if="publishProgress.total > 0">
             <div class="progress-label">发布进度:</div>
-            <el-progress :percentage="Math.round((publishProgress.current / publishProgress.total) * 100)" :show-text="true" />
+            <el-progress :percentage="Math.round((publishProgress.current / publishProgress.total) * 100)"
+              :show-text="true" />
             <div class="progress-text">{{ publishProgress.current }} / {{ publishProgress.total }}</div>
           </div>
           <div class="progress-item" v-if="downloaderProgress.total > 0">
             <div class="progress-label">下载器添加进度:</div>
-            <el-progress :percentage="Math.round((downloaderProgress.current / downloaderProgress.total) * 100)" :show-text="true" />
+            <el-progress :percentage="Math.round((downloaderProgress.current / downloaderProgress.total) * 100)"
+              :show-text="true" />
             <div class="progress-text">{{ downloaderProgress.current }} / {{ downloaderProgress.total }}</div>
           </div>
         </div>
@@ -525,14 +496,8 @@
       <!-- 步骤 1 的按钮 -->
       <div v-if="activeStep === 1" class="button-group">
         <el-button @click="handlePreviousStep" :disabled="isLoading">上一步</el-button>
-        <el-tooltip
-          :content="isScrolledToBottom ? '' : '请先滚动到页面底部'"
-          :disabled="isScrolledToBottom"
-          placement="top">
-          <el-button
-            type="primary"
-            @click="goToSelectSiteStep"
-            :disabled="isLoading || !isScrolledToBottom"
+        <el-tooltip :content="isScrolledToBottom ? '' : '请先滚动到页面底部'" :disabled="isScrolledToBottom" placement="top">
+          <el-button type="primary" @click="goToSelectSiteStep" :disabled="isLoading || !isScrolledToBottom"
             :class="{ 'scrolled-to-bottom': isScrolledToBottom }">
             下一步：选择发布站点
           </el-button>
@@ -1808,6 +1773,15 @@ const getMappedTags = () => {
   });
 };
 
+// Computed properties for filtered title components
+const filteredTitleComponents = computed(() => {
+  return torrentData.value.title_components.filter(param => param.key !== '无法识别');
+});
+
+const unrecognizedComponent = computed(() => {
+  return torrentData.value.title_components.find(param => param.key === '无法识别');
+});
+
 const showLogs = async () => {
   if (!taskId.value) {
     ElNotification.warning('没有可用的任务日志')
@@ -2061,16 +2035,33 @@ const showSiteLog = (siteName: string, logs: string) => {
 
 .title-components-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 12px 16px;
   margin-bottom: 20px;
 }
 
 .standard-params-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 12px 16px;
   margin-bottom: 20px;
+}
+
+.standard-params-grid.second-row .tags-wide-item {
+  grid-column: span 3;
+}
+
+.subtitle-unrecognized-grid {
+  display: grid;
+  grid-template-columns: 4fr 1fr;
+  gap: 12px 16px;
+  align-items: start;
+}
+
+.placeholder-item {
+  opacity: 0;
+  pointer-events: none;
+  height: 1px;
 }
 
 .screenshot-container,
