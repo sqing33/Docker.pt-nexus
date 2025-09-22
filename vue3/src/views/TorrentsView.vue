@@ -155,7 +155,7 @@
           </div>
         </template>
         <div class="cross-seed-content" v-if="selectedTorrentForMigration">
-          <CrossSeedPanel :torrent="selectedTorrentForMigration" :source-site="selectedSourceSite"
+          <CrossSeedPanel
             @complete="handleCrossSeedComplete" @cancel="closeCrossSeedDialog" />
         </div>
       </el-card>
@@ -284,6 +284,8 @@ import { ElMessage } from 'element-plus';
 import type { TableInstance, Sort } from 'element-plus'
 import type { ElTree } from 'element-plus'
 import CrossSeedPanel from '../components/CrossSeedPanel.vue'
+import { useCrossSeedStore } from '@/stores/crossSeed'
+import type { ISourceInfo } from '@/types'
 
 const emits = defineEmits(['ready'])
 
@@ -397,9 +399,15 @@ const pathTreeData = ref<PathNode[]>([])
 
 const sourceSelectionDialogVisible = ref<boolean>(false);
 const allSourceSitesStatus = ref<SiteStatus[]>([]);
-const selectedTorrentForMigration = ref<Torrent | null>(null);
-const crossSeedDialogVisible = ref<boolean>(false);
-const selectedSourceSite = ref<string>('');
+
+const crossSeedStore = useCrossSeedStore();
+
+// 控制转种弹窗的显示，当 taskId 存在时显示
+const crossSeedDialogVisible = computed(() => !!crossSeedStore.taskId);
+// 从 store 获取选中的种子信息
+const selectedTorrentForMigration = computed(() => crossSeedStore.workingParams as Torrent | null);
+// 从 store 获取源站点名称
+const selectedSourceSite = computed(() => crossSeedStore.sourceInfo?.name || '');
 
 // 站点操作弹窗相关
 const siteOperationDialogVisible = ref<boolean>(false);
@@ -609,19 +617,16 @@ const fetchData = async () => {
 }
 
 const startCrossSeed = (row: Torrent) => {
+  // 在开始转种流程前，先重置 store，防止旧数据污染
+  crossSeedStore.reset();
+
   const availableSources = Object.entries(row.sites)
     .map(([siteName, siteDetails]) => ({ siteName, ...siteDetails }))
     .filter(site => {
-      // 检查站点是否配置为源站点
       const isSourceSite = site.migration === 1 || site.migration === 3;
       if (!isSourceSite) return false;
-
-      // 检查是否有有效的种子ID或链接
-      // 1. 完整的详情页链接
       const hasDetailsLink = site.comment && site.comment.includes('details.php?id=');
-      // 2. 只有种子ID的情况（纯数字）
       const hasTorrentId = site.comment && /^\d+$/.test(site.comment.trim());
-
       return hasDetailsLink || hasTorrentId;
     });
 
@@ -630,7 +635,8 @@ const startCrossSeed = (row: Torrent) => {
     return;
   }
 
-  selectedTorrentForMigration.value = row;
+  // 将当前要操作的种子信息存入 store
+  crossSeedStore.setParams(row);
   sourceSelectionDialogVisible.value = true;
 };
 
@@ -645,29 +651,18 @@ const confirmSourceSiteAndProceed = async (sourceSite: any) => {
   const siteDetails = row.sites[sourceSite.siteName];
   let torrentId = null;
 
-  // 首先检查是否能从链接中提取到ID
   const idMatch = siteDetails?.comment?.match(/id=(\d+)/);
   if (idMatch && idMatch[1]) {
     torrentId = idMatch[1];
-  }
-  // 检查注释是否只包含纯数字（种子ID）
-  else if (siteDetails?.comment && /^\d+$/.test(siteDetails.comment.trim())) {
+  } else if (siteDetails?.comment && /^\d+$/.test(siteDetails.comment.trim())) {
     torrentId = siteDetails.comment.trim();
-  }
-  // 如果以上都无法提取到ID，则使用种子名称进行搜索
-  else {
+  } else {
     try {
       const response = await fetch('/api/migrate/search_torrent_id', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          sourceSite: sourceSite.siteName,
-          torrentName: row.name
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourceSite: sourceSite.siteName, torrentName: row.name })
       });
-
       const result = await response.json();
       if (result.success && result.torrent_id) {
         torrentId = result.torrent_id;
@@ -677,26 +672,34 @@ const confirmSourceSiteAndProceed = async (sourceSite: any) => {
         sourceSelectionDialogVisible.value = false;
         return;
       }
-    } catch (error) {
+    } catch (error: any) {
       ElMessage.error(`搜索种子ID时发生网络错误：${error.message}`);
       sourceSelectionDialogVisible.value = false;
       return;
     }
   }
 
-  // 将获取到的种子ID存储起来，供后续使用
   if (siteDetails) {
+    // @ts-ignore
     siteDetails.torrentId = torrentId;
   }
 
   const sourceSiteName = sourceSite.siteName;
+  const sourceSiteIdentifier = allSourceSitesStatus.value.find(s => s.name === sourceSiteName)?.site || sourceSiteName.toLowerCase();
 
   ElMessage.success(`准备从站点 [${sourceSiteName}] 开始迁移种子...`);
 
-  // 设置选中的源站点并打开转种弹窗
-  selectedSourceSite.value = sourceSiteName;
+  // 设置 store，触发转种弹窗
+  const sourceInfo: ISourceInfo = {
+    name: sourceSiteName,
+    site: sourceSiteIdentifier,
+    torrentId,
+  };
+  crossSeedStore.setSourceInfo(sourceInfo);
+  crossSeedStore.setTaskId(row.name + '_' + Date.now()); // 使用时间戳确保唯一性
+
   sourceSelectionDialogVisible.value = false;
-  crossSeedDialogVisible.value = true;
+  // crossSeedDialogVisible 会通过 computed 属性自动变为 true
 };
 
 const isSourceSiteSelectable = (siteName: string): boolean => {
@@ -704,9 +707,7 @@ const isSourceSiteSelectable = (siteName: string): boolean => {
 };
 
 const closeCrossSeedDialog = () => {
-  crossSeedDialogVisible.value = false;
-  selectedTorrentForMigration.value = null;
-  selectedSourceSite.value = '';
+  crossSeedStore.reset();
 };
 
 // 处理站点点击事件
@@ -756,7 +757,7 @@ const setSiteNotExist = async () => {
 
 const handleCrossSeedComplete = () => {
   ElMessage.success('转种操作已完成！');
-  closeCrossSeedDialog();
+  crossSeedStore.reset();
   // 可选：刷新数据以显示最新状态
   fetchData();
 };

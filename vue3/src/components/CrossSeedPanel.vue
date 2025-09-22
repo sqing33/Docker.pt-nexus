@@ -578,6 +578,7 @@ import { ElNotification, ElMessageBox } from 'element-plus'
 import { ElTooltip } from 'element-plus'
 import axios from 'axios'
 import { Refresh, CircleCheckFilled, CircleCloseFilled, Close } from '@element-plus/icons-vue'
+import { useCrossSeedStore } from '@/stores/crossSeed'
 
 // BBCode 解析函数
 const parseBBCode = (text) => {
@@ -636,12 +637,12 @@ interface Torrent {
   downloaderId?: string;
 }
 
-const props = defineProps<{
-  torrent: Torrent;
-  sourceSite: string;
-}>();
-
 const emit = defineEmits(['complete', 'cancel']);
+
+const crossSeedStore = useCrossSeedStore();
+
+const torrent = computed(() => crossSeedStore.workingParams as Torrent);
+const sourceSite = computed(() => crossSeedStore.sourceInfo?.name || '');
 
 const getInitialTorrentData = () => ({
   title_components: [] as { key: string, value: string }[],
@@ -792,10 +793,10 @@ const filteredDeclarationsList = computed(() => {
 const filteredDeclarationsCount = computed(() => filteredDeclarationsList.value.length)
 
 const isTargetSiteSelectable = (siteName: string): boolean => {
-  if (!props.torrent || !props.torrent.sites) {
+  if (!torrent.value || !torrent.value.sites) {
     return true;
   }
-  return !props.torrent.sites[siteName];
+  return !torrent.value.sites[siteName];
 };
 
 const canProceedToNextStep = computed(() => {
@@ -843,7 +844,7 @@ const refreshIntro = async () => {
     type: 'intro',
     source_info: {
       main_title: torrentData.value.original_main_title,
-      source_site: props.sourceSite,
+      source_site: sourceSite.value,
       imdb_link: torrentData.value.imdb_link,
       douban_link: torrentData.value.douban_link,
     }
@@ -900,12 +901,12 @@ const refreshScreenshots = async () => {
     type: 'screenshot',
     source_info: {
       main_title: torrentData.value.original_main_title,
-      source_site: props.sourceSite,
+      source_site: sourceSite.value,
       imdb_link: torrentData.value.imdb_link,
       douban_link: torrentData.value.douban_link,
     },
-    savePath: props.torrent.save_path,
-    torrentName: props.torrent.name
+    savePath: torrent.value.save_path,
+    torrentName: torrent.value.name
   };
 
   try {
@@ -979,12 +980,12 @@ const handleImageError = async (url: string, type: 'poster' | 'screenshot', inde
     type: type,
     source_info: {
       main_title: torrentData.value.original_main_title,
-      source_site: props.sourceSite,
+      source_site: sourceSite.value,
       imdb_link: torrentData.value.imdb_link,
       douban_link: torrentData.value.douban_link,
     },
-    savePath: props.torrent.save_path,
-    torrentName: props.torrent.name
+    savePath: torrent.value.save_path,
+    torrentName: torrent.value.name
   }
 
   try {
@@ -1066,9 +1067,9 @@ const fetchSitesStatus = async () => {
 }
 
 const fetchTorrentInfo = async () => {
-  if (!props.sourceSite || !props.torrent) return;
+  if (!sourceSite.value || !torrent.value) return;
 
-  const siteDetails = props.torrent.sites[props.sourceSite];
+  const siteDetails = torrent.value.sites[sourceSite.value];
   // 首先检查是否有存储的种子ID
   let torrentId = siteDetails.torrentId || null;
 
@@ -1076,7 +1077,7 @@ const fetchTorrentInfo = async () => {
   if (!torrentId) {
     const idMatch = siteDetails.comment?.match(/id=(\d+)/);
     if (!idMatch || !idMatch[1]) {
-      ElNotification.error(`无法从源站点 ${props.sourceSite} 的链接中提取种子ID。`);
+      ElNotification.error(`无法从源站点 ${sourceSite.value} 的链接中提取种子ID。`);
       emit('cancel');
       return;
     }
@@ -1095,8 +1096,8 @@ const fetchTorrentInfo = async () => {
 
   // 步骤1: 尝试从数据库读取种子信息
   try {
-    const englishSiteName = await getEnglishSiteName(props.sourceSite);
-    console.log(`尝试从数据库读取种子信息: ${torrentId} from ${props.sourceSite} (${englishSiteName})`);
+    const englishSiteName = await getEnglishSiteName(sourceSite.value);
+    console.log(`尝试从数据库读取种子信息: ${torrentId} from ${sourceSite.value} (${englishSiteName})`);
     const dbResponse = await axios.get('/api/migrate/get_db_seed_info', {
       params: {
         torrent_id: torrentId,
@@ -1255,9 +1256,9 @@ const fetchTorrentInfo = async () => {
     }
 
     const storeResponse = await axios.post('/api/migrate/fetch_and_store', {
-      sourceSite: props.sourceSite,
+      sourceSite: sourceSite.value,
       searchTerm: torrentId,
-      savePath: props.torrent.save_path,
+      savePath: torrent.value.save_path,
     }, {
       timeout: 60000 // 60秒超时，用于抓取和存储
     });
@@ -1273,8 +1274,8 @@ const fetchTorrentInfo = async () => {
       while (dbReadAttempt < maxDbReadAttempts) {
         dbReadAttempt++;
         try {
-          const retryEnglishSiteName = await getEnglishSiteName(props.sourceSite);
-          console.log(`重试从数据库读取种子信息: ${torrentId} from ${props.sourceSite} (${retryEnglishSiteName})`);
+          const retryEnglishSiteName = await getEnglishSiteName(sourceSite.value);
+          console.log(`重试从数据库读取种子信息: ${torrentId} from ${sourceSite.value} (${retryEnglishSiteName})`);
           dbResponseAfterStore = await axios.get('/api/migrate/get_db_seed_info', {
             params: {
               torrent_id: torrentId,
@@ -1493,9 +1494,9 @@ const goToPublishPreviewStep = async () => {
       }
     } else {
       // 回退模式：需要从props中获取
-      const siteDetails = props.torrent.sites[props.sourceSite];
+      const siteDetails = torrent.value.sites[sourceSite.value];
       torrentId = siteDetails.torrentId || null;
-      siteName = await getEnglishSiteName(props.sourceSite);
+      siteName = await getEnglishSiteName(sourceSite.value);
 
       if (!torrentId) {
         const idMatch = siteDetails.comment?.match(/id=(\d+)/);
@@ -1634,7 +1635,7 @@ const handlePublish = async () => {
         task_id: taskId.value,
         upload_data: torrentData.value,
         targetSite: siteName,
-        sourceSite: props.sourceSite
+        sourceSite: sourceSite.value
       })
 
       const result = {
@@ -1742,14 +1743,14 @@ const handleApiError = (error: any, defaultMessage: string) => {
 }
 
 const triggerAddToDownloader = async (result: any) => {
-  if (!props.torrent.save_path || !props.torrent.downloaderId) {
+  if (!torrent.value.save_path || !torrent.value.downloaderId) {
     const msg = `[${result.siteName}] 警告: 未能获取到原始保存路径或下载器ID，已跳过自动添加任务。`;
     console.warn(msg);
     logContent.value += `\n${msg}`;
     return { success: false, message: "未能获取到原始保存路径或下载器ID", downloaderName: "" };
   }
 
-  let targetDownloaderId = props.torrent.downloaderId;
+  let targetDownloaderId = torrent.value.downloaderId;
   let targetDownloaderName = "未知下载器";
 
   try {
@@ -1771,7 +1772,7 @@ const triggerAddToDownloader = async (result: any) => {
   try {
     const response = await axios.post('/api/migrate/add_to_downloader', {
       url: result.url,
-      savePath: props.torrent.save_path,
+      savePath: torrent.value.save_path,
       downloaderId: targetDownloaderId,
     });
 
