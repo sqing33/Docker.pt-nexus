@@ -297,9 +297,14 @@
                 </div>
                 <div class="param-item tags-item half-width">
                   <span class="param-label">标签：</span>
-                  <span :class="['param-value', { 'empty': !getMappedTags() || getMappedTags().length === 0 }]">
-                    {{ getMappedTags().join(', ') || 'N/A' }}
-                  </span>
+                  <div class="param-value-container">
+                    <span :class="['param-value', { 'empty': !getMappedTags() || getMappedTags().length === 0 }]">
+                      {{ getMappedTags().join(', ') || 'N/A' }}
+                    </span>
+                    <span class="param-standard-key" v-if="torrentData.standardized_params.tags && torrentData.standardized_params.tags.length > 0">
+                      {{ torrentData.standardized_params.tags.join(', ') }}
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -307,45 +312,80 @@
               <div class="params-content">
                 <div class="param-item inline-param">
                   <span class="param-label">类型：</span>
-                  <span :class="['param-value', { 'empty': !getMappedValue('type') }]">
-                    {{ getMappedValue('type') || 'N/A' }}
-                  </span>
+                  <div class="param-value-container">
+                    <span :class="['param-value', { 'empty': !getMappedValue('type') }]">
+                      {{ getMappedValue('type') || 'N/A' }}
+                    </span>
+                    <span class="param-standard-key" v-if="torrentData.standardized_params.type">
+                      {{ torrentData.standardized_params.type }}
+                    </span>
+                  </div>
                 </div>
                 <div class="param-item inline-param">
                   <span class="param-label">媒介：</span>
-                  <span :class="['param-value', { 'empty': !getMappedValue('medium') }]">
-                    {{ getMappedValue('medium') || 'N/A' }}
-                  </span>
+                  <div class="param-value-container">
+                    <span :class="['param-value', { 'empty': !getMappedValue('medium') }]">
+                      {{ getMappedValue('medium') || 'N/A' }}
+                    </span>
+                    <span class="param-standard-key" v-if="torrentData.standardized_params.medium">
+                      {{ torrentData.standardized_params.medium }}
+                    </span>
+                  </div>
                 </div>
                 <div class="param-item inline-param">
                   <span class="param-label">视频编码：</span>
-                  <span :class="['param-value', { 'empty': !getMappedValue('video_codec') }]">
-                    {{ getMappedValue('video_codec') || 'N/A' }}
-                  </span>
+                  <div class="param-value-container">
+                    <span :class="['param-value', { 'empty': !getMappedValue('video_codec') }]">
+                      {{ getMappedValue('video_codec') || 'N/A' }}
+                    </span>
+                    <span class="param-standard-key" v-if="torrentData.standardized_params.video_codec">
+                      {{ torrentData.standardized_params.video_codec }}
+                    </span>
+                  </div>
                 </div>
                 <div class="param-item inline-param">
                   <span class="param-label">音频编码：</span>
-                  <span :class="['param-value', { 'empty': !getMappedValue('audio_codec') }]">
-                    {{ getMappedValue('audio_codec') || 'N/A' }}
-                  </span>
+                  <div class="param-value-container">
+                    <span :class="['param-value', { 'empty': !getMappedValue('audio_codec') }]">
+                      {{ getMappedValue('audio_codec') || 'N/A' }}
+                    </span>
+                    <span class="param-standard-key" v-if="torrentData.standardized_params.audio_codec">
+                      {{ torrentData.standardized_params.audio_codec }}
+                    </span>
+                  </div>
                 </div>
                 <div class="param-item inline-param">
                   <span class="param-label">分辨率：</span>
-                  <span :class="['param-value', { 'empty': !getMappedValue('resolution') }]">
-                    {{ getMappedValue('resolution') || 'N/A' }}
-                  </span>
+                  <div class="param-value-container">
+                    <span :class="['param-value', { 'empty': !getMappedValue('resolution') }]">
+                      {{ getMappedValue('resolution') || 'N/A' }}
+                    </span>
+                    <span class="param-standard-key" v-if="torrentData.standardized_params.resolution">
+                      {{ torrentData.standardized_params.resolution }}
+                    </span>
+                  </div>
                 </div>
                 <div class="param-item inline-param">
                   <span class="param-label">制作组：</span>
-                  <span :class="['param-value', { 'empty': !getMappedValue('team') }]">
-                    {{ getMappedValue('team') || 'N/A' }}
-                  </span>
+                  <div class="param-value-container">
+                    <span :class="['param-value', { 'empty': !getMappedValue('team') }]">
+                      {{ getMappedValue('team') || 'N/A' }}
+                    </span>
+                    <span class="param-standard-key" v-if="torrentData.standardized_params.team">
+                      {{ torrentData.standardized_params.team }}
+                    </span>
+                  </div>
                 </div>
                 <div class="param-item inline-param">
                   <span class="param-label">产地/来源：</span>
-                  <span :class="['param-value', { 'empty': !getMappedValue('source') }]">
-                    {{ getMappedValue('source') || 'N/A' }}
-                  </span>
+                  <div class="param-value-container">
+                    <span :class="['param-value', { 'empty': !getMappedValue('source') }]">
+                      {{ getMappedValue('source') || 'N/A' }}
+                    </span>
+                    <span class="param-standard-key" v-if="torrentData.standardized_params.source">
+                      {{ torrentData.standardized_params.source }}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -2260,7 +2300,7 @@ const showSiteLog = (siteName: string, logs: string) => {
 
 .params-content {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(4, 1fr);
   gap: 12px;
   padding: 0;
 }
@@ -2328,6 +2368,12 @@ const showSiteLog = (siteName: string, logs: string) => {
   line-height: 1.4;
 }
 
+.imdb-item .param-value-container,
+.tags-item .param-value-container {
+  display: flex;
+  flex-direction: column;
+}
+
 .tags-item {
   background-color: #f3e5f5;
   border-color: #ce93d8;
@@ -2358,11 +2404,25 @@ const showSiteLog = (siteName: string, logs: string) => {
   padding-top: 2px;
 }
 
-.inline-param .param-value {
+.inline-param .param-value-container {
   flex: 1;
   margin-left: 8px;
+  display: flex;
+  flex-direction: column;
+}
+
+.inline-param .param-value {
   font-size: 14px;
   word-break: break-word;
+  line-height: 1.4;
+}
+
+.param-standard-key {
+  font-size: 12px;
+  color: #909399;
+  font-style: italic;
+  margin-top: 2px;
+  line-height: 1.2;
 }
 
 .param-label {
