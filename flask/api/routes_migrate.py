@@ -457,6 +457,9 @@ def update_db_seed_info():
                 standardized_params = mapper.map_parameters(site_name, english_site_name, extracted_data)
 
             # 保存标准化后的参数到数据库
+            # 从title_components中提取标题拆解的各项参数
+            title_components = updated_parameters.get('title_components', [])
+
             # 构造完整的存储参数
             final_parameters = {
                 "title": updated_parameters.get('title', ''),
@@ -476,6 +479,9 @@ def update_db_seed_info():
                 "team": standardized_params.get('team', ''),
                 "source": standardized_params.get('source', ''),
                 "tags": standardized_params.get('tags', []),
+
+                # 保存完整的标题组件数据
+                "title_components": title_components,
 
                 # 添加标准化后的参数
                 "standardized_params": standardized_params,

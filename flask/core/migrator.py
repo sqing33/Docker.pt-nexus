@@ -830,7 +830,7 @@ class TorrentMigrator:
                         }
                     }
                     temp_standardized = self.parameter_mapper.map_parameters(
-                        self.SOURCE_NAME, temp_extracted)
+                        self.SOURCE_NAME, self.SOURCE_SITE_CODE, temp_extracted)
                     audio_from_title_standard = temp_standardized.get(
                         'audio_codec')
 
@@ -937,6 +937,8 @@ class TorrentMigrator:
             # 直接使用前面 ParameterMapper 生成的 standardized_params 字典，
             # 它已经包含了所有映射好的标准化参数。
 
+            # 从title_components中提取标题拆解的各项参数（title_components已在方法开头定义）
+
             # 1. 先构建包含非标准化信息的字典
             seed_parameters = {
                 "title":
@@ -960,6 +962,9 @@ class TorrentMigrator:
                 # [修正] 从 standardized_params 获取已经标准化的标签
                 "tags":
                 standardized_params.get("tags", []),
+
+                # 保存完整的标题组件数据
+                "title_components": title_components,
             }
 
             # 2. 将 standardized_params 中所有标准化的键值对合并进来。

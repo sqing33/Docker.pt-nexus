@@ -96,6 +96,13 @@ class SeedParameter:
             else:
                 tags = str(tags) if tags else ""
 
+            # 处理title_components字段（列表转换为字符串）
+            title_components = parameters.get("title_components", [])
+            if isinstance(title_components, list):
+                title_components = json.dumps(title_components, ensure_ascii=False)
+            else:
+                title_components = str(title_components) if title_components else ""
+
             # 根据数据库类型构建UPSERT SQL
             if self.db_manager.db_type == "postgresql":
                 # PostgreSQL使用ON CONFLICT DO UPDATE
@@ -103,8 +110,8 @@ class SeedParameter:
                     INSERT INTO seed_parameters
                     (torrent_id, site_name, title, subtitle, imdb_link, douban_link, type, medium,
                      video_codec, audio_codec, resolution, team, source, tags, poster, screenshots,
-                     statement, body, mediainfo, created_at, updated_at)
-                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+                     statement, body, mediainfo, title_components, created_at, updated_at)
+                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
                     ON CONFLICT (torrent_id, site_name)
                     DO UPDATE SET
                         title = EXCLUDED.title,
@@ -124,6 +131,7 @@ class SeedParameter:
                         statement = EXCLUDED.statement,
                         body = EXCLUDED.body,
                         mediainfo = EXCLUDED.mediainfo,
+                        title_components = EXCLUDED.title_components,
                         updated_at = EXCLUDED.updated_at
                 """
             elif self.db_manager.db_type == "mysql":
@@ -132,8 +140,8 @@ class SeedParameter:
                     INSERT INTO seed_parameters
                     (torrent_id, site_name, title, subtitle, imdb_link, douban_link, type, medium,
                      video_codec, audio_codec, resolution, team, source, tags, poster, screenshots,
-                     statement, body, mediainfo, created_at, updated_at)
-                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+                     statement, body, mediainfo, title_components, created_at, updated_at)
+                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
                     ON DUPLICATE KEY UPDATE
                         title = VALUES(title),
                         subtitle = VALUES(subtitle),
@@ -152,6 +160,7 @@ class SeedParameter:
                         statement = VALUES(statement),
                         body = VALUES(body),
                         mediainfo = VALUES(mediainfo),
+                        title_components = VALUES(title_components),
                         updated_at = VALUES(updated_at)
                 """
             else:  # SQLite
@@ -160,8 +169,8 @@ class SeedParameter:
                     INSERT INTO seed_parameters
                     (torrent_id, site_name, title, subtitle, imdb_link, douban_link, type, medium,
                      video_codec, audio_codec, resolution, team, source, tags, poster, screenshots,
-                     statement, body, mediainfo, created_at, updated_at)
-                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+                     statement, body, mediainfo, title_components, created_at, updated_at)
+                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
                     ON CONFLICT (torrent_id, site_name)
                     DO UPDATE SET
                         title = excluded.title,
@@ -181,6 +190,7 @@ class SeedParameter:
                         statement = excluded.statement,
                         body = excluded.body,
                         mediainfo = excluded.mediainfo,
+                        title_components = excluded.title_components,
                         updated_at = excluded.updated_at
                 """
 
@@ -205,6 +215,7 @@ class SeedParameter:
                 parameters.get("statement", ""),
                 parameters.get("body", ""),
                 parameters.get("mediainfo", ""),
+                title_components,
                 parameters["created_at"],
                 parameters["updated_at"]
             )
@@ -315,6 +326,13 @@ class SeedParameter:
                     except json.JSONDecodeError:
                         parameters["tags"] = []
 
+                # 解析title_components字段（如果存在）
+                if "title_components" in parameters and isinstance(parameters["title_components"], str):
+                    try:
+                        parameters["title_components"] = json.loads(parameters["title_components"])
+                    except json.JSONDecodeError:
+                        parameters["title_components"] = []
+
                 return parameters
 
             return None
@@ -358,6 +376,13 @@ class SeedParameter:
                     parameters["tags"] = json.loads(parameters["tags"])
                 except json.JSONDecodeError:
                     parameters["tags"] = []
+
+            # 解析title_components字段（如果存在）
+            if "title_components" in parameters and isinstance(parameters["title_components"], str):
+                try:
+                    parameters["title_components"] = json.loads(parameters["title_components"])
+                except json.JSONDecodeError:
+                    parameters["title_components"] = []
 
             logging.info(f"种子参数已从JSON文件加载: {json_file_path}")
             return parameters
