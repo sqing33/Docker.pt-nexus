@@ -214,20 +214,19 @@ mappings:
     "default": "5"
 
   tag:
-    "禁转": 1
-    "VCB-Studio": 2
-    "儿童片": 17
-    "LGBTQ+": 19
-    "中字": 6
-    "特效字幕": 20
-    "国语": 5
-    "粤语": 8
-    "完结": 14
-    "系列合集": 10
-    "原生原盘": 11
-    "DIY": 4
-    "Remux": 15
-    "杜比视界": 12
-    "HDR10+": 13
-    "HDR": 7
+    "tag.VCB-Studio": 2
+    "tag.儿童片": 17
+    "tag.LGBTQ+": 19
+    "tag.中字": 6
+    "tag.特效字幕": 20
+    "tag.国语": 5
+    "tag.粤语": 8
+    "tag.完结": 14
+    "tag.系列合集": 10
+    "tag.原生原盘": 11
+    "tag.DIY": 4
+    "tag.Remux": 15
+    "tag.杜比视界": 12
+    "tag.HDR10+": 13
+    "tag.HDR": 7
     "default": null

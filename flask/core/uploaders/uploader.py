@@ -337,6 +337,7 @@ class BaseUploader(ABC):
         # 处理标签映射
         tag_mapping = self.mappings.get("tag", {})
         combined_tags = self._collect_all_tags()
+
         for tag_str in combined_tags:
             tag_id = self._find_mapping(tag_mapping, tag_str)
             if tag_id:
@@ -446,7 +447,11 @@ class BaseUploader(ABC):
         """
         收集所有可能的标签来源
         """
-        # 从源站参数获取标签
+        # 从标准化参数获取标签（主要来源）
+        standardized_params = self.upload_data.get("standardized_params", {})
+        standardized_tags = set(standardized_params.get("tags", []))
+
+        # 从源站参数获取标签（备用来源）
         source_params = self.upload_data.get("source_params", {})
         source_tags = set(source_params.get("标签") or [])
 
@@ -459,8 +464,11 @@ class BaseUploader(ABC):
         if "中字" in source_type:
             tags_from_mediainfo.add("中字")
 
-        # 合并所有标签
-        combined_tags = source_tags.union(tags_from_mediainfo)
+        # 合并所有标签，确保原始标签不会被覆盖
+        # 优先使用标准化参数中的标签，然后是源站参数中的标签，最后是MediaInfo提取的标签
+        combined_tags = standardized_tags.copy()  # 先使用标准化参数中的标签
+        combined_tags.update(source_tags)  # 再添加源站参数中的标签
+        combined_tags.update(tags_from_mediainfo)  # 最后添加从 MediaInfo 提取的标签
 
         # 从标题组件中智能匹配HDR等信息
         title_components_list = self.upload_data.get("title_components", [])

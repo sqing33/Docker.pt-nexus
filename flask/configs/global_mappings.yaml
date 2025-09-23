@@ -234,6 +234,7 @@ global_standard_keys:
   # 标签映射
   tag:
       "官种": "tag.官种"
+      "官方": "tag.官方"
       "驻站": "tag.驻站"
       "禁转": "tag.禁转"
       "首发": "tag.首发"

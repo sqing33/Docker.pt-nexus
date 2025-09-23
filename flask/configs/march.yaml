@@ -175,10 +175,8 @@ mappings:
     "default": "11"
 
   tag:
-    "禁转": 1
-    "首发": 2
-    "DIY": 4
-    "国语": 5
-    "中字": 6
-    "HDR": 7
+    "tag.DIY": 4
+    "tag.国语": 5
+    "tag.中字": 6
+    "tag.HDR": 7
     "default": null

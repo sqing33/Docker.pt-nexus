@@ -164,6 +164,7 @@ source_parsers:
       "HHWEB": "team.hhweb"
       # 可在此继续添加更多制作组
     
+    # 标签映射
     tag:
       "动画": "tag.动画"
       "禁转": "tag.禁转"
@@ -182,6 +183,16 @@ source_parsers:
       "CC": "tag.cc"
       "3D": "tag.3d"
       "应求": "tag.应求"
+      "官方": "tag.官方"
+      "国语": "tag.国语"
+      "粤语": "tag.粤语"
+      "杜比": "tag.杜比"
+      "特效字幕": "tag.特效字幕"
+      "英字": "tag.英字"
+      "4K": "tag.4K"
+      "Blu-ray": "tag.Blu-ray"
+      "LIVE现场": "tag.LIVE现场"
+      "default": null
 
 # 3. 参数映射规则 - 定义如何将标准化键映射到站点上传表单所需的具体'value'
 mappings:
@@ -259,32 +270,4 @@ mappings:
     "audio.other": "99"
     "default": "99"
     
-  # 标签映射
-  tag:
-    "动画": "tag.动画"
-    "禁转": "tag.禁转"
-    "合集": "tag.合集"
-    "原生": "tag.原生"
-    "自购": "tag.自购"
-    "国配": "tag.国语"
-    "中字": "tag.中字"
-    "特效": "tag.特效"
-    "自译": "tag.自译"
-    "DoVi": "tag.Dolby_Vision"
-    "HDR10": "tag.hdr10"
-    "HDR10+": "tag.hdr10plus"
-    "菁彩HDR": "tag.菁彩HDR"
-    "HLG": "tag.hlg"
-    "CC": "tag.cc"
-    "3D": "tag.3d"
-    "应求": "tag.应求"
-    "官方": "tag.官方"
-    "国语": "tag.国语"
-    "粤语": "tag.粤语"
-    "杜比": "tag.杜比"
-    "特效字幕": "tag.特效字幕"
-    "英字": "tag.英字"
-    "4K": "tag.4K"
-    "Blu-ray": "tag.Blu-ray"
-    "LIVE现场": "tag.LIVE现场"
-    "default": null
+

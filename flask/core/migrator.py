@@ -14,6 +14,7 @@ import urllib3
 import traceback
 import importlib
 import yaml
+import urllib.parse
 from io import StringIO
 from typing import Dict, Any, Optional, List
 from config import TEMP_DIR, DATA_DIR
@@ -554,10 +555,22 @@ class TorrentMigrator:
                 'content-disposition')
             torrent_filename = "default.torrent"  # 设置一个默认值
             if content_disposition:
-                filename_match = re.search(r'filename="?([^"]+)"?',
-                                           content_disposition)
+                # 尝试匹配filename*（支持UTF-8编码）和filename
+                filename_match = re.search(
+                    r'filename\*="?UTF-8\'\'([^"]+)"?',
+                    content_disposition, re.IGNORECASE)
                 if filename_match:
                     torrent_filename = filename_match.group(1)
+                    # URL解码文件名（UTF-8编码）
+                    torrent_filename = urllib.parse.unquote(torrent_filename, encoding='utf-8')
+                else:
+                    # 尝试匹配普通的filename
+                    filename_match = re.search(r'filename="?([^"]+)"?',
+                                               content_disposition)
+                    if filename_match:
+                        torrent_filename = filename_match.group(1)
+                        # URL解码文件名
+                        torrent_filename = urllib.parse.unquote(torrent_filename)
 
             # 使用统一的数据提取方法
             extracted_data = self._extract_data_by_site_type(soup, torrent_id)
@@ -741,7 +754,6 @@ class TorrentMigrator:
             # --- [核心修改结束] ---
 
             # 处理torrent_filename，去除.torrent扩展名、URL解码并过滤站点信息，以便正确查找视频文件
-            import urllib.parse
             processed_torrent_name = urllib.parse.unquote(torrent_filename)
             if processed_torrent_name.endswith('.torrent'):
                 processed_torrent_name = processed_torrent_name[:

@@ -5,6 +5,7 @@ import uuid
 import re
 import os
 import requests
+import urllib.parse
 from flask import Blueprint, jsonify, request
 from bs4 import BeautifulSoup
 from utils import upload_data_title, upload_data_screenshot, upload_data_poster, upload_data_movie_info, add_torrent_to_downloader, extract_tags_from_mediainfo, extract_origin_from_description, extract_resolution_from_mediainfo
@@ -97,10 +98,39 @@ def get_db_seed_info():
                 # 生成反向映射表（从标准键到中文显示名称的映射）
                 reverse_mappings = generate_reverse_mappings()
 
+                # 生成task_id并存入缓存，以便发布时使用
+                task_id = str(uuid.uuid4())
+
+                # 获取站点信息
+                source_info = db_manager.get_site_by_nickname(site_name)
+                if not source_info:
+                    # 如果通过昵称找不到，尝试通过英文站点名查找
+                    try:
+                        conn = db_manager._get_connection()
+                        cursor = db_manager._get_cursor(conn)
+                        cursor.execute("SELECT * FROM sites WHERE site = ?",
+                                       (site_name, ))
+                        source_info = cursor.fetchone()
+                        if source_info:
+                            source_info = dict(source_info)
+                    except Exception as e:
+                        logging.warning(f"获取站点信息失败: {e}")
+
+                # 将数据存入缓存，以便发布时使用
+                MIGRATION_CACHE[task_id] = {
+                    "source_info": source_info,
+                    "original_torrent_path": None,  # 将在发布时重新获取
+                    "torrent_dir": None,  # 将在发布时重新确定
+                    "source_site_name": site_name,
+                    "source_torrent_id": torrent_id,
+                    "requires_torrent_download": True,  # 需要下载种子文件
+                }
+
                 return jsonify({
                     "success": True,
                     "data": parameters,
                     "source": "database",
+                    "task_id": task_id,  # 返回task_id给前端
                     "reverse_mappings": reverse_mappings
                 })
             else:
@@ -119,7 +149,10 @@ def get_db_seed_info():
 
     except Exception as e:
         logging.error(f"get_db_seed_info发生意外错误: {e}", exc_info=True)
-        return jsonify({"success": False, "message": f"服务器内部错误: {str(e)}"}), 500
+        return jsonify({
+            "success": False,
+            "message": f"服务器内部错误: {str(e)}"
+        }), 500
 
 
 def generate_reverse_mappings():
@@ -130,15 +163,18 @@ def generate_reverse_mappings():
         import os
 
         # 首先尝试从global_mappings.yaml读取
-        global_mappings_path = os.path.join(os.path.dirname(__file__), '../configs/global_mappings.yaml')
+        global_mappings_path = os.path.join(os.path.dirname(__file__),
+                                            '../configs/global_mappings.yaml')
         global_mappings = {}
 
         if os.path.exists(global_mappings_path):
             try:
                 with open(global_mappings_path, 'r', encoding='utf-8') as f:
                     config_data = yaml.safe_load(f)
-                    global_mappings = config_data.get('global_standard_keys', {})
-                logging.info(f"成功从global_mappings.yaml读取配置，包含{len(global_mappings)}个类别")
+                    global_mappings = config_data.get('global_standard_keys',
+                                                      {})
+                logging.info(
+                    f"成功从global_mappings.yaml读取配置，包含{len(global_mappings)}个类别")
             except Exception as e:
                 logging.warning(f"读取global_mappings.yaml失败: {e}，将使用配置文件中的设置")
 
@@ -180,13 +216,16 @@ def generate_reverse_mappings():
             else:
                 # 其他类别正常处理
                 for chinese_name, standard_value in mappings.items():
-                    if standard_value and standard_value not in reverse_mappings[category]:
-                        reverse_mappings[category][standard_value] = chinese_name
+                    if standard_value and standard_value not in reverse_mappings[
+                            category]:
+                        reverse_mappings[category][
+                            standard_value] = chinese_name
 
         # 只在必要时添加固定映射项作为后备，避免覆盖YAML配置
         add_fallback_mappings(reverse_mappings)
 
-        logging.info(f"成功生成反向映射表: { {k: len(v) for k, v in reverse_mappings.items()} }")
+        logging.info(
+            f"成功生成反向映射表: { {k: len(v) for k, v in reverse_mappings.items()} }")
         return reverse_mappings
 
     except Exception as e:
@@ -289,9 +328,7 @@ def add_fallback_mappings(reverse_mappings):
 
     if not reverse_mappings['team']:
         logging.warning("team映射为空，添加基础后备映射")
-        reverse_mappings['team'].update({
-            'team.other': '其他'
-        })
+        reverse_mappings['team'].update({'team.other': '其他'})
 
     if not reverse_mappings['tags']:
         logging.warning("tags映射为空，添加基础后备映射")
@@ -302,8 +339,6 @@ def add_fallback_mappings(reverse_mappings):
             'tag.官种': '官种',
             'tag.首发': '首发'
         })
-
-
 
 
 # 新增：专门负责数据抓取和存储的API接口
@@ -367,7 +402,9 @@ def migrate_fetch_and_store():
                 "source_torrent_id": search_term,
             }
 
-            logging.info(f"种子信息抓取并存储成功: {search_term} from {source_site_name} ({english_site_name})")
+            logging.info(
+                f"种子信息抓取并存储成功: {search_term} from {source_site_name} ({english_site_name})"
+            )
             return jsonify({
                 "success": True,
                 "task_id": task_id,
@@ -396,8 +433,10 @@ def update_db_seed_info():
 
         if not all([torrent_id, site_name, updated_parameters]):
             return jsonify({
-                "success": False,
-                "message": "错误：缺少必要参数（torrent_id、site_name、updated_parameters）"
+                "success":
+                False,
+                "message":
+                "错误：缺少必要参数（torrent_id、site_name、updated_parameters）"
             }), 400
 
         db_manager = migrate_bp.db_manager
@@ -418,12 +457,16 @@ def update_db_seed_info():
                     '不可说': 'ssd',
                     '憨憨': 'hhanclub'
                 }
-                english_site_name = site_mapping.get(site_name, site_name.lower())
+                english_site_name = site_mapping.get(site_name,
+                                                     site_name.lower())
 
-            logging.info(f"开始更新种子参数: {torrent_id} from {site_name} ({english_site_name})")
+            logging.info(
+                f"开始更新种子参数: {torrent_id} from {site_name} ({english_site_name})"
+            )
 
             # 检查用户是否提供了修改的标准参数
-            user_standardized_params = updated_parameters.get('standardized_params', {})
+            user_standardized_params = updated_parameters.get(
+                'standardized_params', {})
 
             if user_standardized_params:
                 # 用户已经修改了标准参数，优先使用用户的修改
@@ -435,21 +478,30 @@ def update_db_seed_info():
                 # 重新进行参数标准化（模拟ParameterMapper的处理）
                 # 需要构造extracted_data格式用于映射
                 extracted_data = {
-                    'title': updated_parameters.get('title', ''),
-                    'subtitle': updated_parameters.get('subtitle', ''),
-                    'imdb_link': updated_parameters.get('imdb_link', ''),
-                    'douban_link': updated_parameters.get('douban_link', ''),
+                    'title':
+                    updated_parameters.get('title', ''),
+                    'subtitle':
+                    updated_parameters.get('subtitle', ''),
+                    'imdb_link':
+                    updated_parameters.get('imdb_link', ''),
+                    'douban_link':
+                    updated_parameters.get('douban_link', ''),
                     'intro': {
                         'statement': updated_parameters.get('statement', ''),
                         'poster': updated_parameters.get('poster', ''),
                         'body': updated_parameters.get('body', ''),
-                        'screenshots': updated_parameters.get('screenshots', ''),
+                        'screenshots':
+                        updated_parameters.get('screenshots', ''),
                         'imdb_link': updated_parameters.get('imdb_link', ''),
-                        'douban_link': updated_parameters.get('douban_link', '')
+                        'douban_link':
+                        updated_parameters.get('douban_link', '')
                     },
-                    'mediainfo': updated_parameters.get('mediainfo', ''),
-                    'source_params': updated_parameters.get('source_params', {}),
-                    'title_components': updated_parameters.get('title_components', [])
+                    'mediainfo':
+                    updated_parameters.get('mediainfo', ''),
+                    'source_params':
+                    updated_parameters.get('source_params', {}),
+                    'title_components':
+                    updated_parameters.get('title_components', [])
                 }
 
                 # 使用ParameterMapper重新标准化参数
@@ -457,7 +509,8 @@ def update_db_seed_info():
                 mapper = ParameterMapper()
 
                 # 重新标准化参数
-                standardized_params = mapper.map_parameters(site_name, english_site_name, extracted_data)
+                standardized_params = mapper.map_parameters(
+                    site_name, english_site_name, extracted_data)
 
             # 保存标准化后的参数到数据库
             # 从title_components中提取标题拆解的各项参数
@@ -502,22 +555,37 @@ def update_db_seed_info():
                     "标签": standardized_params.get("tags", []),
                 },
                 "complete_publish_params": {
-                    "title_components": updated_parameters.get('title_components', []),
-                    "subtitle": updated_parameters.get('subtitle', ''),
-                    "imdb_link": standardized_params.get("imdb_link", ""),
-                    "douban_link": standardized_params.get("douban_link", ""),
+                    "title_components":
+                    updated_parameters.get('title_components', []),
+                    "subtitle":
+                    updated_parameters.get('subtitle', ''),
+                    "imdb_link":
+                    standardized_params.get("imdb_link", ""),
+                    "douban_link":
+                    standardized_params.get("douban_link", ""),
                     "intro": {
-                        "statement": updated_parameters.get('statement', ''),
-                        "poster": updated_parameters.get('poster', ''),
-                        "body": updated_parameters.get('body', ''),
-                        "screenshots": updated_parameters.get('screenshots', ''),
-                        "removed_ardtudeclarations": updated_parameters.get('removed_ardtudeclarations', []),
-                        "imdb_link": updated_parameters.get('imdb_link', ''),
-                        "douban_link": updated_parameters.get('douban_link', '')
+                        "statement":
+                        updated_parameters.get('statement', ''),
+                        "poster":
+                        updated_parameters.get('poster', ''),
+                        "body":
+                        updated_parameters.get('body', ''),
+                        "screenshots":
+                        updated_parameters.get('screenshots', ''),
+                        "removed_ardtudeclarations":
+                        updated_parameters.get('removed_ardtudeclarations',
+                                               []),
+                        "imdb_link":
+                        updated_parameters.get('imdb_link', ''),
+                        "douban_link":
+                        updated_parameters.get('douban_link', '')
                     },
-                    "mediainfo": updated_parameters.get('mediainfo', ''),
-                    "source_params": updated_parameters.get('source_params', {}),
-                    "standardized_params": standardized_params
+                    "mediainfo":
+                    updated_parameters.get('mediainfo', ''),
+                    "source_params":
+                    updated_parameters.get('source_params', {}),
+                    "standardized_params":
+                    standardized_params
                 },
                 "raw_params_for_preview": {
                     "final_main_title": standardized_params.get("title", ""),
@@ -534,29 +602,38 @@ def update_db_seed_info():
                 }
             }
 
-            update_result = seed_param_model.update_parameters(torrent_id, english_site_name, final_parameters)
+            update_result = seed_param_model.update_parameters(
+                torrent_id, english_site_name, final_parameters)
 
             if update_result:
-                logging.info(f"种子参数更新成功: {torrent_id} from {site_name} ({english_site_name})")
+                logging.info(
+                    f"种子参数更新成功: {torrent_id} from {site_name} ({english_site_name})"
+                )
 
                 # 生成反向映射表（从标准键到中文显示名称的映射）
                 reverse_mappings = generate_reverse_mappings()
 
                 return jsonify({
-                    "success": True,
-                    "standardized_params": standardized_params,
-                    "final_publish_parameters": final_parameters["final_publish_parameters"],
-                    "complete_publish_params": final_parameters["complete_publish_params"],
-                    "raw_params_for_preview": final_parameters["raw_params_for_preview"],
-                    "reverse_mappings": reverse_mappings,
-                    "message": "参数更新并标准化成功"
+                    "success":
+                    True,
+                    "standardized_params":
+                    standardized_params,
+                    "final_publish_parameters":
+                    final_parameters["final_publish_parameters"],
+                    "complete_publish_params":
+                    final_parameters["complete_publish_params"],
+                    "raw_params_for_preview":
+                    final_parameters["raw_params_for_preview"],
+                    "reverse_mappings":
+                    reverse_mappings,
+                    "message":
+                    "参数更新并标准化成功"
                 })
             else:
-                logging.warning(f"种子参数更新失败: {torrent_id} from {site_name} ({english_site_name})")
-                return jsonify({
-                    "success": False,
-                    "message": "参数更新失败"
-                }), 500
+                logging.warning(
+                    f"种子参数更新失败: {torrent_id} from {site_name} ({english_site_name})"
+                )
+                return jsonify({"success": False, "message": "参数更新失败"}), 500
 
         except Exception as e:
             logging.error(f"更新种子参数失败: {e}", exc_info=True)
@@ -567,7 +644,10 @@ def update_db_seed_info():
 
     except Exception as e:
         logging.error(f"update_db_seed_info发生意外错误: {e}", exc_info=True)
-        return jsonify({"success": False, "message": f"服务器内部错误: {str(e)}"}), 500
+        return jsonify({
+            "success": False,
+            "message": f"服务器内部错误: {str(e)}"
+        }), 500
 
 
 # 保留原fetch_info接口作为向后兼容，但内部调用新的fetch_and_store + get_db_seed_info
@@ -596,8 +676,11 @@ def migrate_fetch_info():
         }
 
         # 直接调用fetch_and_store函数
-        with flask_request._fake_request('/api/migrate/fetch_and_store', 'POST', data=json.dumps(store_data),
-                                       headers={'Content-Type': 'application/json'}):
+        with flask_request._fake_request(
+                '/api/migrate/fetch_and_store',
+                'POST',
+                data=json.dumps(store_data),
+                headers={'Content-Type': 'application/json'}):
             store_result = migrate_fetch_and_store()
 
         store_response_data = store_result.get_json()
@@ -611,19 +694,21 @@ def migrate_fetch_info():
         # 第二步：从数据库读取数据
         from models.seed_parameter import SeedParameter
         seed_param_model = SeedParameter(db_manager)
-        parameters = seed_param_model.get_parameters(search_term, source_site_name)
+        parameters = seed_param_model.get_parameters(search_term,
+                                                     source_site_name)
 
         if parameters:
             task_id = store_response_data.get("task_id")
 
             # 缓存必要信息用于发布
             MIGRATION_CACHE[task_id] = {
-                "source_info": db_manager.get_site_by_nickname(source_site_name),
+                "source_info":
+                db_manager.get_site_by_nickname(source_site_name),
                 "original_torrent_path": None,  # 将在发布时重新获取
                 "torrent_dir": None,  # 将在发布时重新确定
                 "source_site_name": source_site_name,
                 "source_torrent_id": search_term,
-                "requires_torrent_download": True,  # 标记需要重新下载种子文件
+                "requires_torrent_download": False,  # 不再强制重新下载，改为根据实际文件存在情况判断
             }
 
             # 构造兼容原有格式的响应
@@ -631,34 +716,49 @@ def migrate_fetch_info():
                 "success": True,
                 "task_id": task_id,
                 "data": {
-                    "original_main_title": parameters.get("title", ""),
-                    "title_components": parameters.get("title_components", []),
-                    "subtitle": parameters.get("subtitle", ""),
-                    "imdb_link": parameters.get("imdb_link", ""),
-                    "douban_link": parameters.get("douban_link", ""),
+                    "original_main_title":
+                    parameters.get("title", ""),
+                    "title_components":
+                    parameters.get("title_components", []),
+                    "subtitle":
+                    parameters.get("subtitle", ""),
+                    "imdb_link":
+                    parameters.get("imdb_link", ""),
+                    "douban_link":
+                    parameters.get("douban_link", ""),
                     "intro": {
-                        "statement": parameters.get("statement", ""),
-                        "poster": parameters.get("poster", ""),
-                        "body": parameters.get("body", ""),
-                        "screenshots": parameters.get("screenshots", ""),
-                        "removed_ardtudeclarations": parameters.get("removed_ardtudeclarations", []),
-                        "imdb_link": parameters.get("imdb_link", ""),
-                        "douban_link": parameters.get("douban_link", "")
+                        "statement":
+                        parameters.get("statement", ""),
+                        "poster":
+                        parameters.get("poster", ""),
+                        "body":
+                        parameters.get("body", ""),
+                        "screenshots":
+                        parameters.get("screenshots", ""),
+                        "removed_ardtudeclarations":
+                        parameters.get("removed_ardtudeclarations", []),
+                        "imdb_link":
+                        parameters.get("imdb_link", ""),
+                        "douban_link":
+                        parameters.get("douban_link", "")
                     },
-                    "mediainfo": parameters.get("mediainfo", ""),
-                    "source_params": parameters.get("source_params", {}),
-                    "standardized_params": parameters.get("standardized_params", {}),
-                    "final_publish_parameters": parameters.get("final_publish_parameters", {}),
-                    "complete_publish_params": parameters.get("complete_publish_params", {}),
-                    "raw_params_for_preview": parameters.get("raw_params_for_preview", {}),
+                    "mediainfo":
+                    parameters.get("mediainfo", ""),
+                    "source_params":
+                    parameters.get("source_params", {}),
+                    "standardized_params":
+                    parameters.get("standardized_params", {}),
+                    "final_publish_parameters":
+                    parameters.get("final_publish_parameters", {}),
+                    "complete_publish_params":
+                    parameters.get("complete_publish_params", {}),
+                    "raw_params_for_preview":
+                    parameters.get("raw_params_for_preview", {}),
                 },
                 "logs": store_response_data.get("logs", "")
             })
         else:
-            return jsonify({
-                "success": False,
-                "logs": "数据抓取成功但从数据库读取失败"
-            })
+            return jsonify({"success": False, "logs": "数据抓取成功但从数据库读取失败"})
     except Exception as e:
         logging.error(f"migrate_fetch_info 发生意外错误: {e}", exc_info=True)
         return jsonify({"success": False, "logs": f"服务器内部错误: {e}"}), 500
@@ -679,6 +779,9 @@ def migrate_publish():
         return jsonify({"success": False, "logs": "错误：必须提供目标站点名称。"}), 400
 
     context = MIGRATION_CACHE[task_id]
+
+    print("发布参数！！！！！！！！！！！", upload_data)
+
     migrator = None  # 确保在 finally 中可用
 
     try:
@@ -697,105 +800,7 @@ def migrate_publish():
         if not source_site_name:
             source_site_name = context.get("source_site_name", "")
 
-        # 检查是否需要重新下载种子文件（从数据库获取的数据）
-        requires_torrent_download = context.get("requires_torrent_download", False)
-        if requires_torrent_download or not os.path.exists(original_torrent_path):
-            logging.info("需要重新下载种子文件")
-            # 重新下载种子文件
-            try:
-                import cloudscraper
-                import re
-                from config import TEMP_DIR
-
-                # 初始化scraper
-                session = requests.Session()
-                session.verify = False
-                scraper = cloudscraper.create_scraper(sess=session)
-
-                # 构造下载链接
-                SOURCE_BASE_URL = source_info.get("base_url", "").rstrip('/')
-                SOURCE_COOKIE = source_info.get("cookie", "")
-                source_torrent_id = context.get("source_torrent_id", "")
-
-                if SOURCE_BASE_URL and SOURCE_COOKIE and source_torrent_id:
-                    # 获取详情页以找到下载链接
-                    response = scraper.get(
-                        f"{SOURCE_BASE_URL}/details.php",
-                        headers={"Cookie": SOURCE_COOKIE},
-                        params={"id": source_torrent_id, "hit": "1"},
-                        timeout=60
-                    )
-                    response.raise_for_status()
-                    response.encoding = "utf-8"
-
-                    from bs4 import BeautifulSoup
-                    soup = BeautifulSoup(response.text, "html.parser")
-                    download_link_tag = soup.select_one(
-                        f'a.index[href^="download.php?id={source_torrent_id}"]')
-
-                    if download_link_tag:
-                        # 下载种子文件
-                        torrent_response = scraper.get(
-                            f"{SOURCE_BASE_URL}/{download_link_tag['href']}",
-                            headers={"Cookie": SOURCE_COOKIE},
-                            timeout=60,
-                        )
-                        torrent_response.raise_for_status()
-
-                        # 从响应头中尝试获取文件名
-                        content_disposition = torrent_response.headers.get('content-disposition')
-                        torrent_filename = "unknown.torrent"
-                        if content_disposition:
-                            filename_match = re.search(r'filename="?([^"]+)"?', content_disposition)
-                            if filename_match:
-                                torrent_filename = filename_match.group(1)
-
-                        # 创建以种子ID命名的目录（如果之前没有的话）
-                        if not torrent_dir:
-                            torrent_dir = os.path.join(TEMP_DIR, f"torrent_{source_torrent_id}")
-                            os.makedirs(torrent_dir, exist_ok=True)
-
-                        # 保存种子文件
-                        original_torrent_path = os.path.join(torrent_dir, torrent_filename)
-                        with open(original_torrent_path, "wb") as f:
-                            f.write(torrent_response.content)
-
-                        logging.info(f"重新下载种子文件成功: {original_torrent_path}")
-                    else:
-                        logging.error("未找到种子下载链接")
-                        return jsonify({
-                            "success": False,
-                            "logs": "错误：未找到种子下载链接。"
-                        }), 404
-                else:
-                    logging.error("缺少必要的源站点信息")
-                    return jsonify({
-                        "success": False,
-                        "logs": "错误：缺少必要的源站点信息。"
-                    }), 400
-            except Exception as e:
-                logging.error(f"重新下载种子文件失败: {e}")
-                return jsonify({
-                    "success": False,
-                    "logs": f"重新下载种子文件失败: {e}"
-                }), 500
-        # 如果原始种子路径仍然无效，尝试从torrent_dir中查找种子文件
-        elif not os.path.exists(original_torrent_path) and torrent_dir:
-            logging.info(f"原始种子路径无效，尝试从目录中查找: {torrent_dir}")
-            try:
-                # 查找torrent_dir中的.torrent文件
-                for file in os.listdir(torrent_dir):
-                    if file.endswith('.torrent'):
-                        original_torrent_path = os.path.join(torrent_dir, file)
-                        logging.info(f"找到种子文件: {original_torrent_path}")
-                        break
-            except Exception as e:
-                logging.warning(f"查找种子文件时出错: {e}")
-
-        # 特殊提取器处理已移至 migrator.py 中
-
-        # 动态创建针对本次发布的 Migrator 实例
-        # 修复：添加缺失的search_term和save_path参数
+        # 创建 TorrentMigrator 实例用于发布
         migrator = TorrentMigrator(source_info,
                                    target_info,
                                    search_term=context.get(
@@ -804,20 +809,277 @@ def migrate_publish():
                                    or upload_data.get("savePath", ""),
                                    config_manager=config_manager)
 
-        # 使用特殊提取器处理数据（如果需要）
-        source_torrent_id = context.get("source_torrent_id", "unknown")
-        print(
-            f"在publish阶段处理数据，源站点: {source_site_name}, 种子ID: {source_torrent_id}"
-        )
-        print(
-            f"调用apply_special_extractor_if_needed前，upload_data中的mediainfo长度: {len(upload_data.get('mediainfo', '')) if upload_data.get('mediainfo') else 0}"
-        )
-        upload_data = migrator.apply_special_extractor_if_needed(
-            upload_data, source_torrent_id)
-        print(f"publish阶段数据处理完成")
-        print(
-            f"调用apply_special_extractor_if_needed后，upload_data中的mediainfo长度: {len(upload_data.get('mediainfo', '')) if upload_data.get('mediainfo') else 0}"
-        )
+        # 检查种子文件是否存在，如果不存在则重新下载
+        # 首先检查原始路径
+        if original_torrent_path is None or not os.path.exists(
+                original_torrent_path):
+            logging.info("原始种子文件路径不存在，检查临时目录")
+            # 如果原始路径不存在，检查临时目录中是否已有种子文件
+            # 首先检查以种子ID命名的目录（旧格式）
+            source_torrent_id = context.get("source_torrent_id", "")
+            if source_torrent_id:
+                from config import TEMP_DIR
+                # 检查旧格式目录
+                old_torrent_dir = os.path.join(TEMP_DIR,
+                                               f"torrent_{source_torrent_id}")
+                if os.path.exists(old_torrent_dir):
+                    try:
+                        # 查找old_torrent_dir中的.torrent文件
+                        for file in os.listdir(old_torrent_dir):
+                            if file.endswith('.torrent'):
+                                original_torrent_path = os.path.join(
+                                    old_torrent_dir, file)
+                                logging.info(
+                                    f"在旧格式临时目录中找到种子文件: {original_torrent_path}"
+                                )
+                                break
+                    except Exception as e:
+                        logging.warning(f"查找旧格式临时目录中的种子文件时出错: {e}")
+
+                # 如果在旧格式目录中没找到，检查以种子名称命名的目录（新格式）
+                if original_torrent_path is None or not os.path.exists(
+                        original_torrent_path):
+                    # 尝试从缓存中获取种子目录路径
+                    cached_torrent_dir = context.get("torrent_dir")
+                    if cached_torrent_dir and os.path.exists(
+                            cached_torrent_dir):
+                        try:
+                            # 查找cached_torrent_dir中的.torrent文件
+                            for file in os.listdir(cached_torrent_dir):
+                                if file.endswith('.torrent'):
+                                    original_torrent_path = os.path.join(
+                                        cached_torrent_dir, file)
+                                    logging.info(
+                                        f"在新格式临时目录中找到种子文件: {original_torrent_path}"
+                                    )
+                                    break
+                        except Exception as e:
+                            logging.warning(f"查找新格式临时目录中的种子文件时出错: {e}")
+                    else:
+                        # 如果缓存中没有torrent_dir或目录不存在，尝试重构路径
+                        # 使用种子ID从数据库获取种子信息，然后重建目录路径
+                        try:
+                            from models.seed_parameter import SeedParameter
+                            from flask import current_app
+                            db_manager = current_app.config['DB_MANAGER']
+                            seed_param_model = SeedParameter(db_manager)
+
+                            source_torrent_id = context.get(
+                                "source_torrent_id", "")
+                            source_site_name = context.get(
+                                "source_site_name", "")
+
+                            if source_torrent_id and source_site_name:
+                                # 从数据库获取种子参数
+                                parameters = seed_param_model.get_parameters(
+                                    source_torrent_id, source_site_name)
+                                if parameters and parameters.get("title"):
+                                    # 重建种子目录路径
+                                    from config import TEMP_DIR
+                                    import re
+                                    original_main_title = parameters.get(
+                                        "title", "")
+                                    safe_filename_base = re.sub(
+                                        r'[\\/*?:"<>|]', "_",
+                                        original_main_title)[:150]
+                                    reconstructed_torrent_dir = os.path.join(
+                                        TEMP_DIR, safe_filename_base)
+
+                                    if os.path.exists(
+                                            reconstructed_torrent_dir):
+                                        try:
+                                            # 查找reconstructed_torrent_dir中的.torrent文件
+                                            for file in os.listdir(
+                                                    reconstructed_torrent_dir):
+                                                if file.endswith('.torrent'):
+                                                    original_torrent_path = os.path.join(
+                                                        reconstructed_torrent_dir,
+                                                        file)
+                                                    logging.info(
+                                                        f"在重构的目录中找到种子文件: {original_torrent_path}"
+                                                    )
+                                                    break
+                                        except Exception as e:
+                                            logging.warning(
+                                                f"查找重构目录中的种子文件时出错: {e}")
+                        except Exception as e:
+                            logging.warning(f"尝试重构种子目录路径时出错: {e}")
+
+            # 如果仍然没有找到，直接在TEMP_DIR中查找以种子名称命名的目录
+            if original_torrent_path is None or not os.path.exists(
+                    original_torrent_path):
+                try:
+                    # 从数据库获取种子参数来确定目录名
+                    from models.seed_parameter import SeedParameter
+                    from flask import current_app
+                    db_manager = current_app.config['DB_MANAGER']
+                    seed_param_model = SeedParameter(db_manager)
+
+                    source_torrent_id = context.get("source_torrent_id", "")
+                    source_site_name = context.get("source_site_name", "")
+
+                    if source_torrent_id and source_site_name:
+                        # 从数据库获取种子参数
+                        parameters = seed_param_model.get_parameters(
+                            source_torrent_id, source_site_name)
+                        if parameters and parameters.get("title"):
+                            # 重建种子目录路径
+                            from config import TEMP_DIR
+                            import re
+                            original_main_title = parameters.get("title", "")
+                            safe_filename_base = re.sub(
+                                r'[\\/*?:"<>|]', "_",
+                                original_main_title)[:150]
+                            seed_name_dir = os.path.join(
+                                TEMP_DIR, safe_filename_base)
+
+                            # 在该目录中查找.torrent文件
+                            if os.path.exists(seed_name_dir):
+                                for file in os.listdir(seed_name_dir):
+                                    if file.endswith('.torrent'):
+                                        original_torrent_path = os.path.join(
+                                            seed_name_dir, file)
+                                        logging.info(
+                                            f"在种子名称目录中找到种子文件: {original_torrent_path}"
+                                        )
+                                        break
+                except Exception as e:
+                    logging.warning(f"查找种子名称目录中的种子文件时出错: {e}")
+
+            # 如果仍然没有找到有效的种子文件，则重新下载
+            if original_torrent_path is None or not os.path.exists(
+                    original_torrent_path):
+                logging.info("需要重新下载种子文件")
+                # 重新下载种子文件
+                try:
+                    import cloudscraper
+                    import re
+                    from config import TEMP_DIR
+
+                    # 初始化scraper
+                    session = requests.Session()
+                    session.verify = False
+                    scraper = cloudscraper.create_scraper(sess=session)
+
+                    # 构造下载链接
+                    SOURCE_BASE_URL = source_info.get("base_url",
+                                                      "").rstrip('/')
+                    # 确保URL有正确的协议前缀
+                    if SOURCE_BASE_URL and not SOURCE_BASE_URL.startswith(
+                        ('http://', 'https://')):
+                        SOURCE_BASE_URL = 'https://' + SOURCE_BASE_URL
+                    SOURCE_COOKIE = source_info.get("cookie", "")
+                    source_torrent_id = context.get("source_torrent_id", "")
+
+                    if SOURCE_BASE_URL and SOURCE_COOKIE and source_torrent_id:
+                        # 获取详情页以找到下载链接
+                        response = scraper.get(
+                            f"{SOURCE_BASE_URL}/details.php",
+                            headers={"Cookie": SOURCE_COOKIE},
+                            params={
+                                "id": source_torrent_id,
+                                "hit": "1"
+                            },
+                            timeout=60)
+                        response.raise_for_status()
+                        response.encoding = "utf-8"
+
+                        from bs4 import BeautifulSoup
+                        soup = BeautifulSoup(response.text, "html.parser")
+                        download_link_tag = soup.select_one(
+                            f'a.index[href^="download.php?id={source_torrent_id}"]'
+                        )
+
+                        if download_link_tag:
+                            # 下载种子文件
+                            torrent_response = scraper.get(
+                                f"{SOURCE_BASE_URL}/{download_link_tag['href']}",
+                                headers={"Cookie": SOURCE_COOKIE},
+                                timeout=60,
+                            )
+                            torrent_response.raise_for_status()
+
+                            # 从响应头中尝试获取文件名
+                            content_disposition = torrent_response.headers.get(
+                                'content-disposition')
+                            torrent_filename = "unknown.torrent"
+                            if content_disposition:
+                                # 尝试匹配filename*（支持UTF-8编码）和filename
+                                filename_match = re.search(
+                                    r'filename\*="?UTF-8\'\'([^"]+)"?',
+                                    content_disposition, re.IGNORECASE)
+                                if filename_match:
+                                    torrent_filename = filename_match.group(1)
+                                    # URL解码文件名（UTF-8编码）
+                                    torrent_filename = urllib.parse.unquote(
+                                        torrent_filename, encoding='utf-8')
+                                else:
+                                    # 尝试匹配普通的filename
+                                    filename_match = re.search(
+                                        r'filename="?([^"]+)"?',
+                                        content_disposition)
+                                    if filename_match:
+                                        torrent_filename = filename_match.group(
+                                            1)
+                                        # URL解码文件名
+                                        torrent_filename = urllib.parse.unquote(
+                                            torrent_filename)
+
+                            # 创建以种子ID命名的目录（如果之前没有的话）
+                            if not torrent_dir:
+                                torrent_dir = os.path.join(
+                                    TEMP_DIR, f"torrent_{source_torrent_id}")
+                                os.makedirs(torrent_dir, exist_ok=True)
+
+                            # 保存种子文件
+                            # 确保文件名在文件系统中是有效的，并正确处理中文字符
+                            try:
+                                # 对文件名进行文件系统安全的处理
+                                safe_filename = torrent_filename
+                                # 移除或替换文件系统不支持的字符
+                                safe_filename = re.sub(r'[<>:"/\\|?*]', '_',
+                                                       safe_filename)
+                                # 确保文件名不超过文件系统限制
+                                if len(safe_filename.encode('utf-8')) > 255:
+                                    # 如果文件名太长，截断并保持扩展名
+                                    name, ext = os.path.splitext(safe_filename)
+                                    max_len = 255 - len(ext.encode('utf-8'))
+                                    safe_filename = name.encode(
+                                        'utf-8')[:max_len].decode(
+                                            'utf-8', 'ignore') + ext
+
+                                original_torrent_path = os.path.join(
+                                    torrent_dir, safe_filename)
+                                with open(original_torrent_path, "wb") as f:
+                                    f.write(torrent_response.content)
+                            except OSError as e:
+                                # 如果文件名有问题，使用默认名称
+                                logging.warning(f"使用原始文件名保存失败: {e}, 使用默认名称")
+                                original_torrent_path = os.path.join(
+                                    torrent_dir, "torrent.torrent")
+                                with open(original_torrent_path, "wb") as f:
+                                    f.write(torrent_response.content)
+
+                            logging.info(
+                                f"重新下载种子文件成功: {original_torrent_path}")
+                        else:
+                            logging.error("未找到种子下载链接")
+                            return jsonify({
+                                "success": False,
+                                "logs": "错误：未找到种子下载链接。"
+                            }), 404
+                    else:
+                        logging.error("缺少必要的源站点信息")
+                        return jsonify({
+                            "success": False,
+                            "logs": "错误：缺少必要的源站点信息。"
+                        }), 400
+                except Exception as e:
+                    logging.error(f"重新下载种子文件失败: {e}")
+                    return jsonify({
+                        "success": False,
+                        "logs": f"重新下载种子文件失败: {e}"
+                    }), 500
 
         # 1. 修改种子文件
         main_title = upload_data.get("original_main_title", "torrent")
@@ -950,9 +1212,8 @@ def validate_media():
     imdb_link = source_info.get("imdb_link", '') if source_info else ''
     douban_link = source_info.get("douban_link", '') if source_info else ''
 
-    logging.info(
-        f"收到媒体处理请求 - 类型: {media_type}, "
-        f"来源信息: {source_info}，视频路径: {save_path}，种子名称: {torrent_name}")
+    logging.info(f"收到媒体处理请求 - 类型: {media_type}, "
+                 f"来源信息: {source_info}，视频路径: {save_path}，种子名称: {torrent_name}")
 
     if media_type == "screenshot":
         screenshots = upload_data_screenshot(source_info, save_path,
@@ -982,7 +1243,10 @@ def validate_media():
         else:
             return jsonify({"success": False, "error": description}), 400
     else:
-        return jsonify({"success": False, "error": f"不支持的媒体类型: {media_type}"}), 400
+        return jsonify({
+            "success": False,
+            "error": f"不支持的媒体类型: {media_type}"
+        }), 400
 
 
 @migrate_bp.route("/migrate/add_to_downloader", methods=["POST"])

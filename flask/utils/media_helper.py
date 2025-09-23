@@ -1110,7 +1110,7 @@ def extract_tags_from_mediainfo(mediainfo_text: str) -> list:
     从 MediaInfo 文本中提取关键词，并返回一个标准化的标签列表。
 
     :param mediainfo_text: 完整的 MediaInfo 报告字符串。
-    :return: 一个包含识别出的标签字符串的列表，例如 ['国语', '中字', 'HDR10']。
+    :return: 一个包含识别出的标签字符串的列表，例如 ['tag.国语', 'tag.中字', 'tag.HDR10']。
     """
     if not mediainfo_text:
         return []
@@ -1158,7 +1158,7 @@ def extract_tags_from_mediainfo(mediainfo_text: str) -> list:
             # 处理音频块中的国语检测
             if audio_section_lines:
                 if _check_mandarin_in_audio_section(audio_section_lines):
-                    found_tags.add('国语')
+                    found_tags.add('tag.国语')
                 audio_section_lines = []  # 清空音频块
             continue
 
@@ -1171,38 +1171,46 @@ def extract_tags_from_mediainfo(mediainfo_text: str) -> list:
             line_lower = line_stripped.lower()
             if '中字' in tag_keywords_map and any(
                     kw in line_lower for kw in tag_keywords_map['中字']):
-                found_tags.add('中字')
+                found_tags.add('tag.中字')
 
         # 检查 HDR 格式标签 (全局检查)
         line_lower = line_stripped.lower()
         if 'dolby vision' in tag_keywords_map and any(
                 kw in line_lower for kw in tag_keywords_map['Dolby Vision']):
-            found_tags.add('Dolby Vision')
+            found_tags.add('tag.Dolby Vision')
         if 'hdr10+' in tag_keywords_map and any(
                 kw in line_lower for kw in tag_keywords_map['HDR10+']):
-            found_tags.add('HDR10+')
+            found_tags.add('tag.HDR10+')
         # HDR10 要放在 HDR 之前检查，以获得更精确匹配
         if 'hdr10' in tag_keywords_map and any(
                 kw in line_lower for kw in tag_keywords_map['HDR10']):
-            found_tags.add('HDR10')
+            found_tags.add('tag.HDR10')
         elif 'hdr' in tag_keywords_map and any(
                 kw in line_lower for kw in tag_keywords_map['HDR']):
             # 避免重复添加，如果已有更具体的HDR格式，则不添加通用的'HDR'
             if not any(hdr_tag in found_tags
-                       for hdr_tag in ['Dolby Vision', 'HDR10+', 'HDR10']):
-                found_tags.add('HDR')
+                       for hdr_tag in ['tag.Dolby Vision', 'tag.HDR10+', 'tag.HDR10']):
+                found_tags.add('tag.HDR')
         if 'hdrvivid' in tag_keywords_map and any(
                 kw in line_lower for kw in tag_keywords_map['HDRVivid']):
             # 注意：站点可能没有 HDRVivid 标签，但我们先提取出来
-            found_tags.add('HDRVivid')
+            found_tags.add('tag.HDRVivid')
 
     # 处理最后一个音频块（如果文件末尾没有video块）
     if audio_section_lines:
         if _check_mandarin_in_audio_section(audio_section_lines):
-            found_tags.add('国语')
+            found_tags.add('tag.国语')
 
-    print(f"从 MediaInfo 中提取到的标签: {list(found_tags)}")
-    return list(found_tags)
+    # 为所有标签添加 tag. 前缀
+    prefixed_tags = set()
+    for tag in found_tags:
+        if not tag.startswith('tag.'):
+            prefixed_tags.add(f'tag.{tag}')
+        else:
+            prefixed_tags.add(tag)
+
+    print(f"从 MediaInfo 中提取到的标签: {list(prefixed_tags)}")
+    return list(prefixed_tags)
 
 
 def _check_mandarin_in_audio_section(audio_lines):
@@ -1258,7 +1266,8 @@ def extract_origin_from_description(description_text: str) -> str:
             # 清理可能的多余字符
             origin = re.sub(r'[\[\]【】\(\)]', '', origin).strip()
             # 移除常见的分隔符，如" / "、","等
-            origin = re.split(r'\s*/\s*|\s*,\s*|\s*;\s*|\s*&\s*', origin)[0].strip()
+            origin = re.split(r'\s*/\s*|\s*,\s*|\s*;\s*|\s*&\s*',
+                              origin)[0].strip()
             return origin
 
     return ""
@@ -1275,7 +1284,8 @@ def extract_resolution_from_mediainfo(mediainfo_text: str) -> str:
         return ""
 
     # 查找 Video 部分
-    video_section_match = re.search(r"Video[\s\S]*?(?=\n\n|\Z)", mediainfo_text)
+    video_section_match = re.search(r"Video[\s\S]*?(?=\n\n|\Z)",
+                                    mediainfo_text)
     if not video_section_match:
         return ""
 
@@ -1285,8 +1295,10 @@ def extract_resolution_from_mediainfo(mediainfo_text: str) -> str:
     # 匹配格式如：Width                                 : 1 920 pixels
     #            Height                                : 1 080 pixels
     # 处理带空格的数字格式，如 "1 920" -> "1920"
-    width_match = re.search(r"[Ww]idth\s*:\s*(\d+)\s*(\d*)\s*pixels?", video_section)
-    height_match = re.search(r"[Hh]eight\s*:\s*(\d+)\s*(\d*)\s*pixels?", video_section)
+    width_match = re.search(r"[Ww]idth\s*:\s*(\d+)\s*(\d*)\s*pixels?",
+                            video_section)
+    height_match = re.search(r"[Hh]eight\s*:\s*(\d+)\s*(\d*)\s*pixels?",
+                             video_section)
 
     width = None
     height = None
@@ -1310,13 +1322,15 @@ def extract_resolution_from_mediainfo(mediainfo_text: str) -> str:
     # 如果没有找到标准格式，尝试其他格式
     if not width or not height:
         # 备用方法：查找类似 "1920 / 1080" 的格式
-        resolution_match = re.search(r"(\d{3,4})\s*/\s*(\d{3,4})", video_section)
+        resolution_match = re.search(r"(\d{3,4})\s*/\s*(\d{3,4})",
+                                     video_section)
         if resolution_match:
             width = int(resolution_match.group(1))
             height = int(resolution_match.group(2))
         else:
             # 查找其他格式的分辨率信息
-            other_resolution_match = re.search(r"(\d{3,4})\s*[xX]\s*(\d{3,4})", mediainfo_text)
+            other_resolution_match = re.search(r"(\d{3,4})\s*[xX]\s*(\d{3,4})",
+                                               mediainfo_text)
             if other_resolution_match:
                 width = int(other_resolution_match.group(1))
                 height = int(other_resolution_match.group(2))

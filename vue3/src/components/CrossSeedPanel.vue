@@ -1184,8 +1184,18 @@ const fetchTorrentInfo = async () => {
       console.log('检查绑定 - type:', torrentData.value.standardized_params.type);
       console.log('检查绑定 - medium:', torrentData.value.standardized_params.medium);
 
-      // 如果数据库中有task_id信息，也可以设置（使用英文站点名）
-      taskId.value = `db_${torrentId}_${englishSiteName}`;
+      // 直接使用从数据库返回的 taskId，如果后端没有返回则生成标识符
+      if (dbResponse.data.task_id) {
+        taskId.value = dbResponse.data.task_id; // 使用从数据库返回的 taskId
+        ElNotification.success({
+          title: '缓存准备完成',
+          message: '发布任务已准备就绪'
+        });
+      } else {
+        // 如果后端未返回task_id，回退到标识符
+        taskId.value = `db_${torrentId}_${englishSiteName}`;
+        console.warn('后端未返回taskId，使用标识符');
+      }
       isDataFromDatabase.value = true; // Mark that data was loaded from database
 
       // 自动提取链接的逻辑保持不变
@@ -1572,35 +1582,6 @@ const goToPublishPreviewStep = async () => {
       ElNotification.closeAll();
 
       if (response.data.success) {
-        // 如果我们是从数据库加载的数据（使用的是临时的假 taskId），
-        // 在这里需要调用 fetch_and_store 来获取一个真实的 taskId，为后端准备发布任务。
-        if (taskId.value && taskId.value.startsWith('db_')) {
-          try {
-            ElNotification({
-              title: '正在准备',
-              message: '正在创建发布任务，请稍候...',
-              type: 'info',
-              duration: 0,
-            });
-
-            const storeResponse = await axios.post('/api/migrate/fetch_and_store', {
-              sourceSite: sourceSite.value,
-              searchTerm: torrentId, // 这个变量在函数上半部分已经获取
-              savePath: torrent.value.save_path,
-            });
-
-            if (storeResponse.data.success && storeResponse.data.task_id) {
-              taskId.value = storeResponse.data.task_id; // 使用真实的 taskId 覆盖临时的假 Id
-            } else {
-              throw new Error(storeResponse.data.message || '创建发布任务失败');
-            }
-          } catch (error) {
-            ElNotification.closeAll();
-            handleApiError(error, '准备发布任务时发生网络错误');
-            isLoading.value = false;
-            return; // 准备失败，中断操作
-          }
-        }
         ElNotification.closeAll();
         // 更新成功后，获取重新标准化后的参数
         const { standardized_params, final_publish_parameters, complete_publish_params, raw_params_for_preview, reverse_mappings: updatedReverseMappings } = response.data;
