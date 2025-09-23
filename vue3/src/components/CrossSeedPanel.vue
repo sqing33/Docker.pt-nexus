@@ -48,14 +48,14 @@
 
                   <div class="bottom-info-section">
                     <div class="subtitle-unrecognized-grid">
-                      <!-- 副标题占3列 -->
-                      <div class="subtitle-section">
+                      <!-- 副标题占4列 -->
+                      <div class="subtitle-section" style="grid-column: span 4;">
                         <el-form-item label="副标题">
                           <el-input v-model="torrentData.subtitle" />
                         </el-form-item>
                       </div>
-                      <!-- 无法识别占2列 -->
-                      <div class="unrecognized-section">
+                      <!-- 无法识别占1列 -->
+                      <div class="unrecognized-section" style="grid-column: span 1;">
                         <el-form-item v-if="unrecognizedComponent" :key="unrecognizedComponent.key"
                           :label="unrecognizedComponent.key">
                           <el-input v-model="unrecognizedComponent.value" />
@@ -529,7 +529,7 @@
       <!-- 步骤 0 的按钮 -->
       <div v-if="activeStep === 0" class="button-group">
         <el-button @click="$emit('cancel')">取消</el-button>
-        <el-button type="primary" @click="goToPublishPreviewStep">
+        <el-button type="primary" @click="goToPublishPreviewStep" :disabled="isNextButtonDisabled">
           下一步：发布参数预览
         </el-button>
       </div>
@@ -765,6 +765,7 @@ const isReparsing = ref(false)
 const isRefreshingScreenshots = ref(false)
 const isRefreshingIntro = ref(false)
 const isHandlingScreenshotError = ref(false) // 防止重复处理截图错误
+const screenshotValid = ref(true) // 跟踪截图是否有效
 const logContent = ref('')
 const showLogCard = ref(false)
 const downloaderList = ref<{ id: string, name: string }[]>([])
@@ -899,11 +900,14 @@ const refreshScreenshots = async () => {
 
     if (response.data.success && response.data.screenshots) {
       torrentData.value.intro.screenshots = response.data.screenshots;
+      screenshotValid.value = true; // 标记截图有效
       ElNotification.success({
         title: '重新获取成功',
         message: '已成功生成并加载了新的截图。',
       });
     } else {
+      // 如果重新获取截图失败，标记截图无效
+      screenshotValid.value = false;
       ElNotification.error({
         title: '重新获取失败',
         message: response.data.error || '无法从后端获取新的截图。',
@@ -916,6 +920,8 @@ const refreshScreenshots = async () => {
       title: '操作失败',
       message: errorMsg,
     });
+    // 如果重新获取截图失败，标记截图无效
+    screenshotValid.value = false;
   } finally {
     isRefreshingScreenshots.value = false;
   }
@@ -952,6 +958,7 @@ const handleImageError = async (url: string, type: 'poster' | 'screenshot', inde
   console.error(`图片加载失败: 类型=${type}, URL=${url}, 索引=${index}`)
   if (type === 'screenshot') {
     isHandlingScreenshotError.value = true;
+    screenshotValid.value = false; // 标记截图无效
     ElNotification.warning({
       title: '截图失效',
       message: '检测到截图链接失效，正在尝试从视频重新生成...',
@@ -980,6 +987,7 @@ const handleImageError = async (url: string, type: 'poster' | 'screenshot', inde
     if (response.data.success) {
       if (type === 'screenshot' && response.data.screenshots) {
         torrentData.value.intro.screenshots = response.data.screenshots;
+        screenshotValid.value = true; // 标记截图有效
         ElNotification.success({
           title: '截图已更新',
           message: '已成功生成并加载了新的截图。',
@@ -992,6 +1000,10 @@ const handleImageError = async (url: string, type: 'poster' | 'screenshot', inde
         });
       }
     } else {
+      // 如果更新截图失败，保持screenshotValid为false
+      if (type === 'screenshot') {
+        screenshotValid.value = false;
+      }
       ElNotification.error({
         title: '更新失败',
         message: response.data.error || `无法从后端获取新的${type === 'poster' ? '海报' : '截图'}。`,
@@ -1008,6 +1020,7 @@ const handleImageError = async (url: string, type: 'poster' | 'screenshot', inde
     // 重置截图处理状态
     if (type === 'screenshot') {
       isHandlingScreenshotError.value = false;
+      // 注意：不重置 screenshotValid 状态，保持当前的截图有效状态
     }
   }
 }
@@ -1207,6 +1220,10 @@ const fetchTorrentInfo = async () => {
       }
 
       activeStep.value = 0;
+      // Check screenshot validity after loading data
+      nextTick(() => {
+        checkScreenshotValidity();
+      });
       // Set flag to indicate data was loaded from database
       isDataFromDatabase.value = true;
       // Skip the scraping part since we have data from database
@@ -1831,6 +1848,47 @@ const unrecognizedComponent = computed(() => {
   return torrentData.value.title_components.find(param => param.key === '无法识别');
 });
 
+// 计算属性：检查下一步按钮是否应该禁用
+// 只有当"无法识别"的参数为空字符串时才允许点击按钮
+const isNextButtonDisabled = computed(() => {
+  const unrecognized = torrentData.value.title_components.find(param => param.key === '无法识别');
+  // 如果存在"无法识别"的参数且不为空字符串，或截图失效，则禁用按钮
+  return (unrecognized && unrecognized.value !== '') || !screenshotValid.value;
+});
+
+// 检查截图有效性
+const checkScreenshotValidity = async () => {
+  // 检查当前截图的有效性
+  const screenshots = screenshotImages.value;
+  if (screenshots.length === 0) {
+    // 如果没有截图，认为是有效的
+    screenshotValid.value = true;
+    return;
+  }
+
+  // 对于每个截图，创建一个图片对象来检查是否可以加载
+  let allValid = true;
+  for (const url of screenshots) {
+    try {
+      await new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+          resolve(true);
+        };
+        img.onerror = () => {
+          reject(new Error('Image load failed'));
+        };
+        img.src = url;
+      });
+    } catch (error) {
+      allValid = false;
+      break;
+    }
+  }
+
+  screenshotValid.value = allValid;
+};
+
 const showLogs = async () => {
   if (!taskId.value) {
     ElNotification.warning('没有可用的任务日志')
@@ -2102,9 +2160,11 @@ const showSiteLog = (siteName: string, logs: string) => {
 
 .subtitle-unrecognized-grid {
   display: grid;
-  grid-template-columns: 4fr 1fr;
+  grid-template-columns: repeat(5, 1fr);
   gap: 12px 16px;
   align-items: start;
+  min-width: 0; /* 防止网格项溢出 */
+  width: 100%; /* 确保网格占满容器宽度 */
 }
 
 .placeholder-item {
