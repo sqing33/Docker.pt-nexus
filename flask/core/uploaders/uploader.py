@@ -524,6 +524,7 @@ class BaseUploader(ABC):
             # 创建 tmp 目录如果不存在
             tmp_dir = os.path.join(DATA_DIR, "tmp")
             os.makedirs(tmp_dir, exist_ok=True)
+            print(f"DEBUG: 临时目录路径: {tmp_dir}")
 
             # 获取种子名称作为文件夹名
             torrent_path = self.upload_data.get("modified_torrent_path", "")

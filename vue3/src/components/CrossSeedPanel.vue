@@ -1569,11 +1569,41 @@ const goToPublishPreviewStep = async () => {
       updated_parameters: updatedParameters
     });
 
-    ElNotification.closeAll();
+      ElNotification.closeAll();
 
-    if (response.data.success) {
-      // 更新成功后，获取重新标准化后的参数
-      const { standardized_params, final_publish_parameters, complete_publish_params, raw_params_for_preview, reverse_mappings: updatedReverseMappings } = response.data;
+      if (response.data.success) {
+        // 如果我们是从数据库加载的数据（使用的是临时的假 taskId），
+        // 在这里需要调用 fetch_and_store 来获取一个真实的 taskId，为后端准备发布任务。
+        if (taskId.value && taskId.value.startsWith('db_')) {
+          try {
+            ElNotification({
+              title: '正在准备',
+              message: '正在创建发布任务，请稍候...',
+              type: 'info',
+              duration: 0,
+            });
+
+            const storeResponse = await axios.post('/api/migrate/fetch_and_store', {
+              sourceSite: sourceSite.value,
+              searchTerm: torrentId, // 这个变量在函数上半部分已经获取
+              savePath: torrent.value.save_path,
+            });
+
+            if (storeResponse.data.success && storeResponse.data.task_id) {
+              taskId.value = storeResponse.data.task_id; // 使用真实的 taskId 覆盖临时的假 Id
+            } else {
+              throw new Error(storeResponse.data.message || '创建发布任务失败');
+            }
+          } catch (error) {
+            ElNotification.closeAll();
+            handleApiError(error, '准备发布任务时发生网络错误');
+            isLoading.value = false;
+            return; // 准备失败，中断操作
+          }
+        }
+        ElNotification.closeAll();
+        // 更新成功后，获取重新标准化后的参数
+        const { standardized_params, final_publish_parameters, complete_publish_params, raw_params_for_preview, reverse_mappings: updatedReverseMappings } = response.data;
 
       // 更新反向映射表（如果后端返回了更新的映射表）
       if (updatedReverseMappings) {
