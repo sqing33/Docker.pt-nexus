@@ -577,13 +577,20 @@ class TorrentMigrator:
 
             self.logger.info(f"获取到原始主标题: {original_main_title}")
 
+            # 创建以种子名称命名的子目录来保存种子文件和参数
             safe_filename_base = re.sub(r'[\\/*?:"<>|]', "_",
                                         original_main_title)[:150]
+            torrent_dir = os.path.join(TEMP_DIR, safe_filename_base)
+            os.makedirs(torrent_dir, exist_ok=True)
+
+            # 保存原始种子文件到指定文件夹
             original_torrent_path = os.path.join(
-                TEMP_DIR, f"{safe_filename_base}.original.torrent")
+                torrent_dir, f"{torrent_filename}")
             with open(original_torrent_path, "wb") as f:
                 f.write(torrent_response.content)
             self.temp_files.append(original_torrent_path)
+
+            self.logger.info(f"种子文件已保存到: {original_torrent_path}")
 
             # 调用 upload_data_title 时，传入主标题和种子文件名
             title_components = upload_data_title(original_main_title,
@@ -1003,6 +1010,7 @@ class TorrentMigrator:
             return {
                 "review_data": review_data_payload,
                 "original_torrent_path": original_torrent_path,
+                "torrent_dir": torrent_dir,  # 返回种子目录路径以便发种时查找文件
                 "logs": self.log_handler.get_logs(),
             }
         except Exception as e:

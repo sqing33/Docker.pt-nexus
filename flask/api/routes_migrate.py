@@ -3,6 +3,8 @@
 import logging
 import uuid
 import re
+import os
+import requests
 from flask import Blueprint, jsonify, request
 from bs4 import BeautifulSoup
 from utils import upload_data_title, upload_data_screenshot, upload_data_poster, upload_data_movie_info, add_torrent_to_downloader, extract_tags_from_mediainfo, extract_origin_from_description, extract_resolution_from_mediainfo
@@ -356,10 +358,11 @@ def migrate_fetch_and_store():
 
         if "review_data" in result:
             task_id = str(uuid.uuid4())
-            # 只缓存必要信息，包括原始种子路径用于发布
+            # 只缓存必要信息，包括种子目录路径用于发布时查找种子文件
             MIGRATION_CACHE[task_id] = {
                 "source_info": source_info,
                 "original_torrent_path": result["original_torrent_path"],
+                "torrent_dir": result["torrent_dir"],  # 保存种子目录路径
                 "source_site_name": english_site_name,  # 使用英文站点名作为唯一标识符
                 "source_torrent_id": search_term,
             }
@@ -617,8 +620,10 @@ def migrate_fetch_info():
             MIGRATION_CACHE[task_id] = {
                 "source_info": db_manager.get_site_by_nickname(source_site_name),
                 "original_torrent_path": None,  # 将在发布时重新获取
+                "torrent_dir": None,  # 将在发布时重新确定
                 "source_site_name": source_site_name,
                 "source_torrent_id": search_term,
+                "requires_torrent_download": True,  # 标记需要重新下载种子文件
             }
 
             # 构造兼容原有格式的响应
@@ -686,10 +691,106 @@ def migrate_publish():
 
         source_info = context["source_info"]
         original_torrent_path = context["original_torrent_path"]
+        torrent_dir = context.get("torrent_dir", "")  # 获取种子目录
 
         # 从缓存中获取源站点名称（如果前端没有传递）
         if not source_site_name:
             source_site_name = context.get("source_site_name", "")
+
+        # 检查是否需要重新下载种子文件（从数据库获取的数据）
+        requires_torrent_download = context.get("requires_torrent_download", False)
+        if requires_torrent_download or not os.path.exists(original_torrent_path):
+            logging.info("需要重新下载种子文件")
+            # 重新下载种子文件
+            try:
+                import cloudscraper
+                import re
+                from config import TEMP_DIR
+
+                # 初始化scraper
+                session = requests.Session()
+                session.verify = False
+                scraper = cloudscraper.create_scraper(sess=session)
+
+                # 构造下载链接
+                SOURCE_BASE_URL = source_info.get("base_url", "").rstrip('/')
+                SOURCE_COOKIE = source_info.get("cookie", "")
+                source_torrent_id = context.get("source_torrent_id", "")
+
+                if SOURCE_BASE_URL and SOURCE_COOKIE and source_torrent_id:
+                    # 获取详情页以找到下载链接
+                    response = scraper.get(
+                        f"{SOURCE_BASE_URL}/details.php",
+                        headers={"Cookie": SOURCE_COOKIE},
+                        params={"id": source_torrent_id, "hit": "1"},
+                        timeout=60
+                    )
+                    response.raise_for_status()
+                    response.encoding = "utf-8"
+
+                    from bs4 import BeautifulSoup
+                    soup = BeautifulSoup(response.text, "html.parser")
+                    download_link_tag = soup.select_one(
+                        f'a.index[href^="download.php?id={source_torrent_id}"]')
+
+                    if download_link_tag:
+                        # 下载种子文件
+                        torrent_response = scraper.get(
+                            f"{SOURCE_BASE_URL}/{download_link_tag['href']}",
+                            headers={"Cookie": SOURCE_COOKIE},
+                            timeout=60,
+                        )
+                        torrent_response.raise_for_status()
+
+                        # 从响应头中尝试获取文件名
+                        content_disposition = torrent_response.headers.get('content-disposition')
+                        torrent_filename = "unknown.torrent"
+                        if content_disposition:
+                            filename_match = re.search(r'filename="?([^"]+)"?', content_disposition)
+                            if filename_match:
+                                torrent_filename = filename_match.group(1)
+
+                        # 创建以种子ID命名的目录（如果之前没有的话）
+                        if not torrent_dir:
+                            torrent_dir = os.path.join(TEMP_DIR, f"torrent_{source_torrent_id}")
+                            os.makedirs(torrent_dir, exist_ok=True)
+
+                        # 保存种子文件
+                        original_torrent_path = os.path.join(torrent_dir, torrent_filename)
+                        with open(original_torrent_path, "wb") as f:
+                            f.write(torrent_response.content)
+
+                        logging.info(f"重新下载种子文件成功: {original_torrent_path}")
+                    else:
+                        logging.error("未找到种子下载链接")
+                        return jsonify({
+                            "success": False,
+                            "logs": "错误：未找到种子下载链接。"
+                        }), 404
+                else:
+                    logging.error("缺少必要的源站点信息")
+                    return jsonify({
+                        "success": False,
+                        "logs": "错误：缺少必要的源站点信息。"
+                    }), 400
+            except Exception as e:
+                logging.error(f"重新下载种子文件失败: {e}")
+                return jsonify({
+                    "success": False,
+                    "logs": f"重新下载种子文件失败: {e}"
+                }), 500
+        # 如果原始种子路径仍然无效，尝试从torrent_dir中查找种子文件
+        elif not os.path.exists(original_torrent_path) and torrent_dir:
+            logging.info(f"原始种子路径无效，尝试从目录中查找: {torrent_dir}")
+            try:
+                # 查找torrent_dir中的.torrent文件
+                for file in os.listdir(torrent_dir):
+                    if file.endswith('.torrent'):
+                        original_torrent_path = os.path.join(torrent_dir, file)
+                        logging.info(f"找到种子文件: {original_torrent_path}")
+                        break
+            except Exception as e:
+                logging.warning(f"查找种子文件时出错: {e}")
 
         # 特殊提取器处理已移至 migrator.py 中
 
