@@ -529,7 +529,7 @@
       <!-- 步骤 0 的按钮 -->
       <div v-if="activeStep === 0" class="button-group">
         <el-button @click="$emit('cancel')">取消</el-button>
-        <el-button type="primary" @click="goToPublishPreviewStep" :disabled="isLoading || !canProceedToNextStep">
+        <el-button type="primary" @click="goToPublishPreviewStep">
           下一步：发布参数预览
         </el-button>
       </div>
@@ -735,6 +735,7 @@ onMounted(() => {
   })
 })
 
+
 // 监听活动步骤的变化
 watch(activeStep, (newStep, oldStep) => {
   if (oldStep === 1) {
@@ -763,10 +764,11 @@ const finalResultsList = ref<any[]>([])
 const isReparsing = ref(false)
 const isRefreshingScreenshots = ref(false)
 const isRefreshingIntro = ref(false)
-const reportedFailedScreenshots = ref(false)
+const isHandlingScreenshotError = ref(false) // 防止重复处理截图错误
 const logContent = ref('')
 const showLogCard = ref(false)
 const downloaderList = ref<{ id: string, name: string }[]>([])
+const isDataFromDatabase = ref(false) // Flag to track if data was loaded from database
 
 // 反向映射表，用于将标准值映射到中文显示名称
 const reverseMappings = ref({
@@ -799,33 +801,6 @@ const isTargetSiteSelectable = (siteName: string): boolean => {
   return !torrent.value.sites[siteName];
 };
 
-const canProceedToNextStep = computed(() => {
-  if (isLoading.value || isReparsing.value) {
-    return false;
-  }
-
-  if (reportedFailedScreenshots.value) {
-    if (screenshotImages.value.length === 0 && torrentData.value.intro.screenshots) {
-      return false;
-    }
-  }
-
-  const titleComponents = torrentData.value.title_components;
-  if (titleComponents && Array.isArray(titleComponents)) {
-    const unrecognizedParam = titleComponents.find(
-      param => param.key === "无法识别" && param.value && param.value.trim() !== ""
-    );
-    if (unrecognizedParam) {
-      return false;
-    }
-  }
-
-  if (!torrentData.value.original_main_title || torrentData.value.original_main_title.trim() === "") {
-    return false;
-  }
-
-  return true;
-});
 
 const refreshIntro = async () => {
   if (!torrentData.value.douban_link && !torrentData.value.imdb_link) {
@@ -887,6 +862,15 @@ const refreshIntro = async () => {
 const refreshScreenshots = async () => {
   if (!torrentData.value.original_main_title) {
     ElNotification.warning('标题为空，无法重新获取截图。');
+    return;
+  }
+
+  // 防止重复请求
+  if (isRefreshingScreenshots.value) {
+    ElNotification.info({
+      title: '正在处理中',
+      message: '截图重新生成请求已在处理中，请稍候...',
+    });
     return;
   }
 
@@ -959,12 +943,15 @@ const reparseTitle = async () => {
 };
 
 const handleImageError = async (url: string, type: 'poster' | 'screenshot', index: number) => {
-  if (type === 'screenshot' && reportedFailedScreenshots.value) {
-    return
+  // 防止重复处理截图错误
+  if (type === 'screenshot' && isHandlingScreenshotError.value) {
+    console.log(`截图错误已正在处理中，跳过重复请求: ${url}`);
+    return;
   }
+
   console.error(`图片加载失败: 类型=${type}, URL=${url}, 索引=${index}`)
   if (type === 'screenshot') {
-    reportedFailedScreenshots.value = true
+    isHandlingScreenshotError.value = true;
     ElNotification.warning({
       title: '截图失效',
       message: '检测到截图链接失效，正在尝试从视频重新生成...',
@@ -993,7 +980,6 @@ const handleImageError = async (url: string, type: 'poster' | 'screenshot', inde
     if (response.data.success) {
       if (type === 'screenshot' && response.data.screenshots) {
         torrentData.value.intro.screenshots = response.data.screenshots;
-        reportedFailedScreenshots.value = false;
         ElNotification.success({
           title: '截图已更新',
           message: '已成功生成并加载了新的截图。',
@@ -1018,6 +1004,11 @@ const handleImageError = async (url: string, type: 'poster' | 'screenshot', inde
       title: '操作失败',
       message: errorMsg,
     });
+  } finally {
+    // 重置截图处理状态
+    if (type === 'screenshot') {
+      isHandlingScreenshotError.value = false;
+    }
   }
 }
 
@@ -1131,7 +1122,7 @@ const fetchTorrentInfo = async () => {
 
       // 从数据库返回的数据中提取相关信息
       torrentData.value = {
-        original_main_title: dbData.title,
+        original_main_title: dbData.title || '',
         title_components: dbData.title_components || [],
         subtitle: dbData.subtitle,
         imdb_link: dbData.imdb_link,
@@ -1182,6 +1173,7 @@ const fetchTorrentInfo = async () => {
 
       // 如果数据库中有task_id信息，也可以设置（使用英文站点名）
       taskId.value = `db_${torrentId}_${englishSiteName}`;
+      isDataFromDatabase.value = true; // Mark that data was loaded from database
 
       // 自动提取链接的逻辑保持不变
       if ((!torrentData.value.imdb_link || !torrentData.value.douban_link) && torrentData.value.intro.body) {
@@ -1215,6 +1207,9 @@ const fetchTorrentInfo = async () => {
       }
 
       activeStep.value = 0;
+      // Set flag to indicate data was loaded from database
+      isDataFromDatabase.value = true;
+      // Skip the scraping part since we have data from database
       return;
     } else {
       // 数据库中不存在该记录，这是正常情况，不需要记录为错误
@@ -1325,7 +1320,7 @@ const fetchTorrentInfo = async () => {
         });
 
         torrentData.value = {
-          original_main_title: dbData.title,
+          original_main_title: dbData.title || '',
           title_components: dbData.title_components || [],
           subtitle: dbData.subtitle,
           imdb_link: dbData.imdb_link,
@@ -1371,6 +1366,7 @@ const fetchTorrentInfo = async () => {
         }
 
         taskId.value = storeResponse.data.task_id;
+        isDataFromDatabase.value = true; // Mark that data was loaded from database
 
         // 自动提取链接的逻辑保持不变
         if ((!torrentData.value.imdb_link || !torrentData.value.douban_link) && torrentData.value.intro.body) {
@@ -1404,6 +1400,10 @@ const fetchTorrentInfo = async () => {
         }
 
         activeStep.value = 0;
+        // Check screenshot validity after loading data
+        nextTick(() => {
+          checkScreenshotValidity();
+        });
       } else {
         ElNotification.closeAll();
         ElNotification.error({
@@ -1485,8 +1485,16 @@ const goToPublishPreviewStep = async () => {
     // taskId可能格式: db_${torrentId}_${siteName} 或原始task_id
     let torrentId, siteName;
 
-    if (taskId.value && taskId.value.startsWith('db_')) {
+    // 如果数据是从数据库加载的，优先使用数据库模式解析
+    if (isDataFromDatabase.value && taskId.value && taskId.value.startsWith('db_')) {
       // 数据库模式: db_${torrentId}_${siteName}
+      const parts = taskId.value.split('_');
+      if (parts.length >= 3) {
+        torrentId = parts[1];
+        siteName = parts.slice(2).join('_'); // 处理站点名称中可能有下划线的情况
+      }
+    } else if (taskId.value && taskId.value.startsWith('db_')) {
+      // 原有的数据库模式解析
       const parts = taskId.value.split('_');
       if (parts.length >= 3) {
         torrentId = parts[1];

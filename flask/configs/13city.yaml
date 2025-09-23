@@ -12,6 +12,7 @@ form_fields:
   team: "team_sel[4]"
   source: "processing_sel[4]"
   category: "type"  # 类别字段映射到type参数
+  tags[4][]: "tags[]"  # 标签字段映射到tags参数
 
 # 标准化键映射 - 定义源文本到标准化键的映射规则
 # source_parsers部分：定义如何从原始数据解析出标准化参数
@@ -267,19 +268,17 @@ mappings:
     "default": "11"
 
   tag:
-    "禁转": 1
-    "首发": 2
-    "完结": 9
-    "分集": 8
-    "粤语": 13
-    "多语": 10
-    "国语": 5
-    "中字": 6
-    "中英双字": 14
-    "4K": 12
-    "1080p": 11
-    "HDR": 7
-    "DIY": 4
-    "红叶转载": 19
-    "有声图书": 15
+    "tag.完结": 9
+    "tag.分集": 8
+    "tag.粤语": 13
+    "tag.多语": 10
+    "tag.国语": 5
+    "tag.中字": 6
+    "tag.中英双字": 14
+    "tag.4K": 12
+    "tag.1080p": 11
+    "tag.HDR": 7
+    "tag.DIY": 4
+    "tag.红叶转载": 19
+    "tag.有声图书": 15
     "default": null
