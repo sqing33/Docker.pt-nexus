@@ -14,7 +14,7 @@ from pymediainfo import MediaInfo
 import time
 import cloudscraper
 from bs4 import BeautifulSoup
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 from config import TEMP_DIR, config_manager
 from qbittorrentapi import Client as qbClient
 from transmission_rpc import Client as TrClient
@@ -669,13 +669,15 @@ def upload_data_title(title: str, torrent_filename: str = ""):
     return final_components_list
 
 
-def upload_data_screenshot(source_info, save_path, torrent_name=None):
+def upload_data_screenshot(source_info,
+                           save_path,
+                           torrent_name=None,
+                           downloader_id=None):
     """
     使用ffmpeg从指定的视频文件中截取多张图片，根据配置上传到指定图床，
     并返回一个包含所有图片BBCode链接的字符串。
     """
     print("开始执行截图和上传任务...")
-
     # --- [核心修改] 读取图床配置 ---
     config = config_manager.get()
     hoster = config.get("cross_seed", {}).get("image_hoster", "pixhost")
@@ -689,6 +691,76 @@ def upload_data_screenshot(source_info, save_path, torrent_name=None):
     else:
         full_video_path = save_path
         print(f"使用原始路径: {full_video_path}")
+
+    # 检查是否需要使用代理
+    use_proxy = False
+    proxy_config = None
+    if downloader_id:
+        downloaders = config.get("downloaders", [])
+        for downloader in downloaders:
+            if downloader.get("id") == downloader_id:
+                use_proxy = downloader.get("use_proxy", False)
+                if use_proxy:
+                    # 获取代理配置
+                    host_value = downloader.get('host', '')
+                    proxy_port = downloader.get('proxy_port', 9090)
+
+                    # 解析主机地址
+                    if host_value.startswith(('http://', 'https://')):
+                        parsed_url = urlparse(host_value)
+                    else:
+                        parsed_url = urlparse(f"http://{host_value}")
+
+                    proxy_ip = parsed_url.hostname
+                    if not proxy_ip:
+                        # 如果无法解析，使用备用方法
+                        if '://' in host_value:
+                            proxy_ip = host_value.split('://')[1].split(
+                                ':')[0].split('/')[0]
+                        else:
+                            proxy_ip = host_value.split(':')[0]
+
+                    proxy_config = {
+                        "proxy_base_url": f"http://{proxy_ip}:{proxy_port}",
+                        "proxy_downloader_config": {
+                            "id":
+                            downloader_id,
+                            "type":
+                            downloader.get('type', ''),
+                            "host":
+                            "http://127.0.0.1:" + str(parsed_url.port or 8080),
+                            "username":
+                            downloader.get('username', ''),
+                            "password":
+                            downloader.get('password', ''),
+                            "save_path":
+                            save_path  # 传递save_path给代理
+                        }
+                    }
+                break
+
+    # 如果使用代理，则通过代理处理截图
+    print(full_video_path)
+    if use_proxy and proxy_config:
+        print(f"使用代理处理截图: {proxy_config['proxy_base_url']}")
+        try:
+            # 发送请求到代理获取截图
+            response = requests.post(
+                f"{proxy_config['proxy_base_url']}/api/media/screenshot",
+                json={"remote_path": full_video_path},
+                timeout=120)
+            response.raise_for_status()
+
+            result = response.json()
+            if result.get("success"):
+                print("代理截图上传成功")
+                return result.get("bbcode", "")
+            else:
+                print(f"代理截图上传失败: {result.get('message', '未知错误')}")
+                return ""
+        except Exception as e:
+            print(f"通过代理获取截图失败: {e}")
+            return ""
 
     target_video_file = _find_target_video_file(full_video_path)
     if not target_video_file:
@@ -1188,8 +1260,8 @@ def extract_tags_from_mediainfo(mediainfo_text: str) -> list:
         elif 'hdr' in tag_keywords_map and any(
                 kw in line_lower for kw in tag_keywords_map['HDR']):
             # 避免重复添加，如果已有更具体的HDR格式，则不添加通用的'HDR'
-            if not any(hdr_tag in found_tags
-                       for hdr_tag in ['tag.Dolby Vision', 'tag.HDR10+', 'tag.HDR10']):
+            if not any(hdr_tag in found_tags for hdr_tag in
+                       ['tag.Dolby Vision', 'tag.HDR10+', 'tag.HDR10']):
                 found_tags.add('tag.HDR')
         if 'hdrvivid' in tag_keywords_map and any(
                 kw in line_lower for kw in tag_keywords_map['HDRVivid']):

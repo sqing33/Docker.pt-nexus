@@ -210,6 +210,19 @@ class DataTracker(Thread):
             logging.error(f"通过代理获取 '{downloader_config['name']}' 统计信息失败: {e}")
             return None
 
+    def _should_use_proxy(self, downloader_id):
+        """根据下载器ID检查是否应该使用代理。"""
+        try:
+            config = self.config_manager.get()
+            downloaders = config.get("downloaders", [])
+            for downloader in downloaders:
+                if downloader.get("id") == downloader_id:
+                    return downloader.get("use_proxy", False)
+            return False
+        except Exception as e:
+            logging.error(f"检查下载器 {downloader_id} 是否使用代理时出错: {e}")
+            return False
+
     def _get_proxy_torrents(self, downloader_config):
         """通过代理获取下载器的完整种子信息。"""
         try:

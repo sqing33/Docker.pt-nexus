@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"mime/multipart"
 	"net/http"
 	"net/http/cookiejar"
@@ -15,6 +16,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -109,6 +112,12 @@ type MediaInfoResponse struct {
 	Success       bool   `json:"success"`
 	Message       string `json:"message"`
 	MediaInfoText string `json:"mediainfo_text,omitempty"`
+}
+
+// SubtitleEvent 用于存储单个字幕事件的开始和结束时间
+type SubtitleEvent struct {
+	StartTime float64
+	EndTime   float64
 }
 
 // ======================= 辅助函数 =======================
@@ -339,7 +348,7 @@ func fetchServerStatsForDownloader(wg *sync.WaitGroup, config DownloaderConfig, 
 	resultsChan <- stats
 }
 
-// ======================= [新增] 媒体处理辅助函数 =======================
+// ======================= 媒体处理辅助函数 =======================
 
 func executeCommand(name string, args ...string) (string, error) {
 	cmd := exec.Command(name, args...)
@@ -367,25 +376,27 @@ func getVideoDuration(videoPath string) (float64, error) {
 	return duration, nil
 }
 
-func findFirstSubtitleStream(videoPath string) (int, error) {
+// [修改版] findFirstSubtitleStream 函数，按 ASS > SRT > PGS 的偏好顺序选择
+func findFirstSubtitleStream(videoPath string) (int, string, error) {
 	log.Printf("正在为视频 '%s' 探测字幕流...", filepath.Base(videoPath))
 
 	args := []string{
 		"-v", "quiet",
 		"-print_format", "json",
-		"-show_entries", "stream=index,codec_type,disposition",
+		"-show_entries", "stream=index,codec_name,codec_type,disposition",
 		"-select_streams", "s",
 		videoPath,
 	}
 
 	output, err := executeCommand("ffprobe", args...)
 	if err != nil {
-		return -1, fmt.Errorf("ffprobe 探测字幕失败: %v", err)
+		return -1, "", fmt.Errorf("ffprobe 探测字幕失败: %v", err)
 	}
 
 	var probeResult struct {
 		Streams []struct {
-			Index       int `json:"index"`
+			Index       int    `json:"index"`
+			CodecName   string `json:"codec_name"`
 			Disposition struct {
 				Comment         int `json:"comment"`
 				HearingImpaired int `json:"hearing_impaired"`
@@ -396,25 +407,65 @@ func findFirstSubtitleStream(videoPath string) (int, error) {
 
 	if err := json.Unmarshal([]byte(output), &probeResult); err != nil {
 		log.Printf("警告: 解析 ffprobe 的字幕 JSON 输出失败: %v。将不带字幕截图。", err)
-		return -1, nil
+		return -1, "", nil
 	}
 
 	if len(probeResult.Streams) == 0 {
 		log.Printf("视频中未发现内嵌字幕流。")
-		return -1, nil
+		return -1, "", nil
 	}
 
+	// [核心修改] 建立偏好顺序：ASS > SubRip > PGS
+	type SubtitleChoice struct {
+		Index     int
+		CodecName string
+	}
+
+	var bestASS, bestSRT, bestPGS SubtitleChoice
+	bestASS.Index, bestSRT.Index, bestPGS.Index = -1, -1, -1
+
 	for _, stream := range probeResult.Streams {
-		if stream.Disposition.Comment == 0 && stream.Disposition.HearingImpaired == 0 && stream.Disposition.VisualImpaired == 0 {
-			log.Printf("   ✅ 找到可用字幕流，流索引: %d", stream.Index)
-			return stream.Index, nil
+		// 首先，检查是否是“正常”字幕
+		isNormal := stream.Disposition.Comment == 0 && stream.Disposition.HearingImpaired == 0 && stream.Disposition.VisualImpaired == 0
+		if isNormal {
+			switch stream.CodecName {
+			case "ass":
+				if bestASS.Index == -1 { // 只取第一个找到的ASS字幕
+					bestASS = SubtitleChoice{Index: stream.Index, CodecName: stream.CodecName}
+				}
+			case "subrip":
+				if bestSRT.Index == -1 { // 只取第一个找到的SRT字幕
+					bestSRT = SubtitleChoice{Index: stream.Index, CodecName: stream.CodecName}
+				}
+			case "hdmv_pgs_subtitle":
+				if bestPGS.Index == -1 { // 只取第一个找到的PGS字幕
+					bestPGS = SubtitleChoice{Index: stream.Index, CodecName: stream.CodecName}
+				}
+			}
 		}
 	}
 
-	log.Printf("   ⚠️ 未找到\"正常\"字幕流，将使用第一个字幕流 (索引: %d)", probeResult.Streams[0].Index)
-	return probeResult.Streams[0].Index, nil
+	// 根据偏好顺序返回结果
+	if bestASS.Index != -1 {
+		log.Printf("   ✅ 找到最优字幕流 (ASS)，流索引: %d, 格式: %s", bestASS.Index, bestASS.CodecName)
+		return bestASS.Index, bestASS.CodecName, nil
+	}
+	if bestSRT.Index != -1 {
+		log.Printf("   ✅ 找到可用字幕流 (SRT)，流索引: %d, 格式: %s", bestSRT.Index, bestSRT.CodecName)
+		return bestSRT.Index, bestSRT.CodecName, nil
+	}
+	if bestPGS.Index != -1 {
+		log.Printf("   ✅ 找到可用字幕流 (PGS)，流索引: %d, 格式: %s", bestPGS.Index, bestPGS.CodecName)
+		return bestPGS.Index, bestPGS.CodecName, nil
+	}
+
+	// 如果所有“正常”字幕都找不到，则回退到使用文件中的第一个字幕流
+	firstStream := probeResult.Streams[0]
+	log.Printf("   ⚠️ 未找到任何“正常”字幕流，将使用第一个字幕流 (索引: %d, 格式: %s)", firstStream.Index, firstStream.CodecName)
+	return firstStream.Index, firstStream.CodecName, nil
 }
 
+// [最终正确版本] takeScreenshot 函数，使用绝对索引
 func takeScreenshot(videoPath, outputPath string, timePoint float64, subtitleStreamIndex int) error {
 	log.Printf("正在截图 (时间点: %.2fs) -> %s", timePoint, outputPath)
 
@@ -427,22 +478,22 @@ func takeScreenshot(videoPath, outputPath string, timePoint float64, subtitleStr
 	}
 
 	if subtitleStreamIndex >= 0 {
-		safeVideoPath := strings.ReplaceAll(videoPath, `\`, `\\`)
-		safeVideoPath = strings.ReplaceAll(safeVideoPath, `:`, `\:`)
-
-		filter := fmt.Sprintf("subtitles='%s':stream_index=%d", safeVideoPath, subtitleStreamIndex)
-
-		args = append(args, "-vf", filter)
-		log.Printf("   ...将使用字幕流索引 %d 进行截图。", subtitleStreamIndex)
+		// [核心修正]
+		// 不再使用 [0:s:%d] (按字幕类型索引)，而是直接使用 [0:%d] (按绝对索引)。
+		// 这样就能精确匹配 ffprobe 找到的那个流。
+		filter := fmt.Sprintf("[0:v][0:%d]overlay[v]", subtitleStreamIndex)
+		args = append(args, "-filter_complex", filter, "-map", "[v]")
+		log.Printf("   ...将使用 overlay 滤镜和字幕流 (绝对索引 %d) 进行截图。", subtitleStreamIndex)
 	} else {
 		log.Printf("   ...未提供字幕流，将不带字幕截图。")
+		args = append(args, "-map", "0:v")
 	}
 
 	args = append(args, outputPath)
 
 	_, err := executeCommand("ffmpeg", args...)
 	if err != nil {
-		log.Printf("ffmpeg 截图失败，命令参数: %v", args)
+		log.Printf("ffmpeg 截图失败，最终执行的命令: ffmpeg %s", strings.Join(args, " "))
 		return fmt.Errorf("ffmpeg 截图失败: %v", err)
 	}
 	return nil
@@ -494,6 +545,214 @@ func uploadToPixhost(imagePath string) (string, error) {
 	}
 	log.Printf("Pixhost 上传成功, URL: %s", result.ShowURL)
 	return result.ShowURL, nil
+}
+
+// [最终决定版] findSubtitleEvents, 使用 -show_packets 统一处理所有文本字幕 (SRT/ASS)
+func findSubtitleEvents(videoPath string, subtitleStreamIndex int) ([]SubtitleEvent, error) {
+	log.Printf("正在为视频 '%s' (字幕流索引 %d) 智能提取字幕时间点...", filepath.Base(videoPath), subtitleStreamIndex)
+	if subtitleStreamIndex < 0 {
+		return nil, fmt.Errorf("无效的字幕流索引")
+	}
+
+	// [核心修正] 全面转向使用 -show_packets，这是获取时间戳最可靠的方法
+	args := []string{
+		"-v", "quiet",
+		"-print_format", "json",
+		"-show_packets",
+		"-select_streams", fmt.Sprintf("%d", subtitleStreamIndex),
+		videoPath,
+	}
+
+	output, err := executeCommand("ffprobe", args...)
+	if err != nil {
+		return nil, fmt.Errorf("ffprobe 提取字幕数据包失败: %v", err)
+	}
+
+	// 增加健壮性，处理 ffprobe 可能的非 JSON 警告信息
+	jsonStartIndex := strings.Index(output, "{")
+	if jsonStartIndex == -1 {
+		return nil, fmt.Errorf("ffprobe 输出中未找到有效的JSON内容")
+	}
+	jsonOutput := output[jsonStartIndex:]
+
+	// 定义一个统一的结构体来解析 -show_packets 的输出
+	var probeResult struct {
+		Packets []struct {
+			PtsTime      string `json:"pts_time"`
+			DurationTime string `json:"duration_time"`
+		} `json:"packets"`
+	}
+
+	if err := json.Unmarshal([]byte(jsonOutput), &probeResult); err != nil {
+		return nil, fmt.Errorf("解析 ffprobe 的字幕JSON输出失败: %v", err)
+	}
+
+	var events []SubtitleEvent
+	for _, packet := range probeResult.Packets {
+		start, err1 := strconv.ParseFloat(packet.PtsTime, 64)
+		duration, err2 := strconv.ParseFloat(packet.DurationTime, 64)
+
+		// 只有在成功解析出开始时间和时长，并且时长大于0.1秒时才添加
+		if err1 == nil && err2 == nil && duration > 0.1 {
+			end := start + duration
+			events = append(events, SubtitleEvent{StartTime: start, EndTime: end})
+		}
+	}
+
+	if len(events) == 0 {
+		return nil, fmt.Errorf("未能在字幕流中提取到任何有效的时间事件")
+	}
+
+	log.Printf("   ✅ 成功提取到 %d 条字幕事件。", len(events))
+	return events, nil
+}
+
+// findSubtitleEventsForPGS 专门为图形字幕(PGS)提取有效的显示时间段
+func findSubtitleEventsForPGS(videoPath string, subtitleStreamIndex int) ([]SubtitleEvent, error) {
+	log.Printf("正在为视频 '%s' (PGS字幕流索引 %d) 智能提取显示时间段...", filepath.Base(videoPath), subtitleStreamIndex)
+	if subtitleStreamIndex < 0 {
+		return nil, fmt.Errorf("无效的字幕流索引")
+	}
+
+	// [核心修正] 使用 -show_packets 代替 -show_frames，并获取 pts_time
+	args := []string{
+		"-v", "quiet",
+		"-print_format", "json",
+		"-show_packets", // Frames 对 PGS 无效, packets 才是我们需要的
+		"-select_streams", fmt.Sprintf("%d", subtitleStreamIndex),
+		videoPath,
+	}
+
+	output, err := executeCommand("ffprobe", args...)
+	if err != nil {
+		return nil, fmt.Errorf("ffprobe 提取PGS数据包失败: %v", err)
+	}
+
+	// 有时 ffprobe 会输出非json格式的警告信息, 我们需要找到json的起始位置
+	jsonStartIndex := strings.Index(output, "{")
+	if jsonStartIndex == -1 {
+		return nil, fmt.Errorf("ffprobe 输出中未找到有效的JSON内容")
+	}
+	jsonOutput := output[jsonStartIndex:]
+
+	// [核心修正] 更新JSON结构体以匹配 -show_packets 的输出
+	var probeResult struct {
+		Packets []struct {
+			PtsTime string `json:"pts_time"`
+		} `json:"packets"`
+	}
+
+	if err := json.Unmarshal([]byte(jsonOutput), &probeResult); err != nil {
+		return nil, fmt.Errorf("解析 ffprobe 的PGS JSON输出失败: %v", err)
+	}
+
+	if len(probeResult.Packets) < 2 {
+		return nil, fmt.Errorf("PGS字幕数据包数量过少，无法配对")
+	}
+
+	var events []SubtitleEvent
+	// 两两配对，i+=2
+	for i := 0; i < len(probeResult.Packets)-1; i += 2 {
+		start, err1 := strconv.ParseFloat(probeResult.Packets[i].PtsTime, 64)
+		end, err2 := strconv.ParseFloat(probeResult.Packets[i+1].PtsTime, 64)
+
+		// 确保是一个有效的时间段, 并且时长大于0.1秒，过滤掉快速闪烁的空字幕
+		if err1 == nil && err2 == nil && end > start && (end-start) > 0.1 {
+			events = append(events, SubtitleEvent{StartTime: start, EndTime: end})
+		}
+	}
+
+	if len(events) == 0 {
+		return nil, fmt.Errorf("未能从PGS字幕流中提取到任何有效的显示时间段")
+	}
+
+	log.Printf("   ✅ 成功提取到 %d 个PGS字幕显示时间段。", len(events))
+	return events, nil
+}
+
+// [新增] findTargetVideoFile 根据路径智能查找目标视频文件
+func findTargetVideoFile(path string) (string, error) {
+	log.Printf("开始在路径 '%s' 中智能查找目标视频文件...", path)
+
+	videoExtensions := map[string]bool{
+		".mkv": true, ".mp4": true, ".ts": true, ".avi": true,
+		".wmv": true, ".mov": true, ".flv": true, ".m2ts": true,
+	}
+
+	info, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		return "", fmt.Errorf("提供的路径不存在: %s", path)
+	}
+	if err != nil {
+		return "", fmt.Errorf("无法获取路径信息: %v", err)
+	}
+
+	// 如果路径本身就是个视频文件，直接返回
+	if !info.IsDir() {
+		if videoExtensions[strings.ToLower(filepath.Ext(path))] {
+			log.Printf("路径直接指向一个视频文件，将使用: %s", path)
+			return path, nil
+		}
+		return "", fmt.Errorf("路径是一个文件，但不是支持的视频格式: %s", path)
+	}
+
+	// 遍历目录查找所有视频文件
+	var videoFiles []string
+	err = filepath.Walk(path, func(filePath string, fileInfo os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !fileInfo.IsDir() && videoExtensions[strings.ToLower(filepath.Ext(filePath))] {
+			videoFiles = append(videoFiles, filePath)
+		}
+		return nil
+	})
+	if err != nil {
+		return "", fmt.Errorf("遍历目录失败: %v", err)
+	}
+
+	if len(videoFiles) == 0 {
+		return "", fmt.Errorf("在目录 '%s' 中未找到任何视频文件", path)
+	}
+
+	// 智能判断是剧集还是电影
+	seriesPattern := regexp.MustCompile(`(?i)[\._\s-](S\d{1,2}E\d{1,3}|Season[\._\s-]?\d{1,2}|E\d{1,3})[\._\s-]`)
+	isSeries := false
+	for _, f := range videoFiles {
+		if seriesPattern.MatchString(filepath.Base(f)) {
+			isSeries = true
+			break
+		}
+	}
+
+	if isSeries {
+		log.Printf("检测到剧集命名格式，将选择第一集。")
+		// 按文件名排序，返回第一个
+		sort.Strings(videoFiles)
+		targetFile := videoFiles[0]
+		log.Printf("已选择剧集文件: %s", targetFile)
+		return targetFile, nil
+	} else {
+		log.Printf("未检测到剧集格式，将按电影处理（选择最大文件）。")
+		var largestFile string
+		var maxSize int64 = -1
+		for _, f := range videoFiles {
+			fileInfo, err := os.Stat(f)
+			if err != nil {
+				log.Printf("警告: 无法获取文件 '%s' 的大小: %v", f, err)
+				continue
+			}
+			if fileInfo.Size() > maxSize {
+				maxSize = fileInfo.Size()
+				largestFile = f
+			}
+		}
+		if largestFile == "" {
+			return "", fmt.Errorf("无法确定最大的视频文件")
+		}
+		log.Printf("已选择最大文件 (%.2f GB): %s", float64(maxSize)/1024/1024/1024, largestFile)
+		return largestFile, nil
+	}
 }
 
 // ======================= HTTP 处理器 =======================
@@ -575,6 +834,7 @@ func statsHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSONResponse(w, r, http.StatusOK, allStats)
 }
 
+// [高级随机版] screenshotHandler 函数
 func screenshotHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSONResponse(w, r, http.StatusMethodNotAllowed, ScreenshotResponse{Success: false, Message: "仅支持 POST 方法"})
@@ -585,9 +845,15 @@ func screenshotHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSONResponse(w, r, http.StatusBadRequest, ScreenshotResponse{Success: false, Message: "无效的 JSON 请求体: " + err.Error()})
 		return
 	}
-	videoPath := reqData.RemotePath
-	if videoPath == "" {
+	initialPath := reqData.RemotePath
+	if initialPath == "" {
 		writeJSONResponse(w, r, http.StatusBadRequest, ScreenshotResponse{Success: false, Message: "remote_path 不能为空"})
+		return
+	}
+
+	videoPath, err := findTargetVideoFile(initialPath)
+	if err != nil {
+		writeJSONResponse(w, r, http.StatusBadRequest, ScreenshotResponse{Success: false, Message: err.Error()})
 		return
 	}
 
@@ -597,11 +863,90 @@ func screenshotHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	subtitleIndex, err := findFirstSubtitleStream(videoPath)
+	subtitleIndex, subtitleCodec, err := findFirstSubtitleStream(videoPath)
 	if err != nil {
 		log.Printf("警告: 探测字幕流时发生错误: %v", err)
 		subtitleIndex = -1
 	}
+
+	// --- [高级随机版] 智能选择截图时间点 ---
+	screenshotPoints := make([]float64, 0, 5)
+	var subtitleEvents []SubtitleEvent
+	const numScreenshots = 5 // 定义截图数量，方便修改
+
+	if subtitleIndex >= 0 {
+		if subtitleCodec == "subrip" || subtitleCodec == "ass" {
+			subtitleEvents, err = findSubtitleEvents(videoPath, subtitleIndex)
+		} else if subtitleCodec == "hdmv_pgs_subtitle" {
+			subtitleEvents, err = findSubtitleEventsForPGS(videoPath, subtitleIndex)
+		} else {
+			err = fmt.Errorf("不支持的字幕格式 '%s' 用于智能截图", subtitleCodec)
+		}
+	}
+
+	if err == nil && subtitleEvents != nil && len(subtitleEvents) >= numScreenshots {
+		log.Printf("智能截图模式启动：找到 %d 个有效字幕事件/时间段。", len(subtitleEvents))
+		rand.Seed(time.Now().UnixNano())
+
+		// 1. 筛选出在视频 30% 到 80% 时间范围内的“黄金字幕”
+		goldenStartTime := duration * 0.30
+		goldenEndTime := duration * 0.80
+		var goldenEvents []SubtitleEvent
+		for _, event := range subtitleEvents {
+			if event.StartTime >= goldenStartTime && event.EndTime <= goldenEndTime {
+				goldenEvents = append(goldenEvents, event)
+			}
+		}
+		log.Printf("   -> 在视频中部 (%.2fs - %.2fs) 找到 %d 个“黄金”字幕事件。", goldenStartTime, goldenEndTime, len(goldenEvents))
+
+		targetEvents := goldenEvents
+		// 2. 优雅降级：如果黄金字幕太少，就退回到使用所有字幕
+		if len(targetEvents) < numScreenshots {
+			log.Printf("   -> “黄金”字幕数量不足，将从所有字幕事件中随机选择。")
+			targetEvents = subtitleEvents
+		}
+
+		// 3. 从目标列表 (targetEvents) 中随机选择 N 个不重复的事件
+		if len(targetEvents) > 0 {
+			// 使用 rand.Perm 创建一个随机的索引序列，确保不重复且高效
+			randomIndices := rand.Perm(len(targetEvents))
+
+			count := 0
+			for _, idx := range randomIndices {
+				if count >= numScreenshots {
+					break
+				}
+				event := targetEvents[idx]
+
+				durationOfEvent := event.EndTime - event.StartTime
+				randomOffset := durationOfEvent*0.1 + rand.Float64()*(durationOfEvent*0.8)
+				randomPoint := event.StartTime + randomOffset
+
+				screenshotPoints = append(screenshotPoints, randomPoint)
+				log.Printf("   -> 选中时间段 [%.2fs - %.2fs], 随机截图点: %.2fs", event.StartTime, event.EndTime, randomPoint)
+				count++
+			}
+		}
+
+	}
+
+	// 如果智能截图模式未能生成足够的截图点，则使用备用方案
+	if len(screenshotPoints) < numScreenshots {
+		if err != nil {
+			log.Printf("警告: 智能截图失败，回退到按百分比截图。原因: %v", err)
+		} else {
+			log.Printf("警告: 有效字幕数量不足，回退到按百分比截图。")
+		}
+
+		screenshotPoints = []float64{
+			duration * 0.25,
+			duration * 0.33,
+			duration * 0.50,
+			duration * 0.65,
+			duration * 0.80,
+		}
+	}
+	// --- 智能选择逻辑结束 ---
 
 	tempDir, err := os.MkdirTemp("", "screenshots-*")
 	if err != nil {
@@ -610,7 +955,6 @@ func screenshotHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	screenshotPoints := []float64{0.20, 0.35, 0.65}
 	var uploadedURLs []string
 	var wg sync.WaitGroup
 	var mu sync.Mutex
@@ -621,7 +965,7 @@ func screenshotHandler(w http.ResponseWriter, r *http.Request) {
 		go func(i int, point float64) {
 			defer wg.Done()
 			screenshotPath := filepath.Join(tempDir, fmt.Sprintf("ss_%d.jpg", i+1))
-			if err := takeScreenshot(videoPath, screenshotPath, duration*point, subtitleIndex); err != nil {
+			if err := takeScreenshot(videoPath, screenshotPath, point, subtitleIndex); err != nil {
 				errChan <- fmt.Errorf("第 %d 张图截图失败: %v", i+1, err)
 				return
 			}
@@ -647,6 +991,10 @@ func screenshotHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSONResponse(w, r, http.StatusInternalServerError, ScreenshotResponse{Success: false, Message: "处理截图时发生错误: " + strings.Join(errors, "; ")})
 		return
 	}
+	if len(uploadedURLs) < len(screenshotPoints) {
+		writeJSONResponse(w, r, http.StatusInternalServerError, ScreenshotResponse{Success: false, Message: "部分截图未能成功上传"})
+		return
+	}
 
 	var bbcodeBuilder strings.Builder
 	for _, url := range uploadedURLs {
@@ -668,9 +1016,16 @@ func mediainfoHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSONResponse(w, r, http.StatusBadRequest, MediaInfoResponse{Success: false, Message: "无效的 JSON 请求体: " + err.Error()})
 		return
 	}
-	videoPath := reqData.RemotePath
-	if videoPath == "" {
+	initialPath := reqData.RemotePath
+	if initialPath == "" {
 		writeJSONResponse(w, r, http.StatusBadRequest, MediaInfoResponse{Success: false, Message: "remote_path 不能为空"})
+		return
+	}
+
+	// [核心修改] 调用智能查找函数
+	videoPath, err := findTargetVideoFile(initialPath)
+	if err != nil {
+		writeJSONResponse(w, r, http.StatusBadRequest, MediaInfoResponse{Success: false, Message: err.Error()})
 		return
 	}
 

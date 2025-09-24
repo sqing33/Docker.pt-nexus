@@ -1209,15 +1209,16 @@ def validate_media():
     source_info = data.get("source_info")
     save_path = data.get("savePath")
     torrent_name = data.get("torrentName")
+    downloader_id = data.get("downloaderId")  # 获取下载器ID
     imdb_link = source_info.get("imdb_link", '') if source_info else ''
     douban_link = source_info.get("douban_link", '') if source_info else ''
 
     logging.info(f"收到媒体处理请求 - 类型: {media_type}, "
-                 f"来源信息: {source_info}，视频路径: {save_path}，种子名称: {torrent_name}")
+                 f"来源信息: {source_info}，视频路径: {save_path}，种子名称: {torrent_name}, 下载器ID: {downloader_id}")
 
     if media_type == "screenshot":
         screenshots = upload_data_screenshot(source_info, save_path,
-                                             torrent_name)
+                                             torrent_name, downloader_id)
         return jsonify({"success": True, "screenshots": screenshots}), 200
     elif media_type == "poster":
         status, posters, description, extracted_imdb_link = upload_data_movie_info(
