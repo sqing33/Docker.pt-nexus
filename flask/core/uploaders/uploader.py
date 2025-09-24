@@ -707,6 +707,24 @@ class BaseUploader(ABC):
                 if "该种子已存在" in response.text:
                     logger.info("检测到种子已存在的提示信息。")
                 return True, f"发布成功！种子已存在，详情页: {final_url}"
+            elif "该种子已存在" in response.text:
+                # 处理页面内容中包含已存在提示但没有跳转的情况
+                logger.success("种子已存在！在页面内容中检测到已存在提示。")
+                # 尝试从响应内容中提取详情页URL
+                import re
+                # 匹配模式：url=domain/details.php?id=数字&其他参数
+                url_pattern = r'url=([^&\s]+/details\.php\?id=\d+[^&\s]*)'
+                url_match = re.search(url_pattern, response.text)
+                if url_match:
+                    extracted_url = url_match.group(1)
+                    # 确保URL包含协议
+                    if not extracted_url.startswith(('http://', 'https://')):
+                        extracted_url = f"https://{extracted_url}"
+                    logger.info(f"从响应内容中提取到详情页URL: {extracted_url}")
+                    return True, f"发布成功！种子已存在，详情页: {extracted_url}"
+                else:
+                    logger.info("未能从响应内容中提取到详情页URL")
+                    return True, "发布成功！种子已存在，但未能获取详情页链接。"
             elif "login.php" in final_url:
                 logger.error("发布失败，Cookie 已失效，被重定向到登录页。")
                 return False, "发布失败，Cookie 已失效或无效。"
