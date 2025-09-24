@@ -25,6 +25,9 @@ from utils import (
 CACHE_LOCK = Lock()
 data_tracker_thread = None
 
+# --- 代理相关常量 ---
+PROXY_BASE_URL = "http://152.53.189.117:9090"
+
 
 def load_site_maps_from_db(db_manager):
     """从数据库加载站点和发布组的映射关系。"""
@@ -159,6 +162,71 @@ class DataTracker(Thread):
                 del self.clients[client_id]
             return None
 
+    def _get_proxy_stats(self, downloader_config):
+        """通过代理获取下载器的统计信息。"""
+        try:
+            # 构造代理请求数据
+            proxy_downloader_config = {
+                "id": downloader_config['id'],
+                "type": downloader_config['type'],
+                "host": "http://127.0.0.1:" + str(urlparse(f"http://{downloader_config['host']}").port or 8080),
+                "username": downloader_config.get('username', ''),
+                "password": downloader_config.get('password', '')
+            }
+
+            # 发送请求到代理获取统计信息
+            response = requests.post(
+                f"{PROXY_BASE_URL}/api/stats/server",
+                json=[proxy_downloader_config],
+                timeout=30
+            )
+            response.raise_for_status()
+
+            stats_data = response.json()
+            if stats_data and len(stats_data) > 0:
+                return stats_data[0]  # 返回第一个下载器的统计信息
+            else:
+                logging.warning(f"代理返回空的统计信息 for '{downloader_config['name']}'")
+                return None
+
+        except Exception as e:
+            logging.error(f"通过代理获取 '{downloader_config['name']}' 统计信息失败: {e}")
+            return None
+
+    def _get_proxy_torrents(self, downloader_config):
+        """通过代理获取下载器的完整种子信息。"""
+        try:
+            # 构造代理请求数据
+            proxy_downloader_config = {
+                "id": downloader_config['id'],
+                "type": downloader_config['type'],
+                "host": "http://127.0.0.1:" + str(urlparse(f"http://{downloader_config['host']}").port or 8080),
+                "username": downloader_config.get('username', ''),
+                "password": downloader_config.get('password', '')
+            }
+
+            # 构造请求数据，包含comment和trackers
+            request_data = {
+                "downloaders": [proxy_downloader_config],
+                "include_comment": True,
+                "include_trackers": True
+            }
+
+            # 发送请求到代理获取种子信息
+            response = requests.post(
+                f"{PROXY_BASE_URL}/api/torrents/all",
+                json=request_data,
+                timeout=120  # 种子信息可能需要更长的时间
+            )
+            response.raise_for_status()
+
+            torrents_data = response.json()
+            return torrents_data
+
+        except Exception as e:
+            logging.error(f"通过代理获取 '{downloader_config['name']}' 种子信息失败: {e}")
+            return None
+
     def run(self):
         logging.info(
             f"DataTracker 线程已启动。流量更新间隔: {self.interval}秒, 种子列表更新间隔: {self.TORRENT_UPDATE_INTERVAL}秒。"
@@ -222,43 +290,69 @@ class DataTracker(Thread):
                 "ul_speed": 0
             }
             try:
-                client = self._get_client(downloader)
-                if not client: continue
+                # 检查是否需要使用代理
+                use_proxy = downloader.get("use_proxy", False)
 
-                if downloader["type"] == "qbittorrent":
-                    try:
-                        main_data = client.sync_maindata()
-                    except qb_exceptions.APIConnectionError:
-                        logging.warning(
-                            f"与 '{downloader['name']}' 的连接丢失，正在尝试重新连接...")
-                        del self.clients[downloader['id']]
-                        client = self._get_client(downloader)
-                        if not client: continue
-                        main_data = client.sync_maindata()
+                if use_proxy and downloader["type"] == "qbittorrent":
+                    # 使用代理获取统计数据
+                    logging.info(f"通过代理获取 '{downloader['name']}' 的统计信息...")
+                    proxy_stats = self._get_proxy_stats(downloader)
 
-                    server_state = main_data.get('server_state', {})
-                    data_point.update({
-                        'dl_speed':
-                        int(server_state.get('dl_info_speed', 0)),
-                        'ul_speed':
-                        int(server_state.get('up_info_speed', 0)),
-                        'total_dl':
-                        int(server_state.get('alltime_dl', 0)),
-                        'total_ul':
-                        int(server_state.get('alltime_ul', 0))
-                    })
-                elif downloader["type"] == "transmission":
-                    stats = client.session_stats()
-                    data_point.update({
-                        "dl_speed":
-                        int(getattr(stats, "download_speed", 0)),
-                        "ul_speed":
-                        int(getattr(stats, "upload_speed", 0)),
-                        "total_dl":
-                        int(stats.cumulative_stats.downloaded_bytes),
-                        "total_ul":
-                        int(stats.cumulative_stats.uploaded_bytes),
-                    })
+                    if proxy_stats:
+                        server_state = proxy_stats.get('server_state', {})
+                        data_point.update({
+                            'dl_speed':
+                            int(server_state.get('dl_info_speed', 0)),
+                            'ul_speed':
+                            int(server_state.get('up_info_speed', 0)),
+                            'total_dl':
+                            int(server_state.get('alltime_dl', 0)),
+                            'total_ul':
+                            int(server_state.get('alltime_ul', 0))
+                        })
+                    else:
+                        # 代理获取失败，跳过此下载器
+                        logging.warning(f"通过代理获取 '{downloader['name']}' 统计信息失败")
+                        continue
+                else:
+                    # 使用常规方式获取统计数据
+                    client = self._get_client(downloader)
+                    if not client: continue
+
+                    if downloader["type"] == "qbittorrent":
+                        try:
+                            main_data = client.sync_maindata()
+                        except qb_exceptions.APIConnectionError:
+                            logging.warning(
+                                f"与 '{downloader['name']}' 的连接丢失，正在尝试重新连接...")
+                            del self.clients[downloader['id']]
+                            client = self._get_client(downloader)
+                            if not client: continue
+                            main_data = client.sync_maindata()
+
+                        server_state = main_data.get('server_state', {})
+                        data_point.update({
+                            'dl_speed':
+                            int(server_state.get('dl_info_speed', 0)),
+                            'ul_speed':
+                            int(server_state.get('up_info_speed', 0)),
+                            'total_dl':
+                            int(server_state.get('alltime_dl', 0)),
+                            'total_ul':
+                            int(server_state.get('alltime_ul', 0))
+                        })
+                    elif downloader["type"] == "transmission":
+                        stats = client.session_stats()
+                        data_point.update({
+                            "dl_speed":
+                            int(getattr(stats, "download_speed", 0)),
+                            "ul_speed":
+                            int(getattr(stats, "upload_speed", 0)),
+                            "total_dl":
+                            int(stats.cumulative_stats.downloaded_bytes),
+                            "total_ul":
+                            int(stats.cumulative_stats.uploaded_bytes),
+                        })
                 latest_speeds_update[downloader["id"]] = {
                     "name": downloader["name"],
                     "type": downloader["type"],
@@ -390,27 +484,48 @@ class DataTracker(Thread):
             torrents_list = []
             client_instance = None
             try:
-                client_instance = self._get_client(downloader)
-                if not client_instance:
-                    print(f"【刷新线程】无法连接到下载器 {downloader['name']}")
-                    continue
+                # 检查是否需要使用代理
+                use_proxy = downloader.get("use_proxy", False)
 
-                print(f"【刷新线程】正在从 {downloader['name']} 获取种子列表...")
-                if downloader["type"] == "qbittorrent":
-                    torrents_list = client_instance.torrents_info(
-                        status_filter="all")
-                elif downloader["type"] == "transmission":
-                    fields = [
-                        "id", "name", "hashString", "downloadDir", "totalSize",
-                        "status", "comment", "trackers", "percentDone",
-                        "uploadedEver"
-                    ]
-                    torrents_list = client_instance.get_torrents(
-                        arguments=fields)
-                print(f"【刷新线程】从 '{downloader['name']}' 成功获取到 {len(torrents_list)} 个种子。")
-                logging.info(
-                    f"从 '{downloader['name']}' 成功获取到 {len(torrents_list)} 个种子。"
-                )
+                if use_proxy and downloader["type"] == "qbittorrent":
+                    # 使用代理获取种子信息
+                    logging.info(f"通过代理获取 '{downloader['name']}' 的种子信息...")
+                    proxy_torrents = self._get_proxy_torrents(downloader)
+
+                    if proxy_torrents is not None:
+                        torrents_list = proxy_torrents
+                        print(f"【刷新线程】通过代理从 '{downloader['name']}' 成功获取到 {len(torrents_list)} 个种子。")
+                        logging.info(
+                            f"通过代理从 '{downloader['name']}' 成功获取到 {len(torrents_list)} 个种子。"
+                        )
+                    else:
+                        # 代理获取失败，跳过此下载器
+                        print(f"【刷新线程】通过代理获取 '{downloader['name']}' 种子信息失败")
+                        logging.warning(f"通过代理获取 '{downloader['name']}' 种子信息失败")
+                        continue
+                else:
+                    # 使用常规方式获取种子信息
+                    client_instance = self._get_client(downloader)
+                    if not client_instance:
+                        print(f"【刷新线程】无法连接到下载器 {downloader['name']}")
+                        continue
+
+                    print(f"【刷新线程】正在从 {downloader['name']} 获取种子列表...")
+                    if downloader["type"] == "qbittorrent":
+                        torrents_list = client_instance.torrents_info(
+                            status_filter="all")
+                    elif downloader["type"] == "transmission":
+                        fields = [
+                            "id", "name", "hashString", "downloadDir", "totalSize",
+                            "status", "comment", "trackers", "percentDone",
+                            "uploadedEver"
+                        ]
+                        torrents_list = client_instance.get_torrents(
+                            arguments=fields)
+                    print(f"【刷新线程】从 '{downloader['name']}' 成功获取到 {len(torrents_list)} 个种子。")
+                    logging.info(
+                        f"从 '{downloader['name']}' 成功获取到 {len(torrents_list)} 个种子。"
+                    )
             except Exception as e:
                 print(f"【刷新线程】未能从 '{downloader['name']}' 获取数据: {e}")
                 logging.error(f"未能从 '{downloader['name']}' 获取数据: {e}")
@@ -554,79 +669,111 @@ class DataTracker(Thread):
 
     def _normalize_torrent_info(self, t, client_type, client_instance=None):
         if client_type == "qbittorrent":
-            info = {
-                "name": t.name,
-                "hash": t.hash,
-                "save_path": t.save_path,
-                "size": t.size,
-                "progress": t.progress,
-                "state": t.state,
-                "comment": t.get("comment", ""),
-                "trackers": t.trackers,
-                "uploaded": t.uploaded,
-            }
+            # 检查数据是从代理获取的还是从客户端获取的
+            if isinstance(t, dict):
+                # 从代理获取的数据是字典格式
+                info = {
+                    "name": t.get("name", ""),
+                    "hash": t.get("hash", ""),
+                    "save_path": t.get("save_path", ""),
+                    "size": t.get("size", 0),
+                    "progress": t.get("progress", 0),
+                    "state": t.get("state", ""),
+                    "comment": t.get("comment", ""),
+                    "trackers": t.get("trackers", []),
+                    "uploaded": t.get("uploaded", 0),
+                }
+            else:
+                # 从客户端获取的数据是对象格式
+                info = {
+                    "name": t.name,
+                    "hash": t.hash,
+                    "save_path": t.save_path,
+                    "size": t.size,
+                    "progress": t.progress,
+                    "state": t.state,
+                    "comment": t.get("comment", ""),
+                    "trackers": t.trackers,
+                    "uploaded": t.uploaded,
+                }
 
-            # --- [核心修正] ---
-            # 基于成功的测试脚本，实现可靠的备用方案
-            if not info["comment"] and client_instance:
-                logging.debug(f"种子 '{t.name[:30]}...' 的注释为空，尝试备用接口获取。")
-                try:
-                    # 1. 从客户端实例中提取 SID cookie
-                    sid_cookie = client_instance._session.cookies.get('SID')
-                    if sid_cookie:
-                        cookies_for_request = {'SID': sid_cookie}
+                # --- [核心修正] ---
+                # 基于成功的测试脚本，实现可靠的备用方案
+                if not info["comment"] and client_instance:
+                    logging.debug(f"种子 '{t.name[:30]}...' 的注释为空，尝试备用接口获取。")
+                    try:
+                        # 1. 从客户端实例中提取 SID cookie
+                        sid_cookie = client_instance._session.cookies.get('SID')
+                        if sid_cookie:
+                            cookies_for_request = {'SID': sid_cookie}
 
-                        # 2. 构造请求
-                        # 使用 client.host 属性，这是库提供的公共接口，比_host更稳定
-                        base_url = client_instance.host
-                        properties_url = f"{base_url}/api/v2/torrents/properties"
-                        params = {'hash': t.hash}
+                            # 2. 构造请求
+                            # 使用 client.host 属性，这是库提供的公共接口，比_host更稳定
+                            base_url = client_instance.host
+                            properties_url = f"{base_url}/api/v2/torrents/properties"
+                            params = {'hash': t.hash}
 
-                        # 3. 发送手动请求
-                        response = requests.get(properties_url,
-                                                params=params,
-                                                cookies=cookies_for_request,
-                                                timeout=10)
-                        response.raise_for_status()
+                            # 3. 发送手动请求
+                            response = requests.get(properties_url,
+                                                    params=params,
+                                                    cookies=cookies_for_request,
+                                                    timeout=10)
+                            response.raise_for_status()
 
-                        # 4. 解析并更新 comment
-                        properties_data = response.json()
-                        fallback_comment = properties_data.get("comment", "")
+                            # 4. 解析并更新 comment
+                            properties_data = response.json()
+                            fallback_comment = properties_data.get("comment", "")
 
-                        if fallback_comment:
-                            logging.info(
-                                f"成功通过备用接口为种子 '{t.name[:30]}...' 获取到注释。")
-                            info["comment"] = fallback_comment
-                    else:
-                        logging.warning(f"无法为备用请求提取 SID cookie，跳过。")
+                            if fallback_comment:
+                                logging.info(
+                                    f"成功通过备用接口为种子 '{t.name[:30]}...' 获取到注释。")
+                                info["comment"] = fallback_comment
+                        else:
+                            logging.warning(f"无法为备用请求提取 SID cookie，跳过。")
 
-                except Exception as e:
-                    logging.warning(f"为种子HASH {t.hash} 调用备用接口获取注释失败: {e}")
+                    except Exception as e:
+                        logging.warning(f"为种子HASH {t.hash} 调用备用接口获取注释失败: {e}")
 
             return info
         # --- [修正结束] ---
         elif client_type == "transmission":
-            return {
-                "name":
-                t.name,
-                "hash":
-                t.hash_string,
-                "save_path":
-                t.download_dir,
-                "size":
-                t.total_size,
-                "progress":
-                t.percent_done,
-                "state":
-                t.status,
-                "comment":
-                getattr(t, "comment", ""),
-                "trackers": [{
-                    "url": tracker.get("announce")
-                } for tracker in t.trackers],
-                "uploaded":
-                t.uploaded_ever,
-            }
+            # 检查数据是从代理获取的还是从客户端获取的
+            if isinstance(t, dict):
+                # 从代理获取的数据是字典格式
+                return {
+                    "name": t.get("name", ""),
+                    "hash": t.get("hashString", ""),
+                    "save_path": t.get("downloadDir", ""),
+                    "size": t.get("totalSize", 0),
+                    "progress": t.get("percentDone", 0),
+                    "state": t.get("status", ""),
+                    "comment": t.get("comment", ""),
+                    "trackers": t.get("trackers", []),
+                    "uploaded": t.get("uploadedEver", 0),
+                }
+            else:
+                # 从客户端获取的数据是对象格式
+                return {
+                    "name":
+                    t.name,
+                    "hash":
+                    t.hash_string,
+                    "save_path":
+                    t.download_dir,
+                    "size":
+                    t.total_size,
+                    "progress":
+                    t.percent_done,
+                    "state":
+                    t.status,
+                    "comment":
+                    getattr(t, "comment", ""),
+                    "trackers": [{
+                        "url": tracker.get("announce")
+                    } for tracker in t.trackers],
+                    "uploaded":
+                    t.uploaded_ever,
+                }
         return {}
 
     def _find_site_nickname(self, trackers, core_domain_map):
