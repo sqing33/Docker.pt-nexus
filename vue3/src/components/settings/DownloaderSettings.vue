@@ -70,16 +70,34 @@
               @input="resetConnectionStatus(downloader.id)"
             ></el-input>
           </el-form-item>
-          <el-form-item label="客户端类型">
-            <el-select
-              v-model="downloader.type"
-              placeholder="请选择类型"
-              style="width: 100%"
-              @change="resetConnectionStatus(downloader.id)"
-            >
-              <el-option label="qBittorrent" value="qbittorrent"></el-option>
-              <el-option label="Transmission" value="transmission"></el-option>
-            </el-select>
+          <el-form-item label="客户端设置">
+            <div class="client-type-and-proxy-row">
+              <el-select
+                v-model="downloader.type"
+                placeholder="请选择类型"
+                class="client-type-select"
+                @change="resetConnectionStatus(downloader.id)"
+              >
+                <el-option label="qBittorrent" value="qbittorrent"></el-option>
+                <el-option label="Transmission" value="transmission"></el-option>
+              </el-select>
+              <div v-if="downloader.type === 'qbittorrent'" class="proxy-switch-wrapper">
+                <el-tooltip
+                  content="通过Go语言编写的专用代理连接，可解决网络延迟、获取数据不准等问题。"
+                  placement="top"
+                  :hide-after="0"
+                >
+                  <el-switch
+                    v-model="downloader.use_proxy"
+                    size="large"
+                    inline-prompt
+                    active-text="远程"
+                    inactive-text="本地"
+                    @change="resetConnectionStatus(downloader.id)"
+                  />
+                </el-tooltip>
+              </div>
+            </div>
           </el-form-item>
           <el-form-item label="主机地址">
             <el-input
@@ -140,6 +158,7 @@ const fetchSettings = async () => {
         response.data.realtime_speed_enabled = true
       response.data.downloaders.forEach((d) => {
         if (!d.id) d.id = `client_${Date.now()}_${Math.random()}`
+        if (typeof d.use_proxy !== 'boolean') d.use_proxy = false
       })
       settings.value = response.data
     }
@@ -173,7 +192,8 @@ const addDownloader = () => {
     type: 'qbittorrent',
     host: '',
     username: '',
-    password: '',
+        password: '',
+    use_proxy: false,
   })
 }
 
@@ -263,6 +283,25 @@ const testConnection = async (downloader) => {
   display: flex;
   align-items: center;
 }
+.proxy-switch-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px; /* Match Element Plus default input height */
+  margin-left: 12px;
+  flex-shrink: 0; /* Prevent shrinking */
+}
+
+.client-type-and-proxy-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.client-type-select {
+  flex-grow: 1;
+}
+
 .switch-form-item {
   margin-bottom: 0;
   margin-left: 8px;

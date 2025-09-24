@@ -87,7 +87,7 @@ def _prepare_api_config(downloader_config):
     api_config = {
         k: v
         for k, v in downloader_config.items()
-        if k not in ["id", "name", "type", "enabled"]
+        if k not in ["id", "name", "type", "enabled", "use_proxy"]
     }
     if downloader_config["type"] == "transmission":
         if api_config.get("host"):

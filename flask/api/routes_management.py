@@ -609,7 +609,7 @@ def test_connection():
             api_config = {
                 k: v
                 for k, v in client_config.items()
-                if k not in ["id", "name", "type", "enabled"]
+                if k not in ["id", "name", "type", "enabled", "use_proxy"]
             }
             client = Client(**api_config)
             client.auth_log_in()
@@ -726,7 +726,7 @@ def get_downloader_info_api():
                 api_config = {
                     k: v
                     for k, v in client_config.items()
-                    if k not in ["id", "name", "type", "enabled"]
+                    if k not in ["id", "name", "type", "enabled", "use_proxy"]
                 }
                 client = Client(**api_config)
                 client.auth_log_in()

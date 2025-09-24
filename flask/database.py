@@ -830,7 +830,7 @@ def reconcile_historical_data(db_manager, config):
                 api_config = {
                     k: v
                     for k, v in client_config.items()
-                    if k not in ["id", "name", "type", "enabled"]
+                    if k not in ["id", "name", "type", "enabled", "use_proxy"]
                 }
                 client = Client(**api_config)
                 client.auth_log_in()
