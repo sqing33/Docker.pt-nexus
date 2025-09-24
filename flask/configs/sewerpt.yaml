@@ -171,9 +171,7 @@ mappings:
 
   video_codec:
     "video.h264": "1"
-    "video.x264": "1"
     "video.h265": "6"
-    "video.x265": "6"
     "video.vc1": "2"
     "video.xvid": "3"
     "video.mpeg2": "4"

@@ -18,6 +18,13 @@ AUDIO_CODEC_FALLBACK_MAP = {
     "audio.ddp": "audio.ac3",
 }
 
+# [新增] 定义视频编码回退层级地图
+# 键: 更精确的格式, 值: 它的下一个回退选项
+VIDEO_CODEC_FALLBACK_MAP = {
+    "video.x265": "video.h265",
+    "video.x264": "video.h264",
+}
+
 
 class BaseUploader(ABC):
     """
@@ -187,9 +194,13 @@ class BaseUploader(ABC):
                       mapping_dict: dict,
                       key_to_find: str,
                       default_key: str = "default",
-                      use_length_priority: bool = True) -> str:
+                      use_length_priority: bool = True,
+                      mapping_type: str = "general") -> str:
         """
         [修正] 通用的映射查找函数，使用正则表达式的单词边界来防止错误的子字符串匹配。
+        支持音频和视频编码的回退机制。
+
+        :param mapping_type: 映射类型，可以是 "audio"、"video" 或 "general"
         """
         if not mapping_dict or not key_to_find:
             return mapping_dict.get(default_key, "")
@@ -239,7 +250,15 @@ class BaseUploader(ABC):
 
             # 3. 如果所有匹配都失败，查找下一个回退选项
             original_key = current_key
-            current_key = AUDIO_CODEC_FALLBACK_MAP.get(current_key)
+
+            # 根据映射类型选择相应的回退映射表
+            if mapping_type == "audio":
+                current_key = AUDIO_CODEC_FALLBACK_MAP.get(current_key)
+            elif mapping_type == "video":
+                current_key = VIDEO_CODEC_FALLBACK_MAP.get(current_key)
+            else:
+                # 通用类型，同时检查音频和视频回退
+                current_key = AUDIO_CODEC_FALLBACK_MAP.get(current_key) or VIDEO_CODEC_FALLBACK_MAP.get(current_key)
 
             if current_key:
                 logger.debug(
@@ -294,7 +313,7 @@ class BaseUploader(ABC):
                                       {}).get("video_codec", "codec_sel[4]")
         codec_mapping = self.mappings.get("video_codec", {})
         mapped_params[codec_field] = self._find_mapping(
-            codec_mapping, codec_str)
+            codec_mapping, codec_str, mapping_type="video")
         logger.debug(
             f"DEBUG: 视频编码映射 '{codec_str}' -> '{mapped_params[codec_field]}'")
 
@@ -305,7 +324,7 @@ class BaseUploader(ABC):
                                               "audiocodec_sel[4]")
         audio_mapping = self.mappings.get("audio_codec", {})
         mapped_params[audio_field] = self._find_mapping(
-            audio_mapping, audio_str)
+            audio_mapping, audio_str, mapping_type="audio")
         logger.debug(
             f"DEBUG: 音频编码映射 '{audio_str}' -> '{mapped_params[audio_field]}'")
 
