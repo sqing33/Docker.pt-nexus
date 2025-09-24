@@ -4,6 +4,7 @@ import logging
 import copy
 import uuid
 import cloudscraper
+import requests
 from flask import Blueprint, jsonify, request
 from urllib.parse import urlparse
 
@@ -17,6 +18,49 @@ from transmission_rpc import Client as TrClient, TransmissionError
 
 # --- Blueprint Setup ---
 management_bp = Blueprint("management_api", __name__, url_prefix="/api")
+
+
+def _get_proxy_downloader_info(client_config, config_manager):
+    """通过代理获取下载器信息。"""
+    try:
+        # 从配置中获取代理服务器地址
+        config = config_manager.get()
+        proxy_ip = config.get("proxy_server_ip", "127.0.0.1")
+        proxy_base_url = f"http://{proxy_ip}:9090"
+        print(f"Using proxy server at: {proxy_base_url}")
+
+        # 构造代理请求数据
+        proxy_downloader_config = {
+            "id":
+            client_config['id'],
+            "type":
+            client_config['type'],
+            "host":
+            "http://127.0.0.1:" +
+            str(urlparse(f"http://{client_config['host']}").port or 8080),
+            "username":
+            client_config.get('username', ''),
+            "password":
+            client_config.get('password', '')
+        }
+
+        # 发送请求到代理获取统计信息
+        response = requests.post(f"{proxy_base_url}/api/stats/server",
+                                 json=[proxy_downloader_config],
+                                 timeout=30)
+        response.raise_for_status()
+
+        stats_data = response.json()
+        if stats_data and len(stats_data) > 0:
+            return stats_data[0]  # 返回第一个下载器的统计信息
+        else:
+            logging.warning(f"代理返回空的统计信息 for '{client_config['name']}'")
+            return None
+
+    except Exception as e:
+        logging.error(f"通过代理获取 '{client_config['name']}' 统计信息失败: {e}")
+        return None
+
 
 # --- 依赖注入占位符 ---
 # 在 run.py 中，management_bp.db_manager 和 management_bp.config_manager 将被赋值
@@ -228,7 +272,7 @@ def fetch_all_passkeys():
     db_manager = management_bp.db_manager
     # 获取请求参数，判断是否使用代理
     use_proxy = request.json.get("use_proxy", False) if request.json else False
-    
+
     try:
         # 获取所有有Cookie且为可发布站点的信息
         conn = db_manager._get_connection()
@@ -279,12 +323,12 @@ def fetch_all_passkeys():
                 # 发送请求获取用户控制面板页面
                 import cloudscraper
                 scraper = cloudscraper.create_scraper()
-                
+
                 # 添加重试机制，类似uploaders/base.py中的实现
                 max_retries = 3
                 last_exception = None
                 proxies = None
-                
+
                 # 如果明确要求使用代理，则获取代理配置
                 if use_proxy:
                     try:
@@ -299,49 +343,61 @@ def fetch_all_passkeys():
                             logging.info(f"Using proxy: {proxy_url}")
                     except Exception as e:
                         logging.warning(f"代理设置失败: {e}")
-                
+
                 for attempt in range(max_retries):
                     try:
                         # 检查是否是重试并且 Connection reset by peer 错误，强制使用代理
-                        if attempt > 0 and last_exception and "Connection reset by peer" in str(last_exception):
-                            logging.info("检测到 Connection reset by peer 错误，强制使用代理重试...")
+                        if attempt > 0 and last_exception and "Connection reset by peer" in str(
+                                last_exception):
+                            logging.info(
+                                "检测到 Connection reset by peer 错误，强制使用代理重试...")
                             try:
                                 config_manager = management_bp.config_manager
                                 conf = (config_manager.get() or {})
                                 # 优先使用转种设置中的代理地址，其次兼容旧的 network.proxy_url
                                 proxy_url = (conf.get("cross_seed", {})
-                                             or {}).get("proxy_url") or (conf.get(
-                                                 "network", {}) or {}).get("proxy_url")
+                                             or {}).get("proxy_url") or (
+                                                 conf.get("network", {})
+                                                 or {}).get("proxy_url")
                                 if proxy_url:
-                                    proxies = {"http": proxy_url, "https": proxy_url}
+                                    proxies = {
+                                        "http": proxy_url,
+                                        "https": proxy_url
+                                    }
                                     logging.info(f"使用代理重试: {proxy_url}")
                             except Exception as proxy_error:
                                 logging.warning(f"代理设置失败: {proxy_error}")
-                        
-                        logging.info(f"正在获取 {site_nickname} 的Passkey... (尝试 {attempt + 1}/{max_retries})")
+
+                        logging.info(
+                            f"正在获取 {site_nickname} 的Passkey... (尝试 {attempt + 1}/{max_retries})"
+                        )
                         response = scraper.get(f"{base_url}/usercp.php",
                                                headers=headers,
                                                timeout=30,
                                                proxies=proxies)
                         response.raise_for_status()
-                        
+
                         # 成功则跳出循环
                         last_exception = None
                         break
-                        
+
                     except Exception as e:
                         last_exception = e
-                        logging.warning(f"第 {attempt + 1} 次尝试获取 {site_nickname} 的Passkey失败: {e}")
-                        
+                        logging.warning(
+                            f"第 {attempt + 1} 次尝试获取 {site_nickname} 的Passkey失败: {e}"
+                        )
+
                         # 如果不是最后一次尝试，等待一段时间后重试
                         if attempt < max_retries - 1:
                             import time
-                            wait_time = 2 ** attempt  # 指数退避
-                            logging.info(f"等待 {wait_time} 秒后进行第 {attempt + 2} 次尝试...")
+                            wait_time = 2**attempt  # 指数退避
+                            logging.info(
+                                f"等待 {wait_time} 秒后进行第 {attempt + 2} 次尝试...")
                             time.sleep(wait_time)
                         else:
-                            logging.error(f"获取 {site_nickname} 的Passkey所有重试均已失败")
-                
+                            logging.error(
+                                f"获取 {site_nickname} 的Passkey所有重试均已失败")
+
                 # 如果所有重试都失败了，处理错误
                 if last_exception:
                     error_msg = str(last_exception)
@@ -353,7 +409,8 @@ def fetch_all_passkeys():
                     elif "dns" in error_msg.lower():
                         failed_sites.append(f"{site_nickname}(域名解析失败)")
                     elif "104" in error_msg and "Connection reset by peer" in error_msg:
-                        failed_sites.append(f"{site_nickname}(连接被重置: {error_msg})")
+                        failed_sites.append(
+                            f"{site_nickname}(连接被重置: {error_msg})")
                     else:
                         failed_sites.append(
                             f"{site_nickname}(网络连接错误: {error_msg})")
@@ -722,7 +779,20 @@ def get_downloader_info_api():
             "累计上传量": format_bytes(total_ul),
         }
         try:
-            if d_info["type"] == "qbittorrent":
+            # 检查是否需要使用代理
+            use_proxy = client_config.get("use_proxy", False)
+
+            if use_proxy and d_info["type"] == "qbittorrent":
+                # 使用代理获取下载器信息
+                proxy_stats = _get_proxy_downloader_info(
+                    client_config, config_manager)
+                if proxy_stats:
+                    d_info["details"]["版本"] = proxy_stats.get("version", "未知")
+                    d_info["status"] = "已连接"
+                else:
+                    d_info["status"] = "连接失败"
+                    d_info["details"]["错误信息"] = "通过代理连接失败"
+            elif d_info["type"] == "qbittorrent":
                 api_config = {
                     k: v
                     for k, v in client_config.items()
@@ -731,11 +801,12 @@ def get_downloader_info_api():
                 client = Client(**api_config)
                 client.auth_log_in()
                 d_info["details"]["版本"] = client.app.version
+                d_info["status"] = "已连接"
             elif d_info["type"] == "transmission":
                 api_config = services._prepare_api_config(client_config)
                 client = TrClient(**api_config)
                 d_info["details"]["版本"] = client.get_session().version
-            d_info["status"] = "已连接"
+                d_info["status"] = "已连接"
         except Exception as e:
             d_info["status"] = "连接失败"
             d_info["details"]["错误信息"] = str(e)
@@ -794,10 +865,7 @@ def get_iyuu_settings():
     """获取IYUU相关设置。"""
     config_manager = management_bp.config_manager
     # 提供一个安全的默认值
-    default_settings = {
-        "query_interval_hours": 72,
-        "auto_query_enabled": True
-    }
+    default_settings = {"query_interval_hours": 72, "auto_query_enabled": True}
     # 从配置中获取IYUU设置，如果不存在则使用默认值
     settings = config_manager.get().get("iyuu_settings", default_settings)
     return jsonify(settings)
@@ -845,7 +913,10 @@ def trigger_iyuu_query():
         return jsonify({"success": True, "message": "IYUU 查询已成功触发。"})
     except Exception as e:
         logging.error(f"手动触发IYUU查询失败: {e}", exc_info=True)
-        return jsonify({"success": False, "message": f"触发IYUU查询失败: {str(e)}"}), 500
+        return jsonify({
+            "success": False,
+            "message": f"触发IYUU查询失败: {str(e)}"
+        }), 500
 
 
 @management_bp.route("/iyuu/logs", methods=["GET"])
@@ -856,4 +927,7 @@ def get_iyuu_logs():
         return jsonify({"success": True, "logs": iyuu_logs})
     except Exception as e:
         logging.error(f"获取IYUU日志失败: {e}", exc_info=True)
-        return jsonify({"success": False, "message": f"获取IYUU日志失败: {str(e)}"}), 500
+        return jsonify({
+            "success": False,
+            "message": f"获取IYUU日志失败: {str(e)}"
+        }), 500

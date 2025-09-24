@@ -25,8 +25,6 @@ from utils import (
 CACHE_LOCK = Lock()
 data_tracker_thread = None
 
-# --- 代理相关常量 ---
-PROXY_BASE_URL = "http://152.53.189.117:9090"
 
 
 def load_site_maps_from_db(db_manager):
@@ -165,18 +163,37 @@ class DataTracker(Thread):
     def _get_proxy_stats(self, downloader_config):
         """通过代理获取下载器的统计信息。"""
         try:
+            # 从下载器配置的host中提取IP地址作为代理服务器地址
+            host_value = downloader_config['host']
+
+            # 如果host已经包含协议，直接解析；否则添加http://前缀
+            if host_value.startswith(('http://', 'https://')):
+                parsed_url = urlparse(host_value)
+            else:
+                parsed_url = urlparse(f"http://{host_value}")
+
+            proxy_ip = parsed_url.hostname
+            if not proxy_ip:
+                # 如果无法解析，使用备用方法
+                if '://' in host_value:
+                    proxy_ip = host_value.split('://')[1].split(':')[0].split('/')[0]
+                else:
+                    proxy_ip = host_value.split(':')[0]
+
+            proxy_base_url = f"http://{proxy_ip}:9090"
+
             # 构造代理请求数据
             proxy_downloader_config = {
                 "id": downloader_config['id'],
                 "type": downloader_config['type'],
-                "host": "http://127.0.0.1:" + str(urlparse(f"http://{downloader_config['host']}").port or 8080),
+                "host": "http://127.0.0.1:" + str(parsed_url.port or 8080),
                 "username": downloader_config.get('username', ''),
                 "password": downloader_config.get('password', '')
             }
 
             # 发送请求到代理获取统计信息
             response = requests.post(
-                f"{PROXY_BASE_URL}/api/stats/server",
+                f"{proxy_base_url}/api/stats/server",
                 json=[proxy_downloader_config],
                 timeout=30
             )
@@ -196,11 +213,30 @@ class DataTracker(Thread):
     def _get_proxy_torrents(self, downloader_config):
         """通过代理获取下载器的完整种子信息。"""
         try:
+            # 从下载器配置的host中提取IP地址作为代理服务器地址
+            host_value = downloader_config['host']
+
+            # 如果host已经包含协议，直接解析；否则添加http://前缀
+            if host_value.startswith(('http://', 'https://')):
+                parsed_url = urlparse(host_value)
+            else:
+                parsed_url = urlparse(f"http://{host_value}")
+
+            proxy_ip = parsed_url.hostname
+            if not proxy_ip:
+                # 如果无法解析，使用备用方法
+                if '://' in host_value:
+                    proxy_ip = host_value.split('://')[1].split(':')[0].split('/')[0]
+                else:
+                    proxy_ip = host_value.split(':')[0]
+
+            proxy_base_url = f"http://{proxy_ip}:9090"
+
             # 构造代理请求数据
             proxy_downloader_config = {
                 "id": downloader_config['id'],
                 "type": downloader_config['type'],
-                "host": "http://127.0.0.1:" + str(urlparse(f"http://{downloader_config['host']}").port or 8080),
+                "host": "http://127.0.0.1:" + str(parsed_url.port or 8080),
                 "username": downloader_config.get('username', ''),
                 "password": downloader_config.get('password', '')
             }
@@ -214,7 +250,7 @@ class DataTracker(Thread):
 
             # 发送请求到代理获取种子信息
             response = requests.post(
-                f"{PROXY_BASE_URL}/api/torrents/all",
+                f"{proxy_base_url}/api/torrents/all",
                 json=request_data,
                 timeout=120  # 种子信息可能需要更长的时间
             )
@@ -299,17 +335,25 @@ class DataTracker(Thread):
                     proxy_stats = self._get_proxy_stats(downloader)
 
                     if proxy_stats:
-                        server_state = proxy_stats.get('server_state', {})
-                        data_point.update({
-                            'dl_speed':
-                            int(server_state.get('dl_info_speed', 0)),
-                            'ul_speed':
-                            int(server_state.get('up_info_speed', 0)),
-                            'total_dl':
-                            int(server_state.get('alltime_dl', 0)),
-                            'total_ul':
-                            int(server_state.get('alltime_ul', 0))
-                        })
+                        # 代理返回的数据格式与直连不同，需要适配
+                        if 'server_state' in proxy_stats:
+                            # 如果代理返回的是标准格式
+                            server_state = proxy_stats.get('server_state', {})
+                            data_point.update({
+                                'dl_speed': int(server_state.get('dl_info_speed', 0)),
+                                'ul_speed': int(server_state.get('up_info_speed', 0)),
+                                'total_dl': int(server_state.get('alltime_dl', 0)),
+                                'total_ul': int(server_state.get('alltime_ul', 0))
+                            })
+                        else:
+                            # 新的代理数据格式，直接从根级别获取数据
+                            data_point.update({
+                                'dl_speed': int(proxy_stats.get('download_speed', 0)),
+                                'ul_speed': int(proxy_stats.get('upload_speed', 0)),
+                                'total_dl': int(proxy_stats.get('total_download', 0)),
+                                'total_ul': int(proxy_stats.get('total_upload', 0))
+                            })
+                            logging.info(f"代理数据: 上传速度={data_point['ul_speed']:,}, 下载速度={data_point['dl_speed']:,}, 总上传={data_point['total_ul']:,}, 总下载={data_point['total_dl']:,}")
                     else:
                         # 代理获取失败，跳过此下载器
                         logging.warning(f"通过代理获取 '{downloader['name']}' 统计信息失败")
