@@ -23,25 +23,34 @@ management_bp = Blueprint("management_api", __name__, url_prefix="/api")
 def _get_proxy_downloader_info(client_config, config_manager):
     """通过代理获取下载器信息。"""
     try:
-        # 从配置中获取代理服务器地址
-        config = config_manager.get()
-        proxy_ip = config.get("proxy_server_ip", "127.0.0.1")
-        proxy_base_url = f"http://{proxy_ip}:9090"
-        print(f"Using proxy server at: {proxy_base_url}")
+        # 从下载器配置的host中提取IP地址作为代理服务器地址
+        host_value = client_config['host']
+
+        # 如果host已经包含协议，直接解析；否则添加http://前缀
+        if host_value.startswith(('http://', 'https://')):
+            parsed_url = urlparse(host_value)
+        else:
+            parsed_url = urlparse(f"http://{host_value}")
+
+        proxy_ip = parsed_url.hostname
+        if not proxy_ip:
+            # 如果无法解析，使用备用方法
+            if '://' in host_value:
+                proxy_ip = host_value.split('://')[1].split(':')[0].split('/')[0]
+            else:
+                proxy_ip = host_value.split(':')[0]
+
+        proxy_port = client_config.get('proxy_port', 9090)  # 默认9090
+        proxy_base_url = f"http://{proxy_ip}:{proxy_port}"
+        logging.info(f"使用代理服务器: {proxy_base_url}")
 
         # 构造代理请求数据
         proxy_downloader_config = {
-            "id":
-            client_config['id'],
-            "type":
-            client_config['type'],
-            "host":
-            "http://127.0.0.1:" +
-            str(urlparse(f"http://{client_config['host']}").port or 8080),
-            "username":
-            client_config.get('username', ''),
-            "password":
-            client_config.get('password', '')
+            "id": client_config['id'],
+            "type": client_config['type'],
+            "host": "http://127.0.0.1:" + str(parsed_url.port or 8080),
+            "username": client_config.get('username', ''),
+            "password": client_config.get('password', '')
         }
 
         # 发送请求到代理获取统计信息
@@ -661,21 +670,37 @@ def test_connection():
             client_config["password"] = current_dl.get("password", "")
 
     name = client_config.get("name", "下载器")
+    use_proxy = client_config.get("use_proxy", False)
+
     try:
         if client_config.get("type") == "qbittorrent":
-            api_config = {
-                k: v
-                for k, v in client_config.items()
-                if k not in ["id", "name", "type", "enabled", "use_proxy"]
-            }
-            client = Client(**api_config)
-            client.auth_log_in()
+            if use_proxy:
+                # 使用代理测试连接
+                logging.info(f"通过代理测试 '{name}' 的连接...")
+                proxy_stats = _get_proxy_downloader_info(client_config, config_manager)
+                if proxy_stats:
+                    return jsonify({"success": True, "message": f"下载器 '{name}' 代理连接测试成功"})
+                else:
+                    return jsonify({"success": False, "message": f"'{name}' 代理连接测试失败，请检查代理服务器和下载器配置。"}), 200
+            else:
+                # 使用直连测试
+                api_config = {
+                    k: v
+                    for k, v in client_config.items()
+                    if k not in ["id", "name", "type", "enabled", "use_proxy", "proxy_port"]
+                }
+                client = Client(**api_config)
+                client.auth_log_in()
         elif client_config.get("type") == "transmission":
-            api_config = services._prepare_api_config(client_config)
-            client = TrClient(**api_config)
-            client.get_session()
+            if use_proxy:
+                return jsonify({"success": False, "message": "Transmission 暂不支持代理连接测试。"}), 200
+            else:
+                api_config = services._prepare_api_config(client_config)
+                client = TrClient(**api_config)
+                client.get_session()
         else:
             return jsonify({"success": False, "message": "无效的客户端类型。"}), 400
+
         return jsonify({"success": True, "message": f"下载器 '{name}' 连接测试成功"})
     except Exception as e:
         error_msg = str(e)
@@ -796,7 +821,7 @@ def get_downloader_info_api():
                 api_config = {
                     k: v
                     for k, v in client_config.items()
-                    if k not in ["id", "name", "type", "enabled", "use_proxy"]
+                    if k not in ["id", "name", "type", "enabled", "use_proxy", "proxy_port"]
                 }
                 client = Client(**api_config)
                 client.auth_log_in()

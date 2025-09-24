@@ -63,15 +63,14 @@
           </div>
         </template>
         <el-form :model="downloader" label-position="left" label-width="auto">
-          <el-form-item label="自定义名称">
-            <el-input
-              v-model="downloader.name"
-              placeholder="例如：家庭服务器 qB"
-              @input="resetConnectionStatus(downloader.id)"
-            ></el-input>
-          </el-form-item>
-          <el-form-item label="客户端设置">
-            <div class="client-type-and-proxy-row">
+          <el-form-item label="名称">
+            <div class="name-and-client-row">
+              <el-input
+                v-model="downloader.name"
+                placeholder="例如：家庭服务器 qB"
+                class="name-input"
+                @input="resetConnectionStatus(downloader.id)"
+              ></el-input>
               <el-select
                 v-model="downloader.type"
                 placeholder="请选择类型"
@@ -81,22 +80,37 @@
                 <el-option label="qBittorrent" value="qbittorrent"></el-option>
                 <el-option label="Transmission" value="transmission"></el-option>
               </el-select>
-              <div v-if="downloader.type === 'qbittorrent'" class="proxy-switch-wrapper">
-                <el-tooltip
-                  content="通过Go语言编写的专用代理连接，可解决网络延迟、获取数据不准等问题。"
-                  placement="top"
-                  :hide-after="0"
-                >
-                  <el-switch
-                    v-model="downloader.use_proxy"
-                    size="large"
-                    inline-prompt
-                    active-text="远程"
-                    inactive-text="本地"
-                    @change="resetConnectionStatus(downloader.id)"
-                  />
-                </el-tooltip>
-              </div>
+            </div>
+          </el-form-item>
+          <el-form-item label="代理设置">
+            <div class="proxy-settings-row">
+              <el-input
+                v-model="downloader.proxy_port"
+                type="number"
+                placeholder="9090"
+                class="proxy-port-input"
+                :min="1"
+                :max="65535"
+                :disabled="downloader.type === 'transmission'"
+                @input="resetConnectionStatus(downloader.id)"
+              >
+                <template #prepend>端口</template>
+              </el-input>
+              <el-tooltip
+                :content="downloader.type === 'transmission' ? 'Transmission 暂不支持代理功能' : '通过Go语言编写的专用代理连接，可解决网络延迟、获取数据不准等问题。'"
+                placement="top"
+                :hide-after="0"
+              >
+                <el-switch
+                  v-model="downloader.use_proxy"
+                  size="large"
+                  inline-prompt
+                  active-text="远程"
+                  inactive-text="本地"
+                  :disabled="downloader.type === 'transmission'"
+                  @change="resetConnectionStatus(downloader.id)"
+                />
+              </el-tooltip>
             </div>
           </el-form-item>
           <el-form-item label="主机地址">
@@ -159,6 +173,7 @@ const fetchSettings = async () => {
       response.data.downloaders.forEach((d) => {
         if (!d.id) d.id = `client_${Date.now()}_${Math.random()}`
         if (typeof d.use_proxy !== 'boolean') d.use_proxy = false
+        if (!d.proxy_port) d.proxy_port = 9090
       })
       settings.value = response.data
     }
@@ -192,8 +207,9 @@ const addDownloader = () => {
     type: 'qbittorrent',
     host: '',
     username: '',
-        password: '',
+    password: '',
     use_proxy: false,
+    proxy_port: 9090,
   })
 }
 
@@ -283,23 +299,30 @@ const testConnection = async (downloader) => {
   display: flex;
   align-items: center;
 }
-.proxy-switch-wrapper {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 32px; /* Match Element Plus default input height */
-  margin-left: 12px;
-  flex-shrink: 0; /* Prevent shrinking */
-}
-
-.client-type-and-proxy-row {
+.name-and-client-row {
   display: flex;
   align-items: center;
   width: 100%;
+  gap: 12px;
+}
+
+.name-input {
+  flex: 1; /* 名称输入框占一半 */
 }
 
 .client-type-select {
-  flex-grow: 1;
+  flex: 1; /* 客户端选择占一半 */
+}
+
+.proxy-settings-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 12px;
+}
+
+.proxy-port-input {
+  flex: 1; /* 占据剩余空间 */
 }
 
 .switch-form-item {

@@ -180,7 +180,8 @@ class DataTracker(Thread):
                 else:
                     proxy_ip = host_value.split(':')[0]
 
-            proxy_base_url = f"http://{proxy_ip}:9090"
+            proxy_port = downloader_config.get('proxy_port', 9090)  # 默认9090
+            proxy_base_url = f"http://{proxy_ip}:{proxy_port}"
 
             # 构造代理请求数据
             proxy_downloader_config = {
@@ -230,7 +231,8 @@ class DataTracker(Thread):
                 else:
                     proxy_ip = host_value.split(':')[0]
 
-            proxy_base_url = f"http://{proxy_ip}:9090"
+            proxy_port = downloader_config.get('proxy_port', 9090)  # 默认9090
+            proxy_base_url = f"http://{proxy_ip}:{proxy_port}"
 
             # 构造代理请求数据
             proxy_downloader_config = {
