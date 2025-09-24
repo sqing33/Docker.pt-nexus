@@ -1,0 +1,16 @@
+# requirements.txt
+Flask
+flask-cors
+python-dotenv
+qbittorrent-api
+transmission-rpc
+mysql-connector-python
+PyYAML
+cloudscraper
+beautifulsoup4
+loguru
+bencoder
+pymediainfo
+PyJWT
+Flask-Bcrypt
+psycopg2-binary

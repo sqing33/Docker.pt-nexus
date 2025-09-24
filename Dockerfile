@@ -1,15 +1,15 @@
 # Stage 1: Build Vue frontend
 FROM node:20-alpine AS builder
 
-WORKDIR /app/vue3
+WORKDIR /app/webui
 
 RUN npm install -g pnpm
 
-COPY ./vue3/package.json ./vue3/pnpm-lock.yaml ./
+COPY ./webui/package.json ./webui/pnpm-lock.yaml ./
 
 RUN pnpm install --frozen-lockfile
 
-COPY ./vue3 .
+COPY ./webui .
 
 RUN pnpm build
 
@@ -20,13 +20,13 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
 
-COPY --from=builder /app/vue3/dist ./dist
+COPY --from=builder /app/webui/dist ./dist
 
-COPY ./flask/requirements.txt .
+COPY ./server/requirements.txt .
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY ./flask .
+COPY ./server .
 
 RUN apt update && \
     apt install -y ffmpeg mediainfo && \

@@ -1,0 +1,287 @@
+# PandaPT站点的配置文件
+# 基于三层解耦模型重构，包含source_parsers和标准化的mappings
+
+site_name: "PandaPT"
+
+# 表单字段定义 - 定义站点上传表单中各字段的标识符
+form_fields:
+  medium: "medium_sel[4]"
+  video_codec: "codec_sel[4]"
+  audio_codec: "audiocodec_sel[4]"
+  resolution: "standard_sel[4]"
+  source: "source_sel[4]"
+  team: "team_sel[4]"
+  category: "type"  # 类别字段映射到type参数
+  processing: "processing_sel[4]"
+
+# 标准化键映射 - 定义源文本到标准化键的映射规则
+# source_parsers部分：定义如何从原始数据解析出标准化参数
+source_parsers:
+  source_params:
+    type:
+      source_key: "类型"
+    medium:
+      source_key: "媒介"
+    video_codec:
+      source_key: "视频编码"
+    audio_codec:
+      source_key: "音频编码"
+    resolution:
+      source_key: "分辨率"
+    source:
+      source_key: "产地"
+    team:
+      source_key: "制作组"
+    processing:
+      source_key: "格式"
+
+  title_components:
+    title:
+      source_key: "主标题"
+    season_episode:
+      source_key: "季集"
+    year:
+      source_key: "年份"
+    status:
+      source_key: "剧集状态"
+    edition:
+      source_key: "发布版本"
+    resolution:
+      source_key: "分辨率"
+    platform:
+      source_key: "片源平台"
+    medium:
+      source_key: "媒介"
+    video_codec:
+      source_key: "视频编码"
+    video_format:
+      source_key: "视频格式"
+    hdr_format:
+      source_key: "HDR格式"
+    bit_depth:
+      source_key: "色深"
+    frame_rate:
+      source_key: "帧率"
+    audio_codec:
+      source_key: "音频编码"
+    team:
+      source_key: "制作组"
+
+  # 标准化键映射规则（从原始文本到标准化键）
+  standard_keys:
+    type:
+      "电影": "category.movie"
+      "电视剧": "category.tv_series"
+      "动漫": "category.animation"
+      "综艺": "category.tv_shows"
+      "纪录片": "category.documentaries"
+      "体育": "category.sports"
+      "软件": "category.software"
+      "游戏": "category.game"
+      "演唱会/音乐会": "category.music_video"
+      "其他": "category.other"
+      "电子书": "category.ebook"
+      "有声书": "category.audiobook"
+      "MV (音乐短片)": "category.music_video"
+      "音乐": "category.music"
+
+    medium:
+      "UHD Blu-ray": "medium.uhd_bluray"
+      "Blu-ray": "medium.bluray"
+      "Remux": "medium.remux"
+      "Encode": "medium.encode"
+      "Track": "medium.track"
+      "WEB-DL": "medium.webdl"
+      "CD": "medium.cd"
+      "DVDR": "medium.dvdr"
+      "HDTV": "medium.hdtv"
+      "UHDTV": "medium.uhdtv"
+      "MiniBD": "medium.minibd"
+      "HD DVD": "medium.hddvd"
+      "Other": "medium.other"
+
+    video_codec:
+      "HEVC/H.265/x265": "video.h265"
+      "AVC/H.264/x264": "video.h264"
+      "VP8/VP9": "video.vp9"
+      "VC-1": "video.vc1"
+      "Xvid": "video.xvid"
+      "MPEG-2": "video.mpeg2"
+      "Other": "video.other"
+
+    audio_codec:
+      "AV3A": "audio.av3a"
+      "TrueHD Atmos": "audio.truehd_atmos"
+      "TrueHD": "audio.truehd"
+      "DTS-X": "audio.dtsx"
+      "DTS-HD": "audio.dts_hd_ma"
+      "DTS-HR": "audio.dts_hr"
+      "DTS": "audio.dts"
+      "DD/AC3": "audio.ac3"
+      "DDP/EAC3": "audio.ddp"
+      "AAC": "audio.aac"
+      "FLAC": "audio.flac"
+      "LPCM/PCM": "audio.lpcm"
+      "Other": "audio.other"
+      "MP3": "audio.mp3"
+      "APE": "audio.ape"
+      "M4A": "audio.m4a"
+      "WAV": "audio.wav"
+
+    resolution:
+      "4320k/8K": "resolution.r4320p"
+      "2160p/4K": "resolution.r2160p"
+      "1080p": "resolution.r1080p"
+      "1080i": "resolution.r1080i"
+      "720p": "resolution.r720p"
+      "SD": "resolution.sd"
+
+    source:
+      "CHN(中国大陆)": "source.china"
+      "EU/US(欧美)": "source.western"
+      "HK/MAC/TW(港澳台地区)": "source.hongkong"
+      "JPN(日本)": "source.japan"
+      "KOR(韩国)": "source.korea"
+      "IND(印度)": "source.india"
+      "SEA(东南亚)": "source.southeast_asia"
+      "Other(其他)": "source.other"
+
+    team:
+      "Panda(原盘diy组)": "team.panda_diy"
+      "Panda(原盘Remux组)": "team.panda_remux"
+      "Panda(压制组)": "team.panda_encode"
+      "AilMWeb(流媒体组)": "team.ailmweb"
+      "AilMTV(电视录制组)": "team.ailmtv"
+      "AilMUpscale(超分视频组)": "team.ailmupscale"
+      "CatEDU(部分禁转)": "team.catedu"
+      "Red Leaves (红叶)": "team.redleaves"
+      "Other": "team.other"
+
+    processing:
+      "EPUB/MOBI/PDF/AZW": "format.epub_mobi_pdf_azw"
+      "EPUB": "format.epub"
+      "MOBI": "format.mobi"
+      "PDF": "format.pdf"
+      "Other": "format.other"
+
+# 参数映射规则 - 定义如何将标准化键映射到站点特定参数
+mappings:
+  type:
+    "category.movie": "401"
+    "category.tv_series": "402"
+    "category.animation": "405"
+    "category.tv_shows": "403"
+    "category.documentaries": "404"
+    "category.sports": "407"
+    "category.software": "412"
+    "category.game": "411"
+    "category.music_video": "413"
+    "category.other": "409"
+    "category.ebook": "410"
+    "category.audiobook": "414"
+    "category.music": "408"
+    "default": "409"
+
+  medium:
+    "medium.uhd_bluray": "11"
+    "medium.bluray": "1"
+    "medium.remux": "3"
+    "medium.encode": "7"
+    "medium.track": "9"
+    "medium.webdl": "10"
+    "medium.cd": "8"
+    "medium.dvdr": "6"
+    "medium.hdtv": "5"
+    "medium.uhdtv": "12"
+    "medium.minibd": "4"
+    "medium.hddvd": "2"
+    "medium.other": "4"
+    "default": "4"
+
+  video_codec:
+    "video.h265": "6"
+    "video.h264": "1"
+    "video.vp9": "7"
+    "video.vc1": "2"
+    "video.xvid": "3"
+    "video.mpeg2": "4"
+    "video.other": "5"
+    "default": "5"
+
+  audio_codec:
+    "audio.av3a": "19"
+    "audio.truehd_atmos": "8"
+    "audio.truehd": "1"
+    "audio.dtsx": "2"
+    "audio.dts_hd_ma": "3"
+    "audio.dts_hr": "18"
+    "audio.dts": "4"
+    "audio.ac3": "5"
+    "audio.ddp": "6"
+    "audio.aac": "7"
+    "audio.flac": "11"
+    "audio.lpcm": "9"
+    "audio.other": "16"
+    "audio.mp3": "10"
+    "audio.ape": "12"
+    "audio.m4a": "14"
+    "audio.wav": "15"
+    "default": "16"
+
+  resolution:
+    "resolution.r4320p": "6"
+    "resolution.r2160p": "5"
+    "resolution.r1080p": "1"
+    "resolution.r1080i": "2"
+    "resolution.r720p": "3"
+    "resolution.sd": "7"
+    "default": "7"
+
+  source:
+    "source.china": "7"
+    "source.western": "1"
+    "source.hongkong": "2"
+    "source.japan": "3"
+    "source.korea": "4"
+    "source.india": "9"
+    "source.southeast_asia": "8"
+    "source.other": "6"
+    "default": "6"
+
+  team:
+    "team.panda_diy": "6"
+    "team.panda_remux": "10"
+    "team.panda_encode": "1"
+    "team.ailmweb": "7"
+    "team.ailmtv": "8"
+    "team.ailmupscale": "14"
+    "team.catedu": "15"
+    "team.redleaves": "22"
+    "team.other": "5"
+    "default": "5"
+
+  processing:
+    "format.epub_mobi_pdf_azw": "1"
+    "format.epub": "2"
+    "format.mobi": "3"
+    "format.pdf": "4"
+    "format.other": "5"
+    "default": "5"
+
+  tag:
+    "tag.s纯净版": 16
+    "tag.sDIY": 4
+    "tag.s完结": 10
+    "tag.s分集": 17
+    "tag.s国语": 5
+    "tag.s粤语": 13
+    "tag.s中字": 6
+    "tag.s杜比视界": 8
+    "tag.sHDR10+": 9
+    "tag.sHDR10": 7
+    "tag.s菁彩HDR": 15
+    "tag.s特效": 12
+    "tag.sASMR": 21
+    "tag.s网络小说": 19
+    "tag.s漫画": 18
+    "default": null

@@ -20,13 +20,13 @@ Dockerfile
 venv/
 
 # Node modules
-vue3/node_modules
-vue3/dist
+webui/node_modules
+webui/dist
 
 # Backend specific
-flask/.env
-flask/pt_stats.db
-flask/pt_stats.db-journal
+server/.env
+server/pt_stats.db
+server/pt_stats.db-journal
 
 # Logs
 *.log
