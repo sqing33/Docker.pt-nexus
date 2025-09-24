@@ -459,6 +459,33 @@ class DataTracker(Thread):
             conn = self.db_manager._get_connection()
             cursor = self.db_manager._get_cursor(conn)
             now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+            # 先清理启用下载器中已删除的种子
+            print(f"【刷新线程】开始清理启用下载器中已删除的种子...")
+            enabled_downloader_ids = {d["id"] for d in enabled_downloaders}
+            for downloader_id in enabled_downloader_ids:
+                # 获取该下载器当前的种子哈希
+                downloader_current_hashes = {h for h in all_current_hashes
+                                           if torrents_to_upsert.get(h, {}).get("downloader_id") == downloader_id}
+
+                # 获取数据库中该下载器的历史种子哈希
+                placeholder = "%s" if self.db_manager.db_type in ["mysql", "postgresql"] else "?"
+                cursor.execute(f"SELECT hash FROM torrents WHERE downloader_id = {placeholder}", (downloader_id,))
+                db_hashes = {row["hash"] for row in cursor.fetchall()}
+
+                # 找出需要删除的种子（在数据库中但不在当前下载器中）
+                hashes_to_delete = db_hashes - downloader_current_hashes
+
+                if hashes_to_delete:
+                    print(f"【刷新线程】发现下载器 {downloader_id} 中有 {len(hashes_to_delete)} 个种子已被删除")
+                    # 从torrents表中删除这些种子（但保留torrent_upload_stats表中的数据）
+                    delete_placeholders = ",".join([placeholder] * len(hashes_to_delete))
+                    delete_query = f"DELETE FROM torrents WHERE hash IN ({delete_placeholders}) AND downloader_id = {placeholder}"
+                    cursor.execute(delete_query, tuple(hashes_to_delete) + (downloader_id,))
+                    deleted_count = cursor.rowcount
+                    print(f"【刷新线程】已删除下载器 {downloader_id} 中的 {deleted_count} 个已移除的种子记录")
+                    logging.info(f"已删除下载器 {downloader_id} 中的 {deleted_count} 个已移除的种子记录")
+
             if torrents_to_upsert:
                 params = [(*d.values(), now_str)
                           for d in torrents_to_upsert.values()]
