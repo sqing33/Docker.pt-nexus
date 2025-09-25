@@ -119,7 +119,7 @@ jobs:
             echo "成功构建: $OUTPUT_NAME"
           done
 
-      - name: 4. 创建 Release 并上传二进制文件
+      - name: 4. 创建 Release 并上传二进制文件和安装脚本
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ github.event.inputs.tags }}
@@ -128,3 +128,4 @@ jobs:
           prerelease: false
           files: |
             proxy/releases/pt-nexus-box-proxy-*
+            proxy/install-pt-nexus-box-proxy.sh
