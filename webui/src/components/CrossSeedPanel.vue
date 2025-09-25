@@ -327,9 +327,8 @@
                     <span :class="['param-value', { 'empty': !getMappedTags() || getMappedTags().length === 0 }]">
                       {{ getMappedTags().join(', ') || 'N/A' }}
                     </span>
-                    <span class="param-standard-key"
-                      v-if="torrentData.standardized_params.tags && torrentData.standardized_params.tags.length > 0">
-                      {{ torrentData.standardized_params.tags.join(', ') }}
+                    <span class="param-standard-key" v-if="filteredTags && filteredTags.length > 0">
+                      {{ filteredTags.join(', ') }}
                     </span>
                   </div>
                 </div>
@@ -1702,10 +1701,19 @@ const getInvalidStandardParams = () => {
 
   for (const key of standardParamKeys) {
     const value = standardizedParams[key];
-    // 如果参数有值但不符合 *.* 格式，则标记为无效
     if (value && typeof value === 'string' && value.trim() !== '' && !/^[a-zA-Z0-9_]+\.[a-zA-Z0-9_]+$/.test(value)) {
       invalidParams.push(key);
     }
+  }
+
+  const flexibleRegex = new RegExp(/^[\p{L}\p{N}_-]+\.[\p{L}\p{N}_-]+$/u);
+
+  if (filteredTags.value.some(tag => {
+    const isInvalid = !flexibleRegex.test(tag);
+
+    return isInvalid;
+  })) {
+    invalidParams.push('tags');
   }
 
   return invalidParams;
@@ -1723,7 +1731,8 @@ const goToPublishPreviewStep = async () => {
       'audio_codec': '音频编码',
       'resolution': '分辨率',
       'team': '制作组',
-      'source': '产地'
+      'source': '产地',
+      'tags': '标签'
     };
 
     const invalidParamNames = invalidParams.map(param => paramNames[param] || param);
@@ -2092,10 +2101,10 @@ const getMappedValue = (category: string) => {
 
 // 辅助函数：获取映射后的标签列表
 const getMappedTags = () => {
-  const standardizedParams = torrentData.value.standardized_params;
-  if (!standardizedParams || !standardizedParams.tags || !reverseMappings.value.tags) return [];
+  // 使用 filteredTags 计算属性来过滤掉空标签
+  if (!filteredTags.value || !reverseMappings.value.tags) return [];
 
-  return standardizedParams.tags.map(tag => {
+  return filteredTags.value.map((tag: string) => {
     return reverseMappings.value.tags[tag] || tag;
   });
 };
@@ -2103,6 +2112,11 @@ const getMappedTags = () => {
 // Computed properties for filtered title components
 const filteredTitleComponents = computed(() => {
   return torrentData.value.title_components.filter(param => param.key !== '无法识别');
+});
+// 计算属性：过滤掉空标签
+const filteredTags = computed(() => {
+  const tags = torrentData.value.standardized_params.tags;
+  return tags?.filter(tag => tag && typeof tag === 'string' && tag.trim() !== '') || [];
 });
 // 计算属性：为未解析的标题提供初始参数框
 const initialTitleComponents = computed(() => {
@@ -2124,14 +2138,21 @@ const unrecognizedComponent = computed(() => {
 // 更新无法识别组件的值
 const updateUnrecognizedValue = (value) => {
   const index = torrentData.value.title_components.findIndex(param => param.key === '无法识别');
-  if (index !== -1) {
-    torrentData.value.title_components[index].value = value;
+  if (value === '') {
+    // 如果值为空字符串，则从数组中移除该项
+    if (index !== -1) {
+      torrentData.value.title_components.splice(index, 1);
+    }
   } else {
-    // 如果不存在"无法识别"组件，则添加它
-    torrentData.value.title_components.push({
-      key: '无法识别',
-      value: value
-    });
+    if (index !== -1) {
+      torrentData.value.title_components[index].value = value;
+    } else {
+      // 如果不存在"无法识别"组件，则添加它
+      torrentData.value.title_components.push({
+        key: '无法识别',
+        value: value
+      });
+    }
   }
 };
 
@@ -2139,21 +2160,22 @@ const updateUnrecognizedValue = (value) => {
 // 只有当"无法识别"的参数为空字符串，截图有效，且标准化参数符合格式时才允许点击按钮
 const isNextButtonDisabled = computed(() => {
   const unrecognized = torrentData.value.title_components.find(param => param.key === '无法识别');
+  const hasUnrecognized = unrecognized && unrecognized.value !== '';
+  const hasInvalidScreenshots = !screenshotValid.value;
+  const invalidParams = getInvalidStandardParams();
+  const hasInvalidStandardParams = invalidParams.length > 0;
+
   // 如果存在"无法识别"的参数且不为空字符串，或截图失效，则禁用按钮
-  if ((unrecognized && unrecognized.value !== '') || !screenshotValid.value) {
+  if (hasUnrecognized) {
     return true;
   }
 
-  // 检查标准化参数是否符合标准键格式(*.*)
-  const standardizedParams = torrentData.value.standardized_params;
-  const standardParamKeys = ['type', 'medium', 'video_codec', 'audio_codec', 'resolution', 'team', 'source'];
+  if (hasInvalidScreenshots) {
+    return true;
+  }
 
-  for (const key of standardParamKeys) {
-    const value = standardizedParams[key];
-    // 如果参数有值但不符合 *.* 格式，则禁用按钮
-    if (value && typeof value === 'string' && value.trim() !== '' && !/^[a-zA-Z0-9_]+\.[a-zA-Z0-9_]+$/.test(value)) {
-      return true;
-    }
+  if (hasInvalidStandardParams) {
+    return true;
   }
 
   return false;
