@@ -126,7 +126,7 @@ def create_app():
 
         # --- 启动IYUU后台线程 ---
         logging.info("正在启动IYUU后台线程...")
-        # start_iyuu_thread(db_manager, config_manager)
+        start_iyuu_thread(db_manager, config_manager)
     else:
         logging.info("检测到调试监控进程，跳过后台线程启动。")
 
@@ -171,7 +171,7 @@ if __name__ == "__main__":
     atexit.register(cleanup)
 
     # 从环境变量获取端口，如果未设置则使用默认值 15272
-    port = int(os.getenv("PORT", 15273))
+    port = int(os.getenv("PORT", 15272))
 
     logging.info(f"以开发模式启动 Flask 服务器，监听端口 http://0.0.0.0:{port} ...")
 
