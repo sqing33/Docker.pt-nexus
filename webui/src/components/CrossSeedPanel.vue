@@ -64,26 +64,29 @@
                         </el-form-item>
                       </div>
                       <!-- 无法识别占1列 -->
-                      <div class="unrecognized-section" style="grid-column: span 1;">
-                        <el-form-item :key="unrecognizedComponent.key" :label="unrecognizedComponent.key">
-                          <el-input :value="unrecognizedComponent.value" @input="updateUnrecognizedValue" />
+                      <div :class="{ 'unrecognized-section': unrecognizedValue }" style="grid-column: span 1;">
+                        <el-form-item label="无法识别">
+                          <el-input v-model="unrecognizedValue" />
                         </el-form-item>
                       </div>
                     </div>
 
                     <!-- 标准参数区域 -->
+                    <!-- [最终版本] 标准参数区域 -->
                     <div class="standard-params-section">
                       <!-- 第一行：类型、媒介、视频编码、音频编码、分辨率 -->
                       <div class="standard-params-grid">
                         <el-form-item label="类型 (type)">
-                          <el-select v-model="torrentData.standardized_params.type" placeholder="请选择类型" clearable>
+                          <el-select v-model="torrentData.standardized_params.type" placeholder="请选择类型" clearable
+                            :class="{ 'is-invalid': invalidStandardParams.includes('type') }" data-tag-style>
                             <el-option v-for="(label, value) in reverseMappings.type" :key="value" :label="label"
                               :value="value" />
                           </el-select>
                         </el-form-item>
 
                         <el-form-item label="媒介 (medium)">
-                          <el-select v-model="torrentData.standardized_params.medium" placeholder="请选择媒介" clearable>
+                          <el-select v-model="torrentData.standardized_params.medium" placeholder="请选择媒介" clearable
+                            :class="{ 'is-invalid': invalidStandardParams.includes('medium') }" data-tag-style>
                             <el-option v-for="(label, value) in reverseMappings.medium" :key="value" :label="label"
                               :value="value" />
                           </el-select>
@@ -91,7 +94,8 @@
 
                         <el-form-item label="视频编码 (video_codec)">
                           <el-select v-model="torrentData.standardized_params.video_codec" placeholder="请选择视频编码"
-                            clearable>
+                            clearable :class="{ 'is-invalid': invalidStandardParams.includes('video_codec') }"
+                            data-tag-style>
                             <el-option v-for="(label, value) in reverseMappings.video_codec" :key="value" :label="label"
                               :value="value" />
                           </el-select>
@@ -99,15 +103,16 @@
 
                         <el-form-item label="音频编码 (audio_codec)">
                           <el-select v-model="torrentData.standardized_params.audio_codec" placeholder="请选择音频编码"
-                            clearable>
+                            clearable :class="{ 'is-invalid': invalidStandardParams.includes('audio_codec') }"
+                            data-tag-style>
                             <el-option v-for="(label, value) in reverseMappings.audio_codec" :key="value" :label="label"
                               :value="value" />
                           </el-select>
                         </el-form-item>
 
                         <el-form-item label="分辨率 (resolution)">
-                          <el-select v-model="torrentData.standardized_params.resolution" placeholder="请选择分辨率"
-                            clearable>
+                          <el-select v-model="torrentData.standardized_params.resolution" placeholder="请选择分辨率" clearable
+                            :class="{ 'is-invalid': invalidStandardParams.includes('resolution') }" data-tag-style>
                             <el-option v-for="(label, value) in reverseMappings.resolution" :key="value" :label="label"
                               :value="value" />
                           </el-select>
@@ -116,16 +121,19 @@
 
                       <!-- 第二行：制作组、产地、标签特殊布局 -->
                       <div class="standard-params-grid second-row">
+                        <!-- 【代码修改处】 -->
                         <el-form-item label="制作组 (team)">
                           <el-select v-model="torrentData.standardized_params.team" placeholder="请选择制作组" clearable
-                            filterable allow-create default-first-option>
+                            filterable allow-create default-first-option class="team-select"
+                            :class="{ 'is-invalid': invalidStandardParams.includes('team') }">
                             <el-option v-for="(label, value) in reverseMappings.team" :key="value" :label="label"
                               :value="value" />
                           </el-select>
                         </el-form-item>
 
                         <el-form-item label="产地 (source)">
-                          <el-select v-model="torrentData.standardized_params.source" placeholder="请选择产地" clearable>
+                          <el-select v-model="torrentData.standardized_params.source" placeholder="请选择产地" clearable
+                            :class="{ 'is-invalid': invalidStandardParams.includes('source') }" data-tag-style>
                             <el-option v-for="(label, value) in reverseMappings.source" :key="value" :label="label"
                               :value="value" />
                           </el-select>
@@ -134,14 +142,23 @@
                         <el-form-item label="标签 (tags)" class="tags-wide-item">
                           <el-select v-model="torrentData.standardized_params.tags" multiple filterable allow-create
                             default-first-option placeholder="请选择或输入标签" style="width: 100%">
-                            <el-option v-for="(label, value) in reverseMappings.tags" :key="value" :label="label"
-                              :value="value" />
+                            <template #tag="{ data }">
+                              <el-tag v-for="item in data" :key="item.value" :type="getTagType(item.value)" closable
+                                disable-transitions @close="handleTagClose(item.value)" style="margin: 2px;">
+                                <span>{{ item.currentLabel }}</span>
+                              </el-tag>
+                            </template>
+                            <el-option v-for="option in allTagOptions" :key="option.value" :label="option.label"
+                              :value="option.value">
+                              <span :style="{ color: invalidTagsList.includes(option.value) ? '#F56C6C' : '' }">
+                                {{ option.label }}
+                              </span>
+                            </el-option>
                           </el-select>
                         </el-form-item>
 
                         <!-- 占位符1：保持5列结构 -->
                         <div class="placeholder-item"></div>
-
                         <!-- 占位符2：保持5列结构 -->
                         <div class="placeholder-item"></div>
                       </div>
@@ -1694,34 +1711,34 @@ const fetchTorrentInfo = async () => {
 }
 
 // 检查标准化参数是否符合格式的辅助函数
-const getInvalidStandardParams = () => {
+const invalidStandardParams = computed(() => {
   const standardizedParams = torrentData.value.standardized_params;
   const standardParamKeys = ['type', 'medium', 'video_codec', 'audio_codec', 'resolution', 'team', 'source'];
-  const invalidParams = [];
+  const invalidParamsList = [];
+
+  // 【修改】使用与 invalidTagsList 相同的、更强大的正则表达式
+  const flexibleRegex = new RegExp(/^[\p{L}\p{N}_-]+\.[\p{L}\p{N}_-]+$/u);
 
   for (const key of standardParamKeys) {
     const value = standardizedParams[key];
-    if (value && typeof value === 'string' && value.trim() !== '' && !/^[a-zA-Z0-9_]+\.[a-zA-Z0-9_]+$/.test(value)) {
-      invalidParams.push(key);
+
+    // 【修改】使用新的正则表达式进行判断
+    if (value && typeof value === 'string' && value.trim() !== '' && !flexibleRegex.test(value)) {
+      invalidParamsList.push(key);
     }
   }
 
-  const flexibleRegex = new RegExp(/^[\p{L}\p{N}_-]+\.[\p{L}\p{N}_-]+$/u);
-
-  if (filteredTags.value.some(tag => {
-    const isInvalid = !flexibleRegex.test(tag);
-
-    return isInvalid;
-  })) {
-    invalidParams.push('tags');
+  // 这里逻辑保持不变
+  if (invalidTagsList.value.length > 0) {
+    invalidParamsList.push('tags');
   }
 
-  return invalidParams;
-};
+  return invalidParamsList;
+});
 
 const goToPublishPreviewStep = async () => {
   // 检查是否有不符合格式的标准化参数
-  const invalidParams = getInvalidStandardParams();
+  const invalidParams = invalidStandardParams.value;
   if (invalidParams.length > 0) {
     // 显示提示信息
     const paramNames = {
@@ -1869,6 +1886,27 @@ const goToPublishPreviewStep = async () => {
   } finally {
     isLoading.value = false;
   }
+};
+
+// 【新增】计算属性：整合预设标签和当前已选标签，用于渲染下拉列表
+const allTagOptions = computed(() => {
+  const predefinedTags = Object.keys(reverseMappings.value.tags || {});
+  const currentTags = torrentData.value.standardized_params.tags || [];
+  const combined = [...new Set([...predefinedTags, ...currentTags])];
+
+  return combined.map(tagValue => ({
+    value: tagValue,
+    label: reverseMappings.value.tags[tagValue] || tagValue
+  }));
+});
+
+// 【修改并添加调试代码】方法：根据标签是否有效，返回不同的类型
+const getTagType = (tag: string) => {
+  // 在浏览器开发者工具的控制台(Console)中打印日志，方便调试
+  console.log(`[getTagType] 检查标签: "${tag}", 是否无效: ${invalidTagsList.value.includes(tag)}`);
+
+  // 核心逻辑不变
+  return invalidTagsList.value.includes(tag) ? 'danger' : 'info';
 };
 
 const goToSelectSiteStep = () => {
@@ -2118,6 +2156,19 @@ const filteredTags = computed(() => {
   const tags = torrentData.value.standardized_params.tags;
   return tags?.filter(tag => tag && typeof tag === 'string' && tag.trim() !== '') || [];
 });
+
+// 【新增】计算属性：专门用于找出并返回所有格式不正确的标签列表
+const invalidTagsList = computed(() => {
+  // 定义支持中文和连字符的灵活正则表达式
+  // \p{L} -> 匹配任何语言的字母 (包括中文)
+  // \p{N} -> 匹配任何语言的数字
+  // _-  -> 匹配下划线和连字符
+  // u 标志 -> 启用 Unicode 支持
+  const flexibleRegex = new RegExp(/^[\p{L}\p{N}_-]+\.[\p{L}\p{N}_-]+$/u);
+
+  // 从已过滤的标签中，再次过滤出不符合新正则的标签
+  return filteredTags.value.filter(tag => !flexibleRegex.test(tag));
+});
 // 计算属性：为未解析的标题提供初始参数框
 const initialTitleComponents = computed(() => {
   // 定义常见的标题参数键
@@ -2129,32 +2180,45 @@ const initialTitleComponents = computed(() => {
   }));
 });
 
-const unrecognizedComponent = computed(() => {
-  const unrecognized = torrentData.value.title_components.find(param => param.key === '无法识别');
-  // 如果没有找到"无法识别"的组件，返回一个默认对象以确保输入框始终显示
-  return unrecognized || { key: '无法识别', value: '' };
-});
+const handleTagClose = (tagToRemove: string) => {
+  // 找到要删除的标签在数组中的索引
+  const index = torrentData.value.standardized_params.tags.indexOf(tagToRemove);
 
-// 更新无法识别组件的值
-const updateUnrecognizedValue = (value) => {
-  const index = torrentData.value.title_components.findIndex(param => param.key === '无法识别');
-  if (value === '') {
-    // 如果值为空字符串，则从数组中移除该项
-    if (index !== -1) {
-      torrentData.value.title_components.splice(index, 1);
-    }
-  } else {
-    if (index !== -1) {
-      torrentData.value.title_components[index].value = value;
-    } else {
-      // 如果不存在"无法识别"组件，则添加它
-      torrentData.value.title_components.push({
-        key: '无法识别',
-        value: value
-      });
-    }
+  // 如果找到了，就从数组中移除它
+  if (index > -1) {
+    torrentData.value.standardized_params.tags.splice(index, 1);
   }
 };
+
+const unrecognizedValue = computed({
+  // Getter: 当模板需要读取值时调用
+  get() {
+    const unrecognized = torrentData.value.title_components.find(param => param.key === '无法识别');
+    return unrecognized ? unrecognized.value : ''; // 返回找到的值，或者空字符串
+  },
+  // Setter: 当 v-model 试图修改值时调用
+  set(newValue) {
+    const index = torrentData.value.title_components.findIndex(param => param.key === '无法识别');
+
+    // 如果新输入的值是空的，就从数组里删除这个项目
+    if (newValue === '' || newValue === null) {
+      if (index !== -1) {
+        torrentData.value.title_components.splice(index, 1);
+      }
+    } else {
+      // 如果项目已存在，就更新它的值
+      if (index !== -1) {
+        torrentData.value.title_components[index].value = newValue;
+      } else {
+        // 如果项目不存在，就创建一个新的推进数组
+        torrentData.value.title_components.push({
+          key: '无法识别',
+          value: newValue
+        });
+      }
+    }
+  }
+});
 
 // 计算属性：检查下一步按钮是否应该禁用
 // 只有当"无法识别"的参数为空字符串，截图有效，且标准化参数符合格式时才允许点击按钮
@@ -2162,18 +2226,16 @@ const isNextButtonDisabled = computed(() => {
   const unrecognized = torrentData.value.title_components.find(param => param.key === '无法识别');
   const hasUnrecognized = unrecognized && unrecognized.value !== '';
   const hasInvalidScreenshots = !screenshotValid.value;
-  const invalidParams = getInvalidStandardParams();
-  const hasInvalidStandardParams = invalidParams.length > 0;
 
-  // 如果存在"无法识别"的参数且不为空字符串，或截图失效，则禁用按钮
+  // 将 getInvalidStandardParams() 修改为 invalidStandardParams.value
+  const hasInvalidStandardParams = invalidStandardParams.value.length > 0;
+
   if (hasUnrecognized) {
     return true;
   }
-
   if (hasInvalidScreenshots) {
     return true;
   }
-
   if (hasInvalidStandardParams) {
     return true;
   }
@@ -3278,5 +3340,94 @@ const openAllSitesInRow = (row: any[]) => {
 .code-font :deep(.el-textarea__inner) {
   font-family: 'Courier New', Courier, monospace;
   font-size: 13px;
+}
+
+/* 【新增】无效标签警告信息的样式 */
+.invalid-tags-warning {
+  margin-top: 5px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  /* 元素之间的间距 */
+  line-height: 1.4;
+}
+
+.warning-text {
+  font-size: 12px;
+  color: #f56c6c;
+  /* 红色文字 */
+  margin-right: 5px;
+}
+
+
+/* ==================================================================== */
+/*          [最终方案] 参数验证失败的统一视觉反馈样式                 */
+/* ==================================================================== */
+
+/* --- 1. 将单选 el-select 的选中值伪装成 el-tag 样式 --- */
+
+/* 1.1 设置基础的 Tag 样式 (内边距、圆角等) */
+.el-select[data-tag-style] :deep(.el-select__selected-item) {
+  padding: 0 9px;
+  text-align: center;
+  border-radius: 4px;
+  line-height: 20px;
+  height: 25px;
+  display: inline-block;
+  box-sizing: border-box;
+  border: 1px solid transparent;
+  /* 添加透明边框占位 */
+}
+
+/* 1.2 定义“有效”状态下的 Tag 颜色 (蓝色，和标签的 info 类型一致) */
+.el-select[data-tag-style]:not(.is-invalid) :deep(.el-select__selected-item) {
+  background-color: var(--el-color-info-light-9);
+  color: var(--el-color-info);
+  border-color: var(--el-color-info-light-8);
+}
+
+/* 1.3 定义“无效”状态下的 Tag 颜色 (红色，和标签的 danger 类型一致) */
+.el-select[data-tag-style].is-invalid :deep(.el-select__selected-item) {
+  background-color: var(--el-color-danger-light-9);
+  color: var(--el-color-danger);
+  border-color: var(--el-color-danger-light-8);
+}
+
+/* --- 2. (可选但推荐) 为所有无效的 el-select 添加外层红框作为额外提示 --- */
+.el-select.is-invalid :deep(.el-input__wrapper) {
+  box-shadow: 0 0 0 1px var(--el-color-danger) inset !important;
+}
+
+.el-select.team-select :deep(.el-select__selected-item) {
+  z-index: -999;
+  color: #909399;
+  background-color: var(--el-color-info-light-9);
+  border-color: var(--el-color-info-light-8);
+  border: 1px solid var(--el-color-info-light-8);
+  text-align: center;
+  border-radius: 4px;
+}
+
+.el-select.is-invalid :deep(.el-select__selected-item) {
+  z-index: -999;
+  color: #F56C6C;
+  background-color: var(--el-color-danger-light-9);
+  border-color: var(--el-color-danger-light-8);
+  border: 1px solid var(--el-color-danger-light-8);
+  text-align: center;
+  border-radius: 4px;
+}
+
+.unrecognized-section :deep(.el-input__inner) {
+  z-index: -999;
+  color: #F56C6C;
+  background-color: var(--el-color-danger-light-9);
+  border-color: var(--el-color-danger-light-8);
+  border: 1px solid var(--el-color-danger-light-8);
+  text-align: center;
+  border-radius: 4px;
+  height: 25px;
+  margin: 3px 0;
 }
 </style>
