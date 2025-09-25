@@ -160,7 +160,16 @@
                     <el-form-item label="声明" class="statement-item">
                       <el-input type="textarea" v-model="torrentData.intro.statement" :rows="18" />
                     </el-form-item>
-                    <el-form-item label="海报链接">
+                    <el-form-item>
+                      <template #label>
+                        <div class="form-label-with-button">
+                          <span>海报链接</span>
+                          <el-button :icon="Refresh" @click="refreshPosters" :loading="isRefreshingPosters" size="small"
+                            type="text">
+                            重新获取
+                          </el-button>
+                        </div>
+                      </template>
                       <el-input type="textarea" v-model="torrentData.intro.poster" :rows="2" />
                     </el-form-item>
                   </div>
@@ -822,6 +831,7 @@ const isReparsing = ref(false)
 const isRefreshingScreenshots = ref(false)
 const isRefreshingIntro = ref(false)
 const isRefreshingMediainfo = ref(false)
+const isRefreshingPosters = ref(false)
 const isHandlingScreenshotError = ref(false) // 防止重复处理截图错误
 const screenshotValid = ref(true) // 跟踪截图是否有效
 const logContent = ref('')
@@ -1047,6 +1057,69 @@ const refreshMediainfo = async () => {
     });
   } finally {
     isRefreshingMediainfo.value = false;
+  }
+};
+
+const refreshPosters = async () => {
+  if (!torrentData.value.original_main_title) {
+    ElNotification.warning('标题为空，无法重新获取海报。');
+    return;
+  }
+
+  // 防止重复请求
+  if (isRefreshingPosters.value) {
+    ElNotification.info({
+      title: '正在处理中',
+      message: '海报重新获取请求已在处理中，请稍候...',
+    });
+    return;
+  }
+
+  isRefreshingPosters.value = true;
+  ElNotification.info({
+    title: '正在重新获取',
+    message: '正在重新生成海报...',
+    duration: 0
+  });
+
+  const payload = {
+    type: 'poster',
+    source_info: {
+      main_title: torrentData.value.original_main_title,
+      source_site: sourceSite.value,
+      imdb_link: torrentData.value.imdb_link,
+      douban_link: torrentData.value.douban_link,
+    },
+    savePath: torrent.value.save_path,
+    torrentName: torrent.value.name,
+    downloaderId: torrent.value.downloaderId // 添加下载器ID
+  };
+
+  try {
+    const response = await axios.post('/api/media/validate', payload);
+    ElNotification.closeAll();
+
+    if (response.data.success && response.data.posters) {
+      torrentData.value.intro.poster = response.data.posters;
+      ElNotification.success({
+        title: '重新获取成功',
+        message: '已成功生成并加载了新的海报。',
+      });
+    } else {
+      ElNotification.error({
+        title: '重新获取失败',
+        message: response.data.error || '无法从后端获取新的海报。',
+      });
+    }
+  } catch (error: any) {
+    ElNotification.closeAll();
+    const errorMsg = error.response?.data?.error || '重新获取海报时发生网络错误';
+    ElNotification.error({
+      title: '操作失败',
+      message: errorMsg,
+    });
+  } finally {
+    isRefreshingPosters.value = false;
   }
 };
 
@@ -3149,7 +3222,34 @@ const openAllSitesInRow = (row: any[]) => {
   padding: 4px 12px;
   height: 28px;
   border-radius: 4px;
-  transform: translate(10px, 2px);
+  transform: translate(10px, 0);
+}
+
+/* 海报与声明面板样式 */
+.poster-statement-container {
+  height: 100%;
+}
+
+.poster-statement-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  height: 100%;
+}
+
+.left-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.statement-item {
+  flex: 1;
+  min-height: 0;
+}
+
+.statement-item :deep(.el-textarea__inner) {
+  height: 100%;
 }
 
 .code-font,

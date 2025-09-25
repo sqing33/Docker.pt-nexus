@@ -1138,7 +1138,8 @@ def upload_data_movie_info(douban_link: str, imdb_link: str):
             # 提取海报图片
             img_match = re.search(r'(\[img\].*?\[/img\])', format_data)
             if img_match:
-                poster = img_match.group(1)
+                # poster = img_match.group(1)
+                poster = re.sub(r'img1', 'img9', img_match.group(1))
 
             # 提取简介内容（去除海报部分）
             description = re.sub(r'\[img\].*?\[/img\]', '',
