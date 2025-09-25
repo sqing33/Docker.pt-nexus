@@ -75,6 +75,7 @@ type ServerStats struct {
 	UploadSpeed   int64  `json:"upload_speed"`
 	TotalDownload int64  `json:"total_download"`
 	TotalUpload   int64  `json:"total_upload"`
+	Version       string `json:"version,omitempty"`
 }
 type FlexibleTracker struct {
 	URL        string      `json:"url"`
@@ -321,12 +322,22 @@ func fetchServerStatsForDownloader(wg *sync.WaitGroup, config DownloaderConfig, 
 		errChan <- fmt.Errorf("[%s] 解析统计信息JSON失败: %v", config.Host, err)
 		return
 	}
+
+	// 获取版本信息
+	version := ""
+	versionBody, err := httpClient.Get("app/version", nil)
+	if err == nil {
+		version = strings.TrimSpace(string(versionBody))
+	} else {
+		log.Printf("警告: 获取 '%s' 版本信息失败: %v", config.Host, err)
+	}
+
 	stats := ServerStats{
 		DownloaderID: config.ID, DownloadSpeed: mainData.ServerState.DlInfoSpeed,
 		UploadSpeed: mainData.ServerState.UpInfoSpeed, TotalDownload: mainData.ServerState.AlltimeDL,
-		TotalUpload: mainData.ServerState.AlltimeUL,
+		TotalUpload: mainData.ServerState.AlltimeUL, Version: version,
 	}
-	log.Printf("成功从 '%s' 获取到服务器统计信息", config.Host)
+	log.Printf("成功从 '%s' 获取到服务器统计信息，版本: %s", config.Host, version)
 	resultsChan <- stats
 }
 
@@ -966,6 +977,18 @@ func mediainfoHandler(w http.ResponseWriter, r *http.Request) {
 // ======================= 主函数 (无变动) =======================
 
 func main() {
+	// 获取命令行参数中的端口，默认为9090
+	port := "9090"
+	if len(os.Args) > 1 {
+		port = os.Args[1]
+		// 确保端口前有冒号
+		if !strings.HasPrefix(port, ":") {
+			port = ":" + port
+		}
+	} else {
+		port = ":9090"
+	}
+
 	http.HandleFunc("/api/torrents/all", allTorrentsHandler)
 	http.HandleFunc("/api/stats/server", statsHandler)
 	http.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
@@ -980,8 +1003,8 @@ func main() {
 	log.Println("  GET  /api/health      - 健康检查")
 	log.Println("  POST /api/media/screenshot - 远程截图并上传图床")
 	log.Println("  POST /api/media/mediainfo  - 远程获取MediaInfo")
-	log.Println("监听端口: 9090")
-	if err := http.ListenAndServe(":9090", nil); err != nil {
+	log.Printf("监听端口: %s", port)
+	if err := http.ListenAndServe(port, nil); err != nil {
 		log.Fatalf("启动服务器失败: %v", err)
 	}
 }

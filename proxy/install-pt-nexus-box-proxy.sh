@@ -125,8 +125,8 @@ create_start_script() {
 
 INSTALL_DIR="/opt/pt-nexus-proxy"
 PROXY_BIN="pt-nexus-box-proxy"
-LOG_FILE="proxy.log"
-PID_FILE="proxy.pid"
+LOG_FILE="/var/run/pt-nexus-box-proxy.log"
+PID_FILE="/var/run/pt-nexus-box-proxy.pid"
 
 echo "--- PT Nexus Proxy 启动脚本 ---"
 
@@ -135,6 +135,14 @@ if [ ! -f "$PROXY_BIN" ]; then
     echo "错误: 代理程序 '$PROXY_BIN' 不存在于当前目录。"
     exit 1
 fi
+
+# 询问用户输入端口
+echo "请输入代理服务端口 (默认: 9090):"
+read -r PORT_INPUT
+if [ -z "$PORT_INPUT" ]; then
+    PORT_INPUT="9090"
+fi
+echo "将使用端口: $PORT_INPUT"
 
 # 1. 安装依赖
 echo "[1/4] 正在检查并安装依赖 (需要 sudo 权限)..."
@@ -208,10 +216,11 @@ if [ -f "$PID_FILE" ]; then
 fi
 
 # 4. 以后台模式启动程序
-echo "[3/4] 正在后台启动 '$PROXY_BIN'..."
+echo "[3/4] 正在后台启动 '$PROXY_BIN' (端口: $PORT_INPUT)..."
 
 # 使用 nohup 将程序放到后台，并将标准输出和错误输出重定向到日志文件
-nohup ./$PROXY_BIN > "$LOG_FILE" 2>&1 &
+# 将端口作为参数传递给程序
+nohup ./$PROXY_BIN "$PORT_INPUT" > "$LOG_FILE" 2>&1 &
 APP_PID=$!
 
 # 等待一秒钟，然后检查进程是否真的启动了
@@ -228,6 +237,7 @@ echo "$APP_PID" > "$PID_FILE"
 echo "[4/4] 启动成功！"
 echo "----------------------------------------"
 echo "  - 进程ID (PID): $APP_PID"
+echo "  - 监听端口:     $PORT_INPUT"
 echo "  - 日志文件:     $LOG_FILE"
 echo "  - PID 文件:     $PID_FILE"
 echo ""
@@ -247,7 +257,7 @@ create_stop_script() {
 
 # PT Nexus Proxy 停止脚本
 
-PID_FILE="proxy.pid"
+PID_FILE="/var/run/pt-nexus-box-proxy.pid"
 
 echo "--- 正在停止 PT Nexus Proxy ---"
 
@@ -293,7 +303,7 @@ else
 fi
 
 echo "----------------------------------------"
-echo "代理程序已停止。"
+echo "PT Nexus Box 代理程序已停止。"
 echo "----------------------------------------"
 
 exit 0

@@ -21,9 +21,9 @@
 # 设置你的 Go 程序的文件名
 APP_NAME="pt-nexus-box-proxy"
 # 日志文件名
-LOG_FILE="proxy.log"
-# PID 文件名
-PID_FILE="proxy.pid"
+LOG_FILE="/var/run/pt-nexus-box-proxy.log"
+# PID 文件名 (使用硬路径)
+PID_FILE="/var/run/pt-nexus-box-proxy.pid"
 
 # --- 脚本开始 ---
 
@@ -35,6 +35,14 @@ if [ ! -f "$APP_NAME" ]; then
     echo "请将编译好的 Go 程序与此脚本放在一起。"
     exit 1
 fi
+
+# 询问用户输入端口
+echo "请输入代理服务端口 (默认: 9090):"
+read -r PORT_INPUT
+if [ -z "$PORT_INPUT" ]; then
+    PORT_INPUT="9090"
+fi
+echo "将使用端口: $PORT_INPUT"
 
 # 1. 安装依赖
 echo "[1/4] 正在检查并安装依赖 (需要 sudo 权限)..."
@@ -113,10 +121,11 @@ if [ -f "$PID_FILE" ]; then
 fi
 
 # 4. 以后台模式启动程序
-echo "[3/4] 正在后台启动 '$APP_NAME'..."
+echo "[3/4] 正在后台启动 '$APP_NAME' (端口: $PORT_INPUT)..."
 
 # 使用 nohup 将程序放到后台，并将标准输出和错误输出重定向到日志文件
-nohup ./$APP_NAME > "$LOG_FILE" 2>&1 &
+# 将端口作为参数传递给程序
+nohup ./$APP_NAME "$PORT_INPUT" > "$LOG_FILE" 2>&1 &
 
 # 获取新启动的进程的 PID
 APP_PID=$!
@@ -135,6 +144,7 @@ echo "$APP_PID" > "$PID_FILE"
 echo "[4/4] 启动成功！"
 echo "----------------------------------------"
 echo "  - 进程ID (PID): $APP_PID"
+echo "  - 监听端口:     $PORT_INPUT"
 echo "  - 日志文件:     $LOG_FILE"
 echo "  - PID 文件:     $PID_FILE"
 echo ""
