@@ -1,6 +1,24 @@
 <template>
   <div class="home-container">
-    
+
+    <div class="warning-banner">
+      <div class="warning-content">
+        <img src="/favicon.ico" alt="PT Nexus Logo" class="warning-icon">
+        <div class="text-container">
+          <div class="marquee-container">
+            <div class="marquee-content">
+              <span class="warning-text">重要提示：PT Nexus 仅作为转种辅助工具，无法保证 100%
+                准确性。转种前请务必仔细检查预览信息，确认参数正确无误。转种后请及时核实种子信息，如有错误请立即修改并反馈
+                bug。因使用本工具产生的种子错误问题，需由使用者自行修改，如不修改则本工具不承担任何责任。</span>
+              <span class="warning-text">重要提示：PT Nexus 仅作为转种辅助工具，无法保证 100%
+                准确性。转种前请务必仔细检查预览信息，确认参数正确无误。转种后请及时核实种子信息，如有错误请立即修改并反馈
+                bug。因使用本工具产生的种子错误问题，需由使用者自行修改，如不修改则本工具不承担任何责任。</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <el-row :gutter="24">
       <el-col :span="12">
         <h3 class="site-list-title">支持的源站点</h3>
@@ -35,18 +53,14 @@
         </div>
       </el-col>
     </el-row>
-    
+
     <!-- 下载器信息展示 -->
     <el-row :gutter="24" style="margin-top: 24px;">
       <el-col :span="24">
         <h3 class="downloader-title">下载器状态</h3>
         <div class="downloader-grid">
-          <el-card 
-            v-for="downloader in downloaderInfo" 
-            :key="downloader.name" 
-            class="downloader-card"
-            :class="{ 'disabled': !downloader.enabled }"
-          >
+          <el-card v-for="downloader in downloaderInfo" :key="downloader.name" class="downloader-card"
+            :class="{ 'disabled': !downloader.enabled }">
             <div class="downloader-header">
               <div class="downloader-name">
                 <el-tag :type="downloader.enabled ? 'success' : 'info'" effect="dark" size="small">
@@ -58,7 +72,7 @@
                 {{ downloader.status }}
               </el-tag>
             </div>
-            
+
             <div class="downloader-details" v-if="downloader.enabled">
               <div class="detail-row">
                 <span class="detail-label">版本:</span>
@@ -81,12 +95,12 @@
                 <span class="detail-value">{{ downloader.details?.['累计下载量'] || '0 B' }}</span>
               </div>
             </div>
-            
+
             <div class="downloader-disabled" v-else>
               下载器已禁用
             </div>
           </el-card>
-          
+
           <div v-if="!downloaderInfo.length" class="empty-downloader-placeholder">
             暂无下载器配置
           </div>
@@ -147,7 +161,7 @@ const fetchDownloaderInfo = async () => {
 onMounted(() => {
   fetchSitesStatus();
   fetchDownloaderInfo();
-  
+
   // 每30秒自动刷新一次下载器信息
   setInterval(() => {
     fetchDownloaderInfo();
@@ -160,6 +174,84 @@ onMounted(() => {
   padding: 24px;
   max-width: 1200px;
   margin: 0 auto;
+}
+
+.warning-banner {
+  background: linear-gradient(135deg, #f0f4ff 0%, #e6eeff 100%);
+  border-radius: 12px;
+  padding: 25px;
+  margin-bottom: 24px;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
+  color: #333;
+  overflow: hidden;
+  border: 1px solid #dcdfe6;
+}
+
+.warning-content {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.warning-icon {
+  width: 70px;
+  height: 70px;
+  flex-shrink: 0;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+  animation: pulse 3s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.2);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+.text-container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.marquee-container {
+  overflow: hidden;
+  white-space: nowrap;
+  width: 100%;
+}
+
+.marquee-content {
+  display: inline-block;
+  animation: marquee 25s linear infinite;
+  white-space: nowrap;
+}
+
+.warning-text {
+  display: inline-block;
+  margin: 0;
+  color: red;
+  font-size: 22px;
+  line-height: 1.6;
+  text-shadow: 0 1px 1px rgba(255, 255, 255, 0.8);
+  padding-right: 50px;
+  font-weight: 500;
+}
+
+@keyframes marquee {
+  0% {
+    transform: translateX(0);
+  }
+
+  100% {
+    transform: translateX(-50%);
+  }
 }
 
 .site-list-title {
@@ -178,14 +270,15 @@ onMounted(() => {
 
 .site-list-box {
   border: 1px solid #dcdfe6;
-  border-radius: 6px;
-  padding: 16px;
-  background-color: #fafafa;
+  border-radius: 8px;
+  padding: 20px;
+  background: linear-gradient(135deg, #fafbff 0%, #f0f4ff 100%);
   min-height: 200px;
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 12px;
   align-content: flex-start;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.03);
 }
 
 .site-tag {
