@@ -231,7 +231,6 @@ global_standard_keys:
     "CMCT": "team.cmct"
     "MWeb": "team.mweb"
     "FRDS": "team.frds"
-    "N/A": "team.other"
     "Other": "team.other"
 
   # 标签映射
