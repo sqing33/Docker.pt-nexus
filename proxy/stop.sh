@@ -16,11 +16,11 @@
 # ==============================================================================
 
 # --- 配置 ---
-PID_FILE="proxy.pid"
+PID_FILE="/var/run/pt-nexus-box-proxy.pid"
 
 # --- 脚本开始 ---
 
-echo "--- 正在停止 Go qBittorrent 代理 ---"
+echo "--- 正在停止 PT Nexus Box 代理 ---"
 
 # 检查 PID 文件是否存在
 if [ ! -f "$PID_FILE" ]; then
@@ -64,7 +64,7 @@ else
 fi
 
 echo "----------------------------------------"
-echo "代理程序已停止。"
+echo "PT Nexus Box 代理程序已停止。"
 echo "----------------------------------------"
 
 exit 0
