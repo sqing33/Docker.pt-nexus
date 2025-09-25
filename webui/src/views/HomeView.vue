@@ -19,40 +19,52 @@
       </div>
     </div>
 
-    <el-row :gutter="24">
-      <el-col :span="12">
-        <h3 class="site-list-title">支持的源站点</h3>
-        <p class="site-list-tip">
-          <el-tag type="success" size="small" effect="dark" style="margin-right: 5px;">绿色</el-tag>
-          表示已配置Cookie<br>
-          <el-tag type="primary" size="small" effect="dark" style="margin-right: 5px;">蓝色</el-tag>
-          表示站点支持但未配置Cookie
-        </p>
-        <div class="site-list-box">
-          <el-tag v-for="site in sourceSitesList" :key="site.name" class="site-tag"
-            :type="site.has_cookie ? 'success' : 'primary'">
-            {{ site.name }}
-          </el-tag>
-          <div v-if="!sourceSitesList.length" class="empty-placeholder">加载中...</div>
+    <el-card class="site-card">
+      <template #header>
+        <div class="site-card-header">
+          <span class="site-card-title">站点支持列表</span>
+          <div class="site-legend">
+            <span class="legend-item">
+              <span class="legend-dot legend-dot-success"></span>
+              配置完整
+            </span>
+            <span class="legend-item">
+              <span class="legend-dot legend-dot-primary"></span>
+              配置不完整
+            </span>
+          </div>
         </div>
-      </el-col>
-      <el-col :span="12">
-        <h3 class="site-list-title">支持的目标站点</h3>
-        <p class="site-list-tip">
-          <el-tag type="success" size="small" effect="dark" style="margin-right: 5px;">绿色</el-tag>
-          表示Cookie/Passkey齐全<br>
-          <el-tag type="primary" size="small" effect="dark" style="margin-right: 5px;">蓝色</el-tag>
-          表示站点支持但未配置Cookie/Passkey
-        </p>
-        <div class="site-list-box">
-          <el-tag v-for="site in targetSitesList" :key="site.name" class="site-tag"
-            :type="site.has_cookie && site.has_passkey ? 'success' : 'primary'">
-            {{ site.name }}
-          </el-tag>
-          <div v-if="!targetSitesList.length" class="empty-placeholder">加载中...</div>
+      </template>
+      <div class="combined-legend">
+        <span class="role-legend-item">
+          <span class="role-tag role-source">源</span>
+          源站点
+        </span>
+        <span class="role-legend-item">
+          <span class="role-tag role-target">目标</span>
+          目标站点
+        </span>
+        <span class="role-legend-item">
+          <span class="role-tag role-both">源/目标</span>
+          同时支持源和目标
+        </span>
+      </div>
+      <div class="site-grid">
+        <div v-for="site in combinedSitesList" :key="site.name" class="site-item" :class="getSiteClass(site)">
+          <div class="site-content">
+            <div class="site-name-container">
+              <span class="site-name">{{ site.name }}</span>
+            </div>
+          </div>
+          <div class="site-roles">
+            <span v-if="site.is_source && site.is_target" class="role-tag role-both">源/目标</span>
+            <span v-else-if="site.is_source" class="role-tag role-source">源</span>
+            <span v-else-if="site.is_target" class="role-tag role-target">目标</span>
+          </div>
         </div>
-      </el-col>
-    </el-row>
+        <div v-if="!combinedSitesList.length" class="empty-placeholder">加载中...</div>
+      </div>
+    </el-card>
 
     <!-- 下载器信息展示 -->
     <el-row :gutter="24" style="margin-top: 24px;">
@@ -138,6 +150,110 @@ const downloaderInfo = ref<DownloaderInfo[]>([])
 
 const sourceSitesList = computed(() => allSitesStatus.value.filter(s => s.is_source));
 const targetSitesList = computed(() => allSitesStatus.value.filter(s => s.is_target));
+
+// 合并站点列表，去除重复项
+const combinedSitesList = computed(() => {
+  const uniqueSites = new Map();
+
+  // 添加源站点
+  sourceSitesList.value.forEach(site => {
+    uniqueSites.set(site.name, {
+      ...site,
+      is_source: true,
+      is_target: false
+    });
+  });
+
+  // 添加目标站点，如果已存在则更新属性
+  targetSitesList.value.forEach(site => {
+    if (uniqueSites.has(site.name)) {
+      // 站点同时是源和目标，合并属性
+      const existingSite = uniqueSites.get(site.name);
+      uniqueSites.set(site.name, {
+        ...existingSite,
+        ...site,
+        is_source: true,
+        is_target: true,
+        // 确保保留源站点的Cookie状态
+        has_cookie: existingSite.has_cookie || site.has_cookie
+      });
+    } else {
+      // 站点仅是目标
+      uniqueSites.set(site.name, {
+        ...site,
+        is_source: false,
+        is_target: true
+      });
+    }
+  });
+
+  // 转换为数组并排序（源站点在前，目标站点在后，同时支持的站点在最前）
+  return Array.from(uniqueSites.values()).sort((a, b) => {
+    // 同时支持源和目标的站点排在最前面
+    if (a.is_source && a.is_target) return -1;
+    if (b.is_source && b.is_target) return 1;
+
+    // 源站点排在前面
+    if (a.is_source && !b.is_source) return -1;
+    if (!a.is_source && b.is_source) return 1;
+
+    // 目标站点
+    return 0;
+  });
+});
+
+// 获取站点的CSS类
+const getSiteClass = (site: SiteStatus) => {
+  // 检查配置状态
+  let isConfigured = false;
+  if (site.is_source && !site.is_target) {
+    // 仅源站点，检查Cookie
+    isConfigured = site.has_cookie;
+  } else if (!site.is_source && site.is_target) {
+    // 仅目标站点，检查Cookie和Passkey
+    isConfigured = site.has_cookie && site.has_passkey;
+  } else if (site.is_source && site.is_target) {
+    // 同时是源和目标，需要Cookie和Passkey
+    isConfigured = site.has_cookie && site.has_passkey;
+  }
+
+  return {
+    'site-configured': isConfigured,
+    'site-unconfigured': !isConfigured
+  };
+};
+
+// 获取站点的提示信息
+const getSiteTooltip = (site: SiteStatus) => {
+  let configStatus = '';
+  if (site.is_source && !site.is_target) {
+    // 仅源站点
+    configStatus = site.has_cookie ? '已配置Cookie' : '未配置Cookie';
+  } else if (!site.is_source && site.is_target) {
+    // 仅目标站点
+    configStatus = (site.has_cookie && site.has_passkey) ? 'Cookie/Passkey齐全' : '未配置Cookie/Passkey';
+  } else if (site.is_source && site.is_target) {
+    // 同时是源和目标
+    if (site.has_cookie && site.has_passkey) {
+      configStatus = 'Cookie/Passkey齐全';
+    } else if (site.has_cookie) {
+      configStatus = '已配置Cookie';
+    } else {
+      configStatus = '配置不完整';
+    }
+  }
+
+  let roleStatus = '';
+  if (site.is_source && site.is_target) {
+    roleStatus = '（源/目标）';
+  } else if (site.is_source) {
+    roleStatus = '（源）';
+  } else if (site.is_target) {
+    roleStatus = '（目标）';
+  }
+
+  return `${configStatus}${roleStatus}`;
+};
 
 const fetchSitesStatus = async () => {
   try {
@@ -254,43 +370,204 @@ onMounted(() => {
   }
 }
 
-.site-list-title {
-  text-align: center;
-  color: #303133;
-  font-weight: 500;
-  margin: 0 0 8px;
-}
-
-.site-list-tip {
-  font-size: 12px;
-  color: #909399;
-  text-align: center;
-  margin: 0 0 12px;
-}
-
-.site-list-box {
-  border: 1px solid #dcdfe6;
+/* 站点卡片样式 */
+.site-card {
+  border: 1px solid #e4e7ed;
   border-radius: 8px;
-  padding: 20px;
-  background: linear-gradient(135deg, #fafbff 0%, #f0f4ff 100%);
-  min-height: 200px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  align-content: flex-start;
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.03);
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
+  margin-bottom: 24px;
 }
 
-.site-tag {
+.site-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+}
+
+.site-card :deep(.el-card__body) {
+  padding: 0 10px 10px
+}
+
+.site-card-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.site-legend {
+  display: flex;
+  gap: 16px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  color: #606266;
+}
+
+.legend-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 4px;
+}
+
+.legend-dot-success {
+  background-color: #67c23a;
+}
+
+.legend-dot-primary {
+  background-color: #409eff;
+}
+
+.combined-legend {
+  display: flex;
+  gap: 24px;
+  padding: 12px 0;
+  border-bottom: 1px solid #e4e7ed;
+}
+
+.role-legend-item {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  color: #606266;
+}
+
+.combined-legend .role-tag {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 12px;
+  font-weight: 500;
+  margin-right: 4px;
+}
+
+.combined-legend .role-source {
+  background-color: #ecf5ff;
+  color: #409eff;
+  border: 1px solid #b3d8ff;
+}
+
+.combined-legend .role-target {
+  background-color: #f0f9ff;
+  color: #67c23a;
+  border: 1px solid #b3e0ff;
+}
+
+.combined-legend .role-both {
+  background-color: #fdf6ec;
+  color: #e6a23c;
+  border: 1px solid #f5dab1;
+}
+
+.site-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 10px;
+  padding: 12px 0;
+  min-height: 180px;
+}
+
+.site-item {
+  display: flex;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 4px;
+  position: relative;
+}
+
+.site-item::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+.site-configured {
+  background-color: #f0f9ff;
+  border: 1px solid #b3e0ff;
+  color: #606266;
+  font-weight: 500;
+}
+
+.site-configured::before {
+  background-color: #67c23a;
+}
+
+.site-unconfigured {
+  background-color: #f5f7fa;
+  border: 1px solid #dcdfe6;
+  color: #909399;
+}
+
+.site-unconfigured::before {
+  background-color: #409eff;
+}
+
+.site-content {
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.site-name-container {
+  flex: 1;
+  min-width: 0;
+}
+
+.site-name {
   font-size: 14px;
-  height: 28px;
-  line-height: 26px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+
+.site-roles {
+  display: flex;
+  gap: 3px;
+  margin-left: 6px;
+}
+
+.role-tag {
+  display: inline-block;
+  padding: 0px 3px;
+  border-radius: 2px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.role-source {
+  background-color: #ecf5ff;
+  color: #409eff;
+  border: 1px solid #b3d8ff;
+}
+
+.role-target {
+  background-color: #f0f9ff;
+  color: #67c23a;
+  border: 1px solid #b3e0ff;
+}
+
+.role-both {
+  background-color: #fdf6ec;
+  color: #e6a23c;
+  border: 1px solid #f5dab1;
 }
 
 .empty-placeholder {
   width: 100%;
   text-align: center;
   color: #909399;
+  grid-column: 1 / -1;
+  padding: 40px 0;
 }
 
 /* 下载器信息样式 */
