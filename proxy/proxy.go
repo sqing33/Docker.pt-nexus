@@ -441,7 +441,20 @@ func findFirstSubtitleStream(videoPath string) (int, string, error) {
 }
 func takeScreenshot(videoPath, outputPath string, timePoint float64, subtitleStreamIndex int) error {
 	log.Printf("正在使用 mpv 截图 (时间点: %.2fs) -> %s", timePoint, outputPath)
-	args := []string{"--no-audio", fmt.Sprintf("--start=%.2f", timePoint), "--frames=1", fmt.Sprintf("--o=%s", outputPath), videoPath}
+	args := []string{
+		"--no-audio",
+		fmt.Sprintf("--start=%.2f", timePoint),
+		"--frames=1",
+
+		// --- HDR 色调映射参数 ---
+		// 指定输出为标准的sRGB色彩空间，这是所有SDR图片的基础
+		"--target-trc=srgb",
+		// 使用 'hable' 算法进行色调映射，它能在保留高光和阴影细节方面取得良好平衡
+		"--tone-mapping=hable",
+
+		fmt.Sprintf("--o=%s", outputPath),
+		videoPath,
+	}
 	_, err := executeCommand("mpv", args...)
 	if err != nil {
 		log.Printf("mpv 截图失败，最终执行的命令: mpv %s", strings.Join(args, " "))

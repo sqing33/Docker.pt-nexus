@@ -860,10 +860,10 @@ def upload_data_screenshot(source_info,
                            torrent_name=None,
                            downloader_id=None):
     """
-    [JPEG优化顺序版] 使用 mpv 从视频文件中截取多张图片，并上传到图床。
-    - 按顺序一张一张处理，移除了并发逻辑以简化流程和调试。
-    - 先用 mpv 截取高质量 PNG 作为源，再转换为体积更小的 JPEG 上传。
-    - 采用先进的智能时间点分析，优先截取带字幕的画面。
+    [最终HDR优化版] 使用 mpv 从视频文件中截取多张图片，并上传到图床。
+    - 新增HDR色调映射参数，确保HDR视频截图颜色正常。
+    - 按顺序一张一张处理，简化流程。
+    - 采用智能时间点分析。
     """
     if Image is None:
         print("错误：Pillow 库未安装，无法执行截图任务。")
@@ -915,7 +915,7 @@ def upload_data_screenshot(source_info,
             response = requests.post(
                 f"{proxy_config['proxy_base_url']}/api/media/screenshot",
                 json={"remote_path": full_video_path},
-                timeout=300)  # 延长超时时间
+                timeout=300)
             response.raise_for_status()
             result = response.json()
             if result.get("success"):
@@ -968,42 +968,52 @@ def upload_data_screenshot(source_info,
     uploaded_urls = []
     temp_files_to_cleanup = []
 
-    # --- [核心修改] 使用简单的 for 循环代替并发处理 ---
     for i, screenshot_time in enumerate(screenshot_points):
         print(f"\n--- 开始处理第 {i+1}/{len(screenshot_points)} 张截图 ---")
 
         safe_name = re.sub(r'[\\/*?:"<>|\'\s\.]+', '_',
                            source_info.get('main_title', f'screenshot_{i+1}'))
-
         timestamp = f"{time.time():.0f}"
         intermediate_png_path = os.path.join(
             TEMP_DIR, f"{safe_name}_{i+1}_{timestamp}_temp.png")
         final_jpeg_path = os.path.join(TEMP_DIR,
                                        f"{safe_name}_{i+1}_{timestamp}.jpg")
-
         temp_files_to_cleanup.extend([intermediate_png_path, final_jpeg_path])
 
-        # 步骤1: 使用mpv截取高质量的PNG作为源文件
+        # --- [核心修改] ---
+        # 为 mpv 命令添加 HDR 色调映射参数
         cmd_screenshot = [
-            "mpv", "--no-audio", f"--start={screenshot_time:.2f}",
-            "--frames=1", f"--o={intermediate_png_path}", target_video_file
+            "mpv",
+            "--no-audio",
+            f"--start={screenshot_time:.2f}",
+            "--frames=1",
+
+            # --- HDR 色调映射参数 ---
+            # 指定输出为标准的sRGB色彩空间，这是所有SDR图片的基础
+            "--target-trc=srgb",
+            # 使用 'hable' 算法进行色调映射，它能在保留高光和阴影细节方面取得良好平衡
+            "--tone-mapping=hable",
+            # 如果色彩依然不准，可以尝试更现代的 'bt.2390' 算法
+            # "--tone-mapping=bt.2390",
+            f"--o={intermediate_png_path}",
+            target_video_file
         ]
+        # --- [核心修改结束] ---
 
         try:
             subprocess.run(cmd_screenshot,
                            check=True,
                            capture_output=True,
-                           timeout=45)
+                           timeout=60)
 
             if not os.path.exists(intermediate_png_path):
                 print(f"❌ 错误: mpv 命令执行成功，但未找到输出文件 {intermediate_png_path}")
-                continue  # 继续处理下一张图片
+                continue
 
             print(
                 f"   -> 中间PNG图 {os.path.basename(intermediate_png_path)} 生成成功。"
             )
 
-            # 步骤2: 使用Pillow将PNG转换为JPEG
             try:
                 with Image.open(intermediate_png_path) as img:
                     rgb_img = img.convert('RGB')
@@ -1013,9 +1023,8 @@ def upload_data_screenshot(source_info,
                 )
             except Exception as e:
                 print(f"   ❌ 错误: 图片从PNG转换为JPEG失败: {e}")
-                continue  # 转换失败，继续处理下一张图片
+                continue
 
-            # 步骤3: 上传压缩后的JPEG文件
             max_retries = 3
             image_url = None
             for attempt in range(max_retries):
@@ -1026,30 +1035,26 @@ def upload_data_screenshot(source_info,
                                                     auth_token)
                     else:
                         image_url = _upload_to_pixhost(final_jpeg_path)
-
                     if image_url:
                         uploaded_urls.append(image_url)
-                        break  # 上传成功，跳出重试循环
+                        break
                     else:
-                        # 如果上传函数返回None但没有抛出异常，等待后重试
                         time.sleep(2)
                 except Exception as e:
                     print(f"   -> 上传尝试 {attempt+1} 出现异常: {e}")
-                    time.sleep(2)  # 发生异常后也等待重试
+                    time.sleep(2)
 
             if not image_url:
                 print(f"⚠️  第 {i+1} 张图片经过 {max_retries} 次尝试后仍然上传失败。")
 
         except subprocess.CalledProcessError as e:
             error_output = e.stderr.decode('utf-8', errors='ignore')
-            print(f"❌ 错误: mpv 截图失败。命令: '{' '.join(cmd_screenshot)}'")
+            print(f"❌ 错误: mpv 截图失败。")
             print(f"   -> Stderr: {error_output}")
-            continue  # mpv失败，继续处理下一张
+            continue
         except subprocess.TimeoutExpired:
-            print(f"❌ 错误: mpv 截图超时 (超过45秒)。")
-            continue  # 超时，继续处理下一张
-
-    # --- [核心修改结束] ---
+            print(f"❌ 错误: mpv 截图超时 (超过60秒)。")
+            continue
 
     print("\n--- 所有截图处理完毕 ---")
     print(f"正在清理临时目录中的 {len(temp_files_to_cleanup)} 个截图文件...")
@@ -1065,10 +1070,8 @@ def upload_data_screenshot(source_info,
         return ""
 
     bbcode_links = []
-    # 对URL进行排序，确保每次生成的BBCode顺序一致
     for url in sorted(uploaded_urls):
         if "pixhost.to/show/" in url:
-            # 转换为直接的图片链接
             bbcode_links.append(
                 f"[img]{url.replace('https://pixhost.to/show/', 'https://img1.pixhost.to/images/')}[/img]"
             )
