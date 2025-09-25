@@ -592,9 +592,37 @@ import axios from 'axios'
 import { Refresh, CircleCheckFilled, CircleCloseFilled, Close } from '@element-plus/icons-vue'
 import { useCrossSeedStore } from '@/stores/crossSeed'
 
-// BBCode 解析函数
-const parseBBCode = (text) => {
+// 过滤多余空行的辅助函数
+const filterExtraEmptyLines = (text: string): string => {
   if (!text) return ''
+  // 过滤掉多余的空行，保留项目间的单个空行
+  // 先去除行尾空格和其他空白字符
+  text = text.replace(/[ \t\f\v]+$/gm, '')
+  // 去除开头和结尾的空行
+  text = text.replace(/^\s*\n+/, '').replace(/\n\s*$/, '')
+  // 将两个或更多连续的空行替换为单个换行符（即一个空行）
+  text = text.replace(/(\n\s*){2,}/g, '\n\n')
+  // 处理句子和列表之间的多余空行（更通用的处理方式）
+  text = text.replace(/([^\n]+。)\s*\n\s*\n(\s*\d+\.)/g, '$1\n$2')
+  // 处理列表项之间的多余空行
+  text = text.replace(/(\d+\.[\s\S]*?)\n\s*\n(\s*\d+\.)/g, '$1\n$2')
+  // 处理嵌套标签内的多余空行（例如[b][color]标签内的空行）
+  text = text.replace(/(\[(?:b|color)[^\]]*\][\s\S]*?)\n\s*\n([\s\S]*?\[\/(?:b|color)\])/gi, '$1\n$2')
+  // 处理多层嵌套标签
+  for (let i = 0; i < 3; i++) {
+    text = text.replace(/(\[(?:quote|b|color|size)[^\]]*\][\s\S]*?)\n\s*\n([\s\S]*?\[\/(?:quote|b|color|size)\])/gi, '$1\n$2')
+  }
+  // 再次处理可能仍然存在的多余空行
+  text = text.replace(/(\n\s*){2,}/g, '\n\n')
+  return text
+}
+
+// BBCode 解析函数
+const parseBBCode = (text: string): string => {
+  if (!text) return ''
+
+  // 过滤掉多余的空行，只保留单个空行
+  text = filterExtraEmptyLines(text)
 
   // 处理 [quote] 标签
   text = text.replace(/\[quote\]([\s\S]*?)\[\/quote\]/gi, '<blockquote>$1</blockquote>')
@@ -606,9 +634,9 @@ const parseBBCode = (text) => {
   text = text.replace(/\[color=(\w+|\#[0-9a-fA-F]{3,6})\]([\s\S]*?)\[\/color\]/gi, '<span style="color: $1;">$2</span>')
 
   // 处理 [size] 标签，映射到具体的像素值
-  text = text.replace(/\[size=(\d+)\]([\s\S]*?)\[\/size\]/gi, (match, size, content) => {
+  text = text.replace(/\[size=(\d+)\]([\s\S]*?)\[\/size\]/gi, (match: string, size: string, content: string): string => {
     // 根据 size 值映射到具体的像素值
-    const sizeMap = {
+    const sizeMap: { [key: string]: string } = {
       '1': '12',
       '2': '14',
       '3': '16',
@@ -843,7 +871,7 @@ const refreshIntro = async () => {
     ElNotification.closeAll();
 
     if (response.data.success && response.data.intro) {
-      torrentData.value.intro.body = response.data.intro;
+      torrentData.value.intro.body = filterExtraEmptyLines(response.data.intro);
 
       // 如果返回了新的IMDb链接，也更新它
       if (response.data.extracted_imdb_link && !torrentData.value.imdb_link) {
@@ -1154,9 +1182,9 @@ const fetchTorrentInfo = async () => {
         imdb_link: dbData.imdb_link,
         douban_link: dbData.douban_link,
         intro: {
-          statement: dbData.statement || '',
+          statement: filterExtraEmptyLines(dbData.statement) || '',
           poster: dbData.poster || '',
-          body: dbData.body || '',
+          body: filterExtraEmptyLines(dbData.body) || '',
           screenshots: dbData.screenshots || '',
           removed_ardtudeclarations: dbData.removed_ardtudeclarations || []
         },
@@ -1366,9 +1394,9 @@ const fetchTorrentInfo = async () => {
           imdb_link: dbData.imdb_link,
           douban_link: dbData.douban_link,
           intro: {
-            statement: dbData.statement || '',
+            statement: filterExtraEmptyLines(dbData.statement) || '',
             poster: dbData.poster || '',
-            body: dbData.body || '',
+            body: filterExtraEmptyLines(dbData.body) || '',
             screenshots: dbData.screenshots || '',
             removed_ardtudeclarations: dbData.removed_ardtudeclarations || []
           },
@@ -1511,7 +1539,50 @@ const fetchTorrentInfo = async () => {
   }
 }
 
+// 检查标准化参数是否符合格式的辅助函数
+const getInvalidStandardParams = () => {
+  const standardizedParams = torrentData.value.standardized_params;
+  const standardParamKeys = ['type', 'medium', 'video_codec', 'audio_codec', 'resolution', 'team', 'source'];
+  const invalidParams = [];
+
+  for (const key of standardParamKeys) {
+    const value = standardizedParams[key];
+    // 如果参数有值但不符合 *.* 格式，则标记为无效
+    if (value && typeof value === 'string' && value.trim() !== '' && !/^[a-zA-Z0-9_]+\.[a-zA-Z0-9_]+$/.test(value)) {
+      invalidParams.push(key);
+    }
+  }
+
+  return invalidParams;
+};
+
 const goToPublishPreviewStep = async () => {
+  // 检查是否有不符合格式的标准化参数
+  const invalidParams = getInvalidStandardParams();
+  if (invalidParams.length > 0) {
+    // 显示提示信息
+    const paramNames = {
+      'type': '类型',
+      'medium': '媒介',
+      'video_codec': '视频编码',
+      'audio_codec': '音频编码',
+      'resolution': '分辨率',
+      'team': '制作组',
+      'source': '产地'
+    };
+
+    const invalidParamNames = invalidParams.map(param => paramNames[param] || param);
+
+    ElNotification({
+      title: '参数格式不正确',
+      message: `以下参数格式不正确，请修改为 *.* 的标准格式: ${invalidParamNames.join(', ')}`,
+      type: 'warning',
+      duration: 0,
+      showClose: true,
+    });
+    return;
+  }
+
   isLoading.value = true;
   try {
     ElNotification({
@@ -1566,7 +1637,7 @@ const goToPublishPreviewStep = async () => {
 
     console.log(`更新种子参数: ${torrentId} from ${siteName}`);
 
-    // 构建更新的参数
+    // 构建更新的参数，应用空行过滤
     const updatedParameters = {
       title: torrentData.value.original_main_title,
       subtitle: torrentData.value.subtitle,
@@ -1574,8 +1645,8 @@ const goToPublishPreviewStep = async () => {
       douban_link: torrentData.value.douban_link,
       poster: torrentData.value.intro.poster,
       screenshots: torrentData.value.intro.screenshots,
-      statement: torrentData.value.intro.statement,
-      body: torrentData.value.intro.body,
+      statement: filterExtraEmptyLines(torrentData.value.intro.statement),
+      body: filterExtraEmptyLines(torrentData.value.intro.body),
       mediainfo: torrentData.value.mediainfo,
       source_params: torrentData.value.source_params,
       title_components: torrentData.value.title_components,
@@ -1884,11 +1955,27 @@ const unrecognizedComponent = computed(() => {
 });
 
 // 计算属性：检查下一步按钮是否应该禁用
-// 只有当"无法识别"的参数为空字符串时才允许点击按钮
+// 只有当"无法识别"的参数为空字符串，截图有效，且标准化参数符合格式时才允许点击按钮
 const isNextButtonDisabled = computed(() => {
   const unrecognized = torrentData.value.title_components.find(param => param.key === '无法识别');
   // 如果存在"无法识别"的参数且不为空字符串，或截图失效，则禁用按钮
-  return (unrecognized && unrecognized.value !== '') || !screenshotValid.value;
+  if ((unrecognized && unrecognized.value !== '') || !screenshotValid.value) {
+    return true;
+  }
+
+  // 检查标准化参数是否符合标准键格式(*.*)
+  const standardizedParams = torrentData.value.standardized_params;
+  const standardParamKeys = ['type', 'medium', 'video_codec', 'audio_codec', 'resolution', 'team', 'source'];
+
+  for (const key of standardParamKeys) {
+    const value = standardizedParams[key];
+    // 如果参数有值但不符合 *.* 格式，则禁用按钮
+    if (value && typeof value === 'string' && value.trim() !== '' && !/^[a-zA-Z0-9_]+\.[a-zA-Z0-9_]+$/.test(value)) {
+      return true;
+    }
+  }
+
+  return false;
 });
 
 // 检查截图有效性
