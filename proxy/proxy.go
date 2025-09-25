@@ -465,37 +465,30 @@ func findFirstSubtitleStream(videoPath string) (int, string, error) {
 	return firstStream.Index, firstStream.CodecName, nil
 }
 
-// [最终正确版本] takeScreenshot 函数，使用绝对索引
+// [最终版] takeScreenshot 函数，使用 mpv 输出 PNG 格式
 func takeScreenshot(videoPath, outputPath string, timePoint float64, subtitleStreamIndex int) error {
-	log.Printf("正在截图 (时间点: %.2fs) -> %s", timePoint, outputPath)
+	// 注意：outputPath 传入时应为 ".../ss_1.png"
+	log.Printf("正在使用 mpv 截图 (时间点: %.2fs) -> %s", timePoint, outputPath)
 
+	// 使用 mpv，它能更好地自动处理内嵌字体和色彩空间问题
+	// 直接输出为 PNG 格式，以获得最佳兼容性
 	args := []string{
-		"-ss", fmt.Sprintf("%.2f", timePoint),
-		"-i", videoPath,
-		"-vframes", "1",
-		"-q:v", "2",
-		"-y",
+		"--no-audio",
+		fmt.Sprintf("--start=%.2f", timePoint),
+		"--frames=1",
+		fmt.Sprintf("--o=%s", outputPath),
+		videoPath,
 	}
 
-	if subtitleStreamIndex >= 0 {
-		// [核心修正]
-		// 不再使用 [0:s:%d] (按字幕类型索引)，而是直接使用 [0:%d] (按绝对索引)。
-		// 这样就能精确匹配 ffprobe 找到的那个流。
-		filter := fmt.Sprintf("[0:v][0:%d]overlay[v]", subtitleStreamIndex)
-		args = append(args, "-filter_complex", filter, "-map", "[v]")
-		log.Printf("   ...将使用 overlay 滤镜和字幕流 (绝对索引 %d) 进行截图。", subtitleStreamIndex)
-	} else {
-		log.Printf("   ...未提供字幕流，将不带字幕截图。")
-		args = append(args, "-map", "0:v")
-	}
+	// subtitleStreamIndex 在 mpv 中可以不传，它会自动选择最优字幕
+	// 如果未来有精确控制的需求，可以再扩展此部分
 
-	args = append(args, outputPath)
-
-	_, err := executeCommand("ffmpeg", args...)
+	_, err := executeCommand("mpv", args...)
 	if err != nil {
-		log.Printf("ffmpeg 截图失败，最终执行的命令: ffmpeg %s", strings.Join(args, " "))
-		return fmt.Errorf("ffmpeg 截图失败: %v", err)
+		log.Printf("mpv 截图失败，最终执行的命令: mpv %s", strings.Join(args, " "))
+		return fmt.Errorf("mpv 截图失败: %v", err)
 	}
+	log.Printf("   ✅ mpv 截图成功 -> %s", outputPath)
 	return nil
 }
 
@@ -964,7 +957,8 @@ func screenshotHandler(w http.ResponseWriter, r *http.Request) {
 		wg.Add(1)
 		go func(i int, point float64) {
 			defer wg.Done()
-			screenshotPath := filepath.Join(tempDir, fmt.Sprintf("ss_%d.jpg", i+1))
+			// [核心修改] 将输出文件格式从 jpg 改为 png
+			screenshotPath := filepath.Join(tempDir, fmt.Sprintf("ss_%d.png", i+1)) // <-- 修改这里
 			if err := takeScreenshot(videoPath, screenshotPath, point, subtitleIndex); err != nil {
 				errChan <- fmt.Errorf("第 %d 张图截图失败: %v", i+1, err)
 				return

@@ -301,7 +301,8 @@
                     <span :class="['param-value', { 'empty': !getMappedTags() || getMappedTags().length === 0 }]">
                       {{ getMappedTags().join(', ') || 'N/A' }}
                     </span>
-                    <span class="param-standard-key" v-if="torrentData.standardized_params.tags && torrentData.standardized_params.tags.length > 0">
+                    <span class="param-standard-key"
+                      v-if="torrentData.standardized_params.tags && torrentData.standardized_params.tags.length > 0">
                       {{ torrentData.standardized_params.tags.join(', ') }}
                     </span>
                   </div>
@@ -488,7 +489,7 @@
             </div>
             <h4 class="card-title">{{ result.siteName }}</h4>
             <div v-if="result.isExisted" class="existed-tag">
-              <el-tag type="warning" size="small">种子已存在</el-tag>
+              <el-tag type="warning" size="small">已存在</el-tag>
             </div>
 
             <!-- 下载器添加状态 -->
@@ -503,7 +504,7 @@
               </div>
               <span class="status-text"
                 :class="{ 'success': result.downloaderStatus.success, 'error': !result.downloaderStatus.success }">
-                {{ result.downloaderStatus.success ? `成功将种子添加到下载器 '${result.downloaderStatus.downloaderName}'` : '添加失败'
+                {{ result.downloaderStatus.success ? `种子已添加到 '${result.downloaderStatus.downloaderName}'` : '添加失败'
                 }}
               </span>
             </div>
@@ -513,7 +514,8 @@
               <el-button type="primary" size="small" @click="showSiteLog(result.siteName, result.logs)">
                 查看日志
               </el-button>
-              <a v-if="result.success && result.url" :href="result.url" target="_blank" rel="noopener noreferrer">
+              <a v-if="result.success && result.url" :href="result.url" target="_blank" rel="noopener noreferrer"
+                style="transform: translateY(-3px);">
                 <el-button type="success" size="small">
                   查看种子
                 </el-button>
@@ -1580,12 +1582,12 @@ const goToPublishPreviewStep = async () => {
       updated_parameters: updatedParameters
     });
 
-      ElNotification.closeAll();
+    ElNotification.closeAll();
 
-      if (response.data.success) {
-        ElNotification.closeAll();
-        // 更新成功后，获取重新标准化后的参数
-        const { standardized_params, final_publish_parameters, complete_publish_params, raw_params_for_preview, reverse_mappings: updatedReverseMappings } = response.data;
+    if (response.data.success) {
+      ElNotification.closeAll();
+      // 更新成功后，获取重新标准化后的参数
+      const { standardized_params, final_publish_parameters, complete_publish_params, raw_params_for_preview, reverse_mappings: updatedReverseMappings } = response.data;
 
       // 更新反向映射表（如果后端返回了更新的映射表）
       if (updatedReverseMappings) {
@@ -2186,8 +2188,10 @@ const showSiteLog = (siteName: string, logs: string) => {
   grid-template-columns: repeat(5, 1fr);
   gap: 12px 16px;
   align-items: start;
-  min-width: 0; /* 防止网格项溢出 */
-  width: 100%; /* 确保网格占满容器宽度 */
+  min-width: 0;
+  /* 防止网格项溢出 */
+  width: 100%;
+  /* 确保网格占满容器宽度 */
 }
 
 .placeholder-item {
@@ -2392,7 +2396,7 @@ const showSiteLog = (siteName: string, logs: string) => {
 
 .params-content {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 12px;
   padding: 0;
 }
@@ -2658,11 +2662,12 @@ const showSiteLog = (siteName: string, logs: string) => {
   gap: 20px;
   justify-content: center;
   align-content: flex-start;
+  padding-bottom: 30px;
 }
 
 .result-card {
-  width: 280px;
-  height: 200px;
+  width: 150px;
+  height: 150px;
   /* 增加一点高度以容纳下载器状态 */
   border-radius: 8px;
   border: 1px solid #e4e7ed;
@@ -2689,9 +2694,9 @@ const showSiteLog = (siteName: string, logs: string) => {
   border-top: 4px solid #F56C6C;
 }
 
-.card-icon {
-  margin-bottom: 12px;
-}
+/* .card-icon {
+  margin-bottom: 8px;
+} */
 
 .card-title {
   font-size: 1.1rem;
@@ -2701,7 +2706,8 @@ const showSiteLog = (siteName: string, logs: string) => {
 }
 
 .existed-tag {
-  margin-bottom: 8px;
+  position: absolute;
+  transform: translate(65px, 35px);
 }
 
 .card-extra {

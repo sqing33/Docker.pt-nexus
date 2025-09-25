@@ -209,6 +209,7 @@ global_standard_keys:
   # 制作组映射
   team:
     "ADE": "team.ade"
+    "ADWeb": "team.adweb"
     "Audies": "team.audies"
     "CSPT": "team.cspt"
     "CSWEB": "team.csweb"
