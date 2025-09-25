@@ -75,6 +75,9 @@ class IYUUThread(Thread):
 
     def _process_torrents(self, is_manual_trigger=False):
         """处理种子数据，按name列进行聚合"""
+        from datetime import datetime
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
         # 检查是否启用自动查询（仅在自动触发时检查）
         if not is_manual_trigger:
             config = self.config_manager.get()
@@ -86,7 +89,7 @@ class IYUUThread(Thread):
                 log_iyuu_message("IYUU自动查询已禁用，跳过本次查询任务", "INFO")
                 return
 
-        log_iyuu_message("开始执行IYUU种子聚合任务", "INFO")
+        log_iyuu_message(f"[{current_time}] 开始执行IYUU种子聚合任务", "INFO")
         conn = None
         try:
             conn = self.db_manager._get_connection()

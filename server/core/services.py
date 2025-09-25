@@ -530,8 +530,10 @@ class DataTracker(Thread):
                 conn.close()
 
     def _update_torrents_in_db(self):
+        from datetime import datetime
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         logging.info("=== 开始更新数据库中的种子 ===")
-        print("【刷新线程】开始更新数据库中的种子...")
+        print(f"【刷新线程】[{current_time}] 开始更新数据库中的种子...")
         config = self.config_manager.get()
         enabled_downloaders = [
             d for d in config.get("downloaders", []) if d.get("enabled")
