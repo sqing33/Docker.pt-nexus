@@ -66,18 +66,16 @@ const handleGlobalRefresh = async () => {
         throw new Error('触发刷新失败')
       }
 
-      setTimeout(async () => {
-        try {
-          if (activeComponentRefresher.value) {
-            await activeComponentRefresher.value()
-          }
-          ElMessage.success('数据已刷新！')
-        } catch (e: any) {
-          ElMessage.error(`数据更新失败: ${e.message}`)
-        } finally {
-          isRefreshing.value = false
+      try {
+        if (activeComponentRefresher.value) {
+          await activeComponentRefresher.value()
         }
-      }, 2500)
+        ElMessage.success('数据已刷新！')
+      } catch (e: any) {
+        ElMessage.error(`数据更新失败: ${e.message}`)
+      } finally {
+        isRefreshing.value = false
+      }
     } catch (e: any) {
       ElMessage.error(e.message)
       isRefreshing.value = false

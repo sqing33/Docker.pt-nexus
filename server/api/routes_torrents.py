@@ -281,10 +281,9 @@ def refresh_data_api():
         if services.data_tracker_thread and services.data_tracker_thread.is_alive(
         ):
             print("【API】数据追踪服务正在运行，启动刷新线程")
-            Thread(target=services.data_tracker_thread._update_torrents_in_db
-                   ).start()
-            print("【API】后台刷新线程已启动")
-            return jsonify({"message": "后台刷新已触发"}), 202
+            services.data_tracker_thread._update_torrents_in_db()
+            print("【API】数据刷新完成")
+            return jsonify({"message": "数据刷新完成"}), 200
         else:
             print("【API】数据追踪服务未运行，无法刷新")
             return jsonify({"message": "数据追踪服务未运行，无法刷新。"}), 400
