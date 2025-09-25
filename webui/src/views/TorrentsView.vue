@@ -146,7 +146,7 @@
       @current-change="handleCurrentChange" background />
 
     <!-- 转种弹窗 -->
-    <div v-if="crossSeedDialogVisible" class="modal-overlay" @click.self="closeCrossSeedDialog">
+    <div v-if="crossSeedDialogVisible" class="modal-overlay">
       <el-card class="cross-seed-card" shadow="always">
         <template #header>
           <div class="modal-header">
