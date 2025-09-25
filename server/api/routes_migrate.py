@@ -1243,6 +1243,21 @@ def validate_media():
             }), 200
         else:
             return jsonify({"success": False, "error": description}), 400
+    elif media_type == "mediainfo":
+        # 处理媒体信息重新获取请求
+        from utils.media_helper import upload_data_mediaInfo
+        # 获取当前的mediainfo（如果有的话）
+        current_mediainfo = data.get("current_mediainfo", "")
+        # 调用upload_data_mediaInfo函数重新生成mediainfo
+        new_mediainfo = upload_data_mediaInfo(current_mediainfo, save_path,
+                                              source_info.get("main_title") if source_info else None)
+        if new_mediainfo:
+            return jsonify({
+                "success": True,
+                "mediainfo": new_mediainfo
+            }), 200
+        else:
+            return jsonify({"success": False, "error": "无法生成媒体信息"}), 400
     else:
         return jsonify({
             "success": False,

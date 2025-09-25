@@ -40,9 +40,17 @@
                       </el-input>
                     </el-form-item>
                     <div class="title-components-grid">
-                      <el-form-item v-for="param in filteredTitleComponents" :key="param.key" :label="param.key">
-                        <el-input v-model="param.value" />
-                      </el-form-item>
+                      <template v-if="filteredTitleComponents.length > 0">
+                        <el-form-item v-for="param in filteredTitleComponents" :key="param.key" :label="param.key">
+                          <el-input v-model="param.value" />
+                        </el-form-item>
+                      </template>
+                      <!-- 当没有解析出标题组件时，显示初始参数框 -->
+                      <template v-else>
+                        <el-form-item v-for="(param, index) in initialTitleComponents" :key="'init-' + index" :label="param.key">
+                          <el-input v-model="param.value" />
+                        </el-form-item>
+                      </template>
                     </div>
                   </div>
 
@@ -182,7 +190,7 @@
                       <div class="form-label-with-button">
                         <span>截图</span>
                         <el-button :icon="Refresh" @click="refreshScreenshots" :loading="isRefreshingScreenshots"
-                          size="small" type="primary">
+                          size="small" type="text">
                           重新获取
                         </el-button>
                       </div>
@@ -215,24 +223,33 @@
                   <div class="form-label-with-button">
                     <span>正文</span>
                     <el-button :icon="Refresh" @click="refreshIntro" :loading="isRefreshingIntro" size="small"
-                      type="primary">
+                      type="text">
                       重新获取
                     </el-button>
                   </div>
                 </template>
                 <el-input type="textarea" v-model="torrentData.intro.body" :rows="18" />
               </el-form-item>
-              <el-form-item label="豆瓣链接" v-if="torrentData.douban_link">
+              <el-form-item label="豆瓣链接">
                 <el-input v-model="torrentData.douban_link" placeholder="请输入豆瓣电影链接" />
               </el-form-item>
-              <el-form-item label="IMDb链接" v-if="torrentData.imdb_link">
+              <el-form-item label="IMDb链接">
                 <el-input v-model="torrentData.imdb_link" placeholder="请输入IMDb电影链接" />
               </el-form-item>
             </el-form>
           </el-tab-pane>
           <el-tab-pane label="媒体信息" name="mediainfo">
             <el-form label-position="top" class="fill-height-form">
-              <el-form-item label="Mediainfo" class="is-flexible">
+              <el-form-item class="is-flexible">
+                <template #label>
+                  <div class="form-label-with-button">
+                    <span>Mediainfo</span>
+                    <el-button :icon="Refresh" @click="refreshMediainfo" :loading="isRefreshingMediainfo" size="small"
+                      type="text">
+                      重新获取
+                    </el-button>
+                  </div>
+                </template>
                 <el-input type="textarea" class="code-font" v-model="torrentData.mediainfo" :rows="22" />
               </el-form-item>
             </el-form>
@@ -804,6 +821,7 @@ const finalResultsList = ref<any[]>([])
 const isReparsing = ref(false)
 const isRefreshingScreenshots = ref(false)
 const isRefreshingIntro = ref(false)
+const isRefreshingMediainfo = ref(false)
 const isHandlingScreenshotError = ref(false) // 防止重复处理截图错误
 const screenshotValid = ref(true) // 跟踪截图是否有效
 const logContent = ref('')
@@ -965,6 +983,70 @@ const refreshScreenshots = async () => {
     screenshotValid.value = false;
   } finally {
     isRefreshingScreenshots.value = false;
+  }
+};
+
+const refreshMediainfo = async () => {
+  if (!torrentData.value.original_main_title) {
+    ElNotification.warning('标题为空，无法重新获取媒体信息。');
+    return;
+  }
+
+  // 防止重复请求
+  if (isRefreshingMediainfo.value) {
+    ElNotification.info({
+      title: '正在处理中',
+      message: '媒体信息重新获取请求已在处理中，请稍候...',
+    });
+    return;
+  }
+
+  isRefreshingMediainfo.value = true;
+  ElNotification.info({
+    title: '正在重新获取',
+    message: '正在从视频重新生成媒体信息...',
+    duration: 0
+  });
+
+  const payload = {
+    type: 'mediainfo',
+    source_info: {
+      main_title: torrentData.value.original_main_title,
+      source_site: sourceSite.value,
+      imdb_link: torrentData.value.imdb_link,
+      douban_link: torrentData.value.douban_link,
+    },
+    current_mediainfo: torrentData.value.mediainfo, // 添加当前mediainfo
+    savePath: torrent.value.save_path,
+    torrentName: torrent.value.name,
+    downloaderId: torrent.value.downloaderId // 添加下载器ID
+  };
+
+  try {
+    const response = await axios.post('/api/migrate/media/validate', payload);
+    ElNotification.closeAll();
+
+    if (response.data.success && response.data.mediainfo) {
+      torrentData.value.mediainfo = response.data.mediainfo;
+      ElNotification.success({
+        title: '重新获取成功',
+        message: '已成功生成并加载了新的媒体信息。',
+      });
+    } else {
+      ElNotification.error({
+        title: '重新获取失败',
+        message: response.data.error || '无法从后端获取新的媒体信息。',
+      });
+    }
+  } catch (error: any) {
+    ElNotification.closeAll();
+    const errorMsg = error.response?.data?.error || '重新获取媒体信息时发生网络错误';
+    ElNotification.error({
+      title: '操作失败',
+      message: errorMsg,
+    });
+  } finally {
+    isRefreshingMediainfo.value = false;
   }
 };
 
@@ -1948,6 +2030,16 @@ const getMappedTags = () => {
 // Computed properties for filtered title components
 const filteredTitleComponents = computed(() => {
   return torrentData.value.title_components.filter(param => param.key !== '无法识别');
+});
+// 计算属性：为未解析的标题提供初始参数框
+const initialTitleComponents = computed(() => {
+  // 定义常见的标题参数键
+  const commonKeys = ['主标题', '季集', '年份', '剧集状态', '发布版本', '分辨率', '片源平台', '媒介', '视频编码', '视频格式', 'HDR格式', '色深', '帧率', '音频编码', '制作组'];
+  // 创建带有空值的初始参数数组
+  return commonKeys.map(key => ({
+    key: key,
+    value: ''
+  }));
 });
 
 const unrecognizedComponent = computed(() => {
@@ -3043,6 +3135,7 @@ const openAllSitesInRow = (row: any[]) => {
   padding: 4px 12px;
   height: 28px;
   border-radius: 4px;
+  transform: translate(10px, 2px);
 }
 
 .code-font,
