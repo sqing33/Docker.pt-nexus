@@ -47,7 +47,8 @@
                       </template>
                       <!-- 当没有解析出标题组件时，显示初始参数框 -->
                       <template v-else>
-                        <el-form-item v-for="(param, index) in initialTitleComponents" :key="'init-' + index" :label="param.key">
+                        <el-form-item v-for="(param, index) in initialTitleComponents" :key="'init-' + index"
+                          :label="param.key">
                           <el-input v-model="param.value" />
                         </el-form-item>
                       </template>
@@ -64,9 +65,8 @@
                       </div>
                       <!-- 无法识别占1列 -->
                       <div class="unrecognized-section" style="grid-column: span 1;">
-                        <el-form-item v-if="unrecognizedComponent" :key="unrecognizedComponent.key"
-                          :label="unrecognizedComponent.key">
-                          <el-input v-model="unrecognizedComponent.value" />
+                        <el-form-item :key="unrecognizedComponent.key" :label="unrecognizedComponent.key">
+                          <el-input :value="unrecognizedComponent.value" @input="updateUnrecognizedValue" />
                         </el-form-item>
                       </div>
                     </div>
@@ -2043,8 +2043,24 @@ const initialTitleComponents = computed(() => {
 });
 
 const unrecognizedComponent = computed(() => {
-  return torrentData.value.title_components.find(param => param.key === '无法识别');
+  const unrecognized = torrentData.value.title_components.find(param => param.key === '无法识别');
+  // 如果没有找到"无法识别"的组件，返回一个默认对象以确保输入框始终显示
+  return unrecognized || { key: '无法识别', value: '' };
 });
+
+// 更新无法识别组件的值
+const updateUnrecognizedValue = (value) => {
+  const index = torrentData.value.title_components.findIndex(param => param.key === '无法识别');
+  if (index !== -1) {
+    torrentData.value.title_components[index].value = value;
+  } else {
+    // 如果不存在"无法识别"组件，则添加它
+    torrentData.value.title_components.push({
+      key: '无法识别',
+      value: value
+    });
+  }
+};
 
 // 计算属性：检查下一步按钮是否应该禁用
 // 只有当"无法识别"的参数为空字符串，截图有效，且标准化参数符合格式时才允许点击按钮
@@ -2400,15 +2416,13 @@ const openAllSitesInRow = (row: any[]) => {
 .title-components-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 12px 16px;
-  margin-bottom: 20px;
+  gap: 5px 15px;
 }
 
 .standard-params-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 12px 16px;
-  margin-bottom: 20px;
+  gap: 5px 15px;
 }
 
 .standard-params-grid.second-row .tags-wide-item {
