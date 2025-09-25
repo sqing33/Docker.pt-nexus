@@ -476,50 +476,60 @@
           </div>
         </div>
 
-        <div class="results-grid-container">
-          <div v-for="result in finalResultsList" :key="result.siteName" class="result-card"
-            :class="{ 'is-success': result.success, 'is-error': !result.success }">
-            <div class="card-icon">
-              <el-icon v-if="result.success" color="#67C23A" :size="32">
-                <CircleCheckFilled />
-              </el-icon>
-              <el-icon v-else color="#F56C6C" :size="32">
-                <CircleCloseFilled />
-              </el-icon>
-            </div>
-            <h4 class="card-title">{{ result.siteName }}</h4>
-            <div v-if="result.isExisted" class="existed-tag">
-              <el-tag type="warning" size="small">已存在</el-tag>
-            </div>
+        <div class="results-rows-container">
+          <div v-for="(row, rowIndex) in groupedResults" :key="rowIndex" class="results-row">
+            <div class="row-sites">
+              <div v-for="result in row" :key="result.siteName" class="result-card"
+                :class="{ 'is-success': result.success, 'is-error': !result.success }">
+                <div class="card-icon">
+                  <el-icon v-if="result.success" color="#67C23A" :size="32">
+                    <CircleCheckFilled />
+                  </el-icon>
+                  <el-icon v-else color="#F56C6C" :size="32">
+                    <CircleCloseFilled />
+                  </el-icon>
+                </div>
+                <h4 class="card-title">{{ result.siteName }}</h4>
+                <div v-if="result.isExisted" class="existed-tag">
+                  <el-tag type="warning" size="small">已存在</el-tag>
+                </div>
 
-            <!-- 下载器添加状态 -->
-            <div class="downloader-status" v-if="result.downloaderStatus">
-              <div class="status-icon">
-                <el-icon v-if="result.downloaderStatus.success" color="#67C23A" :size="16">
-                  <CircleCheckFilled />
-                </el-icon>
-                <el-icon v-else color="#F56C6C" :size="16">
-                  <CircleCloseFilled />
-                </el-icon>
+                <!-- 下载器添加状态 -->
+                <div class="downloader-status" v-if="result.downloaderStatus">
+                  <div class="status-icon">
+                    <el-icon v-if="result.downloaderStatus.success" color="#67C23A" :size="16">
+                      <CircleCheckFilled />
+                    </el-icon>
+                    <el-icon v-else color="#F56C6C" :size="16">
+                      <CircleCloseFilled />
+                    </el-icon>
+                  </div>
+                  <span class="status-text"
+                    :class="{ 'success': result.downloaderStatus.success, 'error': !result.downloaderStatus.success }">
+                    {{ result.downloaderStatus.success ? `种子已添加到 '${result.downloaderStatus.downloaderName}'` : '添加失败'
+                    }}
+                  </span>
+                </div>
+
+                <!-- 操作按钮 -->
+                <div class="card-extra">
+                  <el-button type="primary" size="small" @click="showSiteLog(result.siteName, result.logs)">
+                    查看日志
+                  </el-button>
+                  <a v-if="result.success && result.url" :href="result.url" target="_blank" rel="noopener noreferrer"
+                    style="transform: translateY(-3px);">
+                    <el-button type="success" size="small">
+                      查看种子
+                    </el-button>
+                  </a>
+                </div>
               </div>
-              <span class="status-text"
-                :class="{ 'success': result.downloaderStatus.success, 'error': !result.downloaderStatus.success }">
-                {{ result.downloaderStatus.success ? `种子已添加到 '${result.downloaderStatus.downloaderName}'` : '添加失败'
-                }}
-              </span>
             </div>
-
-            <!-- 操作按钮 -->
-            <div class="card-extra">
-              <el-button type="primary" size="small" @click="showSiteLog(result.siteName, result.logs)">
-                查看日志
+            <div class="row-action">
+              <el-button type="warning" :icon="Refresh" size="large" @click="openAllSitesInRow(row)"
+                :disabled="!hasValidUrlsInRow(row)" class="open-all-button">
+                <div class="button-subtitle">打开{{ getValidUrlsCount(row) }}个站点</div>
               </el-button>
-              <a v-if="result.success && result.url" :href="result.url" target="_blank" rel="noopener noreferrer"
-                style="transform: translateY(-3px);">
-                <el-button type="success" size="small">
-                  查看种子
-                </el-button>
-              </a>
             </div>
           </div>
         </div>
@@ -1952,6 +1962,49 @@ const showSiteLog = (siteName: string, logs: string) => {
   showLogCard.value = true;
 }
 
+// 分组结果，每行5个
+const groupedResults = computed(() => {
+  const results = finalResultsList.value;
+  const grouped = [];
+  for (let i = 0; i < results.length; i += 5) {
+    grouped.push(results.slice(i, i + 5));
+  }
+  return grouped;
+});
+
+// 检查行中是否有有效的URL
+const hasValidUrlsInRow = (row: any[]) => {
+  return row.some(result => result.success && result.url);
+};
+
+// 获取行中有效URL的数量
+const getValidUrlsCount = (row: any[]) => {
+  return row.filter(result => result.success && result.url).length;
+};
+
+// 打开一行中所有有效的种子链接
+const openAllSitesInRow = (row: any[]) => {
+  const validResults = row.filter(result => result.success && result.url);
+
+  if (validResults.length === 0) {
+    ElNotification.warning({
+      title: '无法打开',
+      message: '该行没有可用的种子链接'
+    });
+    return;
+  }
+
+  // 批量打开所有链接
+  validResults.forEach(result => {
+    window.open(result.url, '_blank', 'noopener,noreferrer');
+  });
+
+  ElNotification.success({
+    title: '批量打开成功',
+    message: `已打开 ${validResults.length} 个种子页面`
+  });
+};
+
 </script>
 
 <style scoped>
@@ -2656,6 +2709,78 @@ const showSiteLog = (siteName: string, logs: string) => {
 }
 
 /* --- 步骤 3: 发布结果 --- */
+.results-rows-container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding-bottom: 30px;
+}
+
+.results-row {
+  display: flex;
+  align-items: stretch;
+  gap: 16px;
+  padding: 16px;
+}
+
+.row-sites {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  flex: 1;
+  justify-content: flex-start;
+  position: relative;
+}
+
+.row-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 120px;
+  flex-shrink: 0;
+  position: absolute;
+  right: 0;
+  margin-top: 50px;
+}
+
+.open-all-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: auto;
+  padding: 5px 3px;
+  min-height: 80px;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.open-all-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.open-all-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.open-all-button:disabled:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.button-subtitle {
+  font-size: 12px;
+  margin-top: 4px;
+  opacity: 0.8;
+  font-weight: normal;
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  letter-spacing: 2px;
+  transform: translateX(-5px);
+}
+
 .results-grid-container {
   display: flex;
   flex-wrap: wrap;
@@ -2668,7 +2793,6 @@ const showSiteLog = (siteName: string, logs: string) => {
 .result-card {
   width: 150px;
   height: 150px;
-  /* 增加一点高度以容纳下载器状态 */
   border-radius: 8px;
   border: 1px solid #e4e7ed;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
@@ -2679,6 +2803,7 @@ const showSiteLog = (siteName: string, logs: string) => {
   text-align: center;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   background: #fff;
+  flex-shrink: 0;
 }
 
 .result-card:hover {

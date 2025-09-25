@@ -258,7 +258,8 @@ class BaseUploader(ABC):
                 current_key = VIDEO_CODEC_FALLBACK_MAP.get(current_key)
             else:
                 # 通用类型，同时检查音频和视频回退
-                current_key = AUDIO_CODEC_FALLBACK_MAP.get(current_key) or VIDEO_CODEC_FALLBACK_MAP.get(current_key)
+                current_key = AUDIO_CODEC_FALLBACK_MAP.get(
+                    current_key) or VIDEO_CODEC_FALLBACK_MAP.get(current_key)
 
             if current_key:
                 logger.debug(
@@ -312,8 +313,9 @@ class BaseUploader(ABC):
         codec_field = self.config.get("form_fields",
                                       {}).get("video_codec", "codec_sel[4]")
         codec_mapping = self.mappings.get("video_codec", {})
-        mapped_params[codec_field] = self._find_mapping(
-            codec_mapping, codec_str, mapping_type="video")
+        mapped_params[codec_field] = self._find_mapping(codec_mapping,
+                                                        codec_str,
+                                                        mapping_type="video")
         logger.debug(
             f"DEBUG: 视频编码映射 '{codec_str}' -> '{mapped_params[codec_field]}'")
 
@@ -323,8 +325,9 @@ class BaseUploader(ABC):
                                       {}).get("audio_codec",
                                               "audiocodec_sel[4]")
         audio_mapping = self.mappings.get("audio_codec", {})
-        mapped_params[audio_field] = self._find_mapping(
-            audio_mapping, audio_str, mapping_type="audio")
+        mapped_params[audio_field] = self._find_mapping(audio_mapping,
+                                                        audio_str,
+                                                        mapping_type="audio")
         logger.debug(
             f"DEBUG: 音频编码映射 '{audio_str}' -> '{mapped_params[audio_field]}'")
 
