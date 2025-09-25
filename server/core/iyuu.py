@@ -154,8 +154,16 @@ class IYUUThread(Thread):
             output_lines.append("=" * 50 + "\n")
             output_lines.append("=== IYUU种子聚合任务执行完成 ===\n")
 
-            # 确保tmp目录存在
-            tmp_dir = "/app/Code/Dockerfile/Docker.pt-nexus/flask/data/tmp"
+            # 从配置获取tmp目录，如果未设置则使用系统默认临时目录
+            config = self.config_manager.get()
+            iyuu_settings = config.get("iyuu_settings", {})
+            tmp_dir = iyuu_settings.get("tmp_dir", "")
+
+            # 如果配置中未指定tmp_dir，则使用系统默认临时目录
+            if not tmp_dir:
+                from config import TEMP_DIR
+                tmp_dir = TEMP_DIR
+
             if not os.path.exists(tmp_dir):
                 os.makedirs(tmp_dir)
 
