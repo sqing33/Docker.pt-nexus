@@ -10,15 +10,17 @@ import subprocess
 import tempfile
 import requests
 import json
-from pymediainfo import MediaInfo
 import time
+import random
 import cloudscraper
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
+from pymediainfo import MediaInfo
 from config import TEMP_DIR, config_manager
 from qbittorrentapi import Client as qbClient
 from transmission_rpc import Client as TrClient
 from utils import ensure_scheme
+from PIL import Image
 
 
 def _upload_to_pixhost(image_path: str):
@@ -146,6 +148,190 @@ def _upload_to_agsv(image_path: str, token: str):
         logging.error(f"上传到 末日图床 时发生错误: {e}")
         print(f"   ❌ 上传到 末日图床 时发生错误: {e}")
         return None
+
+
+def _get_smart_screenshot_points(video_path: str,
+                                 num_screenshots: int = 5) -> list[float]:
+    """
+    [优化版] 使用 ffprobe 智能分析视频字幕，选择最佳的截图时间点。
+    - 通过 `-read_intervals` 参数实现分段读取，避免全文件扫描，大幅提升大文件处理速度。
+    - 优先选择 ASS > SRT > PGS 格式的字幕。
+    - 优先在视频的 30%-80% "黄金时段" 内随机选择。
+    - 在所有智能分析失败时，优雅地回退到按百分比选择。
+    """
+    print("\n--- 开始智能截图时间点分析 (快速扫描模式) ---")
+    if not shutil.which("ffprobe"):
+        print("警告: 未找到 ffprobe，无法进行智能分析。")
+        return []
+
+    try:
+        cmd_duration = [
+            "ffprobe", "-v", "error", "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1", video_path
+        ]
+        result = subprocess.run(cmd_duration,
+                                capture_output=True,
+                                text=True,
+                                check=True,
+                                encoding='utf-8')
+        duration = float(result.stdout.strip())
+        print(f"视频总时长: {duration:.2f} 秒")
+    except Exception as e:
+        print(f"错误：使用 ffprobe 获取视频时长失败。{e}")
+        return []
+
+    # 探测字幕流的部分保持不变，因为它本身速度很快
+    try:
+        cmd_probe_subs = [
+            "ffprobe", "-v", "quiet", "-print_format", "json", "-show_entries",
+            "stream=index,codec_name,disposition", "-select_streams", "s",
+            video_path
+        ]
+        result = subprocess.run(cmd_probe_subs,
+                                capture_output=True,
+                                text=True,
+                                check=True,
+                                encoding='utf-8')
+        sub_data = json.loads(result.stdout)
+
+        best_ass, best_srt, best_pgs = None, None, None
+        for stream in sub_data.get("streams", []):
+            disposition = stream.get("disposition", {})
+            is_normal = not any([
+                disposition.get("comment"),
+                disposition.get("hearing_impaired"),
+                disposition.get("visual_impaired")
+            ])
+            if is_normal:
+                codec_name = stream.get("codec_name")
+                if codec_name == "ass" and not best_ass: best_ass = stream
+                elif codec_name == "subrip" and not best_srt: best_srt = stream
+                elif codec_name == "hdmv_pgs_subtitle" and not best_pgs:
+                    best_pgs = stream
+
+        chosen_sub_stream = best_ass or best_srt or best_pgs
+        if not chosen_sub_stream:
+            print("未找到合适的正常字幕流。")
+            return []
+
+        sub_index, sub_codec = chosen_sub_stream.get(
+            "index"), chosen_sub_stream.get("codec_name")
+        print(f"   ✅ 找到最优字幕流 (格式: {sub_codec.upper()})，流索引: {sub_index}")
+
+    except Exception as e:
+        print(f"探测字幕流失败: {e}")
+        return []
+
+    subtitle_events = []
+    try:
+        # --- 【核心修改】 ---
+        # 1. 定义我们要探测的时间点（例如，视频的20%, 40%, 60%, 80%位置）
+        probe_points = [0.2, 0.4, 0.6, 0.8]
+        # 2. 定义在每个探测点附近扫描多长时间（例如，60秒），时间越长，找到字幕事件越多，但耗时也越长
+        probe_duration = 60
+
+        # 3. 构建 -read_intervals 参数
+        # 格式为 "start1%+duration1,start2%+duration2,..."
+        intervals = []
+        for point in probe_points:
+            start_time = duration * point
+            end_time = start_time + probe_duration
+            if end_time > duration:
+                end_time = duration  # 确保不超过视频总长
+            intervals.append(f"{start_time}%{end_time}")
+
+        read_intervals_arg = ",".join(intervals)
+        print(f"   🚀 将只扫描以下时间段来寻找字幕: {read_intervals_arg}")
+
+        # 4. 将 -read_intervals 参数添加到 ffprobe 命令中
+        cmd_extract = [
+            "ffprobe",
+            "-v",
+            "quiet",
+            "-read_intervals",
+            read_intervals_arg,  # <--- 新增的参数
+            "-print_format",
+            "json",
+            "-show_packets",
+            "-select_streams",
+            str(sub_index),
+            video_path
+        ]
+
+        # 执行命令，现在它会快非常多
+        result = subprocess.run(cmd_extract,
+                                capture_output=True,
+                                text=True,
+                                check=True,
+                                encoding='utf-8')
+        # --- 【核心修改结束】 ---
+
+        events_data = json.loads(result.stdout)
+        packets = events_data.get("packets", [])
+
+        # 后续处理逻辑基本不变
+        if sub_codec in ["ass", "subrip"]:
+            for packet in packets:
+                try:
+                    start, dur = float(packet.get("pts_time")), float(
+                        packet.get("duration_time"))
+                    if dur > 0.1:
+                        subtitle_events.append({
+                            "start": start,
+                            "end": start + dur
+                        })
+                except (ValueError, TypeError):
+                    continue
+        elif sub_codec == "hdmv_pgs_subtitle":
+            for i in range(0, len(packets) - 1, 2):
+                try:
+                    start, end = float(packets[i].get("pts_time")), float(
+                        packets[i + 1].get("pts_time"))
+                    if end > start and (end - start) > 0.1:
+                        subtitle_events.append({"start": start, "end": end})
+                except (ValueError, TypeError):
+                    continue
+
+        if not subtitle_events: raise ValueError("在指定区间内未能提取到任何有效的时间事件。")
+        print(f"   ✅ 成功从指定区间提取到 {len(subtitle_events)} 条有效字幕事件。")
+    except Exception as e:
+        print(f"智能提取时间事件失败: {e}")
+        return []
+
+    # 后续的随机选择逻辑保持不变
+    if len(subtitle_events) < num_screenshots:
+        print("有效字幕数量不足，无法启动智能选择。")
+        return []
+
+    golden_start_time, golden_end_time = duration * 0.30, duration * 0.80
+    golden_events = [
+        e for e in subtitle_events
+        if e["start"] >= golden_start_time and e["end"] <= golden_end_time
+    ]
+    print(
+        f"   -> 在视频中部 ({(golden_start_time):.2f}s - {(golden_end_time):.2f}s) 找到 {len(golden_events)} 个黄金字幕事件。"
+    )
+
+    target_events = golden_events
+    if len(target_events) < num_screenshots:
+        print("   -> 黄金字幕数量不足，将从所有字幕事件中随机选择。")
+        target_events = subtitle_events
+
+    chosen_events = random.sample(target_events,
+                                  min(num_screenshots, len(target_events)))
+
+    screenshot_points = []
+    for event in chosen_events:
+        event_duration = event["end"] - event["start"]
+        random_offset = event_duration * 0.1 + random.random() * (
+            event_duration * 0.8)
+        random_point = event["start"] + random_offset
+        screenshot_points.append(random_point)
+        print(
+            f"   -> 选中时间段 [{(event['start']):.2f}s - {(event['end']):.2f}s], 随机截图点: {(random_point):.2f}s"
+        )
+
+    return sorted(screenshot_points)
 
 
 def _find_target_video_file(path: str) -> str | None:
@@ -674,17 +860,21 @@ def upload_data_screenshot(source_info,
                            torrent_name=None,
                            downloader_id=None):
     """
-    使用ffmpeg从指定的视频文件中截取多张图片，根据配置上传到指定图床，
-    并返回一个包含所有图片BBCode链接的字符串。
+    [JPEG优化顺序版] 使用 mpv 从视频文件中截取多张图片，并上传到图床。
+    - 按顺序一张一张处理，移除了并发逻辑以简化流程和调试。
+    - 先用 mpv 截取高质量 PNG 作为源，再转换为体积更小的 JPEG 上传。
+    - 采用先进的智能时间点分析，优先截取带字幕的画面。
     """
-    print("开始执行截图和上传任务...")
-    # --- [核心修改] 读取图床配置 ---
+    if Image is None:
+        print("错误：Pillow 库未安装，无法执行截图任务。")
+        return ""
+
+    print("开始执行截图和上传任务 (引擎: mpv, 输出格式: JPEG, 模式: 顺序执行)...")
     config = config_manager.get()
     hoster = config.get("cross_seed", {}).get("image_hoster", "pixhost")
-    print(f"已选择图床服务: {hoster}")
-    # -----------------------------
+    num_screenshots = 5
+    print(f"已选择图床服务: {hoster}, 截图数量: {num_screenshots}")
 
-    # 如果提供了种子名称，则构建完整的视频文件路径
     if torrent_name:
         full_video_path = os.path.join(save_path, torrent_name)
         print(f"使用完整视频路径: {full_video_path}")
@@ -692,7 +882,7 @@ def upload_data_screenshot(source_info,
         full_video_path = save_path
         print(f"使用原始路径: {full_video_path}")
 
-    # 检查是否需要使用代理
+    # --- 代理检查和处理逻辑 (此部分保持不变) ---
     use_proxy = False
     proxy_config = None
     if downloader_id:
@@ -701,56 +891,32 @@ def upload_data_screenshot(source_info,
             if downloader.get("id") == downloader_id:
                 use_proxy = downloader.get("use_proxy", False)
                 if use_proxy:
-                    # 获取代理配置
                     host_value = downloader.get('host', '')
                     proxy_port = downloader.get('proxy_port', 9090)
-
-                    # 解析主机地址
                     if host_value.startswith(('http://', 'https://')):
                         parsed_url = urlparse(host_value)
                     else:
                         parsed_url = urlparse(f"http://{host_value}")
-
                     proxy_ip = parsed_url.hostname
                     if not proxy_ip:
-                        # 如果无法解析，使用备用方法
                         if '://' in host_value:
                             proxy_ip = host_value.split('://')[1].split(
                                 ':')[0].split('/')[0]
                         else:
                             proxy_ip = host_value.split(':')[0]
-
                     proxy_config = {
                         "proxy_base_url": f"http://{proxy_ip}:{proxy_port}",
-                        "proxy_downloader_config": {
-                            "id":
-                            downloader_id,
-                            "type":
-                            downloader.get('type', ''),
-                            "host":
-                            "http://127.0.0.1:" + str(parsed_url.port or 8080),
-                            "username":
-                            downloader.get('username', ''),
-                            "password":
-                            downloader.get('password', ''),
-                            "save_path":
-                            save_path  # 传递save_path给代理
-                        }
                     }
                 break
 
-    # 如果使用代理，则通过代理处理截图
-    print(full_video_path)
     if use_proxy and proxy_config:
         print(f"使用代理处理截图: {proxy_config['proxy_base_url']}")
         try:
-            # 发送请求到代理获取截图
             response = requests.post(
                 f"{proxy_config['proxy_base_url']}/api/media/screenshot",
                 json={"remote_path": full_video_path},
-                timeout=120)
+                timeout=300)  # 延长超时时间
             response.raise_for_status()
-
             result = response.json()
             if result.get("success"):
                 print("代理截图上传成功")
@@ -762,141 +928,155 @@ def upload_data_screenshot(source_info,
             print(f"通过代理获取截图失败: {e}")
             return ""
 
+    # --- 本地截图逻辑 ---
     target_video_file = _find_target_video_file(full_video_path)
     if not target_video_file:
         print("错误：在指定路径中未找到视频文件。")
         return ""
 
-    if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
-        print("错误：找不到 ffmpeg 或 ffprobe。请确保它们已安装并已添加到系统环境变量 PATH 中。")
+    if not shutil.which("mpv"):
+        print("错误：找不到 mpv。请确保它已安装并已添加到系统环境变量 PATH 中。")
         return ""
 
-    try:
-        # ... (获取视频时长的代码保持不变) ...
-        print("正在获取视频时长...")
-        cmd_duration = [
-            "ffprobe", "-v", "error", "-show_entries", "format=duration",
-            "-of", "default=noprint_wrappers=1:nokey=1", target_video_file
-        ]
-        result = subprocess.run(cmd_duration,
-                                capture_output=True,
-                                text=True,
-                                check=True)
-        duration = float(result.stdout.strip())
-        print(f"视频总时长: {duration:.2f} 秒")
-    except Exception as e:
-        print(f"错误：使用 ffprobe 获取视频时长失败。{e}")
-        return ""
-
-    auth_token = None
-    if hoster == "agsv":
-        auth_token = _get_agsv_auth_token()
-        if not auth_token:
-            print("❌ 无法获取 末日图床 Token，截图上传任务终止。")
+    screenshot_points = _get_smart_screenshot_points(target_video_file,
+                                                     num_screenshots)
+    if len(screenshot_points) < num_screenshots:
+        print("警告: 智能分析失败或字幕不足，回退到按百分比截图。")
+        try:
+            cmd_duration = [
+                "ffprobe", "-v", "error", "-show_entries", "format=duration",
+                "-of", "default=noprint_wrappers=1:nokey=1", target_video_file
+            ]
+            result = subprocess.run(cmd_duration,
+                                    capture_output=True,
+                                    text=True,
+                                    check=True,
+                                    encoding='utf-8')
+            duration = float(result.stdout.strip())
+            screenshot_points = [
+                duration * p for p in [0.15, 0.30, 0.50, 0.70, 0.85]
+            ]
+        except Exception as e:
+            print(f"错误: 连获取视频时长都失败了，无法截图。{e}")
             return ""
 
-    uploaded_urls = []
-    screenshot_points = [0.20, 0.35, 0.65]
+    auth_token = _get_agsv_auth_token() if hoster == "agsv" else None
+    if hoster == "agsv" and not auth_token:
+        print("❌ 无法获取 末日图床 Token，截图上传任务终止。")
+        return ""
 
-    try:
-        for i, point in enumerate(screenshot_points):
-            screenshot_time = duration * point
-            base_name = source_info.get('main_title', f'screenshot_{i+1}')
-            safe_name = re.sub(r'[\\/*?:"<>|\'\s\.]+', '_', base_name)
-            output_filename = os.path.join(
-                TEMP_DIR, f"{safe_name}_{i+1}_{time.time()}.jpg")
+    uploaded_urls = []
+    temp_files_to_cleanup = []
+
+    # --- [核心修改] 使用简单的 for 循环代替并发处理 ---
+    for i, screenshot_time in enumerate(screenshot_points):
+        print(f"\n--- 开始处理第 {i+1}/{len(screenshot_points)} 张截图 ---")
+
+        safe_name = re.sub(r'[\\/*?:"<>|\'\s\.]+', '_',
+                           source_info.get('main_title', f'screenshot_{i+1}'))
+
+        timestamp = f"{time.time():.0f}"
+        intermediate_png_path = os.path.join(
+            TEMP_DIR, f"{safe_name}_{i+1}_{timestamp}_temp.png")
+        final_jpeg_path = os.path.join(TEMP_DIR,
+                                       f"{safe_name}_{i+1}_{timestamp}.jpg")
+
+        temp_files_to_cleanup.extend([intermediate_png_path, final_jpeg_path])
+
+        # 步骤1: 使用mpv截取高质量的PNG作为源文件
+        cmd_screenshot = [
+            "mpv", "--no-audio", f"--start={screenshot_time:.2f}",
+            "--frames=1", f"--o={intermediate_png_path}", target_video_file
+        ]
+
+        try:
+            subprocess.run(cmd_screenshot,
+                           check=True,
+                           capture_output=True,
+                           timeout=45)
+
+            if not os.path.exists(intermediate_png_path):
+                print(f"❌ 错误: mpv 命令执行成功，但未找到输出文件 {intermediate_png_path}")
+                continue  # 继续处理下一张图片
 
             print(
-                f"正在截取第 {i+1}/{len(screenshot_points)} 张图片 (时间点: {screenshot_time:.2f}s)..."
+                f"   -> 中间PNG图 {os.path.basename(intermediate_png_path)} 生成成功。"
             )
 
-            cmd_screenshot = [
-                "ffmpeg", "-ss",
-                str(screenshot_time), "-i", target_video_file, "-vframes", "1",
-                "-q:v", "2", "-y", output_filename
-            ]
-
+            # 步骤2: 使用Pillow将PNG转换为JPEG
             try:
-                subprocess.run(cmd_screenshot, check=True, capture_output=True)
-
-                if os.path.exists(output_filename):
-                    print(f"截图 {output_filename} 生成成功，准备上传。")
-
-                    # --- [核心修改] 根据配置选择上传函数，并添加重试机制 ---
-                    max_retries = 3
-                    image_url = None
-
-                    for attempt in range(max_retries):
-                        try:
-                            if hoster == "pixhost":
-                                image_url = _upload_to_pixhost(output_filename)
-                            elif hoster == "agsv":
-                                image_url = _upload_to_agsv(
-                                    output_filename, auth_token)
-                            else:
-                                print(f"警告: 未知的图床 '{hoster}'，将默认使用 pixhost。")
-                                image_url = _upload_to_pixhost(output_filename)
-
-                            if image_url:
-                                uploaded_urls.append(image_url)
-                                print(
-                                    f"第 {i+1} 张图片上传成功 (尝试 {attempt+1}/{max_retries})"
-                                )
-                                break
-                            else:
-                                print(
-                                    f"第 {i+1} 张图片上传失败 (尝试 {attempt+1}/{max_retries})"
-                                )
-                                if attempt < max_retries - 1:
-                                    print(f"等待 2 秒后重试...")
-                                    time.sleep(2)
-
-                        except Exception as e:
-                            print(
-                                f"第 {i+1} 张图片上传出现异常 (尝试 {attempt+1}/{max_retries}): {e}"
-                            )
-                            if attempt < max_retries - 1:
-                                print(f"等待 2 秒后重试...")
-                                time.sleep(2)
-                            continue
-
-                    if not image_url:
-                        print(f"⚠️  第 {i+1} 张图片经过 {max_retries} 次尝试后仍然上传失败")
-
-                else:
-                    print(f"警告：ffmpeg 命令执行成功，但未找到输出文件 {output_filename}")
-
-            except subprocess.CalledProcessError as e:
-                print(f"错误：ffmpeg 截图失败。命令返回了非零退出码。")
+                with Image.open(intermediate_png_path) as img:
+                    rgb_img = img.convert('RGB')
+                    rgb_img.save(final_jpeg_path, 'jpeg', quality=85)
                 print(
-                    f"FFMPEG Stderr: {e.stderr.decode('utf-8', errors='ignore')}"
+                    f"   -> JPEG压缩成功 (质量: 85) -> {os.path.basename(final_jpeg_path)}"
                 )
+            except Exception as e:
+                print(f"   ❌ 错误: 图片从PNG转换为JPEG失败: {e}")
+                continue  # 转换失败，继续处理下一张图片
 
-    finally:
-        print(f"正在清理临时目录中的截图文件...")
-        for item in os.listdir(TEMP_DIR):
-            if item.endswith(".jpg"):
+            # 步骤3: 上传压缩后的JPEG文件
+            max_retries = 3
+            image_url = None
+            for attempt in range(max_retries):
+                print(f"   -> 正在上传 (第 {attempt+1}/{max_retries} 次尝试)...")
                 try:
-                    os.remove(os.path.join(TEMP_DIR, item))
-                except OSError as e:
-                    print(f"清理临时文件 {item} 失败: {e}")
+                    if hoster == "agsv":
+                        image_url = _upload_to_agsv(final_jpeg_path,
+                                                    auth_token)
+                    else:
+                        image_url = _upload_to_pixhost(final_jpeg_path)
+
+                    if image_url:
+                        uploaded_urls.append(image_url)
+                        break  # 上传成功，跳出重试循环
+                    else:
+                        # 如果上传函数返回None但没有抛出异常，等待后重试
+                        time.sleep(2)
+                except Exception as e:
+                    print(f"   -> 上传尝试 {attempt+1} 出现异常: {e}")
+                    time.sleep(2)  # 发生异常后也等待重试
+
+            if not image_url:
+                print(f"⚠️  第 {i+1} 张图片经过 {max_retries} 次尝试后仍然上传失败。")
+
+        except subprocess.CalledProcessError as e:
+            error_output = e.stderr.decode('utf-8', errors='ignore')
+            print(f"❌ 错误: mpv 截图失败。命令: '{' '.join(cmd_screenshot)}'")
+            print(f"   -> Stderr: {error_output}")
+            continue  # mpv失败，继续处理下一张
+        except subprocess.TimeoutExpired:
+            print(f"❌ 错误: mpv 截图超时 (超过45秒)。")
+            continue  # 超时，继续处理下一张
+
+    # --- [核心修改结束] ---
+
+    print("\n--- 所有截图处理完毕 ---")
+    print(f"正在清理临时目录中的 {len(temp_files_to_cleanup)} 个截图文件...")
+    for item_path in temp_files_to_cleanup:
+        try:
+            if os.path.exists(item_path):
+                os.remove(item_path)
+        except OSError as e:
+            print(f"清理临时文件 {item_path} 失败: {e}")
 
     if not uploaded_urls:
         print("任务完成，但没有成功上传任何图片。")
         return ""
 
-    print("正在将 Pixhost 网页链接转换为直接图片链接并生成BBCode...")
-    bbcode_links = [
-        f"[img]{url.replace('https://pixhost.to/show/', 'https://img1.pixhost.to/images/')}[/img]"
-        for url in uploaded_urls
-    ]
+    bbcode_links = []
+    # 对URL进行排序，确保每次生成的BBCode顺序一致
+    for url in sorted(uploaded_urls):
+        if "pixhost.to/show/" in url:
+            # 转换为直接的图片链接
+            bbcode_links.append(
+                f"[img]{url.replace('https://pixhost.to/show/', 'https://img1.pixhost.to/images/')}[/img]"
+            )
+        else:
+            bbcode_links.append(f"[img]{url}[/img]")
+
     screenshots = "\n".join(bbcode_links)
-
     print("所有截图已成功上传并已格式化为BBCode。")
-    print("--- 返回内容 ---")
-    print(screenshots)
-    print("-----------------")
-
     return screenshots
 
 
