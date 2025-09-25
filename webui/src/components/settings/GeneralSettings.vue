@@ -1,9 +1,5 @@
 <template>
   <div class="settings-container">
-    <div class="page-header">
-      <h2>设置</h2>
-      <p class="page-description">管理用户账户、转种设置和系统配置</p>
-    </div>
 
     <div class="settings-grid">
       <!-- 用户信息设置卡片 -->
@@ -664,20 +660,9 @@ onMounted(() => {
 .settings-container {
   padding: 20px;
   background-color: var(--el-bg-color-page);
-  min-height: 100%;
+  min-height: calc(100% - 40px);
   overflow-y: auto;
   height: 100%;
-}
-
-.page-header {
-  margin-bottom: 20px;
-}
-
-.page-header h2 {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--el-text-color-primary);
-  margin: 0;
 }
 
 .page-description {
