@@ -81,11 +81,13 @@ class TorrentMigrator:
                  target_site_info,
                  search_term="",
                  save_path="",
+                 torrent_name="",
                  config_manager=None):
         self.source_site = source_site_info
         self.target_site = target_site_info
         self.search_term = search_term
         self.save_path = save_path
+        self.torrent_name = torrent_name
         self.config_manager = config_manager
 
         self.SOURCE_BASE_URL = ensure_scheme(self.source_site.get("base_url"))
@@ -952,11 +954,9 @@ class TorrentMigrator:
                 getattr(self, '_special_extractor_processed', False)
             }
 
-            # [此部分为核心修改]
-            # ------------------------------------------------------------------------------------------
-            # 保存参数到数据库。
-            # 直接使用前面 ParameterMapper 生成的 standardized_params 字典，
-            # 它已经包含了所有映射好的标准化参数。
+            # 获取源站点种子的 hash 值
+            hash = seed_param_model.search_torrent_hash(
+                self.torrent_name, self.SOURCE_NAME)
 
             # 从title_components中提取标题拆解的各项参数（title_components已在方法开头定义）
 
@@ -983,6 +983,8 @@ class TorrentMigrator:
             seed_parameters.update({
                 "nickname":
                 self.SOURCE_NAME,
+                "save_path":
+                self.save_path,
                 "type":
                 standardized_params.get("type"),
                 "medium":
@@ -1003,14 +1005,14 @@ class TorrentMigrator:
 
             # 保存到数据库（优先）和JSON文件（后备），使用英文站点名作为标识
             save_result = seed_param_model.save_parameters(
-                torrent_id, self.SOURCE_SITE_CODE, seed_parameters)
+                hash, torrent_id, self.SOURCE_SITE_CODE, seed_parameters)
             if save_result:
                 self.logger.info(
-                    f"种子参数(使用标准化键)已保存: {torrent_id} from {self.SOURCE_NAME} ({self.SOURCE_SITE_CODE})"
+                    f"种子参数(使用标准化键)已保存: {hash} from {self.SOURCE_NAME} ({self.SOURCE_SITE_CODE})"
                 )
             else:
                 self.logger.warning(
-                    f"种子参数(使用标准化键)保存失败: {torrent_id} from {self.SOURCE_NAME} ({self.SOURCE_SITE_CODE})"
+                    f"种子参数(使用标准化键)保存失败: {hash} from {self.SOURCE_NAME} ({self.SOURCE_SITE_CODE})"
                 )
 
             return {
