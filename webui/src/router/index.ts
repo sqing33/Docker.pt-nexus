@@ -22,6 +22,11 @@ const router = createRouter({
       component: () => import('../views/TorrentsView.vue'),
     },
     {
+      path: '/data',
+      name: 'data',
+      component: () => import('../views/CrossSeedDataView.vue'),
+    },
+    {
       path: '/sites',
       name: 'sites',
       component: () => import('../views/SitesView.vue'),

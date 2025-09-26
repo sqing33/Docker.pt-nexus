@@ -1,19 +1,18 @@
 <!-- src/App.vue -->
 <template>
   <el-menu v-if="!isLoginPage" :default-active="activeRoute" class="main-nav" mode="horizontal" router>
+    <div style="padding: 5px 15px;line-height: 32px;">
+      <img src="/favicon.ico" alt="Logo" height="32" style="margin-right: 8px; vertical-align: middle;" />
+      PT Nexus
+    </div>
     <el-menu-item index="/">首页</el-menu-item>
     <el-menu-item index="/info">流量统计</el-menu-item>
-    <el-menu-item index="/torrents">种子查询</el-menu-item>
-    <el-menu-item index="/sites">做种信息</el-menu-item>
+    <el-menu-item index="/torrents">转种</el-menu-item>
+    <el-menu-item index="/data">种子数据</el-menu-item>
+    <el-menu-item index="/sites">做种数据</el-menu-item>
     <el-menu-item index="/settings">设置</el-menu-item>
     <div class="refresh-button-container">
-      <el-button
-        type="success"
-        @click="handleGlobalRefresh"
-        :loading="isRefreshing"
-        :disabled="isRefreshing"
-        plain
-      >
+      <el-button type="success" @click="handleGlobalRefresh" :loading="isRefreshing" :disabled="isRefreshing" plain>
         刷新
       </el-button>
     </div>
