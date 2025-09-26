@@ -1518,6 +1518,7 @@ const fetchTorrentInfo = async () => {
       sourceSite: sourceSite.value,
       searchTerm: torrentId,
       savePath: torrent.value.save_path,
+      torrentName: torrent.value.name,
     }, {
       timeout: 60000 // 60秒超时，用于抓取和存储
     });

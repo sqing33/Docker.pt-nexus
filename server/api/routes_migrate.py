@@ -347,9 +347,9 @@ def migrate_fetch_and_store():
     """专门负责种子信息抓取和存储，不返回预览数据"""
     db_manager = migrate_bp.db_manager
     data = request.json
-    source_site_name, search_term, save_path = (data.get("sourceSite"),
-                                                data.get("searchTerm"),
-                                                data.get("savePath", ""))
+    source_site_name, search_term, save_path, torrent_name = (
+        data.get("sourceSite"), data.get("searchTerm"),
+        data.get("savePath", ""), data.get("torrentName"))
 
     if not all([source_site_name, search_term]):
         return jsonify({"success": False, "message": "错误：源站点和搜索词不能为空。"}), 400
@@ -386,6 +386,7 @@ def migrate_fetch_and_store():
                                    target_site_info=None,
                                    search_term=search_term,
                                    save_path=save_path,
+                                   torrent_name=torrent_name,
                                    config_manager=config_manager)
 
         # 调用数据抓取和信息提取（这会自动保存到数据库）
