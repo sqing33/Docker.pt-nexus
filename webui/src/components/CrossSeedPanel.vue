@@ -606,6 +606,7 @@
       <!-- 步骤 1 的按钮 -->
       <div v-if="activeStep === 1" class="button-group">
         <el-button @click="handlePreviousStep" :disabled="isLoading">上一步</el-button>
+        <el-button type="primary" @click="$emit('complete')" v-if="props.showCompleteButton">修改完成</el-button>
         <el-tooltip :content="isScrolledToBottom ? '' : '请先滚动到页面底部审查完种子信息再发布！'" :disabled="isScrolledToBottom"
           placement="top">
           <el-button type="primary" @click="goToSelectSiteStep" :disabled="isLoading || !isScrolledToBottom"
@@ -735,6 +736,13 @@ interface Torrent {
   total_uploaded_formatted: string;
   downloaderId?: string;
 }
+
+const props = defineProps({
+  showCompleteButton: {
+    type: Boolean,
+    default: false
+  }
+});
 
 const emit = defineEmits(['complete', 'cancel']);
 

@@ -556,13 +556,13 @@ class TorrentMigrator:
             torrent_filename = "default.torrent"  # 设置一个默认值
             if content_disposition:
                 # 尝试匹配filename*（支持UTF-8编码）和filename
-                filename_match = re.search(
-                    r'filename\*="?UTF-8\'\'([^"]+)"?',
-                    content_disposition, re.IGNORECASE)
+                filename_match = re.search(r'filename\*="?UTF-8\'\'([^"]+)"?',
+                                           content_disposition, re.IGNORECASE)
                 if filename_match:
                     torrent_filename = filename_match.group(1)
                     # URL解码文件名（UTF-8编码）
-                    torrent_filename = urllib.parse.unquote(torrent_filename, encoding='utf-8')
+                    torrent_filename = urllib.parse.unquote(torrent_filename,
+                                                            encoding='utf-8')
                 else:
                     # 尝试匹配普通的filename
                     filename_match = re.search(r'filename="?([^"]+)"?',
@@ -570,7 +570,8 @@ class TorrentMigrator:
                     if filename_match:
                         torrent_filename = filename_match.group(1)
                         # URL解码文件名
-                        torrent_filename = urllib.parse.unquote(torrent_filename)
+                        torrent_filename = urllib.parse.unquote(
+                            torrent_filename)
 
             # 使用统一的数据提取方法
             extracted_data = self._extract_data_by_site_type(soup, torrent_id)
@@ -597,8 +598,8 @@ class TorrentMigrator:
             os.makedirs(torrent_dir, exist_ok=True)
 
             # 保存原始种子文件到指定文件夹
-            original_torrent_path = os.path.join(
-                torrent_dir, f"{torrent_filename}")
+            original_torrent_path = os.path.join(torrent_dir,
+                                                 f"{torrent_filename}")
             with open(original_torrent_path, "wb") as f:
                 f.write(torrent_response.content)
             self.temp_files.append(original_torrent_path)
@@ -849,7 +850,8 @@ class TorrentMigrator:
                         }
                     }
                     temp_standardized = self.parameter_mapper.map_parameters(
-                        self.SOURCE_NAME, self.SOURCE_SITE_CODE, temp_extracted)
+                        self.SOURCE_NAME, self.SOURCE_SITE_CODE,
+                        temp_extracted)
                     audio_from_title_standard = temp_standardized.get(
                         'audio_codec')
 
@@ -960,27 +962,17 @@ class TorrentMigrator:
 
             # 1. 先构建包含非标准化信息的字典
             seed_parameters = {
-                "title":
-                original_main_title,
-                "subtitle":
-                subtitle,
-                "imdb_link":
-                imdb_link,
-                "douban_link":
-                douban_link,
-                "poster":
-                intro.get("poster"),
-                "screenshots":
-                intro.get("screenshots"),
-                "statement":
-                intro.get("statement", "").strip(),
-                "body":
-                intro.get("body", "").strip(),
-                "mediainfo":
-                mediainfo,
+                "title": original_main_title,
+                "subtitle": subtitle,
+                "imdb_link": imdb_link,
+                "douban_link": douban_link,
+                "poster": intro.get("poster"),
+                "screenshots": intro.get("screenshots"),
+                "statement": intro.get("statement", "").strip(),
+                "body": intro.get("body", "").strip(),
+                "mediainfo": mediainfo,
                 # [修正] 从 standardized_params 获取已经标准化的标签
-                "tags":
-                standardized_params.get("tags", []),
+                "tags": standardized_params.get("tags", []),
 
                 # 保存完整的标题组件数据
                 "title_components": title_components,
@@ -989,6 +981,8 @@ class TorrentMigrator:
             # 2. 将 standardized_params 中所有标准化的键值对合并进来。
             #    这里的 .get() 会返回 'category.movie' 这样的完整字符串。
             seed_parameters.update({
+                "nickname":
+                self.SOURCE_NAME,
                 "type":
                 standardized_params.get("type"),
                 "medium":

@@ -6,15 +6,16 @@
     <div class="table-container">
       <el-table :data="tableData" v-loading="loading" border style="width: 100%" empty-text="暂无转种数据"
         :max-height="tableMaxHeight" height="100%">
+        <el-table-column type="selection" width="55" align="center"></el-table-column>
         <el-table-column prop="id" label="ID" width="65" align="center" sortable></el-table-column>
         <el-table-column prop="torrent_id" label="种子ID" align="center" width="80"
           show-overflow-tooltip></el-table-column>
-        <el-table-column prop="site_name" label="站点名称" width="100" align="center">
+        <el-table-column prop="nickname" label="站点名称" width="100" align="center">
           <template #default="scope">
-            <div class="mapped-cell">{{ getMappedValue('site_name', scope.row.site_name) }}</div>
+            <div class="mapped-cell">{{ scope.row.nickname }}</div>
           </template>
         </el-table-column>
-        <el-table-column prop="title" label="标题" min-width="200">
+        <el-table-column prop="title" label="标题" align="center">
           <template #default="scope">
             <div class="title-cell">
               <div class="subtitle-line" :title="scope.row.subtitle">
@@ -50,7 +51,7 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="audio_codec" label="音频编码" width="120" align="center">
+        <el-table-column prop="audio_codec" label="音频编码" width="90" align="center">
           <template #default="scope">
             <div class="mapped-cell"
               :class="{ 'invalid-value': !isValidFormat(scope.row.audio_codec) || !isMapped('audio_codec', scope.row.audio_codec) }">
@@ -58,7 +59,7 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="resolution" label="分辨率" width="100" align="center">
+        <el-table-column prop="resolution" label="分辨率" width="90" align="center">
           <template #default="scope">
             <div class="mapped-cell"
               :class="{ 'invalid-value': !isValidFormat(scope.row.resolution) || !isMapped('resolution', scope.row.resolution) }">
@@ -74,7 +75,7 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="source" label="产地" width="110" align="center">
+        <el-table-column prop="source" label="产地" width="100" align="center">
           <template #default="scope">
             <div class="mapped-cell"
               :class="{ 'invalid-value': !isValidFormat(scope.row.source) || !isMapped('source', scope.row.source) }">
@@ -82,7 +83,7 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="tags" label="标签" min-width="150">
+        <el-table-column prop="tags" label="标签" align="center" width="170">
           <template #default="scope">
             <div class="tags-cell">
               <el-tag v-for="(tag, index) in getMappedTags(scope.row.tags)" :key="tag" size="small"
@@ -93,14 +94,14 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="created_at" label="创建时间" width="140" align="center" sortable>
-          <template #default="scope">
-            <div class="mapped-cell datetime-cell">{{ formatDateTime(scope.row.created_at) }}</div>
-          </template>
-        </el-table-column>
         <el-table-column prop="updated_at" label="更新时间" width="140" align="center" sortable>
           <template #default="scope">
             <div class="mapped-cell datetime-cell">{{ formatDateTime(scope.row.updated_at) }}</div>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="100" align="center" fixed="right">
+          <template #default="scope">
+            <el-button size="small" type="primary" @click="handleEdit(scope.row)">编辑</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -114,12 +115,32 @@
         @current-change="handleCurrentChange" background>
       </el-pagination>
     </div>
+
+    <!-- 转种弹窗 -->
+    <div v-if="crossSeedDialogVisible" class="modal-overlay">
+      <el-card class="cross-seed-card" shadow="always">
+        <template #header>
+          <div class="modal-header">
+            <span>转种 - {{ selectedTorrentName }}</span>
+            <el-button type="danger" circle @click="closeCrossSeedDialog" plain>X</el-button>
+          </div>
+        </template>
+        <div class="cross-seed-content">
+          <CrossSeedPanel :show-complete-button="true" @complete="handleCrossSeedComplete"
+            @cancel="closeCrossSeedDialog" />
+        </div>
+      </el-card>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
+import CrossSeedPanel from '../components/CrossSeedPanel.vue'
+import { useCrossSeedStore } from '@/stores/crossSeed'
+import type { ISourceInfo } from '@/types'
+
 
 interface SeedParameter {
   id: number
@@ -317,7 +338,20 @@ const fetchData = async () => {
     })
 
     const response = await fetch(`/api/cross-seed-data?${params.toString()}`)
-    const result = await response.json()
+
+    // 检查响应状态
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const responseText = await response.text();
+
+    // 检查响应是否为JSON格式
+    if (!responseText.startsWith('{') && !responseText.startsWith('[')) {
+      throw new Error('服务器响应不是有效的JSON格式');
+    }
+
+    const result = JSON.parse(responseText)
 
     if (result.success) {
       tableData.value = result.data
@@ -350,6 +384,90 @@ const handleCurrentChange = (val: number) => {
   fetchData()
 }
 
+const crossSeedStore = useCrossSeedStore();
+
+// 控制转种弹窗的显示
+const crossSeedDialogVisible = computed(() => !!crossSeedStore.taskId);
+const selectedTorrentName = computed(() => crossSeedStore.workingParams?.title || '');
+
+// 处理编辑按钮点击
+const handleEdit = async (row: SeedParameter) => {
+  try {
+    // 重置 store
+    crossSeedStore.reset();
+
+    // 从后端API获取详细的种子参数
+    const response = await fetch(`/api/migrate/get_db_seed_info?torrent_id=${row.torrent_id}&site_name=${row.site_name}`);
+
+    // 检查响应状态
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const responseText = await response.text();
+
+    // 检查响应是否为JSON格式
+    if (!responseText.startsWith('{') && !responseText.startsWith('[')) {
+      throw new Error('服务器响应不是有效的JSON格式');
+    }
+
+    const result = JSON.parse(responseText);
+
+    if (result.success) {
+      // 将获取到的数据设置到 store 中
+      // 构造一个基本的 Torrent 对象结构
+      const torrentData = {
+        ...result.data,
+        name: result.data.title,
+        // 添加缺失的 Torrent 接口必需字段（使用默认值）
+        save_path: '',
+        size: 0,
+        size_formatted: '0 B',
+        progress: 100,
+        state: 'completed',
+        total_uploaded: 0,
+        total_uploaded_formatted: '0 B',
+        sites: {
+          [result.data.site_name]: {
+            torrentId: result.data.torrent_id,
+            comment: `id=${result.data.torrent_id}` // 为了向后兼容，也提供comment格式
+          }
+        }
+      };
+
+      crossSeedStore.setParams(torrentData);
+
+      // 设置源站点信息
+      const sourceInfo: ISourceInfo = {
+        name: result.data.site_name,
+        site: result.data.site_name.toLowerCase(), // 假设站点标识符是站点名称的小写形式
+        torrentId: result.data.torrent_id
+      };
+      crossSeedStore.setSourceInfo(sourceInfo);
+
+      // 设置一个任务ID以显示弹窗
+      crossSeedStore.setTaskId(`cross_seed_${row.id}_${Date.now()}`);
+    } else {
+      ElMessage.error(result.error || '获取种子参数失败');
+    }
+  } catch (error: any) {
+    ElMessage.error(error.message || '网络错误');
+  }
+};
+
+// 关闭转种弹窗
+const closeCrossSeedDialog = () => {
+  crossSeedStore.reset();
+};
+
+// 处理转种完成
+const handleCrossSeedComplete = () => {
+  ElMessage.success('转种操作已完成！');
+  crossSeedStore.reset();
+  // 可选：刷新数据以显示最新状态
+  fetchData();
+};
+
 // 处理窗口大小变化
 const handleResize = () => {
   tableMaxHeight.value = window.innerHeight - 80
@@ -366,6 +484,48 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 2000;
+}
+
+.cross-seed-card {
+  width: 90vw;
+  max-width: 1200px;
+  height: 90vh;
+  max-height: 800px;
+  display: flex;
+  flex-direction: column;
+}
+
+:deep(.cross-seed-card .el-card__body) {
+  padding: 10px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.cross-seed-content {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
 .cross-seed-data-view {
   height: 100%;
   display: flex;
@@ -427,7 +587,7 @@ onUnmounted(() => {
   line-height: 1.2;
 }
 
-:deep(.el-table_1_column_12) {
+:deep(.el-table_1_column_13) {
   padding: 0;
 }
 
@@ -453,6 +613,7 @@ onUnmounted(() => {
   justify-content: center;
   height: 100%;
   line-height: 1.4;
+  text-align: left;
 }
 
 .subtitle-line,

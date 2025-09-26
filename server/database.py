@@ -118,6 +118,39 @@ class DatabaseManager:
                 conn.commit()
                 logging.info(f"'{col}' 列移除成功。")
 
+        # --- 迁移 seed_parameters 表，添加 nickname 列 ---
+        table_name = 'seed_parameters'
+        # 获取当前表的列信息
+        if self.db_type == 'mysql':
+            cursor.execute(f"DESCRIBE {table_name}")
+            columns = {row['Field'].lower() for row in cursor.fetchall()}
+        elif self.db_type == 'postgresql':
+            cursor.execute(
+                "SELECT column_name FROM information_schema.columns WHERE table_name = %s AND table_schema = 'public'",
+                (table_name, ))
+            columns = {row['column_name'].lower() for row in cursor.fetchall()}
+        else:  # sqlite
+            cursor.execute(f"PRAGMA table_info({table_name})")
+            columns = {row['name'].lower() for row in cursor.fetchall()}
+
+        # 检查是否需要添加 nickname 列
+        if 'nickname' not in columns:
+            logging.info(f"在 '{table_name}' 表中添加 'nickname' 列...")
+            if self.db_type == 'mysql':
+                cursor.execute(
+                    f"ALTER TABLE {table_name} ADD COLUMN nickname VARCHAR(255)"
+                )
+            elif self.db_type == 'postgresql':
+                cursor.execute(
+                    f"ALTER TABLE {table_name} ADD COLUMN nickname VARCHAR(255)"
+                )
+            else:  # sqlite
+                cursor.execute(
+                    f"ALTER TABLE {table_name} ADD COLUMN nickname TEXT"
+                )
+            conn.commit()
+            logging.info("'nickname' 列添加成功。")
+
     def _migrate_torrents_table(self, conn, cursor):
         """检查并向 torrents 表添加 downloader_id 和 iyuu_last_check 列。"""
         table_name = 'torrents'
@@ -559,7 +592,7 @@ class DatabaseManager:
             )
             # 创建种子参数表，用于存储从源站点提取的种子参数
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS seed_parameters (id INTEGER NOT NULL AUTO_INCREMENT, torrent_id VARCHAR(255) NOT NULL, site_name VARCHAR(255) NOT NULL, title TEXT, subtitle TEXT, imdb_link TEXT, douban_link TEXT, type VARCHAR(100), medium VARCHAR(100), video_codec VARCHAR(100), audio_codec VARCHAR(100), resolution VARCHAR(100), team VARCHAR(100), source VARCHAR(100), tags TEXT, poster TEXT, screenshots TEXT, statement TEXT, body TEXT, mediainfo TEXT, title_components TEXT, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, PRIMARY KEY (id), UNIQUE KEY seed_parameters_torrent_id_site_name_key (torrent_id, site_name)) ENGINE=InnoDB ROW_FORMAT=DYNAMIC"
+                "CREATE TABLE IF NOT EXISTS seed_parameters (id INTEGER NOT NULL AUTO_INCREMENT, torrent_id VARCHAR(255) NOT NULL, site_name VARCHAR(255) NOT NULL, nickname VARCHAR(255), title TEXT, subtitle TEXT, imdb_link TEXT, douban_link TEXT, type VARCHAR(100), medium VARCHAR(100), video_codec VARCHAR(100), audio_codec VARCHAR(100), resolution VARCHAR(100), team VARCHAR(100), source VARCHAR(100), tags TEXT, poster TEXT, screenshots TEXT, statement TEXT, body TEXT, mediainfo TEXT, title_components TEXT, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, PRIMARY KEY (id), UNIQUE KEY seed_parameters_torrent_id_site_name_key (torrent_id, site_name)) ENGINE=InnoDB ROW_FORMAT=DYNAMIC"
             )
         # 表创建逻辑 (PostgreSQL)
         elif self.db_type == "postgresql":
@@ -584,7 +617,7 @@ class DatabaseManager:
             )
             # 创建种子参数表，用于存储从源站点提取的种子参数
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS seed_parameters (id SERIAL PRIMARY KEY, torrent_id VARCHAR(255) NOT NULL, site_name VARCHAR(255) NOT NULL, title TEXT, subtitle TEXT, imdb_link TEXT, douban_link TEXT, type VARCHAR(100), medium VARCHAR(100), video_codec VARCHAR(100), audio_codec VARCHAR(100), resolution VARCHAR(100), team VARCHAR(100), source VARCHAR(100), tags TEXT, poster TEXT, screenshots TEXT, statement TEXT, body TEXT, mediainfo TEXT, title_components TEXT, created_at TIMESTAMP NOT NULL, updated_at TIMESTAMP NOT NULL, CONSTRAINT seed_parameters_torrent_id_site_name_key UNIQUE (torrent_id, site_name))"
+                "CREATE TABLE IF NOT EXISTS seed_parameters (id SERIAL PRIMARY KEY, torrent_id VARCHAR(255) NOT NULL, site_name VARCHAR(255) NOT NULL, nickname VARCHAR(255), title TEXT, subtitle TEXT, imdb_link TEXT, douban_link TEXT, type VARCHAR(100), medium VARCHAR(100), video_codec VARCHAR(100), audio_codec VARCHAR(100), resolution VARCHAR(100), team VARCHAR(100), source VARCHAR(100), tags TEXT, poster TEXT, screenshots TEXT, statement TEXT, body TEXT, mediainfo TEXT, title_components TEXT, created_at TIMESTAMP NOT NULL, updated_at TIMESTAMP NOT NULL, CONSTRAINT seed_parameters_torrent_id_site_name_key UNIQUE (torrent_id, site_name))"
             )
         # 表创建逻辑 (SQLite)
         else:
@@ -609,7 +642,7 @@ class DatabaseManager:
             )
             # 创建种子参数表，用于存储从源站点提取的种子参数
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS seed_parameters (id INTEGER PRIMARY KEY AUTOINCREMENT, torrent_id TEXT NOT NULL, site_name TEXT NOT NULL, title TEXT, subtitle TEXT, imdb_link TEXT, douban_link TEXT, type TEXT, medium TEXT, video_codec TEXT, audio_codec TEXT, resolution TEXT, team TEXT, source TEXT, tags TEXT, poster TEXT, screenshots TEXT, statement TEXT, body TEXT, mediainfo TEXT, title_components TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE (torrent_id, site_name))"
+                "CREATE TABLE IF NOT EXISTS seed_parameters (id INTEGER PRIMARY KEY AUTOINCREMENT, torrent_id TEXT NOT NULL, site_name TEXT NOT NULL, nickname TEXT, title TEXT, subtitle TEXT, imdb_link TEXT, douban_link TEXT, type TEXT, medium TEXT, video_codec TEXT, audio_codec TEXT, resolution TEXT, team TEXT, source TEXT, tags TEXT, poster TEXT, screenshots TEXT, statement TEXT, body TEXT, mediainfo TEXT, title_components TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE (torrent_id, site_name))"
             )
 
         conn.commit()

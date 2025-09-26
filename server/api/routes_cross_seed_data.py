@@ -7,6 +7,7 @@ import os
 # 创建蓝图
 cross_seed_data_bp = Blueprint('cross_seed_data', __name__)
 
+
 def generate_reverse_mappings():
     """Generate reverse mappings from standard keys to Chinese display names"""
     try:
@@ -14,14 +15,16 @@ def generate_reverse_mappings():
         from config import config_manager
 
         # First try to read from global_mappings.yaml
-        global_mappings_path = os.path.join(os.path.dirname(__file__), '../configs/global_mappings.yaml')
+        global_mappings_path = os.path.join(os.path.dirname(__file__),
+                                            '../configs/global_mappings.yaml')
         global_mappings = {}
 
         if os.path.exists(global_mappings_path):
             try:
                 with open(global_mappings_path, 'r', encoding='utf-8') as f:
                     config_data = yaml.safe_load(f)
-                    global_mappings = config_data.get('global_standard_keys', {})
+                    global_mappings = config_data.get('global_standard_keys',
+                                                      {})
             except Exception as e:
                 logging.warning(f"Failed to read global_mappings.yaml: {e}")
 
@@ -38,8 +41,7 @@ def generate_reverse_mappings():
             'resolution': {},
             'source': {},
             'team': {},
-            'tags': {},
-            'site_name': {}
+            'tags': {}
         }
 
         # Mapping categories
@@ -51,7 +53,8 @@ def generate_reverse_mappings():
             'resolution': global_mappings.get('resolution', {}),
             'source': global_mappings.get('source', {}),
             'team': global_mappings.get('team', {}),
-            'tags': global_mappings.get('tag', {})  # Note: YAML uses 'tag' not 'tags'
+            'tags': global_mappings.get('tag',
+                                        {})  # Note: YAML uses 'tag' not 'tags'
         }
 
         # Create reverse mappings: from standard value to Chinese name
@@ -64,36 +67,16 @@ def generate_reverse_mappings():
             else:
                 # Normal handling for other categories
                 for chinese_name, standard_value in mappings.items():
-                    if standard_value and standard_value not in reverse_mappings[category]:
-                        reverse_mappings[category][standard_value] = chinese_name
-
-        # Get site name mappings from database
-        try:
-            from flask import current_app
-            db_manager = current_app.config['DB_MANAGER']
-            conn = db_manager._get_connection()
-            cursor = db_manager._get_cursor(conn)
-
-            # Query all sites to get site name mappings
-            cursor.execute("SELECT site, nickname FROM sites")
-            site_rows = cursor.fetchall()
-
-            # Create site name mappings: site (standard value) to nickname (Chinese name)
-            for row in site_rows:
-                site = row[0] if isinstance(row, tuple) else row['site']
-                nickname = row[1] if isinstance(row, tuple) else row['nickname']
-                if site and nickname:
-                    reverse_mappings['site_name'][site] = nickname
-
-            cursor.close()
-            conn.close()
-        except Exception as e:
-            logging.error(f"Failed to get site mappings from database: {e}", exc_info=True)
+                    if standard_value and standard_value not in reverse_mappings[
+                            category]:
+                        reverse_mappings[category][
+                            standard_value] = chinese_name
 
         return reverse_mappings
 
     except Exception as e:
-        logging.error(f"Failed to generate reverse mappings: {e}", exc_info=True)
+        logging.error(f"Failed to generate reverse mappings: {e}",
+                      exc_info=True)
         # Return empty reverse mappings as fallback
         return {
             'type': {},
@@ -103,9 +86,9 @@ def generate_reverse_mappings():
             'resolution': {},
             'source': {},
             'team': {},
-            'tags': {},
-            'site_name': {}
+            'tags': {}
         }
+
 
 @cross_seed_data_bp.route('/api/cross-seed-data', methods=['GET'])
 def get_cross_seed_data():
@@ -129,19 +112,26 @@ def get_cross_seed_data():
         # 先查询总数
         cursor.execute("SELECT COUNT(*) as total FROM seed_parameters")
         total_result = cursor.fetchone()
-        total_count = total_result[0] if isinstance(total_result, tuple) else total_result['total']
+        total_count = total_result[0] if isinstance(
+            total_result, tuple) else total_result['total']
 
-        # 查询当前页的数据
+        # 查询当前页的数据，只获取前端需要显示的列
         if db_manager.db_type == "postgresql":
-            cursor.execute("""
-                SELECT * FROM seed_parameters
+            cursor.execute(
+                """
+                SELECT id, torrent_id, site_name, nickname, title, subtitle, type, medium, video_codec,
+                       audio_codec, resolution, team, source, tags, updated_at
+                FROM seed_parameters
                 ORDER BY created_at DESC
                 LIMIT %s OFFSET %s
             """, (page_size, offset))
         else:
             placeholder = "?" if db_manager.db_type == "sqlite" else "%s"
-            cursor.execute(f"""
-                SELECT * FROM seed_parameters
+            cursor.execute(
+                f"""
+                SELECT id, torrent_id, site_name, nickname, title, subtitle, type, medium, video_codec,
+                       audio_codec, resolution, team, source, tags, updated_at
+                FROM seed_parameters
                 ORDER BY created_at DESC
                 LIMIT {placeholder} OFFSET {placeholder}
             """, (page_size, offset))
@@ -167,7 +157,8 @@ def get_cross_seed_data():
                     tags = json.loads(tags)
                 except:
                     # If parsing fails, split by comma
-                    tags = [tag.strip() for tag in tags.split(',')] if tags else []
+                    tags = [tag.strip()
+                            for tag in tags.split(',')] if tags else []
                 item['tags'] = tags
 
         cursor.close()
@@ -187,7 +178,4 @@ def get_cross_seed_data():
         })
     except Exception as e:
         logging.error(f"获取转种数据时出错: {e}")
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
+        return jsonify({"success": False, "error": str(e)}), 500
