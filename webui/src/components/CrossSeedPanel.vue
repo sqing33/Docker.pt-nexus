@@ -276,7 +276,7 @@
                     </el-button>
                   </div>
                 </template>
-                <el-input type="textarea" class="code-font" v-model="torrentData.mediainfo" :rows="22" />
+                <el-input type="textarea" class="code-font" v-model="torrentData.mediainfo" :rows="26" />
               </el-form-item>
             </el-form>
           </el-tab-pane>
@@ -332,11 +332,22 @@
               <!-- IMDb链接和标签在同一行 -->
               <div class="param-row">
                 <div class="param-item imdb-item half-width">
-                  <span class="param-label">IMDb链接：</span>
-                  <span
-                    :class="['param-value', { 'empty': !torrentData.imdb_link || torrentData.imdb_link === 'N/A' }]">
-                    {{ torrentData.imdb_link || 'N/A' }}
-                  </span>
+                  <div style="display: flex; ">
+                    <span class="param-label">IMDb链接：</span>
+                    <span
+                      :class="['param-value', { 'empty': !torrentData.imdb_link || torrentData.imdb_link === 'N/A' }]">
+                      {{ torrentData.imdb_link || 'N/A' }}
+                    </span>
+                  </div>
+                  <div style="display: flex; ">
+                    <span style="letter-spacing: 2.6px;" class="param-label">豆瓣链接</span>
+                    <span style="font-size: 13px;">：</span>
+                    <span
+                      :class="['param-value', { 'empty': !torrentData.douban_link || torrentData.douban_link === 'N/A' }]">
+                      {{ torrentData.douban_link || 'N/A' }}
+                    </span>
+                  </div>
+
                 </div>
                 <div class="param-item tags-item half-width">
                   <span class="param-label">标签：</span>
@@ -455,7 +466,7 @@
               <div class="description-section" v-if="posterImages.length > 0">
                 <div class="image-gallery">
                   <img v-for="(url, index) in posterImages" :key="'poster-preview-' + index" :src="url"
-                    :alt="'海报 ' + (index + 1)" class="preview-image-inline" style="width: 200px;"
+                    :alt="'海报 ' + (index + 1)" class="preview-image-inline" style="width: 300px;"
                     @error="handleImageError(url, 'poster', index)" />
                 </div>
               </div>
@@ -468,7 +479,6 @@
 
               <!-- 视频截图 -->
               <div class="description-section" v-if="screenshotImages.length > 0">
-                <div class="section-title">视频截图:</div>
                 <div class="image-gallery">
                   <img v-for="(url, index) in screenshotImages" :key="'screenshot-preview-' + index" :src="url"
                     :alt="'截图 ' + (index + 1)" class="preview-image-inline"
@@ -583,14 +593,21 @@
       <!-- 步骤 0 的按钮 -->
       <div v-if="activeStep === 0" class="button-group">
         <el-button @click="$emit('cancel')">取消</el-button>
-        <el-button type="primary" @click="goToPublishPreviewStep" :disabled="isNextButtonDisabled">
-          下一步：发布参数预览
-        </el-button>
+
+        <el-tooltip content="存在待修改的参数" placement="top" :disabled="!isNextButtonDisabled">
+          <!-- 添加一个 span 作为包裹元素 -->
+
+          <el-button type="primary" @click="goToPublishPreviewStep" :disabled="isNextButtonDisabled">
+            下一步：发布参数预览
+          </el-button>
+
+        </el-tooltip>
       </div>
       <!-- 步骤 1 的按钮 -->
       <div v-if="activeStep === 1" class="button-group">
         <el-button @click="handlePreviousStep" :disabled="isLoading">上一步</el-button>
-        <el-tooltip :content="isScrolledToBottom ? '' : '请先滚动到页面底部'" :disabled="isScrolledToBottom" placement="top">
+        <el-tooltip :content="isScrolledToBottom ? '' : '请先滚动到页面底部审查完种子信息再发布！'" :disabled="isScrolledToBottom"
+          placement="top">
           <el-button type="primary" @click="goToSelectSiteStep" :disabled="isLoading || !isScrolledToBottom"
             :class="{ 'scrolled-to-bottom': isScrolledToBottom }">
             下一步：选择发布站点
@@ -2806,8 +2823,7 @@ const openAllSitesInRow = (row: any[]) => {
 
 .param-item {
   display: flex;
-  flex-direction: column;
-  padding: 16px;
+  padding: 12px;
   background-color: #f8f9fa;
   border-radius: 8px;
   border: 1px solid #e9ecef;
@@ -2855,10 +2871,13 @@ const openAllSitesInRow = (row: any[]) => {
 }
 
 /* IMDb和标签项的内容布局 */
-.imdb-item,
-.tags-item {
+.imdb-item {
   display: flex;
   flex-direction: column;
+}
+
+.tags-item {
+  display: flex;
 }
 
 .imdb-item .param-value,
@@ -2928,10 +2947,8 @@ const openAllSitesInRow = (row: any[]) => {
   font-weight: 600;
   color: #495057;
   font-size: 13px;
-  margin-bottom: 6px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  display: flex;
   align-items: center;
 }
 
