@@ -38,7 +38,8 @@ def generate_reverse_mappings():
             'resolution': {},
             'source': {},
             'team': {},
-            'tags': {}
+            'tags': {},
+            'site_name': {}
         }
 
         # Mapping categories
@@ -66,6 +67,29 @@ def generate_reverse_mappings():
                     if standard_value and standard_value not in reverse_mappings[category]:
                         reverse_mappings[category][standard_value] = chinese_name
 
+        # Get site name mappings from database
+        try:
+            from flask import current_app
+            db_manager = current_app.config['DB_MANAGER']
+            conn = db_manager._get_connection()
+            cursor = db_manager._get_cursor(conn)
+
+            # Query all sites to get site name mappings
+            cursor.execute("SELECT site, nickname FROM sites")
+            site_rows = cursor.fetchall()
+
+            # Create site name mappings: site (standard value) to nickname (Chinese name)
+            for row in site_rows:
+                site = row[0] if isinstance(row, tuple) else row['site']
+                nickname = row[1] if isinstance(row, tuple) else row['nickname']
+                if site and nickname:
+                    reverse_mappings['site_name'][site] = nickname
+
+            cursor.close()
+            conn.close()
+        except Exception as e:
+            logging.error(f"Failed to get site mappings from database: {e}", exc_info=True)
+
         return reverse_mappings
 
     except Exception as e:
@@ -79,7 +103,8 @@ def generate_reverse_mappings():
             'resolution': {},
             'source': {},
             'team': {},
-            'tags': {}
+            'tags': {},
+            'site_name': {}
         }
 
 @cross_seed_data_bp.route('/api/cross-seed-data', methods=['GET'])
