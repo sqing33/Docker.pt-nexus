@@ -512,13 +512,59 @@ def update_db_seed_info():
                 standardized_params = mapper.map_parameters(
                     site_name, english_site_name, extracted_data)
 
-            # 保存标准化后的参数到数据库
             # 从title_components中提取标题拆解的各项参数
             title_components = updated_parameters.get('title_components', [])
 
+            # [新增] 开始：根据 title_components 拼接新标题
+            # 1. 将 title_components 列表转换为字典，方便后续查找
+            title_params = {
+                item["key"]: item["value"]
+                for item in title_components if item.get("value")
+            }
+
+            # 2. 使用您提供的逻辑来拼接标题
+            order = [
+                "主标题",
+                "季集",
+                "年份",
+                "剧集状态",
+                "发布版本",
+                "分辨率",
+                "片源平台",
+                "媒介",
+                "视频编码",
+                "视频格式",
+                "HDR格式",
+                "色深",
+                "帧率",
+                "音频编码",
+            ]
+            title_parts = []
+            for key in order:
+                value = title_params.get(key)
+                if value:
+                    title_parts.append(" ".join(map(str, value)) if isinstance(
+                        value, list) else str(value))
+
+            raw_main_part = " ".join(filter(None, title_parts))
+            main_part = re.sub(r'(?<!\d)\.(?!\d)', ' ', raw_main_part)
+            main_part = re.sub(r'\s+', ' ', main_part).strip()
+            release_group = title_params.get("制作组", "NOGROUP")
+            if "N/A" in release_group:
+                release_group = "NOGROUP"
+
+            # 对特殊制作组进行处理，不需要添加前缀连字符
+            special_groups = ["MNHD-FRDS", "mUHD-FRDS"]
+            if release_group in special_groups:
+                preview_title = f"{main_part} {release_group}"
+            else:
+                preview_title = f"{main_part}-{release_group}"
+            # [新增] 结束：标题拼接完成，结果保存在 preview_title 变量中
+
             # 构造完整的存储参数
             final_parameters = {
-                "title": updated_parameters.get('title', ''),
+                # [修改] 将原来的 title 值替换为新生成的 preview_title
+                "title": preview_title,
                 "subtitle": updated_parameters.get('subtitle', ''),
                 "imdb_link": updated_parameters.get('imdb_link', ''),
                 "douban_link": updated_parameters.get('douban_link', ''),
@@ -535,14 +581,11 @@ def update_db_seed_info():
                 "team": standardized_params.get('team', ''),
                 "source": standardized_params.get('source', ''),
                 "tags": standardized_params.get('tags', []),
-
-                # 保存完整的标题组件数据
                 "title_components": title_components,
-
-                # 添加标准化后的参数
                 "standardized_params": standardized_params,
                 "final_publish_parameters": {
-                    "主标题 (预览)": standardized_params.get("title", ""),
+                    # [修改] 预览标题也使用新生成的标题
+                    "主标题 (预览)": preview_title,
                     "副标题": updated_parameters.get('subtitle', ''),
                     "IMDb链接": standardized_params.get("imdb_link", ""),
                     "类型": standardized_params.get("type", ""),
@@ -588,7 +631,8 @@ def update_db_seed_info():
                     standardized_params
                 },
                 "raw_params_for_preview": {
-                    "final_main_title": standardized_params.get("title", ""),
+                    # [修改] 原始预览参数也使用新标题
+                    "final_main_title": preview_title,
                     "subtitle": updated_parameters.get('subtitle', ''),
                     "imdb_link": standardized_params.get("imdb_link", ""),
                     "type": standardized_params.get("type", ""),
@@ -605,6 +649,7 @@ def update_db_seed_info():
             update_result = seed_param_model.update_parameters(
                 torrent_id, english_site_name, final_parameters)
 
+            # 后续代码保持不变...
             if update_result:
                 logging.info(
                     f"种子参数更新成功: {torrent_id} from {site_name} ({english_site_name})"
@@ -1213,8 +1258,10 @@ def validate_media():
     imdb_link = source_info.get("imdb_link", '') if source_info else ''
     douban_link = source_info.get("douban_link", '') if source_info else ''
 
-    logging.info(f"收到媒体处理请求 - 类型: {media_type}, "
-                 f"来源信息: {source_info}，视频路径: {save_path}，种子名称: {torrent_name}, 下载器ID: {downloader_id}")
+    logging.info(
+        f"收到媒体处理请求 - 类型: {media_type}, "
+        f"来源信息: {source_info}，视频路径: {save_path}，种子名称: {torrent_name}, 下载器ID: {downloader_id}"
+    )
 
     if media_type == "screenshot":
         screenshots = upload_data_screenshot(source_info, save_path,
@@ -1249,13 +1296,11 @@ def validate_media():
         # 获取当前的mediainfo（如果有的话）
         current_mediainfo = data.get("current_mediainfo", "")
         # 调用upload_data_mediaInfo函数重新生成mediainfo
-        new_mediainfo = upload_data_mediaInfo(current_mediainfo, save_path,
-                                              source_info.get("main_title") if source_info else None)
+        new_mediainfo = upload_data_mediaInfo(
+            current_mediainfo, save_path,
+            source_info.get("main_title") if source_info else None)
         if new_mediainfo:
-            return jsonify({
-                "success": True,
-                "mediainfo": new_mediainfo
-            }), 200
+            return jsonify({"success": True, "mediainfo": new_mediainfo}), 200
         else:
             return jsonify({"success": False, "error": "无法生成媒体信息"}), 400
     else:
