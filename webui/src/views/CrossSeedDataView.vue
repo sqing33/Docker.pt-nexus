@@ -3,11 +3,25 @@
     <el-alert v-if="error" :title="error" type="error" show-icon :closable="false"
       style="margin: 0; border-radius: 0;"></el-alert>
 
+    <!-- 搜索和控制栏 -->
+    <div class="search-and-controls">
+      <el-button type="primary" @click="fetchData" :loading="loading" size="small"
+        style="margin-right: 15px;">刷新</el-button>
+      <el-input v-model="searchQuery" placeholder="搜索标题或种子ID..." clearable class="search-input"
+        style="width: 300px; margin-right: 15px;" />
+
+      <div class="pagination-controls" v-if="tableData.length > 0">
+        <el-pagination v-model:current-page="currentPage" v-model:page-size="pageSize" :page-sizes="[10, 20, 50, 100]"
+          :total="total" layout="total, sizes, prev, pager, next, jumper" @size-change="handleSizeChange"
+          @current-change="handleCurrentChange" background>
+        </el-pagination>
+      </div>
+    </div>
+
     <div class="table-container">
       <el-table :data="tableData" v-loading="loading" border style="width: 100%" empty-text="暂无转种数据"
         :max-height="tableMaxHeight" height="100%">
         <el-table-column type="selection" width="55" align="center"></el-table-column>
-        <el-table-column prop="id" label="ID" width="65" align="center" sortable></el-table-column>
         <el-table-column prop="torrent_id" label="种子ID" align="center" width="80"
           show-overflow-tooltip></el-table-column>
         <el-table-column prop="nickname" label="站点名称" width="100" align="center">
@@ -19,10 +33,10 @@
           <template #default="scope">
             <div class="title-cell">
               <div class="subtitle-line" :title="scope.row.subtitle">
-                {{ scope.row.subtitle || 'N/A' }}
+                {{ scope.row.subtitle || '' }}
               </div>
               <div class="main-title-line" :title="scope.row.title">
-                {{ scope.row.title || 'N/A' }}
+                {{ scope.row.title || '' }}
               </div>
             </div>
           </template>
@@ -94,6 +108,13 @@
             </div>
           </template>
         </el-table-column>
+        <el-table-column prop="unrecognized" label="无法识别" width="120" align="center">
+          <template #default="scope">
+            <div class="mapped-cell" :class="{ 'invalid-value': scope.row.unrecognized }">
+              {{ scope.row.unrecognized || '' }}
+            </div>
+          </template>
+        </el-table-column>
         <el-table-column prop="updated_at" label="更新时间" width="140" align="center" sortable>
           <template #default="scope">
             <div class="mapped-cell datetime-cell">{{ formatDateTime(scope.row.updated_at) }}</div>
@@ -105,15 +126,6 @@
           </template>
         </el-table-column>
       </el-table>
-    </div>
-
-    <div class="pagination-container" v-if="tableData.length > 0">
-      <el-button type="primary" @click="fetchData" :loading="loading" size="small"
-        style="margin-right: 15px;">刷新</el-button>
-      <el-pagination v-model:current-page="currentPage" v-model:page-size="pageSize" :page-sizes="[10, 20, 50, 100]"
-        :total="total" layout="total, sizes, prev, pager, next, jumper" @size-change="handleSizeChange"
-        @current-change="handleCurrentChange" background>
-      </el-pagination>
     </div>
 
     <!-- 转种弹窗 -->
@@ -135,7 +147,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import CrossSeedPanel from '../components/CrossSeedPanel.vue'
 import { useCrossSeedStore } from '@/stores/crossSeed'
@@ -164,6 +176,7 @@ interface SeedParameter {
   body: string
   mediainfo: string
   title_components: string
+  unrecognized: string
   created_at: string
   updated_at: string
 }
@@ -205,9 +218,12 @@ const currentPage = ref<number>(1)
 const pageSize = ref<number>(20)
 const total = ref<number>(0)
 
+// 搜索相关
+const searchQuery = ref<string>('')
+
 // 辅助函数：获取映射后的中文值
 const getMappedValue = (category: keyof ReverseMappings, standardValue: string) => {
-  if (!standardValue) return 'N/A'
+  if (!standardValue) return ''
 
   const mappings = reverseMappings.value[category]
   if (!mappings) return standardValue
@@ -310,7 +326,7 @@ const getTagClass = (tags: string[] | string, index: number) => {
 
 // 格式化日期时间为完整的年月日时分秒格式，并支持换行显示
 const formatDateTime = (dateString: string) => {
-  if (!dateString) return 'N/A'
+  if (!dateString) return ''
 
   try {
     const date = new Date(dateString)
@@ -334,7 +350,8 @@ const fetchData = async () => {
   try {
     const params = new URLSearchParams({
       page: currentPage.value.toString(),
-      page_size: pageSize.value.toString()
+      page_size: pageSize.value.toString(),
+      search: searchQuery.value
     })
 
     const response = await fetch(`/api/cross-seed-data?${params.toString()}`)
@@ -385,6 +402,12 @@ const handleCurrentChange = (val: number) => {
 }
 
 const crossSeedStore = useCrossSeedStore();
+
+// 监听搜索查询的变化，自动触发搜索
+watch(searchQuery, () => {
+  currentPage.value = 1
+  fetchData()
+})
 
 // 控制转种弹窗的显示
 const crossSeedDialogVisible = computed(() => !!crossSeedStore.taskId);
@@ -534,6 +557,20 @@ onUnmounted(() => {
   box-sizing: border-box;
 }
 
+.search-and-controls {
+  display: flex;
+  align-items: center;
+  padding: 10px 15px;
+  background-color: #ffffff;
+  border-bottom: 1px solid #ebeef5;
+}
+
+.pagination-controls {
+  flex: 1;
+  display: flex;
+  justify-content: flex-end;
+}
+
 .table-container {
   flex: 1;
   overflow: hidden;
@@ -552,19 +589,6 @@ onUnmounted(() => {
   overflow-x: hidden;
 }
 
-.pagination-container {
-  display: flex;
-  align-items: center;
-  padding: 10px 15px;
-  background-color: #ffffff;
-  border-top: 1px solid #ebeef5;
-}
-
-.pagination-container :deep(.el-pagination) {
-  flex: 1;
-  display: flex;
-  justify-content: flex-end;
-}
 
 .mapped-cell {
   text-align: center;

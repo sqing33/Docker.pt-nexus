@@ -36,7 +36,7 @@ class SeedParameter:
         # 返回文件路径
         return os.path.join(site_dir, f"{torrent_id}.json")
 
-    def save_parameters(self, torrent_id: str, site_name: str,
+    def save_parameters(self, hash: str, torrent_id: str, site_name: str,
                         parameters: Dict[str, Any]) -> bool:
         """
         保存种子参数到数据库（优先）和JSON文件（后备）
@@ -59,8 +59,8 @@ class SeedParameter:
 
             # 优先保存到数据库
             if self.db_manager:
-                db_success = self._save_to_database(torrent_id, site_name,
-                                                    parameters)
+                db_success = self._save_to_database(hash, torrent_id,
+                                                    site_name, parameters)
                 if db_success:
                     logging.info(f"种子参数已保存到数据库: {torrent_id} from {site_name}")
                     return True
@@ -76,12 +76,13 @@ class SeedParameter:
             logging.error(f"保存种子参数失败: {e}", exc_info=True)
             return False
 
-    def _save_to_database(self, torrent_id: str, site_name: str,
+    def _save_to_database(self, hash: str, torrent_id: str, site_name: str,
                           parameters: Dict[str, Any]) -> bool:
         """
         保存种子参数到数据库（使用UPSERT避免重复键冲突）
 
         Args:
+            hash: 种子hash值
             torrent_id: 种子ID
             site_name: 站点名称
             parameters: 参数字典
@@ -115,14 +116,15 @@ class SeedParameter:
                 # PostgreSQL使用ON CONFLICT DO UPDATE
                 insert_sql = f"""
                     INSERT INTO seed_parameters
-                    (torrent_id, site_name, nickname, title, subtitle, imdb_link, douban_link, type, medium,
+                    (hash, torrent_id, site_name, nickname, save_path, title, subtitle, imdb_link, douban_link, type, medium,
                      video_codec, audio_codec, resolution, team, source, tags, poster, screenshots,
                      statement, body, mediainfo, title_components, created_at, updated_at)
-                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
-                    ON CONFLICT (torrent_id, site_name)
+                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+                    ON CONFLICT (hash, torrent_id, site_name)
                     DO UPDATE SET
                         nickname = EXCLUDED.nickname,
                         title = EXCLUDED.title,
+                        save_path = EXCLUDED.save_path,
                         subtitle = EXCLUDED.subtitle,
                         imdb_link = EXCLUDED.imdb_link,
                         douban_link = EXCLUDED.douban_link,
@@ -146,13 +148,15 @@ class SeedParameter:
                 # MySQL使用ON DUPLICATE KEY UPDATE
                 insert_sql = f"""
                     INSERT INTO seed_parameters
-                    (torrent_id, site_name, nickname, title, subtitle, imdb_link, douban_link, type, medium,
+                    (hash, torrent_id, site_name, nickname, save_path, title, subtitle, imdb_link, douban_link, type, medium,
                      video_codec, audio_codec, resolution, team, source, tags, poster, screenshots,
                      statement, body, mediainfo, title_components, created_at, updated_at)
-                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
                     ON DUPLICATE KEY UPDATE
+                        torrent_id = VALUES(torrent_id),
                         nickname = VALUES(nickname),
                         title = VALUES(title),
+                        save_path = VALUES(save_path),
                         subtitle = VALUES(subtitle),
                         imdb_link = VALUES(imdb_link),
                         douban_link = VALUES(douban_link),
@@ -176,14 +180,16 @@ class SeedParameter:
                 # SQLite使用ON CONFLICT DO UPDATE
                 insert_sql = f"""
                     INSERT INTO seed_parameters
-                    (torrent_id, site_name, nickname, title, subtitle, imdb_link, douban_link, type, medium,
+                    (hash, torrent_id, site_name, nickname, save_path, title, subtitle, imdb_link, douban_link, type, medium,
                      video_codec, audio_codec, resolution, team, source, tags, poster, screenshots,
                      statement, body, mediainfo, title_components, created_at, updated_at)
-                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
-                    ON CONFLICT (torrent_id, site_name)
+                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+                    ON CONFLICT (hash, torrent_id, site_name)
                     DO UPDATE SET
+                        torrent_id = excluded.torrent_id,
                         nickname = excluded.nickname,
                         title = excluded.title,
+                        save_path = excluded.save_path,
                         subtitle = excluded.subtitle,
                         imdb_link = excluded.imdb_link,
                         douban_link = excluded.douban_link,
@@ -205,7 +211,16 @@ class SeedParameter:
                 """
 
             # 准备参数
-            params = (torrent_id, site_name, parameters.get("nickname", ""),
+            # 处理mediainfo字段（可能为字典，需要转换为字符串）
+            mediainfo = parameters.get("mediainfo", "")
+            if isinstance(mediainfo, dict):
+                mediainfo = json.dumps(mediainfo, ensure_ascii=False)
+            elif not isinstance(mediainfo, str):
+                mediainfo = str(mediainfo) if mediainfo else ""
+
+            params = (hash, torrent_id, site_name,
+                      parameters.get("nickname",
+                                     ""), parameters.get("save_path", ""),
                       parameters.get("title",
                                      ""), parameters.get("subtitle", ""),
                       parameters.get("imdb_link",
@@ -219,9 +234,7 @@ class SeedParameter:
                                      ""), tags, parameters.get("poster", ""),
                       parameters.get("screenshots",
                                      ""), parameters.get("statement", ""),
-                      parameters.get("body",
-                                     ""), parameters.get("mediainfo",
-                                                         ""), title_components,
+                      parameters.get("body", ""), mediainfo, title_components,
                       parameters["created_at"], parameters["updated_at"])
 
             cursor.execute(insert_sql, params)
@@ -469,3 +482,52 @@ class SeedParameter:
         except Exception as e:
             logging.error(f"删除种子参数文件失败: {e}", exc_info=True)
             return False
+
+    def search_torrent_hash(self, name: str, sites: str = None) -> str:
+        """
+        根据种子名称和站点信息搜索对应的hash值。
+
+        Args:
+            name (str): 种子名称
+            sites (str, optional): 站点信息
+
+        Returns:
+            str: hash字符串，如果未找到则返回空字符串
+        """
+        try:
+            conn = self.db_manager._get_connection()
+            cursor = self.db_manager._get_cursor(conn)
+            ph = self.db_manager.get_placeholder()
+
+            # 根据数据库类型构建查询语句
+            if self.db_manager.db_type == "postgresql":
+                if sites:
+                    cursor.execute(
+                        "SELECT hash FROM torrents WHERE name = %s AND sites = %s",
+                        (name, sites))
+                else:
+                    cursor.execute("SELECT hash FROM torrents WHERE name = %s",
+                                   (name, ))
+            else:
+                if sites:
+                    cursor.execute(
+                        "SELECT hash FROM torrents WHERE name = ? AND sites = ?",
+                        (name, sites))
+                else:
+                    cursor.execute("SELECT hash FROM torrents WHERE name = ?",
+                                   (name, ))
+
+            results = cursor.fetchall()
+            if results:
+                return results[0]["hash"]
+            else:
+                return ""
+
+        except Exception as e:
+            logging.error(f"search_torrent_hash 出错: {e}", exc_info=True)
+            return ""
+        finally:
+            if cursor:
+                cursor.close()
+            if conn:
+                conn.close()

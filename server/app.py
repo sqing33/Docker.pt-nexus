@@ -124,11 +124,11 @@ def create_app():
     # 检查是否在调试模式下运行
     if os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
         logging.info("正在启动数据追踪线程...")
-        start_data_tracker(db_manager, config_manager)
+        # start_data_tracker(db_manager, config_manager)
 
-        # --- 启动IYUU后台线程 ---
-        logging.info("正在启动IYUU后台线程...")
-        start_iyuu_thread(db_manager, config_manager)
+        # # --- 启动IYUU后台线程 ---
+        # logging.info("正在启动IYUU后台线程...")
+        # start_iyuu_thread(db_manager, config_manager)
     else:
         logging.info("检测到调试监控进程，跳过后台线程启动。")
 

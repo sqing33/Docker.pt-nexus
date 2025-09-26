@@ -146,8 +146,7 @@ class DatabaseManager:
                 )
             else:  # sqlite
                 cursor.execute(
-                    f"ALTER TABLE {table_name} ADD COLUMN nickname TEXT"
-                )
+                    f"ALTER TABLE {table_name} ADD COLUMN nickname TEXT")
             conn.commit()
             logging.info("'nickname' 列添加成功。")
 
@@ -348,7 +347,6 @@ class DatabaseManager:
             cursor.close()
             conn.close()
 
-    
     def _add_missing_columns(self, conn, cursor):
         """检查并向 sites 表添加缺失的列，实现自动化的数据库迁移。"""
         logging.info("正在检查 'sites' 表的结构完整性...")
@@ -592,7 +590,7 @@ class DatabaseManager:
             )
             # 创建种子参数表，用于存储从源站点提取的种子参数
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS seed_parameters (id INTEGER NOT NULL AUTO_INCREMENT, torrent_id VARCHAR(255) NOT NULL, site_name VARCHAR(255) NOT NULL, nickname VARCHAR(255), title TEXT, subtitle TEXT, imdb_link TEXT, douban_link TEXT, type VARCHAR(100), medium VARCHAR(100), video_codec VARCHAR(100), audio_codec VARCHAR(100), resolution VARCHAR(100), team VARCHAR(100), source VARCHAR(100), tags TEXT, poster TEXT, screenshots TEXT, statement TEXT, body TEXT, mediainfo TEXT, title_components TEXT, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, PRIMARY KEY (id), UNIQUE KEY seed_parameters_torrent_id_site_name_key (torrent_id, site_name)) ENGINE=InnoDB ROW_FORMAT=DYNAMIC"
+                "CREATE TABLE IF NOT EXISTS seed_parameters (hash VARCHAR(40) NOT NULL, torrent_id VARCHAR(255) NOT NULL, site_name VARCHAR(255) NOT NULL, nickname VARCHAR(255), save_path TEXT, title TEXT, subtitle TEXT, imdb_link TEXT, douban_link TEXT, type VARCHAR(100), medium VARCHAR(100), video_codec VARCHAR(100), audio_codec VARCHAR(100), resolution VARCHAR(100), team VARCHAR(100), source VARCHAR(100), tags TEXT, poster TEXT, screenshots TEXT, statement TEXT, body TEXT, mediainfo TEXT, title_components TEXT, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, PRIMARY KEY (hash, torrent_id, site_name)) ENGINE=InnoDB ROW_FORMAT=DYNAMIC"
             )
         # 表创建逻辑 (PostgreSQL)
         elif self.db_type == "postgresql":
@@ -617,7 +615,7 @@ class DatabaseManager:
             )
             # 创建种子参数表，用于存储从源站点提取的种子参数
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS seed_parameters (id SERIAL PRIMARY KEY, torrent_id VARCHAR(255) NOT NULL, site_name VARCHAR(255) NOT NULL, nickname VARCHAR(255), title TEXT, subtitle TEXT, imdb_link TEXT, douban_link TEXT, type VARCHAR(100), medium VARCHAR(100), video_codec VARCHAR(100), audio_codec VARCHAR(100), resolution VARCHAR(100), team VARCHAR(100), source VARCHAR(100), tags TEXT, poster TEXT, screenshots TEXT, statement TEXT, body TEXT, mediainfo TEXT, title_components TEXT, created_at TIMESTAMP NOT NULL, updated_at TIMESTAMP NOT NULL, CONSTRAINT seed_parameters_torrent_id_site_name_key UNIQUE (torrent_id, site_name))"
+                "CREATE TABLE IF NOT EXISTS seed_parameters (hash VARCHAR(40) NOT NULL, torrent_id VARCHAR(255) NOT NULL, site_name VARCHAR(255) NOT NULL, nickname VARCHAR(255), title TEXT, subtitle TEXT, imdb_link TEXT, douban_link TEXT, type VARCHAR(100), medium VARCHAR(100), video_codec VARCHAR(100), audio_codec VARCHAR(100), resolution VARCHAR(100), team VARCHAR(100), source VARCHAR(100), tags TEXT, poster TEXT, screenshots TEXT, statement TEXT, body TEXT, mediainfo TEXT, title_components TEXT, created_at TIMESTAMP NOT NULL, updated_at TIMESTAMP NOT NULL, PRIMARY KEY (hash, torrent_id, site_name))"
             )
         # 表创建逻辑 (SQLite)
         else:
@@ -642,7 +640,7 @@ class DatabaseManager:
             )
             # 创建种子参数表，用于存储从源站点提取的种子参数
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS seed_parameters (id INTEGER PRIMARY KEY AUTOINCREMENT, torrent_id TEXT NOT NULL, site_name TEXT NOT NULL, nickname TEXT, title TEXT, subtitle TEXT, imdb_link TEXT, douban_link TEXT, type TEXT, medium TEXT, video_codec TEXT, audio_codec TEXT, resolution TEXT, team TEXT, source TEXT, tags TEXT, poster TEXT, screenshots TEXT, statement TEXT, body TEXT, mediainfo TEXT, title_components TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE (torrent_id, site_name))"
+                "CREATE TABLE IF NOT EXISTS seed_parameters (hash TEXT NOT NULL, torrent_id TEXT NOT NULL, site_name TEXT NOT NULL, nickname TEXT, title TEXT, subtitle TEXT, imdb_link TEXT, douban_link TEXT, type TEXT, medium TEXT, video_codec TEXT, audio_codec TEXT, resolution TEXT, team TEXT, source TEXT, tags TEXT, poster TEXT, screenshots TEXT, statement TEXT, body TEXT, mediainfo TEXT, title_components TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (hash, torrent_id, site_name))"
             )
 
         conn.commit()
@@ -862,8 +860,10 @@ def reconcile_historical_data(db_manager, config):
             if client_config["type"] == "qbittorrent":
                 api_config = {
                     k: v
-                    for k, v in client_config.items()
-                    if k not in ["id", "name", "type", "enabled", "use_proxy", "proxy_port"]
+                    for k, v in client_config.items() if k not in [
+                        "id", "name", "type", "enabled", "use_proxy",
+                        "proxy_port"
+                    ]
                 }
                 client = Client(**api_config)
                 client.auth_log_in()

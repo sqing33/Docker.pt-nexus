@@ -92,11 +92,12 @@ def generate_reverse_mappings():
 
 @cross_seed_data_bp.route('/api/cross-seed-data', methods=['GET'])
 def get_cross_seed_data():
-    """获取seed_parameters表中的所有数据（支持分页）"""
+    """获取seed_parameters表中的所有数据（支持分页和搜索）"""
     try:
         # 获取分页参数
         page = int(request.args.get('page', 1))
         page_size = int(request.args.get('page_size', 20))
+        search_query = request.args.get('search', '').strip()
 
         # 限制页面大小
         page_size = min(page_size, 100)
@@ -109,32 +110,49 @@ def get_cross_seed_data():
         conn = db_manager._get_connection()
         cursor = db_manager._get_cursor(conn)
 
+        # 构建查询条件
+        where_clause = ""
+        params = []
+        if search_query:
+            if db_manager.db_type == "postgresql":
+                where_clause = "WHERE title ILIKE %s OR torrent_id ILIKE %s"
+                params = [f"%{search_query}%", f"%{search_query}%"]
+            else:
+                where_clause = "WHERE title LIKE ? OR torrent_id LIKE ?"
+                params = [f"%{search_query}%", f"%{search_query}%"]
+
         # 先查询总数
-        cursor.execute("SELECT COUNT(*) as total FROM seed_parameters")
+        count_query = f"SELECT COUNT(*) as total FROM seed_parameters {where_clause}"
+        if db_manager.db_type == "postgresql":
+            cursor.execute(count_query, params)
+        else:
+            cursor.execute(count_query, params)
         total_result = cursor.fetchone()
         total_count = total_result[0] if isinstance(
             total_result, tuple) else total_result['total']
 
         # 查询当前页的数据，只获取前端需要显示的列
         if db_manager.db_type == "postgresql":
-            cursor.execute(
-                """
-                SELECT id, torrent_id, site_name, nickname, title, subtitle, type, medium, video_codec,
-                       audio_codec, resolution, team, source, tags, updated_at
+            query = f"""
+                SELECT hash, torrent_id, site_name, nickname, title, subtitle, type, medium, video_codec,
+                       audio_codec, resolution, team, source, tags, title_components, updated_at
                 FROM seed_parameters
+                {where_clause}
                 ORDER BY created_at DESC
                 LIMIT %s OFFSET %s
-            """, (page_size, offset))
+            """
+            cursor.execute(query, params + [page_size, offset])
         else:
             placeholder = "?" if db_manager.db_type == "sqlite" else "%s"
-            cursor.execute(
-                f"""
-                SELECT id, torrent_id, site_name, nickname, title, subtitle, type, medium, video_codec,
-                       audio_codec, resolution, team, source, tags, updated_at
+            query = f"""
+                SELECT hash, torrent_id, site_name, nickname, title, subtitle, type, medium, video_codec,
+                       audio_codec, resolution, team, source, tags, title_components, updated_at
                 FROM seed_parameters
+                {where_clause}
                 ORDER BY created_at DESC
                 LIMIT {placeholder} OFFSET {placeholder}
-            """, (page_size, offset))
+            """
+            cursor.execute(query, params + [page_size, offset])
 
         rows = cursor.fetchall()
 
@@ -160,6 +178,28 @@ def get_cross_seed_data():
                     tags = [tag.strip()
                             for tag in tags.split(',')] if tags else []
                 item['tags'] = tags
+
+            # Extract "无法识别" field from title_components
+            title_components = item.get('title_components', [])
+            unrecognized_value = ''
+            if isinstance(title_components, str):
+                try:
+                    # Try to parse as JSON list
+                    import json
+                    title_components = json.loads(title_components)
+                except:
+                    # If parsing fails, keep as is
+                    title_components = []
+
+            # Find the "无法识别" entry in title_components
+            if isinstance(title_components, list):
+                for component in title_components:
+                    if isinstance(component, dict) and component.get('key') == '无法识别':
+                        unrecognized_value = component.get('value', '')
+                        break
+
+            # Add unrecognized field to item
+            item['unrecognized'] = unrecognized_value
 
         cursor.close()
         conn.close()

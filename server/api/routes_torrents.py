@@ -63,8 +63,7 @@ def get_data_api():
         state_filters = json.loads(request.args.get("state_filters", "[]"))
         downloader_filters = json.loads(
             request.args.get("downloader_filters", "[]"))
-        exist_site_names = json.loads(
-            request.args.get("existSiteNames", "[]"))
+        exist_site_names = json.loads(request.args.get("existSiteNames", "[]"))
         not_exist_site_names = json.loads(
             request.args.get("notExistSiteNames", "[]"))
         name_search = request.args.get("nameSearch", "").lower()
@@ -81,12 +80,18 @@ def get_data_api():
         # --- [新增] 开始: 一次性获取所有站点配置信息 ---
         cursor.execute("SELECT nickname, migration FROM sites")
         # [修复] 将 sqlite3.Row 对象转换为标准的 dict，以支持 .get() 方法
-        site_configs = {row["nickname"]: dict(row) for row in cursor.fetchall()}
+        site_configs = {
+            row["nickname"]: dict(row)
+            for row in cursor.fetchall()
+        }
         # --- [新增] 结束 ---
 
         # 获取所有目标站点（migration 为 2 或 3 的站点）
-        target_sites = {name for name, config in site_configs.items()
-                       if config.get("migration", 0) in [2, 3]}
+        target_sites = {
+            name
+            for name, config in site_configs.items()
+            if config.get("migration", 0) in [2, 3]
+        }
 
         cursor.execute(
             "SELECT DISTINCT sites FROM torrents WHERE sites IS NOT NULL AND sites != ''"
@@ -96,9 +101,13 @@ def get_data_api():
 
         # 明确指定查询列，确保包含新添加的列，并排除状态为"不存在"的记录
         if db_manager.db_type == "postgresql":
-            cursor.execute("SELECT hash, name, save_path, size, progress, state, sites, \"group\", details, downloader_id, last_seen, iyuu_last_check FROM torrents WHERE state != %s", ("不存在",))
+            cursor.execute(
+                "SELECT hash, name, save_path, size, progress, state, sites, \"group\", details, downloader_id, last_seen, iyuu_last_check FROM torrents WHERE state != %s",
+                ("不存在", ))
         else:
-            cursor.execute("SELECT hash, name, save_path, size, progress, state, sites, `group`, details, downloader_id, last_seen, iyuu_last_check FROM torrents WHERE state != %s", ("不存在",))
+            cursor.execute(
+                "SELECT hash, name, save_path, size, progress, state, sites, `group`, details, downloader_id, last_seen, iyuu_last_check FROM torrents WHERE state != %s",
+                ("不存在", ))
         torrents_raw = [dict(row) for row in cursor.fetchall()]
 
         cursor.execute(
@@ -178,7 +187,8 @@ def get_data_api():
                 "downloaderIds":
                 data.get("downloader_ids", []),
                 "downloaderId":
-                data.get("downloader_ids", [None])[0] if data.get("downloader_ids") else None  # 保持向后兼容
+                data.get("downloader_ids", [None])[0]
+                if data.get("downloader_ids") else None  # 保持向后兼容
             })
             final_torrent_list.append(data)
 
@@ -200,7 +210,8 @@ def get_data_api():
         if downloader_filters:
             filtered_list = [
                 t for t in filtered_list
-                if any(downloader_id in downloader_filters for downloader_id in t.get("downloaderIds", []))
+                if any(downloader_id in downloader_filters
+                       for downloader_id in t.get("downloaderIds", []))
             ]
         # 站点筛选逻辑：同时支持存在于和不存在于的筛选
         # 种子必须存在于exist_site_names中的所有站点
@@ -216,7 +227,8 @@ def get_data_api():
             not_exist_site_set = set(not_exist_site_names)
             filtered_list = [
                 t for t in filtered_list
-                if not not_exist_site_set.intersection(set(t.get("sites", {}).keys()))
+                if not not_exist_site_set.intersection(
+                    set(t.get("sites", {}).keys()))
             ]
 
         # Sorting logic
@@ -228,7 +240,8 @@ def get_data_api():
             }
             sort_key = sort_key_map.get(sort_prop, sort_prop)
             if sort_key in [
-                    "size", "progress", "total_uploaded", "site_count", "target_sites_count"
+                    "size", "progress", "total_uploaded", "site_count",
+                    "target_sites_count"
             ]:
                 filtered_list.sort(key=lambda x: x.get(sort_key, 0),
                                    reverse=reverse)
@@ -272,6 +285,7 @@ def get_data_api():
             cursor.close()
         if conn:
             conn.close()
+
 
 @torrents_bp.route("/refresh_data", methods=["POST"])
 def refresh_data_api():
