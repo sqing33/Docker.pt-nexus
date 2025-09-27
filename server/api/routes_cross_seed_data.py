@@ -90,6 +90,45 @@ def generate_reverse_mappings():
         }
 
 
+@cross_seed_data_bp.route('/api/cross-seed-data/unique-paths', methods=['GET'])
+def get_unique_save_paths():
+    """获取seed_parameters表中所有唯一的保存路径"""
+    try:
+        # 获取数据库管理器
+        db_manager = current_app.config['DB_MANAGER']
+        conn = db_manager._get_connection()
+        cursor = db_manager._get_cursor(conn)
+
+        # 查询所有唯一的保存路径
+        if db_manager.db_type == "postgresql":
+            query = "SELECT DISTINCT save_path FROM seed_parameters WHERE save_path IS NOT NULL AND save_path != '' ORDER BY save_path"
+            cursor.execute(query)
+        else:
+            query = "SELECT DISTINCT save_path FROM seed_parameters WHERE save_path IS NOT NULL AND save_path != '' ORDER BY save_path"
+            cursor.execute(query)
+
+        rows = cursor.fetchall()
+
+        # 将结果转换为列表
+        if isinstance(rows, list):
+            # PostgreSQL返回的是字典列表
+            unique_paths = [row['save_path'] for row in rows if row['save_path']]
+        else:
+            # MySQL和SQLite返回的是元组列表
+            unique_paths = [row[0] for row in rows if row[0]]
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            "success": True,
+            "unique_paths": unique_paths
+        })
+    except Exception as e:
+        logging.error(f"获取唯一保存路径时出错: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @cross_seed_data_bp.route('/api/cross-seed-data', methods=['GET'])
 def get_cross_seed_data():
     """获取seed_parameters表中的所有数据（支持分页和搜索）"""
@@ -98,6 +137,10 @@ def get_cross_seed_data():
         page = int(request.args.get('page', 1))
         page_size = int(request.args.get('page_size', 20))
         search_query = request.args.get('search', '').strip()
+
+        # 获取筛选参数
+        save_path_filter = request.args.get('save_path', '').strip()
+        is_deleted_filter = request.args.get('is_deleted', '').strip()
 
         # 限制页面大小
         page_size = min(page_size, 100)
@@ -111,15 +154,47 @@ def get_cross_seed_data():
         cursor = db_manager._get_cursor(conn)
 
         # 构建查询条件
-        where_clause = ""
+        where_conditions = []
         params = []
+
+        # 搜索查询条件
         if search_query:
             if db_manager.db_type == "postgresql":
-                where_clause = "WHERE title ILIKE %s OR torrent_id ILIKE %s"
-                params = [f"%{search_query}%", f"%{search_query}%"]
+                where_conditions.append(
+                    "(title ILIKE %s OR torrent_id ILIKE %s OR subtitle ILIKE %s)")
+                params.extend([f"%{search_query}%", f"%{search_query}%", f"%{search_query}%"])
             else:
-                where_clause = "WHERE title LIKE ? OR torrent_id LIKE ?"
-                params = [f"%{search_query}%", f"%{search_query}%"]
+                where_conditions.append("(title LIKE ? OR torrent_id LIKE ? OR subtitle LIKE ?)")
+                params.extend([f"%{search_query}%", f"%{search_query}%", f"%{search_query}%"])
+
+        # 保存路径筛选条件 - 支持多个路径筛选
+        if save_path_filter:
+            # 将逗号分隔的路径转换为列表
+            paths = [path.strip() for path in save_path_filter.split(',') if path.strip()]
+            if paths:
+                if db_manager.db_type == "postgresql":
+                    # PostgreSQL 使用 ANY 操作符
+                    placeholders = ', '.join(['%s'] * len(paths))
+                    where_conditions.append(f"save_path = ANY(ARRAY[{placeholders}])")
+                    params.extend(paths)
+                else:
+                    # MySQL 和 SQLite 使用 IN 操作符
+                    placeholders = ', '.join(['%s' if db_manager.db_type == "mysql" else '?'] * len(paths))
+                    where_conditions.append(f"save_path IN ({placeholders})")
+                    params.extend(paths)
+
+        # 删除状态筛选条件
+        if is_deleted_filter in ['0', '1']:
+            if db_manager.db_type == "postgresql":
+                where_conditions.append("is_deleted = %s")
+            else:
+                where_conditions.append("is_deleted = ?")
+            params.append(int(is_deleted_filter))
+
+        # 组合WHERE子句
+        where_clause = ""
+        if where_conditions:
+            where_clause = "WHERE " + " AND ".join(where_conditions)
 
         # 先查询总数
         count_query = f"SELECT COUNT(*) as total FROM seed_parameters {where_clause}"
@@ -134,8 +209,8 @@ def get_cross_seed_data():
         # 查询当前页的数据，只获取前端需要显示的列
         if db_manager.db_type == "postgresql":
             query = f"""
-                SELECT hash, torrent_id, site_name, nickname, title, subtitle, type, medium, video_codec,
-                       audio_codec, resolution, team, source, tags, title_components, updated_at
+                SELECT hash, torrent_id, site_name, nickname, save_path, title, subtitle, type, medium, video_codec,
+                       audio_codec, resolution, team, source, tags, title_components, is_deleted, updated_at
                 FROM seed_parameters
                 {where_clause}
                 ORDER BY created_at DESC
@@ -145,8 +220,8 @@ def get_cross_seed_data():
         else:
             placeholder = "?" if db_manager.db_type == "sqlite" else "%s"
             query = f"""
-                SELECT hash, torrent_id, site_name, nickname, title, subtitle, type, medium, video_codec,
-                       audio_codec, resolution, team, source, tags, title_components, updated_at
+                SELECT hash, torrent_id, site_name, nickname, save_path, title, subtitle, type, medium, video_codec,
+                       audio_codec, resolution, team, source, tags, title_components, is_deleted, updated_at
                 FROM seed_parameters
                 {where_clause}
                 ORDER BY created_at DESC
@@ -194,12 +269,31 @@ def get_cross_seed_data():
             # Find the "无法识别" entry in title_components
             if isinstance(title_components, list):
                 for component in title_components:
-                    if isinstance(component, dict) and component.get('key') == '无法识别':
+                    if isinstance(component,
+                                  dict) and component.get('key') == '无法识别':
                         unrecognized_value = component.get('value', '')
                         break
 
             # Add unrecognized field to item
             item['unrecognized'] = unrecognized_value
+
+        # 获取所有唯一的保存路径（用于路径树）
+        if db_manager.db_type == "postgresql":
+            path_query = "SELECT DISTINCT save_path FROM seed_parameters WHERE save_path IS NOT NULL AND save_path != '' ORDER BY save_path"
+            cursor.execute(path_query)
+        else:
+            path_query = "SELECT DISTINCT save_path FROM seed_parameters WHERE save_path IS NOT NULL AND save_path != '' ORDER BY save_path"
+            cursor.execute(path_query)
+
+        path_rows = cursor.fetchall()
+
+        # 将结果转换为列表
+        if isinstance(path_rows, list):
+            # PostgreSQL返回的是字典列表
+            unique_paths = [row['save_path'] for row in path_rows if row['save_path']]
+        else:
+            # MySQL和SQLite返回的是元组列表
+            unique_paths = [row[0] for row in path_rows if row[0]]
 
         cursor.close()
         conn.close()
@@ -214,7 +308,8 @@ def get_cross_seed_data():
             "total": total_count,
             "page": page,
             "page_size": page_size,
-            "reverse_mappings": reverse_mappings
+            "reverse_mappings": reverse_mappings,
+            "unique_paths": unique_paths  # 添加唯一路径数据
         })
     except Exception as e:
         logging.error(f"获取转种数据时出错: {e}")

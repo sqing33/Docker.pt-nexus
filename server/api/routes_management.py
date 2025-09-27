@@ -884,6 +884,44 @@ def save_ui_settings():
         return jsonify({"success": False, "message": "无法保存 UI 设置。"}), 500
 
 
+@management_bp.route("/ui_settings/cross_seed", methods=["GET"])
+def get_cross_seed_ui_settings():
+    """获取 CrossSeedDataView 的 UI 设置。"""
+    config_manager = management_bp.config_manager
+    # 提供一个安全的默认值，以防配置文件损坏或字段缺失
+    default_settings = {
+        "page_size": 20,
+        "search_query": "",
+        "active_filters": {
+            "savePath": "",
+            "isDeleted": ""
+        }
+    }
+    # 从配置中获取 cross_seed_view 的设置，如果不存在则使用默认值
+    settings = config_manager.get().get("ui_settings",
+                                        {}).get("cross_seed_view",
+                                                default_settings)
+    return jsonify(settings)
+
+
+@management_bp.route("/ui_settings/cross_seed", methods=["POST"])
+def save_cross_seed_ui_settings():
+    """保存 CrossSeedDataView 的 UI 设置。"""
+    config_manager = management_bp.config_manager
+    new_cross_seed_view_settings = request.json
+
+    current_config = config_manager.get()
+
+    # 使用 .setdefault 确保各层级都存在
+    ui_settings = current_config.setdefault("ui_settings", {})
+    ui_settings["cross_seed_view"] = new_cross_seed_view_settings
+
+    if config_manager.save(current_config):
+        return jsonify({"success": True, "message": "Cross Seed UI 设置已成功保存。"})
+    else:
+        return jsonify({"success": False, "message": "无法保存 Cross Seed UI 设置。"}), 500
+
+
 # --- [新增] IYUU 设置接口 ---
 @management_bp.route("/iyuu/settings", methods=["GET"])
 def get_iyuu_settings():
