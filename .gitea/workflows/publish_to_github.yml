@@ -8,34 +8,61 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
+
+    container:
+      image: ghcr.io/sqing33/gitea_actions_runner:latest
+
     steps:
       - name: Checkout Gitea repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Remove non-open-source files based on .github_exclude
+      - name: Clean repository history with BFG
+        shell: bash
         run: |
-          # 检查 .github_exclude 文件是否存在
-          if [ -f .github_exclude ]; then
-            echo "Found .github_exclude, processing files to remove..."
-            # 读取 .github_exclude 文件，过滤掉注释和空行，然后执行删除
-            # xargs -r 会在没有输入的情况下不运行 rm 命令，更安全
-            grep -vE '^#|^$' .github_exclude | xargs -r rm -rf
-            echo "Cleanup complete."
-          else
-            echo ".github_exclude not found, skipping cleanup."
+          set -e
+
+          BFG_ARGS=()
+          
+          # 关键改动：添加 --no-blob-protection 参数
+          # 这会告诉 BFG 清理所有提交，包括最新的 HEAD 提交
+          BFG_ARGS+=(--no-blob-protection)
+
+          # 处理要删除的文件列表
+          if [ -f .bfg_delete_files ]; then
+            FILES_TO_DELETE=$(grep -vE '^#|^$' .bfg_delete_files | tr '\n' ',' | sed 's/,$//')
+            if [ -n "$FILES_TO_DELETE" ]; then
+              BFG_ARGS+=(--delete-files "{$FILES_TO_DELETE}")
+            fi
           fi
 
-      - name: Push to GitHub
+          # 处理要删除的文件夹列表
+          if [ -f .bfg_delete_folders ]; then
+            FOLDERS_TO_DELETE=$(grep -vE '^#|^$' .bfg_delete_folders | tr '\n' ',' | sed 's/,$//')
+            if [ -n "$FOLDERS_TO_DELETE" ]; then
+              BFG_ARGS+=(--delete-folders "{$FOLDERS_TO_DELETE}")
+            fi
+          fi
+
+          # 检查除了 --no-blob-protection 之外是否还有其他清理参数
+          if [ ${#BFG_ARGS[@]} -le 1 ]; then
+            echo "No files or folders specified for cleanup. Skipping."
+            exit 0
+          fi
+
+          echo "Cleaning repository with BFG. Arguments: ${BFG_ARGS[@]}"
+          
+          java -jar /usr/local/bin/bfg.jar "${BFG_ARGS[@]}" .
+          
+          echo "Compacting repository to physically remove cleaned objects..."
+          git reflog expire --expire=now --all && git gc --prune=now --aggressive
+
+      - name: Push cleaned repository to GitHub
+        shell: bash
         run: |
-          git config --global user.name 'Your Name'
-          git config --global user.email 'your-email@example.com'
-          # 注意：这里我们同样删除了 .github_exclude 文件本身，因为它也不应该出现在 GitHub 上
-          rm -f .github_exclude
-          # 添加所有更改（包括删除的文件）到暂存区
-          git add -A
-          # 创建一个新的提交，这会让 GitHub 上的历史更干净
-          git commit -m "Publish open-source version"
-          # 强制推送到 GitHub
-          git push --force https://your-github-username:${{ secrets.GITHUB_TOKEN }}@github.com/your-github-username/your-github-repo.git main
+          set -e
+          
+          echo "Pushing the cleaned repository to GitHub..."
+          git remote set-url origin https://sqing33:${{ secrets.TOKEN }}@github.com/sqing33/Docker.pt-nexus.git
+          git push --force --mirror

@@ -1,0 +1,8 @@
+# 按文件夹名删除，无论它们在哪个目录下
+node_modules
+dist
+data
+corss_seed
+.vscode
+.gitea
+.claude

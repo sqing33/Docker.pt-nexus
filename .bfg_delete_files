@@ -1,0 +1,14 @@
+# 按文件名删除，无论它们在哪个目录下
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.env
+__pycache__
+qb.py
+test.py
+CLAUDE.md
+.bfg_delete_files
+.bfg_delete_folders
+.github_exclude
