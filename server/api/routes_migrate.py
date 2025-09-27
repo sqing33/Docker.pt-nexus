@@ -1071,7 +1071,35 @@ def migrate_publish():
                                         torrent_filename = urllib.parse.unquote(
                                             torrent_filename)
 
-                            # 创建以种子ID命名的目录（如果之前没有的话）
+                            # 如果 torrent_dir 还没有确定，尝试从数据库获取种子标题来创建目录
+                            if not torrent_dir:
+                                try:
+                                    # 从数据库获取种子参数来确定目录名
+                                    from models.seed_parameter import SeedParameter
+                                    from flask import current_app
+                                    db_manager = current_app.config['DB_MANAGER']
+                                    seed_param_model = SeedParameter(db_manager)
+
+                                    if source_torrent_id and source_site_name:
+                                        # 从数据库获取种子参数
+                                        parameters = seed_param_model.get_parameters(
+                                            source_torrent_id, source_site_name)
+                                        if parameters and parameters.get("title"):
+                                            # 重建种子目录路径
+                                            from config import TEMP_DIR
+                                            import re
+                                            original_main_title = parameters.get(
+                                                "title", "")
+                                            safe_filename_base = re.sub(
+                                                r'[\\/*?:"<>|]', "_",
+                                                original_main_title)[:150]
+                                            torrent_dir = os.path.join(
+                                                TEMP_DIR, safe_filename_base)
+                                            os.makedirs(torrent_dir, exist_ok=True)
+                                except Exception as e:
+                                    logging.warning(f"尝试从数据库获取标题创建目录时出错: {e}")
+
+                            # 如果 still 没有 torrent_dir，则回退到原来的以ID命名的目录
                             if not torrent_dir:
                                 torrent_dir = os.path.join(
                                     TEMP_DIR, f"torrent_{source_torrent_id}")
@@ -1127,16 +1155,14 @@ def migrate_publish():
                         "logs": f"重新下载种子文件失败: {e}"
                     }), 500
 
-        # 1. 修改种子文件
-        main_title = upload_data.get("original_main_title", "torrent")
-        modified_torrent_path = migrator.modify_torrent_file(
-            original_torrent_path, main_title)
-        if not modified_torrent_path:
-            raise Exception("修改种子文件失败。")
+        # 1. 直接使用原始种子文件路径进行发布（不再修改种子）
+        if not original_torrent_path or not os.path.exists(original_torrent_path):
+            raise Exception("原始种子文件路径无效或文件不存在。")
 
-        # 2. 发布
+        # 2. 发布 (传递 torrent_dir 给上传器)
+        upload_data["torrent_dir"] = torrent_dir  # 确保上传器能获取到 torrent_dir
         result = migrator.publish_prepared_torrent(upload_data,
-                                                   modified_torrent_path)
+                                                   original_torrent_path)
         return jsonify(result)
 
     except Exception as e:
