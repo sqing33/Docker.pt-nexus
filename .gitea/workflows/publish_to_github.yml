@@ -1,0 +1,41 @@
+name: Publish to GitHub
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Gitea repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Remove non-open-source files based on .github_exclude
+        run: |
+          # 检查 .github_exclude 文件是否存在
+          if [ -f .github_exclude ]; then
+            echo "Found .github_exclude, processing files to remove..."
+            # 读取 .github_exclude 文件，过滤掉注释和空行，然后执行删除
+            # xargs -r 会在没有输入的情况下不运行 rm 命令，更安全
+            grep -vE '^#|^$' .github_exclude | xargs -r rm -rf
+            echo "Cleanup complete."
+          else
+            echo ".github_exclude not found, skipping cleanup."
+          fi
+
+      - name: Push to GitHub
+        run: |
+          git config --global user.name 'Your Name'
+          git config --global user.email 'your-email@example.com'
+          # 注意：这里我们同样删除了 .github_exclude 文件本身，因为它也不应该出现在 GitHub 上
+          rm -f .github_exclude
+          # 添加所有更改（包括删除的文件）到暂存区
+          git add -A
+          # 创建一个新的提交，这会让 GitHub 上的历史更干净
+          git commit -m "Publish open-source version"
+          # 强制推送到 GitHub
+          git push --force https://your-github-username:${{ secrets.GITHUB_TOKEN }}@github.com/your-github-username/your-github-repo.git main

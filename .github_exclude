@@ -1,0 +1,28 @@
+# webui
+webui/logs
+webui/*.log
+webui/npm-debug.log*
+webui/yarn-debug.log*
+webui/yarn-error.log*
+webui/pnpm-debug.log*
+webui/lerna-debug.log*
+webui/node_modules
+webui/dist
+
+# server
+server/.env
+server/data
+*/__pycache__
+*/*/__pycache__
+
+# proxy
+proxy/qb.py
+proxy/test.py
+
+# corss_seed
+corss_seed
+
+.vscode
+.gitea
+.claude
+CLAUDE.md
