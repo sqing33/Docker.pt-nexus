@@ -54,7 +54,11 @@
           <div class="name-header-container">
             <div>种子名称</div>
             <el-input v-model="nameSearch" placeholder="搜索名称..." clearable class="search-input" @click.stop />
-            <span @click.stop>
+            <span @click.stop style="display: flex; align-items: center;">
+              <div v-if="hasActiveFilters" class="current-filters" style="margin-right: 15px; display: flex; align-items: center;">
+                <el-tag type="info" size="default" effect="plain">{{ currentFilterText }}</el-tag>
+                <el-button type="danger" link style="padding: 0; margin-left: 8px;" @click="clearAllFilters">清除</el-button>
+              </div>
               <el-button type="primary" @click="openFilterDialog" plain>筛选</el-button>
             </span>
           </div>
@@ -141,7 +145,7 @@
     </el-table>
 
     <el-pagination v-if="totalTorrents > 0" style="margin-top: 15px; justify-content: flex-end"
-      v-model:current-page="currentPage" v-model:page-size="pageSize" :page-sizes="[20, 50, 100, 200, 500]"
+      v-model:current-page="currentPage" v-model:page-size="pageSize" :page-sizes="[20, 50, 100]"
       :total="totalTorrents" layout="total, sizes, prev, pager, next, jumper" @size-change="handleSizeChange"
       @current-change="handleCurrentChange" background />
 
@@ -180,6 +184,16 @@
               </el-radio-group>
               <el-input v-model="siteSearch" placeholder="搜索站点" clearable style="width:280px; font-size: 14px;"
                 size="default" />
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <div v-if="tempFilters.existSiteNames.length > 0" style="display: flex; align-items: center;">
+                  <el-tag type="info" size="default" effect="plain">存在于: {{ tempFilters.existSiteNames.length }}</el-tag>
+                  <el-button type="danger" link style="padding: 0; margin-left: 5px;" @click="clearExistSiteFilter">清除</el-button>
+                </div>
+                <div v-if="tempFilters.notExistSiteNames.length > 0" style="display: flex; align-items: center;">
+                  <el-tag type="info" size="default" effect="plain">不存在于: {{ tempFilters.notExistSiteNames.length }}</el-tag>
+                  <el-button type="danger" link style="padding: 0; margin-left: 5px;" @click="clearNotExistSiteFilter">清除</el-button>
+                </div>
+              </div>
             </div>
             <div class="site-checkbox-container">
               <el-checkbox-group v-model="currentSiteNames">
@@ -191,17 +205,35 @@
             </div>
           </div>
           <el-divider content-position="left">下载器</el-divider>
+          <div style="margin-bottom: 10px;">
+            <div v-if="tempFilters.downloaderIds.length > 0" style="display: flex; align-items: center;">
+              <el-tag type="info" size="default" effect="plain">下载器: {{ tempFilters.downloaderIds.length }}</el-tag>
+              <el-button type="danger" link style="padding: 0; margin-left: 5px;" @click="clearDownloaderFilter">清除</el-button>
+            </div>
+          </div>
           <el-checkbox-group v-model="tempFilters.downloaderIds">
             <el-checkbox v-for="downloader in downloadersList" :key="downloader.id" :label="downloader.id">
               {{ downloader.name }}
             </el-checkbox>
           </el-checkbox-group>
           <el-divider content-position="left">保存路径</el-divider>
+          <div style="margin-bottom: 10px;">
+            <div v-if="tempFilters.paths.length > 0" style="display: flex; align-items: center;">
+              <el-tag type="info" size="default" effect="plain">路径: {{ tempFilters.paths.length }}</el-tag>
+              <el-button type="danger" link style="padding: 0; margin-left: 5px;" @click="clearPathFilter">清除</el-button>
+            </div>
+          </div>
           <div class="path-tree-container">
             <el-tree ref="pathTreeRef" :data="pathTreeData" show-checkbox node-key="path" default-expand-all
               check-on-click-node :props="{ class: 'path-tree-node' }" />
           </div>
           <el-divider content-position="left">状态</el-divider>
+          <div style="margin-bottom: 10px;">
+            <div v-if="tempFilters.states.length > 0" style="display: flex; align-items: center;">
+              <el-tag type="info" size="default" effect="plain">状态: {{ tempFilters.states.length }}</el-tag>
+              <el-button type="danger" link style="padding: 0; margin-left: 5px;" @click="clearStateFilter">清除</el-button>
+            </div>
+          </div>
           <el-checkbox-group v-model="tempFilters.states">
             <el-checkbox v-for="state in unique_states" :key="state" :label="state">{{
               state
@@ -209,6 +241,7 @@
           </el-checkbox-group>
         </div>
         <div class="filter-card-footer">
+          <el-button @click="clearFilters">清除筛选</el-button>
           <el-button @click="filterDialogVisible = false">取消</el-button>
           <el-button type="primary" @click="applyFilters">确认</el-button>
         </div>
@@ -424,6 +457,49 @@ const filteredSiteOptions = computed(() => {
   if (!siteSearch.value) return sorted_all_sites.value
   const kw = siteSearch.value.toLowerCase()
   return sorted_all_sites.value.filter((s) => s.toLowerCase().includes(kw))
+})
+
+// 计算当前筛选条件的显示文本
+const currentFilterText = computed(() => {
+  const filters = activeFilters
+  const filterTexts = []
+
+  // 处理保存路径筛选
+  if (filters.paths && filters.paths.length > 0) {
+    filterTexts.push(`路径: ${filters.paths.length}`)
+  }
+
+  // 处理状态筛选
+  if (filters.states && filters.states.length > 0) {
+    filterTexts.push(`状态: ${filters.states.length}`)
+  }
+
+  // 处理站点筛选
+  if (filters.existSiteNames && filters.existSiteNames.length > 0) {
+    filterTexts.push(`存在于: ${filters.existSiteNames.length}`)
+  }
+  if (filters.notExistSiteNames && filters.notExistSiteNames.length > 0) {
+    filterTexts.push(`不存在于: ${filters.notExistSiteNames.length}`)
+  }
+
+  // 处理下载器筛选
+  if (filters.downloaderIds && filters.downloaderIds.length > 0) {
+    filterTexts.push(`下载器: ${filters.downloaderIds.length}`)
+  }
+
+  return filterTexts.join(', ')
+})
+
+// 检查是否有任何筛选条件被应用
+const hasActiveFilters = computed(() => {
+  const filters = activeFilters
+  return (
+    (filters.paths && filters.paths.length > 0) ||
+    (filters.states && filters.states.length > 0) ||
+    (filters.existSiteNames && filters.existSiteNames.length > 0) ||
+    (filters.notExistSiteNames && filters.notExistSiteNames.length > 0) ||
+    (filters.downloaderIds && filters.downloaderIds.length > 0)
+  )
 })
 
 // 计算在当前模式下可选的站点（排除已在另一种模式下选择的站点）
@@ -804,6 +880,95 @@ const applyFilters = async () => {
 
   Object.assign(activeFilters, tempFilters)
   filterDialogVisible.value = false
+  currentPage.value = 1
+  await fetchData()
+  saveUiSettings()
+}
+
+// 清除筛选条件
+const clearFilters = () => {
+  // 重置临时筛选条件
+  tempFilters.paths = []
+  tempFilters.states = []
+  tempFilters.existSiteNames = []
+  tempFilters.notExistSiteNames = []
+  tempFilters.downloaderIds = []
+
+  // 重置站点筛选模式
+  siteFilterMode.value = 'exist'
+
+  // 重置搜索
+  siteSearch.value = ''
+
+  // 清除路径树的选中状态
+  if (pathTreeRef.value) {
+    pathTreeRef.value.setCheckedKeys([], false)
+  }
+}
+
+// 清除"存在于"站点筛选
+const clearExistSiteFilter = () => {
+  tempFilters.existSiteNames = []
+  // 如果当前是"存在于"模式，更新树的选中状态
+  if (siteFilterMode.value === 'exist' && pathTreeRef.value) {
+    const selectedPaths = pathTreeRef.value.getCheckedKeys(true)
+    tempFilters.paths = selectedPaths as string[]
+  }
+}
+
+// 清除"不存在于"站点筛选
+const clearNotExistSiteFilter = () => {
+  tempFilters.notExistSiteNames = []
+  // 如果当前是"不存在于"模式，更新树的选中状态
+  if (siteFilterMode.value === 'not-exist' && pathTreeRef.value) {
+    const selectedPaths = pathTreeRef.value.getCheckedKeys(true)
+    tempFilters.paths = selectedPaths as string[]
+  }
+}
+
+// 清除路径筛选
+const clearPathFilter = () => {
+  tempFilters.paths = []
+  // 清除路径树的选中状态
+  if (pathTreeRef.value) {
+    pathTreeRef.value.setCheckedKeys([], false)
+  }
+}
+
+// 清除状态筛选
+const clearStateFilter = () => {
+  tempFilters.states = []
+}
+
+// 清除下载器筛选
+const clearDownloaderFilter = () => {
+  tempFilters.downloaderIds = []
+}
+
+// 清除所有筛选和搜索条件
+const clearAllFilters = async () => {
+  // 重置所有筛选条件
+  activeFilters.paths = []
+  activeFilters.states = []
+  activeFilters.existSiteNames = []
+  activeFilters.notExistSiteNames = []
+  activeFilters.downloaderIds = []
+
+  // 重置名称搜索
+  nameSearch.value = ''
+
+  // 重置站点筛选模式
+  siteFilterMode.value = 'exist'
+
+  // 重置站点搜索
+  siteSearch.value = ''
+
+  // 清除路径树的选中状态
+  if (pathTreeRef.value) {
+    pathTreeRef.value.setCheckedKeys([], false)
+  }
+
+  // 重置到第一页并获取数据
   currentPage.value = 1
   await fetchData()
   saveUiSettings()
