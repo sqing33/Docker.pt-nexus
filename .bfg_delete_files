@@ -9,6 +9,7 @@ __pycache__
 qb.py
 test.py
 CLAUDE.md
-.bfg_delete_files
-.bfg_delete_folders
-.github_exclude
+pt-nexus-box-proxy
+
+routes_cross_seed_data.py
+CrossSeedDataView.vue

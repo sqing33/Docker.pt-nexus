@@ -1,8 +1,6 @@
-.env
-data
-MediaInfo
 __pycache__
 sites/__pycache__
 api/__pycache__
 core/__pycache__
 utils/__pycache__
+tmp
