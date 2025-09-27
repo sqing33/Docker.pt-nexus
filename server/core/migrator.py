@@ -152,6 +152,72 @@ class TorrentMigrator:
             self.logger.warning(f"加载源站点配置文件时出错: {e}")
             return {}
 
+    def _download_torrent_file(self, torrent_id: str, temp_dir: str) -> str:
+        """
+        从源站点下载种子文件并保存到指定目录
+
+        Args:
+            torrent_id: 种子ID
+            temp_dir: 临时目录路径
+
+        Returns:
+            str: 下载的种子文件路径
+        """
+        try:
+            self.logger.info(f"正在从源站点 {self.SOURCE_NAME} 下载种子文件 (ID: {torrent_id})...")
+
+            # 获取代理配置
+            proxies = self._get_proxies(self.SOURCE_PROXY)
+            if proxies:
+                self.logger.info(f"使用代理下载种子文件: {proxies}")
+
+            # 构造下载链接
+            download_url = f"{self.SOURCE_BASE_URL}/download.php?id={torrent_id}"
+
+            # 下载种子文件
+            torrent_response = self.scraper.get(
+                download_url,
+                headers={"Cookie": self.SOURCE_COOKIE},
+                timeout=60,
+                proxies=proxies,
+            )
+            torrent_response.raise_for_status()
+
+            # 从响应头中尝试获取文件名，这是最准确的方式
+            content_disposition = torrent_response.headers.get('content-disposition')
+            torrent_filename = f"{torrent_id}.torrent"  # 默认文件名
+            if content_disposition:
+                # 尝试匹配filename*（支持UTF-8编码）和filename
+                filename_match = re.search(r'filename\*="?UTF-8\'\'([^"]+)"?',
+                                           content_disposition, re.IGNORECASE)
+                if filename_match:
+                    torrent_filename = filename_match.group(1)
+                    # URL解码文件名（UTF-8编码）
+                    torrent_filename = urllib.parse.unquote(torrent_filename,
+                                                            encoding='utf-8')
+                else:
+                    # 尝试匹配普通的filename
+                    filename_match = re.search(r'filename="?([^"]+)"?',
+                                               content_disposition)
+                    if filename_match:
+                        torrent_filename = filename_match.group(1)
+                        # URL解码文件名
+                        torrent_filename = urllib.parse.unquote(
+                            torrent_filename)
+
+            # 保存种子文件到临时目录
+            torrent_path = os.path.join(temp_dir, torrent_filename)
+            with open(torrent_path, "wb") as f:
+                f.write(torrent_response.content)
+
+            self.logger.success(f"种子文件已下载并保存到: {torrent_path}")
+            return torrent_path
+
+        except Exception as e:
+            self.logger.error(f"下载种子文件时出错: {e}")
+            self.logger.debug(traceback.format_exc())
+            return ""
+
     def apply_special_extractor_if_needed(self, upload_data, torrent_id=None):
         """
         根据源站点名称决定是否使用特殊提取器处理数据
