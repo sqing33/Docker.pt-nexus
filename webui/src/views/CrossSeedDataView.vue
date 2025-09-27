@@ -10,6 +10,11 @@
       <el-input v-model="searchQuery" placeholder="搜索标题或种子ID..." clearable class="search-input"
         style="width: 300px; margin-right: 15px;" />
 
+      <!-- 筛选按钮 -->
+      <el-button type="primary" @click="openFilterDialog" plain size="small" style="margin-right: 15px;">
+        筛选
+      </el-button>
+
       <div class="pagination-controls" v-if="tableData.length > 0">
         <el-pagination v-model:current-page="currentPage" v-model:page-size="pageSize" :page-sizes="[10, 20, 50, 100]"
           :total="total" layout="total, sizes, prev, pager, next, jumper" @size-change="handleSizeChange"
@@ -18,10 +23,47 @@
       </div>
     </div>
 
+    <!-- 筛选器弹窗 -->
+    <div v-if="filterDialogVisible" class="filter-overlay" @click.self="filterDialogVisible = false">
+      <el-card class="filter-card">
+        <template #header>
+          <div class="filter-card-header">
+            <span>筛选选项</span>
+            <el-button type="danger" circle @click="filterDialogVisible = false" plain>X</el-button>
+          </div>
+        </template>
+        <div class="filter-card-body">
+          <el-divider content-position="left">保存路径</el-divider>
+          <div class="path-tree-container">
+            <el-tree
+              ref="pathTreeRef"
+              :data="pathTreeData"
+              show-checkbox
+              node-key="path"
+              default-expand-all
+              check-on-click-node
+              :props="{ class: 'path-tree-node' }"
+            />
+          </div>
+
+          <el-divider content-position="left">删除状态</el-divider>
+          <el-radio-group v-model="tempFilters.isDeleted" style="width: 100%;">
+            <el-radio :label="''">全部</el-radio>
+            <el-radio :label="'0'">未删除</el-radio>
+            <el-radio :label="'1'">已删除</el-radio>
+          </el-radio-group>
+        </div>
+        <div class="filter-card-footer">
+          <el-button @click="filterDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="applyFilters">确认</el-button>
+        </div>
+      </el-card>
+    </div>
+
     <div class="table-container">
       <el-table :data="tableData" v-loading="loading" border style="width: 100%" empty-text="暂无转种数据"
-        :max-height="tableMaxHeight" height="100%">
-        <el-table-column type="selection" width="55" align="center"></el-table-column>
+        :max-height="tableMaxHeight" height="100%" :row-class-name="tableRowClassName">
+        <el-table-column type="selection" width="55" align="center" :selectable="checkSelectable"></el-table-column>
         <el-table-column prop="torrent_id" label="种子ID" align="center" width="80"
           show-overflow-tooltip></el-table-column>
         <el-table-column prop="nickname" label="站点名称" width="100" align="center">
@@ -117,7 +159,9 @@
         </el-table-column>
         <el-table-column prop="updated_at" label="更新时间" width="140" align="center" sortable>
           <template #default="scope">
-            <div class="mapped-cell datetime-cell">{{ formatDateTime(scope.row.updated_at) }}</div>
+            <div class="mapped-cell datetime-cell">
+              {{ scope.row.is_deleted === 1 ? '已删除' : formatDateTime(scope.row.updated_at) }}
+            </div>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="100" align="center" fixed="right">
@@ -147,8 +191,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
+import type { TableInstance } from 'element-plus'
+import type { ElTree } from 'element-plus'
 import CrossSeedPanel from '../components/CrossSeedPanel.vue'
 import { useCrossSeedStore } from '@/stores/crossSeed'
 import type { ISourceInfo } from '@/types'
@@ -179,6 +225,13 @@ interface SeedParameter {
   unrecognized: string
   created_at: string
   updated_at: string
+  is_deleted: number
+}
+
+interface PathNode {
+  path: string
+  label: string
+  children?: PathNode[]
 }
 
 interface ReverseMappings {
@@ -210,6 +263,11 @@ const tableData = ref<SeedParameter[]>([])
 const loading = ref<boolean>(true)
 const error = ref<string | null>(null)
 
+// 路径树相关
+const pathTreeRef = ref<InstanceType<typeof ElTree> | null>(null)
+const pathTreeData = ref<PathNode[]>([])
+const uniquePaths = ref<string[]>([])
+
 // 表格高度
 const tableMaxHeight = ref<number>(window.innerHeight - 80)
 
@@ -220,6 +278,14 @@ const total = ref<number>(0)
 
 // 搜索相关
 const searchQuery = ref<string>('')
+
+// 筛选相关
+const filterDialogVisible = ref<boolean>(false)
+const activeFilters = ref({
+  savePath: '',
+  isDeleted: ''
+})
+const tempFilters = ref({ ...activeFilters.value })
 
 // 辅助函数：获取映射后的中文值
 const getMappedValue = (category: keyof ReverseMappings, standardValue: string) => {
@@ -344,6 +410,36 @@ const formatDateTime = (dateString: string) => {
   }
 }
 
+const buildPathTree = (paths: string[]): PathNode[] => {
+  const root: PathNode[] = []
+  const nodeMap = new Map<string, PathNode>()
+  paths.sort().forEach((fullPath) => {
+    const parts = fullPath.replace(/^\/|\/$/g, '').split('/')
+    let currentPath = ''
+    let parentChildren = root
+    parts.forEach((part, index) => {
+      currentPath = index === 0 ? `/${part}` : `${currentPath}/${part}`
+      if (!nodeMap.has(currentPath)) {
+        const newNode: PathNode = {
+          path: index === parts.length - 1 ? fullPath : currentPath,
+          label: part,
+          children: [],
+        }
+        nodeMap.set(currentPath, newNode)
+        parentChildren.push(newNode)
+      }
+      const currentNode = nodeMap.get(currentPath)!
+      parentChildren = currentNode.children!
+    })
+  })
+  nodeMap.forEach((node) => {
+    if (node.children && node.children.length === 0) {
+      delete node.children
+    }
+  })
+  return root
+}
+
 const fetchData = async () => {
   loading.value = true
   error.value = null
@@ -351,7 +447,9 @@ const fetchData = async () => {
     const params = new URLSearchParams({
       page: currentPage.value.toString(),
       page_size: pageSize.value.toString(),
-      search: searchQuery.value
+      search: searchQuery.value,
+      save_path: activeFilters.value.savePath,
+      is_deleted: activeFilters.value.isDeleted
     })
 
     const response = await fetch(`/api/cross-seed-data?${params.toString()}`)
@@ -378,6 +476,12 @@ const fetchData = async () => {
       if (result.reverse_mappings) {
         reverseMappings.value = result.reverse_mappings
       }
+
+      // 更新唯一路径数据并构建路径树
+      if (result.unique_paths) {
+        uniquePaths.value = result.unique_paths
+        pathTreeData.value = buildPathTree(result.unique_paths)
+      }
     } else {
       error.value = result.error || '获取数据失败'
       ElMessage.error(result.error || '获取数据失败')
@@ -390,15 +494,85 @@ const fetchData = async () => {
   }
 }
 
+const saveUiSettings = async () => {
+  try {
+    const settingsToSave = {
+      page_size: pageSize.value,
+      search_query: searchQuery.value,
+      active_filters: activeFilters.value,
+    };
+    await fetch('/api/ui_settings/cross_seed', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(settingsToSave)
+    });
+  } catch (e: any) {
+    console.error('无法保存UI设置:', e.message);
+  }
+};
+
+const loadUiSettings = async () => {
+  try {
+    const response = await fetch('/api/ui_settings/cross_seed');
+    if (!response.ok) {
+      console.warn('无法加载UI设置，将使用默认值。');
+      return;
+    }
+    const settings = await response.json();
+    pageSize.value = settings.page_size ?? 20;
+    searchQuery.value = settings.search_query ?? '';
+    if (settings.active_filters) {
+      Object.assign(activeFilters.value, settings.active_filters);
+    }
+  } catch (e) {
+    console.error('加载UI设置时出错:', e);
+  }
+};
+
 const handleSizeChange = (val: number) => {
   pageSize.value = val
   currentPage.value = 1
   fetchData()
+  saveUiSettings()
 }
 
 const handleCurrentChange = (val: number) => {
   currentPage.value = val
   fetchData()
+}
+
+// 打开筛选对话框
+const openFilterDialog = () => {
+  // 将当前活动的筛选条件复制到临时筛选条件
+  tempFilters.value = { ...activeFilters.value }
+  filterDialogVisible.value = true
+  nextTick(() => {
+    // 如果已有选中的路径，设置树的选中状态
+    if (pathTreeRef.value && activeFilters.value.savePath) {
+      // 将逗号分隔的路径字符串转换为数组
+      const selectedPaths = activeFilters.value.savePath.split(',').filter(path => path.trim() !== '')
+      // 设置树的选中状态，只设置叶子节点
+      pathTreeRef.value.setCheckedKeys(selectedPaths, true)
+    }
+  })
+}
+
+// 应用筛选条件
+const applyFilters = () => {
+  // 从路径树中获取选中的路径
+  if (pathTreeRef.value) {
+    const selectedPaths = pathTreeRef.value.getCheckedKeys(true) as string[]
+    // 将选中的路径以逗号分隔的形式保存到筛选条件中
+    tempFilters.value.savePath = selectedPaths.join(',')
+  }
+
+  // 将临时筛选条件应用为活动筛选条件
+  activeFilters.value = { ...tempFilters.value }
+  filterDialogVisible.value = false
+  // 重置到第一页并获取数据
+  currentPage.value = 1
+  fetchData()
+  saveUiSettings()
 }
 
 const crossSeedStore = useCrossSeedStore();
@@ -407,6 +581,7 @@ const crossSeedStore = useCrossSeedStore();
 watch(searchQuery, () => {
   currentPage.value = 1
   fetchData()
+  saveUiSettings()
 })
 
 // 控制转种弹窗的显示
@@ -496,10 +671,27 @@ const handleResize = () => {
   tableMaxHeight.value = window.innerHeight - 80
 }
 
-onMounted(() => {
+onMounted(async () => {
+  // 加载UI设置
+  await loadUiSettings();
+  // 获取数据
   fetchData()
   window.addEventListener('resize', handleResize)
 })
+
+// 为表格行设置CSS类名
+const tableRowClassName = ({ row }: { row: SeedParameter }) => {
+  if (row.is_deleted === 1) {
+    return 'deleted-row'
+  }
+  return ''
+}
+
+// 控制表格行是否可选择
+const checkSelectable = (row: SeedParameter) => {
+  // 如果is_deleted为1，则不可选择
+  return row.is_deleted !== 1
+}
 
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
@@ -518,6 +710,74 @@ onUnmounted(() => {
   justify-content: center;
   align-items: center;
   z-index: 2000;
+}
+
+.filter-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 2000;
+}
+
+.filter-card {
+  width: 500px;
+  max-width: 95vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.filter-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+:deep(.filter-card .el-card__body) {
+  padding: 0;
+  flex: 1;
+  overflow-y: auto;
+}
+
+:deep(.el-card__header) {
+  padding: 5px 10px;
+}
+
+:deep(.el-divider--horizontal) {
+  margin: 18px 0;
+}
+
+.filter-card-body {
+  overflow-y: auto;
+  padding: 10px 15px;
+}
+
+.path-tree-container {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  padding: 5px;
+  margin-bottom: 20px;
+}
+
+:deep(.path-tree-node .el-tree-node__content) {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.filter-card-footer {
+  padding: 5px 10px;
+  border-top: 1px solid var(--el-border-color-lighter);
+  display: flex;
+  justify-content: flex-end;
 }
 
 .cross-seed-card {
@@ -631,6 +891,15 @@ onUnmounted(() => {
   border-color: #fbc4c4 !important;
 }
 
+:deep(.deleted-row) {
+  background-color: #fef0f0 !important;
+  color: #f56c6c !important;
+}
+
+:deep(.deleted-row:hover) {
+  background-color: #fde2e2 !important;
+}
+
 .title-cell {
   display: flex;
   flex-direction: column;
@@ -649,7 +918,6 @@ onUnmounted(() => {
 }
 
 .subtitle-line {
-  color: #000000;
   font-size: 12px;
   margin-bottom: 2px;
 }
@@ -661,6 +929,15 @@ onUnmounted(() => {
 .invalid-tag {
   background-color: #fef0f0 !important;
   border-color: #fbc4c4 !important;
+}
+
+:deep(.deleted-row) {
+  background-color: #fef0f0 !important;
+  color: #f56c6c !important;
+}
+
+:deep(.deleted-row:hover) {
+  background-color: #fde2e2 !important;
 }
 
 .tags-cell {
@@ -677,5 +954,14 @@ onUnmounted(() => {
 .invalid-tag {
   background-color: #fef0f0 !important;
   border-color: #fbc4c4 !important;
+}
+
+:deep(.deleted-row) {
+  background-color: #fef0f0 !important;
+  color: #f56c6c !important;
+}
+
+:deep(.deleted-row:hover) {
+  background-color: #fde2e2 !important;
 }
 </style>
