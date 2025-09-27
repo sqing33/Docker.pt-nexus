@@ -442,7 +442,10 @@ class SeedParameter:
         updated_params["updated_at"] = datetime.now().strftime(
             "%Y-%m-%d %H:%M:%S")
 
-        return self.save_parameters(torrent_id, site_name, updated_params)
+        # 从现有参数中获取hash值，如果不存在则使用空字符串
+        hash_value = existing_params.get("hash", "")
+
+        return self.save_parameters(hash_value, torrent_id, site_name, updated_params)
 
     def delete_parameters(self, torrent_id: str, site_name: str) -> bool:
         """

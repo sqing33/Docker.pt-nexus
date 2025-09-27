@@ -698,6 +698,38 @@ class DataTracker(Thread):
                     logging.info(
                         f"已删除下载器 {downloader_id} 中的 {deleted_count} 个已移除的种子记录")
 
+            # 更新seed_parameters表中的is_deleted字段
+            print("【刷新线程】开始更新seed_parameters表中的is_deleted字段...")
+            # 获取所有seed_parameters表中的hash值
+            cursor.execute("SELECT DISTINCT hash FROM seed_parameters")
+            seed_hashes = {row["hash"] for row in cursor.fetchall()}
+
+            # 获取所有torrents表中的hash值
+            cursor.execute("SELECT DISTINCT hash FROM torrents")
+            torrent_hashes = {row["hash"] for row in cursor.fetchall()}
+
+            # 找出在torrents表中存在的hash值和不存在的hash值
+            hashes_in_torrents = seed_hashes & torrent_hashes
+            hashes_not_in_torrents = seed_hashes - torrent_hashes
+
+            # 更新在torrents表中存在的hash值的is_deleted字段为0
+            if hashes_in_torrents:
+                print(f"【刷新线程】发现 {len(hashes_in_torrents)} 个种子在torrents表中存在")
+                update_placeholders = ",".join([placeholder] * len(hashes_in_torrents))
+                update_query = f"UPDATE seed_parameters SET is_deleted = 0 WHERE hash IN ({update_placeholders})"
+                cursor.execute(update_query, tuple(hashes_in_torrents))
+                print(f"【刷新线程】已更新 {len(hashes_in_torrents)} 个种子的is_deleted字段为0")
+                logging.info(f"已更新 {len(hashes_in_torrents)} 个种子的is_deleted字段为0")
+
+            # 更新在torrents表中不存在的hash值的is_deleted字段为1
+            if hashes_not_in_torrents:
+                print(f"【刷新线程】发现 {len(hashes_not_in_torrents)} 个种子在torrents表中不存在")
+                update_placeholders = ",".join([placeholder] * len(hashes_not_in_torrents))
+                update_query = f"UPDATE seed_parameters SET is_deleted = 1 WHERE hash IN ({update_placeholders})"
+                cursor.execute(update_query, tuple(hashes_not_in_torrents))
+                print(f"【刷新线程】已更新 {len(hashes_not_in_torrents)} 个种子的is_deleted字段为1")
+                logging.info(f"已更新 {len(hashes_not_in_torrents)} 个种子的is_deleted字段为1")
+
             if torrents_to_upsert:
                 params = [(*d.values(), now_str)
                           for d in torrents_to_upsert.values()]
