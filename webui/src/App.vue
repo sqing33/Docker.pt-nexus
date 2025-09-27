@@ -55,7 +55,7 @@ const handleGlobalRefresh = async () => {
 
   const topLevelPath = route.matched.length > 0 ? route.matched[0].path : ''
 
-  if (topLevelPath === '/torrents' || topLevelPath === '/sites') {
+  if (topLevelPath === '/torrents' || topLevelPath === '/sites' || topLevelPath === '/data') {
     isRefreshing.value = true
     ElMessage.info('后台正在刷新缓存...')
 
