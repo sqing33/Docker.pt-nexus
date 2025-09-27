@@ -8,6 +8,12 @@
       <el-input v-model="searchQuery" placeholder="搜索标题或种子ID..." clearable class="search-input"
         style="width: 300px; margin-right: 15px;" />
 
+      <!-- 批量转种按钮 -->
+      <el-button type="success" @click="openBatchCrossSeedDialog" plain style="margin-right: 15px;"
+        :disabled="selectedRows.length === 0" v-if="selectedRows.length > 0">
+        批量转种
+      </el-button>
+
       <!-- 筛选按钮 -->
       <el-button type="primary" @click="openFilterDialog" plain style="margin-right: 15px;">
         筛选
@@ -64,7 +70,8 @@
 
     <div class="table-container">
       <el-table :data="tableData" v-loading="loading" border style="width: 100%" empty-text="暂无转种数据"
-        :max-height="tableMaxHeight" height="100%" :row-class-name="tableRowClassName">
+        :max-height="tableMaxHeight" height="100%" :row-class-name="tableRowClassName"
+        @selection-change="handleSelectionChange">
         <el-table-column type="selection" width="55" align="center" :selectable="checkSelectable"></el-table-column>
         <el-table-column prop="torrent_id" label="种子ID" align="center" width="80"
           show-overflow-tooltip></el-table-column>
@@ -189,6 +196,39 @@
         </div>
       </el-card>
     </div>
+
+    <!-- 批量转种弹窗 -->
+    <div v-if="batchCrossSeedDialogVisible" class="modal-overlay">
+      <el-card class="batch-cross-seed-card" shadow="always">
+        <template #header>
+          <div class="modal-header">
+            <span>批量转种</span>
+            <el-button type="danger" circle @click="closeBatchCrossSeedDialog" plain>X</el-button>
+          </div>
+        </template>
+        <div class="batch-cross-seed-content">
+          <el-form label-width="120px">
+            <el-form-item label="目标站点">
+              <el-select v-model="targetSite" placeholder="请选择目标站点" style="width: 100%;">
+                <el-option
+                  v-for="option in siteOptions"
+                  :key="option.value"
+                  :label="option.label"
+                  :value="option.value">
+                </el-option>
+              </el-select>
+            </el-form-item>
+            <el-form-item label="选中种子数量">
+              <span>{{ selectedRows.length }} 个</span>
+            </el-form-item>
+          </el-form>
+        </div>
+        <div class="batch-cross-seed-footer">
+          <el-button @click="closeBatchCrossSeedDialog">取消</el-button>
+          <el-button type="primary" @click="handleBatchCrossSeed">确定</el-button>
+        </div>
+      </el-card>
+    </div>
   </div>
 </template>
 
@@ -213,6 +253,7 @@ onMounted(() => {
 
 interface SeedParameter {
   id: number
+  hash: string
   torrent_id: string
   site_name: string
   title: string
@@ -273,6 +314,12 @@ const reverseMappings = ref<ReverseMappings>({
 const tableData = ref<SeedParameter[]>([])
 const loading = ref<boolean>(true)
 const error = ref<string | null>(null)
+
+// 批量转种相关
+const selectedRows = ref<SeedParameter[]>([])
+const batchCrossSeedDialogVisible = ref<boolean>(false)
+const targetSite = ref<string>('')
+const siteOptions = ref<Array<{ label: string, value: string }>>([])
 
 // 路径树相关
 const pathTreeRef = ref<InstanceType<typeof ElTree> | null>(null)
@@ -790,6 +837,89 @@ const checkSelectable = (row: SeedParameter) => {
   return !hasInvalidParams(row)
 }
 
+// 处理表格选中行变化
+const handleSelectionChange = (selection: SeedParameter[]) => {
+  selectedRows.value = selection
+}
+
+// 打开批量转种对话框
+const openBatchCrossSeedDialog = async () => {
+  try {
+    // 获取可转种的站点列表
+    const response = await fetch('/api/sites/status')
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+
+    const sitesStatus = await response.json()
+    // 筛选出可以作为目标站点的站点（is_target为true）
+    const targetSites = sitesStatus.filter((site: any) => site.is_target)
+    // 将获取到的站点列表转换为下拉框选项格式
+    siteOptions.value = targetSites.map((site: any) => ({
+      label: site.name,
+      value: site.name
+    }))
+
+    // 打开对话框
+    batchCrossSeedDialogVisible.value = true
+  } catch (error: any) {
+    ElMessage.error(error.message || '获取站点列表失败')
+  }
+}
+
+// 关闭批量转种对话框
+const closeBatchCrossSeedDialog = () => {
+  batchCrossSeedDialogVisible.value = false
+  targetSite.value = ''
+}
+
+// 处理批量转种
+const handleBatchCrossSeed = async () => {
+  if (!targetSite.value) {
+    ElMessage.warning('请选择目标站点')
+    return
+  }
+
+  try {
+    // 构造要传递给后端的数据
+    const batchData = {
+      target_site_name: targetSite.value,
+      seeds: selectedRows.value.map(row => ({
+        hash: row.hash,
+        torrent_id: row.torrent_id,
+        site_name: row.site_name
+      }))
+    }
+
+    console.log('批量转种数据:', batchData) // 先在控制台打印出来
+
+    // 实际的API调用
+    const response = await fetch('/api/cross-seed-data/batch-cross-seed', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(batchData)
+    })
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+
+    const result = await response.json()
+    if (result.success) {
+      ElMessage.success(`批量转种请求已发送，成功 ${result.data.seeds_processed} 个，失败 ${result.data.seeds_failed} 个`)
+      closeBatchCrossSeedDialog()
+      // 可选：刷新数据
+      // fetchData()
+    } else {
+      ElMessage.error(result.error || '批量转种失败')
+    }
+  } catch (error: any) {
+    ElMessage.error(error.message || '网络错误')
+  }
+}
+
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
 })
@@ -884,6 +1014,32 @@ onUnmounted(() => {
   max-height: 800px;
   display: flex;
   flex-direction: column;
+}
+
+.batch-cross-seed-card {
+  width: 500px;
+  max-width: 95vw;
+  display: flex;
+  flex-direction: column;
+}
+
+:deep(.batch-cross-seed-card .el-card__body) {
+  padding: 20px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.batch-cross-seed-content {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.batch-cross-seed-footer {
+  padding: 10px 0 0 0;
+  border-top: 1px solid var(--el-border-color-lighter);
+  display: flex;
+  justify-content: flex-end;
 }
 
 :deep(.cross-seed-card .el-card__body) {
