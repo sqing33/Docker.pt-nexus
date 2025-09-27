@@ -5,18 +5,20 @@
 
     <!-- 搜索和控制栏 -->
     <div class="search-and-controls">
-      <el-button type="primary" @click="fetchData" :loading="loading" size="small"
-        style="margin-right: 15px;">刷新</el-button>
       <el-input v-model="searchQuery" placeholder="搜索标题或种子ID..." clearable class="search-input"
         style="width: 300px; margin-right: 15px;" />
 
       <!-- 筛选按钮 -->
-      <el-button type="primary" @click="openFilterDialog" plain size="small" style="margin-right: 15px;">
+      <el-button type="primary" @click="openFilterDialog" plain style="margin-right: 15px;">
         筛选
       </el-button>
+      <div v-if="hasActiveFilters" class="current-filters" style="margin-right: 15px; display: flex; align-items: center;">
+        <el-tag type="info" size="default" effect="plain">{{ currentFilterText }}</el-tag>
+        <el-button type="danger" link style="padding: 0; margin-left: 8px;" @click="clearFilters">清除</el-button>
+      </div>
 
       <div class="pagination-controls" v-if="tableData.length > 0">
-        <el-pagination v-model:current-page="currentPage" v-model:page-size="pageSize" :page-sizes="[10, 20, 50, 100]"
+        <el-pagination v-model:current-page="currentPage" v-model:page-size="pageSize" :page-sizes="[20, 50, 100]"
           :total="total" layout="total, sizes, prev, pager, next, jumper" @size-change="handleSizeChange"
           @current-change="handleCurrentChange" background>
         </el-pagination>
@@ -193,11 +195,20 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
-import type { TableInstance } from 'element-plus'
 import type { ElTree } from 'element-plus'
 import CrossSeedPanel from '../components/CrossSeedPanel.vue'
 import { useCrossSeedStore } from '@/stores/crossSeed'
 import type { ISourceInfo } from '@/types'
+
+// 定义emit事件
+const emit = defineEmits<{
+  (e: 'ready', refreshMethod: () => Promise<void>): void
+}>()
+
+// 在组件挂载时发送ready事件
+onMounted(() => {
+  emit('ready', fetchData)
+})
 
 
 interface SeedParameter {
@@ -278,6 +289,38 @@ const total = ref<number>(0)
 
 // 搜索相关
 const searchQuery = ref<string>('')
+
+// 计算当前筛选条件的显示文本
+const currentFilterText = computed(() => {
+  const filters = activeFilters.value
+  const filterTexts = []
+
+  // 处理保存路径筛选
+  if (filters.savePath) {
+    const paths = filters.savePath.split(',').filter(path => path.trim() !== '')
+    if (paths.length > 0) {
+      filterTexts.push(`路径: ${paths.length}个`)
+    }
+  }
+
+  // 处理删除状态筛选
+  if (filters.isDeleted === '0') {
+    filterTexts.push('未删除')
+  } else if (filters.isDeleted === '1') {
+    filterTexts.push('已删除')
+  }
+
+  return filterTexts.join(', ')
+})
+
+// 检查是否有任何筛选条件被应用
+const hasActiveFilters = computed(() => {
+  const filters = activeFilters.value
+  return (
+    (filters.savePath && filters.savePath.split(',').filter(path => path.trim() !== '').length > 0) ||
+    filters.isDeleted !== ''
+  )
+})
 
 // 筛选相关
 const filterDialogVisible = ref<boolean>(false)
@@ -410,6 +453,41 @@ const formatDateTime = (dateString: string) => {
   }
 }
 
+// 检查行是否有无效参数
+const hasInvalidParams = (row: SeedParameter): boolean => {
+  const categories: (keyof Omit<ReverseMappings, 'tags' | 'site_name'>)[] = ['type', 'medium', 'video_codec', 'audio_codec', 'resolution', 'team', 'source'];
+
+  for (const category of categories) {
+    const value = row[category as keyof SeedParameter] as string;
+    if (value && (!isValidFormat(value) || !isMapped(category, value))) {
+      return true;
+    }
+  }
+
+  let tagList: string[] = []
+  if (typeof row.tags === 'string') {
+    try {
+      tagList = JSON.parse(row.tags)
+    } catch {
+      tagList = row.tags.split(',').map(tag => tag.trim()).filter(tag => tag)
+    }
+  } else if (Array.isArray(row.tags)) {
+    tagList = row.tags
+  }
+
+  for (const tag of tagList) {
+    if (!isValidFormat(tag) || !isMapped('tags', tag)) {
+      return true
+    }
+  }
+
+  if (row.unrecognized) {
+    return true
+  }
+
+  return false
+}
+
 const buildPathTree = (paths: string[]): PathNode[] => {
   const root: PathNode[] = []
   const nodeMap = new Map<string, PathNode>()
@@ -539,6 +617,17 @@ const handleSizeChange = (val: number) => {
 const handleCurrentChange = (val: number) => {
   currentPage.value = val
   fetchData()
+}
+
+// 清除筛选条件
+const clearFilters = () => {
+  activeFilters.value = {
+    savePath: '',
+    isDeleted: ''
+  }
+  currentPage.value = 1
+  fetchData()
+  saveUiSettings()
 }
 
 // 打开筛选对话框
@@ -684,13 +773,21 @@ const tableRowClassName = ({ row }: { row: SeedParameter }) => {
   if (row.is_deleted === 1) {
     return 'deleted-row'
   }
+  // 如果行不可选择，添加selected-row-disabled类
+  if (!checkSelectable(row)) {
+    return 'selected-row-disabled'
+  }
   return ''
 }
 
 // 控制表格行是否可选择
 const checkSelectable = (row: SeedParameter) => {
   // 如果is_deleted为1，则不可选择
-  return row.is_deleted !== 1
+  if (row.is_deleted === 1) {
+    return false
+  }
+  // 如果有无效参数，则不可选择
+  return !hasInvalidParams(row)
 }
 
 onUnmounted(() => {
@@ -926,20 +1023,6 @@ onUnmounted(() => {
   font-weight: 500;
 }
 
-.invalid-tag {
-  background-color: #fef0f0 !important;
-  border-color: #fbc4c4 !important;
-}
-
-:deep(.deleted-row) {
-  background-color: #fef0f0 !important;
-  color: #f56c6c !important;
-}
-
-:deep(.deleted-row:hover) {
-  background-color: #fde2e2 !important;
-}
-
 .tags-cell {
   display: flex;
   flex-wrap: wrap;
@@ -951,17 +1034,13 @@ onUnmounted(() => {
   align-items: center;
 }
 
-.invalid-tag {
+/* 不可选择行的复选框变红 */
+:deep(.el-table__body tr.selected-row-disabled td.el-table-column--selection .cell .el-checkbox__input.is-disabled .el-checkbox__inner) {
+  border-color: #f56c6c !important;
   background-color: #fef0f0 !important;
-  border-color: #fbc4c4 !important;
 }
 
-:deep(.deleted-row) {
-  background-color: #fef0f0 !important;
-  color: #f56c6c !important;
-}
-
-:deep(.deleted-row:hover) {
-  background-color: #fde2e2 !important;
+:deep(.el-table__body tr.selected-row-disabled td.el-table-column--selection .cell .el-checkbox__input.is-disabled .el-checkbox__inner::after) {
+  border-color: #f56c6c !important;
 }
 </style>
