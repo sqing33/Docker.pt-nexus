@@ -1101,60 +1101,247 @@ def upload_data_poster(douban_link: str, imdb_link: str):
 
 def upload_data_movie_info(douban_link: str, imdb_link: str):
     """
-    通过PT-Gen API获取电影信息的完整内容，包括海报、简介和IMDb链接。
-    支持从豆瓣链接或IMDb链接获取信息。
+    通过多个PT-Gen API获取电影信息的完整内容，包括海报、简介和IMDb链接。
+    支持从豆瓣链接或IMDb链接获取信息，失败时自动切换API。
     返回: (状态, 海报, 简介, IMDb链接)
     """
-    pt_gen_api_url = 'https://api.iyuu.cn/App.Movie.Ptgen'
+    # API配置列表，按优先级排序
+    api_configs = [
+        {
+            'name': 'ptgen.tju.pt',
+            'base_url': 'https://ptgen.tju.pt/infogen',
+            'type': 'tju_format',
+            'force_douban': True  # 强制使用site=douban模式
+        },
+        {
+            'name': 'ptgen.homeqian.top',
+            'base_url': 'https://ptgen.homeqian.top',
+            'type': 'url_format'
+        },
+        {
+            'name': 'api.iyuu.cn',
+            'base_url': 'https://api.iyuu.cn/App.Movie.Ptgen',
+            'type': 'iyuu_format'
+        }
+    ]
 
     # 确定要使用的资源URL（豆瓣优先）
-    resource_url = douban_link or imdb_link
-
-    if not resource_url:
+    if not douban_link and not imdb_link:
         return False, "", "", "未提供豆瓣或IMDb链接。"
 
+    # 尝试每个API
+    last_error = ""
+    for api_config in api_configs:
+        try:
+            print(f"尝试使用API: {api_config['name']}")
+
+            if api_config['type'] == 'tju_format':
+                # TJU格式API (ptgen.tju.pt) - 强制使用豆瓣模式
+                success, poster, description, imdb_link_result = _call_tju_format_api(
+                    api_config, douban_link, imdb_link)
+            elif api_config['type'] == 'url_format':
+                # URL格式API (workers.dev, homeqian.top)
+                success, poster, description, imdb_link_result = _call_url_format_api(
+                    api_config, douban_link, imdb_link)
+            elif api_config['type'] == 'iyuu_format':
+                # IYUU格式API (api.iyuu.cn)
+                success, poster, description, imdb_link_result = _call_iyuu_format_api(
+                    api_config, douban_link, imdb_link)
+            else:
+                continue
+
+            if success:
+                print(f"API {api_config['name']} 调用成功")
+                return True, poster, description, imdb_link_result
+            else:
+                last_error = description  # 错误信息存储在description中
+                print(f"API {api_config['name']} 返回失败: {last_error}")
+
+        except Exception as e:
+            last_error = f"API {api_config['name']} 请求异常: {e}"
+            print(last_error)
+            continue
+
+    # 所有API都失败
+    return False, "", "", f"所有PT-Gen API都失败。最后错误: {last_error}"
+
+
+def _call_tju_format_api(api_config: dict, douban_link: str, imdb_link: str):
+    """
+    调用TJU格式API (ptgen.tju.pt) - 强制使用site=douban模式
+    """
     try:
-        response = requests.get(f'{pt_gen_api_url}?url={resource_url}',
-                                timeout=30)
+        # 强制使用site=douban，这样IMDb链接也会被转换查询豆瓣
+        if douban_link:
+            # 从豆瓣链接提取ID
+            douban_id = _extract_douban_id(douban_link)
+            if douban_id:
+                url = f"{api_config['base_url']}?site=douban&sid={douban_id}"
+            else:
+                raise ValueError("无法从豆瓣链接提取ID")
+        elif imdb_link:
+            # 从IMDb链接提取ID，但强制使用douban模式
+            imdb_id = _extract_imdb_id(imdb_link)
+            if imdb_id:
+                url = f"{api_config['base_url']}?site=douban&sid={imdb_id}"
+            else:
+                raise ValueError("无法从IMDb链接提取ID")
+        else:
+            raise ValueError("没有可用的链接")
+
+        response = requests.get(url, timeout=30)
         response.raise_for_status()
 
         data = response.json()
 
-        format_data = data.get('format') or data.get('data', {}).get(
-            'format', '')
+        if not data.get('success', False):
+            error_msg = data.get('error', '未知错误')
+            return False, "", f"API返回失败: {error_msg}", ""
 
-        extracted_imdb_link = ""
+        format_data = data.get('format', '')
+        if not format_data:
+            return False, "", "API未返回有效的格式化内容", ""
+
+        # 提取信息
+        extracted_imdb_link = data.get('imdb_link', '')
         poster = ""
         description = ""
 
-        if format_data:
-            # 提取IMDb链接
+        # 提取海报图片
+        img_match = re.search(r'(\[img\].*?\[/img\])', format_data)
+        if img_match:
+            poster = re.sub(r'img1', 'img9', img_match.group(1))
+
+        # 提取简介内容（去除海报部分）
+        description = re.sub(r'\[img\].*?\[/img\]', '', format_data).strip()
+        description = re.sub(r'\n{3,}', '\n\n', description)
+
+        return True, poster, description, extracted_imdb_link
+
+    except Exception as e:
+        return False, "", f"TJU格式API调用失败: {e}", ""
+
+
+def _call_url_format_api(api_config: dict, douban_link: str, imdb_link: str):
+    """
+    调用URL格式API (workers.dev, homeqian.top)
+    """
+    try:
+        resource_url = douban_link or imdb_link
+        url = f"{api_config['base_url']}/?url={resource_url}"
+
+        response = requests.get(url, timeout=30)
+        response.raise_for_status()
+
+        # 尝试解析为JSON
+        try:
+            data = response.json()
+        except:
+            # 如果不是JSON，可能是直接返回的文本格式
+            text_content = response.text.strip()
+            if text_content and ('[img]' in text_content or '◎' in text_content):
+                # 直接返回文本内容作为format
+                return _parse_format_content(text_content)
+            else:
+                return False, "", "API返回了无效的内容格式", ""
+
+        # JSON格式处理
+        if isinstance(data, dict):
+            # 检查是否有错误
+            if data.get('success') is False:
+                error_msg = data.get('message', data.get('error', '未知错误'))
+                return False, "", f"API返回失败: {error_msg}", ""
+
+            # 获取格式化内容
+            format_data = data.get('format', data.get('content', ''))
+            if format_data:
+                return _parse_format_content(format_data, data.get('imdb_link', ''))
+            else:
+                return False, "", "API未返回有效的格式化内容", ""
+        else:
+            return False, "", "API返回了无效的数据格式", ""
+
+    except Exception as e:
+        return False, "", f"URL格式API调用失败: {e}", ""
+
+
+def _call_iyuu_format_api(api_config: dict, douban_link: str, imdb_link: str):
+    """
+    调用IYUU格式API (api.iyuu.cn)
+    """
+    try:
+        resource_url = douban_link or imdb_link
+        url = f"{api_config['base_url']}?url={resource_url}"
+
+        response = requests.get(url, timeout=30)
+        response.raise_for_status()
+
+        data = response.json()
+
+        # 检查业务状态码
+        if data.get('ret') != 200 and data.get('ret') != 0:
+            error_msg = data.get('msg', '未知错误')
+            return False, "", f"API返回错误(状态码{data.get('ret')}): {error_msg}", ""
+
+        format_data = data.get('format') or data.get('data', {}).get('format', '')
+        if not format_data:
+            return False, "", "API未返回有效的简介内容", ""
+
+        return _parse_format_content(format_data)
+
+    except Exception as e:
+        return False, "", f"IYUU格式API调用失败: {e}", ""
+
+
+def _parse_format_content(format_data: str, provided_imdb_link: str = ""):
+    """
+    解析格式化内容，提取海报、简介和IMDb链接
+    """
+    try:
+        # 提取信息
+        extracted_imdb_link = provided_imdb_link
+        poster = ""
+        description = ""
+
+        # 如果没有提供IMDb链接，尝试从格式化内容中提取
+        if not extracted_imdb_link:
             imdb_match = re.search(
                 r'◎IMDb链接\s*(https?://www\.imdb\.com/title/tt\d+/)',
                 format_data)
             if imdb_match:
                 extracted_imdb_link = imdb_match.group(1)
 
-            # 提取海报图片
-            img_match = re.search(r'(\[img\].*?\[/img\])', format_data)
-            if img_match:
-                # poster = img_match.group(1)
-                poster = re.sub(r'img1', 'img9', img_match.group(1))
+        # 提取海报图片
+        img_match = re.search(r'(\[img\].*?\[/img\])', format_data)
+        if img_match:
+            poster = re.sub(r'img1', 'img9', img_match.group(1))
 
-            # 提取简介内容（去除海报部分）
-            description = re.sub(r'\[img\].*?\[/img\]', '',
-                                 format_data).strip()
-            # 清理多余的空行
-            description = re.sub(r'\n{3,}', '\n\n', description)
+        # 提取简介内容（去除海报部分）
+        description = re.sub(r'\[img\].*?\[/img\]', '', format_data).strip()
+        description = re.sub(r'\n{3,}', '\n\n', description)
 
-            return True, poster, description, extracted_imdb_link
-        else:
-            return False, "", "", "PT-Gen接口未返回有效的简介内容。"
+        return True, poster, description, extracted_imdb_link
 
     except Exception as e:
-        error_message = f"请求PT-Gen接口时发生错误: {e}"
-        print(error_message)
-        return False, "", "", error_message
+        return False, "", f"解析格式化内容失败: {e}", ""
+
+
+def _extract_douban_id(douban_link: str) -> str:
+    """
+    从豆瓣链接中提取ID
+    例如: https://movie.douban.com/subject/34832354/ -> 34832354
+    """
+    match = re.search(r'/subject/(\d+)', douban_link)
+    return match.group(1) if match else ""
+
+
+def _extract_imdb_id(imdb_link: str) -> str:
+    """
+    从IMDb链接中提取ID
+    例如: https://www.imdb.com/title/tt13721828/ -> tt13721828
+    """
+    match = re.search(r'/title/(tt\d+)', imdb_link)
+    return match.group(1) if match else ""
 
 
 # (确保文件顶部有 import bencoder, import json)
