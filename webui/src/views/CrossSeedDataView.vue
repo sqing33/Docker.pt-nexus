@@ -891,10 +891,10 @@ const handleBatchCrossSeed = async () => {
       }))
     }
 
-    console.log('批量转种数据:', batchData) // 先在控制台打印出来
+    console.log('批量转种数据:', batchData)
 
-    // 实际的API调用
-    const response = await fetch('/api/cross-seed-data/batch-cross-seed', {
+    // 通过vite代理调用Go服务的API
+    const response = await fetch('/go-api/batch-enhance', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'

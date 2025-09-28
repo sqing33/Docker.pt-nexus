@@ -197,28 +197,40 @@ class CrabptUploader(SpecialUploader):
             import os
             from config import DATA_DIR
 
-            # 创建 tmp 目录如果不存在
-            tmp_dir = os.path.join(DATA_DIR, "tmp")
-            os.makedirs(tmp_dir, exist_ok=True)
+            # 优先使用 torrent_dir (从 prepare_review_data 传递的种子目录路径)
+            torrent_dir = self.upload_data.get("torrent_dir", "")
 
-            # 获取种子名称作为文件夹名
-            torrent_path = self.upload_data.get("modified_torrent_path", "")
-            if torrent_path:
-                torrent_name = os.path.basename(torrent_path)
-                if torrent_name.endswith('.torrent'):
-                    torrent_name = torrent_name[:-8]  # 移除 .torrent 扩展名
-                # 移除 .modified.时间戳 后缀
-                if '.modified.' in torrent_name:
-                    torrent_name = torrent_name.split('.modified.')[0]
-                # 清理文件名中的非法字符
-                import re
-                torrent_name = re.sub(r'[\\/:*?"<>|]', '_', torrent_name)
-            else:
-                torrent_name = "unknown_torrent"
+            # 如果 torrent_dir 不存在或无效，则回退到使用title创建目录
+            if not torrent_dir or not os.path.exists(torrent_dir):
+                # 创建 tmp 目录如果不存在
+                tmp_dir = os.path.join(DATA_DIR, "tmp")
+                os.makedirs(tmp_dir, exist_ok=True)
 
-            # 创建以种子名称命名的子目录
-            torrent_dir = os.path.join(tmp_dir, torrent_name)
-            os.makedirs(torrent_dir, exist_ok=True)
+                # 使用种子标题作为文件夹名（与Go端和download_torrent_only保持一致）
+                title = self.upload_data.get("title", "")
+                if title:
+                    # 清理文件名中的非法字符，限制长度为150
+                    import re
+                    safe_title = re.sub(r'[\\/:*?"<>|]', '_', title)[:150]
+                    torrent_dir = os.path.join(tmp_dir, safe_title)
+                else:
+                    # 如果没有title，使用torrent文件名作为备选
+                    torrent_path = self.upload_data.get("modified_torrent_path", "")
+                    if torrent_path:
+                        torrent_name = os.path.basename(torrent_path)
+                        if torrent_name.endswith('.torrent'):
+                            torrent_name = torrent_name[:-8]  # 移除 .torrent 扩展名
+                        # 移除 .modified.时间戳 后缀
+                        if '.modified.' in torrent_name:
+                            torrent_name = torrent_name.split('.modified.')[0]
+                        # 清理文件名中的非法字符
+                        import re
+                        torrent_name = re.sub(r'[\\/:*?"<>|]', '_', torrent_name)
+                        torrent_dir = os.path.join(tmp_dir, torrent_name)
+                    else:
+                        torrent_dir = os.path.join(tmp_dir, "unknown_torrent")
+
+                os.makedirs(torrent_dir, exist_ok=True)
 
             # 生成唯一文件名
             timestamp = int(time.time())

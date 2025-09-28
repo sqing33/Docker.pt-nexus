@@ -341,6 +341,83 @@ def add_fallback_mappings(reverse_mappings):
         })
 
 
+@migrate_bp.route("/migrate/download_torrent_only", methods=["POST"])
+def download_torrent_only():
+    """仅下载种子文件，不进行数据解析或存储"""
+    try:
+        data = request.json
+        torrent_id = data.get('torrent_id')
+        site_name = data.get('site_name')
+
+        if not all([torrent_id, site_name]):
+            return jsonify({
+                "success": False,
+                "message": "错误：缺少必要参数（torrent_id、site_name）"
+            }), 400
+
+        db_manager = migrate_bp.db_manager
+
+        # 获取站点信息
+        source_info = db_manager.get_site_by_nickname(site_name)
+        if not source_info or not source_info.get("cookie"):
+            return jsonify({
+                "success": False,
+                "message": f"错误：源站点 '{site_name}' 配置不完整。"
+            }), 404
+
+        # 从数据库获取种子标题以确定目录名
+        from models.seed_parameter import SeedParameter
+        seed_param_model = SeedParameter(db_manager)
+        parameters = seed_param_model.get_parameters(torrent_id, site_name)
+
+        if not parameters or not parameters.get("title"):
+            return jsonify({
+                "success": False,
+                "message": "无法从数据库获取种子标题"
+            }), 404
+
+        # 创建种子目录
+        from config import TEMP_DIR
+        import re
+        import os
+
+        original_main_title = parameters.get("title", "")
+        safe_filename_base = re.sub(r'[\\/*?:"<>|]', "_", original_main_title)[:150]
+        torrent_dir = os.path.join(TEMP_DIR, safe_filename_base)
+        os.makedirs(torrent_dir, exist_ok=True)
+
+        # 创建TorrentMigrator实例仅用于下载种子文件
+        migrator = TorrentMigrator(
+            source_site_info=source_info,
+            target_site_info=None,
+            search_term=torrent_id,
+            config_manager=config_manager
+        )
+
+        # 下载种子文件
+        torrent_path = migrator._download_torrent_file(torrent_id, torrent_dir)
+
+        if torrent_path and os.path.exists(torrent_path):
+            return jsonify({
+                "success": True,
+                "torrent_path": torrent_path,
+                "torrent_dir": torrent_dir,
+                "message": "种子文件下载成功"
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "message": "种子文件下载失败"
+            }), 500
+
+    except Exception as e:
+        logging.error(f"download_torrent_only 发生意外错误: {e}", exc_info=True)
+        return jsonify({
+            "success": False,
+            "message": f"服务器内部错误: {str(e)}"
+        }), 500
+
+
 # 新增：专门负责数据抓取和存储的API接口
 @migrate_bp.route("/migrate/fetch_and_store", methods=["POST"])
 def migrate_fetch_and_store():

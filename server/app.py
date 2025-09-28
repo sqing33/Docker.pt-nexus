@@ -4,6 +4,9 @@ import os
 import logging
 import jwt  # type: ignore
 import atexit
+import hmac
+import hashlib
+import time
 from typing import cast
 from flask import Flask, send_from_directory, request, jsonify
 from flask_cors import CORS
@@ -40,6 +43,36 @@ def create_app():
     # --- 步骤 2: 与下载器同步，建立统计基线 ---
     # 这个函数现在从 database.py 导入
     reconcile_historical_data(db_manager, config_manager.get())
+
+    # 动态内部认证token验证函数
+    def validate_internal_token(token):
+        """验证动态生成的内部认证token，支持更大的时间窗口容错"""
+        try:
+            internal_secret = os.getenv("INTERNAL_SECRET", "pt-nexus-2024-secret-key")
+            current_timestamp = int(time.time()) // 3600  # 当前小时
+
+            # 扩大时间窗口：检查前后2小时的token（容错机制）
+            # 这样可以处理服务器时间不同步的问题
+            for time_offset in [-2, -1, 0, 1, 2]:
+                timestamp = current_timestamp + time_offset
+                expected_signature = hmac.new(
+                    internal_secret.encode(),
+                    f"pt-nexus-internal-{timestamp}".encode(),
+                    hashlib.sha256
+                ).hexdigest()[:16]
+
+                if hmac.compare_digest(token, expected_signature):
+                    # 记录验证成功的时间偏移，用于监控时钟同步问题
+                    if time_offset != 0:
+                        logging.warning(f"内部认证token验证成功，但存在时间偏移: {time_offset}小时")
+                    return True
+
+            # 如果所有时间窗口都验证失败，记录详细信息用于调试
+            logging.error(f"内部认证token验证失败: token={token[:8]}..., current_hour={current_timestamp}")
+            return False
+        except Exception as e:
+            logging.error(f"验证内部token时出错: {e}")
+            return False
 
     # --- 步骤 3: 导入并注册所有 API 蓝图 ---
     logging.info("正在注册 API 路由...")
@@ -79,9 +112,33 @@ def create_app():
         # 跳过登录接口
         if request.path.startswith("/api/auth/"):
             return None
+        # 跳过健康检查
+        if request.path == "/health":
+            return None
+
+        # 内部服务认证跳过逻辑
+        # 1. 网络隔离：localhost和内部Docker网络跳过认证
+        remote_addr = request.environ.get('REMOTE_ADDR', '')
+        if remote_addr in ['127.0.0.1', '::1'] or remote_addr.startswith('172.') or remote_addr.startswith('192.168.'):
+            return None
+
+        # 2. 内部API Key认证：使用动态token验证
+        internal_api_key = request.headers.get("X-Internal-API-Key", "")
+        if internal_api_key and validate_internal_token(internal_api_key):
+            return None
+
+        # 3. 原有的特定端点跳过（保留兼容性）
+        if request.path.startswith("/api/migrate/get_db_seed_info") or \
+           request.path.startswith("/api/cross-seed-data/batch-cross-seed-core") or \
+           request.path.startswith("/api/cross-seed-data/batch-cross-seed-internal") or \
+           request.path.startswith("/api/cross-seed-data/test-no-auth"):
+            return None
+
         # 放行所有预检请求
         if request.method == "OPTIONS":
             return None
+
+        # 正常JWT认证流程
         auth_header = request.headers.get("Authorization", "")
         try:
             # 仅调试日志，生产可根据需要调整级别
