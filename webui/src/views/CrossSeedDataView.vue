@@ -10,15 +10,16 @@
 
       <!-- 批量转种按钮 -->
       <el-button type="success" @click="openBatchCrossSeedDialog" plain style="margin-right: 15px;"
-        :disabled="selectedRows.length === 0" v-if="selectedRows.length > 0">
-        批量转种
+        :disabled="!canBatchCrossSeed">
+        {{ batchCrossSeedButtonText }}
       </el-button>
 
       <!-- 筛选按钮 -->
       <el-button type="primary" @click="openFilterDialog" plain style="margin-right: 15px;">
         筛选
       </el-button>
-      <div v-if="hasActiveFilters" class="current-filters" style="margin-right: 15px; display: flex; align-items: center;">
+      <div v-if="hasActiveFilters" class="current-filters"
+        style="margin-right: 15px; display: flex; align-items: center;">
         <el-tag type="info" size="default" effect="plain">{{ currentFilterText }}</el-tag>
         <el-button type="danger" link style="padding: 0; margin-left: 8px;" @click="clearFilters">清除</el-button>
       </div>
@@ -43,15 +44,8 @@
         <div class="filter-card-body">
           <el-divider content-position="left">保存路径</el-divider>
           <div class="path-tree-container">
-            <el-tree
-              ref="pathTreeRef"
-              :data="pathTreeData"
-              show-checkbox
-              node-key="path"
-              default-expand-all
-              check-on-click-node
-              :props="{ class: 'path-tree-node' }"
-            />
+            <el-tree ref="pathTreeRef" :data="pathTreeData" show-checkbox node-key="path" default-expand-all
+              check-on-click-node :props="{ class: 'path-tree-node' }" />
           </div>
 
           <el-divider content-position="left">删除状态</el-divider>
@@ -60,6 +54,27 @@
             <el-radio :label="'0'">未删除</el-radio>
             <el-radio :label="'1'">已删除</el-radio>
           </el-radio-group>
+
+          <el-divider content-position="left">不存在种子筛选</el-divider>
+          <div class="target-sites-container">
+            <div class="selected-site-display">
+              <div v-if="selectedTargetSite" class="selected-site-info">
+                <el-tag type="info" size="default" effect="plain">已选择: {{ selectedTargetSite }}</el-tag>
+                <el-button type="danger" link style="padding: 0; margin-left: 8px;"
+                  @click="clearSelectedTargetSite">清除</el-button>
+              </div>
+              <div v-else class="selected-site-info">
+                <el-tag type="info" size="default" effect="plain">未选择</el-tag>
+              </div>
+            </div>
+            <div class="target-sites-radio-container">
+              <el-radio-group v-model="selectedTargetSite" class="target-sites-radio-group">
+                <el-radio v-for="site in targetSitesList" :key="site" :label="site" class="target-site-radio">
+                  {{ site }}
+                </el-radio>
+              </el-radio-group>
+            </div>
+          </div>
         </div>
         <div class="filter-card-footer">
           <el-button @click="filterDialogVisible = false">取消</el-button>
@@ -207,21 +222,15 @@
           </div>
         </template>
         <div class="batch-cross-seed-content">
-          <el-form label-width="120px">
-            <el-form-item label="目标站点">
-              <el-select v-model="targetSite" placeholder="请选择目标站点" style="width: 100%;">
-                <el-option
-                  v-for="option in siteOptions"
-                  :key="option.value"
-                  :label="option.label"
-                  :value="option.value">
-                </el-option>
-              </el-select>
-            </el-form-item>
-            <el-form-item label="选中种子数量">
-              <span>{{ selectedRows.length }} 个</span>
-            </el-form-item>
-          </el-form>
+          <div class="target-site-selection-body">
+            <div class="batch-info">
+              <p><strong>目标站点：</strong>{{ activeFilters.excludeTargetSites }}</p>
+              <p><strong>选中种子数量：</strong>{{ selectedRows.length }} 个</p>
+              <p style="color: #909399; font-size: 13px; margin-top: 10px;">
+                将把选中的种子转种到上述目标站点，请确认无误后点击确定。
+              </p>
+            </div>
+          </div>
         </div>
         <div class="batch-cross-seed-footer">
           <el-button @click="closeBatchCrossSeedDialog">取消</el-button>
@@ -318,8 +327,6 @@ const error = ref<string | null>(null)
 // 批量转种相关
 const selectedRows = ref<SeedParameter[]>([])
 const batchCrossSeedDialogVisible = ref<boolean>(false)
-const targetSite = ref<string>('')
-const siteOptions = ref<Array<{ label: string, value: string }>>([])
 
 // 路径树相关
 const pathTreeRef = ref<InstanceType<typeof ElTree> | null>(null)
@@ -357,7 +364,31 @@ const currentFilterText = computed(() => {
     filterTexts.push('已删除')
   }
 
+  // 处理不存在种子筛选
+  if (filters.excludeTargetSites && filters.excludeTargetSites.trim() !== '') {
+    filterTexts.push(`不存在于: ${filters.excludeTargetSites}`)
+  }
+
   return filterTexts.join(', ')
+})
+
+// 检查是否可以进行批量转种
+const canBatchCrossSeed = computed(() => {
+  return selectedRows.value.length > 0 &&
+         activeFilters.value.excludeTargetSites &&
+         activeFilters.value.excludeTargetSites.trim() !== ''
+})
+
+// 批量转种按钮的文字
+const batchCrossSeedButtonText = computed(() => {
+  const selectedCount = selectedRows.value.length
+  const targetSite = activeFilters.value.excludeTargetSites
+
+  if (!targetSite || targetSite.trim() === '') {
+    return `批量转种 (${selectedCount}) - 请先选择目标站点`
+  }
+
+  return `批量转种到 ${targetSite} (${selectedCount})`
 })
 
 // 检查是否有任何筛选条件被应用
@@ -365,7 +396,8 @@ const hasActiveFilters = computed(() => {
   const filters = activeFilters.value
   return (
     (filters.savePath && filters.savePath.split(',').filter(path => path.trim() !== '').length > 0) ||
-    filters.isDeleted !== ''
+    filters.isDeleted !== '' ||
+    (filters.excludeTargetSites && filters.excludeTargetSites.trim() !== '')
   )
 })
 
@@ -373,9 +405,26 @@ const hasActiveFilters = computed(() => {
 const filterDialogVisible = ref<boolean>(false)
 const activeFilters = ref({
   savePath: '',
-  isDeleted: ''
+  isDeleted: '',
+  excludeTargetSites: ''  // 新增：排除目标站点筛选
 })
 const tempFilters = ref({ ...activeFilters.value })
+const targetSitesList = ref<string[]>([])  // 新增：目标站点列表
+
+// 计算属性：选中的目标站点（单选）
+const selectedTargetSite = computed({
+  get: () => {
+    return tempFilters.value.excludeTargetSites || ''
+  },
+  set: (site) => {
+    tempFilters.value.excludeTargetSites = site
+  }
+})
+
+// 清除选中的目标站点
+const clearSelectedTargetSite = () => {
+  tempFilters.value.excludeTargetSites = ''
+}
 
 // 辅助函数：获取映射后的中文值
 const getMappedValue = (category: keyof ReverseMappings, standardValue: string) => {
@@ -574,8 +623,14 @@ const fetchData = async () => {
       page_size: pageSize.value.toString(),
       search: searchQuery.value,
       save_path: activeFilters.value.savePath,
-      is_deleted: activeFilters.value.isDeleted
+      is_deleted: activeFilters.value.isDeleted,
+      exclude_target_sites: activeFilters.value.excludeTargetSites  // 新增：目标站点排除参数
     })
+
+    // 调试日志：检查筛选参数
+    if (activeFilters.value.excludeTargetSites) {
+      console.log('发送目标站点排除参数:', activeFilters.value.excludeTargetSites)
+    }
 
     const response = await fetch(`/api/cross-seed-data?${params.toString()}`)
 
@@ -606,6 +661,11 @@ const fetchData = async () => {
       if (result.unique_paths) {
         uniquePaths.value = result.unique_paths
         pathTreeData.value = buildPathTree(result.unique_paths)
+      }
+
+      // 更新目标站点列表
+      if (result.target_sites) {
+        targetSitesList.value = result.target_sites
       }
     } else {
       error.value = result.error || '获取数据失败'
@@ -670,7 +730,8 @@ const handleCurrentChange = (val: number) => {
 const clearFilters = () => {
   activeFilters.value = {
     savePath: '',
-    isDeleted: ''
+    isDeleted: '',
+    excludeTargetSites: ''  // 新增：清除目标站点排除筛选
   }
   currentPage.value = 1
   fetchData()
@@ -843,47 +904,25 @@ const handleSelectionChange = (selection: SeedParameter[]) => {
 }
 
 // 打开批量转种对话框
-const openBatchCrossSeedDialog = async () => {
-  try {
-    // 获取可转种的站点列表
-    const response = await fetch('/api/sites/status')
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
-    }
-
-    const sitesStatus = await response.json()
-    // 筛选出可以作为目标站点的站点（is_target为true）
-    const targetSites = sitesStatus.filter((site: any) => site.is_target)
-    // 将获取到的站点列表转换为下拉框选项格式
-    siteOptions.value = targetSites.map((site: any) => ({
-      label: site.name,
-      value: site.name
-    }))
-
-    // 打开对话框
-    batchCrossSeedDialogVisible.value = true
-  } catch (error: any) {
-    ElMessage.error(error.message || '获取站点列表失败')
-  }
-}
-
-// 关闭批量转种对话框
-const closeBatchCrossSeedDialog = () => {
-  batchCrossSeedDialogVisible.value = false
-  targetSite.value = ''
+const openBatchCrossSeedDialog = () => {
+  // 直接打开对话框，不需要获取站点列表
+  batchCrossSeedDialogVisible.value = true
 }
 
 // 处理批量转种
 const handleBatchCrossSeed = async () => {
-  if (!targetSite.value) {
-    ElMessage.warning('请选择目标站点')
+  // 直接使用筛选中的站点
+  const targetSiteName = activeFilters.value.excludeTargetSites
+
+  if (!targetSiteName || targetSiteName.trim() === '') {
+    ElMessage.warning('请先在筛选中选择目标站点')
     return
   }
 
   try {
     // 构造要传递给后端的数据
     const batchData = {
-      target_site_name: targetSite.value,
+      target_site_name: targetSiteName,
       seeds: selectedRows.value.map(row => ({
         hash: row.hash,
         torrent_id: row.torrent_id,
@@ -918,6 +957,11 @@ const handleBatchCrossSeed = async () => {
   } catch (error: any) {
     ElMessage.error(error.message || '网络错误')
   }
+}
+
+// 关闭批量转种对话框
+const closeBatchCrossSeedDialog = () => {
+  batchCrossSeedDialogVisible.value = false
 }
 
 onUnmounted(() => {
@@ -998,6 +1042,60 @@ onUnmounted(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.target-sites-container {
+  margin-bottom: 20px;
+}
+
+.selected-site-display {
+  margin-bottom: 10px;
+}
+
+.selected-site-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px;
+}
+
+.target-sites-radio-container {
+  width: 100%;
+  min-height: 100px;
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  padding: 10px;
+  margin-bottom: 10px;
+  box-sizing: border-box;
+}
+
+.target-sites-radio-group {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  width: 100%;
+}
+
+:deep(.target-sites-radio-group .el-radio) {
+  margin-right: 0 !important;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+}
+
+:deep(.target-sites-radio-group .el-radio .el-radio__label) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.target-site-radio {
+  margin-bottom: 8px;
 }
 
 .filter-card-footer {
@@ -1198,5 +1296,28 @@ onUnmounted(() => {
 
 :deep(.el-table__body tr.selected-row-disabled td.el-table-column--selection .cell .el-checkbox__input.is-disabled .el-checkbox__inner::after) {
   border-color: #f56c6c !important;
+}
+
+/* 批量转种弹窗样式 */
+.target-site-selection-body {
+  padding: 5px 20px 20px 20px;
+}
+
+.batch-info {
+  margin-top: 20px;
+  padding: 12px;
+  background-color: #f8f9fa;
+  border-radius: 4px;
+  border-left: 4px solid #409eff;
+}
+
+.batch-info p {
+  margin: 8px 0;
+  font-size: 14px;
+  color: #606266;
+}
+
+.batch-info p strong {
+  color: #303133;
 }
 </style>
