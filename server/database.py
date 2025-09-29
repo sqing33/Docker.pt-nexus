@@ -212,6 +212,55 @@ class DatabaseManager:
             conn.commit()
             logging.info("'iyuu_last_check' 列添加成功。")
 
+        # --- 迁移/创建 batch_enhance_records 表 ---
+        batch_records_table = 'batch_enhance_records'
+
+        # 检查batch_enhance_records表是否存在
+        table_exists = False
+        if self.db_type == 'mysql':
+            cursor.execute("SHOW TABLES LIKE %s", (batch_records_table,))
+            table_exists = cursor.fetchone() is not None
+        elif self.db_type == 'postgresql':
+            cursor.execute(
+                "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = %s AND table_schema = 'public')",
+                (batch_records_table,)
+            )
+            result = cursor.fetchone()
+            table_exists = result[0] if isinstance(result, tuple) else result['exists']
+        else:  # sqlite
+            cursor.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                (batch_records_table,)
+            )
+            table_exists = cursor.fetchone() is not None
+
+        # 如果表不存在，创建它
+        if not table_exists:
+            logging.info(f"批量转种记录表 '{batch_records_table}' 不存在，正在创建...")
+            if self.db_type == 'mysql':
+                cursor.execute(
+                    "CREATE TABLE batch_enhance_records (id INT AUTO_INCREMENT PRIMARY KEY, batch_id VARCHAR(255) NOT NULL, torrent_id VARCHAR(255) NOT NULL, source_site VARCHAR(255) NOT NULL, target_site VARCHAR(255) NOT NULL, video_size_gb DECIMAL(8,2), status VARCHAR(50) NOT NULL, success_url TEXT, error_detail TEXT, processed_at DATETIME DEFAULT CURRENT_TIMESTAMP, INDEX idx_batch_records_batch_id (batch_id), INDEX idx_batch_records_torrent_id (torrent_id), INDEX idx_batch_records_status (status), INDEX idx_batch_records_processed_at (processed_at)) ENGINE=InnoDB ROW_FORMAT=DYNAMIC"
+                )
+            elif self.db_type == 'postgresql':
+                cursor.execute(
+                    "CREATE TABLE batch_enhance_records (id SERIAL PRIMARY KEY, batch_id VARCHAR(255) NOT NULL, torrent_id VARCHAR(255) NOT NULL, source_site VARCHAR(255) NOT NULL, target_site VARCHAR(255) NOT NULL, video_size_gb DECIMAL(8,2), status VARCHAR(50) NOT NULL, success_url TEXT, error_detail TEXT, processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+                )
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_batch_records_batch_id ON batch_enhance_records(batch_id)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_batch_records_torrent_id ON batch_enhance_records(torrent_id)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_batch_records_status ON batch_enhance_records(status)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_batch_records_processed_at ON batch_enhance_records(processed_at)")
+            else:  # sqlite
+                cursor.execute(
+                    "CREATE TABLE batch_enhance_records (id INTEGER PRIMARY KEY AUTOINCREMENT, batch_id TEXT NOT NULL, torrent_id TEXT NOT NULL, source_site TEXT NOT NULL, target_site TEXT NOT NULL, video_size_gb REAL, status TEXT NOT NULL, success_url TEXT, error_detail TEXT, processed_at TEXT DEFAULT CURRENT_TIMESTAMP)"
+                )
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_batch_records_batch_id ON batch_enhance_records(batch_id)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_batch_records_torrent_id ON batch_enhance_records(torrent_id)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_batch_records_status ON batch_enhance_records(status)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_batch_records_processed_at ON batch_enhance_records(processed_at)")
+
+            conn.commit()
+            logging.info(f"批量转种记录表 '{batch_records_table}' 创建成功。")
+
     def get_placeholder(self):
         """返回数据库类型对应的正确参数占位符。"""
         return "%s" if self.db_type in ["mysql", "postgresql"] else "?"
@@ -609,6 +658,10 @@ class DatabaseManager:
             cursor.execute(
                 "CREATE TABLE IF NOT EXISTS seed_parameters (hash VARCHAR(40) NOT NULL, torrent_id VARCHAR(255) NOT NULL, site_name VARCHAR(255) NOT NULL, nickname VARCHAR(255), save_path TEXT, title TEXT, subtitle TEXT, imdb_link TEXT, douban_link TEXT, type VARCHAR(100), medium VARCHAR(100), video_codec VARCHAR(100), audio_codec VARCHAR(100), resolution VARCHAR(100), team VARCHAR(100), source VARCHAR(100), tags TEXT, poster TEXT, screenshots TEXT, statement TEXT, body TEXT, mediainfo TEXT, title_components TEXT, is_deleted TINYINT(1) NOT NULL DEFAULT 0, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, PRIMARY KEY (hash, torrent_id, site_name)) ENGINE=InnoDB ROW_FORMAT=DYNAMIC"
             )
+            # 创建批量转种记录表
+            cursor.execute(
+                "CREATE TABLE IF NOT EXISTS batch_enhance_records (id INT AUTO_INCREMENT PRIMARY KEY, batch_id VARCHAR(255) NOT NULL, torrent_id VARCHAR(255) NOT NULL, source_site VARCHAR(255) NOT NULL, target_site VARCHAR(255) NOT NULL, video_size_gb DECIMAL(8,2), status VARCHAR(50) NOT NULL, success_url TEXT, error_detail TEXT, processed_at DATETIME DEFAULT CURRENT_TIMESTAMP, INDEX idx_batch_records_batch_id (batch_id), INDEX idx_batch_records_torrent_id (torrent_id), INDEX idx_batch_records_status (status), INDEX idx_batch_records_processed_at (processed_at)) ENGINE=InnoDB ROW_FORMAT=DYNAMIC"
+            )
         # 表创建逻辑 (PostgreSQL)
         elif self.db_type == "postgresql":
             cursor.execute(
@@ -634,6 +687,14 @@ class DatabaseManager:
             cursor.execute(
                 "CREATE TABLE IF NOT EXISTS seed_parameters (hash VARCHAR(40) NOT NULL, torrent_id VARCHAR(255) NOT NULL, site_name VARCHAR(255) NOT NULL, nickname VARCHAR(255), save_path TEXT, title TEXT, subtitle TEXT, imdb_link TEXT, douban_link TEXT, type VARCHAR(100), medium VARCHAR(100), video_codec VARCHAR(100), audio_codec VARCHAR(100), resolution VARCHAR(100), team VARCHAR(100), source VARCHAR(100), tags TEXT, poster TEXT, screenshots TEXT, statement TEXT, body TEXT, mediainfo TEXT, title_components TEXT, is_deleted BOOLEAN NOT NULL DEFAULT FALSE, created_at TIMESTAMP NOT NULL, updated_at TIMESTAMP NOT NULL, PRIMARY KEY (hash, torrent_id, site_name))"
             )
+            # 创建批量转种记录表
+            cursor.execute(
+                "CREATE TABLE IF NOT EXISTS batch_enhance_records (id SERIAL PRIMARY KEY, batch_id VARCHAR(255) NOT NULL, torrent_id VARCHAR(255) NOT NULL, source_site VARCHAR(255) NOT NULL, target_site VARCHAR(255) NOT NULL, video_size_gb DECIMAL(8,2), status VARCHAR(50) NOT NULL, success_url TEXT, error_detail TEXT, processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+            )
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_batch_records_batch_id ON batch_enhance_records(batch_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_batch_records_torrent_id ON batch_enhance_records(torrent_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_batch_records_status ON batch_enhance_records(status)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_batch_records_processed_at ON batch_enhance_records(processed_at)")
         # 表创建逻辑 (SQLite)
         else:
             cursor.execute(
@@ -659,6 +720,14 @@ class DatabaseManager:
             cursor.execute(
                 "CREATE TABLE IF NOT EXISTS seed_parameters (hash TEXT NOT NULL, torrent_id TEXT NOT NULL, site_name TEXT NOT NULL, nickname TEXT, save_path TEXT, title TEXT, subtitle TEXT, imdb_link TEXT, douban_link TEXT, type TEXT, medium TEXT, video_codec TEXT, audio_codec TEXT, resolution TEXT, team TEXT, source TEXT, tags TEXT, poster TEXT, screenshots TEXT, statement TEXT, body TEXT, mediainfo TEXT, title_components TEXT, is_deleted INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (hash, torrent_id, site_name))"
             )
+            # 创建批量转种记录表
+            cursor.execute(
+                "CREATE TABLE IF NOT EXISTS batch_enhance_records (id INTEGER PRIMARY KEY AUTOINCREMENT, batch_id TEXT NOT NULL, torrent_id TEXT NOT NULL, source_site TEXT NOT NULL, target_site TEXT NOT NULL, video_size_gb REAL, status TEXT NOT NULL, success_url TEXT, error_detail TEXT, processed_at TEXT DEFAULT CURRENT_TIMESTAMP)"
+            )
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_batch_records_batch_id ON batch_enhance_records(batch_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_batch_records_torrent_id ON batch_enhance_records(torrent_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_batch_records_status ON batch_enhance_records(status)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_batch_records_processed_at ON batch_enhance_records(processed_at)")
 
         conn.commit()
         self._migrate_torrents_table(conn, cursor)
