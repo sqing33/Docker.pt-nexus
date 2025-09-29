@@ -142,6 +142,7 @@ def get_cross_seed_data():
         # 获取筛选参数
         save_path_filter = request.args.get('save_path', '').strip()
         is_deleted_filter = request.args.get('is_deleted', '').strip()
+        exclude_target_sites_filter = request.args.get('exclude_target_sites', '').strip()
 
         # 限制页面大小
         page_size = min(page_size, 100)
@@ -192,10 +193,64 @@ def get_cross_seed_data():
                 where_conditions.append("is_deleted = ?")
             params.append(int(is_deleted_filter))
 
+        # 目标站点排除筛选条件
+        if exclude_target_sites_filter:
+            # 现在是单选，不需要分割逗号
+            exclude_site = exclude_target_sites_filter.strip()
+            if exclude_site:
+                logging.info(f"排除目标站点筛选: {exclude_site}")
+
+                # 构建子查询：
+                # 1. 从torrents表中找到在指定站点存在的种子名称
+                # 2. 然后找到这些种子名称对应的hash
+                # 3. 最后排除seed_parameters表中具有这些hash的记录
+                if db_manager.db_type == "postgresql":
+                    subquery = f"""
+                        SELECT DISTINCT sp.hash
+                        FROM seed_parameters sp
+                        WHERE sp.hash IN (
+                            SELECT DISTINCT t1.hash
+                            FROM torrents t1
+                            WHERE t1.name IN (
+                                SELECT DISTINCT t2.name
+                                FROM torrents t2
+                                WHERE t2.sites = %s
+                            )
+                        )
+                    """
+                    where_conditions.append(f"seed_parameters.hash NOT IN ({subquery})")
+                    params.append(exclude_site)
+                else:
+                    # MySQL 和 SQLite
+                    placeholder = '%s' if db_manager.db_type == "mysql" else '?'
+                    subquery = f"""
+                        SELECT DISTINCT sp.hash
+                        FROM seed_parameters sp
+                        WHERE sp.hash IN (
+                            SELECT DISTINCT t1.hash
+                            FROM torrents t1
+                            WHERE t1.name IN (
+                                SELECT DISTINCT t2.name
+                                FROM torrents t2
+                                WHERE t2.sites = {placeholder}
+                            )
+                        )
+                    """
+                    where_conditions.append(f"seed_parameters.hash NOT IN ({subquery})")
+                    params.append(exclude_site)
+
+                logging.info(f"排除子查询SQL: {subquery}")
+                logging.info(f"排除站点参数: {exclude_site}")
+
         # 组合WHERE子句
         where_clause = ""
         if where_conditions:
             where_clause = "WHERE " + " AND ".join(where_conditions)
+
+        # 记录完整的SQL查询用于调试
+        if exclude_target_sites_filter:
+            logging.info(f"完整WHERE子句: {where_clause}")
+            logging.info(f"所有查询参数: {params}")
 
         # 先查询总数
         count_query = f"SELECT COUNT(*) as total FROM seed_parameters {where_clause}"
@@ -278,6 +333,16 @@ def get_cross_seed_data():
             # Add unrecognized field to item
             item['unrecognized'] = unrecognized_value
 
+        # 获取所有目标站点（用于前端筛选选项）
+        cursor.execute("SELECT nickname FROM sites WHERE migration IN (2, 3) ORDER BY nickname")
+        target_sites_rows = cursor.fetchall()
+        if isinstance(target_sites_rows, list):
+            # PostgreSQL返回的是字典列表
+            target_sites_list = [row['nickname'] for row in target_sites_rows if row['nickname']]
+        else:
+            # MySQL和SQLite返回的是元组列表
+            target_sites_list = [row[0] for row in target_sites_rows if row[0]]
+
         # 获取所有唯一的保存路径（用于路径树）
         if db_manager.db_type == "postgresql":
             path_query = "SELECT DISTINCT save_path FROM seed_parameters WHERE save_path IS NOT NULL AND save_path != '' ORDER BY save_path"
@@ -310,7 +375,8 @@ def get_cross_seed_data():
             "page": page,
             "page_size": page_size,
             "reverse_mappings": reverse_mappings,
-            "unique_paths": unique_paths  # 添加唯一路径数据
+            "unique_paths": unique_paths,  # 添加唯一路径数据
+            "target_sites": target_sites_list  # 添加目标站点列表
         })
     except Exception as e:
         logging.error(f"获取转种数据时出错: {e}")
