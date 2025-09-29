@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
@@ -20,6 +21,40 @@ import (
 	"time"
 )
 
+// 种子处理记录结构
+type SeedRecord struct {
+	BatchID      string  `json:"batch_id"`
+	TorrentID    string  `json:"torrent_id"`
+	SourceSite   string  `json:"source_site"`
+	TargetSite   string  `json:"target_site"`
+	VideoSizeGB  float64 `json:"video_size_gb,omitempty"`
+	Status       string  `json:"status"`
+	SuccessURL   string  `json:"success_url,omitempty"`
+	ErrorDetail  string  `json:"error_detail,omitempty"`
+}
+
+type RecordResponse struct {
+	Success bool         `json:"success"`
+	Records []SeedRecord `json:"records,omitempty"`
+	Error   string       `json:"error,omitempty"`
+}
+
+// 保留简化的日志结构用于控制台输出
+type LogEntry struct {
+	Timestamp string `json:"timestamp"`
+	Message   string `json:"message"`
+	Level     string `json:"level"`
+}
+
+// 全局变量
+var (
+	logFile        *os.File
+	logMutex       sync.RWMutex
+	logEntries     []LogEntry
+	maxLogLines    = 1000 // 最大保存的日志行数
+	currentBatchID string // 当前批次ID
+)
+
 // 简单的请求和响应结构
 type BatchRequest struct {
 	TargetSiteName string         `json:"target_site_name"`
@@ -32,9 +67,10 @@ type FilterOptions struct {
 }
 
 type SeedInfo struct {
-	Hash      string `json:"hash"`
-	TorrentID string `json:"torrent_id"`
-	SiteName  string `json:"site_name"`
+	Hash        string  `json:"hash"`
+	TorrentID   string  `json:"torrent_id"`
+	SiteName    string  `json:"site_name"`
+	VideoSizeGB float64 `json:"video_size_gb,omitempty"` // 添加视频大小字段
 }
 
 type BatchResponse struct {
@@ -117,6 +153,126 @@ func getEnv(key, defaultValue string) string {
 	return defaultValue
 }
 
+// 初始化日志系统
+func initLogging() error {
+	// 创建日志文件
+	logPath := filepath.Join(tempDir, "batch-enhancer.log")
+	var err error
+	logFile, err = os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return fmt.Errorf("无法创建日志文件: %v", err)
+	}
+
+	// 设置log包的输出到文件和控制台
+	multiWriter := io.MultiWriter(os.Stdout, logFile)
+	log.SetOutput(multiWriter)
+
+	// 从现有日志文件中读取日志条目
+	loadExistingLogs(logPath)
+
+	return nil
+}
+
+// 从文件加载现有的日志条目
+func loadExistingLogs(logPath string) {
+	file, err := os.Open(logPath)
+	if err != nil {
+		return // 文件不存在或无法打开
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		logEntry := parseLogLine(line)
+		if logEntry != nil {
+			logMutex.Lock()
+			logEntries = append(logEntries, *logEntry)
+			// 保持日志条目数量在限制内
+			if len(logEntries) > maxLogLines {
+				logEntries = logEntries[len(logEntries)-maxLogLines:]
+			}
+			logMutex.Unlock()
+		}
+	}
+}
+
+// 解析日志行
+func parseLogLine(line string) *LogEntry {
+	// 简单的日志行解析，格式: 2024/01/01 12:00:00 message
+	if len(line) < 20 {
+		return nil
+	}
+
+	// 提取时间戳部分 (前19个字符)
+	timestampStr := line[:19]
+	message := strings.TrimSpace(line[20:])
+
+	// 解析时间
+	timestamp, err := time.Parse("2006/01/02 15:04:05", timestampStr)
+	if err != nil {
+		// 如果解析失败，使用当前时间
+		timestamp = time.Now()
+	}
+
+	// 根据消息内容推断日志级别
+	level := "info"
+	messageLower := strings.ToLower(message)
+	if strings.Contains(messageLower, "错误") || strings.Contains(messageLower, "失败") || strings.Contains(messageLower, "error") {
+		level = "error"
+	} else if strings.Contains(messageLower, "警告") || strings.Contains(messageLower, "warning") {
+		level = "warning"
+	} else if strings.Contains(messageLower, "成功") || strings.Contains(messageLower, "完成") {
+		level = "success"
+	}
+
+	return &LogEntry{
+		Timestamp: timestamp.Format(time.RFC3339),
+		Message:   message,
+		Level:     level,
+	}
+}
+
+// 记录日志到控制台和文件
+func logWithLevel(level, format string, args ...interface{}) {
+	message := fmt.Sprintf(format, args...)
+
+	// 记录到标准输出和文件
+	log.Print(message)
+
+	// 同时保存到内存中供API查询（作为备份）
+	entry := LogEntry{
+		Timestamp: time.Now().Format(time.RFC3339),
+		Message:   message,
+		Level:     level,
+	}
+
+	logMutex.Lock()
+	logEntries = append(logEntries, entry)
+	// 保持日志条目数量在限制内
+	if len(logEntries) > maxLogLines {
+		logEntries = logEntries[1:] // 删除最早的条目
+	}
+	logMutex.Unlock()
+}
+
+// 便捷的日志记录函数
+func logInfo(format string, args ...interface{}) {
+	logWithLevel("info", format, args...)
+}
+
+func logWarning(format string, args ...interface{}) {
+	logWithLevel("warning", format, args...)
+}
+
+func logError(format string, args ...interface{}) {
+	logWithLevel("error", format, args...)
+}
+
+func logSuccess(format string, args ...interface{}) {
+	logWithLevel("success", format, args...)
+}
+
 // 站点请求频率控制函数
 func waitForSiteRequest(siteName string) {
 	siteRequestMutex.Lock()
@@ -127,7 +283,7 @@ func waitForSiteRequest(siteName string) {
 		elapsed := time.Since(lastTime)
 		if elapsed < minRequestInterval {
 			waitTime := minRequestInterval - elapsed
-			log.Printf("⏰ 站点 %s 请求间隔控制，等待 %v", siteName, waitTime)
+			logInfo("⏰ 站点 %s 请求间隔控制，等待 %v", siteName, waitTime)
 			time.Sleep(waitTime)
 		}
 	}
@@ -147,6 +303,37 @@ func generateInternalToken() string {
 
 	// 返回前16位作为token（足够安全且不会太长）
 	return signature[:16]
+}
+
+// 记录种子处理结果到数据库
+func recordSeedResult(record SeedRecord) error {
+	// 调用Python API记录种子处理结果
+	recordData := map[string]interface{}{
+		"batch_id":      record.BatchID,
+		"torrent_id":    record.TorrentID,
+		"source_site":   record.SourceSite,
+		"target_site":   record.TargetSite,
+		"video_size_gb": record.VideoSizeGB,
+		"status":        record.Status,
+		"success_url":   record.SuccessURL,
+		"error_detail":  record.ErrorDetail,
+	}
+
+	resp, err := callPythonAPI("/api/batch-enhance/records", recordData)
+	if err != nil {
+		return fmt.Errorf("记录种子处理结果到数据库失败: %v", err)
+	}
+
+	if success, ok := resp["success"].(bool); !ok || !success {
+		return fmt.Errorf("数据库返回记录失败: %v", resp["error"])
+	}
+
+	return nil
+}
+
+// 生成批次ID
+func generateBatchID() string {
+	return fmt.Sprintf("batch_%d_%d", time.Now().Unix(), time.Now().Nanosecond()%1000000)
 }
 
 // Bencode解析器方法
@@ -369,7 +556,7 @@ func extractVideoSizeFromTorrent(torrentPath string) (float64, string, error) {
 
 	// 只输出简要统计信息
 	totalVideoSizeGB := float64(totalVideoSize) / (1024 * 1024 * 1024)
-	log.Printf("     📊 解析结果: %s, 视频大小 %.2fGB", torrent.Info.Name, totalVideoSizeGB)
+	logInfo("     📊 解析结果: %s, 视频大小 %.2fGB", torrent.Info.Name, totalVideoSizeGB)
 
 	if totalVideoSize == 0 {
 		return 0, "", fmt.Errorf("未找到视频文件")
@@ -487,7 +674,7 @@ func sanitizeFilename(title string) string {
 
 // 检查视频文件大小（通过解析torrent文件）
 func checkVideoSize(torrentID, siteName string) (float64, string, error) {
-	log.Printf("     🔍 检查种子大小: %s@%s", torrentID, siteName)
+	logInfo("     🔍 检查种子大小: %s@%s", torrentID, siteName)
 
 	// 获取种子标题
 	title, err := getSeedTitle(torrentID, siteName)
@@ -529,7 +716,7 @@ func checkVideoSize(torrentID, siteName string) (float64, string, error) {
 		return 0, "", fmt.Errorf("解析torrent文件失败: %v", err)
 	}
 
-	log.Printf("     ✅ 解析完成: %.2fGB (%s)", sizeGB, largestFile)
+	logInfo("     ✅ 解析完成: %.2fGB (%s)", sizeGB, largestFile)
 
 	return sizeGB, largestFile, nil
 }
@@ -563,7 +750,7 @@ func downloadTorrentFile(torrentID, siteName string) error {
 // 过滤种子
 func filterSeeds(seeds []SeedInfo, options *FilterOptions) ([]SeedInfo, []SeedResult, FilterStats) {
 	// 强制启用大小过滤进行测试
-	log.Printf("🔍 强制启用大小过滤进行torrent解析测试")
+	logInfo("🔍 强制启用大小过滤进行torrent解析测试")
 
 	var validSeeds []SeedInfo
 	var filteredSeeds []SeedResult
@@ -575,14 +762,14 @@ func filterSeeds(seeds []SeedInfo, options *FilterOptions) ([]SeedInfo, []SeedRe
 	// 硬编码5GB限制，防止被修改
 	const minSizeGB = 5.0
 
-	log.Printf("开始过滤种子，最小大小要求: %.1fGB", minSizeGB)
+	logInfo("开始过滤种子，最小大小要求: %.1fGB", minSizeGB)
 
 	for i, seed := range seeds {
-		log.Printf("[%d/%d] 检查种子: %s", i+1, len(seeds), seed.TorrentID)
+		logInfo("[%d/%d] 检查种子: %s", i+1, len(seeds), seed.TorrentID)
 		sizeGB, _, err := checkVideoSize(seed.TorrentID, seed.SiteName)
 
 		if err != nil {
-			log.Printf("  ❌ 检查失败: %v", err)
+			logInfo("  ❌ 检查失败: %v", err)
 			filteredSeeds = append(filteredSeeds, SeedResult{
 				TorrentID:    seed.TorrentID,
 				Status:       "filtered",
@@ -590,6 +777,9 @@ func filterSeeds(seeds []SeedInfo, options *FilterOptions) ([]SeedInfo, []SeedRe
 			})
 			continue
 		}
+
+		// 将视频大小保存到seed中，供后续使用
+		seed.VideoSizeGB = sizeGB
 
 		// 更新统计信息
 		totalSize += sizeGB
@@ -607,7 +797,7 @@ func filterSeeds(seeds []SeedInfo, options *FilterOptions) ([]SeedInfo, []SeedRe
 
 		// 检查大小过滤
 		if sizeGB < minSizeGB {
-			log.Printf("  🚫 过滤: %.2fGB < %.1fGB", sizeGB, minSizeGB)
+			logInfo("  🚫 过滤: %.2fGB < %.1fGB", sizeGB, minSizeGB)
 			filteredSeeds = append(filteredSeeds, SeedResult{
 				TorrentID:    seed.TorrentID,
 				Status:       "filtered",
@@ -615,8 +805,8 @@ func filterSeeds(seeds []SeedInfo, options *FilterOptions) ([]SeedInfo, []SeedRe
 				FilterReason: fmt.Sprintf("大小 %.2fGB 小于要求的 %.1fGB", sizeGB, minSizeGB),
 			})
 		} else {
-			log.Printf("  ✅ 通过: %.2fGB", sizeGB)
-			validSeeds = append(validSeeds, seed)
+			logInfo("  ✅ 通过: %.2fGB", sizeGB)
+			validSeeds = append(validSeeds, seed) // 这里的seed已经包含了VideoSizeGB
 		}
 	}
 
@@ -659,66 +849,192 @@ func batchEnhanceHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 记录请求开始
-	log.Printf("🎯 收到批量转种请求")
+	logInfo("🎯 收到批量转种请求")
 
 	// 解析请求
 	var req BatchRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		errorMsg := fmt.Sprintf("JSON解析失败: %v", err)
-		log.Printf("❌ 请求错误: %s", errorMsg)
+		logError("❌ 请求错误: %s", errorMsg)
 		http.Error(w, `{"success":false,"error":"Invalid JSON"}`, http.StatusBadRequest)
 		return
 	}
 
 	// 验证请求
 	if req.TargetSiteName == "" {
-		log.Printf("❌ 请求错误: 缺少目标站点名称")
+		logError("❌ 请求错误: 缺少目标站点名称")
 		http.Error(w, `{"success":false,"error":"target_site_name is required"}`, http.StatusBadRequest)
 		return
 	}
 
 	if len(req.Seeds) == 0 {
-		log.Printf("❌ 请求错误: 种子列表为空")
+		logError("❌ 请求错误: 种子列表为空")
 		http.Error(w, `{"success":false,"error":"seeds cannot be empty"}`, http.StatusBadRequest)
 		return
 	}
 
-	log.Printf("✅ 请求验证通过: %s, %d个种子", req.TargetSiteName, len(req.Seeds))
+	logSuccess("✅ 请求验证通过: %s, %d个种子", req.TargetSiteName, len(req.Seeds))
 
 	// 处理批量转种
-	log.Printf("🚀 开始批量转种处理...")
+	logInfo("🚀 开始批量转种处理...")
 	startTime := time.Now()
 	result := processBatchSeeds(req)
 	duration := time.Since(startTime)
 
-	log.Printf("⏱️  批量转种处理完成，耗时: %v", duration)
-	log.Printf("📊 处理结果: %s", result.Message)
+	logInfo("⏱️  批量转种处理完成，耗时: %v", duration)
+	logInfo("📊 处理结果: %s", result.Message)
 
 	// 返回结果
 	json.NewEncoder(w).Encode(result)
 }
 
+// 种子处理记录查看处理
+func recordsHandler(w http.ResponseWriter, r *http.Request) {
+	// 设置CORS头，允许前端跨域访问
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, DELETE, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	w.Header().Set("Content-Type", "application/json")
+
+	// 处理预检请求
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	switch r.Method {
+	case "GET":
+		// 从Python后端获取种子处理记录 - 使用HTTP GET方法
+		client := &http.Client{Timeout: 10 * time.Second}
+		url := coreAPIURL + "/api/batch-enhance/records?page=1&page_size=1000"
+
+		req, err := http.NewRequest("GET", url, nil)
+		if err != nil {
+			// 如果创建请求失败，返回错误
+			response := RecordResponse{
+				Success: false,
+				Error:   fmt.Sprintf("创建HTTP请求失败: %v", err),
+			}
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+
+		// 设置认证头
+		if internalSecret != "" {
+			req.Header.Set("X-Internal-API-Key", generateInternalToken())
+		}
+
+		resp, err := client.Do(req)
+		if err != nil {
+			// 如果Python API不可用，返回错误
+			response := RecordResponse{
+				Success: false,
+				Error:   fmt.Sprintf("Python API不可用: %v", err),
+			}
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil || resp.StatusCode != http.StatusOK {
+			// 如果API调用失败，返回错误
+			response := RecordResponse{
+				Success: false,
+				Error:   fmt.Sprintf("API调用失败: HTTP %d", resp.StatusCode),
+			}
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+
+		// 直接转发Python API的响应
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(body)
+
+	case "DELETE":
+		// 调用Python API清空记录 - 使用HTTP DELETE方法
+		client := &http.Client{Timeout: 10 * time.Second}
+		url := coreAPIURL + "/api/batch-enhance/records"
+
+		req, err := http.NewRequest("DELETE", url, nil)
+		if err != nil {
+			response := RecordResponse{
+				Success: false,
+				Error:   fmt.Sprintf("创建HTTP请求失败: %v", err),
+			}
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+
+		// 设置认证头
+		if internalSecret != "" {
+			req.Header.Set("X-Internal-API-Key", generateInternalToken())
+		}
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err := client.Do(req)
+		if err != nil {
+			response := RecordResponse{
+				Success: false,
+				Error:   fmt.Sprintf("Python API不可用: %v", err),
+			}
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+		defer resp.Body.Close()
+
+		// 直接转发Python API的响应
+		body, _ := io.ReadAll(resp.Body)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(body)
+
+	default:
+		http.Error(w, `{"success":false,"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
+	}
+}
+
+// 从map中安全获取字符串值的辅助函数
+func getStringFromMap(m map[string]interface{}, key string) string {
+	if val, ok := m[key]; ok && val != nil {
+		if str, ok := val.(string); ok {
+			return str
+		}
+	}
+	return ""
+}
+
+// 从种子列表中获取指定TorrentID的源站点
+func getSourceSiteFromSeeds(seeds []SeedInfo, torrentID string) string {
+	for _, seed := range seeds {
+		if seed.TorrentID == torrentID {
+			return seed.SiteName
+		}
+	}
+	return ""
+}
+
 // 核心批量处理逻辑
 func processBatchSeeds(req BatchRequest) BatchResponse {
-	log.Printf("📋 开始批量处理种子...")
+	// 生成新的批次ID
+	currentBatchID = generateBatchID()
+	logInfo("📋 开始批量处理种子，批次ID: %s", currentBatchID)
 
 	var processedSeeds []SeedResult
 	var failedSeeds []SeedResult
 
 	// 首先应用过滤逻辑
-	log.Printf("🔍 应用过滤逻辑...")
+	logInfo("🔍 应用过滤逻辑...")
 	filterStart := time.Now()
 	validSeeds, filteredSeeds, filterStats := filterSeeds(req.Seeds, req.FilterOptions)
 	filterDuration := time.Since(filterStart)
 
-	log.Printf("⏱️  过滤完成，耗时: %v", filterDuration)
-	log.Printf("📊 过滤结果: 总共 %d 个种子, 通过过滤 %d 个, 被过滤 %d 个",
+	logInfo("⏱️  过滤完成，耗时: %v", filterDuration)
+	logInfo("📊 过滤结果: 总共 %d 个种子, 通过过滤 %d 个, 被过滤 %d 个",
 		len(req.Seeds), len(validSeeds), len(filteredSeeds))
-
 
 	// 如果没有有效种子，直接返回
 	if len(validSeeds) == 0 {
-		log.Printf("⚠️  所有种子都被过滤，没有种子需要处理")
+		logWarning("⚠️  所有种子都被过滤，没有种子需要处理")
 		return BatchResponse{
 			Success: true,
 			Message: fmt.Sprintf("所有 %d 个种子都被过滤，没有种子需要处理", len(req.Seeds)),
@@ -735,35 +1051,71 @@ func processBatchSeeds(req BatchRequest) BatchResponse {
 		}
 	}
 
+	// 首先记录所有被过滤的种子到数据库
+	for _, filteredSeed := range filteredSeeds {
+		record := SeedRecord{
+			BatchID:     currentBatchID,
+			TorrentID:   filteredSeed.TorrentID,
+			SourceSite:  getSourceSiteFromSeeds(req.Seeds, filteredSeed.TorrentID),
+			TargetSite:  req.TargetSiteName,
+			VideoSizeGB: filteredSeed.VideoSizeGB,
+			Status:      "filtered",
+			ErrorDetail: filteredSeed.FilterReason,
+		}
+		if err := recordSeedResult(record); err != nil {
+			logError("记录过滤种子到数据库失败: %v", err)
+		}
+	}
+
 	// 串行处理有效种子（站点请求频率由全局控制）
-	log.Printf("🔄 开始串行处理 %d 个有效种子...", len(validSeeds))
+	logInfo("🔄 开始串行处理 %d 个有效种子...", len(validSeeds))
 	processStart := time.Now()
 
 	for i, seed := range validSeeds {
-		log.Printf("🔄 [%d/%d] 开始处理种子: %s -> %s",
+		logInfo("🔄 [%d/%d] 开始处理种子: %s -> %s",
 			i+1, len(validSeeds), seed.TorrentID, req.TargetSiteName)
 
 		seedStart := time.Now()
 		result := processSingleSeed(seed, req.TargetSiteName)
 		seedDuration := time.Since(seedStart)
 
+		// 使用过滤阶段已经获取的视频大小，无需重复调用checkVideoSize
+		videoSizeGB := seed.VideoSizeGB
+
+		// 记录处理结果到数据库
+		record := SeedRecord{
+			BatchID:     currentBatchID,
+			TorrentID:   seed.TorrentID,
+			SourceSite:  seed.SiteName,
+			TargetSite:  req.TargetSiteName,
+			VideoSizeGB: videoSizeGB,
+			Status:      result.Status,
+		}
+
 		if result.Status == "success" {
-			log.Printf("✅ [%d/%d] 种子处理成功: %s (耗时: %v)",
+			logSuccess("✅ [%d/%d] 种子处理成功: %s (耗时: %v)",
 				i+1, len(validSeeds), seed.TorrentID, seedDuration)
+			record.SuccessURL = result.URL
 			processedSeeds = append(processedSeeds, result)
 		} else {
-			log.Printf("❌ [%d/%d] 种子处理失败: %s - %s (耗时: %v)",
+			logError("❌ [%d/%d] 种子处理失败: %s - %s (耗时: %v)",
 				i+1, len(validSeeds), seed.TorrentID, result.Error, seedDuration)
+			record.ErrorDetail = result.Error
 			failedSeeds = append(failedSeeds, result)
+		}
+
+		// 尝试记录到数据库
+		if err := recordSeedResult(record); err != nil {
+			logError("数据库记录失败: %v", err)
 		}
 	}
 
 	processDuration := time.Since(processStart)
-	log.Printf("⏱️  所有种子处理完成，耗时: %v", processDuration)
-	log.Printf("📊 最终统计:")
-	log.Printf("   - 成功处理: %d 个", len(processedSeeds))
-	log.Printf("   - 处理失败: %d 个", len(failedSeeds))
-	log.Printf("   - 过滤排除: %d 个", len(filteredSeeds))
+	logInfo("⏱️  所有种子处理完成，耗时: %v", processDuration)
+	logInfo("📊 最终统计:")
+	logInfo("   - 成功处理: %d 个", len(processedSeeds))
+	logInfo("   - 处理失败: %d 个", len(failedSeeds))
+	logInfo("   - 过滤排除: %d 个", len(filteredSeeds))
 
 	return BatchResponse{
 		Success: true,
@@ -918,12 +1270,12 @@ func getSeedTaskIDAndData(torrentID, siteName string) (string, map[string]interf
 // 从数据库种子数据构造upload_data
 func constructUploadData(seedData map[string]interface{}, seedDir string) map[string]interface{} {
 	uploadData := map[string]interface{}{
-		"title":        getStringValue(seedData, "title"),
-		"subtitle":     getStringValue(seedData, "subtitle"),
-		"imdb_link":    getStringValue(seedData, "imdb_link"),
-		"douban_link":  getStringValue(seedData, "douban_link"),
-		"mediainfo":    getStringValue(seedData, "mediainfo"),
-		"torrent_dir":  seedDir, // 添加种子目录路径，确保上传参数文件保存在正确的目录
+		"title":       getStringValue(seedData, "title"),
+		"subtitle":    getStringValue(seedData, "subtitle"),
+		"imdb_link":   getStringValue(seedData, "imdb_link"),
+		"douban_link": getStringValue(seedData, "douban_link"),
+		"mediainfo":   getStringValue(seedData, "mediainfo"),
+		"torrent_dir": seedDir, // 添加种子目录路径，确保上传参数文件保存在正确的目录
 	}
 
 	// 处理intro对象
@@ -976,14 +1328,14 @@ func constructUploadData(seedData map[string]interface{}, seedDir string) map[st
 	// 处理standardized_params对象：使用数据库字段 + title_components解析
 	standardizedParams := map[string]interface{}{
 		// 从数据库读取的标准参数
-		"type":         getStringValue(seedData, "type"),
-		"medium":       getStringValue(seedData, "medium"),
-		"video_codec":  getStringValue(seedData, "video_codec"),
-		"audio_codec":  getStringValue(seedData, "audio_codec"),
-		"resolution":   getStringValue(seedData, "resolution"),
-		"team":         getStringValue(seedData, "team"),
-		"source":       getStringValue(seedData, "source"),
-		"tags":         getArrayValue(seedData, "tags"),
+		"type":        getStringValue(seedData, "type"),
+		"medium":      getStringValue(seedData, "medium"),
+		"video_codec": getStringValue(seedData, "video_codec"),
+		"audio_codec": getStringValue(seedData, "audio_codec"),
+		"resolution":  getStringValue(seedData, "resolution"),
+		"team":        getStringValue(seedData, "team"),
+		"source":      getStringValue(seedData, "source"),
+		"tags":        getArrayValue(seedData, "tags"),
 	}
 
 	// 从title_components中提取额外的标准参数
@@ -1071,7 +1423,7 @@ func callPythonAPIWithRetry(endpoint string, data map[string]interface{}, maxRet
 			if attempt == maxRetries {
 				return nil, fmt.Errorf("HTTP请求失败: %v", err)
 			}
-			log.Printf("     ⚠️  [%d/%d] HTTP请求失败，重试中: %v", attempt, maxRetries, err)
+			logInfo("     ⚠️  [%d/%d] HTTP请求失败，重试中: %v", attempt, maxRetries, err)
 			time.Sleep(5 * time.Second)
 			continue
 		}
@@ -1082,7 +1434,7 @@ func callPythonAPIWithRetry(endpoint string, data map[string]interface{}, maxRet
 			if attempt == maxRetries {
 				return nil, fmt.Errorf("读取响应失败: %v", err)
 			}
-			log.Printf("     ⚠️  [%d/%d] 读取响应失败，重试中: %v", attempt, maxRetries, err)
+			logInfo("     ⚠️  [%d/%d] 读取响应失败，重试中: %v", attempt, maxRetries, err)
 			time.Sleep(5 * time.Second)
 			continue
 		}
@@ -1092,7 +1444,7 @@ func callPythonAPIWithRetry(endpoint string, data map[string]interface{}, maxRet
 			if attempt == maxRetries {
 				return nil, fmt.Errorf("认证失败，已重试%d次: %s", maxRetries, string(body))
 			}
-			log.Printf("     🔐 [%d/%d] 认证失败，等待60秒后重试", attempt, maxRetries)
+			logInfo("     🔐 [%d/%d] 认证失败，等待60秒后重试", attempt, maxRetries)
 			time.Sleep(60 * time.Second)
 			continue
 		}
@@ -1101,7 +1453,7 @@ func callPythonAPIWithRetry(endpoint string, data map[string]interface{}, maxRet
 			if attempt == maxRetries {
 				return nil, fmt.Errorf("HTTP错误 %d: %s", resp.StatusCode, string(body))
 			}
-			log.Printf("     ⚠️  [%d/%d] HTTP错误 %d，重试中", attempt, maxRetries, resp.StatusCode)
+			logInfo("     ⚠️  [%d/%d] HTTP错误 %d，重试中", attempt, maxRetries, resp.StatusCode)
 			time.Sleep(5 * time.Second)
 			continue
 		}
@@ -1112,7 +1464,7 @@ func callPythonAPIWithRetry(endpoint string, data map[string]interface{}, maxRet
 			if attempt == maxRetries {
 				return nil, fmt.Errorf("JSON解析失败: %v", err)
 			}
-			log.Printf("     ⚠️  [%d/%d] JSON解析失败，重试中: %v", attempt, maxRetries, err)
+			logInfo("     ⚠️  [%d/%d] JSON解析失败，重试中: %v", attempt, maxRetries, err)
 			time.Sleep(5 * time.Second)
 			continue
 		}
@@ -1172,54 +1524,65 @@ func main() {
 	log.Println("🚀 PT Nexus 批量转种增强服务启动中...")
 	log.Println("==========================================")
 
+	// 初始化日志系统
+	logInfo("📝 初始化日志系统...")
+	if err := initLogging(); err != nil {
+		log.Fatalf("❌ 初始化日志系统失败: %v", err)
+	}
+	logSuccess("✅ 日志系统初始化完成")
+
 	// 显示配置信息
-	log.Printf("📊 服务配置:")
-	log.Printf("   - 服务端口: %s", port)
-	log.Printf("   - 核心API地址: %s", coreAPIURL)
-	log.Printf("   - 临时目录: %s", tempDir)
-	log.Printf("   - 视频大小过滤阈值: 5.0GB (硬编码)")
-	log.Printf("   - 站点请求间隔: %v (全局控制)", minRequestInterval)
-	log.Printf("   - 内部认证方式: 网络隔离 + API Key")
+	logInfo("📊 服务配置:")
+	logInfo("   - 服务端口: %s", port)
+	logInfo("   - 核心API地址: %s", coreAPIURL)
+	logInfo("   - 临时目录: %s", tempDir)
+	logInfo("   - 视频大小过滤阈值: 5.0GB (硬编码)")
+	logInfo("   - 站点请求间隔: %v (全局控制)", minRequestInterval)
+	logInfo("   - 内部认证方式: 网络隔离 + API Key")
 	if internalSecret != "" && internalSecret != "pt-nexus-2024-secret-key" {
-		log.Printf("   - 内部认证密钥: 已自定义")
+		logInfo("   - 内部认证密钥: 已自定义")
 	} else {
-		log.Printf("   - 内部认证密钥: 使用默认值")
+		logWarning("   - 内部认证密钥: 使用默认值")
 	}
 
 	// 检查临时目录
 	if _, err := os.Stat(tempDir); os.IsNotExist(err) {
-		log.Printf("⚠️  警告: 临时目录不存在，尝试创建: %s", tempDir)
+		logWarning("⚠️  警告: 临时目录不存在，尝试创建: %s", tempDir)
 		if err := os.MkdirAll(tempDir, 0755); err != nil {
 			log.Fatalf("❌ 致命错误: 无法创建临时目录 %s: %v", tempDir, err)
 		}
-		log.Printf("✅ 临时目录创建成功: %s", tempDir)
+		logSuccess("✅ 临时目录创建成功: %s", tempDir)
 	} else {
-		log.Printf("✅ 临时目录检查通过: %s", tempDir)
+		logSuccess("✅ 临时目录检查通过: %s", tempDir)
 	}
 
 	// 检测核心API连接
-	log.Printf("🔗 检测核心API连接...")
+	logInfo("🔗 检测核心API连接...")
 	if err := testCoreAPIConnection(); err != nil {
-		log.Printf("⚠️  警告: 核心API连接失败: %v", err)
-		log.Printf("   服务将继续启动，但功能可能受限")
+		logWarning("⚠️  警告: 核心API连接失败: %v", err)
+		logInfo("   服务将继续启动，但功能可能受限")
 	} else {
-		log.Printf("✅ 核心API连接正常")
+		logSuccess("✅ 核心API连接正常")
 	}
 
 	// 路由设置
-	log.Printf("🛠️  设置API路由...")
+	logInfo("🛠️  设置API路由...")
 	http.HandleFunc("/health", healthHandler)
 	http.HandleFunc("/batch-enhance", batchEnhanceHandler)
-	log.Printf("   - GET  /health         健康检查")
-	log.Printf("   - POST /batch-enhance  批量转种增强")
+	http.HandleFunc("/records", recordsHandler)
+	logInfo("   - GET  /health         健康检查")
+	logInfo("   - POST /batch-enhance  批量转种增强")
+	logInfo("   - GET  /records        查看处理记录")
+	logInfo("   - DELETE /records      清空处理记录")
 
 	// 启动服务器
-	log.Printf("🌟 批量转种增强服务已启动!")
-	log.Printf("   访问地址: http://localhost:%s", port)
-	log.Printf("   健康检查: http://localhost:%s/health", port)
+	logSuccess("🌟 批量转种增强服务已启动!")
+	logInfo("   访问地址: http://localhost:%s", port)
+	logInfo("   健康检查: http://localhost:%s/health", port)
 	log.Println("==========================================")
 
 	if err := http.ListenAndServe(":"+port, nil); err != nil {
+		logError("❌ 服务器启动失败: %v", err)
 		log.Fatalf("❌ 服务器启动失败: %v", err)
 	}
 }

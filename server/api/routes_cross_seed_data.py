@@ -4,6 +4,8 @@ import logging
 import yaml
 import os
 import time
+import json
+from datetime import datetime, timedelta
 
 # 创建蓝图
 cross_seed_data_bp = Blueprint('cross_seed_data', __name__, url_prefix="/api")
@@ -391,4 +393,264 @@ def test_no_auth():
         "message": "无认证测试成功",
         "timestamp": str(time.time())
     })
+
+
+# ============= 批量转种记录API =============
+
+@cross_seed_data_bp.route('/batch-enhance/records', methods=['POST'])
+def add_batch_enhance_record():
+    """添加批量转种记录（给Go服务调用）"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "error": "缺少请求数据"}), 400
+
+        # 验证必需字段
+        required_fields = ['batch_id', 'torrent_id', 'source_site', 'target_site', 'status']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({"success": False, "error": f"缺少必需字段: {field}"}), 400
+
+        # 获取数据库管理器
+        db_manager = current_app.config['DB_MANAGER']
+        conn = db_manager._get_connection()
+        cursor = db_manager._get_cursor(conn)
+
+        # 插入记录
+        if db_manager.db_type == "mysql":
+            sql = """INSERT INTO batch_enhance_records
+                     (batch_id, torrent_id, source_site, target_site, video_size_gb, status, success_url, error_detail)
+                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"""
+        elif db_manager.db_type == "postgresql":
+            sql = """INSERT INTO batch_enhance_records
+                     (batch_id, torrent_id, source_site, target_site, video_size_gb, status, success_url, error_detail)
+                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"""
+        else:  # sqlite
+            sql = """INSERT INTO batch_enhance_records
+                     (batch_id, torrent_id, source_site, target_site, video_size_gb, status, success_url, error_detail)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)"""
+
+        params = (
+            data['batch_id'],
+            data['torrent_id'],
+            data['source_site'],
+            data['target_site'],
+            data.get('video_size_gb'),
+            data['status'],
+            data.get('success_url'),
+            data.get('error_detail')
+        )
+
+        cursor.execute(sql, params)
+        conn.commit()
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({"success": True, "message": "记录添加成功"})
+
+    except Exception as e:
+        logging.error(f"添加批量转种记录时出错: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@cross_seed_data_bp.route('/batch-enhance/records', methods=['GET'])
+def get_batch_enhance_records():
+    """获取批量转种记录（给前端调用）"""
+    try:
+        # 获取查询参数
+        page = int(request.args.get('page', 1))
+        page_size = int(request.args.get('page_size', 50))
+        status = request.args.get('status', '').strip()
+        batch_id = request.args.get('batch_id', '').strip()
+        search = request.args.get('search', '').strip()
+        start_time = request.args.get('start_time', '').strip()
+        end_time = request.args.get('end_time', '').strip()
+
+        # 限制页面大小
+        page_size = min(page_size, 200)
+        offset = (page - 1) * page_size
+
+        # 获取数据库管理器
+        db_manager = current_app.config['DB_MANAGER']
+        conn = db_manager._get_connection()
+        cursor = db_manager._get_cursor(conn)
+
+        # 构建查询条件
+        where_conditions = []
+        params = []
+
+        # 状态筛选
+        if status:
+            if db_manager.db_type == "postgresql":
+                where_conditions.append("status = %s")
+            else:
+                where_conditions.append("status = ?")
+            params.append(status)
+
+        # 批次ID筛选
+        if batch_id:
+            if db_manager.db_type == "postgresql":
+                where_conditions.append("batch_id = %s")
+            else:
+                where_conditions.append("batch_id = ?")
+            params.append(batch_id)
+
+        # 搜索条件
+        if search:
+            if db_manager.db_type == "postgresql":
+                where_conditions.append("(torrent_id ILIKE %s OR source_site ILIKE %s OR target_site ILIKE %s)")
+                params.extend([f"%{search}%", f"%{search}%", f"%{search}%"])
+            else:
+                where_conditions.append("(torrent_id LIKE ? OR source_site LIKE ? OR target_site LIKE ?)")
+                params.extend([f"%{search}%", f"%{search}%", f"%{search}%"])
+
+        # 时间范围筛选
+        if start_time:
+            try:
+                start_dt = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+                if db_manager.db_type == "postgresql":
+                    where_conditions.append("processed_at >= %s")
+                else:
+                    where_conditions.append("processed_at >= ?")
+                params.append(start_dt)
+            except ValueError:
+                pass
+
+        if end_time:
+            try:
+                end_dt = datetime.fromisoformat(end_time.replace('Z', '+00:00'))
+                if db_manager.db_type == "postgresql":
+                    where_conditions.append("processed_at <= %s")
+                else:
+                    where_conditions.append("processed_at <= ?")
+                params.append(end_dt)
+            except ValueError:
+                pass
+
+        # 组合WHERE子句
+        where_clause = ""
+        if where_conditions:
+            where_clause = "WHERE " + " AND ".join(where_conditions)
+
+        # 查询总数
+        count_query = f"SELECT COUNT(*) as total FROM batch_enhance_records {where_clause}"
+        cursor.execute(count_query, params)
+        total_result = cursor.fetchone()
+        total_count = total_result[0] if isinstance(total_result, tuple) else total_result['total']
+
+        # 查询数据
+        if db_manager.db_type == "postgresql":
+            query = f"""
+                SELECT id, batch_id, torrent_id, source_site, target_site, video_size_gb, status, success_url, error_detail, processed_at
+                FROM batch_enhance_records
+                {where_clause}
+                ORDER BY processed_at DESC
+                LIMIT %s OFFSET %s
+            """
+            cursor.execute(query, params + [page_size, offset])
+        else:
+            placeholder = "?" if db_manager.db_type == "sqlite" else "%s"
+            query = f"""
+                SELECT id, batch_id, torrent_id, source_site, target_site, video_size_gb, status, success_url, error_detail, processed_at
+                FROM batch_enhance_records
+                {where_clause}
+                ORDER BY processed_at DESC
+                LIMIT {placeholder} OFFSET {placeholder}
+            """
+            cursor.execute(query, params + [page_size, offset])
+
+        rows = cursor.fetchall()
+
+        # 转换结果为字典列表
+        if isinstance(rows, list) and rows and isinstance(rows[0], dict):
+            # PostgreSQL返回字典列表
+            records = [dict(row) for row in rows]
+        else:
+            # MySQL和SQLite返回元组列表
+            columns = [desc[0] for desc in cursor.description]
+            records = [dict(zip(columns, row)) for row in rows]
+
+        # 获取所有唯一的批次ID（用于前端筛选）
+        batch_query = "SELECT DISTINCT batch_id FROM batch_enhance_records ORDER BY batch_id DESC LIMIT 100"
+        cursor.execute(batch_query)
+        batch_rows = cursor.fetchall()
+        if isinstance(batch_rows, list) and batch_rows and isinstance(batch_rows[0], dict):
+            batch_ids = [row['batch_id'] for row in batch_rows]
+        else:
+            batch_ids = [row[0] for row in batch_rows]
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            "success": True,
+            "records": records,
+            "total": total_count,
+            "page": page,
+            "page_size": page_size,
+            "batch_ids": batch_ids
+        })
+
+    except Exception as e:
+        logging.error(f"获取批量转种记录时出错: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@cross_seed_data_bp.route('/batch-enhance/records', methods=['DELETE'])
+def clear_batch_enhance_records():
+    """清空批量转种记录（给前端调用）"""
+    try:
+        # 获取数据库管理器
+        db_manager = current_app.config['DB_MANAGER']
+        conn = db_manager._get_connection()
+        cursor = db_manager._get_cursor(conn)
+
+        # 清空记录表
+        cursor.execute("DELETE FROM batch_enhance_records")
+        deleted_count = cursor.rowcount
+        conn.commit()
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            "success": True,
+            "message": f"记录已清空，删除了 {deleted_count} 条记录"
+        })
+
+    except Exception as e:
+        logging.error(f"清空批量转种记录时出错: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@cross_seed_data_bp.route('/batch-enhance/records/batch/<batch_id>', methods=['DELETE'])
+def clear_batch_records_by_id(batch_id):
+    """根据批次ID清空特定批次的记录"""
+    try:
+        # 获取数据库管理器
+        db_manager = current_app.config['DB_MANAGER']
+        conn = db_manager._get_connection()
+        cursor = db_manager._get_cursor(conn)
+
+        # 删除指定批次的记录
+        if db_manager.db_type == "postgresql":
+            cursor.execute("DELETE FROM batch_enhance_records WHERE batch_id = %s", (batch_id,))
+        else:
+            cursor.execute("DELETE FROM batch_enhance_records WHERE batch_id = ?", (batch_id,))
+
+        deleted_count = cursor.rowcount
+        conn.commit()
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            "success": True,
+            "message": f"批次 {batch_id} 的记录已清空，删除了 {deleted_count} 条记录"
+        })
+
+    except Exception as e:
+        logging.error(f"清空批次记录时出错: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
 

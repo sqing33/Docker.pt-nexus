@@ -14,6 +14,11 @@
         {{ batchCrossSeedButtonText }}
       </el-button>
 
+      <!-- 查看记录按钮 -->
+      <el-button type="info" @click="openRecordViewDialog" plain style="margin-right: 15px;">
+        查看处理记录
+      </el-button>
+
       <!-- 筛选按钮 -->
       <el-button type="primary" @click="openFilterDialog" plain style="margin-right: 15px;">
         筛选
@@ -238,6 +243,97 @@
         </div>
       </el-card>
     </div>
+
+    <!-- 处理记录查看弹窗 -->
+    <div v-if="recordDialogVisible" class="modal-overlay">
+      <el-card class="record-view-card" shadow="always">
+        <template #header>
+          <div class="modal-header">
+            <span>批量转种记录 {{ refreshTimer ? '(自动刷新中...)' : '' }}</span>
+            <div class="record-header-controls">
+              <el-button type="primary" size="small" @click="refreshRecords" :loading="recordsLoading">
+                刷新
+              </el-button>
+              <el-button
+                v-if="refreshTimer"
+                type="warning"
+                size="small"
+                @click="stopAutoRefresh"
+              >
+                停止自动刷新
+              </el-button>
+              <el-button
+                v-else-if="batchProgress && batchProgress.isRunning"
+                type="success"
+                size="small"
+                @click="startAutoRefresh"
+              >
+                开启自动刷新
+              </el-button>
+              <el-button type="danger" circle @click="closeRecordViewDialog" plain>X</el-button>
+            </div>
+          </div>
+        </template>
+        <div class="record-view-content">
+          <!-- 种子处理记录表格 -->
+          <div class="records-table-container" v-if="records.length > 0">
+            <el-table
+              :data="records"
+              style="width: 100%"
+              size="small"
+              v-loading="recordsLoading"
+              element-loading-text="加载记录中..."
+              stripe
+            >
+              <el-table-column prop="batch_id" label="批次ID" width="150" show-overflow-tooltip>
+                <template #default="scope">
+                  <el-tag size="small" type="info">{{ scope.row.batch_id }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="torrent_id" label="种子ID" width="100" show-overflow-tooltip />
+              <el-table-column prop="source_site" label="源站点" width="100" />
+              <el-table-column prop="target_site" label="目标站点" width="100" />
+              <el-table-column prop="video_size_gb" label="视频大小" width="100" align="center">
+                <template #default="scope">
+                  <span v-if="scope.row.video_size_gb">{{ scope.row.video_size_gb }}GB</span>
+                  <span v-else>-</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="status" label="状态" width="100" align="center">
+                <template #default="scope">
+                  <el-tag :type="getRecordStatusTypeLocal(scope.row.status)" size="small">
+                    {{ getRecordStatusTextLocal(scope.row.status) }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="error_detail" label="详情" show-overflow-tooltip>
+                <template #default="scope">
+                  <span v-if="scope.row.status === 'success' && scope.row.success_url">
+                    <el-link type="primary" :href="scope.row.success_url" target="_blank">查看转种页面</el-link>
+                  </span>
+                  <span v-else-if="scope.row.error_detail">{{ scope.row.error_detail }}</span>
+                  <span v-else>-</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="processed_at" label="处理时间" width="160" align="center">
+                <template #default="scope">
+                  {{ formatRecordTimeLocal(scope.row.processed_at) }}
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+
+          <!-- 无记录时的显示 -->
+          <div v-if="records.length === 0 && !recordsLoading" class="no-records">
+            <el-empty description="暂无批量转种记录" />
+          </div>
+        </div>
+        <div class="record-view-footer">
+          <el-button @click="clearRecordsLocal" type="warning">清空记录</el-button>
+          <el-button @click="closeRecordViewDialog">关闭</el-button>
+        </div>
+      </el-card>
+    </div>
   </div>
 </template>
 
@@ -327,6 +423,52 @@ const error = ref<string | null>(null)
 // 批量转种相关
 const selectedRows = ref<SeedParameter[]>([])
 const batchCrossSeedDialogVisible = ref<boolean>(false)
+
+// 记录查看相关
+const recordDialogVisible = ref<boolean>(false)
+const records = ref<SeedRecord[]>([])
+const recordsLoading = ref<boolean>(false)
+const batchProgress = ref<BatchProgress | null>(null)
+
+// 定时刷新相关
+const refreshTimer = ref<ReturnType<typeof setInterval> | null>(null)
+const REFRESH_INTERVAL = 5000 // 5秒刷新一次
+
+interface SeedRecord {
+  id: number
+  batch_id: string
+  torrent_id: string
+  source_site: string
+  target_site: string
+  video_size_gb?: number
+  status: string
+  success_url?: string
+  error_detail?: string
+  processed_at: string
+}
+
+interface SeedProgress {
+  torrentId: string
+  siteName: string
+  targetSite: string
+  status: 'pending' | 'checking' | 'processing' | 'success' | 'failed' | 'filtered'
+  statusText: string
+  videoSize?: string
+  filterReason?: string
+  url?: string
+  error?: string
+  processingTime?: string
+}
+
+interface BatchProgress {
+  totalSeeds: number
+  processedSeeds: number
+  isRunning: boolean
+  startTime?: string
+  endTime?: string
+  summary?: string
+  seeds: SeedProgress[]
+}
 
 // 路径树相关
 const pathTreeRef = ref<InstanceType<typeof ElTree> | null>(null)
@@ -920,6 +1062,12 @@ const handleBatchCrossSeed = async () => {
   }
 
   try {
+    // 关闭批量转种对话框
+    closeBatchCrossSeedDialog()
+
+    // 立即打开记录窗口
+    openRecordViewDialog()
+
     // 构造要传递给后端的数据
     const batchData = {
       target_site_name: targetSiteName,
@@ -948,7 +1096,6 @@ const handleBatchCrossSeed = async () => {
     const result = await response.json()
     if (result.success) {
       ElMessage.success(`批量转种请求已发送，成功 ${result.data.seeds_processed} 个，失败 ${result.data.seeds_failed} 个`)
-      closeBatchCrossSeedDialog()
       // 可选：刷新数据
       // fetchData()
     } else {
@@ -964,8 +1111,167 @@ const closeBatchCrossSeedDialog = () => {
   batchCrossSeedDialogVisible.value = false
 }
 
+// 启动定时刷新
+const startAutoRefresh = () => {
+  // 先清除任何现有的定时器
+  stopAutoRefresh()
+
+  // 立即刷新一次
+  refreshRecords()
+
+  // 启动定时器
+  refreshTimer.value = setInterval(async () => {
+    if (recordDialogVisible.value) {
+      await refreshRecords()
+
+      // 检查是否还有正在处理的种子
+      if (batchProgress.value && !batchProgress.value.isRunning) {
+        // 批量处理已完成，延迟3秒后停止自动刷新
+        setTimeout(() => {
+          if (!batchProgress.value?.isRunning) {
+            stopAutoRefresh()
+          }
+        }, 3000)
+      }
+    } else {
+      // 如果记录窗口已关闭，停止定时器
+      stopAutoRefresh()
+    }
+  }, REFRESH_INTERVAL)
+}
+
+// 停止定时刷新
+const stopAutoRefresh = () => {
+  if (refreshTimer.value) {
+    clearInterval(refreshTimer.value)
+    refreshTimer.value = null
+  }
+}
+
+// 打开记录查看对话框
+const openRecordViewDialog = () => {
+  recordDialogVisible.value = true
+  startAutoRefresh()
+}
+
+// 关闭记录查看对话框
+const closeRecordViewDialog = () => {
+  recordDialogVisible.value = false
+  stopAutoRefresh()
+}
+
+// 刷新记录
+const refreshRecords = async () => {
+  recordsLoading.value = true
+  try {
+    // 通过vite代理调用Go服务的记录API
+    const response = await fetch('/go-api/records', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    })
+
+    if (response.ok) {
+      const result = await response.json()
+      if (result.success) {
+        records.value = result.records || []
+
+        // 自动滚动到表格顶部（显示最新记录）
+        await nextTick()
+        const tableContainer = document.querySelector('.records-table-container .el-table__body-wrapper')
+        if (tableContainer) {
+          tableContainer.scrollTop = 0
+        }
+      } else {
+        ElMessage.error(result.error || '获取记录失败')
+      }
+    } else if (response.status === 404) {
+      // 如果接口不存在，显示提示信息
+      records.value = []
+      ElMessage.warning('记录接口暂未实现，请等待后续更新')
+    } else {
+      ElMessage.error('获取记录失败')
+    }
+  } catch (error: any) {
+    console.error('获取记录时出错:', error)
+    ElMessage.error('获取记录失败: ' + (error.message || '网络错误'))
+  } finally {
+    recordsLoading.value = false
+  }
+}
+
+// 清空记录
+const clearRecordsLocal = async () => {
+  try {
+    // 调用清空记录的API
+    const response = await fetch('/go-api/records', {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    })
+
+    if (response.ok) {
+      records.value = []
+      ElMessage.success('记录已清空')
+    } else {
+      // 如果API不存在，只是清空本地显示
+      records.value = []
+      ElMessage.success('本地记录已清空')
+    }
+  } catch (error) {
+    // 如果请求失败，只是清空本地显示
+    records.value = []
+    ElMessage.success('本地记录已清空')
+  }
+}
+
+// 获取记录状态对应的Element Plus标签类型
+const getRecordStatusTypeLocal = (status: string) => {
+  switch (status) {
+    case 'success': return 'success'
+    case 'failed': return 'danger'
+    case 'filtered': return 'warning'
+    case 'processing': return 'primary'
+    case 'pending': return 'info'
+    default: return 'info'
+  }
+}
+
+// 获取记录状态文本
+const getRecordStatusTextLocal = (status: string) => {
+  switch (status) {
+    case 'success': return '成功'
+    case 'failed': return '失败'
+    case 'filtered': return '已过滤'
+    case 'processing': return '处理中'
+    case 'pending': return '等待中'
+    default: return '未知'
+  }
+}
+
+// 格式化记录时间
+const formatRecordTimeLocal = (timestamp: string) => {
+  try {
+    const date = new Date(timestamp)
+    if (isNaN(date.getTime())) return timestamp // 如果日期无效，返回原始字符串
+
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    const hours = String(date.getHours()).padStart(2, '0')
+    const minutes = String(date.getMinutes()).padStart(2, '0')
+    const seconds = String(date.getSeconds()).padStart(2, '0')
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
+  } catch (error) {
+    return timestamp
+  }
+}
+
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
+  stopAutoRefresh() // 清理定时器
 })
 </script>
 
@@ -1319,5 +1625,56 @@ onUnmounted(() => {
 
 .batch-info p strong {
   color: #303133;
+}
+
+/* 记录查看弹窗样式 */
+.record-view-card {
+  width: 90vw;
+  max-width: 1200px;
+  height: 80vh;
+  max-height: 800px;
+  display: flex;
+  flex-direction: column;
+}
+
+:deep(.record-view-card .el-card__body) {
+  padding: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.record-header-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.record-view-content {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 记录表格样式 */
+.records-table-container {
+  flex: 1;
+  overflow: hidden;
+  padding: 10px;
+}
+
+.no-records {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.record-view-footer {
+  padding: 10px 20px;
+  border-top: 1px solid var(--el-border-color-lighter);
+  display: flex;
+  justify-content: space-between;
 }
 </style>
