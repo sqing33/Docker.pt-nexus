@@ -9,6 +9,7 @@
     <el-menu-item index="/info">流量统计</el-menu-item>
     <el-menu-item index="/torrents">一种多站</el-menu-item>
     <el-menu-item index="/data">一站多种</el-menu-item>
+    <el-menu-item index="/batch-fetch">批量获取</el-menu-item>
     <el-menu-item index="/sites">做种数据</el-menu-item>
     <el-menu-item index="/settings">设置</el-menu-item>
     <div class="refresh-button-container">
@@ -55,7 +56,7 @@ const handleGlobalRefresh = async () => {
 
   const topLevelPath = route.matched.length > 0 ? route.matched[0].path : ''
 
-  if (topLevelPath === '/torrents' || topLevelPath === '/sites' || topLevelPath === '/data') {
+  if (topLevelPath === '/torrents' || topLevelPath === '/sites' || topLevelPath === '/data' || topLevelPath === '/batch-fetch') {
     isRefreshing.value = true
     ElMessage.info('后台正在刷新缓存...')
 

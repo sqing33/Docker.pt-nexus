@@ -371,10 +371,7 @@ def download_torrent_only():
         parameters = seed_param_model.get_parameters(torrent_id, site_name)
 
         if not parameters or not parameters.get("title"):
-            return jsonify({
-                "success": False,
-                "message": "无法从数据库获取种子标题"
-            }), 404
+            return jsonify({"success": False, "message": "无法从数据库获取种子标题"}), 404
 
         # 创建种子目录
         from config import TEMP_DIR
@@ -382,17 +379,17 @@ def download_torrent_only():
         import os
 
         original_main_title = parameters.get("title", "")
-        safe_filename_base = re.sub(r'[\\/*?:"<>|]', "_", original_main_title)[:150]
+        safe_filename_base = re.sub(r'[\\/*?:"<>|]', "_",
+                                    original_main_title)[:150]
         torrent_dir = os.path.join(TEMP_DIR, safe_filename_base)
         os.makedirs(torrent_dir, exist_ok=True)
 
         # 创建TorrentMigrator实例仅用于下载种子文件
-        migrator = TorrentMigrator(
-            source_site_info=source_info,
-            target_site_info=None,
-            search_term=torrent_id,
-            config_manager=config_manager
-        )
+        migrator = TorrentMigrator(source_site_info=source_info,
+                                   target_site_info=None,
+                                   search_term=torrent_id,
+                                   config_manager=config_manager,
+                                   db_manager=db_manager)
 
         # 下载种子文件
         torrent_path = migrator._download_torrent_file(torrent_id, torrent_dir)
@@ -405,10 +402,7 @@ def download_torrent_only():
                 "message": "种子文件下载成功"
             })
         else:
-            return jsonify({
-                "success": False,
-                "message": "种子文件下载失败"
-            }), 500
+            return jsonify({"success": False, "message": "种子文件下载失败"}), 500
 
     except Exception as e:
         logging.error(f"download_torrent_only 发生意外错误: {e}", exc_info=True)
@@ -464,7 +458,8 @@ def migrate_fetch_and_store():
                                    search_term=search_term,
                                    save_path=save_path,
                                    torrent_name=torrent_name,
-                                   config_manager=config_manager)
+                                   config_manager=config_manager,
+                                   db_manager=db_manager)
 
         # 调用数据抓取和信息提取（这会自动保存到数据库）
         result = migrator.prepare_review_data()
@@ -930,7 +925,8 @@ def migrate_publish():
                                        "source_torrent_id", ""),
                                    save_path=upload_data.get("save_path", "")
                                    or upload_data.get("savePath", ""),
-                                   config_manager=config_manager)
+                                   config_manager=config_manager,
+                                   db_manager=db_manager)
 
         # 检查种子文件是否存在，如果不存在则重新下载
         # 首先检查原始路径
@@ -1154,14 +1150,18 @@ def migrate_publish():
                                     # 从数据库获取种子参数来确定目录名
                                     from models.seed_parameter import SeedParameter
                                     from flask import current_app
-                                    db_manager = current_app.config['DB_MANAGER']
-                                    seed_param_model = SeedParameter(db_manager)
+                                    db_manager = current_app.config[
+                                        'DB_MANAGER']
+                                    seed_param_model = SeedParameter(
+                                        db_manager)
 
                                     if source_torrent_id and source_site_name:
                                         # 从数据库获取种子参数
                                         parameters = seed_param_model.get_parameters(
-                                            source_torrent_id, source_site_name)
-                                        if parameters and parameters.get("title"):
+                                            source_torrent_id,
+                                            source_site_name)
+                                        if parameters and parameters.get(
+                                                "title"):
                                             # 重建种子目录路径
                                             from config import TEMP_DIR
                                             import re
@@ -1172,7 +1172,8 @@ def migrate_publish():
                                                 original_main_title)[:150]
                                             torrent_dir = os.path.join(
                                                 TEMP_DIR, safe_filename_base)
-                                            os.makedirs(torrent_dir, exist_ok=True)
+                                            os.makedirs(torrent_dir,
+                                                        exist_ok=True)
                                 except Exception as e:
                                     logging.warning(f"尝试从数据库获取标题创建目录时出错: {e}")
 
@@ -1233,7 +1234,8 @@ def migrate_publish():
                     }), 500
 
         # 1. 直接使用原始种子文件路径进行发布（不再修改种子）
-        if not original_torrent_path or not os.path.exists(original_torrent_path):
+        if not original_torrent_path or not os.path.exists(
+                original_torrent_path):
             raise Exception("原始种子文件路径无效或文件不存在。")
 
         # 2. 发布 (传递 torrent_dir 给上传器)
@@ -1302,7 +1304,8 @@ def migrate_torrent():
         migrator = TorrentMigrator(source_info,
                                    target_info,
                                    search_term,
-                                   config_manager=config_manager)
+                                   config_manager=config_manager,
+                                   db_manager=db_manager)
         if hasattr(migrator, "run"):
             result = migrator.run()
             return jsonify(result)
@@ -1527,7 +1530,8 @@ def search_torrent_id():
         migrator = TorrentMigrator(source_site_info=source_info,
                                    target_site_info=None,
                                    search_term=torrent_name,
-                                   config_manager=config_manager)
+                                   config_manager=config_manager,
+                                   db_manager=db_manager)
 
         # 调用搜索方法获取种子ID
         torrent_id = migrator.search_and_get_torrent_id(torrent_name)
@@ -1786,3 +1790,417 @@ def update_preview_data():
     except Exception as e:
         logging.error(f"update_preview_data 发生意外错误: {e}", exc_info=True)
         return jsonify({"success": False, "message": f"服务器内部错误: {e}"}), 500
+
+
+# ===================================================================
+#                    批量获取种子数据 API
+# ===================================================================
+
+# 存储批量任务的进度信息
+BATCH_FETCH_TASKS = {}
+
+
+@migrate_bp.route("/migrate/get_aggregated_torrents", methods=["POST"])
+def get_aggregated_torrents():
+    """获取按名称聚合的种子列表（用于批量获取数据）"""
+    try:
+        db_manager = migrate_bp.db_manager
+        data = request.json
+
+        # 获取分页参数
+        page = data.get("page", 1)
+        page_size = data.get("pageSize", 50)
+
+        # 获取筛选条件
+        name_search = data.get("nameSearch", "").lower()
+        path_filters = data.get("pathFilters", [])
+        state_filters = data.get("stateFilters", [])
+        downloader_filters = data.get("downloaderFilters", [])
+
+        conn = db_manager._get_connection()
+        cursor = db_manager._get_cursor(conn)
+
+        # 获取所有站点配置信息
+        cursor.execute("SELECT nickname, migration FROM sites")
+        site_configs = {
+            row["nickname"]: dict(row)
+            for row in cursor.fetchall()
+        }
+
+        # 查询所有种子数据
+        if db_manager.db_type == "postgresql":
+            cursor.execute(
+                "SELECT hash, name, save_path, size, progress, state, sites, \"group\", details, downloader_id FROM torrents WHERE state != %s",
+                ("不存在", ))
+        else:
+            cursor.execute(
+                "SELECT hash, name, save_path, size, progress, state, sites, `group`, details, downloader_id FROM torrents WHERE state != %s",
+                ("不存在", ))
+        torrents_raw = [dict(row) for row in cursor.fetchall()]
+
+        # 查询 seed_parameters 表中已存在的种子名称
+        # 去除 .torrent 后缀进行匹配
+        cursor.execute("SELECT DISTINCT name FROM seed_parameters WHERE name IS NOT NULL AND name != ''")
+        existing_seed_names = set(row["name"] for row in cursor.fetchall())
+        logging.info(f"seed_parameters 表中已有 {len(existing_seed_names)} 个种子记录")
+
+        # 按名称聚合种子
+        from collections import defaultdict
+        agg_torrents = defaultdict(
+            lambda: {
+                "name": "",
+                "save_path": "",
+                "size": 0,
+                "progress": 0,
+                "state": set(),
+                "sites": defaultdict(dict),
+                "downloader_ids": [],
+            })
+
+        for t in torrents_raw:
+            torrent_key = t['name']
+            agg = agg_torrents[torrent_key]
+            if not agg["name"]:
+                agg.update({
+                    "name": t["name"],
+                    "save_path": t.get("save_path", ""),
+                    "size": t.get("size", 0),
+                })
+            downloader_id = t.get("downloader_id")
+            if downloader_id and downloader_id not in agg["downloader_ids"]:
+                agg["downloader_ids"].append(downloader_id)
+            agg["progress"] = max(agg.get("progress", 0), t.get("progress", 0))
+            agg["state"].add(t.get("state", "N/A"))
+            if t.get("sites"):
+                site_name = t.get("sites")
+                agg["sites"][site_name]["comment"] = t.get("details")
+                agg["sites"][site_name]["state"] = t.get("state", "N/A")
+                agg["sites"][site_name]["migration"] = site_configs.get(
+                    site_name, {}).get("migration", 0)
+
+        # 转换为列表并应用筛选
+        filtered_list = []
+        for name, data in agg_torrents.items():
+            # 排除已在 seed_parameters 表中存在的种子
+            # 去除 .torrent 后缀进行匹配
+            name_without_ext = name
+            if name_without_ext.lower().endswith('.torrent'):
+                name_without_ext = name_without_ext[:-8]
+
+            if name_without_ext in existing_seed_names:
+                logging.debug(f"排除已存在的种子: {name}")
+                continue
+
+            # 名称搜索筛选
+            if name_search and name_search not in name.lower():
+                continue
+
+            # 路径筛选
+            if path_filters and data["save_path"] not in path_filters:
+                continue
+
+            # 状态筛选
+            state_str = ", ".join(sorted(list(data["state"])))
+            if state_filters and state_str not in state_filters:
+                continue
+
+            # 下载器筛选
+            if downloader_filters:
+                if not any(did in downloader_filters
+                           for did in data.get("downloader_ids", [])):
+                    continue
+
+            data.update({
+                "state": state_str,
+                "sites": dict(data["sites"])  # 转换为普通字典
+            })
+            filtered_list.append(data)
+
+        # 计算总数
+        total = len(filtered_list)
+
+        # 应用分页
+        start_idx = (page - 1) * page_size
+        end_idx = start_idx + page_size
+        paginated_list = filtered_list[start_idx:end_idx]
+
+        print(
+            f"分页参数: page={page}, page_size={page_size}, total={total}, start_idx={start_idx}, end_idx={end_idx}, paginated_count={len(paginated_list)}"
+        )
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            "success": True,
+            "data": paginated_list,
+            "total": total
+        })
+
+    except Exception as e:
+        logging.error(f"get_aggregated_torrents 发生错误: {e}", exc_info=True)
+        return jsonify({
+            "success": False,
+            "message": f"服务器内部错误: {str(e)}"
+        }), 500
+
+
+@migrate_bp.route("/migrate/batch_fetch_seed_data", methods=["POST"])
+def batch_fetch_seed_data():
+    """批量获取种子数据并存储到数据库"""
+    try:
+        db_manager = migrate_bp.db_manager
+        data = request.json
+
+        torrent_names = data.get("torrentNames", [])
+        source_sites_priority = data.get("sourceSitesPriority", [])
+
+        if not torrent_names or not source_sites_priority:
+            return jsonify({
+                "success": False,
+                "message": "错误：种子名称列表和源站点优先级列表不能为空"
+            }), 400
+
+        # 生成任务ID
+        task_id = str(uuid.uuid4())
+
+        # 初始化任务进度
+        BATCH_FETCH_TASKS[task_id] = {
+            "total": len(torrent_names),
+            "processed": 0,
+            "success": 0,
+            "failed": 0,
+            "skipped": 0,
+            "isRunning": True,
+            "results": []
+        }
+
+        # 在后台线程中执行批量获取
+        from threading import Thread
+        thread = Thread(target=_process_batch_fetch,
+                        args=(task_id, torrent_names, source_sites_priority,
+                              db_manager))
+        thread.daemon = True
+        thread.start()
+
+        return jsonify({
+            "success": True,
+            "task_id": task_id,
+            "message": "批量获取任务已启动"
+        })
+
+    except Exception as e:
+        logging.error(f"batch_fetch_seed_data 发生错误: {e}", exc_info=True)
+        return jsonify({
+            "success": False,
+            "message": f"服务器内部错误: {str(e)}"
+        }), 500
+
+
+def _process_batch_fetch(task_id, torrent_names, source_sites_priority,
+                         db_manager):
+    """后台处理批量获取任务"""
+    import time
+
+    # 记录每个站点的最后请求时间，用于控制请求间隔
+    site_last_request_time = {}
+    # 默认请求间隔（秒）
+    REQUEST_INTERVAL = 3
+
+    try:
+        for torrent_name in torrent_names:
+            if task_id not in BATCH_FETCH_TASKS:
+                logging.warning(f"任务 {task_id} 已被取消")
+                break
+
+            try:
+                # 查询该名称的所有种子记录
+                conn = db_manager._get_connection()
+                cursor = db_manager._get_cursor(conn)
+
+                if db_manager.db_type == "postgresql":
+                    cursor.execute(
+                        "SELECT hash, name, save_path, sites, details FROM torrents WHERE name = %s AND state != %s",
+                        (torrent_name, "不存在"))
+                else:
+                    cursor.execute(
+                        "SELECT hash, name, save_path, sites, details FROM torrents WHERE name = ? AND state != ?",
+                        (torrent_name, "不存在"))
+
+                torrents = [dict(row) for row in cursor.fetchall()]
+                cursor.close()
+                conn.close()
+
+                if not torrents:
+                    BATCH_FETCH_TASKS[task_id]["results"].append({
+                        "name":
+                        torrent_name,
+                        "status":
+                        "skipped",
+                        "reason":
+                        "未找到种子记录"
+                    })
+                    BATCH_FETCH_TASKS[task_id]["skipped"] += 1
+                    BATCH_FETCH_TASKS[task_id]["processed"] += 1
+                    continue
+
+                # 按优先级查找可用的源站点
+                source_found = None
+                for priority_site in source_sites_priority:
+                    # 获取站点信息
+                    source_info = db_manager.get_site_by_nickname(
+                        priority_site)
+                    if not source_info or not source_info.get("cookie"):
+                        continue
+
+                    # 检查该站点的migration状态
+                    if source_info.get("migration", 0) not in [1, 3]:
+                        continue
+
+                    # 查找该站点的种子记录
+                    for torrent in torrents:
+                        if torrent.get("sites") == priority_site:
+                            # 提取种子ID
+                            comment = torrent.get("details", "")
+                            torrent_id = None
+
+                            if comment:
+                                # 尝试从comment中提取ID
+                                import re
+                                id_match = re.search(r'id=(\d+)', comment)
+                                if id_match:
+                                    torrent_id = id_match.group(1)
+                                elif re.match(r'^\d+$', comment.strip()):
+                                    torrent_id = comment.strip()
+
+                            if torrent_id:
+                                source_found = {
+                                    "site": priority_site,
+                                    "site_info": source_info,
+                                    "torrent_id": torrent_id,
+                                    "torrent": torrent
+                                }
+                                break
+
+                    if source_found:
+                        break
+
+                if not source_found:
+                    BATCH_FETCH_TASKS[task_id]["results"].append({
+                        "name":
+                        torrent_name,
+                        "status":
+                        "failed",
+                        "reason":
+                        "未找到可用的源站点"
+                    })
+                    BATCH_FETCH_TASKS[task_id]["failed"] += 1
+                    BATCH_FETCH_TASKS[task_id]["processed"] += 1
+                    continue
+
+                # 获取种子数据
+                try:
+                    # 检查该站点的最后请求时间，如果间隔不足则等待
+                    current_site = source_found["site"]
+                    if current_site in site_last_request_time:
+                        elapsed = time.time() - site_last_request_time[current_site]
+                        if elapsed < REQUEST_INTERVAL:
+                            wait_time = REQUEST_INTERVAL - elapsed
+                            logging.info(f"站点 {current_site} 请求间隔不足，等待 {wait_time:.1f} 秒...")
+                            time.sleep(wait_time)
+
+                    # 记录本次请求时间
+                    site_last_request_time[current_site] = time.time()
+
+                    migrator = TorrentMigrator(
+                        source_site_info=source_found["site_info"],
+                        target_site_info=None,
+                        search_term=source_found["torrent_id"],
+                        save_path=source_found["torrent"].get("save_path", ""),
+                        torrent_name=torrent_name,
+                        config_manager=config_manager,
+                        db_manager=db_manager)
+
+                    result = migrator.prepare_review_data()
+
+                    if "review_data" in result:
+                        BATCH_FETCH_TASKS[task_id]["results"].append({
+                            "name":
+                            torrent_name,
+                            "status":
+                            "success",
+                            "source_site":
+                            source_found["site"]
+                        })
+                        BATCH_FETCH_TASKS[task_id]["success"] += 1
+                        logging.info(
+                            f"批量获取成功: {torrent_name} from {source_found['site']}"
+                        )
+                    else:
+                        BATCH_FETCH_TASKS[task_id]["results"].append({
+                            "name":
+                            torrent_name,
+                            "status":
+                            "failed",
+                            "reason":
+                            result.get("logs", "未知错误")
+                        })
+                        BATCH_FETCH_TASKS[task_id]["failed"] += 1
+
+                except Exception as e:
+                    BATCH_FETCH_TASKS[task_id]["results"].append({
+                        "name":
+                        torrent_name,
+                        "status":
+                        "failed",
+                        "reason":
+                        str(e)
+                    })
+                    BATCH_FETCH_TASKS[task_id]["failed"] += 1
+                    logging.error(f"批量获取失败: {torrent_name}, 错误: {e}")
+
+                BATCH_FETCH_TASKS[task_id]["processed"] += 1
+
+            except Exception as e:
+                BATCH_FETCH_TASKS[task_id]["results"].append({
+                    "name": torrent_name,
+                    "status": "failed",
+                    "reason": str(e)
+                })
+                BATCH_FETCH_TASKS[task_id]["failed"] += 1
+                BATCH_FETCH_TASKS[task_id]["processed"] += 1
+                logging.error(f"处理种子 {torrent_name} 时发生错误: {e}")
+
+        # 标记任务完成
+        if task_id in BATCH_FETCH_TASKS:
+            BATCH_FETCH_TASKS[task_id]["isRunning"] = False
+            logging.info(f"批量获取任务 {task_id} 完成")
+
+    except Exception as e:
+        logging.error(f"批量获取任务 {task_id} 发生严重错误: {e}", exc_info=True)
+        if task_id in BATCH_FETCH_TASKS:
+            BATCH_FETCH_TASKS[task_id]["isRunning"] = False
+
+
+@migrate_bp.route("/migrate/batch_fetch_progress", methods=["GET"])
+def batch_fetch_progress():
+    """获取批量获取任务的进度"""
+    try:
+        task_id = request.args.get("task_id")
+
+        if not task_id:
+            return jsonify({"success": False, "message": "缺少task_id参数"}), 400
+
+        if task_id not in BATCH_FETCH_TASKS:
+            return jsonify({"success": False, "message": "任务不存在或已过期"}), 404
+
+        progress = BATCH_FETCH_TASKS[task_id]
+
+        return jsonify({"success": True, "progress": progress})
+
+    except Exception as e:
+        logging.error(f"batch_fetch_progress 发生错误: {e}", exc_info=True)
+        return jsonify({
+            "success": False,
+            "message": f"服务器内部错误: {str(e)}"
+        }), 500

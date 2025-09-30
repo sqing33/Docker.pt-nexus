@@ -82,13 +82,15 @@ class TorrentMigrator:
                  search_term="",
                  save_path="",
                  torrent_name="",
-                 config_manager=None):
+                 config_manager=None,
+                 db_manager=None):
         self.source_site = source_site_info
         self.target_site = target_site_info
         self.search_term = search_term
         self.save_path = save_path
         self.torrent_name = torrent_name
         self.config_manager = config_manager
+        self.db_manager = db_manager
 
         self.SOURCE_BASE_URL = ensure_scheme(self.source_site.get("base_url"))
         self.SOURCE_NAME = self.source_site["nickname"]
@@ -577,9 +579,10 @@ class TorrentMigrator:
                 raise Exception("未能获取到种子ID，请检查种子名称或ID是否正确。")
 
             # 初始化种子参数模型
-            # 修复：从配置管理器中获取数据库管理器
-            from flask import current_app
-            seed_param_model = SeedParameter(current_app.config['DB_MANAGER'])
+            # 使用构造函数传入的 db_manager
+            if not self.db_manager:
+                raise Exception("数据库管理器未初始化，无法保存种子参数。")
+            seed_param_model = SeedParameter(self.db_manager)
 
             self.logger.info(f"正在获取种子(ID: {torrent_id})的详细信息...")
             # 获取代理配置
@@ -1024,10 +1027,16 @@ class TorrentMigrator:
             hash = seed_param_model.search_torrent_hash(
                 self.torrent_name, self.SOURCE_NAME)
 
+            # 处理种子名称：去除 .torrent 后缀
+            torrent_name_without_ext = self.torrent_name
+            if torrent_name_without_ext.lower().endswith('.torrent'):
+                torrent_name_without_ext = torrent_name_without_ext[:-8]  # 去除 .torrent (8个字符)
+
             # 从title_components中提取标题拆解的各项参数（title_components已在方法开头定义）
 
             # 1. 先构建包含非标准化信息的字典
             seed_parameters = {
+                "name": torrent_name_without_ext,  # 添加去除后缀的种子名称
                 "title": original_main_title,
                 "subtitle": subtitle,
                 "imdb_link": imdb_link,
