@@ -80,6 +80,14 @@ class ConfigManager:
                 "query_interval_hours": 72,
                 "auto_query_enabled": True,
                 "tmp_dir": ""  # 默认为空，表示使用系统默认临时目录
+            },
+            # --- [新增] 源站点优先级设置 ---
+            "source_priority": [],
+            # --- [新增] 批量获取筛选条件设置 ---
+            "batch_fetch_filters": {
+                "paths": [],
+                "states": [],
+                "downloaderIds": []
             }
         }
 
@@ -158,6 +166,18 @@ class ConfigManager:
                         self._config["auth"]["password_hash"] = ""
                     if "must_change_password" not in self._config["auth"]:
                         self._config["auth"]["must_change_password"] = True
+
+                # --- [新增] 源站点优先级配置兼容 ---
+                if "source_priority" not in self._config:
+                    self._config["source_priority"] = []
+
+                # --- [新增] 批量获取筛选条件配置兼容 ---
+                if "batch_fetch_filters" not in self._config:
+                    self._config["batch_fetch_filters"] = {
+                        "paths": [],
+                        "states": [],
+                        "downloaderIds": []
+                    }
 
             except (json.JSONDecodeError, IOError) as e:
                 logging.error(f"无法读取或解析 {CONFIG_FILE}: {e}。将加载一个安全的默认配置。")

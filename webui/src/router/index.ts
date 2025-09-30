@@ -27,11 +27,6 @@ const router = createRouter({
       component: () => import('../views/CrossSeedDataView.vue'),
     },
     {
-      path: '/batch-fetch',
-      name: 'batch-fetch',
-      component: () => import('../views/BatchFetchDataView.vue'),
-    },
-    {
       path: '/sites',
       name: 'sites',
       component: () => import('../views/SitesView.vue'),

@@ -716,7 +716,11 @@ class DataTracker(Thread):
             if hashes_in_torrents:
                 print(f"【刷新线程】发现 {len(hashes_in_torrents)} 个种子在torrents表中存在")
                 update_placeholders = ",".join([placeholder] * len(hashes_in_torrents))
-                update_query = f"UPDATE seed_parameters SET is_deleted = 0 WHERE hash IN ({update_placeholders})"
+                # 根据数据库类型使用正确的布尔值
+                if self.db_manager.db_type == 'postgresql':
+                    update_query = f"UPDATE seed_parameters SET is_deleted = FALSE WHERE hash IN ({update_placeholders})"
+                else:
+                    update_query = f"UPDATE seed_parameters SET is_deleted = 0 WHERE hash IN ({update_placeholders})"
                 cursor.execute(update_query, tuple(hashes_in_torrents))
                 print(f"【刷新线程】已更新 {len(hashes_in_torrents)} 个种子的is_deleted字段为0")
                 logging.info(f"已更新 {len(hashes_in_torrents)} 个种子的is_deleted字段为0")
@@ -725,7 +729,11 @@ class DataTracker(Thread):
             if hashes_not_in_torrents:
                 print(f"【刷新线程】发现 {len(hashes_not_in_torrents)} 个种子在torrents表中不存在")
                 update_placeholders = ",".join([placeholder] * len(hashes_not_in_torrents))
-                update_query = f"UPDATE seed_parameters SET is_deleted = 1 WHERE hash IN ({update_placeholders})"
+                # 根据数据库类型使用正确的布尔值
+                if self.db_manager.db_type == 'postgresql':
+                    update_query = f"UPDATE seed_parameters SET is_deleted = TRUE WHERE hash IN ({update_placeholders})"
+                else:
+                    update_query = f"UPDATE seed_parameters SET is_deleted = 1 WHERE hash IN ({update_placeholders})"
                 cursor.execute(update_query, tuple(hashes_not_in_torrents))
                 print(f"【刷新线程】已更新 {len(hashes_not_in_torrents)} 个种子的is_deleted字段为1")
                 logging.info(f"已更新 {len(hashes_not_in_torrents)} 个种子的is_deleted字段为1")
