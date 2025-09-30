@@ -1950,15 +1950,24 @@ def batch_fetch_seed_data():
     """批量获取种子数据并存储到数据库"""
     try:
         db_manager = migrate_bp.db_manager
+        config_manager = migrate_bp.config_manager
         data = request.json
 
         torrent_names = data.get("torrentNames", [])
-        source_sites_priority = data.get("sourceSitesPriority", [])
+        # 从配置中读取源站点优先级
+        config = config_manager.get()
+        source_sites_priority = config.get("source_priority", [])
 
-        if not torrent_names or not source_sites_priority:
+        if not torrent_names:
             return jsonify({
                 "success": False,
-                "message": "错误：种子名称列表和源站点优先级列表不能为空"
+                "message": "错误：种子名称列表不能为空"
+            }), 400
+
+        if not source_sites_priority:
+            return jsonify({
+                "success": False,
+                "message": "错误：请先在设置中配置源站点优先级"
             }), 400
 
         # 生成任务ID
@@ -2005,7 +2014,7 @@ def _process_batch_fetch(task_id, torrent_names, source_sites_priority,
     # 记录每个站点的最后请求时间，用于控制请求间隔
     site_last_request_time = {}
     # 默认请求间隔（秒）
-    REQUEST_INTERVAL = 3
+    REQUEST_INTERVAL = 5
 
     try:
         for torrent_name in torrent_names:

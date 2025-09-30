@@ -1,5 +1,5 @@
 <template>
-  <div class="batch-fetch-data-view">
+  <div class="batch-fetch-panel">
     <el-alert v-if="error" :title="error" type="error" show-icon :closable="false" center
       style="margin-bottom: 15px"></el-alert>
 
@@ -17,6 +17,14 @@
         <el-tag type="info" size="default" effect="plain">{{ currentFilterText }}</el-tag>
         <el-button type="danger" link style="padding: 0; margin-left: 8px;" @click="clearFilters">清除</el-button>
       </div>
+
+      <!-- 设置优先级按钮 -->
+      <el-button type="warning" @click="openPrioritySettingsDialog" plain style="margin-right: 15px;">
+        <el-icon style="margin-right: 5px;">
+          <Setting />
+        </el-icon>
+        设置优先级
+      </el-button>
 
       <!-- 批量获取按钮 -->
       <el-button type="success" @click="openBatchFetchDialog" plain style="margin-right: 15px;"
@@ -39,8 +47,8 @@
 
     <!-- 种子列表表格 -->
     <div class="table-container">
-      <el-table :data="tableData" v-loading="loading" border style="width: 100%" empty-text="暂无种子数据"
-        :max-height="tableMaxHeight" height="100%" @selection-change="handleSelectionChange">
+      <el-table :data="tableData" v-loading="loading" border style="width: 100%" empty-text="暂无种子数据" height="100%"
+        @selection-change="handleSelectionChange">
         <el-table-column type="selection" width="55" align="center"></el-table-column>
         <el-table-column prop="name" label="种子名称" min-width="450" show-overflow-tooltip></el-table-column>
         <el-table-column prop="save_path" label="保存路径" width="220" show-overflow-tooltip></el-table-column>
@@ -104,7 +112,7 @@
       <el-card class="batch-fetch-card" shadow="always">
         <template #header>
           <div class="modal-header">
-            <span>批量获取种子数据配置</span>
+            <span>批量获取种子数据</span>
             <el-button type="danger" circle @click="closeBatchFetchDialog" plain>X</el-button>
           </div>
         </template>
@@ -115,50 +123,68 @@
               系统将按名称聚合，逐个从源站点获取种子数据并存储到数据库
             </p>
           </div>
+        </div>
+        <div class="batch-fetch-footer">
+          <el-button @click="closeBatchFetchDialog">取消</el-button>
+          <el-button type="primary" @click="startBatchFetch">
+            开始批量获取
+          </el-button>
+        </div>
+      </el-card>
+    </div>
 
-          <el-divider content-position="left">源站点优先级设置</el-divider>
+    <!-- 源站点优先级设置弹窗 -->
+    <div v-if="prioritySettingsDialogVisible" class="modal-overlay">
+      <el-card class="priority-settings-card" shadow="always">
+        <template #header>
+          <div class="modal-header">
+            <span>源站点优先级设置</span>
+            <el-button type="danger" circle @click="closePrioritySettingsDialog" plain>X</el-button>
+          </div>
+        </template>
+        <div class="priority-settings-content">
+          <el-alert type="info" show-icon :closable="false" style="margin-bottom: 20px;">
+            <template #title>
+              设置批量获取种子数据时的源站点优先级顺序，系统将按顺序查找第一个可用的源站点
+            </template>
+          </el-alert>
+
           <div class="priority-section">
-            <p style="color: #606266; font-size: 14px; margin-bottom: 10px;">
-              拖拽调整优先级顺序，系统将按顺序查找第一个可用的源站点：
+            <p style="color: #606266; font-size: 14px; margin-bottom: 10px; font-weight: 600;">
+              优先级顺序（拖拽调整）：
             </p>
-            <div class="priority-list">
-              <el-tag v-for="(site, index) in sourceSitesPriority" :key="site"
-                :type="getSitePriorityType(index)"
-                size="large"
-                closable
-                @close="removeSiteFromPriority(site)"
-                draggable="true"
-                @dragstart="handleDragStart(index)"
-                @dragover.prevent
-                @drop="handleDrop(index)"
+            <div class="priority-list" v-loading="priorityLoading">
+              <el-tag v-for="(site, index) in sourceSitesPriority" :key="site" :type="getSitePriorityType(index)"
+                size="large" closable @close="removeSiteFromPriority(site)" draggable="true"
+                @dragstart="handleDragStart(index)" @dragover.prevent @drop="handleDrop(index)"
                 style="margin: 5px; cursor: move; user-select: none;">
                 {{ index + 1 }}. {{ site }}
               </el-tag>
+              <span v-if="sourceSitesPriority.length === 0" style="color: #909399; margin-left: 10px;">
+                暂无源站点，请从下方添加
+              </span>
             </div>
 
             <el-divider />
 
-            <p style="color: #606266; font-size: 14px; margin-bottom: 10px;">
-              可用源站点列表（点击添加到优先级）：
+            <p style="color: #606266; font-size: 14px; margin-bottom: 10px; font-weight: 600;">
+              可用源站点列表（点击添加）：
             </p>
-            <div class="available-sites">
-              <el-tag v-for="site in availableSourceSites" :key="site"
-                type="info"
-                size="default"
-                @click="addSiteToPriority(site)"
-                style="margin: 5px; cursor: pointer;">
+            <div class="available-sites" v-loading="priorityLoading">
+              <el-tag v-for="site in availableSourceSites" :key="site" type="info" size="default"
+                @click="addSiteToPriority(site)" style="margin: 5px; cursor: pointer;">
                 {{ site }}
               </el-tag>
-              <span v-if="availableSourceSites.length === 0" style="color: #909399;">
+              <span v-if="availableSourceSites.length === 0" style="color: #909399; margin-left: 10px;">
                 所有源站点已添加
               </span>
             </div>
           </div>
         </div>
-        <div class="batch-fetch-footer">
-          <el-button @click="closeBatchFetchDialog">取消</el-button>
-          <el-button type="primary" @click="startBatchFetch" :disabled="sourceSitesPriority.length === 0">
-            开始批量获取
+        <div class="priority-settings-footer">
+          <el-button @click="closePrioritySettingsDialog">取消</el-button>
+          <el-button type="primary" @click="savePrioritySettings" :loading="prioritySaving">
+            保存设置
           </el-button>
         </div>
       </el-card>
@@ -234,7 +260,12 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
+import { Setting } from '@element-plus/icons-vue'
 import type { ElTree } from 'element-plus'
+
+const emit = defineEmits<{
+  (e: 'cancel'): void
+}>()
 
 interface PathNode {
   path: string
@@ -295,16 +326,22 @@ const selectedRows = ref<Torrent[]>([])
 const batchFetchDialogVisible = ref<boolean>(false)
 const progressDialogVisible = ref<boolean>(false)
 
+// 源站点优先级设置相关
+const prioritySettingsDialogVisible = ref<boolean>(false)
+const priorityLoading = ref<boolean>(false)
+const prioritySaving = ref<boolean>(false)
+const allSourceSites = ref<SiteStatus[]>([])
+const sourceSitesPriority = ref<string[]>([])
+const draggedIndex = ref<number | null>(null)
+
 const pathTreeRef = ref<InstanceType<typeof ElTree> | null>(null)
 const pathTreeData = ref<PathNode[]>([])
 const uniquePaths = ref<string[]>([])
 const uniqueStates = ref<string[]>([])
 const downloadersList = ref<Downloader[]>([])
 
-const tableMaxHeight = ref<number>(window.innerHeight - 150)
-
 const currentPage = ref<number>(1)
-const pageSize = ref<number>(50)
+const pageSize = ref<number>(20)
 const total = ref<number>(0)
 
 const nameSearch = ref<string>('')
@@ -316,11 +353,6 @@ const activeFilters = ref({
   downloaderIds: [] as string[]
 })
 const tempFilters = ref({ ...activeFilters.value })
-
-// 源站点相关
-const allSourceSites = ref<SiteStatus[]>([])
-const sourceSitesPriority = ref<string[]>([])
-const draggedIndex = ref<number | null>(null)
 
 // 任务进度相关
 const currentTaskId = ref<string | null>(null)
@@ -436,7 +468,7 @@ const fetchData = async () => {
       tableData.value = result.data
       total.value = result.total
 
-      // 提取唯一路径和状态 - 只在第一次加载或没有筛选条件时提取
+      // 提取唯一路径和状态
       if (uniquePaths.value.length === 0 || !activeFilters.value.paths.length) {
         uniquePaths.value = [...new Set(result.data.map((t: Torrent) => t.save_path))] as string[]
       }
@@ -468,16 +500,6 @@ const fetchDownloadersList = async () => {
   }
 }
 
-const fetchAllSitesStatus = async () => {
-  try {
-    const response = await fetch('/api/sites/status');
-    if (!response.ok) throw new Error('无法获取站点状态列表');
-    allSourceSites.value = await response.json();
-  } catch (e: any) {
-    error.value = e.message;
-  }
-}
-
 const handleSizeChange = (val: number) => {
   pageSize.value = val
   currentPage.value = 1
@@ -496,6 +518,10 @@ const clearFilters = () => {
     downloaderIds: []
   }
   currentPage.value = 1
+
+  // 保存清空的筛选条件到配置
+  saveFiltersToConfig()
+
   fetchData()
 }
 
@@ -518,7 +544,39 @@ const applyFilters = () => {
   activeFilters.value = { ...tempFilters.value }
   filterDialogVisible.value = false
   currentPage.value = 1
+
+  // 保存筛选条件到配置
+  saveFiltersToConfig()
+
   fetchData()
+}
+
+const saveFiltersToConfig = async () => {
+  try {
+    await fetch('/api/config/batch_fetch_filters', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        batch_fetch_filters: activeFilters.value
+      })
+    })
+  } catch (e: any) {
+    console.error('保存筛选条件失败:', e)
+  }
+}
+
+const loadFiltersFromConfig = async () => {
+  try {
+    const response = await fetch('/api/config/batch_fetch_filters')
+    if (response.ok) {
+      const result = await response.json()
+      if (result.success && result.data) {
+        activeFilters.value = result.data
+      }
+    }
+  } catch (e: any) {
+    console.error('加载筛选条件失败:', e)
+  }
 }
 
 const handleSelectionChange = (selection: Torrent[]) => {
@@ -545,6 +603,63 @@ const openBatchFetchDialog = () => {
 
 const closeBatchFetchDialog = () => {
   batchFetchDialogVisible.value = false
+}
+
+const openPrioritySettingsDialog = async () => {
+  prioritySettingsDialogVisible.value = true
+  await loadPrioritySettings()
+}
+
+const closePrioritySettingsDialog = () => {
+  prioritySettingsDialogVisible.value = false
+}
+
+const loadPrioritySettings = async () => {
+  priorityLoading.value = true
+  try {
+    // 加载所有源站点
+    const sitesResponse = await fetch('/api/sites/status')
+    if (!sitesResponse.ok) throw new Error('无法获取站点状态列表')
+    allSourceSites.value = await sitesResponse.json()
+
+    // 加载已保存的优先级配置
+    const configResponse = await fetch('/api/config/source_priority')
+    if (!configResponse.ok) throw new Error('无法获取配置')
+    const configResult = await configResponse.json()
+    if (configResult.success) {
+      sourceSitesPriority.value = configResult.data || []
+    }
+  } catch (e: any) {
+    ElMessage.error(e.message || '加载配置失败')
+  } finally {
+    priorityLoading.value = false
+  }
+}
+
+const savePrioritySettings = async () => {
+  prioritySaving.value = true
+  try {
+    const response = await fetch('/api/config/source_priority', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        source_priority: sourceSitesPriority.value
+      })
+    })
+
+    if (!response.ok) throw new Error('保存失败')
+    const result = await response.json()
+    if (result.success) {
+      ElMessage.success('源站点优先级配置已保存')
+      closePrioritySettingsDialog()
+    } else {
+      throw new Error(result.message || '保存失败')
+    }
+  } catch (e: any) {
+    ElMessage.error(e.message || '保存配置失败')
+  } finally {
+    prioritySaving.value = false
+  }
 }
 
 const getSitePriorityType = (index: number) => {
@@ -582,11 +697,6 @@ const handleDrop = (dropIndex: number) => {
 }
 
 const startBatchFetch = async () => {
-  if (sourceSitesPriority.value.length === 0) {
-    ElMessage.warning('请至少添加一个源站点到优先级列表')
-    return
-  }
-
   try {
     const torrentNames = selectedRows.value.map(row => row.name)
 
@@ -594,8 +704,7 @@ const startBatchFetch = async () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        torrentNames,
-        sourceSitesPriority: sourceSitesPriority.value
+        torrentNames
       })
     })
 
@@ -690,19 +799,13 @@ const getResultStatusText = (status: string) => {
   }
 }
 
-const handleResize = () => {
-  tableMaxHeight.value = window.innerHeight - 150
-}
-
 onMounted(async () => {
   await fetchDownloadersList()
-  await fetchAllSitesStatus()
+  await loadFiltersFromConfig()
   fetchData()
-  window.addEventListener('resize', handleResize)
 })
 
 onUnmounted(() => {
-  window.removeEventListener('resize', handleResize)
   stopAutoRefresh()
 })
 
@@ -713,7 +816,7 @@ watch(nameSearch, () => {
 </script>
 
 <style scoped>
-.batch-fetch-data-view {
+.batch-fetch-panel {
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -727,6 +830,7 @@ watch(nameSearch, () => {
   padding: 10px 15px;
   background-color: #ffffff;
   border-bottom: 1px solid #ebeef5;
+  flex-shrink: 0;
 }
 
 .pagination-controls {
@@ -751,7 +855,7 @@ watch(nameSearch, () => {
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 2000;
+  z-index: 3000;
 }
 
 .filter-overlay {
@@ -764,7 +868,7 @@ watch(nameSearch, () => {
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 2000;
+  z-index: 3000;
 }
 
 .filter-card {
@@ -809,7 +913,7 @@ watch(nameSearch, () => {
 }
 
 .batch-fetch-card {
-  width: 700px;
+  padding: 10px;
   max-width: 95vw;
   max-height: 90vh;
   display: flex;
@@ -844,6 +948,46 @@ watch(nameSearch, () => {
 
 .config-section {
   margin-bottom: 20px;
+  padding: 15px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  border-left: 4px solid #409eff;
+}
+
+.config-section h3 {
+  margin: 0 0 5px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.priority-settings-card {
+  width: 700px;
+  max-width: 95vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  padding: 0 10px 10px;
+}
+
+:deep(.priority-settings-card .el-card__body) {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.priority-settings-content {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.priority-settings-footer {
+  padding: 10px 0 0 0;
+  border-top: 1px solid var(--el-border-color-lighter);
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 .priority-section {
@@ -851,18 +995,24 @@ watch(nameSearch, () => {
 }
 
 .priority-list {
-  min-height: 60px;
-  padding: 10px;
-  border: 1px solid #dcdfe6;
-  border-radius: 4px;
+  min-height: 80px;
+  padding: 15px;
+  border: 2px dashed #dcdfe6;
+  border-radius: 6px;
   background-color: #f5f7fa;
+  transition: all 0.3s;
+}
+
+.priority-list:hover {
+  border-color: #409eff;
+  background-color: #ecf5ff;
 }
 
 .available-sites {
   min-height: 60px;
-  padding: 10px;
+  padding: 15px;
   border: 1px solid #dcdfe6;
-  border-radius: 4px;
+  border-radius: 6px;
   background-color: #fafafa;
 }
 
@@ -872,10 +1022,10 @@ watch(nameSearch, () => {
   max-height: 90vh;
   display: flex;
   flex-direction: column;
+  padding: 0 10px 10px;
 }
 
 :deep(.progress-card .el-card__body) {
-  padding: 20px;
   flex: 1;
   overflow-y: auto;
   display: flex;

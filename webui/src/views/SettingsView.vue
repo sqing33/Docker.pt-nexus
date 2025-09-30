@@ -21,6 +21,12 @@
           </el-icon>
           <span>站点管理</span>
         </el-menu-item>
+        <el-menu-item index="/settings/source-priority">
+          <el-icon>
+            <Sort />
+          </el-icon>
+          <span>源站点优先级</span>
+        </el-menu-item>
       </el-menu>
     </el-aside>
 
@@ -32,7 +38,7 @@
 
 <script setup>
 import { useRoute } from 'vue-router'
-import { Download, Setting, Tickets } from '@element-plus/icons-vue'
+import { Download, Setting, Tickets, Sort } from '@element-plus/icons-vue'
 
 const route = useRoute()
 </script>

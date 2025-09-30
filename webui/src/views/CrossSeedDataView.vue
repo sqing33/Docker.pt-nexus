@@ -19,6 +19,11 @@
         查看处理记录
       </el-button>
 
+      <!-- 批量获取数据按钮 -->
+      <el-button type="warning" @click="openBatchFetchDialog" plain style="margin-right: 15px;">
+        批量获取数据
+      </el-button>
+
       <!-- 筛选按钮 -->
       <el-button type="primary" @click="openFilterDialog" plain style="margin-right: 15px;">
         筛选
@@ -189,7 +194,7 @@
         <el-table-column prop="updated_at" label="更新时间" width="140" align="center" sortable>
           <template #default="scope">
             <div class="mapped-cell datetime-cell">
-              {{ scope.row.is_deleted === 1 ? '已删除' : formatDateTime(scope.row.updated_at) }}
+              {{ scope.row.is_deleted ? '已删除' : formatDateTime(scope.row.updated_at) }}
             </div>
           </template>
         </el-table-column>
@@ -334,6 +339,21 @@
         </div>
       </el-card>
     </div>
+
+    <!-- 批量获取数据弹窗 -->
+    <div v-if="batchFetchDialogVisible" class="modal-overlay">
+      <el-card class="batch-fetch-main-card" shadow="always">
+        <template #header>
+          <div class="modal-header">
+            <span>批量获取种子数据</span>
+            <el-button type="danger" circle @click="closeBatchFetchDialog" plain>X</el-button>
+          </div>
+        </template>
+        <div class="batch-fetch-main-content">
+          <BatchFetchPanel @cancel="closeBatchFetchDialog" />
+        </div>
+      </el-card>
+    </div>
   </div>
 </template>
 
@@ -342,6 +362,7 @@ import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { ElTree } from 'element-plus'
 import CrossSeedPanel from '../components/CrossSeedPanel.vue'
+import BatchFetchPanel from '../components/BatchFetchPanel.vue'
 import { useCrossSeedStore } from '@/stores/crossSeed'
 import type { ISourceInfo } from '@/types'
 
@@ -382,7 +403,7 @@ interface SeedParameter {
   unrecognized: string
   created_at: string
   updated_at: string
-  is_deleted: number
+  is_deleted: boolean
 }
 
 interface PathNode {
@@ -423,6 +444,9 @@ const error = ref<string | null>(null)
 // 批量转种相关
 const selectedRows = ref<SeedParameter[]>([])
 const batchCrossSeedDialogVisible = ref<boolean>(false)
+
+// 批量获取数据相关
+const batchFetchDialogVisible = ref<boolean>(false)
 
 // 记录查看相关
 const recordDialogVisible = ref<boolean>(false)
@@ -1020,7 +1044,7 @@ onMounted(async () => {
 
 // 为表格行设置CSS类名
 const tableRowClassName = ({ row }: { row: SeedParameter }) => {
-  if (row.is_deleted === 1) {
+  if (row.is_deleted) {
     return 'deleted-row'
   }
   // 如果行不可选择，添加selected-row-disabled类
@@ -1032,8 +1056,8 @@ const tableRowClassName = ({ row }: { row: SeedParameter }) => {
 
 // 控制表格行是否可选择
 const checkSelectable = (row: SeedParameter) => {
-  // 如果is_deleted为1，则不可选择
-  if (row.is_deleted === 1) {
+  // 如果is_deleted为true，则不可选择
+  if (row.is_deleted) {
     return false
   }
   // 如果有无效参数，则不可选择
@@ -1109,6 +1133,16 @@ const handleBatchCrossSeed = async () => {
 // 关闭批量转种对话框
 const closeBatchCrossSeedDialog = () => {
   batchCrossSeedDialogVisible.value = false
+}
+
+// 打开批量获取数据对话框
+const openBatchFetchDialog = () => {
+  batchFetchDialogVisible.value = true
+}
+
+// 关闭批量获取数据对话框
+const closeBatchFetchDialog = () => {
+  batchFetchDialogVisible.value = false
 }
 
 // 启动定时刷新
@@ -1625,6 +1659,31 @@ onUnmounted(() => {
 
 .batch-info p strong {
   color: #303133;
+}
+
+/* 批量获取数据弹窗样式 */
+.batch-fetch-main-card {
+  width: 95vw;
+  max-width: 1400px;
+  height: 85vh;
+  max-height: 900px;
+  display: flex;
+  flex-direction: column;
+}
+
+:deep(.batch-fetch-main-card .el-card__body) {
+  padding: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.batch-fetch-main-content {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 /* 记录查看弹窗样式 */

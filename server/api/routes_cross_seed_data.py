@@ -312,6 +312,13 @@ def get_cross_seed_data():
                             for tag in tags.split(',')] if tags else []
                 item['tags'] = tags
 
+            # Ensure is_deleted field is boolean for consistent frontend handling
+            # MySQL/SQLite return integers (0/1), PostgreSQL returns booleans (false/true)
+            if 'is_deleted' in item:
+                if isinstance(item['is_deleted'], int):
+                    item['is_deleted'] = bool(item['is_deleted'])
+                # PostgreSQL already returns boolean, no conversion needed
+
             # Extract "无法识别" field from title_components
             title_components = item.get('title_components', [])
             unrecognized_value = ''
