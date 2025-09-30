@@ -116,15 +116,16 @@ class SeedParameter:
                 # PostgreSQL使用ON CONFLICT DO UPDATE
                 insert_sql = f"""
                     INSERT INTO seed_parameters
-                    (hash, torrent_id, site_name, nickname, save_path, title, subtitle, imdb_link, douban_link, type, medium,
+                    (hash, torrent_id, site_name, nickname, save_path, name, title, subtitle, imdb_link, douban_link, type, medium,
                      video_codec, audio_codec, resolution, team, source, tags, poster, screenshots,
                      statement, body, mediainfo, title_components, created_at, updated_at)
-                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
                     ON CONFLICT (hash, torrent_id, site_name)
                     DO UPDATE SET
                         nickname = EXCLUDED.nickname,
-                        title = EXCLUDED.title,
                         save_path = EXCLUDED.save_path,
+                        name = EXCLUDED.name,
+                        title = EXCLUDED.title,
                         subtitle = EXCLUDED.subtitle,
                         imdb_link = EXCLUDED.imdb_link,
                         douban_link = EXCLUDED.douban_link,
@@ -148,15 +149,16 @@ class SeedParameter:
                 # MySQL使用ON DUPLICATE KEY UPDATE
                 insert_sql = f"""
                     INSERT INTO seed_parameters
-                    (hash, torrent_id, site_name, nickname, save_path, title, subtitle, imdb_link, douban_link, type, medium,
+                    (hash, torrent_id, site_name, nickname, save_path, name, title, subtitle, imdb_link, douban_link, type, medium,
                      video_codec, audio_codec, resolution, team, source, tags, poster, screenshots,
                      statement, body, mediainfo, title_components, created_at, updated_at)
-                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
                     ON DUPLICATE KEY UPDATE
                         torrent_id = VALUES(torrent_id),
                         nickname = VALUES(nickname),
-                        title = VALUES(title),
                         save_path = VALUES(save_path),
+                        name = VALUES(name),
+                        title = VALUES(title),
                         subtitle = VALUES(subtitle),
                         imdb_link = VALUES(imdb_link),
                         douban_link = VALUES(douban_link),
@@ -180,16 +182,17 @@ class SeedParameter:
                 # SQLite使用ON CONFLICT DO UPDATE
                 insert_sql = f"""
                     INSERT INTO seed_parameters
-                    (hash, torrent_id, site_name, nickname, save_path, title, subtitle, imdb_link, douban_link, type, medium,
+                    (hash, torrent_id, site_name, nickname, save_path, name, title, subtitle, imdb_link, douban_link, type, medium,
                      video_codec, audio_codec, resolution, team, source, tags, poster, screenshots,
                      statement, body, mediainfo, title_components, created_at, updated_at)
-                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
                     ON CONFLICT (hash, torrent_id, site_name)
                     DO UPDATE SET
                         torrent_id = excluded.torrent_id,
                         nickname = excluded.nickname,
-                        title = excluded.title,
                         save_path = excluded.save_path,
+                        name = excluded.name,
+                        title = excluded.title,
                         subtitle = excluded.subtitle,
                         imdb_link = excluded.imdb_link,
                         douban_link = excluded.douban_link,
@@ -221,6 +224,7 @@ class SeedParameter:
             params = (hash, torrent_id, site_name,
                       parameters.get("nickname",
                                      ""), parameters.get("save_path", ""),
+                      parameters.get("name", ""),
                       parameters.get("title",
                                      ""), parameters.get("subtitle", ""),
                       parameters.get("imdb_link",
