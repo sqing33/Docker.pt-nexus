@@ -973,8 +973,8 @@ const handleEdit = async (row: SeedParameter) => {
       const torrentData = {
         ...result.data,
         name: result.data.title,
-        // 添加缺失的 Torrent 接口必需字段（使用默认值）
-        save_path: '',
+        // 使用从数据库获取的实际保存路径，如果没有则为空字符串
+        save_path: result.data.save_path || '',
         size: 0,
         size_formatted: '0 B',
         progress: 100,

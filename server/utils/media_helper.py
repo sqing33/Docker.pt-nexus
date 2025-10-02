@@ -411,11 +411,16 @@ def _find_target_video_file(path: str) -> str | None:
 # --- [修改] 主函数，整合了新的文件查找逻辑 ---
 def upload_data_mediaInfo(mediaInfo: str,
                           save_path: str,
-                          content_name: str = None):
+                          content_name: str = None,
+                          downloader_id: str = None,
+                          torrent_name: str = None,
+                          force_refresh: bool = False):
     """
     检查传入的文本是有效的 MediaInfo 还是 BDInfo 格式。
     如果没有 MediaInfo 或 BDInfo 则尝试从 save_path 查找视频文件提取 MediaInfo。
-    【新增】支持传入 content_name 来构建更精确的搜索路径。
+    【新增】支持传入 torrent_name (实际文件夹名) 或 content_name (解析后的标题) 来构建更精确的搜索路径。
+    【新增】支持传入 downloader_id 来判断是否使用代理获取 MediaInfo
+    【新增】支持传入 force_refresh 强制重新获取 MediaInfo，忽略已有的有效格式
     """
     print("开始检查 MediaInfo/BDInfo 格式")
     print(f"提供的 MediaInfo: {mediaInfo[:80]}...")  # 打印部分MediaInfo
@@ -457,45 +462,102 @@ def upload_data_mediaInfo(mediaInfo: str,
                 (bdinfo_required_matches >= 1 and bdinfo_optional_matches >= 2)
 
     if is_standard_mediainfo:
-        print(f"检测到标准 MediaInfo 格式，验证通过。(匹配关键字数: {mediainfo_matches})")
-        return mediaInfo
+        if force_refresh:
+            print(f"检测到标准 MediaInfo 格式，但设置了强制刷新，将重新提取。")
+            # 不return，继续执行下面的提取逻辑
+        else:
+            print(f"检测到标准 MediaInfo 格式，验证通过。(匹配关键字数: {mediainfo_matches})")
+            return mediaInfo
     elif is_bdinfo:
-        print(
-            f"检测到 BDInfo 格式，验证通过。(必要关键字: {bdinfo_required_matches}/{len(bdinfo_required_keywords)}, 可选关键字: {bdinfo_optional_matches})"
-        )
-        return mediaInfo
-    else:
+        if force_refresh:
+            print(f"检测到 BDInfo 格式，但设置了强制刷新，将重新提取。")
+            # 不return，继续执行下面的提取逻辑
+        else:
+            print(
+                f"检测到 BDInfo 格式，验证通过。(必要关键字: {bdinfo_required_matches}/{len(bdinfo_required_keywords)}, 可选关键字: {bdinfo_optional_matches})"
+            )
+            return mediaInfo
+    elif not force_refresh:
+        # 只有在不是强制刷新时才打印这个消息
         print("提供的文本不是有效的 MediaInfo/BDInfo，将尝试从本地文件提取。")
-        # ... (打印匹配信息的代码不变) ...
 
-        if not save_path:
-            print("错误：未提供 save_path，无法从文件提取 MediaInfo。")
-            return mediaInfo
+    # 如果执行到这里，说明需要重新提取（force_refresh=True 或者没有有效格式）
+    if not save_path:
+        print("错误：未提供 save_path，无法从文件提取 MediaInfo。")
+        return mediaInfo
 
-        # --- 【核心修改】仿照截图逻辑，构建精确的搜索路径 ---
-        path_to_search = save_path  # 默认使用基础路径
-        if content_name:
-            # 如果提供了具体的内容名称（主标题），则拼接成一个更精确的路径
-            path_to_search = os.path.join(save_path, content_name)
-            print(f"已提供 content_name，将在精确路径中搜索: '{path_to_search}'")
+    # --- 【代理检查和处理逻辑】 ---
+    proxy_config = _get_downloader_proxy_config(downloader_id)
 
-        # 使用新构建的路径来查找视频文件
-        target_video_file = _find_target_video_file(path_to_search)
-
-        if not target_video_file:
-            print("未能在指定路径中找到合适的视频文件，提取失败。")
-            return mediaInfo
+    if proxy_config:
+        print(f"使用代理处理 MediaInfo: {proxy_config['proxy_base_url']}")
+        # 构建完整路径发送给代理
+        remote_path = save_path
+        if torrent_name:
+            remote_path = os.path.join(save_path, torrent_name)
+            print(f"已提供 torrent_name，将使用完整路径: '{remote_path}'")
+        elif content_name:
+            remote_path = os.path.join(save_path, content_name)
+            print(f"已提供 content_name，将使用拼接路径: '{remote_path}'")
 
         try:
-            print(f"准备使用 MediaInfo 工具从 '{target_video_file}' 提取...")
-            media_info_parsed = MediaInfo.parse(target_video_file,
-                                                output="text",
-                                                full=False)
-            print("从文件重新提取 MediaInfo 成功。")
-            return str(media_info_parsed)
+            response = requests.post(
+                f"{proxy_config['proxy_base_url']}/api/media/mediainfo",
+                json={"remote_path": remote_path},
+                timeout=300)  # 5分钟超时
+            response.raise_for_status()
+            result = response.json()
+            if result.get("success"):
+                print("通过代理获取 MediaInfo 成功")
+                proxy_mediainfo = result.get("mediainfo", mediaInfo)
+                # 处理代理返回的 MediaInfo，只保留 Complete name 中的文件名
+                proxy_mediainfo = re.sub(
+                    r'(Complete name\s*:\s*)(.+)',
+                    lambda m: f"{m.group(1)}{os.path.basename(m.group(2).strip())}",
+                    proxy_mediainfo
+                )
+                return proxy_mediainfo
+            else:
+                print(f"通过代理获取 MediaInfo 失败: {result.get('message', '未知错误')}")
         except Exception as e:
-            print(f"从文件 '{target_video_file}' 处理时出错: {e}。将返回原始 mediainfo。")
-            return mediaInfo
+            print(f"通过代理获取 MediaInfo 失败: {e}")
+
+    # --- 【核心修改】仿照截图逻辑，构建精确的搜索路径 ---
+    path_to_search = save_path  # 默认使用基础路径
+    # 优先使用 torrent_name (实际文件夹名)，如果不存在再使用 content_name (解析后的标题)
+    if torrent_name:
+        path_to_search = os.path.join(save_path, torrent_name)
+        print(f"已提供 torrent_name，将在精确路径中搜索: '{path_to_search}'")
+    elif content_name:
+        # 如果提供了具体的内容名称（主标题），则拼接成一个更精确的路径
+        path_to_search = os.path.join(save_path, content_name)
+        print(f"已提供 content_name，将在精确路径中搜索: '{path_to_search}'")
+
+    # 使用新构建的路径来查找视频文件
+    target_video_file = _find_target_video_file(path_to_search)
+
+    if not target_video_file:
+        print("未能在指定路径中找到合适的视频文件，提取失败。")
+        return mediaInfo
+
+    try:
+        print(f"准备使用 MediaInfo 工具从 '{target_video_file}' 提取...")
+        media_info_parsed = MediaInfo.parse(target_video_file,
+                                            output="text",
+                                            full=False)
+        # 处理 Complete name，只保留最后一个 / 之后的内容
+        media_info_str = str(media_info_parsed)
+        # 使用正则表达式替换 Complete name 行中的完整路径为文件名
+        media_info_str = re.sub(
+            r'(Complete name\s*:\s*)(.+)',
+            lambda m: f"{m.group(1)}{os.path.basename(m.group(2).strip())}",
+            media_info_str
+        )
+        print("从文件重新提取 MediaInfo 成功。")
+        return media_info_str
+    except Exception as e:
+        print(f"从文件 '{target_video_file}' 处理时出错: {e}。将返回原始 mediainfo。")
+        return mediaInfo
 
 
 def upload_data_title(title: str, torrent_filename: str = ""):
@@ -1886,3 +1948,41 @@ def _upload_to_pixhost_with_proxy(image_path: str, api_url: str, params: dict,
         import traceback
         traceback.print_exc()
         return None
+
+
+def _get_downloader_proxy_config(downloader_id: str = None):
+    """
+    根据下载器ID获取代理配置。
+
+    :param downloader_id: 下载器ID
+    :return: 代理配置字典，如果不需要代理则返回None
+    """
+    if not downloader_id:
+        return None
+
+    config = config_manager.get()
+    downloaders = config.get("downloaders", [])
+
+    for downloader in downloaders:
+        if downloader.get("id") == downloader_id:
+            use_proxy = downloader.get("use_proxy", False)
+            if use_proxy:
+                host_value = downloader.get('host', '')
+                proxy_port = downloader.get('proxy_port', 9090)
+                if host_value.startswith(('http://', 'https://')):
+                    parsed_url = urlparse(host_value)
+                else:
+                    parsed_url = urlparse(f"http://{host_value}")
+                proxy_ip = parsed_url.hostname
+                if not proxy_ip:
+                    if '://' in host_value:
+                        proxy_ip = host_value.split('://')[1].split(':')[0].split('/')[0]
+                    else:
+                        proxy_ip = host_value.split(':')[0]
+                proxy_config = {
+                    "proxy_base_url": f"http://{proxy_ip}:{proxy_port}",
+                }
+                return proxy_config
+            break
+
+    return None

@@ -167,6 +167,23 @@ class DatabaseManager:
             conn.commit()
             logging.info("'is_deleted' 列添加成功。")
 
+        # 检查是否需要添加 downloader_id 列
+        if 'downloader_id' not in columns:
+            logging.info(f"在 '{table_name}' 表中添加 'downloader_id' 列...")
+            if self.db_type == 'mysql':
+                cursor.execute(
+                    f"ALTER TABLE {table_name} ADD COLUMN downloader_id VARCHAR(36) NULL"
+                )
+            elif self.db_type == 'postgresql':
+                cursor.execute(
+                    f"ALTER TABLE {table_name} ADD COLUMN downloader_id VARCHAR(36) NULL"
+                )
+            else:  # sqlite
+                cursor.execute(
+                    f"ALTER TABLE {table_name} ADD COLUMN downloader_id TEXT NULL")
+            conn.commit()
+            logging.info("'downloader_id' 列添加成功。")
+
     def _migrate_torrents_table(self, conn, cursor):
         """检查并向 torrents 表添加 downloader_id 和 iyuu_last_check 列。"""
         table_name = 'torrents'

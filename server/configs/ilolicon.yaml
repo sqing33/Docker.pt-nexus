@@ -1,0 +1,266 @@
+# 站点名称
+site_name: "ilolicon"
+
+# 表单字段定义 - 定义站点上传表单中各字段的标识符
+# 这些名称是根据HTML中的 <select name="..."> 或 <input name="..."> 确定的
+form_fields:
+  category: "type"                # 类别字段
+  source: "source_sel[6]"         # 地区字段
+  medium: "medium_sel[6]"         # 媒介字段
+  video_codec: "codec_sel[6]"     # 视频编码字段
+  audio_codec: "audiocodec_sel[6]" # 音频编码字段
+  resolution: "standard_sel[6]"   # 分辨率字段
+  team: "team_sel[6]"             # 制作组字段
+  tags[6][]: "tags[]"             # 标签字段
+
+# 源解析器 - 定义如何从原始数据中解析出标准化参数
+# 在这个配置中，主要用于定义各参数的中文名称，便于理解
+source_parsers:
+  # 源参数定义
+  source_params:
+    type:
+      source_key: "类型"
+    source:
+      source_key: "地区"
+    medium:
+      source_key: "媒介"
+    video_codec:
+      source_key: "编码"
+    audio_codec:
+      source_key: "音频编码"
+    resolution:
+      source_key: "分辨率"
+    team:
+      source_key: "制作组"
+
+  # 标题组件（此部分为通用结构，可根据实际标题解析需求填充）
+  title_components:
+    title:
+      source_key: "主标题"
+    season_episode:
+      source_key: "季集"
+    year:
+      source_key: "年份"
+    status:
+      source_key: "剧集状态"
+    edition:
+      source_key: "发布版本"
+    resolution:
+      source_key: "分辨率"
+    platform:
+      source_key: "片源平台"
+    medium:
+      source_key: "媒介"
+    video_codec:
+      source_key: "视频编码"
+    video_format:
+      source_key: "视频格式"
+    hdr_format:
+      source_key: "HDR格式"
+    bit_depth:
+      source_key: "色深"
+    frame_rate:
+      source_key: "帧率"
+    audio_codec:
+      source_key: "音频编码"
+    team:
+      source_key: "制作组"
+
+  # 标准化键映射规则（从原始文本到标准化键）
+  # 这部分定义了如何将站点上的人类可读文本（如下拉菜单选项）映射到全局统一的标准化键
+  standard_keys:
+    type:
+      "AV(有码/Censored)": "category.av_censored"
+      "AV(无码/Uncensored)": "category.av_uncensored"
+      "里番(Hanime)": "category.hanime"
+      "H-2D同人动画(H 2D doujin anime)": "category.h_doujin_2d"
+      "H-3D同人动画(H 3D doujin anime)": "category.h_doujin_3d"
+      "H-漫画(H Manga)": "category.h_manga"
+      "H-CG杂图(H-CG)": "category.h_cg"
+      "写真(Picture)": "category.photo"
+      "音声(Audio)": "category.audio"
+      "H-游戏(H Game)": "category.h_game"
+      "H-综艺(H TV Show)": "category.h_tv_show"
+
+    source:
+      "日本 (JPN)": "source.japan"
+      "大陆 (CHN)": "source.china"
+      "欧美 (West)": "source.western" # 注意：全局文件定义了更细致的欧美国家，这里根据站点选项进行映射
+      "台湾 (TWN)": "source.taiwan"
+      "韩国 (KOR)": "source.korea"
+      "香港 (HKG)": "source.hongkong"
+      "印度 (IND)": "source.india"
+      "俄国 (RUS)": "source.russia"
+      "泰国 (THA)": "source.thailand"
+      "其它 (Other)": "source.other"
+
+    medium:
+      "UHD Blu-ray": "medium.uhd_bluray"
+      "Blu-ray": "medium.bluray"
+      "Remux": "medium.remux"
+      "Encode": "medium.encode"
+      "HDTV": "medium.hdtv"
+      "WEB-DL": "medium.webdl"
+      "DVD": "medium.dvd"
+      "CD": "medium.cd"
+      "Other": "medium.other"
+
+    video_codec:
+      "AVC/x264": "video.h264"
+      "HEVC/x265": "video.h265"
+      "AV1": "video.av1"
+      "VC-1": "video.vc1"
+      "MPEG-2": "video.mpeg2"
+      "Other": "video.other"
+
+    audio_codec:
+      "AAC": "audio.aac"
+      "AC3/DD": "audio.ac3"
+      "DDP/E-AC3": "audio.ddp"
+      "MP3": "audio.mp3"
+      "FLAC": "audio.flac"
+      "DTS": "audio.dts"
+      "TrueHD": "audio.truehd"
+      "LPCM": "audio.lpcm"
+      "DTS-HD MA": "audio.dts_hd_ma"
+      "DTS:X": "audio.dtsx"
+      "OPUS": "audio.opus"
+      "Other": "audio.other"
+
+    resolution:
+      "2160p/4K": "resolution.r2160p"
+      "1080p": "resolution.r1080p"
+      "1080i": "resolution.r1080i"
+      "720p": "resolution.r720p"
+      "SD": "resolution.sd" # 自定义一个SD标准键
+      "Other": "resolution.other"
+
+    team:
+      "VCB-Studio": "team.vcb-studio"
+      "7³ACG": "team.7acg"
+      "AI-Raws": "team.ai-raws"
+      "ANK-Raws": "team.ank-raws"
+      "LittleBakas!": "team.littlebakas"
+      "mawen1250": "team.mawen1250"
+      "jsum@U2": "team.jsum"
+      "Moozzi2": "team.moozzi2"
+      "Snow-Raws": "team.snow-raws"
+      "CMCT": "team.cmct"
+      "GodDramas": "team.goddramas"
+      "beAst": "team.beast"
+      "Other": "team.other"
+
+# 参数映射规则 - 定义如何将标准化键映射到站点特定的参数值
+# 这是最终提交给站点的表单值
+mappings:
+  type:
+    "category.av_censored": "420"
+    "category.av_uncensored": "419"
+    "category.hanime": "423"
+    "category.h_doujin_2d": "425"
+    "category.h_doujin_3d": "426"
+    "category.h_manga": "424"
+    "category.h_cg": "427"
+    "category.photo": "418"
+    "category.audio": "429"
+    "category.h_game": "428"
+    "category.h_tv_show": "422"
+    "default": "427" # 默认值设为 H-CG
+
+  source:
+    "source.japan": "6"
+    "source.china": "1"
+    "source.western": "4"
+    "source.taiwan": "3"
+    "source.korea": "5"
+    "source.hongkong": "2"
+    "source.india": "7"
+    "source.russia": "8"
+    "source.thailand": "11"
+    "source.other": "13"
+    "default": "13"
+
+  medium:
+    "medium.uhd_bluray": "14"
+    "medium.bluray": "1"
+    "medium.remux": "3"
+    "medium.encode": "7"
+    "medium.hdtv": "5"
+    "medium.webdl": "12"
+    "medium.dvd": "2"
+    "medium.cd": "8"
+    "medium.other": "11"
+    "default": "11"
+
+  video_codec:
+    "video.h264": "9"
+    "video.h265": "8"
+    "video.av1": "15"
+    "video.vc1": "12"
+    "video.mpeg2": "13"
+    "video.other": "5"
+    "default": "5"
+
+  audio_codec:
+    "audio.aac": "6"
+    "audio.ac3": "13"
+    "audio.ddp": "20"
+    "audio.mp3": "21"
+    "audio.flac": "1"
+    "audio.dts": "3"
+    "audio.truehd": "9"
+    "audio.lpcm": "15"
+    "audio.dts_hd_ma": "10"
+    "audio.dtsx": "23"
+    "audio.opus": "24"
+    "audio.other": "14"
+    "default": "14"
+
+  resolution:
+    "resolution.r2160p": "5"
+    "resolution.r1080p": "1"
+    "resolution.r1080i": "2"
+    "resolution.r720p": "3"
+    "resolution.sd": "4"
+    "resolution.other": "9"
+    "default": "9"
+
+  team:
+    "team.vcb-studio": "11"
+    "team.7acg": "15"
+    "team.ai-raws": "42"
+    "team.ank-raws": "48"
+    "team.littlebakas": "49"
+    "team.mawen1250": "50"
+    "team.jsum": "40"
+    "team.moozzi2": "53"
+    "team.snow-raws": "39"
+    "team.cmct": "46"
+    "team.goddramas": "41"
+    "team.beast": "47"
+    "team.other": "5"
+    "default": "5"
+
+  tag:
+    "tag.r18": 8
+    "tag.禁转": 1
+    "tag.原创": 20
+    "tag.自购": 15
+    "tag.首发": 2
+    "tag.国语": 5
+    "tag.粤语": 23
+    "tag.中字": 6
+    "tag.英字": 18  # 对应 ENSub
+    "tag.特效": 22
+    "tag.DIY": 4
+    "tag.Dolby_Vision": 13 # 对应 DoVi
+    "tag.hdr10": 7
+    "tag.hdr10plus": 14
+    "tag.Atmos": 16
+    "tag.原生": 9 # 对应 原生原盘
+    "tag.LOLI": 11
+    "tag.无对白": 24
+    "tag.GalGame": 19
+    "tag.分集": 21
+    "tag.其他": 10
+    "default": null # 默认不勾选任何标签

@@ -418,9 +418,9 @@ def migrate_fetch_and_store():
     """专门负责种子信息抓取和存储，不返回预览数据"""
     db_manager = migrate_bp.db_manager
     data = request.json
-    source_site_name, search_term, save_path, torrent_name = (
+    source_site_name, search_term, save_path, torrent_name, downloader_id = (
         data.get("sourceSite"), data.get("searchTerm"),
-        data.get("savePath", ""), data.get("torrentName"))
+        data.get("savePath", ""), data.get("torrentName"), data.get("downloaderId"))
 
     if not all([source_site_name, search_term]):
         return jsonify({"success": False, "message": "错误：源站点和搜索词不能为空。"}), 400
@@ -459,7 +459,8 @@ def migrate_fetch_and_store():
                                    save_path=save_path,
                                    torrent_name=torrent_name,
                                    config_manager=config_manager,
-                                   db_manager=db_manager)
+                                   db_manager=db_manager,
+                                   downloader_id=downloader_id)
 
         # 调用数据抓取和信息提取（这会自动保存到数据库）
         result = migrator.prepare_review_data()
@@ -897,8 +898,6 @@ def migrate_publish():
         return jsonify({"success": False, "logs": "错误：必须提供目标站点名称。"}), 400
 
     context = MIGRATION_CACHE[task_id]
-
-    print("发布参数！！！！！！！！！！！", upload_data)
 
     migrator = None  # 确保在 finally 中可用
 
@@ -1402,10 +1401,12 @@ def validate_media():
         from utils.media_helper import upload_data_mediaInfo
         # 获取当前的mediainfo（如果有的话）
         current_mediainfo = data.get("current_mediainfo", "")
-        # 调用upload_data_mediaInfo函数重新生成mediainfo
+        # 调用upload_data_mediaInfo函数重新生成mediainfo，设置force_refresh=True强制重新获取
         new_mediainfo = upload_data_mediaInfo(
             current_mediainfo, save_path,
-            source_info.get("main_title") if source_info else None)
+            torrent_name=torrent_name,
+            downloader_id=downloader_id,
+            force_refresh=True)  # 强制重新获取
         if new_mediainfo:
             return jsonify({"success": True, "mediainfo": new_mediainfo}), 200
         else:
@@ -1840,7 +1841,9 @@ def get_aggregated_torrents():
 
         # 查询 seed_parameters 表中已存在的种子名称
         # 去除 .torrent 后缀进行匹配
-        cursor.execute("SELECT DISTINCT name FROM seed_parameters WHERE name IS NOT NULL AND name != ''")
+        cursor.execute(
+            "SELECT DISTINCT name FROM seed_parameters WHERE name IS NOT NULL AND name != ''"
+        )
         existing_seed_names = set(row["name"] for row in cursor.fetchall())
         logging.info(f"seed_parameters 表中已有 {len(existing_seed_names)} 个种子记录")
 
@@ -1959,10 +1962,7 @@ def batch_fetch_seed_data():
         source_sites_priority = config.get("source_priority", [])
 
         if not torrent_names:
-            return jsonify({
-                "success": False,
-                "message": "错误：种子名称列表不能为空"
-            }), 400
+            return jsonify({"success": False, "message": "错误：种子名称列表不能为空"}), 400
 
         if not source_sites_priority:
             return jsonify({
@@ -2112,10 +2112,13 @@ def _process_batch_fetch(task_id, torrent_names, source_sites_priority,
                     # 检查该站点的最后请求时间，如果间隔不足则等待
                     current_site = source_found["site"]
                     if current_site in site_last_request_time:
-                        elapsed = time.time() - site_last_request_time[current_site]
+                        elapsed = time.time(
+                        ) - site_last_request_time[current_site]
                         if elapsed < REQUEST_INTERVAL:
                             wait_time = REQUEST_INTERVAL - elapsed
-                            logging.info(f"站点 {current_site} 请求间隔不足，等待 {wait_time:.1f} 秒...")
+                            logging.info(
+                                f"站点 {current_site} 请求间隔不足，等待 {wait_time:.1f} 秒..."
+                            )
                             time.sleep(wait_time)
 
                     # 记录本次请求时间

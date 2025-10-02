@@ -103,9 +103,9 @@ type MediaInfoRequest struct {
 	RemotePath string `json:"remote_path"`
 }
 type MediaInfoResponse struct {
-	Success       bool   `json:"success"`
-	Message       string `json:"message"`
-	MediaInfoText string `json:"mediainfo_text,omitempty"`
+	Success   bool   `json:"success"`
+	Message   string `json:"message"`
+	MediaInfo string `json:"mediainfo,omitempty"`
 }
 type SubtitleEvent struct {
 	StartTime float64
@@ -353,6 +353,38 @@ func executeCommand(name string, args ...string) (string, error) {
 		return "", fmt.Errorf("命令 '%s' 执行失败: %v, 错误输出: %s", name, err, stderr.String())
 	}
 	return stdout.String(), nil
+}
+func executeCommandWithTimeout(timeout time.Duration, name string, args ...string) (string, error) {
+	cmd := exec.Command(name, args...)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	// 启动命令
+	if err := cmd.Start(); err != nil {
+		return "", fmt.Errorf("启动命令 '%s' 失败: %v", name, err)
+	}
+
+	// 使用channel等待命令完成
+	done := make(chan error, 1)
+	go func() {
+		done <- cmd.Wait()
+	}()
+
+	// 等待命令完成或超时
+	select {
+	case err := <-done:
+		if err != nil {
+			return "", fmt.Errorf("命令 '%s' 执行失败: %v, 错误输出: %s", name, err, stderr.String())
+		}
+		return stdout.String(), nil
+	case <-time.After(timeout):
+		// 超时，杀死进程
+		if err := cmd.Process.Kill(); err != nil {
+			log.Printf("警告: 无法杀死超时的进程 '%s': %v", name, err)
+		}
+		return "", fmt.Errorf("命令 '%s' 执行超时 (%.0f秒)", name, timeout.Seconds())
+	}
 }
 func buildReadIntervals(duration float64) string {
 	probePoints := []float64{0.2, 0.4, 0.6, 0.8}
@@ -958,19 +990,27 @@ func mediainfoHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSONResponse(w, r, http.StatusBadRequest, MediaInfoResponse{Success: false, Message: "remote_path 不能为空"})
 		return
 	}
+	log.Printf("MediaInfo请求: 开始处理路径 '%s'", initialPath)
+
 	videoPath, err := findTargetVideoFile(initialPath)
 	if err != nil {
+		log.Printf("MediaInfo请求: 查找视频文件失败: %v", err)
 		writeJSONResponse(w, r, http.StatusBadRequest, MediaInfoResponse{Success: false, Message: err.Error()})
 		return
 	}
+
 	log.Printf("正在获取 MediaInfo: %s", videoPath)
-	mediaInfoText, err := executeCommand("mediainfo", "--Output=text", videoPath)
+	// 使用带超时的命令执行 (5分钟超时)
+	mediaInfoText, err := executeCommandWithTimeout(5*time.Minute, "mediainfo", "--Output=text", videoPath)
 	if err != nil {
+		log.Printf("MediaInfo请求: mediainfo命令执行失败: %v", err)
 		writeJSONResponse(w, r, http.StatusInternalServerError, MediaInfoResponse{Success: false, Message: "获取 MediaInfo 失败: " + err.Error()})
 		return
 	}
+
+	log.Printf("MediaInfo请求: 成功获取MediaInfo，长度: %d 字节", len(mediaInfoText))
 	writeJSONResponse(w, r, http.StatusOK, MediaInfoResponse{
-		Success: true, Message: "MediaInfo 获取成功", MediaInfoText: strings.TrimSpace(mediaInfoText),
+		Success: true, Message: "MediaInfo 获取成功", MediaInfo: strings.TrimSpace(mediaInfoText),
 	})
 }
 

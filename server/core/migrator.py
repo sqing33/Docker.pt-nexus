@@ -83,7 +83,8 @@ class TorrentMigrator:
                  save_path="",
                  torrent_name="",
                  config_manager=None,
-                 db_manager=None):
+                 db_manager=None,
+                 downloader_id=None):
         self.source_site = source_site_info
         self.target_site = target_site_info
         self.search_term = search_term
@@ -91,6 +92,7 @@ class TorrentMigrator:
         self.torrent_name = torrent_name
         self.config_manager = config_manager
         self.db_manager = db_manager
+        self.downloader_id = downloader_id
 
         self.SOURCE_BASE_URL = ensure_scheme(self.source_site.get("base_url"))
         self.SOURCE_NAME = self.source_site["nickname"]
@@ -840,7 +842,7 @@ class TorrentMigrator:
                 mediaInfo=mediainfo_text
                 if mediainfo_text else "未找到 Mediainfo 或 BDInfo",
                 save_path=self.save_path,
-                content_name=processed_torrent_name)
+                torrent_name=processed_torrent_name)
 
             # 提取产地信息并更新到source_params中（如果还没有）
             if "产地" not in source_params or not source_params["产地"]:
@@ -1027,6 +1029,38 @@ class TorrentMigrator:
             hash = seed_param_model.search_torrent_hash(
                 self.torrent_name, self.SOURCE_NAME)
 
+            # 从torrents表中获取下载器ID
+            downloader_id_from_db = None
+            if hash and self.db_manager:
+                try:
+                    conn = self.db_manager._get_connection()
+                    cursor = self.db_manager._get_cursor(conn)
+                    ph = self.db_manager.get_placeholder()
+
+                    # 查询torrents表中对应的下载器ID
+                    if self.db_manager.db_type == "postgresql":
+                        cursor.execute(
+                            "SELECT downloader_id FROM torrents WHERE hash = %s",
+                            (hash,)
+                        )
+                    else:  # mysql and sqlite
+                        cursor.execute(
+                            f"SELECT downloader_id FROM torrents WHERE hash = {ph}",
+                            (hash,)
+                        )
+
+                    result = cursor.fetchone()
+                    if result:
+                        downloader_id_from_db = dict(result).get("downloader_id")
+
+                    cursor.close()
+                    conn.close()
+                except Exception as e:
+                    self.logger.error(f"获取下载器ID时出错: {e}")
+
+            # 如果从数据库未获取到下载器ID，尝试使用构造函数中传入的下载器ID
+            final_downloader_id = downloader_id_from_db or self.downloader_id
+
             # 处理种子名称：去除 .torrent 后缀
             torrent_name_without_ext = self.torrent_name
             if torrent_name_without_ext.lower().endswith('.torrent'):
@@ -1075,6 +1109,8 @@ class TorrentMigrator:
                 "source":
                 standardized_params.get("source"),
                 # 移除单独的processing参数保存，统一使用source参数
+                "downloader_id":
+                final_downloader_id  # 添加下载器ID
             })
             # ------------------------------------------------------------------------------------------
 

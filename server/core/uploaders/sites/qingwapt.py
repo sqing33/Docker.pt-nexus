@@ -6,7 +6,7 @@ class QingwaptUploader(BaseUploader):
     QingwAPT站点的上传器实现，继承自BaseUploader
     """
 
-    def _build_title(self) -> str:
+    def _build_title(self, standardized_params: dict) -> str:
         """
         根据 QingwAPT 站点的规则拼接主标题。
         """
