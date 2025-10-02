@@ -168,6 +168,9 @@ class Extractor:
 
             bbcode = self._html_to_bbcode(descr_container_soup)
 
+            print(f"[DEBUG] Original bbcode length: {len(bbcode)}")
+            print(f"[DEBUG] BBCode preview (first 500 chars): {bbcode[:500]}")
+
             # Clean nested quotes
             original_bbcode = bbcode
             while True:
@@ -201,12 +204,32 @@ class Extractor:
                 else:
                     quotes_after_poster.append(quote_content)
 
+            # 辅助函数：检查是否为包含技术参数的quote（这些既不是mediainfo也不应该出现在正文中）
+            def is_technical_params_quote(quote_text):
+                return (
+                    (".Release.Info" in quote_text and "ENCODER" in quote_text) or
+                    ("ENCODER" in quote_text and "RELEASE NAME" in quote_text) or
+                    (".Release.Info" in quote_text and ".Media.Info" in quote_text) or
+                    ("ViDEO CODEC" in quote_text and "AUDiO CODEC" in quote_text) or
+                    (".x265.Info" in quote_text and "x265" in quote_text)
+                )
+
             # Process quotes
             final_statement_quotes = []
             ardtu_declarations = []
             mediainfo_from_quote = ""
             found_mediainfo_in_quote = False
             quotes_for_body = []
+
+            print(f"[DEBUG] quotes_before_poster count: {len(quotes_before_poster)}")
+            print(f"[DEBUG] quotes_after_poster count: {len(quotes_after_poster)}")
+
+            # 打印所有 quote 的内容片段
+            for i, quote in enumerate(quotes_before_poster):
+                print(f"[DEBUG] Quote before poster #{i}: {quote[:200]}")
+
+            for i, quote in enumerate(quotes_after_poster):
+                print(f"[DEBUG] Quote after poster #{i}: {quote[:200]}")
 
             # Process quotes before poster
             for quote in quotes_before_poster:
@@ -216,6 +239,9 @@ class Extractor:
                              and "PLAYLIST REPORT" in quote)
                 is_release_info_style = ".Release.Info" in quote and "ENCODER" in quote
 
+                print(f"[DEBUG] Processing quote: {quote[:100]}")
+                print(f"[DEBUG]   is_mediainfo: {is_mediainfo}, is_bdinfo: {is_bdinfo}, is_release_info_style: {is_release_info_style}")
+
                 if not found_mediainfo_in_quote and (is_mediainfo or is_bdinfo
                                                      or is_release_info_style):
                     mediainfo_from_quote = re.sub(r"\[/?quote\]",
@@ -223,6 +249,10 @@ class Extractor:
                                                   quote,
                                                   flags=re.IGNORECASE).strip()
                     found_mediainfo_in_quote = True
+                    # 将mediainfo/bdinfo quote也保存到removed_ardtudeclarations中
+                    clean_content = re.sub(r"\[\/?quote\]", "", quote).strip()
+                    ardtu_declarations.append(clean_content)
+                    print(f"[DEBUG]   -> Identified as mediainfo/bdinfo, added to ardtu_declarations")
                     continue
 
                 is_ardtutool_auto_publish = ("ARDTU工具自动发布" in quote)
@@ -231,21 +261,45 @@ class Extractor:
                 is_by_ardtu_group_info = "By ARDTU" in quote and "官组作品" in quote
                 has_atu_tool_signature = "| A | By ATU" in quote
 
+                print(f"[DEBUG]   is_ardtutool: {is_ardtutool_auto_publish}, is_disclaimer: {is_disclaimer}")
+                print(f"[DEBUG]   is_csweb: {is_csweb_disclaimer}, is_by_ardtu: {is_by_ardtu_group_info}, has_atu: {has_atu_tool_signature}")
+                print(f"[DEBUG]   is_technical_params: {is_technical_params_quote(quote)}")
+                print(f"[DEBUG]   has 'ARDTU': {'ARDTU' in quote}")
+
                 if is_ardtutool_auto_publish or is_disclaimer or is_csweb_disclaimer or has_atu_tool_signature:
                     clean_content = re.sub(r"\[\/?quote\]", "", quote).strip()
                     ardtu_declarations.append(clean_content)
+                    print(f"[DEBUG] Added to ardtu_declarations (type 1): {clean_content[:100]}")
                 elif is_by_ardtu_group_info:
                     filtered_quote = re.sub(r"\s*By ARDTU\s*", "", quote)
                     final_statement_quotes.append(filtered_quote)
                 elif "ARDTU" in quote:
                     clean_content = re.sub(r"\[\/?quote\]", "", quote).strip()
                     ardtu_declarations.append(clean_content)
+                    print(f"[DEBUG] Added to ardtu_declarations (ARDTU): {clean_content[:100]}")
+                elif is_technical_params_quote(quote):
+                    # 将技术参数quote添加到ARDTU声明中，这样它们会被过滤掉不会出现在正文中
+                    clean_content = re.sub(r"\[\/?quote\]", "", quote).strip()
+                    ardtu_declarations.append(clean_content)
+                    print(f"[DEBUG] Added to ardtu_declarations (technical): {clean_content[:100]}")
                 else:
                     final_statement_quotes.append(quote)
 
             # Process quotes after poster
             for quote in quotes_after_poster:
-                quotes_for_body.append(quote)
+                # 检查是否为mediainfo/bdinfo/技术参数的quote
+                is_mediainfo_after = ("General" in quote and "Video" in quote and "Audio" in quote)
+                is_bdinfo_after = ("DISC INFO" in quote and "PLAYLIST REPORT" in quote)
+                is_release_info_after = ".Release.Info" in quote and "ENCODER" in quote
+                is_technical_after = is_technical_params_quote(quote)
+
+                if is_mediainfo_after or is_bdinfo_after or is_release_info_after or is_technical_after:
+                    # 过滤掉并保存到ardtu_declarations
+                    clean_content = re.sub(r"\[\/?quote\]", "", quote).strip()
+                    ardtu_declarations.append(clean_content)
+                    print(f"[DEBUG] Added quote after poster to ardtu_declarations: {clean_content[:100]}")
+                else:
+                    quotes_for_body.append(quote)
 
             # Extract body content
             body = (re.sub(r"\[quote\].*?\[/quote\]|\[img\].*?\[/img\]",
@@ -270,6 +324,9 @@ class Extractor:
                 images[1:]) if len(images) > 1 else ""
             extracted_data["intro"][
                 "removed_ardtudeclarations"] = ardtu_declarations
+
+            print(f"[DEBUG] Final ardtu_declarations count: {len(ardtu_declarations)}")
+            print(f"[DEBUG] ardtu_declarations content: {ardtu_declarations}")
 
         # Extract MediaInfo
         mediainfo_pre = soup.select_one(
