@@ -224,6 +224,20 @@ func writeJSONResponse(w http.ResponseWriter, r *http.Request, statusCode int, d
 	}
 }
 
+// 辅助函数：格式化字节数为可读格式
+func formatBytes(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.2f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
 // ======================= 核心业务逻辑 (无变动) =======================
 
 func fetchTorrentsForDownloader(wg *sync.WaitGroup, config DownloaderConfig, includeComment, includeTrackers bool, resultsChan chan<- []NormalizedTorrent, errChan chan<- error) {
@@ -244,7 +258,11 @@ func fetchTorrentsForDownloader(wg *sync.WaitGroup, config DownloaderConfig, inc
 		return
 	}
 	normalizedList := make([]NormalizedTorrent, 0, len(torrents))
+	var totalUploaded int64 = 0
+	var totalDownloaded int64 = 0
 	for _, t := range torrents {
+		totalUploaded += t.Uploaded
+		totalDownloaded += t.Size * int64(t.Progress)
 		normalizedList = append(normalizedList, NormalizedTorrent{
 			Hash: t.Hash, Name: t.Name, Size: t.Size, Progress: t.Progress, State: t.State,
 			SavePath: t.SavePath, Uploaded: t.Uploaded, DownloaderID: config.ID,
@@ -287,6 +305,7 @@ func fetchTorrentsForDownloader(wg *sync.WaitGroup, config DownloaderConfig, inc
 		}
 	}
 	log.Printf("成功从 '%s' 获取到 %d 个种子", config.Host, len(normalizedList))
+	log.Printf("下载器 '%s' 统计: 上传量: %.2f GB, 下载量: %.2f GB", config.Host, float64(totalUploaded)/1024/1024/1024, float64(totalDownloaded)/1024/1024/1024)
 	resultsChan <- normalizedList
 }
 func fetchServerStatsForDownloader(wg *sync.WaitGroup, config DownloaderConfig, resultsChan chan<- ServerStats, errChan chan<- error) {
@@ -332,12 +351,29 @@ func fetchServerStatsForDownloader(wg *sync.WaitGroup, config DownloaderConfig, 
 		log.Printf("警告: 获取 '%s' 版本信息失败: %v", config.Host, err)
 	}
 
+	// 检查上传量下载量是否为0，可能是某些版本qb的问题
+	if mainData.ServerState.AlltimeUL == 0 && mainData.ServerState.AlltimeDL == 0 {
+		log.Printf("警告: 下载器 '%s' 的上传量和下载量都为0，可能是该版本qBittorrent不支持获取这些统计信息", config.Host)
+	} else if mainData.ServerState.AlltimeUL == 0 {
+		log.Printf("警告: 下载器 '%s' 的上传量为0，可能是该版本qBittorrent不支持获取上传量统计信息", config.Host)
+	} else if mainData.ServerState.AlltimeDL == 0 {
+		log.Printf("警告: 下载器 '%s' 的下载量为0，可能是该版本qBittorrent不支持获取下载量统计信息", config.Host)
+	}
+
 	stats := ServerStats{
 		DownloaderID: config.ID, DownloadSpeed: mainData.ServerState.DlInfoSpeed,
 		UploadSpeed: mainData.ServerState.UpInfoSpeed, TotalDownload: mainData.ServerState.AlltimeDL,
 		TotalUpload: mainData.ServerState.AlltimeUL, Version: version,
 	}
-	log.Printf("成功从 '%s' 获取到服务器统计信息，版本: %s", config.Host, version)
+
+	// 显示获取到的上传量和下载量
+	log.Printf("下载器 '%s' 服务器统计: 版本: %s, 总上传量: %.2f GB, 总下载量: %.2f GB, 当前上传速度: %s/s, 当前下载速度: %s/s",
+		config.Host, version,
+		float64(mainData.ServerState.AlltimeUL)/1024/1024/1024,
+		float64(mainData.ServerState.AlltimeDL)/1024/1024/1024,
+		formatBytes(mainData.ServerState.UpInfoSpeed),
+		formatBytes(mainData.ServerState.DlInfoSpeed))
+
 	resultsChan <- stats
 }
 

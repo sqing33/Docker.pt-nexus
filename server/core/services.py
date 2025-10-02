@@ -379,6 +379,16 @@ class DataTracker(Thread):
                             logging.info(
                                 f"代理数据: 上传速度={data_point['ul_speed']:,}, 下载速度={data_point['dl_speed']:,}, 总上传={data_point['total_ul']:,}, 总下载={data_point['total_dl']:,}"
                             )
+
+                        # 更新 latest_speeds_update
+                        latest_speeds_update[downloader["id"]] = {
+                            "name": downloader["name"],
+                            "type": downloader["type"],
+                            "enabled": True,
+                            "upload_speed": data_point["ul_speed"],
+                            "download_speed": data_point["dl_speed"]
+                        }
+                        data_points.append(data_point)
                     else:
                         # 代理获取失败，跳过此下载器
                         logging.warning(
@@ -472,54 +482,31 @@ class DataTracker(Thread):
         try:
             conn = self.db_manager._get_connection()
             cursor = self.db_manager._get_cursor(conn)
-            is_mysql = self.db_manager.db_type == "mysql"
-            cursor.execute(
-                "SELECT id, last_total_dl, last_total_ul FROM downloader_clients"
-            )
-            last_states = {row["id"]: dict(row) for row in cursor.fetchall()}
             params_to_insert = []
+
             for entry in buffer:
-                timestamp_str = entry["timestamp"].strftime(
-                    "%Y-%m-%d %H:%M:%S")
+                timestamp_str = entry["timestamp"].strftime("%Y-%m-%d %H:%M:%S")
                 for data_point in entry["points"]:
                     client_id = data_point["downloader_id"]
-                    if not last_states.get(client_id): continue
-                    last_dl, last_ul = int(
-                        last_states[client_id]["last_total_dl"]), int(
-                            last_states[client_id]["last_total_ul"])
-                    current_dl, current_ul = data_point[
-                        "total_dl"], data_point["total_ul"]
-                    dl_inc, ul_inc = (current_dl -
-                                      last_dl if current_dl >= last_dl else
-                                      0), (current_ul - last_ul
-                                           if current_ul >= last_ul else 0)
-                    last_states[client_id]["last_total_dl"], last_states[
-                        client_id]["last_total_ul"] = current_dl, current_ul
+                    current_dl = data_point["total_dl"]
+                    current_ul = data_point["total_ul"]
+
+                    # 直接存储累计值
                     params_to_insert.append(
-                        (timestamp_str, client_id, max(0,
-                                                       ul_inc), max(0, dl_inc),
-                         data_point["ul_speed"], data_point["dl_speed"]))
+                        (timestamp_str, client_id, 0, 0,
+                         data_point["ul_speed"], data_point["dl_speed"],
+                         current_ul, current_dl))
 
             if params_to_insert:
                 # 根据数据库类型使用正确的占位符和冲突处理语法
                 if self.db_manager.db_type == "mysql":
-                    sql_insert = """INSERT INTO traffic_stats (stat_datetime, downloader_id, uploaded, downloaded, upload_speed, download_speed) VALUES (%s, %s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE uploaded = VALUES(uploaded), downloaded = VALUES(downloaded), upload_speed = VALUES(upload_speed), download_speed = VALUES(download_speed)"""
+                    sql_insert = """INSERT INTO traffic_stats (stat_datetime, downloader_id, uploaded, downloaded, upload_speed, download_speed, cumulative_uploaded, cumulative_downloaded) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE uploaded = VALUES(uploaded), downloaded = VALUES(downloaded), upload_speed = VALUES(upload_speed), download_speed = VALUES(download_speed), cumulative_uploaded = VALUES(cumulative_uploaded), cumulative_downloaded = VALUES(cumulative_downloaded)"""
                 elif self.db_manager.db_type == "postgresql":
-                    sql_insert = """INSERT INTO traffic_stats (stat_datetime, downloader_id, uploaded, downloaded, upload_speed, download_speed) VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT(stat_datetime, downloader_id) DO UPDATE SET uploaded = EXCLUDED.uploaded, downloaded = EXCLUDED.downloaded, upload_speed = EXCLUDED.upload_speed, download_speed = EXCLUDED.download_speed"""
+                    sql_insert = """INSERT INTO traffic_stats (stat_datetime, downloader_id, uploaded, downloaded, upload_speed, download_speed, cumulative_uploaded, cumulative_downloaded) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT(stat_datetime, downloader_id) DO UPDATE SET uploaded = EXCLUDED.uploaded, downloaded = EXCLUDED.downloaded, upload_speed = EXCLUDED.upload_speed, download_speed = EXCLUDED.download_speed, cumulative_uploaded = EXCLUDED.cumulative_uploaded, cumulative_downloaded = EXCLUDED.cumulative_downloaded"""
                 else:  # sqlite
-                    sql_insert = """INSERT INTO traffic_stats (stat_datetime, downloader_id, uploaded, downloaded, upload_speed, download_speed) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(stat_datetime, downloader_id) DO UPDATE SET uploaded = excluded.uploaded, downloaded = excluded.downloaded, upload_speed = excluded.upload_speed, download_speed = excluded.download_speed"""
+                    sql_insert = """INSERT INTO traffic_stats (stat_datetime, downloader_id, uploaded, downloaded, upload_speed, download_speed, cumulative_uploaded, cumulative_downloaded) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(stat_datetime, downloader_id) DO UPDATE SET uploaded = excluded.uploaded, downloaded = excluded.downloaded, upload_speed = excluded.upload_speed, download_speed = excluded.download_speed, cumulative_uploaded = excluded.cumulative_uploaded, cumulative_downloaded = excluded.cumulative_downloaded"""
                 cursor.executemany(sql_insert, params_to_insert)
 
-            update_params = [(state["last_total_dl"], state["last_total_ul"],
-                              client_id)
-                             for client_id, state in last_states.items()]
-            if update_params:
-                # 根据数据库类型使用正确的占位符
-                if self.db_manager.db_type == "mysql" or self.db_manager.db_type == "postgresql":
-                    sql = "UPDATE downloader_clients SET last_total_dl = %s, last_total_ul = %s WHERE id = %s"
-                else:  # sqlite
-                    sql = "UPDATE downloader_clients SET last_total_dl = ?, last_total_ul = ? WHERE id = ?"
-                cursor.executemany(sql, update_params)
             conn.commit()
         except Exception as e:
             logging.error(f"将流量缓冲刷新到数据库失败: {e}", exc_info=True)

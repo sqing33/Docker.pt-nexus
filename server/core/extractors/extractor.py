@@ -168,9 +168,6 @@ class Extractor:
 
             bbcode = self._html_to_bbcode(descr_container_soup)
 
-            print(f"[DEBUG] Original bbcode length: {len(bbcode)}")
-            print(f"[DEBUG] BBCode preview (first 500 chars): {bbcode[:500]}")
-
             # Clean nested quotes
             original_bbcode = bbcode
             while True:
@@ -221,16 +218,6 @@ class Extractor:
             found_mediainfo_in_quote = False
             quotes_for_body = []
 
-            print(f"[DEBUG] quotes_before_poster count: {len(quotes_before_poster)}")
-            print(f"[DEBUG] quotes_after_poster count: {len(quotes_after_poster)}")
-
-            # 打印所有 quote 的内容片段
-            for i, quote in enumerate(quotes_before_poster):
-                print(f"[DEBUG] Quote before poster #{i}: {quote[:200]}")
-
-            for i, quote in enumerate(quotes_after_poster):
-                print(f"[DEBUG] Quote after poster #{i}: {quote[:200]}")
-
             # Process quotes before poster
             for quote in quotes_before_poster:
                 is_mediainfo = ("General" in quote and "Video" in quote
@@ -238,9 +225,6 @@ class Extractor:
                 is_bdinfo = ("DISC INFO" in quote
                              and "PLAYLIST REPORT" in quote)
                 is_release_info_style = ".Release.Info" in quote and "ENCODER" in quote
-
-                print(f"[DEBUG] Processing quote: {quote[:100]}")
-                print(f"[DEBUG]   is_mediainfo: {is_mediainfo}, is_bdinfo: {is_bdinfo}, is_release_info_style: {is_release_info_style}")
 
                 if not found_mediainfo_in_quote and (is_mediainfo or is_bdinfo
                                                      or is_release_info_style):
@@ -252,7 +236,6 @@ class Extractor:
                     # 将mediainfo/bdinfo quote也保存到removed_ardtudeclarations中
                     clean_content = re.sub(r"\[\/?quote\]", "", quote).strip()
                     ardtu_declarations.append(clean_content)
-                    print(f"[DEBUG]   -> Identified as mediainfo/bdinfo, added to ardtu_declarations")
                     continue
 
                 is_ardtutool_auto_publish = ("ARDTU工具自动发布" in quote)
@@ -261,27 +244,19 @@ class Extractor:
                 is_by_ardtu_group_info = "By ARDTU" in quote and "官组作品" in quote
                 has_atu_tool_signature = "| A | By ATU" in quote
 
-                print(f"[DEBUG]   is_ardtutool: {is_ardtutool_auto_publish}, is_disclaimer: {is_disclaimer}")
-                print(f"[DEBUG]   is_csweb: {is_csweb_disclaimer}, is_by_ardtu: {is_by_ardtu_group_info}, has_atu: {has_atu_tool_signature}")
-                print(f"[DEBUG]   is_technical_params: {is_technical_params_quote(quote)}")
-                print(f"[DEBUG]   has 'ARDTU': {'ARDTU' in quote}")
-
                 if is_ardtutool_auto_publish or is_disclaimer or is_csweb_disclaimer or has_atu_tool_signature:
                     clean_content = re.sub(r"\[\/?quote\]", "", quote).strip()
                     ardtu_declarations.append(clean_content)
-                    print(f"[DEBUG] Added to ardtu_declarations (type 1): {clean_content[:100]}")
                 elif is_by_ardtu_group_info:
                     filtered_quote = re.sub(r"\s*By ARDTU\s*", "", quote)
                     final_statement_quotes.append(filtered_quote)
                 elif "ARDTU" in quote:
                     clean_content = re.sub(r"\[\/?quote\]", "", quote).strip()
                     ardtu_declarations.append(clean_content)
-                    print(f"[DEBUG] Added to ardtu_declarations (ARDTU): {clean_content[:100]}")
                 elif is_technical_params_quote(quote):
                     # 将技术参数quote添加到ARDTU声明中，这样它们会被过滤掉不会出现在正文中
                     clean_content = re.sub(r"\[\/?quote\]", "", quote).strip()
                     ardtu_declarations.append(clean_content)
-                    print(f"[DEBUG] Added to ardtu_declarations (technical): {clean_content[:100]}")
                 else:
                     final_statement_quotes.append(quote)
 
@@ -297,7 +272,6 @@ class Extractor:
                     # 过滤掉并保存到ardtu_declarations
                     clean_content = re.sub(r"\[\/?quote\]", "", quote).strip()
                     ardtu_declarations.append(clean_content)
-                    print(f"[DEBUG] Added quote after poster to ardtu_declarations: {clean_content[:100]}")
                 else:
                     quotes_for_body.append(quote)
 
@@ -324,9 +298,6 @@ class Extractor:
                 images[1:]) if len(images) > 1 else ""
             extracted_data["intro"][
                 "removed_ardtudeclarations"] = ardtu_declarations
-
-            print(f"[DEBUG] Final ardtu_declarations count: {len(ardtu_declarations)}")
-            print(f"[DEBUG] ardtu_declarations content: {ardtu_declarations}")
 
         # Extract MediaInfo
         mediainfo_pre = soup.select_one(
@@ -372,7 +343,8 @@ class Extractor:
         extracted_data["source_params"]["类型"] = type_match.group(
             1) if type_match else type_text.split("/")[-1]
         extracted_data["source_params"]["媒介"] = basic_info_dict.get("媒介")
-        extracted_data["source_params"]["视频编码"] = basic_info_dict.get("编码")
+        # 视频编码：优先获取"视频编码"，如果没有则获取"编码"
+        extracted_data["source_params"]["视频编码"] = basic_info_dict.get("视频编码") or basic_info_dict.get("编码")
         extracted_data["source_params"]["音频编码"] = basic_info_dict.get("音频编码")
         extracted_data["source_params"]["分辨率"] = basic_info_dict.get("分辨率")
         extracted_data["source_params"]["制作组"] = basic_info_dict.get("制作组")
@@ -623,6 +595,12 @@ class ParameterMapper:
             if raw_value:
                 source_standard_values[param_key] = get_standard_key_for_value(
                     raw_value, param_key)
+
+        # [调试] 打印源站点提取到的标准化参数（标题补全之前）
+        print(f"=== 源站点 {site_name} 提取到的参数（标题补全前） ===")
+        print(f"原始source_params: {source_params}")
+        print(f"标准化后的source_standard_values: {source_standard_values}")
+        print("=" * 60)
 
         title_standard_values = {}
         title_components_config = source_parsers.get("title_components", {})

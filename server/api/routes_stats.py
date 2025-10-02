@@ -113,14 +113,37 @@ def get_chart_data_api():
                 
             time_group_fn = get_time_group_fn(db_manager.db_type, coarse_group_format)
             ph = db_manager.get_placeholder()
-            
-            # 查询聚合表 traffic_stats_hourly
-            query_hourly = f"SELECT {time_group_fn} AS time_group, downloader_id, SUM(uploaded) AS total_ul, SUM(downloaded) AS total_dl FROM traffic_stats_hourly WHERE stat_datetime >= {ph}"
+
+            # 查询聚合表 traffic_stats_hourly - 使用累计字段计算差值
+            # 修改逻辑：使用更简单的方法计算时间段内的累计差值
+            if db_manager.db_type == "postgresql":
+                query_hourly = f"""
+                    SELECT
+                        {time_group_fn} AS time_group,
+                        downloader_id,
+                        GREATEST(0, (MAX(cumulative_uploaded) - MIN(cumulative_uploaded))::bigint) AS total_ul,
+                        GREATEST(0, (MAX(cumulative_downloaded) - MIN(cumulative_downloaded))::bigint) AS total_dl
+                    FROM traffic_stats_hourly
+                    WHERE stat_datetime >= {ph}
+                """
+            else:
+                query_hourly = f"""
+                    SELECT
+                        {time_group_fn} AS time_group,
+                        downloader_id,
+                        MAX(0, MAX(cumulative_uploaded) - MIN(cumulative_uploaded)) AS total_ul,
+                        MAX(0, MAX(cumulative_downloaded) - MIN(cumulative_downloaded)) AS total_dl
+                    FROM traffic_stats_hourly
+                    WHERE stat_datetime >= {ph}
+                """
             params_hourly = [start_dt.strftime("%Y-%m-%d %H:%M:%S")] if start_dt else []
             if end_dt and start_dt:
                 query_hourly += f" AND stat_datetime < {ph}"
                 params_hourly.append(end_dt.strftime("%Y-%m-%d %H:%M:%S"))
-            query_hourly += " GROUP BY time_group, downloader_id ORDER BY time_group"
+            query_hourly += """
+                    GROUP BY time_group, downloader_id
+                    ORDER BY time_group
+            """
             
             cursor.execute(query_hourly, tuple(params_hourly))
             rows_hourly = cursor.fetchall()
@@ -130,15 +153,38 @@ def get_chart_data_api():
             recent_threshold = datetime.now() - timedelta(days=3)
             recent_start = max(start_dt, recent_threshold) if start_dt > recent_threshold else recent_threshold
             
-            # 查询原始表 traffic_stats 中最近3天的数据
+            # 查询原始表 traffic_stats 中最近3天的数据 - 使用累计字段计算差值
             if recent_start < end_dt:
                 time_group_fn_fine = get_time_group_fn(db_manager.db_type, group_by_format)
-                query_fine = f"SELECT {time_group_fn_fine} AS time_group, downloader_id, SUM(uploaded) AS total_ul, SUM(downloaded) AS total_dl FROM traffic_stats WHERE stat_datetime >= {ph}"
+
+                if db_manager.db_type == "postgresql":
+                    query_fine = f"""
+                        SELECT
+                            {time_group_fn_fine} AS time_group,
+                            downloader_id,
+                            GREATEST(0, (MAX(cumulative_uploaded) - MIN(cumulative_uploaded))::bigint) AS total_ul,
+                            GREATEST(0, (MAX(cumulative_downloaded) - MIN(cumulative_downloaded))::bigint) AS total_dl
+                        FROM traffic_stats
+                        WHERE stat_datetime >= {ph}
+                    """
+                else:
+                    query_fine = f"""
+                        SELECT
+                            {time_group_fn_fine} AS time_group,
+                            downloader_id,
+                            MAX(0, MAX(cumulative_uploaded) - MIN(cumulative_uploaded)) AS total_ul,
+                            MAX(0, MAX(cumulative_downloaded) - MIN(cumulative_downloaded)) AS total_dl
+                        FROM traffic_stats
+                        WHERE stat_datetime >= {ph}
+                    """
                 params_fine = [recent_start.strftime("%Y-%m-%d %H:%M:%S")]
                 if end_dt and recent_start:
                     query_fine += f" AND stat_datetime < {ph}"
                     params_fine.append(end_dt.strftime("%Y-%m-%d %H:%M:%S"))
-                query_fine += " GROUP BY time_group, downloader_id ORDER BY time_group"
+                query_fine += """
+                        GROUP BY time_group, downloader_id
+                        ORDER BY time_group
+                """
                 
                 cursor.execute(query_fine, tuple(params_fine))
                 rows_fine = cursor.fetchall()
@@ -157,13 +203,36 @@ def get_chart_data_api():
             time_group_fn = get_time_group_fn(db_manager.db_type, group_by_format)
             ph = db_manager.get_placeholder()
 
-            # --- 修改 SQL 查询，增加 downloader_id 分组 ---
-            query = f"SELECT {time_group_fn} AS time_group, downloader_id, SUM(uploaded) AS total_ul, SUM(downloaded) AS total_dl FROM traffic_stats WHERE stat_datetime >= {ph}"
+            # --- 修改 SQL 查询，使用累计字段计算差值 ---
+            # 简化的累计差值计算方法
+            if db_manager.db_type == "postgresql":
+                query = f"""
+                    SELECT
+                        {time_group_fn} AS time_group,
+                        downloader_id,
+                        GREATEST(0, (MAX(cumulative_uploaded) - MIN(cumulative_uploaded))::bigint) AS total_ul,
+                        GREATEST(0, (MAX(cumulative_downloaded) - MIN(cumulative_downloaded))::bigint) AS total_dl
+                    FROM traffic_stats
+                    WHERE stat_datetime >= {ph}
+                """
+            else:
+                query = f"""
+                    SELECT
+                        {time_group_fn} AS time_group,
+                        downloader_id,
+                        MAX(0, MAX(cumulative_uploaded) - MIN(cumulative_uploaded)) AS total_ul,
+                        MAX(0, MAX(cumulative_downloaded) - MIN(cumulative_downloaded)) AS total_dl
+                    FROM traffic_stats
+                    WHERE stat_datetime >= {ph}
+                """
             params = [start_dt.strftime("%Y-%m-%d %H:%M:%S")] if start_dt else []
             if end_dt and start_dt:
                 query += f" AND stat_datetime < {ph}"
                 params.append(end_dt.strftime("%Y-%m-%d %H:%M:%S"))
-            query += " GROUP BY time_group, downloader_id ORDER BY time_group"
+            query += """
+                    GROUP BY time_group, downloader_id
+                    ORDER BY time_group
+            """
             
             # 如果没有参数但查询中有占位符，则返回空数据
             if not params:
