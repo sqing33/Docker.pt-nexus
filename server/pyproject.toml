@@ -12,6 +12,7 @@ dependencies = [
     "flask-bcrypt>=1.0.1",
     "flask-cors>=6.0.1",
     "loguru>=0.7.3",
+    "lxml>=6.0.2",
     "mysql-connector-python>=9.4.0",
     "pillow>=11.3.0",
     "psycopg2-binary>=2.9.10",

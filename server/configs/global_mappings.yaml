@@ -231,6 +231,18 @@ global_standard_keys:
     "CMCT": "team.cmct"
     "MWeb": "team.mweb"
     "FRDS": "team.frds"
+    "VCB-Studio": "team.vcb-studio"
+    "7³ACG": "team.7acg"
+    "AI-Raws": "team.ai-raws"
+    "ANK-Raws": "team.ank-raws"
+    "LittleBakas!": "team.littlebakas"
+    "mawen1250": "team.mawen1250"
+    "jsum@U2": "team.jsum"
+    "Moozzi2": "team.moozzi2"
+    "Snow-Raws": "team.snow-raws"
+    "CMCT": "team.cmct"
+    "GodDramas": "team.goddramas"
+    "beAst": "team.beast"
     "Other": "team.other"
 
   # 标签映射

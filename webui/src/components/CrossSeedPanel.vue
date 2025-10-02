@@ -1038,11 +1038,7 @@ const refreshScreenshots = async () => {
 };
 
 const refreshMediainfo = async () => {
-  if (!torrentData.value.original_main_title) {
-    ElNotification.warning('标题为空，无法重新获取媒体信息。');
-    return;
-  }
-
+  // 移除标题检查，允许任何时候重新获取
   // 防止重复请求
   if (isRefreshingMediainfo.value) {
     ElNotification.info({
@@ -1067,14 +1063,14 @@ const refreshMediainfo = async () => {
       imdb_link: torrentData.value.imdb_link,
       douban_link: torrentData.value.douban_link,
     },
-    current_mediainfo: torrentData.value.mediainfo, // 添加当前mediainfo
+    current_mediainfo: torrentData.value.mediainfo, // 传递当前mediainfo，但后端会强制重新获取
     savePath: torrent.value.save_path,
     torrentName: torrent.value.name,
     downloaderId: torrent.value.downloaderId // 添加下载器ID
   };
 
   try {
-    const response = await axios.post('/api/migrate/media/validate', payload);
+    const response = await axios.post('/api/media/validate', payload);
     ElNotification.closeAll();
 
     if (response.data.success && response.data.mediainfo) {
@@ -1519,6 +1515,7 @@ const fetchTorrentInfo = async () => {
       searchTerm: torrentId,
       savePath: torrent.value.save_path,
       torrentName: torrent.value.name,
+      downloaderId: torrent.value.downloaderId || (torrent.value.downloaderIds?.length > 0 ? torrent.value.downloaderIds[0] : null),
     }, {
       timeout: 60000 // 60秒超时，用于抓取和存储
     });
@@ -2038,12 +2035,17 @@ const handlePublish = async () => {
   const successfulResults = results.filter(r => r.success && r.url);
   downloaderProgress.value.total = successfulResults.length;
 
-  for (const result of successfulResults) {
+  // 并发执行所有添加种子到下载器的请求
+  const downloaderPromises = successfulResults.map(async (result) => {
     const downloaderStatus = await triggerAddToDownloader(result);
     downloaderStatusMap[result.siteName] = downloaderStatus;
     // Update downloader progress
     downloaderProgress.value.current++
-  }
+    return { siteName: result.siteName, status: downloaderStatus };
+  });
+
+  // 等待所有添加请求完成
+  await Promise.all(downloaderPromises);
   logContent.value += '\n--- [自动添加任务结束] ---';
 
   const siteLogs = results.map(r => {
