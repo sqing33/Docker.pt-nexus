@@ -1067,7 +1067,7 @@ func processBatchSeeds(req BatchRequest) BatchResponse {
 		}
 	}
 
-	// 串行处理有效种子（站点请求频率由全局控制）
+	// 串行处理有效种子(站点请求频率由全局控制)
 	logInfo("🔄 开始串行处理 %d 个有效种子...", len(validSeeds))
 	processStart := time.Now()
 
@@ -1079,34 +1079,14 @@ func processBatchSeeds(req BatchRequest) BatchResponse {
 		result := processSingleSeed(seed, req.TargetSiteName)
 		seedDuration := time.Since(seedStart)
 
-		// 使用过滤阶段已经获取的视频大小，无需重复调用checkVideoSize
-		videoSizeGB := seed.VideoSizeGB
-
-		// 记录处理结果到数据库
-		record := SeedRecord{
-			BatchID:     currentBatchID,
-			TorrentID:   seed.TorrentID,
-			SourceSite:  seed.SiteName,
-			TargetSite:  req.TargetSiteName,
-			VideoSizeGB: videoSizeGB,
-			Status:      result.Status,
-		}
-
 		if result.Status == "success" {
 			logSuccess("✅ [%d/%d] 种子处理成功: %s (耗时: %v)",
 				i+1, len(validSeeds), seed.TorrentID, seedDuration)
-			record.SuccessURL = result.URL
 			processedSeeds = append(processedSeeds, result)
 		} else {
 			logError("❌ [%d/%d] 种子处理失败: %s - %s (耗时: %v)",
 				i+1, len(validSeeds), seed.TorrentID, result.Error, seedDuration)
-			record.ErrorDetail = result.Error
 			failedSeeds = append(failedSeeds, result)
-		}
-
-		// 尝试记录到数据库
-		if err := recordSeedResult(record); err != nil {
-			logError("数据库记录失败: %v", err)
 		}
 	}
 
@@ -1168,11 +1148,16 @@ func processSingleSeed(seed SeedInfo, targetSite string) SeedResult {
 	waitForSiteRequest(targetSite)
 
 	publishReq := map[string]interface{}{
-		"task_id":     taskID,
-		"targetSite":  targetSite,
-		"sourceSite":  seed.SiteName,
-		"upload_data": uploadData,
+		"task_id":                taskID,
+		"targetSite":             targetSite,
+		"sourceSite":             seed.SiteName,
+		"auto_add_to_downloader": true,               // 启用自动添加
+		"batch_id":               currentBatchID,     // 传递批次ID给Python端
+		"video_size_gb":          seed.VideoSizeGB,   // 传递视频大小
 	}
+
+	// 将 uploadData 添加到请求中
+	publishReq["upload_data"] = uploadData
 
 	resp, err := callPythonAPI("/api/migrate/publish", publishReq)
 	if err != nil {
@@ -1496,6 +1481,88 @@ func getArrayValue(data map[string]interface{}, key string) []interface{} {
 		}
 	}
 	return []interface{}{}
+}
+
+// 获取原始种子的下载器信息（通过 hash 或 torrent_id 查询）
+func getOriginalSeedDownloaderInfo(hash, torrentID, siteName string) (string, string) {
+	// 调用Python API获取种子的下载器信息
+	url := fmt.Sprintf("%s/api/torrents/info?hash=%s", coreAPIURL, hash)
+
+	client := &http.Client{Timeout: 10 * time.Second}
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		logWarning("创建获取种子信息请求失败: %v", err)
+		return "", ""
+	}
+
+	// 设置认证头
+	if internalSecret != "" {
+		req.Header.Set("X-Internal-API-Key", generateInternalToken())
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		logWarning("获取种子信息请求失败: %v", err)
+		return "", ""
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		logWarning("获取种子信息返回错误状态码: %d", resp.StatusCode)
+		return "", ""
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		logWarning("读取种子信息响应失败: %v", err)
+		return "", ""
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(body, &result); err != nil {
+		logWarning("解析种子信息JSON失败: %v", err)
+		return "", ""
+	}
+
+	if success, ok := result["success"].(bool); !ok || !success {
+		// 如果通过 hash 查询失败，尝试直接从 torrents 表查询
+		logInfo("通过 hash 查询失败，尝试通过 torrent_id 查询")
+		return getDownloaderInfoFromDB(torrentID, siteName)
+	}
+
+	// 从返回的数据中提取 downloader 和 save_path
+	if data, ok := result["data"].(map[string]interface{}); ok {
+		downloaderId := getStringValue(data, "downloader")
+		savePath := getStringValue(data, "save_path")
+		return downloaderId, savePath
+	}
+
+	return "", ""
+}
+
+// 通过 torrent_id 和 site_name 从数据库查询下载器信息
+func getDownloaderInfoFromDB(torrentID, siteName string) (string, string) {
+	// 构造查询请求
+	data := map[string]interface{}{
+		"torrent_id": torrentID,
+		"site_name":  siteName,
+	}
+
+	resp, err := callPythonAPI("/api/migrate/get_downloader_info", data)
+	if err != nil {
+		logWarning("查询下载器信息失败: %v", err)
+		return "", ""
+	}
+
+	if success, ok := resp["success"].(bool); !ok || !success {
+		return "", ""
+	}
+
+	downloaderId := getStringValue(resp, "downloader_id")
+	savePath := getStringValue(resp, "save_path")
+
+	return downloaderId, savePath
 }
 
 // 测试核心API连接

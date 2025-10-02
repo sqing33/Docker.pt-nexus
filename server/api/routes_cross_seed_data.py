@@ -543,16 +543,16 @@ def add_batch_enhance_record():
         # 插入记录
         if db_manager.db_type == "mysql":
             sql = """INSERT INTO batch_enhance_records
-                     (batch_id, torrent_id, source_site, target_site, video_size_gb, status, success_url, error_detail)
-                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"""
+                     (batch_id, torrent_id, source_site, target_site, video_size_gb, status, success_url, error_detail, downloader_add_result)
+                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"""
         elif db_manager.db_type == "postgresql":
             sql = """INSERT INTO batch_enhance_records
-                     (batch_id, torrent_id, source_site, target_site, video_size_gb, status, success_url, error_detail)
-                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"""
+                     (batch_id, torrent_id, source_site, target_site, video_size_gb, status, success_url, error_detail, downloader_add_result)
+                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"""
         else:  # sqlite
             sql = """INSERT INTO batch_enhance_records
-                     (batch_id, torrent_id, source_site, target_site, video_size_gb, status, success_url, error_detail)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)"""
+                     (batch_id, torrent_id, source_site, target_site, video_size_gb, status, success_url, error_detail, downloader_add_result)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"""
 
         params = (
             data['batch_id'],
@@ -562,7 +562,8 @@ def add_batch_enhance_record():
             data.get('video_size_gb'),
             data['status'],
             data.get('success_url'),
-            data.get('error_detail')
+            data.get('error_detail'),
+            data.get('downloader_add_result')  # 新字段：下载器添加结果
         )
 
         cursor.execute(sql, params)
@@ -666,7 +667,7 @@ def get_batch_enhance_records():
         # 查询数据
         if db_manager.db_type == "postgresql":
             query = f"""
-                SELECT id, batch_id, torrent_id, source_site, target_site, video_size_gb, status, success_url, error_detail, processed_at
+                SELECT id, batch_id, torrent_id, source_site, target_site, video_size_gb, status, success_url, error_detail, downloader_add_result, processed_at
                 FROM batch_enhance_records
                 {where_clause}
                 ORDER BY processed_at DESC
@@ -676,7 +677,7 @@ def get_batch_enhance_records():
         else:
             placeholder = "?" if db_manager.db_type == "sqlite" else "%s"
             query = f"""
-                SELECT id, batch_id, torrent_id, source_site, target_site, video_size_gb, status, success_url, error_detail, processed_at
+                SELECT id, batch_id, torrent_id, source_site, target_site, video_size_gb, status, success_url, error_detail, downloader_add_result, processed_at
                 FROM batch_enhance_records
                 {where_clause}
                 ORDER BY processed_at DESC

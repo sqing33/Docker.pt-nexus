@@ -313,6 +313,14 @@
                   <span v-else>-</span>
                 </template>
               </el-table-column>
+              <el-table-column prop="downloader_add_result" label="下载器添加状态" width="140" align="center" show-overflow-tooltip>
+                <template #default="scope">
+                  <el-tag v-if="scope.row.downloader_add_result" :type="getDownloaderAddStatusType(scope.row.downloader_add_result)" size="small">
+                    {{ formatDownloaderAddResult(scope.row.downloader_add_result) }}
+                  </el-tag>
+                  <span v-else>-</span>
+                </template>
+              </el-table-column>
               <el-table-column prop="processed_at" label="处理时间" width="160" align="center">
                 <template #default="scope">
                   {{ formatRecordTimeLocal(scope.row.processed_at) }}
@@ -461,6 +469,7 @@ interface SeedRecord {
   status: string
   success_url?: string
   error_detail?: string
+  downloader_add_result?: string
   processed_at: string
 }
 
@@ -1449,6 +1458,24 @@ const getRecordStatusTextLocal = (status: string) => {
     case 'pending': return '等待中'
     default: return '未知'
   }
+}
+
+// 获取下载器添加状态的标签类型
+const getDownloaderAddStatusType = (result: string) => {
+  if (result.startsWith('成功')) return 'success'
+  if (result.startsWith('失败')) return 'danger'
+  return 'info'
+}
+
+// 格式化下载器添加结果显示
+const formatDownloaderAddResult = (result: string) => {
+  if (result.startsWith('成功:')) {
+    return result.substring(3) // 移除 "成功:" 前缀
+  }
+  if (result.startsWith('失败:')) {
+    return result.substring(3) // 移除 "失败:" 前缀
+  }
+  return result
 }
 
 // 格式化记录时间
