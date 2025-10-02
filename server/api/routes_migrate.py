@@ -1241,6 +1241,209 @@ def migrate_publish():
         upload_data["torrent_dir"] = torrent_dir  # 确保上传器能获取到 torrent_dir
         result = migrator.publish_prepared_torrent(upload_data,
                                                    original_torrent_path)
+
+        # 3. 如果发布成功，自动添加到下载器
+        if result.get("success") and result.get("url"):
+            auto_add = data.get("auto_add_to_downloader", True)  # 默认自动添加
+            print(f"[下载器添加] 发布成功, auto_add={auto_add}, url={result.get('url')}")
+
+            if auto_add:
+                # 先获取配置的默认下载器
+                config = config_manager.get()
+                default_downloader = config.get("cross_seed", {}).get("default_downloader")
+
+                # 从请求中获取下载器ID和保存路径
+                downloader_id = data.get("downloaderId") or data.get("downloader_id")
+                save_path = upload_data.get("save_path") or upload_data.get("savePath")
+                print(f"[下载器添加] 初始参数: downloader_id={downloader_id}, save_path={save_path}")
+                print(f"[下载器添加] 配置的默认下载器: {default_downloader}")
+
+                # 判断逻辑:
+                # 1. 如果配置了具体的默认下载器(非空非None),使用它
+                # 2. 如果配置为空或"使用源种子下载器",则从数据库查询源种子的下载器
+                # 3. 无论哪种情况,如果缺少save_path,都尝试从数据库获取
+
+                if default_downloader and default_downloader != "":
+                    # 配置了具体的下载器,使用配置的下载器
+                    downloader_id = default_downloader
+                    print(f"[下载器添加] 使用配置的默认下载器: {downloader_id}")
+
+                    # 如果没有save_path,尝试从数据库获取源种子的save_path
+                    if not save_path:
+                        print(f"[下载器添加] 缺少save_path,从数据库获取源种子的保存路径")
+                        source_torrent_id = context.get("source_torrent_id")
+                        if source_torrent_id and source_site_name:
+                            try:
+                                conn = db_manager._get_connection()
+                                cursor = db_manager._get_cursor(conn)
+                                placeholder = db_manager.get_placeholder()
+                                query = f"SELECT save_path FROM seed_parameters WHERE torrent_id = {placeholder} AND site_name = {placeholder}"
+                                cursor.execute(query, (source_torrent_id, source_site_name))
+                                row = cursor.fetchone()
+                                if row and row['save_path']:
+                                    save_path = row['save_path']
+                                    print(f"[下载器添加] 从数据库获取到保存路径: {save_path}")
+                                else:
+                                    print(f"[下载器添加] 数据库中未找到保存路径")
+                                conn.close()
+                            except Exception as e:
+                                print(f"[下载器添加] 从数据库查询保存路径失败: {e}")
+                else:
+                    # 配置为"使用源种子所在的下载器"或未配置
+                    # 尝试从数据库查询原始种子的下载器和保存路径
+                    print(f"[下载器添加] 配置为使用源种子下载器,从数据库查询")
+                    source_torrent_id = context.get("source_torrent_id")
+                    if source_torrent_id and source_site_name:
+                        try:
+                            conn = db_manager._get_connection()
+                            cursor = db_manager._get_cursor(conn)
+
+                            # 使用 db_manager 的占位符方法
+                            placeholder = db_manager.get_placeholder()
+                            query = f"SELECT downloader_id, save_path FROM seed_parameters WHERE torrent_id = {placeholder} AND site_name = {placeholder}"
+
+                            cursor.execute(query, (source_torrent_id, source_site_name))
+                            row = cursor.fetchone()
+                            if row:
+                                downloader_id = row['downloader_id']
+                                # 同时获取 save_path
+                                if not save_path and row['save_path']:
+                                    save_path = row['save_path']
+                                    print(f"[下载器添加] 从数据库获取到保存路径: {save_path}")
+                                print(f"[下载器添加] 从数据库获取到源种子的下载器ID: {downloader_id}")
+                            else:
+                                print(f"[下载器添加] 数据库中未找到源种子信息")
+                            conn.close()
+                        except Exception as e:
+                            print(f"[下载器添加] 从数据库查询下载器ID失败: {e}")
+
+                    if not downloader_id:
+                        print(f"[下载器添加] 未找到源种子的下载器信息")
+
+                # 调用添加到下载器
+                if save_path and downloader_id:
+                    try:
+                        from utils import add_torrent_to_downloader
+                        print(f"[下载器添加] 准备调用add_torrent_to_downloader: URL={result['url']}, Path={save_path}, DownloaderID={downloader_id}")
+                        success, message = add_torrent_to_downloader(
+                            result["url"],
+                            save_path,
+                            downloader_id,
+                            db_manager,
+                            config_manager
+                        )
+                        result["auto_add_result"] = {
+                            "success": success,
+                            "message": message
+                        }
+                        if success:
+                            print(f"✅ [下载器添加] 成功: {message}")
+                        else:
+                            print(f"❌ [下载器添加] 失败: {message}")
+                    except Exception as e:
+                        print(f"❌ [下载器添加] 异常: {e}")
+                        import traceback
+                        traceback.print_exc()
+                        result["auto_add_result"] = {
+                            "success": False,
+                            "message": f"添加失败: {str(e)}"
+                        }
+                else:
+                    missing = []
+                    if not save_path:
+                        missing.append("save_path")
+                    if not downloader_id:
+                        missing.append("downloader_id")
+                    print(f"⚠️ [下载器添加] 跳过: 缺少参数 {', '.join(missing)}")
+                    result["auto_add_result"] = {
+                        "success": False,
+                        "message": f"缺少必要参数: {', '.join(missing)}"
+                    }
+            else:
+                print(f"[下载器添加] auto_add=False, 跳过自动添加")
+        else:
+            if not result.get("success"):
+                print(f"[下载器添加] 发布失败,跳过下载器添加")
+            elif not result.get("url"):
+                print(f"[下载器添加] 发布成功但未返回URL,跳过下载器添加")
+
+        # 处理批量转种记录 - 创建 batch_enhance_records 表记录
+        batch_id = data.get("batch_id")  # Go端传递的批次ID
+        print(f"\n{'='*80}")
+        print(f"[批量转种记录] 检测到batch_id参数: {batch_id}")
+
+        if batch_id:
+            try:
+                # 从 context 中获取种子信息
+                source_torrent_id = context.get("source_torrent_id")
+                print(f"[批量转种记录] 种子信息: torrent_id={source_torrent_id}, source_site={source_site_name}, target_site={target_site_name}")
+
+                if source_torrent_id and source_site_name and target_site_name:
+                    conn = db_manager._get_connection()
+                    cursor = db_manager._get_cursor(conn)
+
+                    # 准备记录数据
+                    video_size_gb = data.get("video_size_gb")  # Go端可能传递的视频大小
+                    status = "success" if result.get("success") else "failed"
+                    success_url = result.get("url") if result.get("success") else None
+                    error_detail = result.get("logs") if not result.get("success") else None
+
+                    print(f"[批量转种记录] 发布结果: status={status}, success_url={success_url}, video_size_gb={video_size_gb}")
+
+                    # 生成下载器添加结果文本
+                    downloader_result = None
+                    if "auto_add_result" in result:
+                        auto_result = result["auto_add_result"]
+                        print(f"[批量转种记录] 下载器添加结果: {auto_result}")
+                        if auto_result["success"]:
+                            downloader_result = f"成功: {auto_result['message']}"
+                        else:
+                            downloader_result = f"失败: {auto_result['message']}"
+                    else:
+                        print(f"[批量转种记录] ⚠️ 未找到auto_add_result字段")
+                        print(f"[批量转种记录] result所有键: {list(result.keys())}")
+                        print(f"[批量转种记录] result完整内容: {result}")
+
+                    print(f"[批量转种记录] 准备写入数据库: downloader_result={downloader_result}")
+
+                    # 直接插入记录(发布的种子不会先被Go端插入,只有过滤的种子才会)
+                    if db_manager.db_type == "mysql":
+                        insert_sql = """INSERT INTO batch_enhance_records
+                                      (batch_id, torrent_id, source_site, target_site, video_size_gb, status, success_url, error_detail, downloader_add_result)
+                                      VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"""
+                    elif db_manager.db_type == "postgresql":
+                        insert_sql = """INSERT INTO batch_enhance_records
+                                      (batch_id, torrent_id, source_site, target_site, video_size_gb, status, success_url, error_detail, downloader_add_result)
+                                      VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"""
+                    else:  # sqlite
+                        insert_sql = """INSERT INTO batch_enhance_records
+                                      (batch_id, torrent_id, source_site, target_site, video_size_gb, status, success_url, error_detail, downloader_add_result)
+                                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+
+                    print(f"[批量转种记录] 执行SQL插入: batch_id={batch_id}, torrent_id={source_torrent_id}")
+                    cursor.execute(insert_sql, (batch_id, source_torrent_id, source_site_name, target_site_name, video_size_gb, status, success_url, error_detail, downloader_result))
+                    conn.commit()
+                    cursor.close()
+                    conn.close()
+
+                    print(f"✅ [批量转种记录] 成功写入数据库: {source_torrent_id} -> {target_site_name}")
+                    print(f"   状态: {status}")
+                    print(f"   下载器结果: {downloader_result}")
+                else:
+                    print(f"❌ [批量转种记录] 缺少必要的种子信息:")
+                    print(f"   torrent_id={source_torrent_id}")
+                    print(f"   source_site={source_site_name}")
+                    print(f"   target_site={target_site_name}")
+
+            except Exception as e:
+                print(f"❌ [批量转种记录] 记录时出错: {e}")
+                import traceback
+                traceback.print_exc()
+        else:
+            print(f"[批量转种记录] 未检测到batch_id参数,跳过记录到batch_enhance_records表")
+
+        print(f"{'='*80}\n")
+
         return jsonify(result)
 
     except Exception as e:
@@ -1415,6 +1618,53 @@ def validate_media():
             "success": False,
             "error": f"不支持的媒体类型: {media_type}"
         }), 400
+
+
+@migrate_bp.route("/migrate/get_downloader_info", methods=["POST"])
+def get_downloader_info():
+    """获取种子的下载器信息（用于Go服务查询）"""
+    db_manager = migrate_bp.db_manager
+    data = request.json
+
+    torrent_id = data.get("torrent_id")
+    site_name = data.get("site_name")
+
+    if not torrent_id or not site_name:
+        return jsonify({
+            "success": False,
+            "message": "缺少必要参数: torrent_id 或 site_name"
+        }), 400
+
+    try:
+        conn = db_manager._get_connection()
+        cursor = db_manager._get_cursor(conn)
+
+        # 使用 db_manager 的占位符方法
+        placeholder = db_manager.get_placeholder()
+        query = f"SELECT downloader_id, save_path FROM seed_parameters WHERE torrent_id = {placeholder} AND site_name = {placeholder}"
+
+        cursor.execute(query, (torrent_id, site_name))
+        row = cursor.fetchone()
+        conn.close()
+
+        if row:
+            return jsonify({
+                "success": True,
+                "downloader_id": row['downloader_id'],
+                "save_path": row['save_path']
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "message": "未找到该种子信息"
+            }), 404
+
+    except Exception as e:
+        logging.error(f"查询下载器信息失败: {e}", exc_info=True)
+        return jsonify({
+            "success": False,
+            "message": f"数据库查询失败: {str(e)}"
+        }), 500
 
 
 @migrate_bp.route("/migrate/add_to_downloader", methods=["POST"])

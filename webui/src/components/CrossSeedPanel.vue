@@ -1977,9 +1977,14 @@ const handlePublish = async () => {
     try {
       const response = await axios.post('/api/migrate/publish', {
         task_id: taskId.value,
-        upload_data: torrentData.value,
+        upload_data: {
+          ...torrentData.value,
+          save_path: torrent.value.save_path  // 添加 save_path
+        },
         targetSite: siteName,
-        sourceSite: sourceSite.value
+        sourceSite: sourceSite.value,
+        downloaderId: torrent.value.downloaderId,  // 新增：传递下载器ID
+        auto_add_to_downloader: true  // 新增：启用自动添加
       })
 
       const result = {
@@ -2027,24 +2032,26 @@ const handlePublish = async () => {
     message: `成功发布到 ${successCount} / ${selectedTargetSites.value.length} 个站点。`
   })
 
-  logContent.value += '\n\n--- [开始自动添加任务] ---';
+  // 处理自动添加到下载器的结果
+  logContent.value += '\n\n--- [自动添加任务结果] ---';
   const downloaderStatusMap: Record<string, { success: boolean, message: string, downloaderName: string }> = {};
 
-  // Set downloader progress total
-  const successfulResults = results.filter(r => r.success && r.url);
-  downloaderProgress.value.total = successfulResults.length;
-
-  // 并发执行所有添加种子到下载器的请求
-  const downloaderPromises = successfulResults.map(async (result) => {
-    const downloaderStatus = await triggerAddToDownloader(result);
-    downloaderStatusMap[result.siteName] = downloaderStatus;
-    // Update downloader progress
-    downloaderProgress.value.current++
-    return { siteName: result.siteName, status: downloaderStatus };
+  // 从 Python 返回的结果中提取 auto_add_result
+  results.forEach(result => {
+    if (result.auto_add_result) {
+      downloaderStatusMap[result.siteName] = {
+        success: result.auto_add_result.success,
+        message: result.auto_add_result.message,
+        downloaderName: '自动检测'
+      };
+      const statusIcon = result.auto_add_result.success ? '✅' : '❌';
+      const statusText = result.auto_add_result.success ? '成功' : '失败';
+      logContent.value += `\n[${result.siteName}] ${statusIcon} ${statusText}: ${result.auto_add_result.message}`;
+    } else if (result.success && result.url) {
+      // 如果没有 auto_add_result，说明可能跳过了自动添加
+      logContent.value += `\n[${result.siteName}] ⚠️  未执行自动添加`;
+    }
   });
-
-  // 等待所有添加请求完成
-  await Promise.all(downloaderPromises);
   logContent.value += '\n--- [自动添加任务结束] ---';
 
   const siteLogs = results.map(r => {
