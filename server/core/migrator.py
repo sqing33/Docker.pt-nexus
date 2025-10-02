@@ -720,8 +720,6 @@ class TorrentMigrator:
             ardtu_declarations = intro_data.get("removed_ardtudeclarations",
                                                 [])
 
-            print(f"[DEBUG migrator] extracted ardtu_declarations: {ardtu_declarations}")
-
             # 如果海报失效，尝试从豆瓣或IMDb获取新海报
             from utils import upload_data_movie_info
 
@@ -822,8 +820,6 @@ class TorrentMigrator:
                 "douban_link": douban_link,
             }
 
-            print(f"[DEBUG migrator] intro dict ardtu_declarations: {intro.get('removed_ardtudeclarations')}")
-
             # 6. 提取产地信息并添加到source_params中
             full_description_text = f"{intro.get('statement', '')}\n{intro.get('body', '')}"
             origin_info = extract_origin_from_description(
@@ -884,7 +880,8 @@ class TorrentMigrator:
                 if not source_params.get("媒介"):
                     source_params["媒介"] = basic_info_dict.get("媒介")
                 if not source_params.get("视频编码"):
-                    source_params["视频编码"] = basic_info_dict.get("视频编码")
+                    # 优先获取"视频编码"，如果没有则获取"编码"
+                    source_params["视频编码"] = basic_info_dict.get("视频编码") or basic_info_dict.get("编码")
                 if not source_params.get("音频编码"):
                     source_params["音频编码"] = basic_info_dict.get("音频编码")
                 if not source_params.get("分辨率"):
@@ -1093,8 +1090,6 @@ class TorrentMigrator:
                 # 保存被过滤掉的ARDTU声明内容
                 "removed_ardtudeclarations": intro.get("removed_ardtudeclarations", []),
             }
-
-            print(f"[DEBUG migrator] seed_parameters ardtu_declarations: {seed_parameters.get('removed_ardtudeclarations')}")
 
             # 2. 将 standardized_params 中所有标准化的键值对合并进来。
             #    这里的 .get() 会返回 'category.movie' 这样的完整字符串。

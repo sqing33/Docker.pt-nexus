@@ -736,32 +736,53 @@ def get_downloader_info_api():
         conn = db_manager._get_connection()
         cursor = db_manager._get_cursor(conn)
 
-        # 获取累计上传和下载量
+        # 获取累计上传和下载量 - 使用最新的累计值
         cursor.execute(
-            "SELECT downloader_id, SUM(downloaded) as total_dl, SUM(uploaded) as total_ul FROM traffic_stats GROUP BY downloader_id"
+            """SELECT downloader_id,
+                      MAX(cumulative_downloaded) as total_dl,
+                      MAX(cumulative_uploaded) as total_ul
+               FROM traffic_stats
+               WHERE cumulative_downloaded > 0 OR cumulative_uploaded > 0
+               GROUP BY downloader_id"""
         )
         totals = {r["downloader_id"]: dict(r) for r in cursor.fetchall()}
 
-        # 获取今日上传和下载量
+        # 获取今日上传和下载量 - 使用和 InfoView.vue 相同的逻辑，计算今日内的总增量
         from datetime import datetime, timedelta
-        # 使用更可靠的日期查询方式
-        if db_manager.db_type == "mysql":
-            today_query = """SELECT downloader_id, SUM(downloaded) as today_dl, SUM(uploaded) as today_ul 
-                            FROM traffic_stats 
-                            WHERE DATE(stat_datetime) = CURDATE() 
-                            GROUP BY downloader_id"""
+
+        # 查询今日内每个下载器的总增量，类似于 routes_stats.py 中的 chart_data 逻辑
+        if db_manager.db_type == "postgresql":
+            today_query = """SELECT
+                                downloader_id,
+                                GREATEST(0,
+                                    (MAX(cumulative_downloaded) - MIN(cumulative_downloaded))::bigint
+                                ) as today_dl,
+                                GREATEST(0,
+                                    (MAX(cumulative_uploaded) - MIN(cumulative_uploaded))::bigint
+                                ) as today_ul
+                             FROM traffic_stats
+                             WHERE stat_datetime::date = CURRENT_DATE
+                             GROUP BY downloader_id"""
             cursor.execute(today_query)
-        elif db_manager.db_type == "postgresql":
-            today_query = """SELECT downloader_id, SUM(downloaded) as today_dl, SUM(uploaded) as today_ul 
-                            FROM traffic_stats 
-                            WHERE stat_datetime::date = CURRENT_DATE 
-                            GROUP BY downloader_id"""
-            cursor.execute(today_query)
-        else:  # SQLite
-            today_query = """SELECT downloader_id, SUM(downloaded) as today_dl, SUM(uploaded) as today_ul 
-                            FROM traffic_stats 
-                            WHERE DATE(stat_datetime) = DATE('now') 
-                            GROUP BY downloader_id"""
+        else:
+            today_query = """SELECT
+                                downloader_id,
+                                MAX(0,
+                                    MAX(cumulative_downloaded) - MIN(cumulative_downloaded)
+                                ) as today_dl,
+                                MAX(0,
+                                    MAX(cumulative_uploaded) - MIN(cumulative_uploaded)
+                                ) as today_ul
+                             FROM traffic_stats
+                             WHERE """
+
+            # 添加日期条件
+            if db_manager.db_type == "mysql":
+                today_query += "DATE(stat_datetime) = CURDATE()"
+            else:  # SQLite
+                today_query += "DATE(stat_datetime) = DATE('now', 'localtime')"
+
+            today_query += " GROUP BY downloader_id"
             cursor.execute(today_query)
 
         today_stats = {r["downloader_id"]: dict(r) for r in cursor.fetchall()}

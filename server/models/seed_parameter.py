@@ -229,12 +229,10 @@ class SeedParameter:
 
             # 处理removed_ardtudeclarations字段（列表转换为字符串）
             removed_ardtudeclarations = parameters.get("removed_ardtudeclarations", [])
-            print(f"[DEBUG seed_parameter] Input removed_ardtudeclarations: {removed_ardtudeclarations}")
             if isinstance(removed_ardtudeclarations, list):
                 removed_ardtudeclarations = json.dumps(removed_ardtudeclarations, ensure_ascii=False)
             else:
                 removed_ardtudeclarations = str(removed_ardtudeclarations) if removed_ardtudeclarations else ""
-            print(f"[DEBUG seed_parameter] JSON stringified removed_ardtudeclarations: {removed_ardtudeclarations}")
 
             params = (hash, torrent_id, site_name,
                       parameters.get("nickname",

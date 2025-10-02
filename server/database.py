@@ -57,227 +57,9 @@ class DatabaseManager:
             conn.row_factory = sqlite3.Row
             return conn.cursor()
 
-    def _run_schema_migrations(self, conn, cursor):
-        """检查并执行必要的数据库结构变更。"""
-        logging.info("正在运行数据库结构迁移检查...")
 
-        # --- 迁移 downloader_clients 表 ---
-        table_name = 'downloader_clients'
-        # 获取当前表的列信息
-        if self.db_type == 'mysql':
-            cursor.execute(f"DESCRIBE {table_name}")
-            columns = {row['Field'].lower() for row in cursor.fetchall()}
-        elif self.db_type == 'postgresql':
-            cursor.execute(
-                "SELECT column_name FROM information_schema.columns WHERE table_name = %s AND table_schema = 'public'",
-                (table_name, ))
-            columns = {row['column_name'].lower() for row in cursor.fetchall()}
-        else:  # sqlite
-            cursor.execute(f"PRAGMA table_info({table_name})")
-            columns = {row['name'].lower() for row in cursor.fetchall()}
-
-        # 检查是否需要新的统一列
-        if 'last_total_dl' not in columns:
-            logging.info(
-                f"在 '{table_name}' 表中添加 'last_total_dl' 和 'last_total_ul' 列..."
-            )
-            if self.db_type == 'mysql':
-                cursor.execute(
-                    f"ALTER TABLE {table_name} ADD COLUMN last_total_dl BIGINT NOT NULL DEFAULT 0"
-                )
-                cursor.execute(
-                    f"ALTER TABLE {table_name} ADD COLUMN last_total_ul BIGINT NOT NULL DEFAULT 0"
-                )
-            else:
-                cursor.execute(
-                    f"ALTER TABLE {table_name} ADD COLUMN last_total_dl INTEGER NOT NULL DEFAULT 0"
-                )
-                cursor.execute(
-                    f"ALTER TABLE {table_name} ADD COLUMN last_total_ul INTEGER NOT NULL DEFAULT 0"
-                )
-            conn.commit()
-            logging.info("新列添加成功。")
-
-        # 检查并移除旧的、不再使用的列
-        old_columns_to_drop = [
-            'last_session_dl', 'last_session_ul', 'last_cumulative_dl',
-            'last_cumulative_ul'
-        ]
-        for col in old_columns_to_drop:
-            if col in columns:
-                logging.info(f"正在从 '{table_name}' 表中移除已过时的列: '{col}'...")
-                # SQLite 在较新版本才支持 DROP COLUMN，MySQL 支持
-                if self.db_type == 'mysql':
-                    cursor.execute(
-                        f"ALTER TABLE {table_name} DROP COLUMN {col}")
-                else:
-                    # 对于 SQLite，需要重建表的复杂操作在这里不演示，
-                    # 较新版本 (3.35.0+) 直接支持 DROP COLUMN
-                    cursor.execute(
-                        f"ALTER TABLE {table_name} DROP COLUMN {col}")
-                conn.commit()
-                logging.info(f"'{col}' 列移除成功。")
-
-        # --- 迁移 seed_parameters 表，添加 nickname 列 ---
-        table_name = 'seed_parameters'
-        # 获取当前表的列信息
-        if self.db_type == 'mysql':
-            cursor.execute(f"DESCRIBE {table_name}")
-            columns = {row['Field'].lower() for row in cursor.fetchall()}
-        elif self.db_type == 'postgresql':
-            cursor.execute(
-                "SELECT column_name FROM information_schema.columns WHERE table_name = %s AND table_schema = 'public'",
-                (table_name, ))
-            columns = {row['column_name'].lower() for row in cursor.fetchall()}
-        else:  # sqlite
-            cursor.execute(f"PRAGMA table_info({table_name})")
-            columns = {row['name'].lower() for row in cursor.fetchall()}
-
-        # 检查是否需要添加 nickname 列
-        if 'nickname' not in columns:
-            logging.info(f"在 '{table_name}' 表中添加 'nickname' 列...")
-            if self.db_type == 'mysql':
-                cursor.execute(
-                    f"ALTER TABLE {table_name} ADD COLUMN nickname VARCHAR(255)"
-                )
-            elif self.db_type == 'postgresql':
-                cursor.execute(
-                    f"ALTER TABLE {table_name} ADD COLUMN nickname VARCHAR(255)"
-                )
-            else:  # sqlite
-                cursor.execute(
-                    f"ALTER TABLE {table_name} ADD COLUMN nickname TEXT")
-            conn.commit()
-            logging.info("'nickname' 列添加成功。")
-
-        # 检查是否需要添加 is_deleted 列
-        if 'is_deleted' not in columns:
-            logging.info(f"在 '{table_name}' 表中添加 'is_deleted' 列...")
-            if self.db_type == 'mysql':
-                cursor.execute(
-                    f"ALTER TABLE {table_name} ADD COLUMN is_deleted TINYINT(1) NOT NULL DEFAULT 0"
-                )
-            elif self.db_type == 'postgresql':
-                cursor.execute(
-                    f"ALTER TABLE {table_name} ADD COLUMN is_deleted BOOLEAN NOT NULL DEFAULT FALSE"
-                )
-            else:  # sqlite
-                cursor.execute(
-                    f"ALTER TABLE {table_name} ADD COLUMN is_deleted INTEGER NOT NULL DEFAULT 0")
-            conn.commit()
-            logging.info("'is_deleted' 列添加成功。")
-
-        # 检查是否需要添加 downloader_id 列
-        if 'downloader_id' not in columns:
-            logging.info(f"在 '{table_name}' 表中添加 'downloader_id' 列...")
-            if self.db_type == 'mysql':
-                cursor.execute(
-                    f"ALTER TABLE {table_name} ADD COLUMN downloader_id VARCHAR(36) NULL"
-                )
-            elif self.db_type == 'postgresql':
-                cursor.execute(
-                    f"ALTER TABLE {table_name} ADD COLUMN downloader_id VARCHAR(36) NULL"
-                )
-            else:  # sqlite
-                cursor.execute(
-                    f"ALTER TABLE {table_name} ADD COLUMN downloader_id TEXT NULL")
-            conn.commit()
-            logging.info("'downloader_id' 列添加成功。")
-
-    def _migrate_torrents_table(self, conn, cursor):
-        """检查并向 torrents 表添加 downloader_id 和 iyuu_last_check 列。"""
-        table_name = 'torrents'
-        if self.db_type == 'mysql':
-            cursor.execute(f"DESCRIBE {table_name}")
-            columns = {row['Field'].lower() for row in cursor.fetchall()}
-        elif self.db_type == 'postgresql':
-            cursor.execute(
-                "SELECT column_name FROM information_schema.columns WHERE table_name = %s AND table_schema = 'public'",
-                (table_name, ))
-            columns = {row['column_name'].lower() for row in cursor.fetchall()}
-        else:  # sqlite
-            cursor.execute(f"PRAGMA table_info({table_name})")
-            columns = {row['name'].lower() for row in cursor.fetchall()}
-
-        if 'downloader_id' not in columns:
-            logging.info(f"正在向 '{table_name}' 表添加 'downloader_id' 列...")
-            if self.db_type == 'mysql':
-                cursor.execute(
-                    f"ALTER TABLE {table_name} ADD COLUMN downloader_id VARCHAR(36) NULL"
-                )
-            else:
-                cursor.execute(
-                    f"ALTER TABLE {table_name} ADD COLUMN downloader_id TEXT NULL"
-                )
-            conn.commit()
-            logging.info("'downloader_id' 列添加成功。")
-
-        if 'iyuu_last_check' not in columns:
-            logging.info(f"正在向 '{table_name}' 表添加 'iyuu_last_check' 列...")
-            if self.db_type == 'mysql':
-                cursor.execute(
-                    f"ALTER TABLE {table_name} ADD COLUMN iyuu_last_check DATETIME NULL"
-                )
-            elif self.db_type == 'postgresql':
-                cursor.execute(
-                    f"ALTER TABLE {table_name} ADD COLUMN iyuu_last_check TIMESTAMP NULL"
-                )
-            else:  # sqlite
-                cursor.execute(
-                    f"ALTER TABLE {table_name} ADD COLUMN iyuu_last_check TEXT NULL"
-                )
-            conn.commit()
-            logging.info("'iyuu_last_check' 列添加成功。")
-
-        # --- 迁移/创建 batch_enhance_records 表 ---
-        batch_records_table = 'batch_enhance_records'
-
-        # 检查batch_enhance_records表是否存在
-        table_exists = False
-        if self.db_type == 'mysql':
-            cursor.execute("SHOW TABLES LIKE %s", (batch_records_table,))
-            table_exists = cursor.fetchone() is not None
-        elif self.db_type == 'postgresql':
-            cursor.execute(
-                "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = %s AND table_schema = 'public')",
-                (batch_records_table,)
-            )
-            result = cursor.fetchone()
-            table_exists = result[0] if isinstance(result, tuple) else result['exists']
-        else:  # sqlite
-            cursor.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
-                (batch_records_table,)
-            )
-            table_exists = cursor.fetchone() is not None
-
-        # 如果表不存在，创建它
-        if not table_exists:
-            logging.info(f"批量转种记录表 '{batch_records_table}' 不存在，正在创建...")
-            if self.db_type == 'mysql':
-                cursor.execute(
-                    "CREATE TABLE batch_enhance_records (id INT AUTO_INCREMENT PRIMARY KEY, batch_id VARCHAR(255) NOT NULL, torrent_id VARCHAR(255) NOT NULL, source_site VARCHAR(255) NOT NULL, target_site VARCHAR(255) NOT NULL, video_size_gb DECIMAL(8,2), status VARCHAR(50) NOT NULL, success_url TEXT, error_detail TEXT, processed_at DATETIME DEFAULT CURRENT_TIMESTAMP, INDEX idx_batch_records_batch_id (batch_id), INDEX idx_batch_records_torrent_id (torrent_id), INDEX idx_batch_records_status (status), INDEX idx_batch_records_processed_at (processed_at)) ENGINE=InnoDB ROW_FORMAT=DYNAMIC"
-                )
-            elif self.db_type == 'postgresql':
-                cursor.execute(
-                    "CREATE TABLE batch_enhance_records (id SERIAL PRIMARY KEY, batch_id VARCHAR(255) NOT NULL, torrent_id VARCHAR(255) NOT NULL, source_site VARCHAR(255) NOT NULL, target_site VARCHAR(255) NOT NULL, video_size_gb DECIMAL(8,2), status VARCHAR(50) NOT NULL, success_url TEXT, error_detail TEXT, processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
-                )
-                cursor.execute("CREATE INDEX IF NOT EXISTS idx_batch_records_batch_id ON batch_enhance_records(batch_id)")
-                cursor.execute("CREATE INDEX IF NOT EXISTS idx_batch_records_torrent_id ON batch_enhance_records(torrent_id)")
-                cursor.execute("CREATE INDEX IF NOT EXISTS idx_batch_records_status ON batch_enhance_records(status)")
-                cursor.execute("CREATE INDEX IF NOT EXISTS idx_batch_records_processed_at ON batch_enhance_records(processed_at)")
-            else:  # sqlite
-                cursor.execute(
-                    "CREATE TABLE batch_enhance_records (id INTEGER PRIMARY KEY AUTOINCREMENT, batch_id TEXT NOT NULL, torrent_id TEXT NOT NULL, source_site TEXT NOT NULL, target_site TEXT NOT NULL, video_size_gb REAL, status TEXT NOT NULL, success_url TEXT, error_detail TEXT, processed_at TEXT DEFAULT CURRENT_TIMESTAMP)"
-                )
-                cursor.execute("CREATE INDEX IF NOT EXISTS idx_batch_records_batch_id ON batch_enhance_records(batch_id)")
-                cursor.execute("CREATE INDEX IF NOT EXISTS idx_batch_records_torrent_id ON batch_enhance_records(torrent_id)")
-                cursor.execute("CREATE INDEX IF NOT EXISTS idx_batch_records_status ON batch_enhance_records(status)")
-                cursor.execute("CREATE INDEX IF NOT EXISTS idx_batch_records_processed_at ON batch_enhance_records(processed_at)")
-
-            conn.commit()
-            logging.info(f"批量转种记录表 '{batch_records_table}' 创建成功。")
-
+    
+        
     def get_placeholder(self):
         """返回数据库类型对应的正确参数占位符。"""
         return "%s" if self.db_type in ["mysql", "postgresql"] else "?"
@@ -430,73 +212,7 @@ class DatabaseManager:
             cursor.close()
             conn.close()
 
-    def _add_missing_columns(self, conn, cursor):
-        """检查并向 sites 表添加缺失的列，实现自动化的数据库迁移。"""
-        logging.info("正在检查 'sites' 表的结构完整性...")
-        columns_to_add = [
-            ("cookie", "TEXT", "TEXT"), ("passkey", "TEXT", "VARCHAR(255)"),
-            ("migration", "INTEGER DEFAULT 0", "TINYINT DEFAULT 0"),
-            ("proxy", "INTEGER NOT NULL DEFAULT 0",
-             "TINYINT NOT NULL DEFAULT 0"),
-            ("speed_limit", "INTEGER DEFAULT 0", "INTEGER DEFAULT 0")
-        ]
-
-        if self.db_type == "mysql":
-            meta_cursor = conn.cursor()
-            meta_cursor.execute(
-                "SELECT column_name FROM INFORMATION_SCHEMA.COLUMNS WHERE table_schema = %s AND table_name = 'sites'",
-                (self.mysql_config.get("database"), ),
-            )
-            existing_columns = {
-                row[0].lower()
-                for row in meta_cursor.fetchall()
-            }
-            meta_cursor.close()
-            for col_name, _, mysql_type in columns_to_add:
-                if col_name.lower() not in existing_columns:
-                    logging.info(
-                        f"在 MySQL 'sites' 表中发现缺失列: '{col_name}'。正在添加...")
-                    cursor.execute(
-                        f"ALTER TABLE `sites` ADD COLUMN `{col_name}` {mysql_type}"
-                    )
-        elif self.db_type == "postgresql":
-            meta_cursor = conn.cursor(cursor_factory=RealDictCursor)
-            meta_cursor.execute(
-                "SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'sites'"
-            )
-            existing_columns = {
-                row["column_name"].lower()
-                for row in meta_cursor.fetchall()
-            }
-            meta_cursor.close()
-            for col_name, _, mysql_type in columns_to_add:
-                if col_name.lower() not in existing_columns:
-                    # PostgreSQL type mappings
-                    postgresql_type = {
-                        "TINYINT DEFAULT 0":
-                        "SMALLINT DEFAULT 0",
-                        "TINYINT NOT NULL DEFAULT 0":
-                        "SMALLINT NOT NULL DEFAULT 0",
-                    }.get(mysql_type, mysql_type)
-                    logging.info(
-                        f"在 PostgreSQL 'sites' 表中发现缺失列: '{col_name}'。正在添加...")
-                    cursor.execute(
-                        f"ALTER TABLE sites ADD COLUMN {col_name} {postgresql_type}"
-                    )
-        else:  # SQLite
-            cursor.execute("PRAGMA table_info(sites)")
-            existing_columns = {
-                row["name"].lower()
-                for row in cursor.fetchall()
-            }
-            for col_name, sqlite_type, _ in columns_to_add:
-                if col_name.lower() not in existing_columns:
-                    logging.info(
-                        f"在 SQLite 'sites' 表中发现缺失列: '{col_name}'。正在添加...")
-                    cursor.execute(
-                        f"ALTER TABLE sites ADD COLUMN {col_name} {sqlite_type}"
-                    )
-
+    
     def sync_sites_from_json(self):
         """从 sites_data.json 同步站点数据到数据库"""
         try:
@@ -653,11 +369,11 @@ class DatabaseManager:
         # 表创建逻辑 (MySQL)
         if self.db_type == "mysql":
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS traffic_stats (stat_datetime DATETIME NOT NULL, downloader_id VARCHAR(36) NOT NULL, uploaded BIGINT DEFAULT 0, downloaded BIGINT DEFAULT 0, upload_speed BIGINT DEFAULT 0, download_speed BIGINT DEFAULT 0, PRIMARY KEY (stat_datetime, downloader_id)) ENGINE=InnoDB ROW_FORMAT=Dynamic"
+                "CREATE TABLE IF NOT EXISTS traffic_stats (stat_datetime DATETIME NOT NULL, downloader_id VARCHAR(36) NOT NULL, uploaded BIGINT DEFAULT 0, downloaded BIGINT DEFAULT 0, upload_speed BIGINT DEFAULT 0, download_speed BIGINT DEFAULT 0, cumulative_uploaded BIGINT NOT NULL DEFAULT 0, cumulative_downloaded BIGINT NOT NULL DEFAULT 0, PRIMARY KEY (stat_datetime, downloader_id)) ENGINE=InnoDB ROW_FORMAT=Dynamic"
             )
             # 创建小时聚合表 (MySQL)
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS traffic_stats_hourly (stat_datetime DATETIME NOT NULL, downloader_id VARCHAR(36) NOT NULL, uploaded BIGINT DEFAULT 0, downloaded BIGINT DEFAULT 0, avg_upload_speed BIGINT DEFAULT 0, avg_download_speed BIGINT DEFAULT 0, samples INTEGER DEFAULT 0, PRIMARY KEY (stat_datetime, downloader_id)) ENGINE=InnoDB ROW_FORMAT=Dynamic"
+                "CREATE TABLE IF NOT EXISTS traffic_stats_hourly (stat_datetime DATETIME NOT NULL, downloader_id VARCHAR(36) NOT NULL, uploaded BIGINT DEFAULT 0, downloaded BIGINT DEFAULT 0, avg_upload_speed BIGINT DEFAULT 0, avg_download_speed BIGINT DEFAULT 0, samples INTEGER DEFAULT 0, cumulative_uploaded BIGINT NOT NULL DEFAULT 0, cumulative_downloaded BIGINT NOT NULL DEFAULT 0, PRIMARY KEY (stat_datetime, downloader_id)) ENGINE=InnoDB ROW_FORMAT=Dynamic"
             )
             cursor.execute(
                 "CREATE TABLE IF NOT EXISTS downloader_clients (id VARCHAR(36) PRIMARY KEY, name VARCHAR(255) NOT NULL, type VARCHAR(50) NOT NULL, last_total_dl BIGINT NOT NULL DEFAULT 0, last_total_ul BIGINT NOT NULL DEFAULT 0) ENGINE=InnoDB ROW_FORMAT=Dynamic"
@@ -669,7 +385,7 @@ class DatabaseManager:
                 "CREATE TABLE IF NOT EXISTS torrent_upload_stats (hash VARCHAR(40) NOT NULL, downloader_id VARCHAR(36) NOT NULL, uploaded BIGINT DEFAULT 0, PRIMARY KEY (hash, downloader_id)) ENGINE=InnoDB ROW_FORMAT=Dynamic"
             )
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS `sites` (`id` mediumint NOT NULL AUTO_INCREMENT, `site` varchar(255) UNIQUE DEFAULT NULL, `nickname` varchar(255) DEFAULT NULL, `base_url` varchar(255) DEFAULT NULL, `special_tracker_domain` varchar(255) DEFAULT NULL, `group` varchar(255) DEFAULT NULL, `cookie` TEXT DEFAULT NULL,`passkey` varchar(255) DEFAULT NULL,`migration` int(11) NOT NULL DEFAULT 1, `speed_limit` int(11) NOT NULL DEFAULT 0, PRIMARY KEY (`id`)) ENGINE=InnoDB ROW_FORMAT=DYNAMIC"
+                "CREATE TABLE IF NOT EXISTS `sites` (`id` mediumint NOT NULL AUTO_INCREMENT, `site` varchar(255) UNIQUE DEFAULT NULL, `nickname` varchar(255) DEFAULT NULL, `base_url` varchar(255) DEFAULT NULL, `special_tracker_domain` varchar(255) DEFAULT NULL, `group` varchar(255) DEFAULT NULL, `cookie` TEXT DEFAULT NULL, `passkey` varchar(255) DEFAULT NULL,`migration` int(11) NOT NULL DEFAULT 1, `proxy` TINYINT(1) NOT NULL DEFAULT 0, `speed_limit` int(11) NOT NULL DEFAULT 0, PRIMARY KEY (`id`)) ENGINE=InnoDB ROW_FORMAT=DYNAMIC"
             )
             # 创建种子参数表，用于存储从源站点提取的种子参数
             cursor.execute(
@@ -682,11 +398,11 @@ class DatabaseManager:
         # 表创建逻辑 (PostgreSQL)
         elif self.db_type == "postgresql":
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS traffic_stats (stat_datetime TIMESTAMP NOT NULL, downloader_id VARCHAR(36) NOT NULL, uploaded BIGINT DEFAULT 0, downloaded BIGINT DEFAULT 0, upload_speed BIGINT DEFAULT 0, download_speed BIGINT DEFAULT 0, PRIMARY KEY (stat_datetime, downloader_id))"
+                "CREATE TABLE IF NOT EXISTS traffic_stats (stat_datetime TIMESTAMP NOT NULL, downloader_id VARCHAR(36) NOT NULL, uploaded BIGINT DEFAULT 0, downloaded BIGINT DEFAULT 0, upload_speed BIGINT DEFAULT 0, download_speed BIGINT DEFAULT 0, cumulative_uploaded BIGINT NOT NULL DEFAULT 0, cumulative_downloaded BIGINT NOT NULL DEFAULT 0, PRIMARY KEY (stat_datetime, downloader_id))"
             )
             # 创建小时聚合表 (PostgreSQL)
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS traffic_stats_hourly (stat_datetime TIMESTAMP NOT NULL, downloader_id VARCHAR(36) NOT NULL, uploaded BIGINT DEFAULT 0, downloaded BIGINT DEFAULT 0, avg_upload_speed BIGINT DEFAULT 0, avg_download_speed BIGINT DEFAULT 0, samples INTEGER DEFAULT 0, PRIMARY KEY (stat_datetime, downloader_id))"
+                "CREATE TABLE IF NOT EXISTS traffic_stats_hourly (stat_datetime TIMESTAMP NOT NULL, downloader_id VARCHAR(36) NOT NULL, uploaded BIGINT DEFAULT 0, downloaded BIGINT DEFAULT 0, avg_upload_speed BIGINT DEFAULT 0, avg_download_speed BIGINT DEFAULT 0, samples INTEGER DEFAULT 0, cumulative_uploaded BIGINT NOT NULL DEFAULT 0, cumulative_downloaded BIGINT NOT NULL DEFAULT 0, PRIMARY KEY (stat_datetime, downloader_id))"
             )
             cursor.execute(
                 "CREATE TABLE IF NOT EXISTS downloader_clients (id VARCHAR(36) PRIMARY KEY, name VARCHAR(255) NOT NULL, type VARCHAR(50) NOT NULL, last_total_dl BIGINT NOT NULL DEFAULT 0, last_total_ul BIGINT NOT NULL DEFAULT 0)"
@@ -698,7 +414,7 @@ class DatabaseManager:
                 "CREATE TABLE IF NOT EXISTS torrent_upload_stats (hash VARCHAR(40) NOT NULL, downloader_id VARCHAR(36) NOT NULL, uploaded BIGINT DEFAULT 0, PRIMARY KEY (hash, downloader_id))"
             )
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS sites (id SERIAL PRIMARY KEY, site VARCHAR(255) UNIQUE, nickname VARCHAR(255), base_url VARCHAR(255), special_tracker_domain VARCHAR(255), \"group\" VARCHAR(255), cookie TEXT, passkey VARCHAR(255), migration INTEGER NOT NULL DEFAULT 1, speed_limit INTEGER NOT NULL DEFAULT 0)"
+                "CREATE TABLE IF NOT EXISTS sites (id SERIAL PRIMARY KEY, site VARCHAR(255) UNIQUE, nickname VARCHAR(255), base_url VARCHAR(255), special_tracker_domain VARCHAR(255), \"group\" VARCHAR(255), cookie TEXT, passkey VARCHAR(255), migration INTEGER NOT NULL DEFAULT 1, proxy SMALLINT NOT NULL DEFAULT 0, speed_limit INTEGER NOT NULL DEFAULT 0)"
             )
             # 创建种子参数表，用于存储从源站点提取的种子参数
             cursor.execute(
@@ -715,11 +431,11 @@ class DatabaseManager:
         # 表创建逻辑 (SQLite)
         else:
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS traffic_stats (stat_datetime TEXT NOT NULL, downloader_id TEXT NOT NULL, uploaded INTEGER DEFAULT 0, downloaded INTEGER DEFAULT 0, upload_speed INTEGER DEFAULT 0, download_speed INTEGER DEFAULT 0, PRIMARY KEY (stat_datetime, downloader_id))"
+                "CREATE TABLE IF NOT EXISTS traffic_stats (stat_datetime TEXT NOT NULL, downloader_id TEXT NOT NULL, uploaded INTEGER DEFAULT 0, downloaded INTEGER DEFAULT 0, upload_speed INTEGER DEFAULT 0, download_speed INTEGER DEFAULT 0, cumulative_uploaded INTEGER NOT NULL DEFAULT 0, cumulative_downloaded INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (stat_datetime, downloader_id))"
             )
             # 创建小时聚合表 (SQLite)
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS traffic_stats_hourly (stat_datetime TEXT NOT NULL, downloader_id TEXT NOT NULL, uploaded INTEGER DEFAULT 0, downloaded INTEGER DEFAULT 0, avg_upload_speed INTEGER DEFAULT 0, avg_download_speed INTEGER DEFAULT 0, samples INTEGER DEFAULT 0, PRIMARY KEY (stat_datetime, downloader_id))"
+                "CREATE TABLE IF NOT EXISTS traffic_stats_hourly (stat_datetime TEXT NOT NULL, downloader_id TEXT NOT NULL, uploaded INTEGER DEFAULT 0, downloaded INTEGER DEFAULT 0, avg_upload_speed INTEGER DEFAULT 0, avg_download_speed INTEGER DEFAULT 0, samples INTEGER DEFAULT 0, cumulative_uploaded INTEGER NOT NULL DEFAULT 0, cumulative_downloaded INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (stat_datetime, downloader_id))"
             )
             cursor.execute(
                 "CREATE TABLE IF NOT EXISTS downloader_clients (id TEXT PRIMARY KEY, name TEXT NOT NULL, type TEXT NOT NULL, last_total_dl INTEGER NOT NULL DEFAULT 0, last_total_ul INTEGER NOT NULL DEFAULT 0)"
@@ -731,7 +447,7 @@ class DatabaseManager:
                 "CREATE TABLE IF NOT EXISTS torrent_upload_stats (hash TEXT NOT NULL, downloader_id TEXT NOT NULL, uploaded INTEGER DEFAULT 0, PRIMARY KEY (hash, downloader_id))"
             )
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS sites (id INTEGER PRIMARY KEY AUTOINCREMENT, site TEXT UNIQUE, nickname TEXT, base_url TEXT, special_tracker_domain TEXT, `group` TEXT, cookie TEXT, passkey TEXT, migration INTEGER NOT NULL DEFAULT 1, speed_limit INTEGER NOT NULL DEFAULT 0)"
+                "CREATE TABLE IF NOT EXISTS sites (id INTEGER PRIMARY KEY AUTOINCREMENT, site TEXT UNIQUE, nickname TEXT, base_url TEXT, special_tracker_domain TEXT, `group` TEXT, cookie TEXT, passkey TEXT, migration INTEGER NOT NULL DEFAULT 1, proxy INTEGER NOT NULL DEFAULT 0, speed_limit INTEGER NOT NULL DEFAULT 0)"
             )
             # 创建种子参数表，用于存储从源站点提取的种子参数
             cursor.execute(
@@ -746,10 +462,6 @@ class DatabaseManager:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_batch_records_status ON batch_enhance_records(status)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_batch_records_processed_at ON batch_enhance_records(processed_at)")
 
-        conn.commit()
-        self._migrate_torrents_table(conn, cursor)
-        self._run_schema_migrations(conn, cursor)
-        self._add_missing_columns(conn, cursor)
         conn.commit()
 
         # 同步站点数据
@@ -807,19 +519,35 @@ class DatabaseManager:
                 time_group_fn = "STRFTIME('%Y-%m-%d %H:00:00', stat_datetime)"
 
             # 执行聚合查询：从原始表中按小时分组计算聚合值
-            aggregate_query = f"""
-                SELECT 
-                    {time_group_fn} AS hour_group,
-                    downloader_id,
-                    SUM(uploaded) AS total_uploaded,
-                    SUM(downloaded) AS total_downloaded,
-                    AVG(upload_speed) AS avg_upload_speed,
-                    AVG(download_speed) AS avg_download_speed,
-                    COUNT(*) AS samples
-                FROM traffic_stats 
-                WHERE stat_datetime < {ph}
-                GROUP BY hour_group, downloader_id
-            """
+            # 对于累计存储方式，我们需要计算每个时间段的累计值差值作为该时间段的流量
+            if self.db_type == "postgresql":
+                aggregate_query = f"""
+                    SELECT
+                        {time_group_fn} AS hour_group,
+                        downloader_id,
+                        GREATEST(0, (MAX(cumulative_uploaded) - MIN(cumulative_uploaded))::bigint) AS total_uploaded,
+                        GREATEST(0, (MAX(cumulative_downloaded) - MIN(cumulative_downloaded))::bigint) AS total_downloaded,
+                        AVG(upload_speed) AS avg_upload_speed,
+                        AVG(download_speed) AS avg_download_speed,
+                        COUNT(*) AS samples
+                    FROM traffic_stats
+                    WHERE stat_datetime < {ph}
+                    GROUP BY hour_group, downloader_id
+                """
+            else:
+                aggregate_query = f"""
+                    SELECT
+                        {time_group_fn} AS hour_group,
+                        downloader_id,
+                        MAX(0, MAX(cumulative_uploaded) - MIN(cumulative_uploaded)) AS total_uploaded,
+                        MAX(0, MAX(cumulative_downloaded) - MIN(cumulative_downloaded)) AS total_downloaded,
+                        AVG(upload_speed) AS avg_upload_speed,
+                        AVG(download_speed) AS avg_download_speed,
+                        COUNT(*) AS samples
+                    FROM traffic_stats
+                    WHERE stat_datetime < {ph}
+                    GROUP BY hour_group, downloader_id
+                """
 
             cursor.execute(aggregate_query, (cutoff_time_str, ))
             aggregated_rows = cursor.fetchall()
@@ -834,56 +562,96 @@ class DatabaseManager:
             # 使用 UPSERT 机制处理重复数据
             if self.db_type == "mysql":
                 upsert_sql = f"""
-                    INSERT INTO traffic_stats_hourly 
-                    (stat_datetime, downloader_id, uploaded, downloaded, avg_upload_speed, avg_download_speed, samples)
-                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+                    INSERT INTO traffic_stats_hourly
+                    (stat_datetime, downloader_id, uploaded, downloaded, avg_upload_speed, avg_download_speed, samples, cumulative_uploaded, cumulative_downloaded)
+                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
                     ON DUPLICATE KEY UPDATE
                     uploaded = uploaded + VALUES(uploaded),
                     downloaded = downloaded + VALUES(downloaded),
                     avg_upload_speed = ((avg_upload_speed * samples) + (VALUES(avg_upload_speed) * VALUES(samples))) / (samples + VALUES(samples)),
                     avg_download_speed = ((avg_download_speed * samples) + (VALUES(avg_download_speed) * VALUES(samples))) / (samples + VALUES(samples)),
-                    samples = samples + VALUES(samples)
+                    samples = samples + VALUES(samples),
+                    cumulative_uploaded = GREATEST(cumulative_uploaded, VALUES(cumulative_uploaded)),
+                    cumulative_downloaded = GREATEST(cumulative_downloaded, VALUES(cumulative_downloaded))
                 """
             elif self.db_type == "postgresql":
                 upsert_sql = f"""
-                    INSERT INTO traffic_stats_hourly 
-                    (stat_datetime, downloader_id, uploaded, downloaded, avg_upload_speed, avg_download_speed, samples)
-                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
-                    ON CONFLICT (stat_datetime, downloader_id) 
+                    INSERT INTO traffic_stats_hourly
+                    (stat_datetime, downloader_id, uploaded, downloaded, avg_upload_speed, avg_download_speed, samples, cumulative_uploaded, cumulative_downloaded)
+                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+                    ON CONFLICT (stat_datetime, downloader_id)
                     DO UPDATE SET
                     uploaded = traffic_stats_hourly.uploaded + EXCLUDED.uploaded,
                     downloaded = traffic_stats_hourly.downloaded + EXCLUDED.downloaded,
                     avg_upload_speed = ((traffic_stats_hourly.avg_upload_speed * traffic_stats_hourly.samples) + (EXCLUDED.avg_upload_speed * EXCLUDED.samples)) / (traffic_stats_hourly.samples + EXCLUDED.samples),
                     avg_download_speed = ((traffic_stats_hourly.avg_download_speed * traffic_stats_hourly.samples) + (EXCLUDED.avg_download_speed * EXCLUDED.samples)) / (traffic_stats_hourly.samples + EXCLUDED.samples),
-                    samples = traffic_stats_hourly.samples + EXCLUDED.samples
+                    samples = traffic_stats_hourly.samples + EXCLUDED.samples,
+                    cumulative_uploaded = GREATEST(traffic_stats_hourly.cumulative_uploaded, EXCLUDED.cumulative_uploaded),
+                    cumulative_downloaded = GREATEST(traffic_stats_hourly.cumulative_downloaded, EXCLUDED.cumulative_downloaded)
                 """
             else:  # sqlite
                 upsert_sql = f"""
-                    INSERT INTO traffic_stats_hourly 
-                    (stat_datetime, downloader_id, uploaded, downloaded, avg_upload_speed, avg_download_speed, samples)
-                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
-                    ON CONFLICT (stat_datetime, downloader_id) 
+                    INSERT INTO traffic_stats_hourly
+                    (stat_datetime, downloader_id, uploaded, downloaded, avg_upload_speed, avg_download_speed, samples, cumulative_uploaded, cumulative_downloaded)
+                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+                    ON CONFLICT (stat_datetime, downloader_id)
                     DO UPDATE SET
                     uploaded = traffic_stats_hourly.uploaded + excluded.uploaded,
                     downloaded = traffic_stats_hourly.downloaded + excluded.downloaded,
                     avg_upload_speed = ((traffic_stats_hourly.avg_upload_speed * traffic_stats_hourly.samples) + (excluded.avg_upload_speed * excluded.samples)) / (traffic_stats_hourly.samples + excluded.samples),
                     avg_download_speed = ((traffic_stats_hourly.avg_download_speed * traffic_stats_hourly.samples) + (excluded.avg_download_speed * excluded.samples)) / (traffic_stats_hourly.samples + excluded.samples),
-                    samples = traffic_stats_hourly.samples + excluded.samples
+                    samples = traffic_stats_hourly.samples + excluded.samples,
+                    cumulative_uploaded = MAX(traffic_stats_hourly.cumulative_uploaded, excluded.cumulative_uploaded),
+                    cumulative_downloaded = MAX(traffic_stats_hourly.cumulative_downloaded, excluded.cumulative_downloaded)
                 """
+
+            # 准备插入参数
+            # 对于累计值，我们需要获取每个时间段内最后一个记录的累计值
+            # 重新查询以获取累计值
+            if self.db_type == "mysql":
+                time_group_fn = "DATE_FORMAT(stat_datetime, '%Y-%m-%d %H:00:00')"
+            elif self.db_type == "postgresql":
+                time_group_fn = "DATE_TRUNC('hour', stat_datetime)"
+            else:  # sqlite
+                time_group_fn = "STRFTIME('%Y-%m-%d %H:00:00', stat_datetime)"
+
+            cumulative_query = f"""
+                SELECT
+                    {time_group_fn} AS hour_group,
+                    downloader_id,
+                    MAX(cumulative_uploaded) AS final_cumulative_uploaded,
+                    MAX(cumulative_downloaded) AS final_cumulative_downloaded
+                FROM traffic_stats
+                WHERE stat_datetime < {ph}
+                GROUP BY hour_group, downloader_id
+            """
+
+            cursor.execute(cumulative_query, (cutoff_time_str, ))
+            cumulative_rows = cursor.fetchall()
+
+            # 创建累计值映射字典
+            cumulative_map = {}
+            for row in cumulative_rows:
+                key = (row["hour_group"] if isinstance(row, dict) else row[0],
+                       row["downloader_id"] if isinstance(row, dict) else row[1])
+                cumulative_map[key] = (
+                    int(row["final_cumulative_uploaded"] if isinstance(row, dict) else row[2]),
+                    int(row["final_cumulative_downloaded"] if isinstance(row, dict) else row[3])
+                )
 
             # 准备插入参数
             upsert_params = [
                 (row["hour_group"] if isinstance(row, dict) else row[0],
                  row["downloader_id"] if isinstance(row, dict) else row[1],
-                 int(row["total_uploaded"] if isinstance(row, dict) else row[2]
-                     ),
-                 int(row["total_downloaded"] if isinstance(row, dict
-                                                           ) else row[3]),
-                 int(row["avg_upload_speed"] if isinstance(row, dict
-                                                           ) else row[4]),
-                 int(row["avg_download_speed"] if isinstance(row, dict
-                                                             ) else row[5]),
-                 int(row["samples"] if isinstance(row, dict) else row[6]))
+                 int(row["total_uploaded"] if isinstance(row, dict) else row[2]),
+                 int(row["total_downloaded"] if isinstance(row, dict) else row[3]),
+                 int(row["avg_upload_speed"] if isinstance(row, dict) else row[4]),
+                 int(row["avg_download_speed"] if isinstance(row, dict) else row[5]),
+                 int(row["samples"] if isinstance(row, dict) else row[6]),
+                 cumulative_map.get((row["hour_group"] if isinstance(row, dict) else row[0],
+                                   row["downloader_id"] if isinstance(row, dict) else row[1]), (0, 0))[0],
+                 cumulative_map.get((row["hour_group"] if isinstance(row, dict) else row[0],
+                                   row["downloader_id"] if isinstance(row, dict) else row[1]), (0, 0))[1])
                 for row in aggregated_rows
             ]
 
@@ -945,13 +713,13 @@ class DatabaseManager:
 
 
 def reconcile_historical_data(db_manager, config):
-    """在启动时与下载客户端同步状态，建立后续增量计算的基线。"""
-    logging.info("正在同步下载器状态以建立新的基线...")
+    """在启动时同步下载器状态到数据库。"""
+    logging.info("正在同步下载器状态...")
     conn = db_manager._get_connection()
     cursor = db_manager._get_cursor(conn)
     ph = db_manager.get_placeholder()
 
-    zero_point_records = []
+    records = []
     current_timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     for client_config in config.get("downloaders", []):
@@ -970,11 +738,9 @@ def reconcile_historical_data(db_manager, config):
                 }
                 client = Client(**api_config)
                 client.auth_log_in()
-                # --- 修改：获取累计值 ---
                 server_state = client.sync_maindata().get('server_state', {})
                 total_dl = int(server_state.get('alltime_dl', 0))
                 total_ul = int(server_state.get('alltime_ul', 0))
-                # -------------------------
             elif client_config["type"] == "transmission":
                 api_config = _prepare_api_config(client_config)
                 client = TrClient(**api_config)
@@ -982,33 +748,26 @@ def reconcile_historical_data(db_manager, config):
                 total_dl = int(stats.cumulative_stats.downloaded_bytes)
                 total_ul = int(stats.cumulative_stats.uploaded_bytes)
 
-            # --- 修改：更新新的统一列 ---
-            cursor.execute(
-                f"UPDATE downloader_clients SET last_total_dl = {ph}, last_total_ul = {ph} WHERE id = {ph}",
-                (total_dl, total_ul, client_id),
-            )
-            # ---------------------------
-
-            zero_point_records.append(
-                (current_timestamp_str, client_id, 0, 0, 0, 0))
-            logging.info(f"客户端 '{client_config['name']}' 的基线已成功设置。")
+            records.append(
+                (current_timestamp_str, client_id, 0, 0, 0, 0, total_ul, total_dl))
+            logging.info(f"客户端 '{client_config['name']}' 的状态已同步。")
         except Exception as e:
-            logging.error(f"[{client_config['name']}] 启动时设置基线失败: {e}")
+            logging.error(f"[{client_config['name']}] 状态同步失败: {e}")
 
-    if zero_point_records:
+    if records:
         try:
-            sql_insert_zero = (
-                f"INSERT INTO traffic_stats (stat_datetime, downloader_id, uploaded, downloaded, upload_speed, download_speed) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}) ON CONFLICT(stat_datetime, downloader_id) DO UPDATE SET uploaded = EXCLUDED.uploaded, downloaded = EXCLUDED.downloaded"
+            sql_insert = (
+                f"INSERT INTO traffic_stats (stat_datetime, downloader_id, uploaded, downloaded, upload_speed, download_speed, cumulative_uploaded, cumulative_downloaded) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}) ON CONFLICT(stat_datetime, downloader_id) DO UPDATE SET uploaded = EXCLUDED.uploaded, downloaded = EXCLUDED.downloaded, cumulative_uploaded = EXCLUDED.cumulative_uploaded, cumulative_downloaded = EXCLUDED.cumulative_downloaded"
                 if db_manager.db_type == "postgresql" else
-                f"INSERT INTO traffic_stats (stat_datetime, downloader_id, uploaded, downloaded, upload_speed, download_speed) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}) ON DUPLICATE KEY UPDATE uploaded = VALUES(uploaded), downloaded = VALUES(downloaded)"
+                f"INSERT INTO traffic_stats (stat_datetime, downloader_id, uploaded, downloaded, upload_speed, download_speed, cumulative_uploaded, cumulative_downloaded) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}) ON DUPLICATE KEY UPDATE uploaded = VALUES(uploaded), downloaded = VALUES(downloaded), cumulative_uploaded = VALUES(cumulative_uploaded), cumulative_downloaded = VALUES(cumulative_downloaded)"
                 if db_manager.db_type == "mysql" else
-                f"INSERT INTO traffic_stats (stat_datetime, downloader_id, uploaded, downloaded, upload_speed, download_speed) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(stat_datetime, downloader_id) DO UPDATE SET uploaded = excluded.uploaded, downloaded = excluded.downloaded"
+                f"INSERT INTO traffic_stats (stat_datetime, downloader_id, uploaded, downloaded, upload_speed, download_speed, cumulative_uploaded, cumulative_downloaded) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(stat_datetime, downloader_id) DO UPDATE SET uploaded = excluded.uploaded, downloaded = excluded.downloaded, cumulative_uploaded = excluded.cumulative_uploaded, cumulative_downloaded = excluded.cumulative_downloaded"
             )
-            cursor.executemany(sql_insert_zero, zero_point_records)
+            cursor.executemany(sql_insert, records)
             logging.info(
-                f"已成功插入 {len(zero_point_records)} 条零点记录到 traffic_stats。")
+                f"已成功插入 {len(records)} 条初始记录到 traffic_stats。")
         except Exception as e:
-            logging.error(f"插入零点记录失败: {e}")
+            logging.error(f"插入初始记录失败: {e}")
             conn.rollback()
 
     conn.commit()
