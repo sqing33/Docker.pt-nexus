@@ -120,11 +120,10 @@ def get_sites_list():
             """)
         source_sites = [row["nickname"] for row in cursor.fetchall()]
 
-        # 获取目标站点 (migration 为 2 或 3，且必须有 passkey)
+        # 获取目标站点 (migration 为 2 或 3)
         cursor.execute("""
-            SELECT nickname FROM sites 
-            WHERE (migration = 2 OR migration = 3) 
-            AND passkey IS NOT NULL AND passkey != '' 
+            SELECT nickname FROM sites
+            WHERE (migration = 2 OR migration = 3)
             ORDER BY nickname
             """)
         target_sites = [row["nickname"] for row in cursor.fetchall()]
@@ -157,15 +156,13 @@ def get_sites():
             select_fields = """
                 s.id, s.nickname, s.site, s.base_url, s.special_tracker_domain, s."group", s.proxy, s.speed_limit,
                 CASE WHEN s.cookie IS NOT NULL AND s.cookie != '' THEN 1 ELSE 0 END as has_cookie,
-                CASE WHEN s.passkey IS NOT NULL AND s.passkey != '' THEN 1 ELSE 0 END as has_passkey,
-                s.cookie, s.passkey
+                s.cookie
             """
         else:
             select_fields = """
                 s.id, s.nickname, s.site, s.base_url, s.special_tracker_domain, s.`group`, s.proxy, s.speed_limit,
                 CASE WHEN s.cookie IS NOT NULL AND s.cookie != '' THEN 1 ELSE 0 END as has_cookie,
-                CASE WHEN s.passkey IS NOT NULL AND s.passkey != '' THEN 1 ELSE 0 END as has_passkey,
-                s.cookie, s.passkey
+                s.cookie
             """
         if filter_by_torrents == "active":
             sql = f"""
@@ -275,209 +272,6 @@ def update_site_cookie():
         return jsonify({"success": False, "message": "服务器内部错误。"}), 500
 
 
-@management_bp.route("/sites/fetch_all_passkeys", methods=["POST"])
-def fetch_all_passkeys():
-    """获取所有有Cookie且可发布站点的Passkey并保存到数据库。"""
-    db_manager = management_bp.db_manager
-    # 获取请求参数，判断是否使用代理
-    use_proxy = request.json.get("use_proxy", False) if request.json else False
-
-    try:
-        # 获取所有有Cookie且为可发布站点的信息
-        conn = db_manager._get_connection()
-        cursor = db_manager._get_cursor(conn)
-        cursor.execute(
-            "SELECT * FROM sites WHERE cookie IS NOT NULL AND cookie != '' AND (migration = 2 OR migration = 3)"
-        )
-        sites_info = cursor.fetchall()
-
-        if not sites_info:
-            return jsonify({
-                "success": False,
-                "message": "没有配置Cookie且为可发布站点的信息。"
-            }), 400
-
-        sites_info = [dict(site) for site in sites_info]
-        successful_count = 0
-        failed_sites = []
-
-        # 为每个站点获取Passkey
-        for site_info in sites_info:
-            try:
-                cookie = site_info.get("cookie")
-                base_url = site_info.get("base_url")
-                site_id = site_info.get("id")
-                site_nickname = site_info.get("nickname")
-
-                if not cookie:
-                    failed_sites.append(f"{site_nickname}(Cookie未配置)")
-                    continue
-
-                if not base_url:
-                    failed_sites.append(f"{site_nickname}(基础URL未配置)")
-                    continue
-
-                # 确保URL有协议前缀
-                if not base_url.startswith(("http://", "https://")):
-                    base_url = "https://" + base_url
-
-                # 构造请求头
-                headers = {
-                    "User-Agent":
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
-                    "Cookie": cookie,
-                    "Referer": f"{base_url}/",
-                }
-
-                # 发送请求获取用户控制面板页面
-                import cloudscraper
-                scraper = cloudscraper.create_scraper()
-
-                # 添加重试机制，类似uploaders/base.py中的实现
-                max_retries = 3
-                last_exception = None
-                proxies = None
-
-                # 如果明确要求使用代理，则获取代理配置
-                if use_proxy:
-                    try:
-                        config_manager = management_bp.config_manager
-                        conf = (config_manager.get() or {})
-                        # 优先使用转种设置中的代理地址，其次兼容旧的 network.proxy_url
-                        proxy_url = (conf.get("cross_seed", {})
-                                     or {}).get("proxy_url") or (conf.get(
-                                         "network", {}) or {}).get("proxy_url")
-                        if proxy_url:
-                            proxies = {"http": proxy_url, "https": proxy_url}
-                            logging.info(f"Using proxy: {proxy_url}")
-                    except Exception as e:
-                        logging.warning(f"代理设置失败: {e}")
-
-                for attempt in range(max_retries):
-                    try:
-                        # 检查是否是重试并且 Connection reset by peer 错误，强制使用代理
-                        if attempt > 0 and last_exception and "Connection reset by peer" in str(
-                                last_exception):
-                            logging.info(
-                                "检测到 Connection reset by peer 错误，强制使用代理重试...")
-                            try:
-                                config_manager = management_bp.config_manager
-                                conf = (config_manager.get() or {})
-                                # 优先使用转种设置中的代理地址，其次兼容旧的 network.proxy_url
-                                proxy_url = (conf.get("cross_seed", {})
-                                             or {}).get("proxy_url") or (
-                                                 conf.get("network", {})
-                                                 or {}).get("proxy_url")
-                                if proxy_url:
-                                    proxies = {
-                                        "http": proxy_url,
-                                        "https": proxy_url
-                                    }
-                                    logging.info(f"使用代理重试: {proxy_url}")
-                            except Exception as proxy_error:
-                                logging.warning(f"代理设置失败: {proxy_error}")
-
-                        logging.info(
-                            f"正在获取 {site_nickname} 的Passkey... (尝试 {attempt + 1}/{max_retries})"
-                        )
-                        response = scraper.get(f"{base_url}/usercp.php",
-                                               headers=headers,
-                                               timeout=30,
-                                               proxies=proxies)
-                        response.raise_for_status()
-
-                        # 成功则跳出循环
-                        last_exception = None
-                        break
-
-                    except Exception as e:
-                        last_exception = e
-                        logging.warning(
-                            f"第 {attempt + 1} 次尝试获取 {site_nickname} 的Passkey失败: {e}"
-                        )
-
-                        # 如果不是最后一次尝试，等待一段时间后重试
-                        if attempt < max_retries - 1:
-                            import time
-                            wait_time = 2**attempt  # 指数退避
-                            logging.info(
-                                f"等待 {wait_time} 秒后进行第 {attempt + 2} 次尝试...")
-                            time.sleep(wait_time)
-                        else:
-                            logging.error(
-                                f"获取 {site_nickname} 的Passkey所有重试均已失败")
-
-                # 如果所有重试都失败了，处理错误
-                if last_exception:
-                    error_msg = str(last_exception)
-                    if "403" in error_msg or "401" in error_msg:
-                        failed_sites.append(f"{site_nickname}(Cookie已过期或无效)")
-                    elif "timeout" in error_msg.lower(
-                    ) or "timed out" in error_msg.lower():
-                        failed_sites.append(f"{site_nickname}(请求超时)")
-                    elif "dns" in error_msg.lower():
-                        failed_sites.append(f"{site_nickname}(域名解析失败)")
-                    elif "104" in error_msg and "Connection reset by peer" in error_msg:
-                        failed_sites.append(
-                            f"{site_nickname}(连接被重置: {error_msg})")
-                    else:
-                        failed_sites.append(
-                            f"{site_nickname}(网络连接错误: {error_msg})")
-                    continue
-
-                # 从页面中提取Passkey
-                import re
-                passkey_pattern = r'<td[^>]*class="rowhead nowrap"[^>]*>\s*密钥\s*</td>\s*<td[^>]*class="rowfollow"[^>]*>\s*([a-f0-9]{32})\s*</td>'
-                match = re.search(passkey_pattern, response.text)
-
-                if not match:
-                    # 检查是否是因为重定向到登录页面
-                    if "login" in response.url or "login" in response.text.lower(
-                    ):
-                        failed_sites.append(
-                            f"{site_nickname}(Cookie已过期，被重定向到登录页)")
-                    else:
-                        failed_sites.append(f"{site_nickname}(页面中未找到Passkey)")
-                    continue
-
-                passkey = match.group(1)
-
-                # 更新数据库中的Passkey
-                cursor.execute("UPDATE sites SET passkey = %s WHERE id = %s",
-                               (passkey, site_id))
-                successful_count += 1
-
-            except Exception as e:
-                failed_sites.append(
-                    f"{site_info.get('nickname')}(处理异常: {str(e)})")
-                continue
-
-        conn.commit()
-
-        # 构造返回消息
-        message = f"成功获取 {successful_count} 个站点的 Passkey。"
-        if failed_sites:
-            message += f" 失败站点: {', '.join(failed_sites)}。"
-
-        return jsonify({
-            "success": True,
-            "message": message,
-            "successful_count": successful_count,
-            "failed_count": len(failed_sites),
-            "failed_sites": failed_sites
-        })
-
-    except Exception as e:
-        logging.error(f"fetch_all_passkeys 发生意外错误: {e}", exc_info=True)
-        return jsonify({
-            "success": False,
-            "message": f"获取Passkey失败: {str(e)}"
-        }), 500
-    finally:
-        if "conn" in locals() and conn:
-            if "cursor" in locals() and cursor:
-                cursor.close()
-            conn.close()
 
 
 # --- CookieCloud ---

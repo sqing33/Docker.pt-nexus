@@ -130,7 +130,6 @@ import axios from 'axios'
 interface SiteStatus {
   name: string;
   has_cookie: boolean;
-  has_passkey: boolean;
   is_source: boolean;
   is_target: boolean;
 }
@@ -210,11 +209,11 @@ const getSiteClass = (site: SiteStatus) => {
     // 仅源站点，检查Cookie
     isConfigured = site.has_cookie;
   } else if (!site.is_source && site.is_target) {
-    // 仅目标站点，检查Cookie和Passkey
-    isConfigured = site.has_cookie && site.has_passkey;
+    // 仅目标站点，检查Cookie
+    isConfigured = site.has_cookie;
   } else if (site.is_source && site.is_target) {
-    // 同时是源和目标，需要Cookie和Passkey
-    isConfigured = site.has_cookie && site.has_passkey;
+    // 同时是源和目标，需要Cookie
+    isConfigured = site.has_cookie;
   }
 
   return {
@@ -231,15 +230,13 @@ const getSiteTooltip = (site: SiteStatus) => {
     configStatus = site.has_cookie ? '已配置Cookie' : '未配置Cookie';
   } else if (!site.is_source && site.is_target) {
     // 仅目标站点
-    configStatus = (site.has_cookie && site.has_passkey) ? 'Cookie/Passkey齐全' : '未配置Cookie/Passkey';
+    configStatus = site.has_cookie ? '已配置Cookie' : '未配置Cookie';
   } else if (site.is_source && site.is_target) {
     // 同时是源和目标
-    if (site.has_cookie && site.has_passkey) {
-      configStatus = 'Cookie/Passkey齐全';
-    } else if (site.has_cookie) {
+    if (site.has_cookie) {
       configStatus = '已配置Cookie';
     } else {
-      configStatus = '配置不完整';
+      configStatus = '未配置Cookie';
     }
   }
 

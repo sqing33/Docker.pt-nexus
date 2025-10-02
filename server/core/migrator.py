@@ -105,9 +105,7 @@ class TorrentMigrator:
             self.TARGET_BASE_URL = ensure_scheme(
                 self.target_site.get("base_url"))
             self.TARGET_COOKIE = self.target_site.get("cookie")
-            self.TARGET_PASSKEY = self.target_site.get("passkey")
             self.TARGET_UPLOAD_MODULE = self.target_site["site"]
-            self.TARGET_TRACKER_URL = f"{self.TARGET_BASE_URL}/announce.php"
             self.TARGET_PROXY = self.target_site.get("proxy", False)
 
         # Initialize scraper and logger
@@ -489,49 +487,7 @@ class TorrentMigrator:
             self.logger.opt(exception=True).error(f"搜索过程中发生错误: {e}")
             return None
 
-    def modify_torrent_file(self, original_path, main_title):
-        self.logger.info(f"正在使用 bencoder 修改 .torrent 文件: {original_path}...")
-        try:
-            with open(original_path, "rb") as f:
-                decoded_torrent = bencoder.decode(f.read())
-            self.logger.info("原始种子文件解码成功。")
-            new_tracker_url_str = f"{self.TARGET_TRACKER_URL}?passkey={self.TARGET_PASSKEY}"
-            decoded_torrent[b"announce"] = new_tracker_url_str.encode("utf-8")
-            self.logger.info(f"将设置新的 Tracker URL 为: {new_tracker_url_str}")
-            for key in [
-                    b"announce-list",
-                    b"comment",
-                    b"publisher",
-                    b"publisher.utf-8",
-                    b"publisher-url",
-                    b"publisher-url.utf-8",
-            ]:
-                if key in decoded_torrent:
-                    del decoded_torrent[key]
-                    self.logger.info(f"已移除 '{key.decode()}' 字段。")
-            if b"info" in decoded_torrent:
-                decoded_torrent[b"info"][b"private"] = 1
-                self.logger.info("已确保 'private' 标记设置为 1。")
-                if b"source" in decoded_torrent[b"info"]:
-                    del decoded_torrent[b"info"][b"source"]
-                    self.logger.info("已从 'info' 字典中移除 'source' 字段。")
-            else:
-                self.logger.error("'info' 字典未找到，任务终止。")
-                return None
-            modified_content = bencoder.encode(decoded_torrent)
-            safe_filename = re.sub(r'[\\/*?:"<>|]', "_", main_title)[:150]
-            modified_path = os.path.join(
-                TEMP_DIR, f"{safe_filename}.modified.{time.time()}.torrent")
-            with open(modified_path, "wb") as f:
-                f.write(modified_content)
-            self.logger.success(f"已成功生成新的种子文件: {modified_path}")
-            self.temp_files.append(modified_path)
-            return modified_path
-        except Exception as e:
-            self.logger.opt(
-                exception=True).error(f"修改 .torrent 文件时发生严重错误: {e}")
-            return None
-
+    
     def _extract_data_by_site_type(self, soup, torrent_id):
         """
         根据站点类型选择对应的提取器提取数据

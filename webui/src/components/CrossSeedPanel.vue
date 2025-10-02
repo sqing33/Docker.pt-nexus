@@ -494,7 +494,7 @@
       <!-- 步骤 2: 选择发布站点 -->
       <div v-if="activeStep === 2" class="step-container site-selection-container">
         <h3 class="selection-title">请选择要发布的目标站点</h3>
-        <p class="selection-subtitle">只有Cookie和Passkey均配置正常的站点才会在此处显示。已存在的站点已被自动禁用。</p>
+        <p class="selection-subtitle">只有Cookie配置正常的站点才会在此处显示。已存在的站点已被自动禁用。</p>
         <div class="select-all-container">
           <el-button-group>
             <el-button type="primary" @click="selectAllTargetSites">全选</el-button>
@@ -719,7 +719,6 @@ interface SiteStatus {
   name: string;
   site: string;
   has_cookie: boolean;
-  has_passkey: boolean;
   is_source: boolean;
   is_target: boolean;
 }
