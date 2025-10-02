@@ -594,7 +594,7 @@
       <div v-if="activeStep === 0" class="button-group">
         <el-button @click="$emit('cancel')">取消</el-button>
 
-        <el-tooltip content="存在待修改的参数" placement="top" :disabled="!isNextButtonDisabled">
+        <el-tooltip content="存在待修改的参数 (请确保mediainfo内容有效且包含必要的媒体信息)" placement="top" :disabled="!isNextButtonDisabled">
           <!-- 添加一个 span 作为包裹元素 -->
 
           <el-button type="primary" @click="goToPublishPreviewStep" :disabled="isNextButtonDisabled">
@@ -2249,11 +2249,17 @@ const unrecognizedValue = computed({
 });
 
 // 计算属性：检查下一步按钮是否应该禁用
-// 只有当"无法识别"的参数为空字符串，截图有效，且标准化参数符合格式时才允许点击按钮
+// 只有当"无法识别"的参数为空字符串，截图有效，标准化参数符合格式，且mediainfo内容有效时才允许点击按钮
+// mediainfo有效性的检查：非空、长度足够、包含关键字段(Complete name, Format)
 const isNextButtonDisabled = computed(() => {
   const unrecognized = torrentData.value.title_components.find(param => param.key === '无法识别');
   const hasUnrecognized = unrecognized && unrecognized.value !== '';
   const hasInvalidScreenshots = !screenshotValid.value;
+  const hasInvalidMediainfo = !torrentData.value.mediainfo ||
+    torrentData.value.mediainfo.trim() === '' ||
+    torrentData.value.mediainfo.trim().length < 50 ||
+    !torrentData.value.mediainfo.includes('Complete name') ||
+    !torrentData.value.mediainfo.includes('Format');
 
   // 将 getInvalidStandardParams() 修改为 invalidStandardParams.value
   const hasInvalidStandardParams = invalidStandardParams.value.length > 0;
@@ -2265,6 +2271,9 @@ const isNextButtonDisabled = computed(() => {
     return true;
   }
   if (hasInvalidStandardParams) {
+    return true;
+  }
+  if (hasInvalidMediainfo) {
     return true;
   }
 
@@ -2748,6 +2757,7 @@ const openAllSitesInRow = (row: any[]) => {
 .filtered-declarations-content {
   flex: 1;
   overflow-y: auto;
+  max-height: 540px;
 }
 
 .declaration-item {

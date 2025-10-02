@@ -118,8 +118,8 @@ class SeedParameter:
                     INSERT INTO seed_parameters
                     (hash, torrent_id, site_name, nickname, save_path, name, title, subtitle, imdb_link, douban_link, type, medium,
                      video_codec, audio_codec, resolution, team, source, tags, poster, screenshots,
-                     statement, body, mediainfo, title_components, downloader_id, created_at, updated_at)
-                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+                     statement, body, mediainfo, title_components, removed_ardtudeclarations, downloader_id, created_at, updated_at)
+                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
                     ON CONFLICT (hash, torrent_id, site_name)
                     DO UPDATE SET
                         nickname = EXCLUDED.nickname,
@@ -143,6 +143,7 @@ class SeedParameter:
                         body = EXCLUDED.body,
                         mediainfo = EXCLUDED.mediainfo,
                         title_components = EXCLUDED.title_components,
+                        removed_ardtudeclarations = EXCLUDED.removed_ardtudeclarations,
                         downloader_id = EXCLUDED.downloader_id,
                         updated_at = EXCLUDED.updated_at
                 """
@@ -152,8 +153,8 @@ class SeedParameter:
                     INSERT INTO seed_parameters
                     (hash, torrent_id, site_name, nickname, save_path, name, title, subtitle, imdb_link, douban_link, type, medium,
                      video_codec, audio_codec, resolution, team, source, tags, poster, screenshots,
-                     statement, body, mediainfo, title_components, downloader_id, created_at, updated_at)
-                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+                     statement, body, mediainfo, title_components, removed_ardtudeclarations, downloader_id, created_at, updated_at)
+                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
                     ON DUPLICATE KEY UPDATE
                         torrent_id = VALUES(torrent_id),
                         nickname = VALUES(nickname),
@@ -177,6 +178,7 @@ class SeedParameter:
                         body = VALUES(body),
                         mediainfo = VALUES(mediainfo),
                         title_components = VALUES(title_components),
+                        removed_ardtudeclarations = VALUES(removed_ardtudeclarations),
                         downloader_id = VALUES(downloader_id),
                         updated_at = VALUES(updated_at)
                 """
@@ -186,8 +188,8 @@ class SeedParameter:
                     INSERT INTO seed_parameters
                     (hash, torrent_id, site_name, nickname, save_path, name, title, subtitle, imdb_link, douban_link, type, medium,
                      video_codec, audio_codec, resolution, team, source, tags, poster, screenshots,
-                     statement, body, mediainfo, title_components, downloader_id, created_at, updated_at)
-                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+                     statement, body, mediainfo, title_components, removed_ardtudeclarations, downloader_id, created_at, updated_at)
+                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
                     ON CONFLICT (hash, torrent_id, site_name)
                     DO UPDATE SET
                         torrent_id = excluded.torrent_id,
@@ -212,6 +214,7 @@ class SeedParameter:
                         body = excluded.body,
                         mediainfo = excluded.mediainfo,
                         title_components = excluded.title_components,
+                        removed_ardtudeclarations = excluded.removed_ardtudeclarations,
                         downloader_id = excluded.downloader_id,
                         updated_at = excluded.updated_at
                 """
@@ -223,6 +226,15 @@ class SeedParameter:
                 mediainfo = json.dumps(mediainfo, ensure_ascii=False)
             elif not isinstance(mediainfo, str):
                 mediainfo = str(mediainfo) if mediainfo else ""
+
+            # 处理removed_ardtudeclarations字段（列表转换为字符串）
+            removed_ardtudeclarations = parameters.get("removed_ardtudeclarations", [])
+            print(f"[DEBUG seed_parameter] Input removed_ardtudeclarations: {removed_ardtudeclarations}")
+            if isinstance(removed_ardtudeclarations, list):
+                removed_ardtudeclarations = json.dumps(removed_ardtudeclarations, ensure_ascii=False)
+            else:
+                removed_ardtudeclarations = str(removed_ardtudeclarations) if removed_ardtudeclarations else ""
+            print(f"[DEBUG seed_parameter] JSON stringified removed_ardtudeclarations: {removed_ardtudeclarations}")
 
             params = (hash, torrent_id, site_name,
                       parameters.get("nickname",
@@ -242,7 +254,7 @@ class SeedParameter:
                       parameters.get("screenshots",
                                      ""), parameters.get("statement", ""),
                       parameters.get("body", ""), mediainfo, title_components,
-                      parameters.get("downloader_id"), parameters["created_at"], parameters["updated_at"])
+                      removed_ardtudeclarations, parameters.get("downloader_id"), parameters["created_at"], parameters["updated_at"])
 
             cursor.execute(insert_sql, params)
             conn.commit()
@@ -364,6 +376,15 @@ class SeedParameter:
                             parameters["title_components"])
                     except json.JSONDecodeError:
                         parameters["title_components"] = []
+
+                # 解析removed_ardtudeclarations字段（如果存在）
+                if "removed_ardtudeclarations" in parameters and isinstance(
+                        parameters["removed_ardtudeclarations"], str):
+                    try:
+                        parameters["removed_ardtudeclarations"] = json.loads(
+                            parameters["removed_ardtudeclarations"])
+                    except json.JSONDecodeError:
+                        parameters["removed_ardtudeclarations"] = []
 
                 return parameters
 
