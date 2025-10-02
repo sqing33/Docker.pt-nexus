@@ -28,6 +28,13 @@
       <el-button type="primary" @click="openFilterDialog" plain style="margin-right: 15px;">
         筛选
       </el-button>
+
+      <!-- 批量删除按钮 - 仅在筛选出已删除项目时显示，删除已勾选项目 -->
+      <el-button v-if="activeFilters.isDeleted === '1'" type="danger" @click="handleDisplayBatchDelete" plain
+        style="margin-right: 15px;" :disabled="selectedRows.length === 0">
+        批量删除已勾选项 ({{ selectedRows.length }})
+      </el-button>
+
       <div v-if="hasActiveFilters" class="current-filters"
         style="margin-right: 15px; display: flex; align-items: center;">
         <el-tag type="info" size="default" effect="plain">{{ currentFilterText }}</el-tag>
@@ -194,13 +201,14 @@
         <el-table-column prop="updated_at" label="更新时间" width="140" align="center" sortable>
           <template #default="scope">
             <div class="mapped-cell datetime-cell">
-              {{ scope.row.is_deleted ? '已删除' : formatDateTime(scope.row.updated_at) }}
+              {{ scope.row.is_deleted ? '已删除/禁转' : formatDateTime(scope.row.updated_at) }}
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="100" align="center" fixed="right">
+        <el-table-column label="操作" width="130" align="center" fixed="right">
           <template #default="scope">
             <el-button size="small" type="primary" @click="handleEdit(scope.row)">编辑</el-button>
+            <el-button size="small" type="danger" @click="handleDelete(scope.row)" style="margin-left: 5px;">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -259,20 +267,11 @@
               <el-button type="primary" size="small" @click="refreshRecords" :loading="recordsLoading">
                 刷新
               </el-button>
-              <el-button
-                v-if="refreshTimer"
-                type="warning"
-                size="small"
-                @click="stopAutoRefresh"
-              >
+              <el-button v-if="refreshTimer" type="warning" size="small" @click="stopAutoRefresh">
                 停止自动刷新
               </el-button>
-              <el-button
-                v-else-if="batchProgress && batchProgress.isRunning"
-                type="success"
-                size="small"
-                @click="startAutoRefresh"
-              >
+              <el-button v-else-if="batchProgress && batchProgress.isRunning" type="success" size="small"
+                @click="startAutoRefresh">
                 开启自动刷新
               </el-button>
               <el-button type="danger" circle @click="closeRecordViewDialog" plain>X</el-button>
@@ -282,14 +281,8 @@
         <div class="record-view-content">
           <!-- 种子处理记录表格 -->
           <div class="records-table-container" v-if="records.length > 0">
-            <el-table
-              :data="records"
-              style="width: 100%"
-              size="small"
-              v-loading="recordsLoading"
-              element-loading-text="加载记录中..."
-              stripe
-            >
+            <el-table :data="records" style="width: 100%" size="small" v-loading="recordsLoading"
+              element-loading-text="加载记录中..." stripe>
               <el-table-column prop="batch_id" label="批次ID" width="150" show-overflow-tooltip>
                 <template #default="scope">
                   <el-tag size="small" type="info">{{ scope.row.batch_id }}</el-tag>
@@ -359,7 +352,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import type { ElTree } from 'element-plus'
 import CrossSeedPanel from '../components/CrossSeedPanel.vue'
 import BatchFetchPanel from '../components/BatchFetchPanel.vue'
@@ -541,8 +534,8 @@ const currentFilterText = computed(() => {
 // 检查是否可以进行批量转种
 const canBatchCrossSeed = computed(() => {
   return selectedRows.value.length > 0 &&
-         activeFilters.value.excludeTargetSites &&
-         activeFilters.value.excludeTargetSites.trim() !== ''
+    activeFilters.value.excludeTargetSites &&
+    activeFilters.value.excludeTargetSites.trim() !== ''
 })
 
 // 批量转种按钮的文字
@@ -1016,6 +1009,173 @@ const handleEdit = async (row: SeedParameter) => {
   }
 };
 
+// 处理删除按钮点击
+const handleDelete = async (row: SeedParameter) => {
+  try {
+    // 确认是否删除
+    await ElMessageBox.confirm(
+      `确定要永久删除种子数据 "${row.title}" 吗？此操作无法恢复！`,
+      '确认永久删除',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    );
+
+    // 向后端发送删除请求 - 使用统一的 delete API
+    const deleteData = {
+      torrent_id: row.torrent_id,
+      site_name: row.site_name
+    };
+    const response = await fetch('/api/cross-seed-data/delete', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(deleteData)
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+
+    if (result.success) {
+      ElMessage.success(result.message || `删除成功`);
+      // 重新获取数据，以更新表格
+      fetchData();
+    } else {
+      ElMessage.error(result.error || '删除失败');
+    }
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      // 只有在不是用户取消的情况下才显示错误
+      ElMessage.error(error.message || '网络错误');
+    }
+  }
+};
+
+// 处理选中项目的批量删除
+const handleBulkDelete = async () => {
+  if (selectedRows.value.length === 0) {
+    ElMessage.warning('请先选择要删除的行');
+    return;
+  }
+
+  try {
+    // 确认是否删除
+    await ElMessageBox.confirm(
+      `确定要删除选中的 ${selectedRows.value.length} 条种子数据吗？`,
+      '确认批量删除',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    );
+
+    // 构造请求体
+    const deleteData = {
+      items: selectedRows.value.map(row => ({
+        torrent_id: row.torrent_id,
+        site_name: row.site_name
+      }))
+    };
+
+    // 调用批量删除API - 使用统一的 delete API
+    const response = await fetch('/api/cross-seed-data/delete', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(deleteData)
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+
+    if (result.success) {
+      ElMessage.success(result.message || `成功删除 ${result.deleted_count} 条数据`);
+      // 清空已选行
+      selectedRows.value = [];
+      // 重新获取数据，以更新表格
+      fetchData();
+    } else {
+      ElMessage.error(result.error || '批量删除失败');
+    }
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      // 只有在不是用户取消的情况下才显示错误
+      ElMessage.error(error.message || '网络错误');
+    }
+  }
+};
+
+// 批量永久删除当前选中的已删除项目（确认删除已选择的项目）
+const handleDisplayBatchDelete = async () => {
+  // 当筛选出已删除项目且进行了勾选时，批量删除已选择的项，而不是全部显示的项
+  if (selectedRows.value.length === 0) {
+    ElMessage.warning('请先选择要删除的项目');
+    return;
+  }
+
+  try {
+    // 确认是否彻底删除
+    await ElMessageBox.confirm(
+      `确定要永久删除选中的 ${selectedRows.value.length} 条种子数据吗？此操作无法恢复！`,
+      '确认永久删除',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    );
+
+    // 构造请求体 - 包含当前选中的项目
+    const deleteData = {
+      items: selectedRows.value.map(row => ({
+        torrent_id: row.torrent_id,
+        site_name: row.site_name
+      }))
+    };
+
+    // 调用批量删除API - 使用统一的 delete API
+    const response = await fetch('/api/cross-seed-data/delete', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(deleteData)
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+
+    if (result.success) {
+      ElMessage.success(result.message || `已永久删除 ${result.deleted_count} 条数据`);
+      // 清空选中行
+      selectedRows.value = [];
+      // 重新获取数据，以更新表格
+      fetchData();
+    } else {
+      ElMessage.error(result.error || '批量删除失败');
+    }
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      // 只有在不是用户取消的情况下才显示错误
+      ElMessage.error(error.message || '网络错误');
+    }
+  }
+};
+
 // 关闭转种弹窗
 const closeCrossSeedDialog = () => {
   crossSeedStore.reset();
@@ -1056,12 +1216,18 @@ const tableRowClassName = ({ row }: { row: SeedParameter }) => {
 
 // 控制表格行是否可选择
 const checkSelectable = (row: SeedParameter) => {
-  // 如果is_deleted为true，则不可选择
-  if (row.is_deleted) {
-    return false
+  // 如果已删除筛选处于活动状态，则允许选择已删除的行 - 便于批量操作
+  if (activeFilters.value.isDeleted === '1') {
+    // 但仍需检查是否有无效参数
+    return !hasInvalidParams(row)
+  } else {
+    // 在正常模式下，已删除的行不可选择；有无效参数的行也不可选择
+    if (row.is_deleted) {
+      return false
+    }
+    // 如果有无效参数，则不可选择
+    return !hasInvalidParams(row)
   }
-  // 如果有无效参数，则不可选择
-  return !hasInvalidParams(row)
 }
 
 // 处理表格选中行变化

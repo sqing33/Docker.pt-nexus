@@ -190,10 +190,13 @@ def get_cross_seed_data():
         # 删除状态筛选条件
         if is_deleted_filter in ['0', '1']:
             if db_manager.db_type == "postgresql":
+                # PostgreSQL handles boolean differently - convert '1' to True, '0' to False
+                bool_value = True if is_deleted_filter == '1' else False
                 where_conditions.append("is_deleted = %s")
+                params.append(bool_value)
             else:
                 where_conditions.append("is_deleted = ?")
-            params.append(int(is_deleted_filter))
+                params.append(int(is_deleted_filter))
 
         # 目标站点排除筛选条件
         if exclude_target_sites_filter:
@@ -400,6 +403,120 @@ def test_no_auth():
         "message": "无认证测试成功",
         "timestamp": str(time.time())
     })
+
+
+@cross_seed_data_bp.route('/cross-seed-data/delete', methods=['DELETE', 'POST'])
+def delete_cross_seed_data():
+    """统一的删除API - 支持单个删除和批量删除"""
+    cursor = None
+    conn = None
+    try:
+        data = request.get_json()
+
+        # 判断是批量删除还是单个删除
+        if data and 'items' in data:
+            # 批量删除
+            items = data['items']
+            if not isinstance(items, list):
+                return jsonify({"success": False, "error": "items 必须是数组"}), 400
+
+            if not items:
+                return jsonify({"success": False, "error": "项目列表不能为空"}), 400
+
+            # 获取数据库管理器
+            db_manager = current_app.config['DB_MANAGER']
+            conn = db_manager._get_connection()
+            cursor = db_manager._get_cursor(conn)
+
+            deleted_count = 0
+
+            # 处理每个要删除的项目
+            for item in items:
+                if 'torrent_id' not in item or 'site_name' not in item:
+                    logging.warning(f"缺少必要的参数: {item}")
+                    continue
+
+                torrent_id = item['torrent_id']
+                site_name = item['site_name']
+
+                # 查询记录是否存在
+                if db_manager.db_type == "postgresql":
+                    select_query = "SELECT 1 FROM seed_parameters WHERE torrent_id = %s AND site_name = %s LIMIT 1"
+                    cursor.execute(select_query, (torrent_id, site_name))
+                else:
+                    select_query = "SELECT 1 FROM seed_parameters WHERE torrent_id = ? AND site_name = ? LIMIT 1"
+                    cursor.execute(select_query, (torrent_id, site_name))
+
+                result = cursor.fetchone()
+                if not result:
+                    logging.info(f"记录不存在，跳过: {torrent_id}, {site_name}")
+                    continue
+
+                # 执行删除
+                if db_manager.db_type == "mysql" or db_manager.db_type == "sqlite":
+                    delete_query = "DELETE FROM seed_parameters WHERE torrent_id = ? AND site_name = ?"
+                    cursor.execute(delete_query, (torrent_id, site_name))
+                else:  # postgresql
+                    delete_query = "DELETE FROM seed_parameters WHERE torrent_id = %s AND site_name = %s"
+                    cursor.execute(delete_query, (torrent_id, site_name))
+
+                deleted_count += 1
+
+            conn.commit()
+
+            return jsonify({
+                "success": True,
+                "message": f"成功删除 {deleted_count} 条数据",
+                "deleted_count": deleted_count
+            })
+
+        elif data and 'torrent_id' in data and 'site_name' in data:
+            # 单个删除
+            torrent_id = data['torrent_id']
+            site_name = data['site_name']
+
+            # 获取数据库管理器
+            db_manager = current_app.config['DB_MANAGER']
+            conn = db_manager._get_connection()
+            cursor = db_manager._get_cursor(conn)
+
+            # 查询记录是否存在
+            if db_manager.db_type == "postgresql":
+                select_query = "SELECT 1 FROM seed_parameters WHERE torrent_id = %s AND site_name = %s LIMIT 1"
+                cursor.execute(select_query, (torrent_id, site_name))
+            else:
+                select_query = "SELECT 1 FROM seed_parameters WHERE torrent_id = ? AND site_name = ? LIMIT 1"
+                cursor.execute(select_query, (torrent_id, site_name))
+
+            result = cursor.fetchone()
+            if not result:
+                return jsonify({"success": False, "error": f"找不到种子数据: {torrent_id} from {site_name}"}), 404
+
+            # 执行删除
+            if db_manager.db_type == "mysql" or db_manager.db_type == "sqlite":
+                delete_query = "DELETE FROM seed_parameters WHERE torrent_id = ? AND site_name = ?"
+                cursor.execute(delete_query, (torrent_id, site_name))
+            else:  # postgresql
+                delete_query = "DELETE FROM seed_parameters WHERE torrent_id = %s AND site_name = %s"
+                cursor.execute(delete_query, (torrent_id, site_name))
+
+            conn.commit()
+
+            return jsonify({"success": True, "message": f"种子数据 {torrent_id} from {site_name} 已删除"})
+
+        else:
+            return jsonify({"success": False, "error": "缺少必需参数: 单个删除需要 torrent_id 和 site_name，批量删除需要 items 数组"}), 400
+
+    except Exception as e:
+        logging.error(f"删除种子数据时出错: {e}")
+        if conn:
+            conn.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 
 # ============= 批量转种记录API =============

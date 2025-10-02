@@ -4,3 +4,4 @@ api/__pycache__
 core/__pycache__
 utils/__pycache__
 tmp
+.venv

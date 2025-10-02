@@ -453,7 +453,7 @@ class SeedParameter:
 
     def delete_parameters(self, torrent_id: str, site_name: str) -> bool:
         """
-        删除种子参数
+        删除种子参数（含数据库和文件）
 
         Args:
             torrent_id: 种子ID
@@ -463,31 +463,53 @@ class SeedParameter:
             bool: 删除是否成功
         """
         try:
-            # 获取文件路径
+            # 删除数据库记录优先
+            if self.db_manager:
+                conn = self.db_manager._get_connection()
+                cursor = self.db_manager._get_cursor(conn)
+                ph = self.db_manager.get_placeholder()
+
+                # 构建删除查询
+                if self.db_manager.db_type == "postgresql":
+                    cursor.execute(
+                        "DELETE FROM seed_parameters WHERE torrent_id = %s AND site_name = %s",
+                        (torrent_id, site_name))
+                else:
+                    cursor.execute(
+                        "DELETE FROM seed_parameters WHERE torrent_id = ? AND site_name = ?",
+                        (torrent_id, site_name))
+
+                deleted_count = cursor.rowcount
+                conn.commit()
+                cursor.close()
+                conn.close()
+
+                logging.info(f"种子参数数据库记录已删除: {torrent_id} from {site_name}, count: {deleted_count}")
+
+                if deleted_count <= 0:
+                    logging.warning(f"在数据库中未找到要删除的种子参数: {torrent_id} from {site_name}")
+
+            # 删除文件（后备操作，清理旧数据）
             json_file_path = self._get_json_file_path(torrent_id, site_name)
 
-            # 检查文件是否存在
-            if not os.path.exists(json_file_path):
-                logging.info(f"种子参数文件不存在: {json_file_path}")
-                return False
+            # 检查文件是否存在，如果存在则删除
+            if os.path.exists(json_file_path):
+                os.remove(json_file_path)
+                logging.info(f"种子参数文件已删除: {json_file_path}")
 
-            # 删除文件
-            os.remove(json_file_path)
-            logging.info(f"种子参数文件已删除: {json_file_path}")
-
-            # 尝试删除空的站点目录
-            site_dir = os.path.dirname(json_file_path)
-            try:
-                os.rmdir(site_dir)
-                logging.info(f"空的站点目录已删除: {site_dir}")
-            except OSError:
-                # 目录不为空，忽略错误
-                pass
+                # 尝试删除空的站点目录
+                site_dir = os.path.dirname(json_file_path)
+                try:
+                    os.rmdir(site_dir)
+                    logging.info(f"空的站点目录已删除: {site_dir}")
+                except OSError:
+                    # 目录不为空，忽略错误
+                    pass
 
             return True
 
         except Exception as e:
-            logging.error(f"删除种子参数文件失败: {e}", exc_info=True)
+            logging.error(f"删除种子参数失败: {e}", exc_info=True)
             return False
 
     def search_torrent_hash(self, name: str, sites: str = None) -> str:
