@@ -98,9 +98,9 @@ class DatabaseManager:
         try:
             # 根据数据库类型使用正确的标识符引用符
             if self.db_type == "postgresql":
-                sql = f"INSERT INTO sites (site, nickname, base_url, special_tracker_domain, \"group\", cookie, passkey, proxy, speed_limit) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})"
+                sql = f"INSERT INTO sites (site, nickname, base_url, special_tracker_domain, \"group\", cookie, proxy, speed_limit) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})"
             else:
-                sql = f"INSERT INTO sites (site, nickname, base_url, special_tracker_domain, `group`, cookie, passkey, proxy, speed_limit) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})"
+                sql = f"INSERT INTO sites (site, nickname, base_url, special_tracker_domain, `group`, cookie, proxy, speed_limit) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})"
             # 去除cookie字符串首尾的换行符和多余空白字符
             cookie = site_data.get("cookie")
             if cookie:
@@ -113,7 +113,6 @@ class DatabaseManager:
                 site_data.get("special_tracker_domain"),
                 site_data.get("group"),
                 cookie,
-                site_data.get("passkey"),
                 int(site_data.get("proxy", 0)),
                 int(site_data.get("speed_limit", 0)),
             )
@@ -141,9 +140,9 @@ class DatabaseManager:
         try:
             # 根据数据库类型使用正确的标识符引用符
             if self.db_type == "postgresql":
-                sql = f"UPDATE sites SET nickname = {ph}, base_url = {ph}, special_tracker_domain = {ph}, \"group\" = {ph}, cookie = {ph}, passkey = {ph}, proxy = {ph}, speed_limit = {ph} WHERE id = {ph}"
+                sql = f"UPDATE sites SET nickname = {ph}, base_url = {ph}, special_tracker_domain = {ph}, \"group\" = {ph}, cookie = {ph}, proxy = {ph}, speed_limit = {ph} WHERE id = {ph}"
             else:
-                sql = f"UPDATE sites SET nickname = {ph}, base_url = {ph}, special_tracker_domain = {ph}, `group` = {ph}, cookie = {ph}, passkey = {ph}, proxy = {ph}, speed_limit = {ph} WHERE id = {ph}"
+                sql = f"UPDATE sites SET nickname = {ph}, base_url = {ph}, special_tracker_domain = {ph}, `group` = {ph}, cookie = {ph}, proxy = {ph}, speed_limit = {ph} WHERE id = {ph}"
             # 去除cookie字符串首尾的换行符和多余空白字符
             cookie = site_data.get("cookie")
             if cookie:
@@ -155,7 +154,6 @@ class DatabaseManager:
                 site_data.get("special_tracker_domain"),
                 site_data.get("group"),
                 cookie,
-                site_data.get("passkey"),
                 int(site_data.get("proxy", 0)),
                 int(site_data.get("speed_limit", 0)),
                 site_data.get("id"),
@@ -279,7 +277,7 @@ class DatabaseManager:
                             final_speed_limit = json_speed_limit
                         # --- [核心修改逻辑结束] ---
 
-                        # 构建更新语句，不包含 cookie, passkey, proxy
+                        # 构建更新语句，不包含 cookie, proxy
                         if self.db_type == "postgresql":
                             update_sql = """
                                 UPDATE sites
@@ -385,7 +383,7 @@ class DatabaseManager:
                 "CREATE TABLE IF NOT EXISTS torrent_upload_stats (hash VARCHAR(40) NOT NULL, downloader_id VARCHAR(36) NOT NULL, uploaded BIGINT DEFAULT 0, PRIMARY KEY (hash, downloader_id)) ENGINE=InnoDB ROW_FORMAT=Dynamic"
             )
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS `sites` (`id` mediumint NOT NULL AUTO_INCREMENT, `site` varchar(255) UNIQUE DEFAULT NULL, `nickname` varchar(255) DEFAULT NULL, `base_url` varchar(255) DEFAULT NULL, `special_tracker_domain` varchar(255) DEFAULT NULL, `group` varchar(255) DEFAULT NULL, `cookie` TEXT DEFAULT NULL, `passkey` varchar(255) DEFAULT NULL,`migration` int(11) NOT NULL DEFAULT 1, `proxy` TINYINT(1) NOT NULL DEFAULT 0, `speed_limit` int(11) NOT NULL DEFAULT 0, PRIMARY KEY (`id`)) ENGINE=InnoDB ROW_FORMAT=DYNAMIC"
+                "CREATE TABLE IF NOT EXISTS `sites` (`id` mediumint NOT NULL AUTO_INCREMENT, `site` varchar(255) UNIQUE DEFAULT NULL, `nickname` varchar(255) DEFAULT NULL, `base_url` varchar(255) DEFAULT NULL, `special_tracker_domain` varchar(255) DEFAULT NULL, `group` varchar(255) DEFAULT NULL, `cookie` TEXT DEFAULT NULL, `migration` int(11) NOT NULL DEFAULT 1, `proxy` TINYINT(1) NOT NULL DEFAULT 0, `speed_limit` int(11) NOT NULL DEFAULT 0, PRIMARY KEY (`id`)) ENGINE=InnoDB ROW_FORMAT=DYNAMIC"
             )
             # 创建种子参数表，用于存储从源站点提取的种子参数
             cursor.execute(
@@ -414,11 +412,11 @@ class DatabaseManager:
                 "CREATE TABLE IF NOT EXISTS torrent_upload_stats (hash VARCHAR(40) NOT NULL, downloader_id VARCHAR(36) NOT NULL, uploaded BIGINT DEFAULT 0, PRIMARY KEY (hash, downloader_id))"
             )
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS sites (id SERIAL PRIMARY KEY, site VARCHAR(255) UNIQUE, nickname VARCHAR(255), base_url VARCHAR(255), special_tracker_domain VARCHAR(255), \"group\" VARCHAR(255), cookie TEXT, passkey VARCHAR(255), migration INTEGER NOT NULL DEFAULT 1, proxy SMALLINT NOT NULL DEFAULT 0, speed_limit INTEGER NOT NULL DEFAULT 0)"
+                "CREATE TABLE IF NOT EXISTS sites (id SERIAL PRIMARY KEY, site VARCHAR(255) UNIQUE, nickname VARCHAR(255), base_url VARCHAR(255), special_tracker_domain VARCHAR(255), \"group\" VARCHAR(255), cookie TEXT, migration INTEGER NOT NULL DEFAULT 1, proxy SMALLINT NOT NULL DEFAULT 0, speed_limit INTEGER NOT NULL DEFAULT 0)"
             )
             # 创建种子参数表，用于存储从源站点提取的种子参数
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS seed_parameters (hash VARCHAR(40) NOT NULL, torrent_id VARCHAR(255) NOT NULL, site_name VARCHAR(255) NOT NULL, nickname VARCHAR(255), save_path TEXT, name TEXT, title TEXT, subtitle TEXT, imdb_link TEXT, douban_link TEXT, type VARCHAR(100), medium VARCHAR(100), video_codec VARCHAR(100), audio_codec VARCHAR(100), resolution VARCHAR(100), team VARCHAR(100), source VARCHAR(100), tags TEXT, poster TEXT, screenshots TEXT, statement TEXT, body TEXT, mediainfo TEXT, title_components TEXT, removed_ardtudeclarations TEXT, is_deleted BOOLEAN NOT NULL DEFAULT FALSE, created_at TIMESTAMP NOT NULL, updated_at TIMESTAMP NOT NULL, PRIMARY KEY (hash, torrent_id, site_name))"
+                "CREATE TABLE IF NOT EXISTS seed_parameters (hash VARCHAR(40) NOT NULL, torrent_id VARCHAR(255) NOT NULL, site_name VARCHAR(255) NOT NULL, nickname VARCHAR(255), save_path TEXT, name TEXT, title TEXT, subtitle TEXT, imdb_link TEXT, douban_link TEXT, type VARCHAR(100), medium VARCHAR(100), video_codec VARCHAR(100), audio_codec VARCHAR(100), resolution VARCHAR(100), team VARCHAR(100), source VARCHAR(100), tags TEXT, poster TEXT, screenshots TEXT, statement TEXT, body TEXT, mediainfo TEXT, title_components TEXT, removed_ardtudeclarations TEXT, downloader_id VARCHAR(36), is_deleted BOOLEAN NOT NULL DEFAULT FALSE, created_at TIMESTAMP NOT NULL, updated_at TIMESTAMP NOT NULL, PRIMARY KEY (hash, torrent_id, site_name))"
             )
             # 创建批量转种记录表
             cursor.execute(
@@ -447,7 +445,7 @@ class DatabaseManager:
                 "CREATE TABLE IF NOT EXISTS torrent_upload_stats (hash TEXT NOT NULL, downloader_id TEXT NOT NULL, uploaded INTEGER DEFAULT 0, PRIMARY KEY (hash, downloader_id))"
             )
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS sites (id INTEGER PRIMARY KEY AUTOINCREMENT, site TEXT UNIQUE, nickname TEXT, base_url TEXT, special_tracker_domain TEXT, `group` TEXT, cookie TEXT, passkey TEXT, migration INTEGER NOT NULL DEFAULT 1, proxy INTEGER NOT NULL DEFAULT 0, speed_limit INTEGER NOT NULL DEFAULT 0)"
+                "CREATE TABLE IF NOT EXISTS sites (id INTEGER PRIMARY KEY AUTOINCREMENT, site TEXT UNIQUE, nickname TEXT, base_url TEXT, special_tracker_domain TEXT, `group` TEXT, cookie TEXT, migration INTEGER NOT NULL DEFAULT 1, proxy INTEGER NOT NULL DEFAULT 0, speed_limit INTEGER NOT NULL DEFAULT 0)"
             )
             # 创建种子参数表，用于存储从源站点提取的种子参数
             cursor.execute(

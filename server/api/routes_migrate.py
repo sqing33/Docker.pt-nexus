@@ -903,7 +903,7 @@ def migrate_publish():
 
     try:
         target_info = db_manager.get_site_by_nickname(target_site_name)
-        if not target_info or not target_info.get("passkey"):
+        if not target_info:
             return jsonify({
                 "success": False,
                 "logs": f"错误: 目标站点 '{target_site_name}' 配置不完整。"
@@ -1288,14 +1288,13 @@ def migrate_torrent():
                 }),
                 404,
             )
-        if not target_info or not target_info.get(
-                "cookie") or not target_info.get("passkey"):
+        if not target_info or not target_info.get("cookie"):
             return (
                 jsonify({
                     "success":
                     False,
                     "logs":
-                    f"错误：未找到目标站点 '{target_site_name}' 或其缺少 Cookie/Passkey 配置。",
+                    f"错误：未找到目标站点 '{target_site_name}' 或其缺少 Cookie 配置。",
                 }),
                 404,
             )
@@ -1471,7 +1470,7 @@ def get_sites_status():
 
         # 从数据库查询所有站点的关键信息，包括英文站点名
         cursor.execute(
-            "SELECT nickname, site, cookie, passkey, migration FROM sites WHERE nickname IS NOT NULL AND nickname != ''"
+            "SELECT nickname, site, cookie, migration FROM sites WHERE nickname IS NOT NULL AND nickname != ''"
         )
         sites_from_db = cursor.fetchall()
 
@@ -1489,7 +1488,6 @@ def get_sites_status():
                 "name": nickname,
                 "site": row.get("site"),  # 添加英文站点名
                 "has_cookie": bool(row.get("cookie")),
-                "has_passkey": bool(row.get("passkey")),
                 "is_source": migration_status in [1, 3],
                 "is_target": migration_status in [2, 3]
             }

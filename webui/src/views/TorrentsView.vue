@@ -351,7 +351,6 @@ interface Torrent {
 interface SiteStatus {
   name: string;
   has_cookie: boolean;
-  has_passkey: boolean;
   is_source: boolean;
   is_target: boolean;
 }

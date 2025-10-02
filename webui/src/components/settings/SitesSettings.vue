@@ -23,14 +23,7 @@
             </el-icon>
             <span>同步Cookie</span>
           </el-button>
-          <el-button type="success" size="large" @click="handleFetchAllPasskeys" :loading="isPasskeyActionLoading"
-            style="margin-left: 10px;">
-            <el-icon>
-              <Refresh />
-            </el-icon>
-            <span>获取Passkey</span>
-          </el-button>
-        </el-form-item>
+                  </el-form-item>
       </el-form>
 
       <div class="right-action-group">
@@ -74,14 +67,7 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="Passkey" width="100" align="center">
-          <template #default="scope">
-            <el-tag :type="scope.row.has_passkey ? 'success' : 'danger'">
-              {{ scope.row.has_passkey ? '已配置' : '未配置' }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="180" align="center" fixed="right">
+                <el-table-column label="操作" width="180" align="center" fixed="right">
           <template #default="scope">
             <el-button type="primary" :icon="Edit" link @click="handleOpenDialog('edit', scope.row)">
               编辑
@@ -138,10 +124,7 @@
         <el-form-item label="Cookie" prop="cookie">
           <el-input v-model="siteForm.cookie" type="textarea" :rows="3" placeholder="从浏览器获取的Cookie字符串"></el-input>
         </el-form-item>
-        <el-form-item label="Passkey" prop="passkey">
-          <el-input v-model="siteForm.passkey" placeholder="站点的Passkey"></el-input>
-        </el-form-item>
-        <el-form-item label="上传限速 (MB/s)" prop="speed_limit">
+                <el-form-item label="上传限速 (MB/s)" prop="speed_limit">
           <el-input-number v-model="siteForm.speed_limit" :min="0" :max="1000" placeholder="0 表示不限速"
             style="width: 100%" />
           <div class="form-tip">单位为 MB/s，0 表示不限速</div>
@@ -170,7 +153,6 @@ const isSaving = ref(false) // 用于站点编辑对话框的保存按钮
 const sitesList = ref([]) // 存储从后端获取的原始列表
 const isSitesLoading = ref(false)
 const isCookieActionLoading = ref(false) // [新增] 用于新的"同步Cookie"按钮的加载状态
-const isPasskeyActionLoading = ref(false) // 用于获取Passkey按钮的加载状态
 const cookieCloudForm = ref({ url: '', key: '', e2e_password: '' })
 const searchQuery = ref('')
 const siteFilter = ref('active')
@@ -194,7 +176,6 @@ const siteForm = ref({
   special_tracker_domain: '',
   group: '',
   cookie: '',
-  passkey: '',
   proxy: 0,
   speed_limit: 0, // 前端显示和输入使用 MB/s 单位
 })
@@ -315,32 +296,6 @@ const handleSaveAndSync = async () => {
   }
 }
 
-// [新增] 获取所有站点Passkey的方法
-const handleFetchAllPasskeys = async () => {
-  isPasskeyActionLoading.value = true
-  try {
-    const response = await axios.post(`${API_BASE_URL}/sites/fetch_all_passkeys`, {}, {
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    })
-    if (response.data.success) {
-      // 使用 HTML 格式显示消息，支持换行
-      ElMessage.success({
-        message: response.data.message,
-        dangerouslyUseHTMLString: true
-      })
-      await fetchSites() // 刷新站点列表以显示更新的Passkey状态
-    } else {
-      ElMessage.error(response.data.message || '获取Passkey失败！')
-    }
-  } catch (error) {
-    const msg = error.response?.data?.message || '请求失败，请检查网络或后端服务。'
-    ElMessage.error(msg)
-  } finally {
-    isPasskeyActionLoading.value = false
-  }
-}
 
 const handleOpenDialog = (mode, site = null) => {
   dialogMode.value = mode
@@ -357,7 +312,6 @@ const handleOpenDialog = (mode, site = null) => {
       special_tracker_domain: '',
       group: '',
       cookie: '',
-      passkey: '',
       proxy: 0,
       speed_limit: 0,
     }
