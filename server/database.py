@@ -57,9 +57,6 @@ class DatabaseManager:
             conn.row_factory = sqlite3.Row
             return conn.cursor()
 
-
-    
-        
     def get_placeholder(self):
         """返回数据库类型对应的正确参数占位符。"""
         return "%s" if self.db_type in ["mysql", "postgresql"] else "?"
@@ -210,7 +207,6 @@ class DatabaseManager:
             cursor.close()
             conn.close()
 
-    
     def sync_sites_from_json(self):
         """从 sites_data.json 同步站点数据到数据库"""
         try:
@@ -391,7 +387,7 @@ class DatabaseManager:
             )
             # 创建批量转种记录表
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS batch_enhance_records (id INT AUTO_INCREMENT PRIMARY KEY, batch_id VARCHAR(255) NOT NULL, torrent_id VARCHAR(255) NOT NULL, source_site VARCHAR(255) NOT NULL, target_site VARCHAR(255) NOT NULL, video_size_gb DECIMAL(8,2), status VARCHAR(50) NOT NULL, success_url TEXT, error_detail TEXT, downloader_add_result TEXT, processed_at DATETIME DEFAULT CURRENT_TIMESTAMP, INDEX idx_batch_records_batch_id (batch_id), INDEX idx_batch_records_torrent_id (torrent_id), INDEX idx_batch_records_status (status), INDEX idx_batch_records_processed_at (processed_at)) ENGINE=InnoDB ROW_FORMAT=DYNAMIC"
+                "CREATE TABLE IF NOT EXISTS batch_enhance_records (id INT AUTO_INCREMENT PRIMARY KEY, title TEXT, batch_id VARCHAR(255) NOT NULL, torrent_id VARCHAR(255) NOT NULL, source_site VARCHAR(255) NOT NULL, target_site VARCHAR(255) NOT NULL, video_size_gb DECIMAL(8,2), status VARCHAR(50) NOT NULL, success_url TEXT, error_detail TEXT, downloader_add_result TEXT, processed_at DATETIME DEFAULT CURRENT_TIMESTAMP, progress VARCHAR(20), INDEX idx_batch_records_batch_id (batch_id), INDEX idx_batch_records_torrent_id (torrent_id), INDEX idx_batch_records_status (status), INDEX idx_batch_records_processed_at (processed_at)) ENGINE=InnoDB ROW_FORMAT=DYNAMIC"
             )
         # 表创建逻辑 (PostgreSQL)
         elif self.db_type == "postgresql":
@@ -420,12 +416,20 @@ class DatabaseManager:
             )
             # 创建批量转种记录表
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS batch_enhance_records (id SERIAL PRIMARY KEY, batch_id VARCHAR(255) NOT NULL, torrent_id VARCHAR(255) NOT NULL, source_site VARCHAR(255) NOT NULL, target_site VARCHAR(255) NOT NULL, video_size_gb DECIMAL(8,2), status VARCHAR(50) NOT NULL, success_url TEXT, error_detail TEXT, downloader_add_result TEXT, processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+                "CREATE TABLE IF NOT EXISTS batch_enhance_records (id SERIAL PRIMARY KEY, title TEXT, batch_id VARCHAR(255) NOT NULL, torrent_id VARCHAR(255) NOT NULL, source_site VARCHAR(255) NOT NULL, target_site VARCHAR(255) NOT NULL, video_size_gb DECIMAL(8,2), status VARCHAR(50) NOT NULL, success_url TEXT, error_detail TEXT, downloader_add_result TEXT, processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, progress VARCHAR(20))"
             )
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_batch_records_batch_id ON batch_enhance_records(batch_id)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_batch_records_torrent_id ON batch_enhance_records(torrent_id)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_batch_records_status ON batch_enhance_records(status)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_batch_records_processed_at ON batch_enhance_records(processed_at)")
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_batch_records_batch_id ON batch_enhance_records(batch_id)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_batch_records_torrent_id ON batch_enhance_records(torrent_id)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_batch_records_status ON batch_enhance_records(status)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_batch_records_processed_at ON batch_enhance_records(processed_at)"
+            )
         # 表创建逻辑 (SQLite)
         else:
             cursor.execute(
@@ -453,12 +457,20 @@ class DatabaseManager:
             )
             # 创建批量转种记录表
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS batch_enhance_records (id INTEGER PRIMARY KEY AUTOINCREMENT, batch_id TEXT NOT NULL, torrent_id TEXT NOT NULL, source_site TEXT NOT NULL, target_site TEXT NOT NULL, video_size_gb REAL, status TEXT NOT NULL, success_url TEXT, error_detail TEXT, downloader_add_result TEXT, processed_at TEXT DEFAULT CURRENT_TIMESTAMP)"
+                "CREATE TABLE IF NOT EXISTS batch_enhance_records (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, batch_id TEXT NOT NULL, torrent_id TEXT NOT NULL, source_site TEXT NOT NULL, target_site TEXT NOT NULL, video_size_gb REAL, status TEXT NOT NULL, success_url TEXT, error_detail TEXT, downloader_add_result TEXT, processed_at TEXT DEFAULT CURRENT_TIMESTAMP, progress TEXT)"
             )
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_batch_records_batch_id ON batch_enhance_records(batch_id)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_batch_records_torrent_id ON batch_enhance_records(torrent_id)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_batch_records_status ON batch_enhance_records(status)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_batch_records_processed_at ON batch_enhance_records(processed_at)")
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_batch_records_batch_id ON batch_enhance_records(batch_id)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_batch_records_torrent_id ON batch_enhance_records(torrent_id)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_batch_records_status ON batch_enhance_records(status)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_batch_records_processed_at ON batch_enhance_records(processed_at)"
+            )
 
         conn.commit()
 
@@ -631,25 +643,35 @@ class DatabaseManager:
             cumulative_map = {}
             for row in cumulative_rows:
                 key = (row["hour_group"] if isinstance(row, dict) else row[0],
-                       row["downloader_id"] if isinstance(row, dict) else row[1])
+                       row["downloader_id"]
+                       if isinstance(row, dict) else row[1])
                 cumulative_map[key] = (
-                    int(row["final_cumulative_uploaded"] if isinstance(row, dict) else row[2]),
-                    int(row["final_cumulative_downloaded"] if isinstance(row, dict) else row[3])
-                )
+                    int(row["final_cumulative_uploaded"] if isinstance(
+                        row, dict) else row[2]),
+                    int(row["final_cumulative_downloaded"] if isinstance(
+                        row, dict) else row[3]))
 
             # 准备插入参数
             upsert_params = [
                 (row["hour_group"] if isinstance(row, dict) else row[0],
                  row["downloader_id"] if isinstance(row, dict) else row[1],
-                 int(row["total_uploaded"] if isinstance(row, dict) else row[2]),
-                 int(row["total_downloaded"] if isinstance(row, dict) else row[3]),
-                 int(row["avg_upload_speed"] if isinstance(row, dict) else row[4]),
-                 int(row["avg_download_speed"] if isinstance(row, dict) else row[5]),
+                 int(row["total_uploaded"] if isinstance(row, dict) else row[2]
+                     ),
+                 int(row["total_downloaded"] if isinstance(row, dict
+                                                           ) else row[3]),
+                 int(row["avg_upload_speed"] if isinstance(row, dict
+                                                           ) else row[4]),
+                 int(row["avg_download_speed"] if isinstance(row, dict
+                                                             ) else row[5]),
                  int(row["samples"] if isinstance(row, dict) else row[6]),
-                 cumulative_map.get((row["hour_group"] if isinstance(row, dict) else row[0],
-                                   row["downloader_id"] if isinstance(row, dict) else row[1]), (0, 0))[0],
-                 cumulative_map.get((row["hour_group"] if isinstance(row, dict) else row[0],
-                                   row["downloader_id"] if isinstance(row, dict) else row[1]), (0, 0))[1])
+                 cumulative_map.get(
+                     (row["hour_group"] if isinstance(row, dict) else row[0],
+                      row["downloader_id"]
+                      if isinstance(row, dict) else row[1]), (0, 0))[0],
+                 cumulative_map.get(
+                     (row["hour_group"] if isinstance(row, dict) else row[0],
+                      row["downloader_id"]
+                      if isinstance(row, dict) else row[1]), (0, 0))[1])
                 for row in aggregated_rows
             ]
 
@@ -746,8 +768,8 @@ def reconcile_historical_data(db_manager, config):
                 total_dl = int(stats.cumulative_stats.downloaded_bytes)
                 total_ul = int(stats.cumulative_stats.uploaded_bytes)
 
-            records.append(
-                (current_timestamp_str, client_id, 0, 0, 0, 0, total_ul, total_dl))
+            records.append((current_timestamp_str, client_id, 0, 0, 0, 0,
+                            total_ul, total_dl))
             logging.info(f"客户端 '{client_config['name']}' 的状态已同步。")
         except Exception as e:
             logging.error(f"[{client_config['name']}] 状态同步失败: {e}")
@@ -762,8 +784,7 @@ def reconcile_historical_data(db_manager, config):
                 f"INSERT INTO traffic_stats (stat_datetime, downloader_id, uploaded, downloaded, upload_speed, download_speed, cumulative_uploaded, cumulative_downloaded) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(stat_datetime, downloader_id) DO UPDATE SET uploaded = excluded.uploaded, downloaded = excluded.downloaded, cumulative_uploaded = excluded.cumulative_uploaded, cumulative_downloaded = excluded.cumulative_downloaded"
             )
             cursor.executemany(sql_insert, records)
-            logging.info(
-                f"已成功插入 {len(records)} 条初始记录到 traffic_stats。")
+            logging.info(f"已成功插入 {len(records)} 条初始记录到 traffic_stats。")
         except Exception as e:
             logging.error(f"插入初始记录失败: {e}")
             conn.rollback()
