@@ -84,6 +84,7 @@ def create_app():
     from api.routes_sites import sites_bp
     from api.routes_cross_seed_data import cross_seed_data_bp
     from api.routes_config import bp_config
+    from api.routes_local_query import local_query_bp
 
     # 将核心服务实例注入到每个蓝图中，以便路由函数可以访问
     # 使用 setattr 避免类型检查器报错
@@ -96,6 +97,7 @@ def create_app():
     setattr(migrate_bp, "db_manager", db_manager)
     setattr(migrate_bp, "config_manager", config_manager)  # 迁移模块也可能需要配置信息
     setattr(sites_bp, "db_manager", db_manager)
+    setattr(local_query_bp, "db_manager", db_manager)
 
     # 将数据库管理器添加到应用配置中，以便在其他地方可以通过current_app访问
     app.config['DB_MANAGER'] = db_manager
@@ -169,6 +171,7 @@ def create_app():
     app.register_blueprint(sites_bp)
     app.register_blueprint(cross_seed_data_bp)
     app.register_blueprint(bp_config)
+    app.register_blueprint(local_query_bp)
 
     # --- 步骤 4: 执行初始数据聚合 ---
     logging.info("正在执行初始数据聚合...")
