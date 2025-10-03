@@ -749,13 +749,7 @@ def reconcile_historical_data(db_manager, config):
         try:
             total_dl, total_ul = 0, 0
             if client_config["type"] == "qbittorrent":
-                api_config = {
-                    k: v
-                    for k, v in client_config.items() if k not in [
-                        "id", "name", "type", "enabled", "use_proxy",
-                        "proxy_port"
-                    ]
-                }
+                api_config = _prepare_api_config(client_config)
                 client = Client(**api_config)
                 client.auth_log_in()
                 server_state = client.sync_maindata().get('server_state', {})

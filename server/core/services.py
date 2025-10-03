@@ -83,12 +83,21 @@ def load_site_maps_from_db(db_manager):
 
 
 def _prepare_api_config(downloader_config):
-    """准备用于API客户端的配置字典，智能处理host和port。"""
-    api_config = {
-        k: v
-        for k, v in downloader_config.items() if k not in
-        ["id", "name", "type", "enabled", "use_proxy", "proxy_port"]
-    }
+    """准备用于API客户端的配置字典，只包含客户端需要的字段。"""
+    # 定义客户端实际需要的字段
+    if downloader_config["type"] == "qbittorrent":
+        # qBittorrent 客户端需要的字段
+        allowed_keys = ["host", "username", "password"]
+    elif downloader_config["type"] == "transmission":
+        # Transmission 客户端需要的字段
+        allowed_keys = ["host", "port", "username", "password"]
+    else:
+        allowed_keys = ["host", "username", "password"]
+
+    # 只提取需要的字段
+    api_config = {k: v for k, v in downloader_config.items() if k in allowed_keys}
+
+    # Transmission 特殊处理：智能解析 host 和 port
     if downloader_config["type"] == "transmission":
         if api_config.get("host"):
             host_value = api_config["host"]
@@ -97,8 +106,7 @@ def _prepare_api_config(downloader_config):
             parsed_url = urlparse(host_value)
             api_config["host"] = parsed_url.hostname
             api_config["port"] = parsed_url.port or 9091
-    elif downloader_config["type"] == "qbittorrent" and "port" in api_config:
-        del api_config["port"]
+
     return api_config
 
 

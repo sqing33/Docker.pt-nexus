@@ -398,7 +398,37 @@ def update_settings():
     restart_needed = False
 
     if "downloaders" in new_config:
-        restart_needed = True
+        # 检查是否只是修改了 path_mappings，而没有修改其他关键配置
+        current_downloaders = current_config.get("downloaders", [])
+        need_restart = False
+
+        # 如果下载器数量变化，需要重启
+        if len(new_config["downloaders"]) != len(current_downloaders):
+            need_restart = True
+        else:
+            # 比较每个下载器的关键字段
+            current_dl_map = {d["id"]: d for d in current_downloaders}
+            for new_dl in new_config["downloaders"]:
+                dl_id = new_dl.get("id")
+                if not dl_id or dl_id not in current_dl_map:
+                    need_restart = True
+                    break
+
+                current_dl = current_dl_map[dl_id]
+                # 检查关键字段是否变化（不包括 path_mappings）
+                key_fields = ["enabled", "type", "host", "username", "use_proxy", "proxy_port"]
+                for field in key_fields:
+                    if new_dl.get(field) != current_dl.get(field):
+                        need_restart = True
+                        break
+
+                # 检查密码是否变化（密码为空表示未修改）
+                if new_dl.get("password") and new_dl.get("password") != current_dl.get("password"):
+                    need_restart = True
+                    break
+
+        restart_needed = need_restart
+
         current_passwords = {
             d["id"]: d.get("password", "")
             for d in current_config.get("downloaders", [])
@@ -478,11 +508,7 @@ def test_connection():
                     return jsonify({"success": False, "message": f"'{name}' 代理连接测试失败，请检查代理服务器和下载器配置。"}), 200
             else:
                 # 使用直连测试
-                api_config = {
-                    k: v
-                    for k, v in client_config.items()
-                    if k not in ["id", "name", "type", "enabled", "use_proxy", "proxy_port"]
-                }
+                api_config = services._prepare_api_config(client_config)
                 client = Client(**api_config)
                 client.auth_log_in()
         elif client_config.get("type") == "transmission":
@@ -633,11 +659,7 @@ def get_downloader_info_api():
                     d_info["status"] = "连接失败"
                     d_info["details"]["错误信息"] = "通过代理连接失败"
             elif d_info["type"] == "qbittorrent":
-                api_config = {
-                    k: v
-                    for k, v in client_config.items()
-                    if k not in ["id", "name", "type", "enabled", "use_proxy", "proxy_port"]
-                }
+                api_config = services._prepare_api_config(client_config)
                 client = Client(**api_config)
                 client.auth_log_in()
                 d_info["details"]["版本"] = client.app.version

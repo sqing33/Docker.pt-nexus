@@ -23,6 +23,62 @@ from utils import ensure_scheme
 from PIL import Image
 
 
+def translate_path(downloader_id: str, remote_path: str) -> str:
+    """
+    将下载器的远程路径转换为 PT Nexus 容器内的本地路径。
+
+    :param downloader_id: 下载器ID
+    :param remote_path: 下载器中的远程路径
+    :return: PT Nexus 容器内可访问的本地路径
+    """
+    if not downloader_id or not remote_path:
+        return remote_path
+
+    # 获取下载器配置
+    config = config_manager.get()
+    downloaders = config.get("downloaders", [])
+
+    for downloader in downloaders:
+        if downloader.get("id") == downloader_id:
+            path_mappings = downloader.get("path_mappings", [])
+            if not path_mappings:
+                # 没有配置路径映射，直接返回原路径
+                return remote_path
+
+            # 按远程路径长度降序排序，优先匹配最长的路径（更精确）
+            sorted_mappings = sorted(
+                path_mappings,
+                key=lambda x: len(x.get('remote', '')),
+                reverse=True
+            )
+
+            for mapping in sorted_mappings:
+                remote = mapping.get('remote', '')
+                local = mapping.get('local', '')
+
+                if not remote or not local:
+                    continue
+
+                # 确保路径比较时统一处理末尾的斜杠
+                remote = remote.rstrip('/')
+                remote_path_normalized = remote_path.rstrip('/')
+
+                # 检查是否匹配（完全匹配或前缀匹配）
+                if remote_path_normalized == remote:
+                    # 完全匹配
+                    return local
+                elif remote_path_normalized.startswith(remote + '/'):
+                    # 前缀匹配，替换路径
+                    relative_path = remote_path_normalized[len(remote):].lstrip('/')
+                    return os.path.join(local, relative_path)
+
+            # 没有匹配的映射，返回原路径
+            return remote_path
+
+    # 没有找到对应的下载器，返回原路径
+    return remote_path
+
+
 def _upload_to_pixhost(image_path: str):
     """
     将单个图片文件上传到 Pixhost.to。
@@ -523,14 +579,19 @@ def upload_data_mediaInfo(mediaInfo: str,
             print(f"通过代理获取 MediaInfo 失败: {e}")
 
     # --- 【核心修改】仿照截图逻辑，构建精确的搜索路径 ---
-    path_to_search = save_path  # 默认使用基础路径
+    # 首先应用路径映射转换
+    translated_save_path = translate_path(downloader_id, save_path)
+    if translated_save_path != save_path:
+        print(f"路径映射: {save_path} -> {translated_save_path}")
+
+    path_to_search = translated_save_path  # 使用转换后的路径
     # 优先使用 torrent_name (实际文件夹名)，如果不存在再使用 content_name (解析后的标题)
     if torrent_name:
-        path_to_search = os.path.join(save_path, torrent_name)
+        path_to_search = os.path.join(translated_save_path, torrent_name)
         print(f"已提供 torrent_name，将在精确路径中搜索: '{path_to_search}'")
     elif content_name:
         # 如果提供了具体的内容名称（主标题），则拼接成一个更精确的路径
-        path_to_search = os.path.join(save_path, content_name)
+        path_to_search = os.path.join(translated_save_path, content_name)
         print(f"已提供 content_name，将在精确路径中搜索: '{path_to_search}'")
 
     # 使用新构建的路径来查找视频文件
@@ -937,11 +998,16 @@ def upload_data_screenshot(source_info,
     num_screenshots = 5
     print(f"已选择图床服务: {hoster}, 截图数量: {num_screenshots}")
 
+    # 首先应用路径映射转换
+    translated_save_path = translate_path(downloader_id, save_path)
+    if translated_save_path != save_path:
+        print(f"路径映射: {save_path} -> {translated_save_path}")
+
     if torrent_name:
-        full_video_path = os.path.join(save_path, torrent_name)
+        full_video_path = os.path.join(translated_save_path, torrent_name)
         print(f"使用完整视频路径: {full_video_path}")
     else:
-        full_video_path = save_path
+        full_video_path = translated_save_path
         print(f"使用原始路径: {full_video_path}")
 
     # --- 代理检查和处理逻辑 (此部分保持不变) ---
