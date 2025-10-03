@@ -25,6 +25,7 @@ import (
 type SeedRecord struct {
 	BatchID     string  `json:"batch_id"`
 	TorrentID   string  `json:"torrent_id"`
+	Title       string  `json:"title,omitempty"`
 	SourceSite  string  `json:"source_site"`
 	TargetSite  string  `json:"target_site"`
 	VideoSizeGB float64 `json:"video_size_gb,omitempty"`
@@ -311,6 +312,7 @@ func recordSeedResult(record SeedRecord) error {
 	// 调用Python API记录种子处理结果
 	recordData := map[string]interface{}{
 		"batch_id":      record.BatchID,
+		"title":         record.Title,
 		"torrent_id":    record.TorrentID,
 		"source_site":   record.SourceSite,
 		"target_site":   record.TargetSite,
@@ -674,13 +676,14 @@ func sanitizeFilename(title string) string {
 }
 
 // 检查视频文件大小（通过解析torrent文件）
-func checkVideoSize(torrentID, siteName string) (float64, string, error) {
+func checkVideoSize(torrentID, siteName string) (float64, string, string, error) {
 	logInfo("     🔍 检查种子大小: %s@%s", torrentID, siteName)
 
 	// 获取种子标题
 	title, err := getSeedTitle(torrentID, siteName)
 	if err != nil {
-		return 0, "", fmt.Errorf("获取种子标题失败: %v", err)
+		// ✨ 即使获取标题失败，也返回空标题，让过滤流程继续
+		return 0, "", "", fmt.Errorf("获取种子标题失败: %v", err)
 	}
 
 	// 构造种子目录路径
@@ -691,7 +694,7 @@ func checkVideoSize(torrentID, siteName string) (float64, string, error) {
 	if _, err := os.Stat(seedDir); os.IsNotExist(err) {
 		err := downloadTorrentFile(torrentID, siteName)
 		if err != nil {
-			return 0, "", fmt.Errorf("下载种子文件失败: %v", err)
+			return 0, "", title, fmt.Errorf("下载种子文件失败: %v", err) // ✨ 返回 title
 		}
 	}
 
@@ -701,25 +704,26 @@ func checkVideoSize(torrentID, siteName string) (float64, string, error) {
 		// 如果找不到torrent文件，尝试下载
 		downloadErr := downloadTorrentFile(torrentID, siteName)
 		if downloadErr != nil {
-			return 0, "", fmt.Errorf("下载torrent文件失败: %v", downloadErr)
+			return 0, "", title, fmt.Errorf("下载torrent文件失败: %v", downloadErr) // ✨ 返回 title
 		}
 
 		// 下载成功后重新查找
 		torrentPath, err = findTorrentFile(seedDir)
 		if err != nil {
-			return 0, "", fmt.Errorf("下载后仍无法找到torrent文件: %v", err)
+			return 0, "", title, fmt.Errorf("下载后仍无法找到torrent文件: %v", err) // ✨ 返回 title
 		}
 	}
 
 	// 解析torrent文件获取大小信息
 	sizeGB, largestFile, err := extractVideoSizeFromTorrent(torrentPath)
 	if err != nil {
-		return 0, "", fmt.Errorf("解析torrent文件失败: %v", err)
+		return 0, "", title, fmt.Errorf("解析torrent文件失败: %v", err) // ✨ 返回 title
 	}
 
 	logInfo("     ✅ 解析完成: %.2fGB (%s)", sizeGB, largestFile)
 
-	return sizeGB, largestFile, nil
+	// ✨ 返回解析出的大小、最大文件名和获取到的标题
+	return sizeGB, largestFile, title, nil
 }
 
 // 下载种子文件（不进行数据解析或存储）
@@ -767,12 +771,13 @@ func filterSeeds(seeds []SeedInfo, options *FilterOptions) ([]SeedInfo, []SeedRe
 
 	for i, seed := range seeds {
 		logInfo("[%d/%d] 检查种子: %s", i+1, len(seeds), seed.TorrentID)
-		sizeGB, _, err := checkVideoSize(seed.TorrentID, seed.SiteName)
+		sizeGB, _, title, err := checkVideoSize(seed.TorrentID, seed.SiteName)
 
 		if err != nil {
 			logInfo("  ❌ 检查失败: %v", err)
 			filteredSeeds = append(filteredSeeds, SeedResult{
 				TorrentID:    seed.TorrentID,
+				Title:        title,
 				Status:       "filtered",
 				FilterReason: fmt.Sprintf("检查大小失败: %v", err),
 			})
@@ -802,8 +807,9 @@ func filterSeeds(seeds []SeedInfo, options *FilterOptions) ([]SeedInfo, []SeedRe
 			filteredSeeds = append(filteredSeeds, SeedResult{
 				TorrentID:    seed.TorrentID,
 				Status:       "filtered",
+				Title:        title,
 				VideoSizeGB:  sizeGB,
-				FilterReason: fmt.Sprintf("大小 %.2fGB 小于要求的 %.1fGB", sizeGB, minSizeGB),
+				FilterReason: fmt.Sprintf("小于 %.1fGB", minSizeGB),
 			})
 		} else {
 			logInfo("  ✅ 通过: %.2fGB", sizeGB)
@@ -1058,6 +1064,7 @@ func processBatchSeeds(req BatchRequest) BatchResponse {
 		record := SeedRecord{
 			BatchID:     currentBatchID,
 			TorrentID:   filteredSeed.TorrentID,
+			Title:       filteredSeed.Title,
 			SourceSite:  getSourceSiteFromSeeds(req.Seeds, filteredSeed.TorrentID),
 			TargetSite:  req.TargetSiteName,
 			VideoSizeGB: filteredSeed.VideoSizeGB,
@@ -1078,7 +1085,12 @@ func processBatchSeeds(req BatchRequest) BatchResponse {
 			i+1, len(validSeeds), seed.TorrentID, req.TargetSiteName)
 
 		seedStart := time.Now()
-		result := processSingleSeed(seed, req.TargetSiteName)
+
+		// === 主要修改点 ===
+		// 调用 processSingleSeed 时传入进度信息
+		result := processSingleSeed(seed, req.TargetSiteName, i+1, len(validSeeds))
+		// =================
+
 		seedDuration := time.Since(seedStart)
 
 		if result.Status == "success" {
@@ -1117,7 +1129,7 @@ func processBatchSeeds(req BatchRequest) BatchResponse {
 }
 
 // 处理单个种子
-func processSingleSeed(seed SeedInfo, targetSite string) SeedResult {
+func processSingleSeed(seed SeedInfo, targetSite string, currentIndex int, totalSeeds int) SeedResult {
 	// 获取种子信息和task_id
 	taskID, seedData, err := getSeedTaskIDAndData(seed.TorrentID, seed.SiteName)
 	if err != nil {
@@ -1149,6 +1161,11 @@ func processSingleSeed(seed SeedInfo, targetSite string) SeedResult {
 	// 站点请求频率控制
 	waitForSiteRequest(targetSite)
 
+	// === 主要修改点：添加进度信息 ===
+	// 构造进度字符串，例如 "[1/10]"
+	progressInfo := fmt.Sprintf("%d/%d", currentIndex, totalSeeds)
+	// === 主要修改点结束 ===
+
 	publishReq := map[string]interface{}{
 		"task_id":                taskID,
 		"targetSite":             targetSite,
@@ -1157,6 +1174,7 @@ func processSingleSeed(seed SeedInfo, targetSite string) SeedResult {
 		"auto_add_to_downloader": true,             // 启用自动添加
 		"batch_id":               currentBatchID,   // 传递批次ID给Python端
 		"video_size_gb":          seed.VideoSizeGB, // 传递视频大小
+		"batch_progress":         progressInfo,     // 添加进度信息
 	}
 
 	// 将 uploadData 添加到请求中

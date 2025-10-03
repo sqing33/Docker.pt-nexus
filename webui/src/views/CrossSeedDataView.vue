@@ -107,6 +107,7 @@
         <el-table-column type="selection" width="55" align="center" :selectable="checkSelectable"></el-table-column>
         <el-table-column prop="torrent_id" label="种子ID" align="center" width="80"
           show-overflow-tooltip></el-table-column>
+
         <el-table-column prop="nickname" label="站点名称" width="100" align="center">
           <template #default="scope">
             <div class="mapped-cell">{{ scope.row.nickname }}</div>
@@ -271,10 +272,11 @@
               <el-button v-if="refreshTimer" type="warning" size="small" @click="stopAutoRefresh">
                 停止自动刷新
               </el-button>
-              <el-button v-else-if="batchProgress && batchProgress.isRunning" type="success" size="small"
-                @click="startAutoRefresh">
+              <!-- ✨ CHANGE START: Modified button logic -->
+              <el-button v-else-if="isBatchRunning" type="success" size="small" @click="startAutoRefresh">
                 开启自动刷新
               </el-button>
+              <!-- ✨ CHANGE END -->
               <el-button type="danger" circle @click="closeRecordViewDialog" plain>X</el-button>
             </div>
           </div>
@@ -284,49 +286,85 @@
           <div class="records-table-container" v-if="records.length > 0">
             <el-table :data="records" style="width: 100%" size="small" v-loading="recordsLoading"
               element-loading-text="加载记录中..." stripe>
-              <el-table-column prop="batch_id" label="批次ID" width="150" show-overflow-tooltip>
+              <el-table-column prop="batch_id" label="批次ID" width="80" align="center">
                 <template #default="scope">
-                  <el-tag size="small" type="info">{{ scope.row.batch_id }}</el-tag>
+                  <el-tag size="small" :type="getBatchTagType(getBatchNumber(scope.row.batch_id))" effect="dark">
+                    {{ getBatchNumber(scope.row.batch_id) }}
+                  </el-tag>
                 </template>
               </el-table-column>
-              <el-table-column prop="torrent_id" label="种子ID" width="100" show-overflow-tooltip />
-              <el-table-column prop="source_site" label="源站点" width="100" />
-              <el-table-column prop="target_site" label="目标站点" width="100" />
-              <el-table-column prop="video_size_gb" label="视频大小" width="100" align="center">
+              <el-table-column prop="torrent_id" label="种子ID" width="65" align="center" show-overflow-tooltip />
+              <el-table-column prop="title" label="种子标题" min-width="250" align="center" show-overflow-tooltip>
+              </el-table-column>
+              <el-table-column prop="source_site" label="源站点" width="80" align="center" />
+              <el-table-column prop="target_site" label="目标站点" width="80" align="center" />
+              <el-table-column prop="video_size_gb" label="视频大小" width="80" align="center">
                 <template #default="scope">
                   <span v-if="scope.row.video_size_gb">{{ scope.row.video_size_gb }}GB</span>
                   <span v-else>-</span>
                 </template>
               </el-table-column>
-              <el-table-column prop="status" label="状态" width="100" align="center">
+              <el-table-column prop="status" label="状态" width="80" align="center">
                 <template #default="scope">
                   <el-tag :type="getRecordStatusTypeLocal(scope.row.status)" size="small">
                     {{ getRecordStatusTextLocal(scope.row.status) }}
                   </el-tag>
                 </template>
               </el-table-column>
-              <el-table-column prop="error_detail" label="详情" show-overflow-tooltip>
+              <el-table-column prop="progress" label="进度" width="100" align="center">
+                <template #default="scope">
+                  <div v-if="scope.row.progress" class="progress-cell">
+                    <el-progress :percentage="calculateProgress(scope.row.progress)"
+                      :color="getProgressColor(calculateProgress(scope.row.progress))" :stroke-width="8"
+                      :show-text="false" class="progress-bar" />
+                    <span class="progress-text">{{ scope.row.progress }}</span>
+                  </div>
+                  <span v-else>-</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="error_detail" label="详情" width="110" align="center" show-overflow-tooltip>
                 <template #default="scope">
                   <span v-if="scope.row.status === 'success' && scope.row.success_url">
-                    <el-link type="primary" :href="scope.row.success_url" target="_blank">查看转种页面</el-link>
+                    <el-link type="primary" :href="scope.row.success_url" target="_blank">查看详情页</el-link>
                   </span>
                   <span v-else-if="scope.row.error_detail">{{ scope.row.error_detail }}</span>
                   <span v-else>-</span>
                 </template>
               </el-table-column>
-              <el-table-column prop="downloader_add_result" label="下载器添加状态" width="140" align="center"
-                show-overflow-tooltip>
+              <el-table-column prop="downloader_add_result" label="下载器状态" width="80" align="center">
                 <template #default="scope">
-                  <el-tag v-if="scope.row.downloader_add_result"
-                    :type="getDownloaderAddStatusType(scope.row.downloader_add_result)" size="small">
-                    {{ formatDownloaderAddResult(scope.row.downloader_add_result) }}
-                  </el-tag>
+                  <!-- 检查是否有下载器结果 -->
+                  <template v-if="scope.row.downloader_add_result">
+                    <!-- ✨ 如果是失败状态 (以'失败'开头) -->
+                    <el-tooltip v-if="getDownloaderAddStatusType(scope.row.downloader_add_result) === 'danger'"
+                      effect="dark" placement="top">
+                      <!-- Tooltip 的内容：显示格式化后的完整错误信息 -->
+                      <template #content>
+                        {{ formatDownloaderAddResult(scope.row.downloader_add_result) }}
+                      </template>
+
+                      <!-- 表格中可见的内容：一个只显示'错误'的 Tag -->
+                      <el-tag type="danger" size="small">
+                        错误
+                      </el-tag>
+                    </el-tooltip>
+
+                    <!-- ✨ 如果是成功状态或其他非失败状态 -->
+                    <el-tag v-else :type="getDownloaderAddStatusType(scope.row.downloader_add_result)" size="small">
+                      {{ formatDownloaderAddResult(scope.row.downloader_add_result) }}
+                    </el-tag>
+                  </template>
+
+                  <!-- 如果没有下载器结果，显示 - -->
                   <span v-else>-</span>
                 </template>
               </el-table-column>
-              <el-table-column prop="processed_at" label="处理时间" width="160" align="center">
+              <el-table-column prop="processed_at" label="处理时间" width="100" align="center">
                 <template #default="scope">
-                  {{ formatRecordTimeLocal(scope.row.processed_at) }}
+                  <!-- ✨ 改动点：添加 div 和样式类以支持换行显示 -->
+                  <div class="mapped-cell datetime-cell">
+                    {{ formatRecordTimeLocal(scope.row.processed_at) }}
+                  </div>
                 </template>
               </el-table-column>
             </el-table>
@@ -457,7 +495,7 @@ const batchFetchDialogVisible = ref<boolean>(false)
 const recordDialogVisible = ref<boolean>(false)
 const records = ref<SeedRecord[]>([])
 const recordsLoading = ref<boolean>(false)
-const batchProgress = ref<BatchProgress | null>(null)
+const batchNumberMap = ref<Map<string, number>>(new Map()) // 批次ID到序号的映射
 
 // 定时刷新相关
 const refreshTimer = ref<ReturnType<typeof setInterval> | null>(null)
@@ -465,39 +503,18 @@ const REFRESH_INTERVAL = 5000 // 5秒刷新一次
 
 interface SeedRecord {
   id: number
+  title?: string
   batch_id: string
   torrent_id: string
   source_site: string
   target_site: string
   video_size_gb?: number
   status: string
+  progress?: string
   success_url?: string
   error_detail?: string
   downloader_add_result?: string
   processed_at: string
-}
-
-interface SeedProgress {
-  torrentId: string
-  siteName: string
-  targetSite: string
-  status: 'pending' | 'checking' | 'processing' | 'success' | 'failed' | 'filtered'
-  statusText: string
-  videoSize?: string
-  filterReason?: string
-  url?: string
-  error?: string
-  processingTime?: string
-}
-
-interface BatchProgress {
-  totalSeeds: number
-  processedSeeds: number
-  isRunning: boolean
-  startTime?: string
-  endTime?: string
-  summary?: string
-  seeds: SeedProgress[]
 }
 
 // 路径树相关
@@ -1254,24 +1271,21 @@ const openBatchCrossSeedDialog = () => {
   batchCrossSeedDialogVisible.value = true
 }
 
-// 处理批量转种
+// 处理批量转种 (启动任务并开启自动刷新)
 const handleBatchCrossSeed = async () => {
   // 直接使用筛选中的站点
-  const targetSiteName = activeFilters.value.excludeTargetSites
+  const targetSiteName = activeFilters.value.excludeTargetSites;
 
   if (!targetSiteName || targetSiteName.trim() === '') {
-    ElMessage.warning('请先在筛选中选择目标站点')
-    return
+    ElMessage.warning('请先在筛选中选择目标站点');
+    return;
   }
 
   try {
-    // 关闭批量转种对话框
-    closeBatchCrossSeedDialog()
+    // 1. 关闭批量转种的确认弹窗
+    closeBatchCrossSeedDialog();
 
-    // 立即打开记录窗口
-    openRecordViewDialog()
-
-    // 构造要传递给后端的数据
+    // 2. 构造要传递给后端的数据
     const batchData = {
       target_site_name: targetSiteName,
       seeds: selectedRows.value.map(row => ({
@@ -1280,35 +1294,44 @@ const handleBatchCrossSeed = async () => {
         site_name: row.site_name,
         nickname: row.nickname
       }))
-    }
+    };
 
-    console.log('批量转种数据:', batchData)
+    console.log('批量转种数据:', batchData);
 
-    // 通过vite代理调用Go服务的API
+    // 3. 立即打开记录窗口并显式地启动自动刷新
+    recordDialogVisible.value = true;
+    startAutoRefresh(); // 关键改动：在这里启动定时器
+
+    // 4. 通过vite代理调用Go服务的API来开始任务
     const response = await fetch('/go-api/batch-enhance', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(batchData)
-    })
+    });
 
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
+      // 如果API请求本身失败（如500错误），停止刷新并抛出错误
+      stopAutoRefresh();
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    const result = await response.json()
+    const result = await response.json();
     if (result.success) {
-      ElMessage.success(`批量转种请求已发送，成功 ${result.data.seeds_processed} 个，失败 ${result.data.seeds_failed} 个`)
-      // 可选：刷新数据
-      // fetchData()
+      ElMessage.success(`批量转种请求已发送，成功 ${result.data.seeds_processed} 个，失败 ${result.data.seeds_failed} 个`);
+      // 请求成功，让自动刷新继续运行
     } else {
-      ElMessage.error(result.error || '批量转种失败')
+      // 如果后端返回业务错误，也停止刷新
+      stopAutoRefresh();
+      ElMessage.error(result.error || '批量转种失败');
     }
   } catch (error: any) {
-    ElMessage.error(error.message || '网络错误')
+    // 捕获到任何JS或网络层面的错误时，都确保停止刷新
+    stopAutoRefresh();
+    ElMessage.error(error.message || '网络错误');
   }
-}
+};
 
 // 关闭批量转种对话框
 const closeBatchCrossSeedDialog = () => {
@@ -1325,6 +1348,42 @@ const closeBatchFetchDialog = () => {
   batchFetchDialogVisible.value = false
 }
 
+// ✨ CHANGE START: New helper function and computed property
+/**
+ * 检查进度字符串（如 '2/2'）是否代表已完成
+ * @param progressStr 进度字符串
+ */
+const isProgressComplete = (progressStr: string): boolean => {
+  if (!progressStr) return false;
+  const match = progressStr.match(/(\d+)\/(\d+)/);
+  if (match) {
+    const current = parseInt(match[1]);
+    const total = parseInt(match[2]);
+    // 进度完成的条件是：总数大于0，且当前值等于总数
+    return total > 0 && current === total;
+  }
+  return false;
+};
+
+/**
+ * 计算属性：判断是否有任务正在进行中
+ * 用于决定是否显示“开启自动刷新”按钮
+ */
+const isBatchRunning = computed(() => {
+  // 如果没有记录，则认为没有任务在运行
+  if (records.value.length === 0) return false;
+
+  // 获取最新一条记录（通常是第一条）
+  const latestRecord = records.value[0];
+
+  // 如果最新记录没有进度信息，可以认为任务刚开始，或状态未知，显示刷新按钮
+  if (!latestRecord.progress) return true;
+
+  // 如果最新记录的进度未满，则任务仍在进行中
+  return !isProgressComplete(latestRecord.progress);
+});
+// ✨ CHANGE END
+
 // 启动定时刷新
 const startAutoRefresh = () => {
   // 先清除任何现有的定时器
@@ -1338,15 +1397,18 @@ const startAutoRefresh = () => {
     if (recordDialogVisible.value) {
       await refreshRecords()
 
-      // 检查是否还有正在处理的种子
-      if (batchProgress.value && !batchProgress.value.isRunning) {
-        // 批量处理已完成，延迟3秒后停止自动刷新
+      // ✨ CHANGE START: New logic to stop auto-refresh based on the latest record's progress
+      // 检查最新一条记录的进度是否已完成
+      if (records.value.length > 0 && isProgressComplete(records.value[0].progress || '')) {
+        // 延迟3秒后停止，以确保最终状态已完全显示
         setTimeout(() => {
-          if (!batchProgress.value?.isRunning) {
-            stopAutoRefresh()
+          // 在停止前再次检查，防止在3秒延迟期间有新任务开始
+          if (records.value.length > 0 && isProgressComplete(records.value[0].progress || '')) {
+            stopAutoRefresh();
           }
-        }, 3000)
+        }, 3000);
       }
+      // ✨ CHANGE END
     } else {
       // 如果记录窗口已关闭，停止定时器
       stopAutoRefresh()
@@ -1364,9 +1426,9 @@ const stopAutoRefresh = () => {
 
 // 打开记录查看对话框
 const openRecordViewDialog = () => {
-  recordDialogVisible.value = true
-  startAutoRefresh()
-}
+  recordDialogVisible.value = true;
+  refreshRecords(); // 打开时加载一次记录
+};
 
 // 关闭记录查看对话框
 const closeRecordViewDialog = () => {
@@ -1378,6 +1440,9 @@ const closeRecordViewDialog = () => {
 const refreshRecords = async () => {
   recordsLoading.value = true
   try {
+    // 清空批次映射，确保每次刷新从1开始
+    resetBatchNumberMap()
+
     // 通过vite代理调用Go服务的记录API
     const response = await fetch('/go-api/records', {
       method: 'GET',
@@ -1428,15 +1493,18 @@ const clearRecordsLocal = async () => {
 
     if (response.ok) {
       records.value = []
+      resetBatchNumberMap() // 清空批次映射
       ElMessage.success('记录已清空')
     } else {
       // 如果API不存在，只是清空本地显示
       records.value = []
+      resetBatchNumberMap() // 清空批次映射
       ElMessage.success('本地记录已清空')
     }
   } catch (error) {
     // 如果请求失败，只是清空本地显示
     records.value = []
+    resetBatchNumberMap() // 清空批次映射
     ElMessage.success('本地记录已清空')
   }
 }
@@ -1463,6 +1531,32 @@ const getRecordStatusTextLocal = (status: string) => {
     case 'pending': return '等待中'
     default: return '未知'
   }
+}
+
+// 获取批次序号显示
+const getBatchNumber = (batchId: string) => {
+  if (!batchId) return '-'
+
+  // 如果还没有映射，自动生成序号
+  if (!batchNumberMap.value.has(batchId)) {
+    batchNumberMap.value.set(batchId, batchNumberMap.value.size + 1)
+  }
+
+  return batchNumberMap.value.get(batchId)
+}
+
+// 根据批次序号获取标签类型（颜色）
+const getBatchTagType = (batchNumber: number | string | undefined) => {
+  if (typeof batchNumber !== 'number') return 'info';
+  // 定义一个颜色循环列表，不包含 'danger'
+  const colors = ['success', 'primary', 'warning', 'info']
+  // 使用取模运算来循环选择颜色
+  return colors[(batchNumber - 1) % colors.length] as 'success' | 'primary' | 'warning' | 'info';
+}
+
+// 在刷新记录时重置批次映射
+const resetBatchNumberMap = () => {
+  batchNumberMap.value.clear()
 }
 
 // 获取下载器添加状态的标签类型
@@ -1495,10 +1589,35 @@ const formatRecordTimeLocal = (timestamp: string) => {
     const hours = String(date.getHours()).padStart(2, '0')
     const minutes = String(date.getMinutes()).padStart(2, '0')
     const seconds = String(date.getSeconds()).padStart(2, '0')
-    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
+
+    // ✨ 改动点：在日期和时间之间添加换行符 '\n'
+    return `${year}-${month}-${day}\n${hours}:${minutes}:${seconds}`
   } catch (error) {
     return timestamp
   }
+}
+
+// 计算进度百分比，从格式如 '2/3' 的字符串中提取
+const calculateProgress = (progressStr: string) => {
+  if (!progressStr) return 0
+
+  // 解析 '当前进度/总进度' 格式
+  const match = progressStr.match(/(\d+)\/(\d+)/)
+  if (match) {
+    const current = parseInt(match[1])
+    const total = parseInt(match[2])
+    if (total > 0) {
+      return Math.round((current / total) * 100)
+    }
+  }
+  return 0
+}
+
+// 根据进度百分比获取进度条颜色
+const getProgressColor = (percentage: number) => {
+  if (percentage < 30) return '#e6a23c'  // 橙色
+  if (percentage < 70) return '#409eff'  // 蓝色
+  return '#67c23a'  // 绿色
 }
 
 onUnmounted(() => {
@@ -1921,6 +2040,10 @@ onUnmounted(() => {
   padding: 10px;
 }
 
+.records-table-container :deep(.el-table_2_column_24) {
+  padding: 0;
+}
+
 .no-records {
   flex: 1;
   display: flex;
@@ -1933,5 +2056,48 @@ onUnmounted(() => {
   border-top: 1px solid var(--el-border-color-lighter);
   display: flex;
   justify-content: space-between;
+}
+
+/* ✨ CHANGE START: Modified progress cell CSS for vertical layout */
+/* 进度单元格样式 */
+.progress-cell {
+  display: flex;
+  flex-direction: column;
+  /* 改为垂直布局 */
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  /* 设置垂直间距 */
+  height: 100%;
+  padding: 4px 0;
+  /* 增加一些内边距 */
+  box-sizing: border-box;
+}
+
+.progress-bar {
+  width: 100%;
+  /* 宽度占满容器 */
+  max-width: 50px;
+  /* 限制最大宽度，使其不过宽 */
+}
+
+.progress-text {
+  min-width: 40px;
+  text-align: center;
+  font-size: 12px;
+  color: #606266;
+  line-height: 1;
+  /* 调整行高以适应新布局 */
+}
+
+/* ✨ CHANGE END */
+
+/* 调整表格列宽 */
+:deep(.el-table__header-wrapper .el-table__header) .el-table_1_column_7 {
+  width: 120px !important;
+}
+
+:deep(.el-table__body-wrapper .el-table__body) .el-table_1_column_7 {
+  width: 120px !important;
 }
 </style>

@@ -115,7 +115,9 @@ def get_unique_save_paths():
         # 将结果转换为列表
         if isinstance(rows, list):
             # PostgreSQL返回的是字典列表
-            unique_paths = [row['save_path'] for row in rows if row['save_path']]
+            unique_paths = [
+                row['save_path'] for row in rows if row['save_path']
+            ]
         else:
             # MySQL和SQLite返回的是元组列表
             unique_paths = [row[0] for row in rows if row[0]]
@@ -123,10 +125,7 @@ def get_unique_save_paths():
         cursor.close()
         conn.close()
 
-        return jsonify({
-            "success": True,
-            "unique_paths": unique_paths
-        })
+        return jsonify({"success": True, "unique_paths": unique_paths})
     except Exception as e:
         logging.error(f"获取唯一保存路径时出错: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
@@ -144,7 +143,8 @@ def get_cross_seed_data():
         # 获取筛选参数
         save_path_filter = request.args.get('save_path', '').strip()
         is_deleted_filter = request.args.get('is_deleted', '').strip()
-        exclude_target_sites_filter = request.args.get('exclude_target_sites', '').strip()
+        exclude_target_sites_filter = request.args.get('exclude_target_sites',
+                                                       '').strip()
 
         # 限制页面大小
         page_size = min(page_size, 100)
@@ -165,25 +165,39 @@ def get_cross_seed_data():
         if search_query:
             if db_manager.db_type == "postgresql":
                 where_conditions.append(
-                    "(title ILIKE %s OR torrent_id ILIKE %s OR subtitle ILIKE %s)")
-                params.extend([f"%{search_query}%", f"%{search_query}%", f"%{search_query}%"])
+                    "(title ILIKE %s OR torrent_id ILIKE %s OR subtitle ILIKE %s)"
+                )
+                params.extend([
+                    f"%{search_query}%", f"%{search_query}%",
+                    f"%{search_query}%"
+                ])
             else:
-                where_conditions.append("(title LIKE ? OR torrent_id LIKE ? OR subtitle LIKE ?)")
-                params.extend([f"%{search_query}%", f"%{search_query}%", f"%{search_query}%"])
+                where_conditions.append(
+                    "(title LIKE ? OR torrent_id LIKE ? OR subtitle LIKE ?)")
+                params.extend([
+                    f"%{search_query}%", f"%{search_query}%",
+                    f"%{search_query}%"
+                ])
 
         # 保存路径筛选条件 - 支持多个路径筛选
         if save_path_filter:
             # 将逗号分隔的路径转换为列表
-            paths = [path.strip() for path in save_path_filter.split(',') if path.strip()]
+            paths = [
+                path.strip() for path in save_path_filter.split(',')
+                if path.strip()
+            ]
             if paths:
                 if db_manager.db_type == "postgresql":
                     # PostgreSQL 使用 ANY 操作符
                     placeholders = ', '.join(['%s'] * len(paths))
-                    where_conditions.append(f"save_path = ANY(ARRAY[{placeholders}])")
+                    where_conditions.append(
+                        f"save_path = ANY(ARRAY[{placeholders}])")
                     params.extend(paths)
                 else:
                     # MySQL 和 SQLite 使用 IN 操作符
-                    placeholders = ', '.join(['%s' if db_manager.db_type == "mysql" else '?'] * len(paths))
+                    placeholders = ', '.join(
+                        ['%s' if db_manager.db_type == "mysql" else '?'] *
+                        len(paths))
                     where_conditions.append(f"save_path IN ({placeholders})")
                     params.extend(paths)
 
@@ -223,7 +237,8 @@ def get_cross_seed_data():
                             )
                         )
                     """
-                    where_conditions.append(f"seed_parameters.hash NOT IN ({subquery})")
+                    where_conditions.append(
+                        f"seed_parameters.hash NOT IN ({subquery})")
                     params.append(exclude_site)
                 else:
                     # MySQL 和 SQLite
@@ -241,7 +256,8 @@ def get_cross_seed_data():
                             )
                         )
                     """
-                    where_conditions.append(f"seed_parameters.hash NOT IN ({subquery})")
+                    where_conditions.append(
+                        f"seed_parameters.hash NOT IN ({subquery})")
                     params.append(exclude_site)
 
                 logging.info(f"排除子查询SQL: {subquery}")
@@ -346,11 +362,15 @@ def get_cross_seed_data():
             item['unrecognized'] = unrecognized_value
 
         # 获取所有目标站点（用于前端筛选选项）
-        cursor.execute("SELECT nickname FROM sites WHERE migration IN (2, 3) ORDER BY nickname")
+        cursor.execute(
+            "SELECT nickname FROM sites WHERE migration IN (2, 3) ORDER BY nickname"
+        )
         target_sites_rows = cursor.fetchall()
         if isinstance(target_sites_rows, list):
             # PostgreSQL返回的是字典列表
-            target_sites_list = [row['nickname'] for row in target_sites_rows if row['nickname']]
+            target_sites_list = [
+                row['nickname'] for row in target_sites_rows if row['nickname']
+            ]
         else:
             # MySQL和SQLite返回的是元组列表
             target_sites_list = [row[0] for row in target_sites_rows if row[0]]
@@ -368,7 +388,9 @@ def get_cross_seed_data():
         # 将结果转换为列表
         if isinstance(path_rows, list):
             # PostgreSQL返回的是字典列表
-            unique_paths = [row['save_path'] for row in path_rows if row['save_path']]
+            unique_paths = [
+                row['save_path'] for row in path_rows if row['save_path']
+            ]
         else:
             # MySQL和SQLite返回的是元组列表
             unique_paths = [row[0] for row in path_rows if row[0]]
@@ -395,7 +417,8 @@ def get_cross_seed_data():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-@cross_seed_data_bp.route('/cross-seed-data/test-no-auth', methods=['POST', 'GET'])
+@cross_seed_data_bp.route('/cross-seed-data/test-no-auth',
+                          methods=['POST', 'GET'])
 def test_no_auth():
     """测试无认证端点"""
     return jsonify({
@@ -405,7 +428,8 @@ def test_no_auth():
     })
 
 
-@cross_seed_data_bp.route('/cross-seed-data/delete', methods=['DELETE', 'POST'])
+@cross_seed_data_bp.route('/cross-seed-data/delete',
+                          methods=['DELETE', 'POST'])
 def delete_cross_seed_data():
     """统一的删除API - 支持单个删除和批量删除"""
     cursor = None
@@ -490,7 +514,12 @@ def delete_cross_seed_data():
 
             result = cursor.fetchone()
             if not result:
-                return jsonify({"success": False, "error": f"找不到种子数据: {torrent_id} from {site_name}"}), 404
+                return jsonify({
+                    "success":
+                    False,
+                    "error":
+                    f"找不到种子数据: {torrent_id} from {site_name}"
+                }), 404
 
             # 执行删除
             if db_manager.db_type == "mysql" or db_manager.db_type == "sqlite":
@@ -502,10 +531,18 @@ def delete_cross_seed_data():
 
             conn.commit()
 
-            return jsonify({"success": True, "message": f"种子数据 {torrent_id} from {site_name} 已删除"})
+            return jsonify({
+                "success": True,
+                "message": f"种子数据 {torrent_id} from {site_name} 已删除"
+            })
 
         else:
-            return jsonify({"success": False, "error": "缺少必需参数: 单个删除需要 torrent_id 和 site_name，批量删除需要 items 数组"}), 400
+            return jsonify({
+                "success":
+                False,
+                "error":
+                "缺少必需参数: 单个删除需要 torrent_id 和 site_name，批量删除需要 items 数组"
+            }), 400
 
     except Exception as e:
         logging.error(f"删除种子数据时出错: {e}")
@@ -521,6 +558,7 @@ def delete_cross_seed_data():
 
 # ============= 批量转种记录API =============
 
+
 @cross_seed_data_bp.route('/batch-enhance/records', methods=['POST'])
 def add_batch_enhance_record():
     """添加批量转种记录（给Go服务调用）"""
@@ -530,41 +568,45 @@ def add_batch_enhance_record():
             return jsonify({"success": False, "error": "缺少请求数据"}), 400
 
         # 验证必需字段
-        required_fields = ['batch_id', 'torrent_id', 'source_site', 'target_site', 'status']
+        required_fields = [
+            'batch_id', 'torrent_id', 'source_site', 'target_site', 'status'
+        ]
         for field in required_fields:
             if field not in data:
-                return jsonify({"success": False, "error": f"缺少必需字段: {field}"}), 400
+                return jsonify({
+                    "success": False,
+                    "error": f"缺少必需字段: {field}"
+                }), 400
 
         # 获取数据库管理器
         db_manager = current_app.config['DB_MANAGER']
         conn = db_manager._get_connection()
         cursor = db_manager._get_cursor(conn)
 
-        # 插入记录
-        if db_manager.db_type == "mysql":
+        # ✨ START: 修改SQL语句，增加 title 列
+        if db_manager.db_type in ["mysql", "postgresql"]:
             sql = """INSERT INTO batch_enhance_records
-                     (batch_id, torrent_id, source_site, target_site, video_size_gb, status, success_url, error_detail, downloader_add_result)
-                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"""
-        elif db_manager.db_type == "postgresql":
-            sql = """INSERT INTO batch_enhance_records
-                     (batch_id, torrent_id, source_site, target_site, video_size_gb, status, success_url, error_detail, downloader_add_result)
-                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"""
+                     (batch_id, torrent_id, title, source_site, target_site, video_size_gb, status, success_url, error_detail, downloader_add_result)
+                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"""
         else:  # sqlite
             sql = """INSERT INTO batch_enhance_records
-                     (batch_id, torrent_id, source_site, target_site, video_size_gb, status, success_url, error_detail, downloader_add_result)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+                     (batch_id, torrent_id, title, source_site, target_site, video_size_gb, status, success_url, error_detail, downloader_add_result)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+        # ✨ END: 修改SQL语句
 
+        # ✨ START: 修改参数元组，增加 title 的值
         params = (
             data['batch_id'],
             data['torrent_id'],
+            data.get('title'),  # 从请求数据中获取 title
             data['source_site'],
             data['target_site'],
             data.get('video_size_gb'),
             data['status'],
             data.get('success_url'),
             data.get('error_detail'),
-            data.get('downloader_add_result')  # 新字段：下载器添加结果
-        )
+            data.get('downloader_add_result'))
+        # ✨ END: 修改参数元组
 
         cursor.execute(sql, params)
         conn.commit()
@@ -624,16 +666,21 @@ def get_batch_enhance_records():
         # 搜索条件
         if search:
             if db_manager.db_type == "postgresql":
-                where_conditions.append("(torrent_id ILIKE %s OR source_site ILIKE %s OR target_site ILIKE %s)")
+                where_conditions.append(
+                    "(torrent_id ILIKE %s OR source_site ILIKE %s OR target_site ILIKE %s)"
+                )
                 params.extend([f"%{search}%", f"%{search}%", f"%{search}%"])
             else:
-                where_conditions.append("(torrent_id LIKE ? OR source_site LIKE ? OR target_site LIKE ?)")
+                where_conditions.append(
+                    "(torrent_id LIKE ? OR source_site LIKE ? OR target_site LIKE ?)"
+                )
                 params.extend([f"%{search}%", f"%{search}%", f"%{search}%"])
 
         # 时间范围筛选
         if start_time:
             try:
-                start_dt = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+                start_dt = datetime.fromisoformat(
+                    start_time.replace('Z', '+00:00'))
                 if db_manager.db_type == "postgresql":
                     where_conditions.append("processed_at >= %s")
                 else:
@@ -644,7 +691,8 @@ def get_batch_enhance_records():
 
         if end_time:
             try:
-                end_dt = datetime.fromisoformat(end_time.replace('Z', '+00:00'))
+                end_dt = datetime.fromisoformat(end_time.replace(
+                    'Z', '+00:00'))
                 if db_manager.db_type == "postgresql":
                     where_conditions.append("processed_at <= %s")
                 else:
@@ -662,12 +710,13 @@ def get_batch_enhance_records():
         count_query = f"SELECT COUNT(*) as total FROM batch_enhance_records {where_clause}"
         cursor.execute(count_query, params)
         total_result = cursor.fetchone()
-        total_count = total_result[0] if isinstance(total_result, tuple) else total_result['total']
+        total_count = total_result[0] if isinstance(
+            total_result, tuple) else total_result['total']
 
         # 查询数据
         if db_manager.db_type == "postgresql":
             query = f"""
-                SELECT id, batch_id, torrent_id, source_site, target_site, video_size_gb, status, success_url, error_detail, downloader_add_result, processed_at
+                SELECT id, title, batch_id, torrent_id, source_site, target_site, video_size_gb, status, success_url, error_detail, downloader_add_result, processed_at, progress
                 FROM batch_enhance_records
                 {where_clause}
                 ORDER BY processed_at DESC
@@ -677,7 +726,7 @@ def get_batch_enhance_records():
         else:
             placeholder = "?" if db_manager.db_type == "sqlite" else "%s"
             query = f"""
-                SELECT id, batch_id, torrent_id, source_site, target_site, video_size_gb, status, success_url, error_detail, downloader_add_result, processed_at
+                SELECT id, title, batch_id, torrent_id, source_site, target_site, video_size_gb, status, success_url, error_detail, downloader_add_result, processed_at, progress
                 FROM batch_enhance_records
                 {where_clause}
                 ORDER BY processed_at DESC
@@ -700,7 +749,8 @@ def get_batch_enhance_records():
         batch_query = "SELECT DISTINCT batch_id FROM batch_enhance_records ORDER BY batch_id DESC LIMIT 100"
         cursor.execute(batch_query)
         batch_rows = cursor.fetchall()
-        if isinstance(batch_rows, list) and batch_rows and isinstance(batch_rows[0], dict):
+        if isinstance(batch_rows, list) and batch_rows and isinstance(
+                batch_rows[0], dict):
             batch_ids = [row['batch_id'] for row in batch_rows]
         else:
             batch_ids = [row[0] for row in batch_rows]
@@ -749,7 +799,8 @@ def clear_batch_enhance_records():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-@cross_seed_data_bp.route('/batch-enhance/records/batch/<batch_id>', methods=['DELETE'])
+@cross_seed_data_bp.route('/batch-enhance/records/batch/<batch_id>',
+                          methods=['DELETE'])
 def clear_batch_records_by_id(batch_id):
     """根据批次ID清空特定批次的记录"""
     try:
@@ -760,9 +811,13 @@ def clear_batch_records_by_id(batch_id):
 
         # 删除指定批次的记录
         if db_manager.db_type == "postgresql":
-            cursor.execute("DELETE FROM batch_enhance_records WHERE batch_id = %s", (batch_id,))
+            cursor.execute(
+                "DELETE FROM batch_enhance_records WHERE batch_id = %s",
+                (batch_id, ))
         else:
-            cursor.execute("DELETE FROM batch_enhance_records WHERE batch_id = ?", (batch_id,))
+            cursor.execute(
+                "DELETE FROM batch_enhance_records WHERE batch_id = ?",
+                (batch_id, ))
 
         deleted_count = cursor.rowcount
         conn.commit()
@@ -771,11 +826,12 @@ def clear_batch_records_by_id(batch_id):
         conn.close()
 
         return jsonify({
-            "success": True,
-            "message": f"批次 {batch_id} 的记录已清空，删除了 {deleted_count} 条记录"
+            "success":
+            True,
+            "message":
+            f"批次 {batch_id} 的记录已清空，删除了 {deleted_count} 条记录"
         })
 
     except Exception as e:
         logging.error(f"清空批次记录时出错: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
-

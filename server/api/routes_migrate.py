@@ -1427,25 +1427,27 @@ def migrate_publish():
                     # 直接插入记录(发布的种子不会先被Go端插入,只有过滤的种子才会)
                     if db_manager.db_type == "mysql":
                         insert_sql = """INSERT INTO batch_enhance_records
-                                      (batch_id, torrent_id, source_site, target_site, video_size_gb, status, success_url, error_detail, downloader_add_result)
-                                      VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"""
+                                      (batch_id, title, torrent_id, source_site, target_site, progress, video_size_gb, status, success_url, error_detail, downloader_add_result)
+                                      VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"""
                     elif db_manager.db_type == "postgresql":
                         insert_sql = """INSERT INTO batch_enhance_records
-                                      (batch_id, torrent_id, source_site, target_site, video_size_gb, status, success_url, error_detail, downloader_add_result)
-                                      VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"""
+                                      (batch_id, title, torrent_id, source_site, target_site, progress, video_size_gb, status, success_url, error_detail, downloader_add_result)
+                                      VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"""
                     else:  # sqlite
                         insert_sql = """INSERT INTO batch_enhance_records
-                                      (batch_id, torrent_id, source_site, target_site, video_size_gb, status, success_url, error_detail, downloader_add_result)
-                                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+                                      (batch_id, title, torrent_id, source_site, target_site, progress, video_size_gb, status, success_url, error_detail, downloader_add_result)
+                                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
 
                     print(
                         f"[批量转种记录] 执行SQL插入: batch_id={batch_id}, torrent_id={source_torrent_id}"
                     )
                     cursor.execute(
                         insert_sql,
-                        (batch_id, source_torrent_id, data.get("nickname", source_site_name),
-                         target_site_name, video_size_gb, status, success_url,
-                         error_detail, downloader_result))
+                        (batch_id, parameters.get("title"),source_torrent_id,
+                         data.get("nickname",
+                                  source_site_name), target_site_name,
+                         data.get("batch_progress"), video_size_gb, status,
+                         success_url, error_detail, downloader_result))
                     conn.commit()
                     cursor.close()
                     conn.close()
