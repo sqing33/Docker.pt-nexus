@@ -420,7 +420,8 @@ def migrate_fetch_and_store():
     data = request.json
     source_site_name, search_term, save_path, torrent_name, downloader_id = (
         data.get("sourceSite"), data.get("searchTerm"),
-        data.get("savePath", ""), data.get("torrentName"), data.get("downloaderId"))
+        data.get("savePath",
+                 ""), data.get("torrentName"), data.get("downloaderId"))
 
     if not all([source_site_name, search_term]):
         return jsonify({"success": False, "message": "错误：源站点和搜索词不能为空。"}), 400
@@ -1245,17 +1246,23 @@ def migrate_publish():
         # 3. 如果发布成功，自动添加到下载器
         if result.get("success") and result.get("url"):
             auto_add = data.get("auto_add_to_downloader", True)  # 默认自动添加
-            print(f"[下载器添加] 发布成功, auto_add={auto_add}, url={result.get('url')}")
+            print(
+                f"[下载器添加] 发布成功, auto_add={auto_add}, url={result.get('url')}")
 
             if auto_add:
                 # 先获取配置的默认下载器
                 config = config_manager.get()
-                default_downloader = config.get("cross_seed", {}).get("default_downloader")
+                default_downloader = config.get("cross_seed",
+                                                {}).get("default_downloader")
 
                 # 从请求中获取下载器ID和保存路径
-                downloader_id = data.get("downloaderId") or data.get("downloader_id")
-                save_path = upload_data.get("save_path") or upload_data.get("savePath")
-                print(f"[下载器添加] 初始参数: downloader_id={downloader_id}, save_path={save_path}")
+                downloader_id = data.get("downloaderId") or data.get(
+                    "downloader_id")
+                save_path = upload_data.get("save_path") or upload_data.get(
+                    "savePath")
+                print(
+                    f"[下载器添加] 初始参数: downloader_id={downloader_id}, save_path={save_path}"
+                )
                 print(f"[下载器添加] 配置的默认下载器: {default_downloader}")
 
                 # 判断逻辑:
@@ -1278,7 +1285,9 @@ def migrate_publish():
                                 cursor = db_manager._get_cursor(conn)
                                 placeholder = db_manager.get_placeholder()
                                 query = f"SELECT save_path FROM seed_parameters WHERE torrent_id = {placeholder} AND site_name = {placeholder}"
-                                cursor.execute(query, (source_torrent_id, source_site_name))
+                                cursor.execute(
+                                    query,
+                                    (source_torrent_id, source_site_name))
                                 row = cursor.fetchone()
                                 if row and row['save_path']:
                                     save_path = row['save_path']
@@ -1302,7 +1311,8 @@ def migrate_publish():
                             placeholder = db_manager.get_placeholder()
                             query = f"SELECT downloader_id, save_path FROM seed_parameters WHERE torrent_id = {placeholder} AND site_name = {placeholder}"
 
-                            cursor.execute(query, (source_torrent_id, source_site_name))
+                            cursor.execute(
+                                query, (source_torrent_id, source_site_name))
                             row = cursor.fetchone()
                             if row:
                                 downloader_id = row['downloader_id']
@@ -1310,7 +1320,9 @@ def migrate_publish():
                                 if not save_path and row['save_path']:
                                     save_path = row['save_path']
                                     print(f"[下载器添加] 从数据库获取到保存路径: {save_path}")
-                                print(f"[下载器添加] 从数据库获取到源种子的下载器ID: {downloader_id}")
+                                print(
+                                    f"[下载器添加] 从数据库获取到源种子的下载器ID: {downloader_id}"
+                                )
                             else:
                                 print(f"[下载器添加] 数据库中未找到源种子信息")
                             conn.close()
@@ -1324,14 +1336,12 @@ def migrate_publish():
                 if save_path and downloader_id:
                     try:
                         from utils import add_torrent_to_downloader
-                        print(f"[下载器添加] 准备调用add_torrent_to_downloader: URL={result['url']}, Path={save_path}, DownloaderID={downloader_id}")
-                        success, message = add_torrent_to_downloader(
-                            result["url"],
-                            save_path,
-                            downloader_id,
-                            db_manager,
-                            config_manager
+                        print(
+                            f"[下载器添加] 准备调用add_torrent_to_downloader: URL={result['url']}, Path={save_path}, DownloaderID={downloader_id}"
                         )
+                        success, message = add_torrent_to_downloader(
+                            result["url"], save_path, downloader_id,
+                            db_manager, config_manager)
                         result["auto_add_result"] = {
                             "success": success,
                             "message": message
@@ -1376,7 +1386,9 @@ def migrate_publish():
             try:
                 # 从 context 中获取种子信息
                 source_torrent_id = context.get("source_torrent_id")
-                print(f"[批量转种记录] 种子信息: torrent_id={source_torrent_id}, source_site={source_site_name}, target_site={target_site_name}")
+                print(
+                    f"[批量转种记录] 种子信息: torrent_id={source_torrent_id}, source_site={source_site_name}, target_site={target_site_name}"
+                )
 
                 if source_torrent_id and source_site_name and target_site_name:
                     conn = db_manager._get_connection()
@@ -1385,10 +1397,14 @@ def migrate_publish():
                     # 准备记录数据
                     video_size_gb = data.get("video_size_gb")  # Go端可能传递的视频大小
                     status = "success" if result.get("success") else "failed"
-                    success_url = result.get("url") if result.get("success") else None
-                    error_detail = result.get("logs") if not result.get("success") else None
+                    success_url = result.get("url") if result.get(
+                        "success") else None
+                    error_detail = result.get(
+                        "logs") if not result.get("success") else None
 
-                    print(f"[批量转种记录] 发布结果: status={status}, success_url={success_url}, video_size_gb={video_size_gb}")
+                    print(
+                        f"[批量转种记录] 发布结果: status={status}, success_url={success_url}, video_size_gb={video_size_gb}"
+                    )
 
                     # 生成下载器添加结果文本
                     downloader_result = None
@@ -1404,7 +1420,9 @@ def migrate_publish():
                         print(f"[批量转种记录] result所有键: {list(result.keys())}")
                         print(f"[批量转种记录] result完整内容: {result}")
 
-                    print(f"[批量转种记录] 准备写入数据库: downloader_result={downloader_result}")
+                    print(
+                        f"[批量转种记录] 准备写入数据库: downloader_result={downloader_result}"
+                    )
 
                     # 直接插入记录(发布的种子不会先被Go端插入,只有过滤的种子才会)
                     if db_manager.db_type == "mysql":
@@ -1420,13 +1438,21 @@ def migrate_publish():
                                       (batch_id, torrent_id, source_site, target_site, video_size_gb, status, success_url, error_detail, downloader_add_result)
                                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"""
 
-                    print(f"[批量转种记录] 执行SQL插入: batch_id={batch_id}, torrent_id={source_torrent_id}")
-                    cursor.execute(insert_sql, (batch_id, source_torrent_id, source_site_name, target_site_name, video_size_gb, status, success_url, error_detail, downloader_result))
+                    print(
+                        f"[批量转种记录] 执行SQL插入: batch_id={batch_id}, torrent_id={source_torrent_id}"
+                    )
+                    cursor.execute(
+                        insert_sql,
+                        (batch_id, source_torrent_id, data.get("nickname", source_site_name),
+                         target_site_name, video_size_gb, status, success_url,
+                         error_detail, downloader_result))
                     conn.commit()
                     cursor.close()
                     conn.close()
 
-                    print(f"✅ [批量转种记录] 成功写入数据库: {source_torrent_id} -> {target_site_name}")
+                    print(
+                        f"✅ [批量转种记录] 成功写入数据库: {source_torrent_id} -> {target_site_name}"
+                    )
                     print(f"   状态: {status}")
                     print(f"   下载器结果: {downloader_result}")
                 else:
@@ -1604,11 +1630,11 @@ def validate_media():
         # 获取当前的mediainfo（如果有的话）
         current_mediainfo = data.get("current_mediainfo", "")
         # 调用upload_data_mediaInfo函数重新生成mediainfo，设置force_refresh=True强制重新获取
-        new_mediainfo = upload_data_mediaInfo(
-            current_mediainfo, save_path,
-            torrent_name=torrent_name,
-            downloader_id=downloader_id,
-            force_refresh=True)  # 强制重新获取
+        new_mediainfo = upload_data_mediaInfo(current_mediainfo,
+                                              save_path,
+                                              torrent_name=torrent_name,
+                                              downloader_id=downloader_id,
+                                              force_refresh=True)  # 强制重新获取
         if new_mediainfo:
             return jsonify({"success": True, "mediainfo": new_mediainfo}), 200
         else:
@@ -1654,10 +1680,7 @@ def get_downloader_info():
                 "save_path": row['save_path']
             })
         else:
-            return jsonify({
-                "success": False,
-                "message": "未找到该种子信息"
-            }), 404
+            return jsonify({"success": False, "message": "未找到该种子信息"}), 404
 
     except Exception as e:
         logging.error(f"查询下载器信息失败: {e}", exc_info=True)

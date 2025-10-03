@@ -23,14 +23,14 @@ import (
 
 // 种子处理记录结构
 type SeedRecord struct {
-	BatchID      string  `json:"batch_id"`
-	TorrentID    string  `json:"torrent_id"`
-	SourceSite   string  `json:"source_site"`
-	TargetSite   string  `json:"target_site"`
-	VideoSizeGB  float64 `json:"video_size_gb,omitempty"`
-	Status       string  `json:"status"`
-	SuccessURL   string  `json:"success_url,omitempty"`
-	ErrorDetail  string  `json:"error_detail,omitempty"`
+	BatchID     string  `json:"batch_id"`
+	TorrentID   string  `json:"torrent_id"`
+	SourceSite  string  `json:"source_site"`
+	TargetSite  string  `json:"target_site"`
+	VideoSizeGB float64 `json:"video_size_gb,omitempty"`
+	Status      string  `json:"status"`
+	SuccessURL  string  `json:"success_url,omitempty"`
+	ErrorDetail string  `json:"error_detail,omitempty"`
 }
 
 type RecordResponse struct {
@@ -70,6 +70,7 @@ type SeedInfo struct {
 	Hash        string  `json:"hash"`
 	TorrentID   string  `json:"torrent_id"`
 	SiteName    string  `json:"site_name"`
+	Nickname    string  `json:"nickname"`
 	VideoSizeGB float64 `json:"video_size_gb,omitempty"` // 添加视频大小字段
 }
 
@@ -1007,7 +1008,8 @@ func getStringFromMap(m map[string]interface{}, key string) string {
 func getSourceSiteFromSeeds(seeds []SeedInfo, torrentID string) string {
 	for _, seed := range seeds {
 		if seed.TorrentID == torrentID {
-			return seed.SiteName
+			logInfo("找到源站点: %s for %s", seed.SiteName, torrentID)
+			return seed.Nickname
 		}
 	}
 	return ""
@@ -1151,9 +1153,10 @@ func processSingleSeed(seed SeedInfo, targetSite string) SeedResult {
 		"task_id":                taskID,
 		"targetSite":             targetSite,
 		"sourceSite":             seed.SiteName,
-		"auto_add_to_downloader": true,               // 启用自动添加
-		"batch_id":               currentBatchID,     // 传递批次ID给Python端
-		"video_size_gb":          seed.VideoSizeGB,   // 传递视频大小
+		"nickname":               seed.Nickname,
+		"auto_add_to_downloader": true,             // 启用自动添加
+		"batch_id":               currentBatchID,   // 传递批次ID给Python端
+		"video_size_gb":          seed.VideoSizeGB, // 传递视频大小
 	}
 
 	// 将 uploadData 添加到请求中
