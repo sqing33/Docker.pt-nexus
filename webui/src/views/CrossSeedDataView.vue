@@ -208,7 +208,8 @@
         <el-table-column label="操作" width="130" align="center" fixed="right">
           <template #default="scope">
             <el-button size="small" type="primary" @click="handleEdit(scope.row)">编辑</el-button>
-            <el-button size="small" type="danger" @click="handleDelete(scope.row)" style="margin-left: 5px;">删除</el-button>
+            <el-button size="small" type="danger" @click="handleDelete(scope.row)"
+              style="margin-left: 5px;">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -313,9 +314,11 @@
                   <span v-else>-</span>
                 </template>
               </el-table-column>
-              <el-table-column prop="downloader_add_result" label="下载器添加状态" width="140" align="center" show-overflow-tooltip>
+              <el-table-column prop="downloader_add_result" label="下载器添加状态" width="140" align="center"
+                show-overflow-tooltip>
                 <template #default="scope">
-                  <el-tag v-if="scope.row.downloader_add_result" :type="getDownloaderAddStatusType(scope.row.downloader_add_result)" size="small">
+                  <el-tag v-if="scope.row.downloader_add_result"
+                    :type="getDownloaderAddStatusType(scope.row.downloader_add_result)" size="small">
                     {{ formatDownloaderAddResult(scope.row.downloader_add_result) }}
                   </el-tag>
                   <span v-else>-</span>
@@ -383,6 +386,7 @@ interface SeedParameter {
   hash: string
   torrent_id: string
   site_name: string
+  nickname: string
   title: string
   subtitle: string
   imdb_link: string
@@ -1273,7 +1277,8 @@ const handleBatchCrossSeed = async () => {
       seeds: selectedRows.value.map(row => ({
         hash: row.hash,
         torrent_id: row.torrent_id,
-        site_name: row.site_name
+        site_name: row.site_name,
+        nickname: row.nickname
       }))
     }
 
