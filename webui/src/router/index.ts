@@ -32,11 +32,6 @@ const router = createRouter({
       component: () => import('../views/SitesView.vue'),
     },
     {
-      path: '/query',
-      name: 'query',
-      component: () => import('../views/LocalQueryView.vue'),
-    },
-    {
       path: '/settings',
       name: 'settings',
       component: () => import('../views/SettingsView.vue'),

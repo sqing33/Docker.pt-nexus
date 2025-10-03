@@ -9,8 +9,7 @@
     <el-menu-item index="/info">流量统计</el-menu-item>
     <el-menu-item index="/torrents">一种多站</el-menu-item>
     <el-menu-item index="/data">一站多种</el-menu-item>
-    <el-menu-item index="/sites">做种数据</el-menu-item>
-    <el-menu-item index="/query">数据检索</el-menu-item>
+    <el-menu-item index="/sites">做种检索</el-menu-item>
     <el-menu-item index="/settings">设置</el-menu-item>
     <div class="refresh-button-container">
       <el-button type="success" @click="handleGlobalRefresh" :loading="isRefreshing" :disabled="isRefreshing" plain>

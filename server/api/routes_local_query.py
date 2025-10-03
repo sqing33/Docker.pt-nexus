@@ -1,9 +1,10 @@
 import logging
 import os
+import json
 from pathlib import Path
 from flask import Blueprint, jsonify
 from collections import defaultdict
-from config import config_manager
+from config import config_manager, DATA_DIR
 from utils.media_helper import _get_downloader_proxy_config
 import requests
 
@@ -13,8 +14,35 @@ local_query_bp = Blueprint("local_query_api",
                            __name__,
                            url_prefix="/api/local_query")
 
+# 缓存文件路径
+SCAN_CACHE_FILE = os.path.join(DATA_DIR, "local_scan_cache.json")
+
 # --- 依赖注入占位符 ---
 # db_manager = None
+
+
+def save_scan_cache(scan_result):
+    """保存扫描结果到缓存文件"""
+    try:
+        with open(SCAN_CACHE_FILE, 'w', encoding='utf-8') as f:
+            json.dump(scan_result, f, ensure_ascii=False, indent=2)
+        logger.info(f"扫描结果已保存到缓存: {SCAN_CACHE_FILE}")
+    except Exception as e:
+        logger.error(f"保存扫描缓存失败: {str(e)}")
+
+
+def load_scan_cache():
+    """从缓存文件读取扫描结果"""
+    try:
+        if os.path.exists(SCAN_CACHE_FILE):
+            with open(SCAN_CACHE_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            logger.info(f"从缓存加载扫描结果: {SCAN_CACHE_FILE}")
+            return data
+        return None
+    except Exception as e:
+        logger.error(f"加载扫描缓存失败: {str(e)}")
+        return None
 
 
 def get_downloader_name_from_config(downloader_id):
@@ -96,6 +124,20 @@ def batch_check_remote_files(proxy_config, remote_paths):
     except Exception as e:
         logger.error(f"调用代理批量检查文件失败: {e}")
         return {}
+
+
+@local_query_bp.route("/scan/cache", methods=["GET"])
+def get_scan_cache():
+    """获取上次扫描的缓存结果"""
+    try:
+        cached_result = load_scan_cache()
+        if cached_result:
+            return jsonify(cached_result)
+        else:
+            return jsonify({"error": "No cached scan result"}), 404
+    except Exception as e:
+        logger.error(f"获取扫描缓存失败: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 
 @local_query_bp.route("/paths", methods=["GET"])
@@ -450,12 +492,17 @@ def scan_local_files():
             "skipped_remote": remote_torrents_count > 0  # 标记是否跳过了远程种子
         }
 
-        return jsonify({
+        result = {
             "scan_summary": scan_summary,
             "missing_files": missing_files,
             "orphaned_files": orphaned_files,
             "synced_torrents": synced_torrents
-        })
+        }
+
+        # 保存到缓存
+        save_scan_cache(result)
+
+        return jsonify(result)
 
     except Exception as e:
         logger.error(f"扫描失败: {str(e)}", exc_info=True)

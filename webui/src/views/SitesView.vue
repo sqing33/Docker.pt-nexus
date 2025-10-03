@@ -113,29 +113,283 @@
         </div>
       </div>
 
-      <!-- 第三个象限：待定内容 -->
-      <div class="quadrant">
-        <h2 class="quadrant-title">待定内容</h2>
-        <div style="display: flex; align-items: center; justify-content: center; height: 100%">
-          <el-empty description="此区域内容待定" />
+      <!-- 第三个象限：本地文件扫描 -->
+      <div class="quadrant local-scan-quadrant">
+        <div class="scan-header">
+          <div class="scan-header-left">
+            <h2 class="quadrant-title">本地文件扫描</h2>
+            <p class="scan-description">扫描数据库中所有种子的保存路径，找出本地已删除的文件或未被任务引用的孤立文件</p>
+          </div>
+          <div class="scan-controls">
+            <el-select
+              v-model="selectedPath"
+              clearable
+              placeholder="选择路径(可选)"
+              filterable
+              size="default"
+              style="width: 280px; margin-right: 10px"
+            >
+              <el-option-group
+                v-for="downloader in downloadersWithPaths"
+                :key="downloader.id"
+                :label="downloader.name"
+              >
+                <el-option
+                  v-for="pathItem in downloader.paths"
+                  :key="pathItem.path"
+                  :label="pathItem.path"
+                  :value="pathItem.path"
+                >
+                  <span>{{ pathItem.path }}</span>
+                  <span style="float: right; color: #8492a6; font-size: 13px">({{ pathItem.count }})</span>
+                </el-option>
+              </el-option-group>
+            </el-select>
+            <el-button type="primary" @click="startScan" :loading="scanning" :icon="Search">
+              {{ selectedPath ? '扫描选定路径' : '扫描全部路径' }}
+            </el-button>
+          </div>
+        </div>
+
+        <!-- 扫描结果统计 -->
+        <div v-if="scanResult" class="scan-summary">
+          <el-row :gutter="16">
+            <el-col :span="4">
+              <div class="stat-item">
+                <div class="stat-value">{{ scanResult.scan_summary.total_torrents }}</div>
+                <div class="stat-label">总种子数</div>
+              </div>
+            </el-col>
+            <el-col :span="5">
+              <div class="stat-item">
+                <div class="stat-value">{{ scanResult.scan_summary.total_local_items }}</div>
+                <div class="stat-label">本地文件数</div>
+              </div>
+            </el-col>
+            <el-col :span="5">
+              <div class="stat-item stat-danger">
+                <div class="stat-value">{{ scanResult.scan_summary.missing_count }}</div>
+                <div class="stat-label">缺失文件</div>
+              </div>
+            </el-col>
+            <el-col :span="5">
+              <div class="stat-item stat-warning">
+                <div class="stat-value">{{ scanResult.scan_summary.orphaned_count }}</div>
+                <div class="stat-label">孤立文件</div>
+              </div>
+            </el-col>
+            <el-col :span="5">
+              <div class="stat-item stat-success">
+                <div class="stat-value">{{ scanResult.scan_summary.synced_count }}</div>
+                <div class="stat-label">正常做种</div>
+              </div>
+            </el-col>
+          </el-row>
+        </div>
+
+        <!-- 结果详情 -->
+        <div v-if="scanResult" class="scan-results">
+          <el-tabs v-model="activeTab" class="result-tabs">
+            <el-tab-pane name="missing">
+              <template #label>
+                <span class="tab-label">
+                  缺失文件
+                  <el-badge
+                    v-if="scanResult.scan_summary.missing_count > 0"
+                    :value="scanResult.scan_summary.missing_count"
+                    type="danger"
+                  />
+                </span>
+              </template>
+              <div class="tab-content">
+                <el-table
+                  :data="scanResult.missing_files || []"
+                  stripe
+                  height="100%"
+                  :default-sort="{ prop: 'size', order: 'descending' }"
+                >
+                  <el-table-column prop="name" label="种子名称" min-width="250" show-overflow-tooltip align="left" header-align="center" />
+                  <el-table-column prop="save_path" label="保存路径" width="180" show-overflow-tooltip align="left" header-align="center" />
+                  <el-table-column prop="size" label="大小" width="110" sortable align="right" header-align="center">
+                    <template #default="{ row }">
+                      {{ formatBytes(row.size) }}
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="downloader_name" label="下载器" width="120" align="center" header-align="center" />
+                </el-table>
+              </div>
+            </el-tab-pane>
+
+            <el-tab-pane name="orphaned">
+              <template #label>
+                <span class="tab-label">
+                  孤立文件
+                  <el-badge
+                    v-if="scanResult.scan_summary.orphaned_count > 0"
+                    :value="scanResult.scan_summary.orphaned_count"
+                    type="warning"
+                  />
+                </span>
+              </template>
+              <div class="tab-content">
+                <el-table
+                  :data="scanResult.orphaned_files || []"
+                  stripe
+                  height="100%"
+                  :default-sort="{ prop: 'size', order: 'descending' }"
+                >
+                  <el-table-column prop="name" label="文件/文件夹名称" min-width="250" show-overflow-tooltip align="left" header-align="center" />
+                  <el-table-column prop="path" label="所在路径" width="180" show-overflow-tooltip align="left" header-align="center" />
+                  <el-table-column prop="size" label="大小" width="110" sortable align="right" header-align="center">
+                    <template #default="{ row }">
+                      {{ row.size ? formatBytes(row.size) : '未知' }}
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="is_file" label="类型" width="80" align="center" header-align="center">
+                    <template #default="{ row }">
+                      <el-tag :type="row.is_file ? 'success' : 'info'" size="small">
+                        {{ row.is_file ? '文件' : '文件夹' }}
+                      </el-tag>
+                    </template>
+                  </el-table-column>
+                </el-table>
+              </div>
+            </el-tab-pane>
+
+            <el-tab-pane name="synced">
+              <template #label>
+                <span class="tab-label">
+                  正常做种
+                  <el-badge
+                    v-if="scanResult.scan_summary.synced_count > 0"
+                    :value="scanResult.scan_summary.synced_count"
+                    type="success"
+                  />
+                </span>
+              </template>
+              <div class="tab-content">
+                <el-table :data="scanResult.synced_torrents || []" stripe height="100%">
+                  <el-table-column prop="name" label="名称" min-width="250" show-overflow-tooltip align="left" header-align="center" />
+                  <el-table-column prop="path" label="路径" width="200" show-overflow-tooltip align="left" header-align="center" />
+                  <el-table-column prop="torrents_count" label="任务数" width="80" align="center" header-align="center">
+                    <template #default="{ row }">
+                      <el-tag v-if="row.torrents_count > 1" type="warning" size="small">
+                        {{ row.torrents_count }}
+                      </el-tag>
+                      <span v-else>{{ row.torrents_count }}</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="下载器" min-width="150" align="left" header-align="center">
+                    <template #default="{ row }">
+                      <el-tag
+                        v-for="(name, index) in row.downloader_names"
+                        :key="index"
+                        size="small"
+                        style="margin-right: 4px"
+                      >
+                        {{ name }}
+                      </el-tag>
+                    </template>
+                  </el-table-column>
+                </el-table>
+              </div>
+            </el-tab-pane>
+          </el-tabs>
+        </div>
+
+        <div v-if="!scanResult && !scanning" style="display: flex; align-items: center; justify-content: center; flex: 1">
+          <el-empty description="点击扫描按钮进行本地文件检查" />
         </div>
       </div>
     </div>
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted, defineEmits } from 'vue'
+import { ElMessage } from 'element-plus'
+import { Search } from '@element-plus/icons-vue'
+import axios from 'axios'
 
-const emits = defineEmits(['ready'])
+interface SiteStat {
+  site_name: string
+  torrent_count: number
+  total_size: number
+}
+
+interface GroupStat {
+  site_name: string
+  group_suffix: string
+  torrent_count: number
+  total_size: number
+}
+
+interface PathItem {
+  path: string
+  count: number
+}
+
+interface Downloader {
+  id: string | number
+  name: string
+  paths: PathItem[]
+}
+
+interface ScanSummary {
+  total_torrents: number
+  total_local_items: number
+  missing_count: number
+  orphaned_count: number
+  synced_count: number
+}
+
+interface MissingFile {
+  name: string
+  save_path: string
+  size: number
+  downloader_name: string
+}
+
+interface OrphanedFile {
+  name: string
+  path: string
+  size?: number
+  is_file: boolean
+  full_path: string
+}
+
+interface SyncedTorrent {
+  name: string
+  path: string
+  torrents_count: number
+  downloader_names: string[]
+}
+
+interface ScanResult {
+  scan_summary: ScanSummary
+  missing_files: MissingFile[]
+  orphaned_files: OrphanedFile[]
+  synced_torrents: SyncedTorrent[]
+}
+
+const emits = defineEmits<{
+  ready: [refreshFn: () => Promise<void>]
+}>()
 
 const siteStatsLoading = ref(true)
 const groupStatsLoading = ref(true)
-const siteStatsData = ref([])
-const groupStatsData = ref([])
+const siteStatsData = ref<SiteStat[]>([])
+const groupStatsData = ref<GroupStat[]>([])
 const selectedSite = ref('')
 
-const formatBytes = (bytes, decimals = 2) => {
+// 本地扫描相关
+const scanning = ref(false)
+const activeTab = ref('missing')
+const scanResult = ref<ScanResult | null>(null)
+const selectedPath = ref<string>('')
+const downloadersWithPaths = ref<Downloader[]>([])
+
+const formatBytes = (bytes: number, decimals = 2): string => {
   if (!+bytes) return '0 Bytes'
   const k = 1024
   const dm = decimals < 0 ? 0 : decimals
@@ -181,8 +435,51 @@ const handleSiteChange = () => {
   fetchGroupStats()
 }
 
+// 获取下载器路径列表
+const fetchDownloadersWithPaths = async () => {
+  try {
+    const res = await axios.get<{ downloaders: Downloader[] }>('/api/local_query/downloaders_with_paths')
+    downloadersWithPaths.value = res.data.downloaders || []
+  } catch (error) {
+    console.error('获取路径列表失败:', error)
+  }
+}
+
+// 获取缓存的扫描结果
+const fetchCachedScanResult = async () => {
+  try {
+    const res = await axios.get<ScanResult>('/api/local_query/scan/cache')
+    scanResult.value = res.data
+    console.log('已加载缓存的扫描结果')
+  } catch (error) {
+    // 404表示没有缓存，这是正常的，不需要报错
+    if (axios.isAxiosError(error) && error.response?.status !== 404) {
+      console.error('获取缓存扫描结果失败:', error)
+    }
+  }
+}
+
+// 开始扫描
+const startScan = async () => {
+  scanning.value = true
+  scanResult.value = null
+  try {
+    const url = selectedPath.value
+      ? `/api/local_query/scan?path=${encodeURIComponent(selectedPath.value)}`
+      : '/api/local_query/scan'
+    const res = await axios.post<ScanResult>(url)
+    scanResult.value = res.data
+    ElMessage.success('扫描完成！')
+  } catch (error) {
+    console.error('扫描失败:', error)
+    ElMessage.error('扫描失败，请查看控制台获取详情')
+  } finally {
+    scanning.value = false
+  }
+}
+
 const refreshAllData = async () => {
-  await Promise.all([fetchSiteStats(), fetchGroupStats()])
+  await Promise.all([fetchSiteStats(), fetchGroupStats(), fetchDownloadersWithPaths(), fetchCachedScanResult()])
 }
 
 onMounted(() => {
@@ -210,9 +507,9 @@ onMounted(() => {
   flex-grow: 1;
   position: relative;
   display: grid;
-  /* 默认（大屏幕）状态：三列等宽布局 */
-  grid-template-columns: repeat(3, 1fr);
-  grid-template-rows: 1fr;
+  /* 默认（大屏幕）状态：左侧1/3两行，右侧2/3一行 */
+  grid-template-columns: 1fr 2fr;
+  grid-template-rows: 1fr 1fr;
   gap: 20px;
   min-height: 0;
 }
@@ -228,6 +525,18 @@ onMounted(() => {
   overflow: hidden;
   /* 为象限设置一个最小高度，防止在多行布局时高度不一 */
   min-height: 300px;
+}
+
+/* 第一、二个象限（做种站点、做种官组）在左侧上下排列 */
+.quadrant:nth-child(1),
+.quadrant:nth-child(2) {
+  grid-column: 1;
+}
+
+/* 第三个象限（待定内容）在右侧，跨越两行 */
+.quadrant:nth-child(3) {
+  grid-column: 2;
+  grid-row: 1 / 3;
 }
 
 .quadrant-title {
@@ -247,16 +556,134 @@ onMounted(() => {
   height: 100% !important;
 }
 
-:deep(.cell) {
-  padding: 0;
-  text-align: center;
-}
-
 /* [新增] 表格包装层，用于提供水平滚动 */
 .table-wrapper {
   overflow-x: auto;
-  flex-grow: 1;
   position: relative;
+}
+
+/* 本地扫描区块特殊样式 */
+.local-scan-quadrant {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.scan-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-shrink: 0;
+  gap: 20px;
+}
+
+.scan-header-left {
+  flex: 1;
+  min-width: 0;
+}
+
+.scan-header-left .quadrant-title {
+  margin-bottom: 6px;
+}
+
+.scan-description {
+  margin: 0;
+  font-size: 13px;
+  color: #909399;
+  line-height: 1.5;
+}
+
+.scan-controls {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.scan-summary {
+  background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 100%);
+  border-radius: 8px;
+  padding: 20px;
+  flex-shrink: 0;
+}
+
+.stat-item {
+  text-align: center;
+  padding: 12px;
+  background: white;
+  border-radius: 6px;
+  transition: all 0.3s;
+}
+
+.stat-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: #303133;
+  margin-bottom: 6px;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: #909399;
+  font-weight: 500;
+}
+
+.stat-danger .stat-value {
+  color: #f56c6c;
+}
+
+.stat-warning .stat-value {
+  color: #e6a23c;
+}
+
+.stat-success .stat-value {
+  color: #67c23a;
+}
+
+.scan-results {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: #fafafa;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.result-tabs {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+:deep(.result-tabs .el-tabs__content) {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+:deep(.result-tabs .el-tab-pane) {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.tab-content {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.tab-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 /* --- 响应式布局 --- */
