@@ -186,22 +186,6 @@ def get_sites():
             conn.close()
 
 
-@management_bp.route("/sites/add", methods=["POST"])
-def add_site():
-    """添加一个新站点。"""
-    db_manager = management_bp.db_manager
-    site_data = request.json
-    if not site_data.get("nickname") or not site_data.get("site"):
-        return jsonify({"success": False, "message": "站点昵称和站点域名不能为空。"}), 400
-    if db_manager.add_site(site_data):
-        return jsonify({"success": True, "message": "站点已成功添加。"})
-    else:
-        return jsonify({
-            "success": False,
-            "message": "添加站点失败，可能是站点域名已存在。"
-        }), 500
-
-
 @management_bp.route("/sites/update", methods=["POST"])
 def update_site_details():
     """更新一个已有站点的所有信息。"""

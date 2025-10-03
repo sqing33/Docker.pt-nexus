@@ -107,6 +107,30 @@ type MediaInfoResponse struct {
 	Message   string `json:"message"`
 	MediaInfo string `json:"mediainfo,omitempty"`
 }
+type FileCheckRequest struct {
+	RemotePath string `json:"remote_path"`
+}
+type FileCheckResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+	Exists  bool   `json:"exists"`
+	IsFile  bool   `json:"is_file,omitempty"`
+	Size    int64  `json:"size,omitempty"`
+}
+type BatchFileCheckRequest struct {
+	RemotePaths []string `json:"remote_paths"`
+}
+type FileCheckResult struct {
+	Path   string `json:"path"`
+	Exists bool   `json:"exists"`
+	IsFile bool   `json:"is_file"`
+	Size   int64  `json:"size"`
+}
+type BatchFileCheckResponse struct {
+	Success bool              `json:"success"`
+	Message string            `json:"message"`
+	Results []FileCheckResult `json:"results"`
+}
 type SubtitleEvent struct {
 	StartTime float64
 	EndTime   float64
@@ -1050,6 +1074,131 @@ func mediainfoHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// fileCheckHandler 处理文件/目录存在性检查
+func fileCheckHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSONResponse(w, r, http.StatusMethodNotAllowed, FileCheckResponse{Success: false, Message: "仅支持 POST 方法"})
+		return
+	}
+	var reqData FileCheckRequest
+	if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
+		writeJSONResponse(w, r, http.StatusBadRequest, FileCheckResponse{Success: false, Message: "无效的 JSON 请求体: " + err.Error()})
+		return
+	}
+	remotePath := reqData.RemotePath
+	if remotePath == "" {
+		writeJSONResponse(w, r, http.StatusBadRequest, FileCheckResponse{Success: false, Message: "remote_path 不能为空"})
+		return
+	}
+
+	log.Printf("文件检查请求: 正在检查路径 '%s'", remotePath)
+
+	// 检查文件/目录是否存在
+	fileInfo, err := os.Stat(remotePath)
+	if os.IsNotExist(err) {
+		log.Printf("文件检查请求: 路径不存在 '%s'", remotePath)
+		writeJSONResponse(w, r, http.StatusOK, FileCheckResponse{
+			Success: true,
+			Message: "检查完成",
+			Exists:  false,
+		})
+		return
+	}
+	if err != nil {
+		log.Printf("文件检查请求: 访问路径失败 '%s': %v", remotePath, err)
+		writeJSONResponse(w, r, http.StatusInternalServerError, FileCheckResponse{
+			Success: false,
+			Message: fmt.Sprintf("访问路径失败: %v", err),
+		})
+		return
+	}
+
+	// 文件/目录存在，获取详细信息
+	isFile := !fileInfo.IsDir()
+	size := fileInfo.Size()
+
+	log.Printf("文件检查请求: 路径存在 '%s' (是否文件: %v, 大小: %d 字节)", remotePath, isFile, size)
+	writeJSONResponse(w, r, http.StatusOK, FileCheckResponse{
+		Success: true,
+		Message: "检查完成",
+		Exists:  true,
+		IsFile:  isFile,
+		Size:    size,
+	})
+}
+
+// batchFileCheckHandler 处理批量文件/目录存在性检查
+func batchFileCheckHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSONResponse(w, r, http.StatusMethodNotAllowed, BatchFileCheckResponse{Success: false, Message: "仅支持 POST 方法"})
+		return
+	}
+	var reqData BatchFileCheckRequest
+	if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
+		writeJSONResponse(w, r, http.StatusBadRequest, BatchFileCheckResponse{Success: false, Message: "无效的 JSON 请求体: " + err.Error()})
+		return
+	}
+
+	if len(reqData.RemotePaths) == 0 {
+		writeJSONResponse(w, r, http.StatusBadRequest, BatchFileCheckResponse{Success: false, Message: "remote_paths 不能为空"})
+		return
+	}
+
+	log.Printf("批量文件检查请求: 正在检查 %d 个路径", len(reqData.RemotePaths))
+
+	results := make([]FileCheckResult, 0, len(reqData.RemotePaths))
+
+	for _, remotePath := range reqData.RemotePaths {
+		result := FileCheckResult{
+			Path:   remotePath,
+			Exists: false,
+			IsFile: false,
+			Size:   0,
+		}
+
+		// 检查文件/目录是否存在
+		fileInfo, err := os.Stat(remotePath)
+		if os.IsNotExist(err) {
+			// 路径不存在，使用默认值（已设置）
+			results = append(results, result)
+			continue
+		}
+		if err != nil {
+			log.Printf("批量文件检查: 访问路径失败 '%s': %v", remotePath, err)
+			// 访问失败，使用默认值
+			results = append(results, result)
+			continue
+		}
+
+		// 文件/目录存在，设置详细信息
+		result.Exists = true
+		result.IsFile = !fileInfo.IsDir()
+		result.Size = fileInfo.Size()
+		results = append(results, result)
+	}
+
+	log.Printf("批量文件检查请求: 完成检查 %d 个路径，其中 %d 个存在",
+		len(reqData.RemotePaths),
+		countExisting(results))
+
+	writeJSONResponse(w, r, http.StatusOK, BatchFileCheckResponse{
+		Success: true,
+		Message: "批量检查完成",
+		Results: results,
+	})
+}
+
+// countExisting 计算存在的文件数量
+func countExisting(results []FileCheckResult) int {
+	count := 0
+	for _, r := range results {
+		if r.Exists {
+			count++
+		}
+	}
+	return count
+}
+
 // ======================= 主函数 (无变动) =======================
 
 func main() {
@@ -1072,6 +1221,8 @@ func main() {
 	})
 	http.HandleFunc("/api/media/screenshot", screenshotHandler)
 	http.HandleFunc("/api/media/mediainfo", mediainfoHandler)
+	http.HandleFunc("/api/file/check", fileCheckHandler)
+	http.HandleFunc("/api/file/batch-check", batchFileCheckHandler)
 	log.Println("增强版qBittorrent代理服务器正在启动...")
 	log.Println("API端点:")
 	log.Println("  POST /api/torrents/all - 获取种子信息")
@@ -1079,6 +1230,8 @@ func main() {
 	log.Println("  GET  /api/health      - 健康检查")
 	log.Println("  POST /api/media/screenshot - 远程截图并上传图床")
 	log.Println("  POST /api/media/mediainfo  - 远程获取MediaInfo")
+	log.Println("  POST /api/file/check       - 远程文件存在性检查")
+	log.Println("  POST /api/file/batch-check - 批量远程文件存在性检查")
 	log.Printf("监听端口: %s", port)
 	if err := http.ListenAndServe(port, nil); err != nil {
 		log.Fatalf("启动服务器失败: %v", err)

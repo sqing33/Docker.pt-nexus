@@ -29,10 +29,6 @@
       <div class="right-action-group">
         <el-input v-model="searchQuery" placeholder="搜索站点昵称/标识/官组" clearable :prefix-icon="Search"
           class="search-input" />
-        <!-- [移除] 原来的独立同步按钮已被删除 -->
-        <el-button type="primary" size="large" @click="handleOpenDialog('add')" :icon="Plus" class="add-site-btn">
-          添加站点
-        </el-button>
       </div>
     </div>
 
@@ -69,7 +65,7 @@
         </el-table-column>
                 <el-table-column label="操作" width="180" align="center" fixed="right">
           <template #default="scope">
-            <el-button type="primary" :icon="Edit" link @click="handleOpenDialog('edit', scope.row)">
+            <el-button type="primary" :icon="Edit" link @click="handleOpenDialog(scope.row)">
               编辑
             </el-button>
             <el-button type="danger" :icon="Delete" link @click="handleDelete(scope.row)">
@@ -93,13 +89,13 @@
       </div>
     </div>
 
-    <!-- 添加/编辑站点对话框 -->
-    <el-dialog v-model="dialogVisible" :title="dialogMode === 'add' ? '添加新站点' : '编辑站点'" width="700px"
+    <!-- 编辑站点对话框 -->
+    <el-dialog v-model="dialogVisible" title="编辑站点" width="700px"
       :close-on-click-modal="false">
       <el-form :model="siteForm" ref="siteFormRef" label-width="140px" label-position="left">
         <el-form-item label="站点标识" prop="site" required>
-          <el-input v-model="siteForm.site" placeholder="例如：pt" :disabled="dialogMode === 'edit'"></el-input>
-          <div class="form-tip">作为站点的唯一标识，添加后不可修改。</div>
+          <el-input v-model="siteForm.site" placeholder="例如：pt" disabled></el-input>
+          <div class="form-tip">站点标识不可修改。</div>
         </el-form-item>
         <el-form-item label="站点昵称" prop="nickname" required>
           <el-input v-model="siteForm.nickname" placeholder="例如：PT站"></el-input>
@@ -144,7 +140,7 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Delete, Edit, Refresh, Search } from '@element-plus/icons-vue'
+import { Delete, Edit, Refresh, Search } from '@element-plus/icons-vue'
 
 // --- 状态管理 ---
 const isSaving = ref(false) // 用于站点编辑对话框的保存按钮
@@ -166,7 +162,6 @@ const pagination = ref({
 
 // --- 对话框状态 ---
 const dialogVisible = ref(false)
-const dialogMode = ref('add') // 'add' or 'edit'
 const siteFormRef = ref(null)
 const siteForm = ref({
   id: null,
@@ -296,26 +291,10 @@ const handleSaveAndSync = async () => {
   }
 }
 
-
-const handleOpenDialog = (mode, site = null) => {
-  dialogMode.value = mode
-  if (mode === 'edit' && site) {
-    // 统一使用MB/s单位
-    const siteData = JSON.parse(JSON.stringify(site))
-    siteForm.value = siteData
-  } else {
-    siteForm.value = {
-      id: null,
-      site: '',
-      nickname: '',
-      base_url: '',
-      special_tracker_domain: '',
-      group: '',
-      cookie: '',
-      proxy: 0,
-      speed_limit: 0,
-    }
-  }
+const handleOpenDialog = (site) => {
+  // 统一使用MB/s单位
+  const siteData = JSON.parse(JSON.stringify(site))
+  siteForm.value = siteData
   dialogVisible.value = true
 }
 
@@ -330,12 +309,7 @@ const handleSave = async () => {
       siteData.cookie = siteData.cookie.trim()
     }
 
-    let response
-    if (dialogMode.value === 'add') {
-      response = await axios.post(`${API_BASE_URL}/sites/add`, siteData)
-    } else {
-      response = await axios.post(`${API_BASE_URL}/sites/update`, siteData)
-    }
+    const response = await axios.post(`${API_BASE_URL}/sites/update`, siteData)
 
     if (response.data.success) {
       ElMessage.success(response.data.message)
