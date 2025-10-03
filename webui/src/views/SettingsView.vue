@@ -21,12 +21,6 @@
           </el-icon>
           <span>站点管理</span>
         </el-menu-item>
-        <el-menu-item index="/settings/source-priority">
-          <el-icon>
-            <Sort />
-          </el-icon>
-          <span>源站点优先级</span>
-        </el-menu-item>
       </el-menu>
     </el-aside>
 
