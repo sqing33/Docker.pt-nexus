@@ -4,6 +4,8 @@ from pathlib import Path
 from flask import Blueprint, jsonify
 from collections import defaultdict
 from config import config_manager
+from utils.media_helper import _get_downloader_proxy_config
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +29,73 @@ def get_downloader_name_from_config(downloader_id):
     except Exception as e:
         logger.error(f"从配置获取下载器名称失败: {str(e)}")
         return "未知"
+
+
+def check_remote_file_exists(proxy_config, remote_path):
+    """
+    通过代理检查远程文件是否存在
+
+    :param proxy_config: 代理配置字典，包含 proxy_base_url
+    :param remote_path: 远程路径
+    :return: (exists, is_file, size) 元组
+    """
+    try:
+        response = requests.post(
+            f"{proxy_config['proxy_base_url']}/api/file/check",
+            json={"remote_path": remote_path},
+            timeout=30
+        )
+        response.raise_for_status()
+        result = response.json()
+
+        if result.get("success"):
+            exists = result.get("exists", False)
+            is_file = result.get("is_file", False)
+            size = result.get("size", 0)
+            return exists, is_file, size
+        else:
+            logger.error(f"代理文件检查失败: {result.get('message', '未知错误')}")
+            return False, False, 0
+    except Exception as e:
+        logger.error(f"调用代理检查文件失败: {e}")
+        return False, False, 0
+
+
+def batch_check_remote_files(proxy_config, remote_paths):
+    """
+    通过代理批量检查远程文件是否存在
+
+    :param proxy_config: 代理配置字典，包含 proxy_base_url
+    :param remote_paths: 远程路径列表
+    :return: 字典 {path: (exists, is_file, size)}
+    """
+    if not remote_paths:
+        return {}
+
+    try:
+        response = requests.post(
+            f"{proxy_config['proxy_base_url']}/api/file/batch-check",
+            json={"remote_paths": remote_paths},
+            timeout=60  # 批量检查可能需要更长时间
+        )
+        response.raise_for_status()
+        result = response.json()
+
+        if result.get("success"):
+            results_dict = {}
+            for item in result.get("results", []):
+                path = item.get("path")
+                exists = item.get("exists", False)
+                is_file = item.get("is_file", False)
+                size = item.get("size", 0)
+                results_dict[path] = (exists, is_file, size)
+            return results_dict
+        else:
+            logger.error(f"代理批量文件检查失败: {result.get('message', '未知错误')}")
+            return {}
+    except Exception as e:
+        logger.error(f"调用代理批量检查文件失败: {e}")
+        return {}
 
 
 @local_query_bp.route("/paths", methods=["GET"])
@@ -60,22 +129,26 @@ def get_paths():
 
 @local_query_bp.route("/downloaders_with_paths", methods=["GET"])
 def get_downloaders_with_paths():
-    """按下载器分组显示路径"""
+    """按下载器分组显示路径（从配置文件获取下载器信息）"""
     try:
+        # 从配置文件获取下载器列表
+        config = config_manager.get()
+        downloaders_config = config.get("downloaders", [])
+
+        if not downloaders_config:
+            return jsonify({"downloaders": []})
+
         db_manager = local_query_bp.db_manager
         conn = db_manager._get_connection()
         cursor = db_manager._get_cursor(conn)
 
-        cursor.execute("SELECT id, name FROM downloader_clients ORDER BY id")
-        downloaders = cursor.fetchall()
-
         result = []
-        for downloader in downloaders:
-            downloader_id = downloader['id'] if isinstance(
-                downloader, dict) else downloader[0]
-            downloader_name = downloader['name'] if isinstance(
-                downloader, dict) else downloader[1]
+        for downloader in downloaders_config:
+            downloader_id = downloader.get("id")
+            downloader_name = downloader.get("name", "未知")
+            path_mappings = downloader.get("path_mappings", [])
 
+            # 查询该下载器的所有唯一路径
             ph = db_manager.get_placeholder()
             cursor.execute(
                 f"""
@@ -86,13 +159,31 @@ def get_downloaders_with_paths():
             """, (downloader_id, ))
 
             paths_data = cursor.fetchall()
-            paths = [{
-                "path": row['save_path'],
-                "count": row['torrent_count']
-            } if isinstance(row, dict) else {
-                "path": row[0],
-                "count": row[1]
-            } for row in paths_data]
+            paths_set = {}  # 使用字典来合并相同路径的计数
+
+            # 处理原始路径
+            for row in paths_data:
+                save_path = row['save_path'] if isinstance(row, dict) else row[0]
+                count = row['torrent_count'] if isinstance(row, dict) else row[1]
+
+                # 原始路径
+                if save_path not in paths_set:
+                    paths_set[save_path] = 0
+                paths_set[save_path] += count
+
+                # 应用路径映射，生成映射后的路径
+                for mapping in path_mappings:
+                    remote = mapping.get("remote", "").rstrip("/")
+                    local = mapping.get("local", "").rstrip("/")
+                    if remote and local and save_path.startswith(remote):
+                        # 将远程路径映射到本地路径
+                        mapped_path = save_path.replace(remote, local, 1)
+                        if mapped_path not in paths_set:
+                            paths_set[mapped_path] = 0
+                        paths_set[mapped_path] += count
+
+            # 转换为列表格式
+            paths = [{"path": path, "count": count} for path, count in sorted(paths_set.items())]
 
             if paths:
                 result.append({
@@ -112,32 +203,93 @@ def get_downloaders_with_paths():
 def scan_local_files():
     """
     [最终版-已修正] 扫描所有路径，对比种子与本地文件。
-    - 缺失文件：返回极简聚合信息。
+    - 缺失文件:返回极简聚合信息。
     - 孤立文件和正常同步：逻辑已恢复。
+    - 支持通过查询参数 path 指定要扫描的特定路径
+    - 应用路径映射，将远程路径转换为本地可访问路径
+    - 判断下载器是否为远程，远程下载器跳过本地文件检查
     """
+    from flask import request
+
+    # 获取查询参数中的路径
+    target_path = request.args.get('path', None)
+
     try:
+        # 从配置文件获取下载器路径映射
+        config = config_manager.get()
+        downloaders_config = config.get("downloaders", [])
+        path_mappings_by_downloader = {}
+        remote_downloaders = set()  # 存储使用代理的远程下载器ID
+
+        for dl in downloaders_config:
+            dl_id = dl.get("id")
+            path_mappings_by_downloader[dl_id] = dl.get("path_mappings", [])
+            # 使用已有的函数判断是否为远程下载器
+            proxy_config = _get_downloader_proxy_config(dl_id)
+            if proxy_config:
+                remote_downloaders.add(dl_id)
+                logger.info(f"下载器 {dl.get('name')} (ID: {dl_id}) 使用代理，将跳过本地文件检查")
+
         db_manager = local_query_bp.db_manager
         conn = db_manager._get_connection()
         cursor = db_manager._get_cursor(conn)
 
-        # 1. 查询所有需要扫描的种子数据 (已简化)
-        cursor.execute("""
-            SELECT t.name, t.save_path, t.size, t.downloader_id
-            FROM torrents t
-            WHERE t.save_path IS NOT NULL AND TRIM(t.save_path) != ''
-        """)
+        # 1. 查询所有需要扫描的种子数据
+        if target_path:
+            # 如果指定了路径，只查询该路径下的种子
+            ph = db_manager.get_placeholder()
+            cursor.execute(f"""
+                SELECT t.name, t.save_path, t.size, t.downloader_id
+                FROM torrents t
+                WHERE t.save_path = {ph}
+            """, (target_path,))
+        else:
+            # 否则查询所有路径
+            cursor.execute("""
+                SELECT t.name, t.save_path, t.size, t.downloader_id
+                FROM torrents t
+                WHERE t.save_path IS NOT NULL AND TRIM(t.save_path) != ''
+            """)
         torrents = cursor.fetchall()
         conn.close()
 
-        # 2. 按 save_path 进行初次分组
-        torrents_by_path = defaultdict(list)
+        # 辅助函数：应用路径映射
+        def apply_path_mapping(remote_path, downloader_id):
+            """将远程路径映射为本地路径"""
+            mappings = path_mappings_by_downloader.get(downloader_id, [])
+            for mapping in mappings:
+                remote = mapping.get("remote", "").rstrip("/")
+                local = mapping.get("local", "").rstrip("/")
+                if remote and local and remote_path.startswith(remote):
+                    return remote_path.replace(remote, local, 1)
+            return remote_path  # 如果没有匹配的映射，返回原路径
+
+        # 2. 按 save_path 进行初次分组，并应用路径映射
+        # 分别处理本地和远程下载器
+        local_torrents_by_path = defaultdict(list)
+        remote_torrents_by_path = defaultdict(list)
+
         for torrent in torrents:
             row_data = dict(torrent)
+            downloader_id = row_data.get("downloader_id")
             # 从配置文件获取下载器名称
-            row_data["downloader_name"] = get_downloader_name_from_config(
-                row_data.get("downloader_id")
-            )
-            torrents_by_path[row_data['save_path']].append(row_data)
+            row_data["downloader_name"] = get_downloader_name_from_config(downloader_id)
+
+            # 判断是否为远程下载器
+            is_remote = downloader_id in remote_downloaders
+
+            if is_remote:
+                # 远程下载器：不进行路径映射，直接使用原路径
+                original_path = row_data['save_path']
+                row_data['is_remote'] = True
+                remote_torrents_by_path[original_path].append(row_data)
+            else:
+                # 本地下载器：应用路径映射
+                original_path = row_data['save_path']
+                mapped_path = apply_path_mapping(original_path, downloader_id)
+                row_data['local_path'] = mapped_path  # 保存映射后的本地路径
+                row_data['is_remote'] = False
+                local_torrents_by_path[mapped_path].append(row_data)
 
         # 3. 初始化扫描结果
         missing_files = []
@@ -145,10 +297,11 @@ def scan_local_files():
         synced_torrents = []
         total_local_items = 0
         total_torrents_count = len(torrents)
+        remote_torrents_count = sum(len(torrents) for torrents in remote_torrents_by_path.values())
 
-        # 4. 遍历每个路径进行扫描
-        for save_path, path_torrents in torrents_by_path.items():
-            if not os.path.exists(save_path):
+        # 4. 遍历每个路径进行扫描（仅扫描本地下载器的路径）
+        for local_path, path_torrents in local_torrents_by_path.items():
+            if not os.path.exists(local_path):
                 missing_groups_by_name = defaultdict(list)
                 for torrent in path_torrents:
                     missing_groups_by_name[torrent['name']].append(torrent)
@@ -158,15 +311,15 @@ def scan_local_files():
                     first_torrent = torrent_group[0]
                     missing_files.append({
                         "name": name,
-                        "save_path": save_path,
-                        "expected_path": os.path.join(save_path, name),
+                        "save_path": first_torrent['save_path'],  # 显示原始远程路径
+                        "expected_path": os.path.join(local_path, name),
                         "size": first_torrent.get('size') or 0,
                         "downloader_name": first_torrent.get('downloader_name', '未知')
                     })
                 continue
 
             try:
-                local_items = set(os.listdir(save_path))
+                local_items = set(os.listdir(local_path))
                 total_local_items += len(local_items)
 
                 torrents_by_name_in_path = defaultdict(list)
@@ -183,18 +336,16 @@ def scan_local_files():
                     first_torrent = torrent_group[0]
                     missing_files.append({
                         "name": name,
-                        "save_path": save_path,
-                        "expected_path": os.path.join(save_path, name),
+                        "save_path": first_torrent['save_path'],  # 显示原始远程路径
+                        "expected_path": os.path.join(local_path, name),
                         "size": first_torrent.get('size') or 0,
                         "downloader_name": first_torrent.get('downloader_name', '未知')
                     })
 
-                # --- CORRECTED-LOGIC-START: 恢复孤立文件和同步文件的检索逻辑 ---
-
                 # 找出孤立的文件 (名字在本地有，但数据库没有)
                 orphaned_names = local_items - torrent_names_in_path
                 for item_name in orphaned_names:
-                    full_path = os.path.join(save_path, item_name)
+                    full_path = os.path.join(local_path, item_name)
                     is_file = os.path.isfile(full_path)
                     size = None
                     try:
@@ -209,7 +360,7 @@ def scan_local_files():
 
                     orphaned_files.append({
                         "name": item_name,
-                        "path": save_path,
+                        "path": local_path,
                         "full_path": full_path,
                         "is_file": is_file,
                         "size": size
@@ -223,25 +374,80 @@ def scan_local_files():
                         "name":
                         name,
                         "path":
-                        save_path,
+                        local_path,
                         "torrents_count":
                         len(torrent_group),
                         "downloader_names":
                         list(set(t["downloader_name"] for t in torrent_group))
                     })
 
-                # --- CORRECTED-LOGIC-END ---
-
             except Exception as e:
-                logger.error(f"扫描路径 {save_path} 时出错: {str(e)}")
+                logger.error(f"扫描路径 {local_path} 时出错: {str(e)}")
 
-        # 5. 统计信息
+        # 5. 处理远程下载器的路径（通过代理批量检查文件）
+        proxy_configs = {}  # 缓存代理配置
+        for remote_path, path_torrents in remote_torrents_by_path.items():
+            # 获取第一个种子的下载器ID和代理配置
+            first_torrent = path_torrents[0]
+            downloader_id = first_torrent.get('downloader_id')
+
+            # 获取或缓存代理配置
+            if downloader_id not in proxy_configs:
+                proxy_configs[downloader_id] = _get_downloader_proxy_config(downloader_id)
+
+            proxy_config = proxy_configs[downloader_id]
+            if not proxy_config:
+                logger.warning(f"下载器 {downloader_id} 没有代理配置，跳过检查")
+                continue
+
+            # 按名称分组，用于后续检查
+            torrents_by_name_in_path = defaultdict(list)
+            for torrent in path_torrents:
+                torrents_by_name_in_path[torrent['name']].append(torrent)
+
+            # 构建需要检查的路径列表
+            paths_to_check = []
+            for name in torrents_by_name_in_path.keys():
+                full_remote_path = os.path.join(remote_path, name)
+                paths_to_check.append(full_remote_path)
+
+            # 批量检查所有文件
+            logger.info(f"批量检查远程路径 {remote_path} 下的 {len(paths_to_check)} 个文件")
+            check_results = batch_check_remote_files(proxy_config, paths_to_check)
+
+            # 处理检查结果
+            for name, torrent_group in torrents_by_name_in_path.items():
+                full_remote_path = os.path.join(remote_path, name)
+                exists, is_file, size = check_results.get(full_remote_path, (False, False, 0))
+
+                if not exists:
+                    # 文件不存在，添加到缺失列表
+                    first = torrent_group[0]
+                    missing_files.append({
+                        "name": name,
+                        "save_path": remote_path,
+                        "expected_path": full_remote_path,
+                        "size": first.get('size') or 0,
+                        "downloader_name": first.get('downloader_name', '未知')
+                    })
+                else:
+                    # 文件存在，添加到正常同步列表
+                    synced_torrents.append({
+                        "name": name,
+                        "path": remote_path,
+                        "torrents_count": len(torrent_group),
+                        "downloader_names": list(set(t["downloader_name"] for t in torrent_group))
+                    })
+
+        # 6. 统计信息
         scan_summary = {
             "total_torrents": total_torrents_count,
             "total_local_items": total_local_items,
             "missing_count": len(missing_files),
             "orphaned_count": len(orphaned_files),
-            "synced_count": len(synced_torrents)
+            "synced_count": len(synced_torrents),
+            "remote_torrents_count": remote_torrents_count,  # 添加远程种子计数
+            "skipped_remote": remote_torrents_count > 0  # 标记是否跳过了远程种子
         }
 
         return jsonify({

@@ -7,9 +7,22 @@
           <h3>本地文件扫描</h3>
           <p>此功能将扫描数据库中所有种子的保存路径，找出本地已删除的文件或未被任务引用的孤立文件。</p>
         </div>
-        <el-button type="primary" size="large" @click="startScan" :loading="scanning" :icon="Search">
-          开始扫描全部
-        </el-button>
+        <div class="action-controls">
+          <el-select v-model="selectedPath" clearable placeholder="选择路径(可选)" style="width: 300px; margin-right: 12px"
+            filterable>
+            <el-option-group v-for="downloader in downloadersWithPaths" :key="downloader.id"
+              :label="downloader.name">
+              <el-option v-for="pathItem in downloader.paths" :key="pathItem.path" :label="pathItem.path"
+                :value="pathItem.path">
+                <span>{{ pathItem.path }}</span>
+                <span style="float: right; color: #8492a6; font-size: 13px">({{ pathItem.count }})</span>
+              </el-option>
+            </el-option-group>
+          </el-select>
+          <el-button type="primary" size="large" @click="startScan" :loading="scanning" :icon="Search">
+            {{ selectedPath ? '扫描选定路径' : '扫描全部路径' }}
+          </el-button>
+        </div>
       </div>
     </el-card>
 
@@ -34,7 +47,7 @@
           <el-statistic title="孤立文件" :value="scanResult.scan_summary.orphaned_count" value-style="color: #e6a23c" />
         </el-col>
         <el-col :span="5">
-          <el-statistic title="正常同步" :value="scanResult.scan_summary.synced_count" value-style="color: #67c23a" />
+          <el-statistic title="正常做种" :value="scanResult.scan_summary.synced_count" value-style="color: #67c23a" />
         </el-col>
       </el-row>
     </el-card>
@@ -99,11 +112,11 @@
           </el-table>
         </el-tab-pane>
 
-        <!-- Tab 3: 正常同步 -->
-        <el-tab-pane label="正常同步" name="synced">
+        <!-- Tab 3: 正常做种 -->
+        <el-tab-pane label="正常做种" name="synced">
           <template #label>
             <span>
-              正常同步
+              正常做种
               <el-badge v-if="scanResult.scan_summary.synced_count > 0" :value="scanResult.scan_summary.synced_count"
                 class="tab-badge" type="success" />
             </span>
@@ -143,7 +156,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { ElMessage, ElMessageBox, ElBadge } from 'element-plus';
 import { Search } from '@element-plus/icons-vue';
 import axios from 'axios';
@@ -151,13 +164,33 @@ import axios from 'axios';
 const scanning = ref(false);
 const activeTab = ref('missing');
 const scanResult = ref<any>(null);
+const selectedPath = ref<string>('');
+const downloadersWithPaths = ref<any[]>([]);
+
+// 获取下载器路径列表
+const fetchDownloadersWithPaths = async () => {
+  try {
+    const res = await axios.get('/api/local_query/downloaders_with_paths');
+    downloadersWithPaths.value = res.data.downloaders || [];
+  } catch (error) {
+    console.error('获取路径列表失败:', error);
+  }
+};
+
+// 页面加载时获取路径列表
+onMounted(() => {
+  fetchDownloadersWithPaths();
+});
 
 // --- API 调用 ---
 const startScan = async () => {
   scanning.value = true;
   scanResult.value = null;
   try {
-    const res = await axios.post('/api/local_query/scan');
+    const url = selectedPath.value
+      ? `/api/local_query/scan?path=${encodeURIComponent(selectedPath.value)}`
+      : '/api/local_query/scan';
+    const res = await axios.post(url);
     scanResult.value = res.data;
     ElMessage.success('扫描完成！');
   } catch (error) {
@@ -192,6 +225,11 @@ const formatBytes = (bytes: number | null | undefined): string => {
 .action-content {
   display: flex;
   justify-content: space-between;
+  align-items: center;
+}
+
+.action-controls {
+  display: flex;
   align-items: center;
 }
 
