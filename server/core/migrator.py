@@ -154,6 +154,305 @@ class TorrentMigrator:
             self.logger.warning(f"加载源站点配置文件时出错: {e}")
             return {}
 
+    def _load_acknowledgment_config(self) -> Dict[str, Any]:
+        """
+        加载全局官组致谢声明配置
+        从 global_mappings.yaml 中读取 team_acknowledgment 配置节点
+        """
+        try:
+            # 修正路径：configs 目录在 server 下，而不是 DATA_DIR 下
+            config_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "configs")
+            global_mappings_path = os.path.join(config_dir, "global_mappings.yaml")
+
+            if os.path.exists(global_mappings_path):
+                with open(global_mappings_path, 'r', encoding='utf-8') as f:
+                    global_config = yaml.safe_load(f)
+                    acknowledgment_config = global_config.get(
+                        "team_acknowledgment", {})
+                    self.logger.debug(f"成功加载官组致谢配置: {acknowledgment_config}")
+                    return acknowledgment_config
+            else:
+                self.logger.warning(f"未找到全局映射配置文件: {global_mappings_path}")
+                return {"enabled": False}
+        except Exception as e:
+            self.logger.warning(f"加载官组致谢配置时出错: {e}")
+            return {"enabled": False}
+
+    def _reverse_lookup_team_name(self, standard_team_key: str) -> str:
+        """
+        从标准化制作组键反向查找原始制作组名称
+        例如: team.frds -> FRDS, team.wiki -> WiKi
+
+        Args:
+            standard_team_key: 标准化的制作组键，如 "team.frds"
+
+        Returns:
+            原始制作组名称，如 "FRDS"
+        """
+        try:
+            # 修正路径：configs 目录在 server 下
+            config_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "configs")
+            global_mappings_path = os.path.join(config_dir, "global_mappings.yaml")
+
+            if os.path.exists(global_mappings_path):
+                with open(global_mappings_path, 'r', encoding='utf-8') as f:
+                    global_config = yaml.safe_load(f)
+                    team_mappings = global_config.get("global_standard_keys",
+                                                      {}).get("team", {})
+
+                    # 遍历映射表，找到匹配的标准化键
+                    for original_name, standard_key in team_mappings.items():
+                        if standard_key == standard_team_key:
+                            self.logger.debug(
+                                f"反向映射: {standard_team_key} -> {original_name}"
+                            )
+                            return original_name
+
+                    # 如果没找到，尝试从标准化键本身提取（如 team.frds -> FRDS）
+                    if standard_team_key.startswith("team."):
+                        extracted_name = standard_team_key.split(".",
+                                                                 1)[1].upper()
+                        self.logger.debug(
+                            f"从标准化键提取: {standard_team_key} -> {extracted_name}"
+                        )
+                        return extracted_name
+        except Exception as e:
+            self.logger.warning(f"反向查找制作组名称时出错: {e}")
+
+        # 降级处理：直接返回标准化键
+        return standard_team_key
+
+    def _clean_group_name(self, group_name: str) -> str:
+        """
+        清理制作组名称，移除前缀符号（- 或 @）
+
+        Args:
+            group_name: 原始制作组名称，可能包含前缀（如 "-MTeam" 或 "@MWeb"）
+
+        Returns:
+            清理后的制作组名称（如 "MTeam" 或 "MWeb"）
+        """
+        if not group_name:
+            return ""
+
+        # 移除开头的 - 或 @ 符号
+        cleaned = group_name.strip()
+        if cleaned.startswith(('-', '@')):
+            cleaned = cleaned[1:]
+
+        return cleaned.strip()
+
+    def _get_team_display_name_from_db(self, team_name: str) -> Optional[str]:
+        """
+        从数据库的 sites 表中查询制作组的显示名称
+
+        查询逻辑：
+        1. 清理 team_name（移除前缀符号）
+        2. 查询所有 sites 表记录
+        3. 遍历每条记录的 group 字段（逗号分隔的制作组列表）
+        4. 清理每个 group 项的前缀，与 team_name 进行不区分大小写的匹配
+        5. 如果匹配成功，返回该记录的 description 字段作为显示名称
+
+        Args:
+            team_name: 制作组名称（可能包含前缀，如 "-MTeam" 或 "@MWeb"）
+
+        Returns:
+            显示名称（如 "MTeam"），如果未找到则返回 None
+        """
+        print(f"[调试-DB] _get_team_display_name_from_db 输入: team_name={team_name}")
+
+        if not team_name or not self.db_manager:
+            print(f"[调试-DB] 提前返回 None: team_name={team_name}, db_manager={self.db_manager}")
+            return None
+
+        try:
+            # 清理输入的制作组名称
+            clean_team = self._clean_group_name(team_name).lower()
+            print(f"[调试-DB] 清理后的制作组名称: '{clean_team}'")
+
+            if not clean_team:
+                print("[调试-DB] 清理后的名称为空，返回 None")
+                return None
+
+            # 查询 sites 表
+            conn = self.db_manager._get_connection()
+            cursor = self.db_manager._get_cursor(conn)
+
+            try:
+                # 查询所有站点记录
+                # 根据数据库类型使用正确的标识符引用符
+                if self.db_manager.db_type == "postgresql":
+                    cursor.execute('SELECT description, "group" FROM sites')
+                else:
+                    cursor.execute("SELECT description, `group` FROM sites")
+                results = cursor.fetchall()
+                print(f"[调试-DB] 查询到 {len(results)} 条站点记录")
+
+                # 遍历每条记录
+                for idx, row in enumerate(results):
+                    row_dict = dict(row)
+                    description = row_dict.get("description", "")
+                    group_field = row_dict.get("group", "")
+
+                    print(f"[调试-DB] 记录 #{idx+1}: description='{description}', group='{group_field}'")
+
+                    if not group_field:
+                        print(f"[调试-DB]   跳过（group字段为空）")
+                        continue
+
+                    # 分割 group 字段（逗号分隔）
+                    group_list = [g.strip() for g in group_field.split(',')]
+                    print(f"[调试-DB]   分割后的group列表: {group_list}")
+
+                    # 清理每个 group 项并进行匹配
+                    for group_item in group_list:
+                        clean_group_item = self._clean_group_name(group_item).lower()
+                        print(f"[调试-DB]   比较: '{clean_group_item}' vs '{clean_team}'")
+
+                        # 不区分大小写匹配
+                        if clean_group_item == clean_team:
+                            self.logger.debug(
+                                f"数据库匹配成功: {team_name} -> {description} "
+                                f"(匹配项: {group_item})"
+                            )
+                            print(f"[调试-DB] ✓ 匹配成功！返回 description: '{description}'")
+                            return description
+
+                # 没有找到匹配
+                self.logger.debug(f"数据库中未找到制作组 '{team_name}' 的匹配项")
+                print(f"[调试-DB] 未找到匹配，返回 None")
+                return None
+
+            finally:
+                cursor.close()
+                conn.close()
+
+        except Exception as e:
+            self.logger.warning(f"从数据库查询制作组显示名称时出错: {e}")
+            print(f"[调试-DB] ✗ 查询出错: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+
+    def _get_team_display_name(self, standard_team_key: str,
+                               acknowledgment_config: Dict[str, Any]) -> Optional[str]:
+        """
+        获取制作组的显示名称
+
+        优先级：
+        1. 数据库查询（sites 表的 description 字段）
+        2. 反向映射的原始制作组名称（如 team.frds -> "FRDS"）
+
+        Args:
+            standard_team_key: 标准化的制作组键，如 "team.frds"
+            acknowledgment_config: 致谢配置字典
+
+        Returns:
+            制作组显示名称，如果数据库中未找到匹配则返回 None
+        """
+        print(f"[调试-Name] _get_team_display_name 输入: standard_team_key={standard_team_key}")
+
+        # 首先反向查找原始制作组名称
+        original_name = self._reverse_lookup_team_name(standard_team_key)
+        print(f"[调试-Name] 反向查找结果: original_name={original_name}")
+
+        # 优先级1: 从数据库查询显示名称
+        display_name_from_db = self._get_team_display_name_from_db(original_name)
+        print(f"[调试-Name] 数据库查询结果: display_name_from_db={display_name_from_db}")
+
+        if display_name_from_db:
+            self.logger.debug(
+                f"使用数据库的显示名称: {standard_team_key} -> {display_name_from_db}"
+            )
+            print(f"[调试-Name] ✓ 返回数据库显示名称: {display_name_from_db}")
+            return display_name_from_db
+
+        # 如果数据库中未找到，返回 None（不添加致谢声明）
+        self.logger.debug(
+            f"数据库中未找到制作组 '{original_name}' 的匹配，不添加致谢声明"
+        )
+        print(f"[调试-Name] 返回 None（数据库未匹配）")
+        return None
+
+    def _detect_official_statement(self, statement: str,
+                                   acknowledgment_config: Dict[str, Any]) -> bool:
+        """
+        使用结构化检测判断声明中是否已包含官组声明
+
+        检测策略（严格限制，避免误检）：
+        1. 必须是第一个 quote 块（所有模式都有 ^ 开头锚点）
+        2. 内容长度必须简短（.{0,50}? 限制在50字符内）
+        3. 提取到的 quote 块总长度不超过 max_statement_length（默认100字符）
+        4. 使用关键词检测作为最后兜底
+
+        Args:
+            statement: 原始声明文本
+            acknowledgment_config: 致谢配置字典
+
+        Returns:
+            bool: 是否检测到官组声明
+        """
+        import re
+
+        if not statement:
+            return False
+
+        # 策略1: 使用正则表达式模式检测
+        detection_patterns = acknowledgment_config.get("detection_patterns", [])
+        max_statement_length = acknowledgment_config.get("max_statement_length", 100)
+
+        if detection_patterns:
+            # 按优先级排序
+            sorted_patterns = sorted(detection_patterns,
+                                    key=lambda x: x.get("priority", 999))
+
+            for pattern_config in sorted_patterns:
+                pattern = pattern_config.get("pattern", "")
+                description = pattern_config.get("description", "")
+
+                if not pattern:
+                    continue
+
+                try:
+                    # 使用正则表达式匹配
+                    # re.IGNORECASE: 忽略大小写
+                    # re.DOTALL: 让 . 匹配包括换行符在内的所有字符
+                    match = re.search(pattern, statement, re.IGNORECASE | re.DOTALL)
+
+                    if match:
+                        # 获取匹配到的完整 quote 块
+                        matched_text = match.group(0)
+
+                        # 验证长度：必须是简短的声明（避免误检长段落的 quote）
+                        if len(matched_text) <= max_statement_length:
+                            self.logger.debug(
+                                f"通过正则模式检测到官组声明: {description}, "
+                                f"长度: {len(matched_text)} 字符")
+                            return True
+                        else:
+                            self.logger.debug(
+                                f"匹配到模式 '{description}' 但长度超限 "
+                                f"({len(matched_text)} > {max_statement_length})，跳过")
+
+                except re.error as e:
+                    self.logger.warning(f"正则表达式错误: {pattern}, 错误: {e}")
+                    continue
+
+        # 策略2: 关键词检测（兜底方案，只检查开头部分）
+        detection_keywords = acknowledgment_config.get("detection_keywords", [])
+        keyword_check_length = acknowledgment_config.get("keyword_check_length", 300)
+
+        if detection_keywords:
+            # 只检查声明开头的部分（提高准确性）
+            statement_header = statement[:keyword_check_length]
+
+            for keyword in detection_keywords:
+                if keyword in statement_header:
+                    self.logger.debug(f"通过关键词检测到官组声明: {keyword}")
+                    return True
+
+        return False
+
     def _download_torrent_file(self, torrent_id: str, temp_dir: str) -> str:
         """
         从源站点下载种子文件并保存到指定目录
@@ -166,7 +465,8 @@ class TorrentMigrator:
             str: 下载的种子文件路径
         """
         try:
-            self.logger.info(f"正在从源站点 {self.SOURCE_NAME} 下载种子文件 (ID: {torrent_id})...")
+            self.logger.info(
+                f"正在从源站点 {self.SOURCE_NAME} 下载种子文件 (ID: {torrent_id})...")
 
             # 获取代理配置
             proxies = self._get_proxies(self.SOURCE_PROXY)
@@ -186,7 +486,8 @@ class TorrentMigrator:
             torrent_response.raise_for_status()
 
             # 从响应头中尝试获取文件名，这是最准确的方式
-            content_disposition = torrent_response.headers.get('content-disposition')
+            content_disposition = torrent_response.headers.get(
+                'content-disposition')
             torrent_filename = f"{torrent_id}.torrent"  # 默认文件名
             if content_disposition:
                 # 尝试匹配filename*（支持UTF-8编码）和filename
@@ -487,7 +788,6 @@ class TorrentMigrator:
             self.logger.opt(exception=True).error(f"搜索过程中发生错误: {e}")
             return None
 
-    
     def _extract_data_by_site_type(self, soup, torrent_id):
         """
         根据站点类型选择对应的提取器提取数据
@@ -837,7 +1137,8 @@ class TorrentMigrator:
                     source_params["媒介"] = basic_info_dict.get("媒介")
                 if not source_params.get("视频编码"):
                     # 优先获取"视频编码"，如果没有则获取"编码"
-                    source_params["视频编码"] = basic_info_dict.get("视频编码") or basic_info_dict.get("编码")
+                    source_params["视频编码"] = basic_info_dict.get(
+                        "视频编码") or basic_info_dict.get("编码")
                 if not source_params.get("音频编码"):
                     source_params["音频编码"] = basic_info_dict.get("音频编码")
                 if not source_params.get("分辨率"):
@@ -904,6 +1205,97 @@ class TorrentMigrator:
             except Exception as e:
                 self.logger.warning(f"音频编码择优处理时发生错误: {e}")
             # [新增结束]
+
+            # [新增] 添加官组致谢声明
+            try:
+                print("=" * 80)
+                print("[调试] 开始官组致谢声明处理")
+
+                # 1. 加载致谢配置
+                acknowledgment_config = self._load_acknowledgment_config()
+                print(f"[调试] 致谢配置加载结果: enabled={acknowledgment_config.get('enabled', False)}")
+
+                # 2. 检查是否启用致谢声明
+                if acknowledgment_config.get("enabled", False):
+                    # 3. 从标准化参数中获取制作组
+                    team_standard = standardized_params.get("team", "")
+                    print(f"[调试] 标准化制作组参数: {team_standard}")
+
+                    # 4. 检查是否在排除列表中
+                    exclude_teams = acknowledgment_config.get("exclude_teams", [])
+                    print(f"[调试] 排除列表: {exclude_teams}")
+
+                    if team_standard and team_standard not in exclude_teams:
+                        print(f"[调试] 制作组 '{team_standard}' 未在排除列表中，继续处理")
+
+                        # 5. 使用结构化检测判断是否已包含官组声明
+                        original_statement = intro.get("statement", "")
+                        print(f"[调试] 原始声明长度: {len(original_statement)} 字符")
+                        print(f"[调试] 原始声明前100字符: {original_statement[:100] if original_statement else '(空)'}")
+
+                        has_official_statement = self._detect_official_statement(
+                            original_statement, acknowledgment_config)
+                        print(f"[调试] 检测到已有官组声明: {has_official_statement}")
+
+                        if has_official_statement:
+                            self.logger.info("检测到声明中已包含官组相关说明，跳过添加致谢声明")
+                            print("[调试] 跳过添加致谢声明（已存在）")
+                        else:
+                            print("[调试] 未检测到官组声明，开始获取显示名称")
+
+                            # 6. 获取制作组显示名称（从数据库查询）
+                            display_name = self._get_team_display_name(
+                                team_standard, acknowledgment_config)
+                            print(f"[调试] 从数据库获取的显示名称: {display_name}")
+
+                            # 7. 如果数据库中未找到匹配，跳过添加致谢声明
+                            if display_name is None:
+                                self.logger.info(
+                                    f"数据库中未找到制作组 '{team_standard}' 的匹配，跳过添加致谢声明"
+                                )
+                                print(f"[调试] 数据库未匹配，跳过添加（team_standard={team_standard}）")
+                            else:
+                                print(f"[调试] 找到显示名称: {display_name}，准备生成致谢声明")
+
+                                # 8. 生成致谢声明
+                                template = acknowledgment_config.get(
+                                    "template",
+                                    "[quote][b][color=blue]{team_name}官组作品，感谢原制作者发布。[/color][/b][/quote]"
+                                )
+                                acknowledgment = template.format(team_name=display_name)
+                                print(f"[调试] 生成的致谢声明: {acknowledgment}")
+
+                                # 9. 将致谢声明插入到 intro["statement"] 的开头
+                                if original_statement:
+                                    intro["statement"] = acknowledgment + "\n\n" + original_statement
+                                    print("[调试] 致谢声明已插入到现有声明前面")
+                                else:
+                                    intro["statement"] = acknowledgment
+                                    print("[调试] 致谢声明已设置为唯一声明")
+
+                                self.logger.info(f"已添加官组致谢声明: {display_name}官组作品")
+                                print(f"[调试] ✓ 成功添加官组致谢声明: {display_name}官组作品")
+                    else:
+                        if not team_standard:
+                            self.logger.debug("未找到制作组信息，跳过添加致谢声明")
+                            print("[调试] 未找到制作组信息（team_standard为空）")
+                        else:
+                            self.logger.debug(
+                                f"制作组 '{team_standard}' 在排除列表中，跳过添加致谢声明")
+                            print(f"[调试] 制作组 '{team_standard}' 在排除列表中")
+                else:
+                    self.logger.debug("官组致谢声明功能未启用")
+                    print("[调试] 官组致谢声明功能未启用")
+
+                print("[调试] 官组致谢声明处理完成")
+                print("=" * 80)
+            except Exception as e:
+                self.logger.warning(f"添加官组致谢声明时发生错误: {e}")
+                print(f"[调试] ✗ 添加官组致谢声明时发生错误: {e}")
+                import traceback
+                self.logger.debug(traceback.format_exc())
+                traceback.print_exc()
+            # [致谢声明添加结束]
 
             # 输出标准化参数以供前端预览
             final_publish_parameters = {
@@ -998,17 +1390,16 @@ class TorrentMigrator:
                     if self.db_manager.db_type == "postgresql":
                         cursor.execute(
                             "SELECT downloader_id FROM torrents WHERE hash = %s",
-                            (hash,)
-                        )
+                            (hash, ))
                     else:  # mysql and sqlite
                         cursor.execute(
                             f"SELECT downloader_id FROM torrents WHERE hash = {ph}",
-                            (hash,)
-                        )
+                            (hash, ))
 
                     result = cursor.fetchone()
                     if result:
-                        downloader_id_from_db = dict(result).get("downloader_id")
+                        downloader_id_from_db = dict(result).get(
+                            "downloader_id")
 
                     cursor.close()
                     conn.close()
@@ -1021,30 +1412,44 @@ class TorrentMigrator:
             # 处理种子名称：去除 .torrent 后缀
             torrent_name_without_ext = self.torrent_name
             if torrent_name_without_ext.lower().endswith('.torrent'):
-                torrent_name_without_ext = torrent_name_without_ext[:-8]  # 去除 .torrent (8个字符)
+                torrent_name_without_ext = torrent_name_without_ext[:
+                                                                    -8]  # 去除 .torrent (8个字符)
 
             # 从title_components中提取标题拆解的各项参数（title_components已在方法开头定义）
 
             # 1. 先构建包含非标准化信息的字典
             seed_parameters = {
-                "name": torrent_name_without_ext,  # 添加去除后缀的种子名称
-                "title": original_main_title,
-                "subtitle": subtitle,
-                "imdb_link": imdb_link,
-                "douban_link": douban_link,
-                "poster": intro.get("poster"),
-                "screenshots": intro.get("screenshots"),
-                "statement": intro.get("statement", "").strip(),
-                "body": intro.get("body", "").strip(),
-                "mediainfo": mediainfo,
+                "name":
+                torrent_name_without_ext,  # 添加去除后缀的种子名称
+                "title":
+                original_main_title,
+                "subtitle":
+                subtitle,
+                "imdb_link":
+                imdb_link,
+                "douban_link":
+                douban_link,
+                "poster":
+                intro.get("poster"),
+                "screenshots":
+                intro.get("screenshots"),
+                "statement":
+                intro.get("statement", "").strip(),
+                "body":
+                intro.get("body", "").strip(),
+                "mediainfo":
+                mediainfo,
                 # [修正] 从 standardized_params 获取已经标准化的标签
-                "tags": standardized_params.get("tags", []),
+                "tags":
+                standardized_params.get("tags", []),
 
                 # 保存完整的标题组件数据
-                "title_components": title_components,
+                "title_components":
+                title_components,
 
                 # 保存被过滤掉的ARDTU声明内容
-                "removed_ardtudeclarations": intro.get("removed_ardtudeclarations", []),
+                "removed_ardtudeclarations":
+                intro.get("removed_ardtudeclarations", []),
             }
 
             # 2. 将 standardized_params 中所有标准化的键值对合并进来。

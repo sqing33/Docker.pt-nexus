@@ -596,12 +596,6 @@ class ParameterMapper:
                 source_standard_values[param_key] = get_standard_key_for_value(
                     raw_value, param_key)
 
-        # [调试] 打印源站点提取到的标准化参数（标题补全之前）
-        print(f"=== 源站点 {site_name} 提取到的参数（标题补全前） ===")
-        print(f"原始source_params: {source_params}")
-        print(f"标准化后的source_standard_values: {source_standard_values}")
-        print("=" * 60)
-
         title_standard_values = {}
         title_components_config = source_parsers.get("title_components", {})
         title_params = {

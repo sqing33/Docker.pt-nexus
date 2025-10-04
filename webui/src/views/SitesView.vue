@@ -55,7 +55,7 @@
         <div class="scan-header">
           <div class="scan-header-left">
             <h2 class="quadrant-title">本地文件扫描</h2>
-            <p class="scan-description">扫描数据库中所有种子的保存路径，找出本地已删除的文件或未被任务引用的孤立文件</p>
+            <p class="scan-description">扫描数据库中所有种子的保存路径，找出本地已删除的文件或未被任务引用的孤立文件。为防止误删除种子，所以不提供一键删除功能。</p>
           </div>
           <div class="scan-controls">
             <el-select v-model="selectedPath" clearable placeholder="选择路径(可选)" filterable size="default"
@@ -569,7 +569,7 @@ onMounted(() => {
 .scan-summary {
   background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 100%);
   border-radius: 8px;
-  padding: 20px;
+  padding: 10px;
   flex-shrink: 0;
 }
 

@@ -32,9 +32,6 @@ class AudiencesSpecialExtractor:
                 # 检查是否包含MediaInfo或BDInfo特征
                 if self._is_valid_mediainfo(cleaned_content):
                     mediainfo_text = cleaned_content
-                    print(
-                        f"在 div.show > div.codemain 中找到有效的MediaInfo/BDInfo，长度: {len(mediainfo_text)}"
-                    )
                     return mediainfo_text
 
         # 如果在div.show中没有找到，尝试其他标准位置作为备选
@@ -53,9 +50,6 @@ class AudiencesSpecialExtractor:
                     # 检查是否包含MediaInfo或BDInfo特征
                     if self._is_valid_mediainfo(cleaned_content):
                         mediainfo_text = cleaned_content
-                        print(
-                            f"在 {selector} 中找到有效的MediaInfo/BDInfo，长度: {len(mediainfo_text)}"
-                        )
                         return mediainfo_text
 
         return mediainfo_text
@@ -382,34 +376,24 @@ class AudiencesSpecialExtractor:
         Args:
             torrent_id: 可选的种子ID，用于保存提取内容到本地文件
         """
-        print(f"开始提取种子信息，种子ID: {torrent_id}")  # 添加调试信息
-
         # 提取基本信息
         basic_info = self.extract_basic_info()
-        print(f"基本信息提取完成: {basic_info}")  # 添加调试信息
 
         # 提取标签
         tags = self.extract_tags()
-        print(f"标签提取完成: {tags}")  # 添加调试信息
 
         # 提取副标题
         subtitle = self.extract_subtitle()
-        print(f"副标题提取完成: {subtitle}")  # 添加调试信息
 
         # 提取简介
         intro = self.extract_intro()
-        print(
-            f"简介提取完成: {len(intro.get('statement', ''))} 字符声明, {len(intro.get('body', ''))} 字符正文"
-        )  # 添加调试信息
 
         # 提取MediaInfo
         mediainfo = self.extract_mediainfo()
-        print(f"MediaInfo提取完成: {len(mediainfo)} 字符")  # 添加调试信息
 
         # 提取产地信息（使用公共方法）
         full_description_text = f"{intro.get('statement', '')}\n{intro.get('body', '')}"
         origin_info = extract_origin_from_description(full_description_text)
-        print(f"产地信息提取完成: {origin_info}")  # 添加调试信息
 
         # 构建参数字典
         source_params = {
@@ -422,7 +406,6 @@ class AudiencesSpecialExtractor:
             "标签": tags,
             "产地": origin_info,
         }
-        print(f"源参数构建完成: {source_params}")  # 添加调试信息
 
         extracted_data = {
             "source_params": source_params,
@@ -430,12 +413,5 @@ class AudiencesSpecialExtractor:
             "intro": intro,
             "mediainfo": mediainfo,
         }
-        print(f"提取数据构建完成")  # 添加调试信息
-
-        # 如果提供了torrent_id，则打印调试信息
-        if torrent_id:
-            print(f"种子ID: {torrent_id}")  # 添加调试信息
-        else:
-            print("未提供种子ID")  # 添加调试信息
 
         return extracted_data

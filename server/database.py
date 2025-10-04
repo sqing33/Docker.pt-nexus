@@ -95,9 +95,9 @@ class DatabaseManager:
         try:
             # 根据数据库类型使用正确的标识符引用符
             if self.db_type == "postgresql":
-                sql = f"INSERT INTO sites (site, nickname, base_url, special_tracker_domain, \"group\", cookie, proxy, speed_limit) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})"
+                sql = f"INSERT INTO sites (site, nickname, base_url, special_tracker_domain, \"group\", description, cookie, proxy, speed_limit) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})"
             else:
-                sql = f"INSERT INTO sites (site, nickname, base_url, special_tracker_domain, `group`, cookie, proxy, speed_limit) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})"
+                sql = f"INSERT INTO sites (site, nickname, base_url, special_tracker_domain, `group`, description, cookie, proxy, speed_limit) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})"
             # 去除cookie字符串首尾的换行符和多余空白字符
             cookie = site_data.get("cookie")
             if cookie:
@@ -109,6 +109,7 @@ class DatabaseManager:
                 site_data.get("base_url"),
                 site_data.get("special_tracker_domain"),
                 site_data.get("group"),
+                site_data.get("description"),
                 cookie,
                 int(site_data.get("proxy", 0)),
                 int(site_data.get("speed_limit", 0)),
@@ -137,9 +138,9 @@ class DatabaseManager:
         try:
             # 根据数据库类型使用正确的标识符引用符
             if self.db_type == "postgresql":
-                sql = f"UPDATE sites SET nickname = {ph}, base_url = {ph}, special_tracker_domain = {ph}, \"group\" = {ph}, cookie = {ph}, proxy = {ph}, speed_limit = {ph} WHERE id = {ph}"
+                sql = f"UPDATE sites SET nickname = {ph}, base_url = {ph}, special_tracker_domain = {ph}, \"group\" = {ph}, description = {ph}, cookie = {ph}, proxy = {ph}, speed_limit = {ph} WHERE id = {ph}"
             else:
-                sql = f"UPDATE sites SET nickname = {ph}, base_url = {ph}, special_tracker_domain = {ph}, `group` = {ph}, cookie = {ph}, proxy = {ph}, speed_limit = {ph} WHERE id = {ph}"
+                sql = f"UPDATE sites SET nickname = {ph}, base_url = {ph}, special_tracker_domain = {ph}, `group` = {ph}, description = {ph}, cookie = {ph}, proxy = {ph}, speed_limit = {ph} WHERE id = {ph}"
             # 去除cookie字符串首尾的换行符和多余空白字符
             cookie = site_data.get("cookie")
             if cookie:
@@ -150,6 +151,7 @@ class DatabaseManager:
                 site_data.get("base_url"),
                 site_data.get("special_tracker_domain"),
                 site_data.get("group"),
+                site_data.get("description"),
                 cookie,
                 int(site_data.get("proxy", 0)),
                 int(site_data.get("speed_limit", 0)),
@@ -278,14 +280,14 @@ class DatabaseManager:
                             update_sql = """
                                 UPDATE sites
                                 SET site = %s, nickname = %s, base_url = %s, special_tracker_domain = %s,
-                                    "group" = %s, migration = %s, speed_limit = %s
+                                    "group" = %s, description = %s, migration = %s, speed_limit = %s
                                 WHERE id = %s
                             """
                         else:
                             update_sql = """
                                 UPDATE sites
                                 SET site = %s, nickname = %s, base_url = %s, special_tracker_domain = %s,
-                                    `group` = %s, migration = %s, speed_limit = %s
+                                    `group` = %s, description = %s, migration = %s, speed_limit = %s
                                 WHERE id = %s
                             """
 
@@ -298,6 +300,7 @@ class DatabaseManager:
                                 site_info.get('base_url'),
                                 site_info.get('special_tracker_domain'),
                                 site_info.get('group'),
+                                site_info.get('description'),
                                 site_info.get('migration', 0),
                                 final_speed_limit,  # 使用条件判断后的最终值
                                 existing_site['id']))
@@ -309,28 +312,30 @@ class DatabaseManager:
                             # 添加新站点
                             cursor.execute(
                                 """
-                                INSERT INTO sites 
-                                (site, nickname, base_url, special_tracker_domain, "group", migration, speed_limit)
-                                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                                INSERT INTO sites
+                                (site, nickname, base_url, special_tracker_domain, "group", description, migration, speed_limit)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                             """, (site_info.get('site'),
                                   site_info.get('nickname'),
                                   site_info.get('base_url'),
                                   site_info.get('special_tracker_domain'),
                                   site_info.get('group'),
+                                  site_info.get('description'),
                                   site_info.get('migration', 0),
                                   site_info.get('speed_limit', 0)))
                         else:
                             # 添加新站点
                             cursor.execute(
                                 """
-                                INSERT INTO sites 
-                                (site, nickname, base_url, special_tracker_domain, `group`, migration, speed_limit)
-                                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                                INSERT INTO sites
+                                (site, nickname, base_url, special_tracker_domain, `group`, description, migration, speed_limit)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                             """, (site_info.get('site'),
                                   site_info.get('nickname'),
                                   site_info.get('base_url'),
                                   site_info.get('special_tracker_domain'),
                                   site_info.get('group'),
+                                  site_info.get('description'),
                                   site_info.get('migration', 0),
                                   site_info.get('speed_limit', 0)))
                         added_count += 1
@@ -379,7 +384,7 @@ class DatabaseManager:
                 "CREATE TABLE IF NOT EXISTS torrent_upload_stats (hash VARCHAR(40) NOT NULL, downloader_id VARCHAR(36) NOT NULL, uploaded BIGINT DEFAULT 0, PRIMARY KEY (hash, downloader_id)) ENGINE=InnoDB ROW_FORMAT=Dynamic"
             )
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS `sites` (`id` mediumint NOT NULL AUTO_INCREMENT, `site` varchar(255) UNIQUE DEFAULT NULL, `nickname` varchar(255) DEFAULT NULL, `base_url` varchar(255) DEFAULT NULL, `special_tracker_domain` varchar(255) DEFAULT NULL, `group` varchar(255) DEFAULT NULL, `cookie` TEXT DEFAULT NULL, `migration` int(11) NOT NULL DEFAULT 1, `proxy` TINYINT(1) NOT NULL DEFAULT 0, `speed_limit` int(11) NOT NULL DEFAULT 0, PRIMARY KEY (`id`)) ENGINE=InnoDB ROW_FORMAT=DYNAMIC"
+                "CREATE TABLE IF NOT EXISTS `sites` (`id` mediumint NOT NULL AUTO_INCREMENT, `site` varchar(255) UNIQUE DEFAULT NULL, `nickname` varchar(255) DEFAULT NULL, `base_url` varchar(255) DEFAULT NULL, `special_tracker_domain` varchar(255) DEFAULT NULL, `group` varchar(255) DEFAULT NULL, `description` varchar(255) DEFAULT NULL, `cookie` TEXT DEFAULT NULL, `migration` int(11) NOT NULL DEFAULT 1, `proxy` TINYINT(1) NOT NULL DEFAULT 0, `speed_limit` int(11) NOT NULL DEFAULT 0, PRIMARY KEY (`id`)) ENGINE=InnoDB ROW_FORMAT=DYNAMIC"
             )
             # 创建种子参数表，用于存储从源站点提取的种子参数
             cursor.execute(
@@ -408,7 +413,7 @@ class DatabaseManager:
                 "CREATE TABLE IF NOT EXISTS torrent_upload_stats (hash VARCHAR(40) NOT NULL, downloader_id VARCHAR(36) NOT NULL, uploaded BIGINT DEFAULT 0, PRIMARY KEY (hash, downloader_id))"
             )
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS sites (id SERIAL PRIMARY KEY, site VARCHAR(255) UNIQUE, nickname VARCHAR(255), base_url VARCHAR(255), special_tracker_domain VARCHAR(255), \"group\" VARCHAR(255), cookie TEXT, migration INTEGER NOT NULL DEFAULT 1, proxy SMALLINT NOT NULL DEFAULT 0, speed_limit INTEGER NOT NULL DEFAULT 0)"
+                "CREATE TABLE IF NOT EXISTS sites (id SERIAL PRIMARY KEY, site VARCHAR(255) UNIQUE, nickname VARCHAR(255), base_url VARCHAR(255), special_tracker_domain VARCHAR(255), \"group\" VARCHAR(255), description VARCHAR(255), cookie TEXT, migration INTEGER NOT NULL DEFAULT 1, proxy SMALLINT NOT NULL DEFAULT 0, speed_limit INTEGER NOT NULL DEFAULT 0)"
             )
             # 创建种子参数表，用于存储从源站点提取的种子参数
             cursor.execute(
@@ -449,7 +454,7 @@ class DatabaseManager:
                 "CREATE TABLE IF NOT EXISTS torrent_upload_stats (hash TEXT NOT NULL, downloader_id TEXT NOT NULL, uploaded INTEGER DEFAULT 0, PRIMARY KEY (hash, downloader_id))"
             )
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS sites (id INTEGER PRIMARY KEY AUTOINCREMENT, site TEXT UNIQUE, nickname TEXT, base_url TEXT, special_tracker_domain TEXT, `group` TEXT, cookie TEXT, migration INTEGER NOT NULL DEFAULT 1, proxy INTEGER NOT NULL DEFAULT 0, speed_limit INTEGER NOT NULL DEFAULT 0)"
+                "CREATE TABLE IF NOT EXISTS sites (id INTEGER PRIMARY KEY AUTOINCREMENT, site TEXT UNIQUE, nickname TEXT, base_url TEXT, special_tracker_domain TEXT, `group` TEXT, description TEXT, cookie TEXT, migration INTEGER NOT NULL DEFAULT 1, proxy INTEGER NOT NULL DEFAULT 0, speed_limit INTEGER NOT NULL DEFAULT 0)"
             )
             # 创建种子参数表，用于存储从源站点提取的种子参数
             cursor.execute(
