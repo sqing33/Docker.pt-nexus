@@ -25,6 +25,14 @@ VIDEO_CODEC_FALLBACK_MAP = {
     "video.x264": "video.h264",
 }
 
+# [新增] 定义媒介回退层级地图
+# 键: 更精确的格式, 值: 它的下一个回退选项
+MEDIUM_FALLBACK_MAP = {
+    "medium.remux": "medium.encode",
+    "medium.uhd_bluray": "medium.bluray",
+    "medium.uhd_blu-ray": "medium.blu-ray",
+}
+
 
 class BaseUploader(ABC):
     """
@@ -198,9 +206,9 @@ class BaseUploader(ABC):
                       mapping_type: str = "general") -> str:
         """
         [修正] 通用的映射查找函数，使用正则表达式的单词边界来防止错误的子字符串匹配。
-        支持音频和视频编码的回退机制。
+        支持音频、视频编码和媒介的回退机制。
 
-        :param mapping_type: 映射类型，可以是 "audio"、"video" 或 "general"
+        :param mapping_type: 映射类型，可以是 "audio"、"video"、"medium" 或 "general"
         """
         if not mapping_dict or not key_to_find:
             return mapping_dict.get(default_key, "")
@@ -256,10 +264,13 @@ class BaseUploader(ABC):
                 current_key = AUDIO_CODEC_FALLBACK_MAP.get(current_key)
             elif mapping_type == "video":
                 current_key = VIDEO_CODEC_FALLBACK_MAP.get(current_key)
+            elif mapping_type == "medium":
+                current_key = MEDIUM_FALLBACK_MAP.get(current_key)
             else:
-                # 通用类型，同时检查音频和视频回退
-                current_key = AUDIO_CODEC_FALLBACK_MAP.get(
-                    current_key) or VIDEO_CODEC_FALLBACK_MAP.get(current_key)
+                # 通用类型，同时检查音频、视频和媒介回退
+                current_key = (AUDIO_CODEC_FALLBACK_MAP.get(current_key)
+                              or VIDEO_CODEC_FALLBACK_MAP.get(current_key)
+                              or MEDIUM_FALLBACK_MAP.get(current_key))
 
             if current_key:
                 logger.debug(
@@ -300,10 +311,12 @@ class BaseUploader(ABC):
         elif is_bdinfo and ('blu' in str(medium_str).lower()
                             or 'dvd' in str(medium_str).lower()):
             mapped_params[medium_field] = self._find_mapping(
-                medium_mapping, medium_str, use_length_priority=False)
+                medium_mapping, medium_str, use_length_priority=False, mapping_type="medium")
         else:
             mapped_params[medium_field] = self._find_mapping(
-                medium_mapping, medium_str, use_length_priority=False)
+                medium_mapping, medium_str, use_length_priority=False, mapping_type="medium")
+        logger.debug(
+            f"DEBUG: 媒介映射 '{medium_str}' -> '{mapped_params[medium_field]}'")
 
         # [修改] 简化所有映射调用，直接传递标准化参数即可，无需硬编码
         # _find_mapping 函数会自动处理字符串或列表

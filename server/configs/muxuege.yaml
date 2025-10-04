@@ -1,0 +1,162 @@
+# 站点名称
+site_name: "Muxuege"
+
+# 表单字段定义 - 定义站点上传表单中各字段的标识符
+form_fields:
+  category: "type"
+  medium: "medium_sel[4]"
+  video_codec: "codec_sel[4]"
+  resolution: "standard_sel[4]"
+  team: "team_sel[4]"
+  tags[4][]: "tags[]"
+
+# 源解析器 - 定义如何从原始数据中解析出标准化参数
+source_parsers:
+  # 源参数定义
+  source_params:
+    type:
+      source_key: "类型"
+    medium:
+      source_key: "媒介"
+    video_codec:
+      source_key: "编码"
+    resolution:
+      source_key: "分辨率"
+    team:
+      source_key: "制作组"
+
+  # 标题组件 (通用结构)
+  title_components:
+    title:
+      source_key: "主标题"
+    # ... 其他标题组件
+
+  # 标准化键映射规则 (从原始文本到标准化键)
+  standard_keys:
+    type:
+      "电影": "category.movie"
+      "电视剧": "category.tv_series"
+      "综艺": "category.tv_shows"
+      "纪录片": "category.documentaries"
+      "动漫": "category.animation"
+      "Music Videos": "category.music_video"
+      "体育": "category.sports"
+      "音乐": "category.music"
+      "其他": "category.other"
+      "系统镜像": "category.os" # 自定义标准键
+
+    medium:
+      "Track": "medium.track"
+      "CD": "medium.cd"
+      "DVDR": "medium.dvdr"
+      "HDTV": "medium.hdtv"
+      "MiniBD": "medium.minibd"
+      "Encode": "medium.encode"
+      "Remux": "medium.remux"
+      "HD DVD": "medium.hddvd" # 自定义标准键
+      "Blu-ray": "medium.bluray"
+      "web": "medium.webdl" # 将 web 映射为 webdl
+
+    video_codec:
+      "H.264": "video.h264"
+      "VC-1": "video.vc1"
+      "Xvid": "video.xvid"
+      "MPEG-2": "video.mpeg2"
+      "Other": "video.other"
+      "H.265": "video.h265"
+
+    resolution:
+      "1080p": "resolution.r1080p"
+      "1080i": "resolution.r1080i"
+      "720p": "resolution.r720p"
+      "SD": "resolution.sd" # 自定义标准键
+      "2160p": "resolution.r2160p"
+
+    team:
+      "StarfallWeb": "team.starfallweb"
+      "HDS": "team.hds"
+      "CHD": "team.chd" # 此处假设为CHD的通用标识
+      "MySiLU": "team.mysilu"
+      "WiKi": "team.wiki"
+      "Other": "team.other"
+      "likesnow": "team.likesnow"
+      "MTeam": "team.mteam"
+      "3Mweb": "team.3mweb"
+      "AiMWeb": "team.ailmweb" # 注意全局文件中是 AilMWeb
+      "Tmp": "team.tmp"
+      "TPTV": "team.tptv"
+      "Mweb": "team.mweb"
+
+# 参数映射规则 - 定义如何将标准化键映射到站点特定参数值
+mappings:
+  type:
+    "category.movie": "401"
+    "category.tv_series": "402"
+    "category.tv_shows": "403"
+    "category.documentaries": "404"
+    "category.animation": "405"
+    "category.music_video": "406"
+    "category.sports": "407"
+    "category.music": "408"
+    "category.other": "409"
+    "category.os": "410"
+    "default": "409"
+
+  medium:
+    "medium.track": "9"
+    "medium.cd": "8"
+    "medium.dvdr": "6"
+    "medium.hdtv": "5"
+    "medium.minibd": "4"
+    "medium.encode": "7"
+    "medium.remux": "3"
+    "medium.hddvd": "2"
+    "medium.bluray": "1"
+    "medium.webdl": "10"
+    "default": "10"
+
+  video_codec:
+    "video.h264": "1"
+    "video.vc1": "2"
+    "video.xvid": "3"
+    "video.mpeg2": "4"
+    "video.other": "5"
+    "video.h265": "6"
+    "default": "5"
+
+  resolution:
+    "resolution.r1080p": "1"
+    "resolution.r1080i": "2"
+    "resolution.r720p": "3"
+    "resolution.sd": "4"
+    "resolution.r2160p": "5"
+    "default": "1" # 默认设为 1080p
+
+  team:
+    "team.starfallweb": "6"
+    "team.hds": "1"
+    "team.chd": "2"
+    "team.mysilu": "3"
+    "team.wiki": "4"
+    "team.other": "5"
+    "team.likesnow": "7"
+    "team.mteam": "8"
+    "team.3mweb": "9"
+    "team.ailmweb": "10"
+    "team.tmp": "11"
+    "team.tptv": "12"
+    "team.mweb": "13"
+    "default": "5"
+
+  tag:
+    "tag.更新中国漫": 9
+    "tag.完结国漫": 8
+    "tag.软件": 29
+    "tag.系统镜像": 28
+    "tag.原盘": 27
+    "tag.完结": 26
+    "tag.杜比": 25
+    "tag.分集": 12
+    "tag.完结日漫": 11
+    "tag.国风音乐": 10
+    "default": null

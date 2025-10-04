@@ -1428,7 +1428,7 @@ def migrate_publish():
                     if db_manager.db_type == "mysql":
                         insert_sql = """INSERT INTO batch_enhance_records
                                       (batch_id, title, torrent_id, source_site, target_site, progress, video_size_gb, status, success_url, error_detail, downloader_add_result)
-                                      VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"""
+                                      VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"""
                     elif db_manager.db_type == "postgresql":
                         insert_sql = """INSERT INTO batch_enhance_records
                                       (batch_id, title, torrent_id, source_site, target_site, progress, video_size_gb, status, success_url, error_detail, downloader_add_result)

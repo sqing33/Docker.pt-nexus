@@ -1857,6 +1857,9 @@ onUnmounted(() => {
   overflow-x: hidden;
 }
 
+.table-container :deep(.el-table_2_column_23) {
+  padding: 0;
+}
 
 .mapped-cell {
   text-align: center;
