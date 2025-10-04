@@ -6,34 +6,14 @@
         <h2 class="quadrant-title">做种站点统计</h2>
         <!-- [修改] 添加 table-wrapper 用于在极端情况下提供水平滚动 -->
         <div class="table-wrapper">
-          <el-table
-            v-loading="siteStatsLoading"
-            :data="siteStatsData"
-            class="stats-table"
-            border
-            stripe
-            height="100%"
-            :default-sort="{ prop: 'total_size', order: 'descending' }"
-          >
+          <el-table v-loading="siteStatsLoading" :data="siteStatsData" class="stats-table" border stripe height="100%"
+            :default-sort="{ prop: 'total_size', order: 'descending' }">
             <template #empty>
               <el-empty description="无站点数据" />
             </template>
-            <el-table-column prop="site_name" label="站点名称" sortable min-width="120" />
-            <el-table-column
-              prop="torrent_count"
-              label="做种数量"
-              sortable
-              align="right"
-              header-align="right"
-            />
-            <el-table-column
-              prop="total_size"
-              label="做种总体积"
-              sortable
-              align="right"
-              header-align="right"
-              min-width="120"
-            >
+            <el-table-column prop="site_name" label="站点名称" align="center" sortable min-width="120" />
+            <el-table-column prop="torrent_count" label="做种数量" sortable align="center" />
+            <el-table-column prop="total_size" label="做种总体积" sortable align="center" min-width="100">
               <template #default="scope">
                 <span>{{ formatBytes(scope.row.total_size) }}</span>
               </template>
@@ -46,65 +26,22 @@
       <div class="quadrant">
         <h2 class="quadrant-title" style="display:flex;align-items:center;gap:10px;">
           <span>做种官组统计</span>
-          <el-select
-            v-model="selectedSite"
-            placeholder="全部站点"
-            clearable
-            filterable
-            size="small"
-            style="width: 240px"
-            @change="handleSiteChange"
-          >
-            <el-option
-              v-for="s in siteStatsData"
-              :key="s.site_name"
-              :label="s.site_name"
-              :value="s.site_name"
-            />
+          <el-select v-model="selectedSite" placeholder="全部站点" clearable filterable size="small" style="width: 240px"
+            @change="handleSiteChange">
+            <el-option v-for="s in siteStatsData" :key="s.site_name" :label="s.site_name" :value="s.site_name" />
           </el-select>
         </h2>
         <!-- [修改] 添加 table-wrapper 用于在极端情况下提供水平滚动 -->
         <div class="table-wrapper">
-          <el-table
-            v-loading="groupStatsLoading"
-            :data="groupStatsData"
-            class="stats-table"
-            border
-            stripe
-            height="100%"
-            :default-sort="{ prop: 'total_size', order: 'descending' }"
-          >
+          <el-table v-loading="groupStatsLoading" :data="groupStatsData" class="stats-table" border stripe height="100%"
+            :default-sort="{ prop: 'total_size', order: 'descending' }">
             <template #empty>
               <el-empty description="无官组数据" />
             </template>
-            <el-table-column
-              prop="site_name"
-              label="所属站点"
-              sortable
-              min-width="80"
-            />
-            <el-table-column
-              :label="selectedSite ? '官组' : '官组'"
-              prop="group_suffix"
-              sortable
-              min-width="120"
-            />
-            <el-table-column
-              prop="torrent_count"
-              label="数量"
-              sortable
-              align="right"
-              header-align="right"
-              width="65"
-            />
-            <el-table-column
-              prop="total_size"
-              label="体积"
-              sortable
-              align="right"
-              header-align="right"
-              min-width="55"
-            >
+            <el-table-column prop="site_name" label="所属站点" align="center" sortable width="110" />
+            <el-table-column :label="selectedSite ? '官组' : '官组'" prop="group_suffix" sortable align="center" />
+            <el-table-column prop="torrent_count" label="数量" sortable align="center" width="80" />
+            <el-table-column prop="total_size" label="体积" sortable align="center" width="90">
               <template #default="scope">
                 <span>{{ formatBytes(scope.row.total_size) }}</span>
               </template>
@@ -121,25 +58,11 @@
             <p class="scan-description">扫描数据库中所有种子的保存路径，找出本地已删除的文件或未被任务引用的孤立文件</p>
           </div>
           <div class="scan-controls">
-            <el-select
-              v-model="selectedPath"
-              clearable
-              placeholder="选择路径(可选)"
-              filterable
-              size="default"
-              style="width: 280px; margin-right: 10px"
-            >
-              <el-option-group
-                v-for="downloader in downloadersWithPaths"
-                :key="downloader.id"
-                :label="downloader.name"
-              >
-                <el-option
-                  v-for="pathItem in downloader.paths"
-                  :key="pathItem.path"
-                  :label="pathItem.path"
-                  :value="pathItem.path"
-                >
+            <el-select v-model="selectedPath" clearable placeholder="选择路径(可选)" filterable size="default"
+              style="width: 280px; margin-right: 10px">
+              <el-option-group v-for="downloader in downloadersWithPaths" :key="downloader.id" :label="downloader.name">
+                <el-option v-for="pathItem in downloader.paths" :key="pathItem.path" :label="pathItem.path"
+                  :value="pathItem.path">
                   <span>{{ pathItem.path }}</span>
                   <span style="float: right; color: #8492a6; font-size: 13px">({{ pathItem.count }})</span>
                 </el-option>
@@ -189,115 +112,113 @@
 
         <!-- 结果详情 -->
         <div v-if="scanResult" class="scan-results">
-          <el-tabs v-model="activeTab" class="result-tabs">
-            <el-tab-pane name="missing">
-              <template #label>
-                <span class="tab-label">
-                  缺失文件
-                  <el-badge
-                    v-if="scanResult.scan_summary.missing_count > 0"
-                    :value="scanResult.scan_summary.missing_count"
-                    type="danger"
-                  />
-                </span>
-              </template>
-              <div class="tab-content">
-                <el-table
-                  :data="scanResult.missing_files || []"
-                  stripe
-                  height="100%"
-                  :default-sort="{ prop: 'size', order: 'descending' }"
-                >
-                  <el-table-column prop="name" label="种子名称" min-width="250" show-overflow-tooltip align="left" header-align="center" />
-                  <el-table-column prop="save_path" label="保存路径" width="180" show-overflow-tooltip align="left" header-align="center" />
-                  <el-table-column prop="size" label="大小" width="110" sortable align="right" header-align="center">
-                    <template #default="{ row }">
-                      {{ formatBytes(row.size) }}
-                    </template>
-                  </el-table-column>
-                  <el-table-column prop="downloader_name" label="下载器" width="120" align="center" header-align="center" />
-                </el-table>
-              </div>
-            </el-tab-pane>
+          <div style="display: flex; align-items: center; gap: 12px; ">
+            <el-tabs v-model="activeTab" style="flex: 0 0 auto;">
+              <el-tab-pane name="missing">
+                <template #label>
+                  <span class="tab-label">
+                    缺失文件
+                    <el-badge v-if="scanResult.scan_summary.missing_count > 0"
+                      :value="scanResult.scan_summary.missing_count" type="danger" :max="999999" />
+                  </span>
+                </template>
+              </el-tab-pane>
+              <el-tab-pane name="orphaned">
+                <template #label>
+                  <span class="tab-label">
+                    孤立文件
+                    <el-badge v-if="scanResult.scan_summary.orphaned_count > 0"
+                      :value="scanResult.scan_summary.orphaned_count" type="warning" :max="999999" />
+                  </span>
+                </template>
+              </el-tab-pane>
+              <el-tab-pane name="synced">
+                <template #label>
+                  <span class="tab-label">
+                    正常做种
+                    <el-badge v-if="scanResult.scan_summary.synced_count > 0"
+                      :value="scanResult.scan_summary.synced_count" type="success" :max="999999" />
+                  </span>
+                </template>
+              </el-tab-pane>
+            </el-tabs>
+            <el-select v-model="pathFilter" placeholder="筛选路径" clearable filterable style="width: 240px;">
+              <el-option v-for="path in allPaths" :key="path" :label="path" :value="path" />
+            </el-select>
+          </div>
 
-            <el-tab-pane name="orphaned">
-              <template #label>
-                <span class="tab-label">
-                  孤立文件
-                  <el-badge
-                    v-if="scanResult.scan_summary.orphaned_count > 0"
-                    :value="scanResult.scan_summary.orphaned_count"
-                    type="warning"
-                  />
-                </span>
-              </template>
-              <div class="tab-content">
-                <el-table
-                  :data="scanResult.orphaned_files || []"
-                  stripe
-                  height="100%"
-                  :default-sort="{ prop: 'size', order: 'descending' }"
-                >
-                  <el-table-column prop="name" label="文件/文件夹名称" min-width="250" show-overflow-tooltip align="left" header-align="center" />
-                  <el-table-column prop="path" label="所在路径" width="180" show-overflow-tooltip align="left" header-align="center" />
-                  <el-table-column prop="size" label="大小" width="110" sortable align="right" header-align="center">
-                    <template #default="{ row }">
-                      {{ row.size ? formatBytes(row.size) : '未知' }}
-                    </template>
-                  </el-table-column>
-                  <el-table-column prop="is_file" label="类型" width="80" align="center" header-align="center">
-                    <template #default="{ row }">
-                      <el-tag :type="row.is_file ? 'success' : 'info'" size="small">
-                        {{ row.is_file ? '文件' : '文件夹' }}
-                      </el-tag>
-                    </template>
-                  </el-table-column>
-                </el-table>
-              </div>
-            </el-tab-pane>
+          <div class="tab-content-area">
+            <div v-if="activeTab === 'missing'" class="tab-content">
+              <el-table :data="filteredMissingFiles" stripe height="100%"
+                :default-sort="{ prop: 'size', order: 'descending' }">
+                <el-table-column prop="name" label="种子名称" show-overflow-tooltip align="left" header-align="center" />
+                <el-table-column prop="save_path" label="保存路径" width="250" show-overflow-tooltip
+                  header-align="center" />
+                <el-table-column prop="size" label="大小" width="110" sortable align="center">
+                  <template #default="{ row }">
+                    {{ formatBytes(row.size) }}
+                  </template>
+                </el-table-column>
+                <el-table-column prop="downloader_name" label="下载器" width="120" align="center" />
+              </el-table>
+            </div>
 
-            <el-tab-pane name="synced">
-              <template #label>
-                <span class="tab-label">
-                  正常做种
-                  <el-badge
-                    v-if="scanResult.scan_summary.synced_count > 0"
-                    :value="scanResult.scan_summary.synced_count"
-                    type="success"
-                  />
-                </span>
-              </template>
-              <div class="tab-content">
-                <el-table :data="scanResult.synced_torrents || []" stripe height="100%">
-                  <el-table-column prop="name" label="名称" min-width="250" show-overflow-tooltip align="left" header-align="center" />
-                  <el-table-column prop="path" label="路径" width="200" show-overflow-tooltip align="left" header-align="center" />
-                  <el-table-column prop="torrents_count" label="任务数" width="80" align="center" header-align="center">
-                    <template #default="{ row }">
-                      <el-tag v-if="row.torrents_count > 1" type="warning" size="small">
-                        {{ row.torrents_count }}
-                      </el-tag>
-                      <span v-else>{{ row.torrents_count }}</span>
-                    </template>
-                  </el-table-column>
-                  <el-table-column label="下载器" min-width="150" align="left" header-align="center">
-                    <template #default="{ row }">
-                      <el-tag
-                        v-for="(name, index) in row.downloader_names"
-                        :key="index"
-                        size="small"
-                        style="margin-right: 4px"
-                      >
-                        {{ name }}
-                      </el-tag>
-                    </template>
-                  </el-table-column>
-                </el-table>
-              </div>
-            </el-tab-pane>
-          </el-tabs>
+            <div v-if="activeTab === 'orphaned'" class="tab-content">
+              <el-table :data="filteredOrphanedFiles" stripe height="100%"
+                :default-sort="{ prop: 'size', order: 'descending' }">
+                <el-table-column prop="name" label="文件/文件夹名称" show-overflow-tooltip align="left"
+                  header-align="center" />
+                <el-table-column prop="path" label="所在路径" width="250" show-overflow-tooltip align="left"
+                  header-align="center" />
+                <el-table-column prop="size" label="大小" width="120" sortable align="center">
+                  <template #default="{ row }">
+                    {{ row.size ? formatBytes(row.size) : '未知' }}
+                  </template>
+                </el-table-column>
+                <el-table-column prop="is_file" label="类型" width="120" align="center" header-align="center">
+                  <template #default="{ row }">
+                    <el-tag :type="row.is_file ? 'success' : 'info'" size="small">
+                      {{ row.is_file ? '文件' : '文件夹' }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </div>
+
+            <div v-if="activeTab === 'synced'" class="tab-content">
+              <el-table :data="filteredSyncedTorrents" stripe height="100%">
+                <el-table-column prop="name" label="名称" show-overflow-tooltip align="left" header-align="center" />
+                <el-table-column prop="path" label="路径" width="250" show-overflow-tooltip align="left"
+                  header-align="center" />
+                <el-table-column prop="torrents_count" label="任务数" width="120" align="center" header-align="center">
+                  <template #default="{ row }">
+                    <el-tag v-if="row.torrents_count > 0" type="warning" size="small">
+                      {{ row.torrents_count }}
+                    </el-tag>
+                    <span v-else>{{ row.torrents_count }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="下载器" width="120" align="center" header-align="center">
+                  <template #default="{ row }">
+                    <el-tag v-for="(name, index) in row.downloader_names" :key="index" size="small"
+                      style="margin-right: 4px">
+                      {{ name }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </div>
+          </div>
         </div>
 
-        <div v-if="!scanResult && !scanning" style="display: flex; align-items: center; justify-content: center; flex: 1">
+        <!-- 加载中状态 -->
+        <div v-if="scanning" v-loading="scanning" element-loading-text="正在扫描本地文件..."
+          element-loading-background="rgba(255, 255, 255, 0.8)" class="loading-container">
+        </div>
+
+        <!-- 空状态 -->
+        <div v-if="!scanResult && !scanning"
+          style="display: flex; align-items: center; justify-content: center; flex: 1">
           <el-empty description="点击扫描按钮进行本地文件检查" />
         </div>
       </div>
@@ -306,7 +227,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, defineEmits } from 'vue'
+import { ref, onMounted, defineEmits, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Search } from '@element-plus/icons-vue'
 import axios from 'axios'
@@ -388,6 +309,52 @@ const activeTab = ref('missing')
 const scanResult = ref<ScanResult | null>(null)
 const selectedPath = ref<string>('')
 const downloadersWithPaths = ref<Downloader[]>([])
+
+// 路径筛选（共用一个）
+const pathFilter = ref<string>('')
+
+// 计算属性：获取所有路径的并集
+const allPaths = computed(() => {
+  if (!scanResult.value) return []
+
+  const paths = new Set<string>()
+
+  // 收集缺失文件的路径
+  if (scanResult.value.missing_files) {
+    scanResult.value.missing_files.forEach(f => paths.add(f.save_path))
+  }
+
+  // 收集孤立文件的路径
+  if (scanResult.value.orphaned_files) {
+    scanResult.value.orphaned_files.forEach(f => paths.add(f.path))
+  }
+
+  // 收集正常做种的路径
+  if (scanResult.value.synced_torrents) {
+    scanResult.value.synced_torrents.forEach(t => paths.add(t.path))
+  }
+
+  return Array.from(paths).sort()
+})
+
+// 计算属性：根据筛选条件过滤数据
+const filteredMissingFiles = computed(() => {
+  if (!scanResult.value?.missing_files) return []
+  if (!pathFilter.value) return scanResult.value.missing_files
+  return scanResult.value.missing_files.filter(f => f.save_path === pathFilter.value)
+})
+
+const filteredOrphanedFiles = computed(() => {
+  if (!scanResult.value?.orphaned_files) return []
+  if (!pathFilter.value) return scanResult.value.orphaned_files
+  return scanResult.value.orphaned_files.filter(f => f.path === pathFilter.value)
+})
+
+const filteredSyncedTorrents = computed(() => {
+  if (!scanResult.value?.synced_torrents) return []
+  if (!pathFilter.value) return scanResult.value.synced_torrents
+  return scanResult.value.synced_torrents.filter(t => t.path === pathFilter.value)
+})
 
 const formatBytes = (bytes: number, decimals = 2): string => {
   if (!+bytes) return '0 Bytes'
@@ -507,8 +474,8 @@ onMounted(() => {
   flex-grow: 1;
   position: relative;
   display: grid;
-  /* 默认（大屏幕）状态：左侧1/3两行，右侧2/3一行 */
-  grid-template-columns: 1fr 2fr;
+  /* 默认（大屏幕）状态：左侧宽度等于单行高度，使左侧区域看起来像正方形 */
+  grid-template-columns: minmax(300px, calc((100vh - 90px) / 2)) 1fr;
   grid-template-rows: 1fr 1fr;
   gap: 20px;
   min-height: 0;
@@ -654,22 +621,9 @@ onMounted(() => {
   padding: 12px;
 }
 
-.result-tabs {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-:deep(.result-tabs .el-tabs__content) {
+.tab-content-area {
   flex: 1;
   min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-:deep(.result-tabs .el-tab-pane) {
-  height: 100%;
   display: flex;
   flex-direction: column;
 }
@@ -684,6 +638,18 @@ onMounted(() => {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+.loading-container {
+  flex: 1;
+  min-height: 300px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+:deep(.el-tabs__header) {
+  margin: 0;
 }
 
 /* --- 响应式布局 --- */
@@ -704,7 +670,8 @@ onMounted(() => {
     /* 允许整个页面垂直滚动 */
     height: auto;
     overflow-y: auto;
-    padding: 15px; /* 在小屏幕上可以减小一些边距 */
+    padding: 15px;
+    /* 在小屏幕上可以减小一些边距 */
   }
 
   .layout-wrapper {

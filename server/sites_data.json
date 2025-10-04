@@ -169,7 +169,7 @@
     "special_tracker_domain": null,
     "group": "CHDBits,CHDWEB,-CHD",
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "ptsbao",
@@ -492,8 +492,8 @@
     "base_url": "ubits.club",
     "special_tracker_domain": null,
     "group": "UBits,UBWEB,UBTV",
-    "migration": 1,
-    "speed_limit": 10
+    "migration": 3,
+    "speed_limit": 50
   },
   {
     "site": "pandapt",
@@ -547,7 +547,7 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 1,
-    "speed_limit": 10
+    "speed_limit": 80
   },
   {
     "site": "qingwapt",
@@ -556,7 +556,7 @@
     "special_tracker_domain": null,
     "group": "FROGE,FROGWeb",
     "migration": 3,
-    "speed_limit": 10
+    "speed_limit": 80
   },
   {
     "site": "xingtan",
