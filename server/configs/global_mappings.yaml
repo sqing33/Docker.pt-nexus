@@ -344,3 +344,62 @@ global_standard_keys:
     "其他": "source.other"
     "Other": "source.other"
     "Other/其他": "source.other"
+
+# 官组致谢声明配置
+team_acknowledgment:
+  enabled: true
+  template: "[quote][b][color=blue]{team_name}官组作品，感谢原制作者发布。[/color][/b][/quote]"
+
+  # 排除列表
+  exclude_teams:
+    - "team.other"
+    - ""
+
+  # 检测模式（正则表达式），按优先级顺序检测
+  # 注意：所有模式都限制为第一个 quote 块，且内容长度不超过 max_statement_length
+  detection_patterns:
+    # 精确模式1 - 检测我们自己添加的格式（带蓝色粗体）
+    # 格式：[quote][b][color=blue]XXX官组作品，感谢原制作者发布。[/color][/b][/quote]
+    - pattern: '^\[quote\]\[b\]\[color=blue\].{0,50}?官组作品.*?\[\/color\]\[\/b\]\[\/quote\]'
+      priority: 1
+      description: "检测蓝色粗体格式的官组声明（我们添加的）"
+
+    # 精确模式2 - 检测蓝色格式但文字是"出品"
+    # 格式：[quote][b][color=blue]XXX官组出品，感谢原制作者发布。[/color][/b][/quote]
+    - pattern: '^\[quote\]\[b\]\[color=blue\].{0,50}?官组出品.*?\[\/color\]\[\/b\]\[\/quote\]'
+      priority: 2
+      description: "检测蓝色粗体格式的官组出品声明"
+
+    # 精确模式3 - 检测简单粗体格式（无颜色）
+    # 格式：[quote][b]XXX官组作品，感谢...[/b][/quote]
+    - pattern: '^\[quote\]\[b\].{0,50}?(官组作品|官方作品|官组出品|官方出品).*?\[\/b\]\[\/quote\]'
+      priority: 3
+      description: "检测粗体格式的官组声明"
+
+    # 宽松模式4 - 检测第一个 quote 块中的简短官组声明
+    # 格式：[quote]XXX官组作品[/quote] 或 [quote]官种[/quote]
+    - pattern: '^\[quote\].{0,50}?(官组作品|官方作品|官组出品|官方出品|官种).*?\[\/quote\]'
+      priority: 4
+      description: "检测简短的官组声明"
+
+    # 宽松模式5 - 检测"感谢原制作者"的简短声明
+    # 格式：[quote]感谢原制作者...[/quote]
+    - pattern: '^\[quote\].{0,50}?感谢原制作者.*?\[\/quote\]'
+      priority: 5
+      description: "检测感谢原制作者的简短声明"
+
+  # 官组声明最大长度（字符数，用于验证检测到的内容是否为简短声明）
+  # 正常的官组声明通常在 20-80 字符之间
+  # 超过此长度的 quote 块可能是正文内容，不应被识别为官组声明
+  max_statement_length: 100
+
+  # 关键词检测（作为最后的兜底方案，已基本不需要）
+  # 只在前 300 字符内检测，且必须是独立的短句
+  detection_keywords:
+    - "官组作品"
+    - "官方作品"
+    - "官种"
+    - "Official Release"
+
+  # 关键词检测范围（字符数，只检查声明开头的部分）
+  keyword_check_length: 300

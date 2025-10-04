@@ -664,8 +664,9 @@ def upload_data_title(title: str, torrent_filename: str = ""):
 
     # 如果不是特殊制作组，使用通用模式匹配
     if not found_special_group:
+        # 支持 - 和 @ 两种前缀
         general_regex = re.compile(
-            r"^(?P<main_part>.+?)(?:-(?P<internal_tag>[A-Za-z0-9@²³⁴⁵⁶⁷⁸⁹]+))?-(?P<release_group>[A-Za-z0-9@²³⁴⁵⁶⁷⁸⁹]+)$",
+            r"^(?P<main_part>.+?)(?:[-@](?P<internal_tag>[A-Za-z0-9@²³⁴⁵⁶⁷⁸⁹]+))?[-@](?P<release_group>[A-Za-z0-9@²³⁴⁵⁶⁷⁸⁹]+)$",
             re.VERBOSE | re.IGNORECASE,
         )
         match = general_regex.match(title)
