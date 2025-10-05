@@ -21,7 +21,7 @@
     </header>
 
     <!-- 2. 中间内容区 (自适应高度、可滚动) -->
-    <main class="panel-content">
+    <main class="panel-content" v-loading="isLoading" element-loading-text="正在获取种子信息，请稍候..." element-loading-background="rgba(255, 255, 255, 0.9)">
       <!-- 步骤 0: 核对种子详情 -->
       <div v-if="activeStep === 0" class="step-container details-container">
         <el-tabs v-model="activeTab" type="border-card" class="details-tabs">
@@ -1468,6 +1468,8 @@ const fetchTorrentInfo = async () => {
       });
       // Set flag to indicate data was loaded from database
       isDataFromDatabase.value = true;
+      // 【修复】在从数据库成功读取后关闭加载动画
+      isLoading.value = false;
       // Skip the scraping part since we have data from database
       return;
     } else {

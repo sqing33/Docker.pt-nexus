@@ -12,8 +12,90 @@ import os
 import yaml
 from typing import Dict, Any, Optional
 from bs4 import BeautifulSoup
-
+import re
+import time
+import logging
+import ijson
 import os
+
+# --- [新增] 本地豆瓣/IMDb 映射加载器 ---
+class DbImdbMapper:
+    _instance = None
+    
+    def __new__(cls, *args, **kwargs):
+        if not cls._instance:
+            cls._instance = super(DbImdbMapper, cls).__new__(cls)
+        return cls._instance
+
+    def __init__(self):
+        # 防止重复初始化
+        if hasattr(self, 'initialized') and self.initialized:
+            return
+        
+        self.dbid_index = {}
+        self.imdbid_index = {}
+        self.initialized = False
+        
+        if not ijson:
+            logging.warning("ijson 库未安装, 无法使用本地JSON文件进行链接补充。")
+            print("[!] ijson 库未安装, 无法使用本地JSON文件进行链接补充。")
+            self.initialized = True
+            return
+
+        try:
+            # 从 config.py 获取 DATA_DIR 的思路，这里直接构造路径
+            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+            data_dir = os.path.join(base_dir, "data")
+            filename = os.path.join(data_dir, 'douban_imdb_map.json')
+            
+            if not os.path.exists(filename):
+                logging.warning(f"本地映射文件 {filename} 不存在，跳过索引建立。")
+                print(f"[!] 本地映射文件 {filename} 不存在，跳过索引建立。")
+                self.initialized = True
+                return
+
+            logging.info("开始读取文件并建立本地 db/imdb 索引...")
+            print("开始读取文件并建立本地 db/imdb 索引...")
+            start_time = time.time()
+            
+            with open(filename, 'rb') as f:
+                for record in ijson.items(f, 'item'):
+                    dbid = record.get('dbid')
+                    imdbid = record.get('imdbid')
+                    
+                    if dbid:
+                        self.dbid_index[str(dbid)] = record
+                    if imdbid:
+                        self.imdbid_index[str(imdbid)] = record
+            
+            end_time = time.time()
+            
+            logging.info(f"索引建立完成！耗时: {end_time - start_time:.2f} 秒")
+            logging.info(f"dbid 索引中有 {len(self.dbid_index)} 条记录")
+            logging.info(f"imdbid 索引中有 {len(self.imdbid_index)} 条记录")
+            print(f"索引建立完成！耗时: {end_time - start_time:.2f} 秒")
+            print(f"dbid 索引中有 {len(self.dbid_index)} 条记录")
+            print(f"imdbid 索引中有 {len(self.imdbid_index)} 条记录")
+            
+            self.initialized = True
+
+        except Exception as e:
+            logging.error(f"建立本地 db/imdb 索引时发生错误: {e}", exc_info=True)
+            print(f"[!] 建立本地 db/imdb 索引时发生错误: {e}")
+            self.initialized = True # 标记为已初始化以防重试
+
+    def get_imdbid_from_dbid(self, dbid: str) -> Optional[str]:
+        record = self.dbid_index.get(str(dbid))
+        return record.get('imdbid') if record else None
+
+    def get_dbid_from_imdbid(self, imdbid: str) -> Optional[int]:
+        record = self.imdbid_index.get(str(imdbid))
+        return record.get('dbid') if record else None
+
+# 在模块加载时创建单例，这样索引只建立一次
+db_imdb_mapper = DbImdbMapper()
+# --- [新增结束] ---
+
 
 CONFIG_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "configs")
@@ -81,6 +163,7 @@ class Extractor:
         Returns:
             Dict with extracted data in standardized format
         """
+        from utils import extract_origin_from_description, check_intro_completeness, upload_data_movie_info
         # Initialize default data structure
         extracted_data = {
             "title": "",
@@ -135,18 +218,75 @@ class Extractor:
         # Extract description information
         descr_container = soup.select_one("div#kdescr")
         if descr_container:
-            # Extract IMDb and Douban links
-            descr_text = descr_container.get_text()
+            # --- [增强] 鲁棒的IMDb和豆瓣链接提取 ---
             imdb_link = ""
             douban_link = ""
 
-            if imdb_match := re.search(
-                    r"(https?://www\.imdb\.com/title/tt\d+)", descr_text):
-                imdb_link = imdb_match.group(1)
+            # 优先级 1: 查找专用的 div#kimdb 容器
+            kimdb_div = soup.select_one("div#kimdb a[href*='imdb.com/title/tt']")
+            if kimdb_div and kimdb_div.get('href'):
+                imdb_link = kimdb_div.get('href')
 
-            if douban_match := re.search(
-                    r"(https?://movie\.douban\.com/subject/\d+)", descr_text):
-                douban_link = douban_match.group(1)
+            # 优先级 2 (后备): 在主简介容器(div#kdescr)的文本中搜索
+            descr_text = descr_container.get_text()
+            # 如果还没找到 IMDb 链接, 则在简介中搜索
+            if not imdb_link:
+                if imdb_match := re.search(r"(https?://www\.imdb\.com/title/tt\d+)", descr_text):
+                    imdb_link = imdb_match.group(1)
+            
+            # 在简介中搜索豆瓣链接
+            if not douban_link:
+                if douban_match := re.search(r"(https?://movie\.douban\.com/subject/\d+)", descr_text):
+                    douban_link = douban_match.group(1)
+
+            # 优先级 3 (全局后备): 如果链接仍然缺失, 则搜索整个页面的文本
+            if not imdb_link or not douban_link:
+                page_text = soup.get_text()
+                if not imdb_link:
+                    if imdb_match := re.search(r"(https?://www\.imdb\.com/title/tt\d+)", page_text):
+                        imdb_link = imdb_match.group(1)
+                if not douban_link:
+                    if douban_match := re.search(r"(https?://movie\.douban\.com/subject/\d+)", page_text):
+                        douban_link = douban_match.group(1)
+
+            # --- [新方案] 使用本地 JSON 文件互补缺失的 IMDb/豆瓣 链接 ---
+            if db_imdb_mapper.initialized and ijson:
+                try:
+                    if (imdb_link and not douban_link) or (douban_link and not imdb_link):
+                        logging.info("检测到 IMDb/豆瓣 链接不完整，尝试使用本地索引补充...")
+                        print("检测到 IMDb/豆瓣 链接不完整，尝试使用本地索引补充...")
+
+                        if imdb_link and not douban_link:
+                            if imdb_id_match := re.search(r'(tt\d+)', imdb_link):
+                                imdb_id = imdb_id_match.group(1)
+                                print(f"[*] 从 IMDb 链接中提取 ID: {imdb_id}, 查询本地索引...")
+                                
+                                found_dbid = db_imdb_mapper.get_dbid_from_imdbid(imdb_id)
+                                if found_dbid:
+                                    douban_link = f"https://movie.douban.com/subject/{found_dbid}/"
+                                    logging.info(f"✅ 成功从本地索引补充豆瓣链接: {douban_link}")
+                                    print(f"  [+] 成功补充豆瓣链接: {douban_link}")
+                                else:
+                                    logging.warning(f"本地索引中未找到与 {imdb_id} 匹配的豆瓣ID。")
+                                    print(f"  [-] 本地索引中未找到与 {imdb_id} 匹配的豆瓣ID。")
+
+                        elif douban_link and not imdb_link:
+                            if douban_id_match := re.search(r'subject/(\d+)', douban_link):
+                                douban_id = douban_id_match.group(1)
+                                print(f"[*] 从豆瓣链接中提取 ID: {douban_id}, 查询本地索引...")
+
+                                found_imdbid = db_imdb_mapper.get_imdbid_from_dbid(douban_id)
+                                if found_imdbid:
+                                    imdb_link = f"https://www.imdb.com/title/{found_imdbid}/"
+                                    logging.info(f"✅ 成功从本地索引补充 IMDb 链接: {imdb_link}")
+                                    print(f"  [+] 成功补充 IMDb 链接: {imdb_link}")
+                                else:
+                                    logging.warning(f"本地索引中未找到与 {douban_id} 匹配的IMDb ID。")
+                                    print(f"  [-] 本地索引中未找到与 {douban_id} 匹配的IMDb ID。")
+
+                except Exception as e:
+                    logging.error(f"使用本地索引补充链接时发生错误: {e}", exc_info=True)
+                    print(f"  [!] 使用本地索引补充链接时发生错误: {e}")
 
             extracted_data["intro"]["imdb_link"] = imdb_link
             extracted_data["intro"]["douban_link"] = douban_link
@@ -281,9 +421,113 @@ class Extractor:
                            bbcode,
                            flags=re.DOTALL).replace("\r", "").strip())
 
-            # Add quotes after poster to body
+            # [新增] 检查简介完整性
+            logging.info("开始简介完整性检测...")
+            completeness_check = check_intro_completeness(body)
+            
+            if not completeness_check["is_complete"]:
+                logging.warning(
+                    f"检测到简介不完整，缺少字段: {completeness_check['missing_fields']}"
+                )
+                print(f"检测到简介不完整，缺少字段: {completeness_check['missing_fields']}")
+                logging.info(f"已找到字段: {completeness_check['found_fields']}")
+                logging.info("尝试从豆瓣/IMDb重新获取完整简介...")
+                print("尝试从豆瓣/IMDb重新获取完整简介...")
+                
+                # 获取已提取的链接
+                imdb_link = extracted_data["intro"].get("imdb_link", "")
+                douban_link = extracted_data["intro"].get("douban_link", "")
+                
+                # 如果有链接,尝试重新获取
+                if imdb_link or douban_link:
+                    try:
+                        status, posters, new_description, new_imdb = upload_data_movie_info(
+                            douban_link, imdb_link
+                        )
+                        
+                        if status and new_description:
+                            # 重新检查新简介的完整性
+                            new_check = check_intro_completeness(new_description)
+                            
+                            if new_check["is_complete"]:
+                                logging.info(
+                                    f"✅ 重新获取的简介完整，包含字段: {new_check['found_fields']}"
+                                )
+                                
+                                # --- [新逻辑] 根据原简介内容决定是替换还是保留 ---
+                                num_found_fields = len(completeness_check.get('found_fields', []))
+                                
+                                if num_found_fields <= 2 and body.strip():
+                                    # 场景 B: 原简介字段少于等于2个，视为补充信息（如发布说明），用[quote]包裹并保留
+                                    logging.info(f"原简介仅包含 {num_found_fields} 个字段，视为补充信息并保留。")
+                                    print(f"[*] 原简介仅包含 {num_found_fields} 个字段，视为补充信息并保留。")
+                                    
+                                    original_body_as_quote = f"[quote]{body.strip()}[/quote]"
+                                    # 添加到待追加的quote列表开头
+                                    quotes_for_body.insert(0, original_body_as_quote)
+                                    
+                                    # 将body主体替换为新获取的完整简介
+                                    body = new_description
+                                    
+                                else:
+                                    # 场景 A: 原简介字段多于2个但不完整，视为不完整的电影简介，直接替换
+                                    logging.info(f"原简介包含 {num_found_fields} 个字段，不完整，将直接替换。")
+                                    print(f"[*] 原简介包含 {num_found_fields} 个字段，不完整，将直接替换。")
+                                    body = new_description
+
+                                # --- [新逻辑结束] ---
+
+                                # 同时更新IMDb链接(如果新获取的链接存在)
+                                if new_imdb:
+                                    extracted_data["intro"]["imdb_link"] = new_imdb
+                                
+                                # 重新提取产地信息并更新
+                                new_origin = extract_origin_from_description(new_description)
+                                if new_origin:
+                                    # 应用全局映射
+                                    if GLOBAL_MAPPINGS and "source" in GLOBAL_MAPPINGS:
+                                        source_mappings = GLOBAL_MAPPINGS["source"]
+                                        mapped_origin = None
+                                        for source_text, standardized_key in source_mappings.items():
+                                            if (str(source_text).strip().lower() == str(new_origin).strip().lower() or
+                                                str(source_text).strip().lower() in str(new_origin).strip().lower() or
+                                                str(new_origin).strip().lower() in str(source_text).strip().lower()):
+                                                mapped_origin = standardized_key
+                                                break
+                                        
+                                        if mapped_origin:
+                                            extracted_data["source_params"]["产地"] = mapped_origin
+                                            logging.info(f"✅ 从新简介中提取并映射产地: {new_origin} -> {mapped_origin}")
+                                        else:
+                                            extracted_data["source_params"]["产地"] = new_origin
+                                            logging.info(f"✅ 从新简介中提取到产地: {new_origin}")
+                                    else:
+                                        extracted_data["source_params"]["产地"] = new_origin
+                                        logging.info(f"✅ 从新简介中提取到产地: {new_origin}")
+                            else:
+                                logging.warning(
+                                    f"重新获取的简介仍不完整，缺少: {new_check['missing_fields']}，保留原简介"
+                                )
+                        else:
+                            logging.warning(f"重新获取简介失败: {posters}")
+                            
+                    except Exception as e:
+                        logging.error(f"重新获取简介时发生错误: {e}", exc_info=True)
+                else:
+                    logging.warning("未找到豆瓣或IMDb链接，无法重新获取简介")
+            else:
+                logging.info(f"✅ 简介完整性检测通过，包含字段: {completeness_check['found_fields']}")
+
+            # Add quotes after poster to body (在完整性检测和可能的重新获取之后)
             if quotes_for_body:
                 body = body + "\n\n" + "\n".join(quotes_for_body)
+
+            # [新逻辑] 清理简介中残留的独立关键词行
+            logging.info("清理简介中残留的独立关键词行 (Mediainfo, Screenshot, etc.)...")
+            words_to_remove = {'mediainfo', 'screenshot', 'source', 'encode'}
+            lines = body.split('\n')
+            cleaned_lines = [line for line in lines if line.strip().lower() not in words_to_remove]
+            body = '\n'.join(cleaned_lines)
 
             # Format statement string
             statement_string = "\n".join(final_statement_quotes)
@@ -351,7 +595,7 @@ class Extractor:
         extracted_data["source_params"]["标签"] = tags
 
         # Extract origin information
-        from utils import extract_origin_from_description
+        from utils import extract_origin_from_description, check_intro_completeness, upload_data_movie_info
         full_description_text = f"{extracted_data['intro']['statement']}\n{extracted_data['intro']['body']}"
         origin_info = extract_origin_from_description(full_description_text)
 

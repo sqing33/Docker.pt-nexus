@@ -330,7 +330,6 @@ class TorrentMigrator:
         except Exception as e:
             self.logger.warning(f"从数据库查询制作组显示名称时出错: {e}")
             print(f"[调试-DB] ✗ 查询出错: {e}")
-            import traceback
             traceback.print_exc()
             return None
 
@@ -677,7 +676,6 @@ class TorrentMigrator:
                     upload_data["special_extractor_processed"] = True
                 except Exception as e:
                     print(f"使用特殊提取器处理{self.SOURCE_NAME}站点数据时发生错误: {e}")
-                    import traceback
                     traceback.print_exc()
                     # 如果特殊提取器失败，继续使用默认处理
         else:
@@ -1292,7 +1290,6 @@ class TorrentMigrator:
             except Exception as e:
                 self.logger.warning(f"添加官组致谢声明时发生错误: {e}")
                 print(f"[调试] ✗ 添加官组致谢声明时发生错误: {e}")
-                import traceback
                 self.logger.debug(traceback.format_exc())
                 traceback.print_exc()
             # [致谢声明添加结束]
