@@ -219,6 +219,7 @@ global_standard_keys:
     "HDK": "team.hdk"
     "HDKWeb": "team.hdkweb"
     "HDKGame": "team.hdkgame"
+    "HDHome": "team.hdhome"
     "Kylin": "team.kylin"
     "AilMWeb": "team.ailmweb"
     "RedLeaves": "team.redleaves"

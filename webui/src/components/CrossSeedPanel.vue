@@ -594,7 +594,7 @@
       <div v-if="activeStep === 0" class="button-group">
         <el-button @click="$emit('cancel')">取消</el-button>
 
-        <el-tooltip content="存在待修改的参数 (请确保mediainfo内容有效且包含必要的媒体信息)" placement="top" :disabled="!isNextButtonDisabled">
+        <el-tooltip content="存在待修改的参数 (请确保mediainfo或bdinfo内容有效且包含必要的媒体信息)" placement="top" :disabled="!isNextButtonDisabled">
           <!-- 添加一个 span 作为包裹元素 -->
 
           <el-button type="primary" @click="goToPublishPreviewStep" :disabled="isNextButtonDisabled">
@@ -2255,17 +2255,28 @@ const unrecognizedValue = computed({
 });
 
 // 计算属性：检查下一步按钮是否应该禁用
-// 只有当"无法识别"的参数为空字符串，截图有效，标准化参数符合格式，且mediainfo内容有效时才允许点击按钮
-// mediainfo有效性的检查：非空、长度足够、包含关键字段(Complete name, Format)
+// 只有当"无法识别"的参数为空字符串，截图有效，标准化参数符合格式，且mediainfo/bdinfo内容有效时才允许点击按钮
+// mediainfo/bdinfo有效性的检查：非空、长度足够、包含各自格式的关键字段
 const isNextButtonDisabled = computed(() => {
   const unrecognized = torrentData.value.title_components.find(param => param.key === '无法识别');
   const hasUnrecognized = unrecognized && unrecognized.value !== '';
   const hasInvalidScreenshots = !screenshotValid.value;
-  const hasInvalidMediainfo = !torrentData.value.mediainfo ||
-    torrentData.value.mediainfo.trim() === '' ||
-    torrentData.value.mediainfo.trim().length < 50 ||
-    !torrentData.value.mediainfo.includes('Complete name') ||
-    !torrentData.value.mediainfo.includes('Format');
+
+  // 检查 mediainfo/bdinfo 的有效性
+  const mediaInfoText = torrentData.value.mediainfo || '';
+  const hasInvalidMediaInfo = !mediaInfoText || mediaInfoText.trim() === '';
+
+  // 如果有内容，进一步检查格式有效性
+  if (!hasInvalidMediaInfo) {
+    // 检查是否为有效的 MediaInfo 或 BDInfo 格式
+    const isStandardMediainfo = _isValidMediainfo(mediaInfoText);
+    const isBDInfo = _isValidBDInfo(mediaInfoText);
+
+    // 如果既不是有效的 MediaInfo 也不是有效的 BDInfo，则认为无效
+    if (!isStandardMediainfo && !isBDInfo) {
+      return true;
+    }
+  }
 
   // 将 getInvalidStandardParams() 修改为 invalidStandardParams.value
   const hasInvalidStandardParams = invalidStandardParams.value.length > 0;
@@ -2279,12 +2290,55 @@ const isNextButtonDisabled = computed(() => {
   if (hasInvalidStandardParams) {
     return true;
   }
-  if (hasInvalidMediainfo) {
+  if (hasInvalidMediaInfo) {
     return true;
   }
 
   return false;
 });
+
+// 辅助函数：检查是否为有效的 MediaInfo 格式
+const _isValidMediainfo = (text: string): boolean => {
+  const standardMediainfoKeywords = [
+    "General",
+    "Video",
+    "Audio",
+    "Complete name",
+    "File size",
+    "Duration",
+    "Width",
+    "Height"
+  ];
+
+  const matches = standardMediainfoKeywords.filter(keyword => text.includes(keyword));
+  return matches.length >= 3; // 至少匹配3个关键字才认为是有效的MediaInfo
+};
+
+// 辅助函数：检查是否为有效的 BDInfo 格式
+const _isValidBDInfo = (text: string): boolean => {
+  const bdInfoRequiredKeywords = ["DISC INFO", "PLAYLIST REPORT"];
+  const bdInfoOptionalKeywords = [
+    "VIDEO:",
+    "AUDIO:",
+    "SUBTITLES:",
+    "FILES:",
+    "Disc Label",
+    "Disc Size",
+    "BDInfo:",
+    "Protection:",
+    "Codec",
+    "Bitrate",
+    "Language",
+    "Description"
+  ];
+
+  const requiredMatches = bdInfoRequiredKeywords.filter(keyword => text.includes(keyword)).length;
+  const optionalMatches = bdInfoOptionalKeywords.filter(keyword => text.includes(keyword)).length;
+
+  // 必须所有必要关键字都存在，或者至少有1个必要关键字且2个以上可选关键字
+  return (requiredMatches === bdInfoRequiredKeywords.length) ||
+         (requiredMatches >= 1 && optionalMatches >= 2);
+};
 
 // 检查截图有效性
 const checkScreenshotValidity = async () => {

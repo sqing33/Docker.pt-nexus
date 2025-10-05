@@ -57,6 +57,17 @@ class ConfigManager:
                 # [新增] 默认下载器设置
                 "default_downloader": ""
             },
+            # --- [新增] 下载器队列设置 ---
+            "downloader_queue": {
+                "enabled": True,
+                "max_queue_size": 1000,
+                "max_workers": 1,
+                "max_retries": 3,
+                "retry_delay_base": 2,  # 重试延迟基数（秒），指数退避
+                "max_retry_delay": 60,  # 最大重试延迟（秒）
+                "task_cleanup_hours": 24,  # 任务记录清理时间（小时）
+                "queue_monitor_interval": 30  # 队列监控间隔（秒）
+            },
             # --- [新增] 为前端 UI 添加默认设置 ---
             "ui_settings": {
                 "torrents_view": {
