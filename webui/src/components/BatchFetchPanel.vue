@@ -49,16 +49,29 @@
     <div class="table-container">
       <el-table :data="tableData" v-loading="loading" border style="width: 100%" empty-text="暂无种子数据" height="100%"
         @selection-change="handleSelectionChange">
-        <el-table-column type="selection" width="55" align="center"></el-table-column>
-        <el-table-column prop="name" label="种子名称" min-width="450" show-overflow-tooltip></el-table-column>
-        <el-table-column prop="save_path" label="保存路径" width="220" show-overflow-tooltip></el-table-column>
-        <el-table-column prop="site_count" label="站点数" width="100" align="center">
+        <el-table-column type="selection" width="55" align="center" header-align="center"></el-table-column>
+        <el-table-column prop="name" label="种子名称" min-width="400" show-overflow-tooltip
+          header-align="center"></el-table-column>
+        <el-table-column prop="size" label="大小" width="110" align="center" header-align="center">
+          <template #default="scope">
+            {{ formatBytes(scope.row.size) }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="save_path" label="保存路径" width="200" header-align="center">
+          <template #default="scope">
+            <div :title="scope.row.save_path"
+              style="width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+              {{ shortenPath(scope.row.save_path, 30) }}
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column prop="site_count" label="站点数" width="100" align="center" header-align="center">
           <template #default="scope">
             {{ Object.keys(scope.row.sites || {}).length }}
           </template>
         </el-table-column>
-        <el-table-column prop="state" label="状态" width="150" align="center"></el-table-column>
-        <el-table-column label="已有源站点" min-width="200">
+        <el-table-column prop="state" label="状态" width="120" align="center" header-align="center"></el-table-column>
+        <el-table-column label="已有源站点" min-width="200" header-align="center">
           <template #default="scope">
             <el-tag v-for="(siteData, siteName) in getSourceSites(scope.row.sites)" :key="siteName" size="small"
               type="success" style="margin: 2px;">
@@ -450,7 +463,7 @@ const fetchData = async () => {
     const params = new URLSearchParams({
       page: currentPage.value.toString(),
       page_size: pageSize.value.toString(),
-      search: nameSearch.value,
+      nameSearch: nameSearch.value,
       path_filters: JSON.stringify(activeFilters.value.paths),
       state_filters: JSON.stringify(activeFilters.value.states),
       downloader_filters: JSON.stringify(activeFilters.value.downloaderIds)
@@ -542,6 +555,7 @@ const clearFilters = () => {
     states: [],
     downloaderIds: []
   }
+  nameSearch.value = ''
   currentPage.value = 1
 
   // 保存清空的筛选条件到配置
@@ -582,7 +596,8 @@ const saveFiltersToConfig = async () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        batch_fetch_filters: activeFilters.value
+        batch_fetch_filters: activeFilters.value,
+        batch_fetch_name_search: nameSearch.value
       })
     })
   } catch (e: any) {
@@ -597,6 +612,10 @@ const loadFiltersFromConfig = async () => {
       const result = await response.json()
       if (result.success && result.data) {
         activeFilters.value = result.data
+      }
+      // 加载搜索内容
+      if (result.success && result.name_search !== undefined) {
+        nameSearch.value = result.name_search
       }
     }
   } catch (e: any) {
@@ -824,6 +843,38 @@ const getResultStatusText = (status: string) => {
   }
 }
 
+const formatBytes = (bytes: number): string => {
+  if (!bytes || bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`
+}
+
+const shortenPath = (path: string, maxLength: number = 50) => {
+  if (!path || path.length <= maxLength) {
+    return path
+  }
+
+  // 对于路径，我们尝试保留开头和结尾的部分
+  const halfLength = Math.floor((maxLength - 3) / 2)
+
+  // 确保我们不会在路径分隔符中间截断
+  let start = path.substring(0, halfLength)
+  let end = path.substring(path.length - halfLength)
+
+  // 如果可能的话，尝试在路径分隔符处截断
+  const lastSeparatorInStart = start.lastIndexOf('/')
+  const firstSeparatorInEnd = end.indexOf('/')
+
+  if (lastSeparatorInStart > 0 && firstSeparatorInEnd >= 0) {
+    start = start.substring(0, lastSeparatorInStart)
+    end = end.substring(firstSeparatorInEnd + 1)
+  }
+
+  return `${start}...${end}`
+}
+
 onMounted(async () => {
   await fetchDownloadersList()
   await loadFiltersFromConfig()
@@ -838,6 +889,7 @@ onUnmounted(() => {
 watch(nameSearch, () => {
   currentPage.value = 1
   fetchData()
+  saveFiltersToConfig()
 })
 </script>
 
