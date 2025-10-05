@@ -36,6 +36,8 @@ source_parsers:
       source_key: "制作组"
 
   title_components:
+    video_codec:
+      source_key: "视频编码"
     title:
       source_key: "主标题"
     season_episode:
@@ -52,8 +54,6 @@ source_parsers:
       source_key: "片源平台"
     medium:
       source_key: "媒介"
-    video_codec:
-      source_key: "视频编码"
     video_format:
       source_key: "视频格式"
     hdr_format:

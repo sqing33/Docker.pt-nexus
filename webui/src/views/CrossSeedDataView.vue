@@ -10,7 +10,7 @@
 
       <!-- 批量转种按钮 -->
       <el-button type="success" @click="openBatchCrossSeedDialog" plain style="margin-right: 15px;"
-        :disabled="!canBatchCrossSeed">
+        :disabled="!canBatchCrossSeed || isDeleteMode">
         {{ batchCrossSeedButtonText }}
       </el-button>
 
@@ -24,16 +24,18 @@
         批量获取数据
       </el-button>
 
+      <!-- 批量删除模式切换按钮 -->
+      <el-button type="danger"
+        @click="isDeleteMode && selectedRows.length > 0 ? executeBatchDelete() : toggleDeleteMode()" plain
+        style="margin-right: 15px;">
+        {{ getDeleteButtonText() }}
+      </el-button>
+
       <!-- 筛选按钮 -->
       <el-button type="primary" @click="openFilterDialog" plain style="margin-right: 15px;">
         筛选
       </el-button>
 
-      <!-- 批量删除按钮 - 仅在筛选出已删除项目时显示，删除已勾选项目 -->
-      <el-button v-if="activeFilters.isDeleted === '1'" type="danger" @click="handleDisplayBatchDelete" plain
-        style="margin-right: 15px;" :disabled="selectedRows.length === 0">
-        批量删除已勾选项 ({{ selectedRows.length }})
-      </el-button>
 
       <div v-if="hasActiveFilters" class="current-filters"
         style="margin-right: 15px; display: flex; align-items: center;">
@@ -490,6 +492,9 @@ const batchCrossSeedDialogVisible = ref<boolean>(false)
 
 // 批量获取数据相关
 const batchFetchDialogVisible = ref<boolean>(false)
+
+// 删除模式相关
+const isDeleteMode = ref<boolean>(false)
 
 // 记录查看相关
 const recordDialogVisible = ref<boolean>(false)
@@ -1146,65 +1151,6 @@ const handleBulkDelete = async () => {
   }
 };
 
-// 批量永久删除当前选中的已删除项目（确认删除已选择的项目）
-const handleDisplayBatchDelete = async () => {
-  // 当筛选出已删除项目且进行了勾选时，批量删除已选择的项，而不是全部显示的项
-  if (selectedRows.value.length === 0) {
-    ElMessage.warning('请先选择要删除的项目');
-    return;
-  }
-
-  try {
-    // 确认是否彻底删除
-    await ElMessageBox.confirm(
-      `确定要永久删除选中的 ${selectedRows.value.length} 条种子数据吗？此操作无法恢复！`,
-      '确认永久删除',
-      {
-        confirmButtonText: '确定',
-        cancelButtonText: '取消',
-        type: 'warning'
-      }
-    );
-
-    // 构造请求体 - 包含当前选中的项目
-    const deleteData = {
-      items: selectedRows.value.map(row => ({
-        torrent_id: row.torrent_id,
-        site_name: row.site_name
-      }))
-    };
-
-    // 调用批量删除API - 使用统一的 delete API
-    const response = await fetch('/api/cross-seed-data/delete', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(deleteData)
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const result = await response.json();
-
-    if (result.success) {
-      ElMessage.success(result.message || `已永久删除 ${result.deleted_count} 条数据`);
-      // 清空选中行
-      selectedRows.value = [];
-      // 重新获取数据，以更新表格
-      fetchData();
-    } else {
-      ElMessage.error(result.error || '批量删除失败');
-    }
-  } catch (error: any) {
-    if (error !== 'cancel') {
-      // 只有在不是用户取消的情况下才显示错误
-      ElMessage.error(error.message || '网络错误');
-    }
-  }
-};
 
 // 关闭转种弹窗
 const closeCrossSeedDialog = () => {
@@ -1246,6 +1192,11 @@ const tableRowClassName = ({ row }: { row: SeedParameter }) => {
 
 // 控制表格行是否可选择
 const checkSelectable = (row: SeedParameter) => {
+  // 在删除模式下，所有行都可以被选择（包括已删除的行）
+  if (isDeleteMode.value) {
+    return true
+  }
+
   // 如果已删除筛选处于活动状态，则允许选择已删除的行 - 便于批量操作
   if (activeFilters.value.isDeleted === '1') {
     // 但仍需检查是否有无效参数
@@ -1263,6 +1214,11 @@ const checkSelectable = (row: SeedParameter) => {
 // 处理表格选中行变化
 const handleSelectionChange = (selection: SeedParameter[]) => {
   selectedRows.value = selection
+
+  // 在删除模式下，根据选择状态更新按钮文字
+  if (isDeleteMode.value) {
+    // 这里会通过计算属性自动更新按钮文字
+  }
 }
 
 // 打开批量转种对话框
@@ -1336,6 +1292,90 @@ const handleBatchCrossSeed = async () => {
 // 关闭批量转种对话框
 const closeBatchCrossSeedDialog = () => {
   batchCrossSeedDialogVisible.value = false
+}
+
+// 获取删除按钮文字
+const getDeleteButtonText = () => {
+  if (!isDeleteMode.value) {
+    return '批量删除模式'
+  }
+
+  if (selectedRows.value.length === 0) {
+    return '退出删除模式'
+  }
+
+  return `删除选中项 (${selectedRows.value.length})`
+}
+
+// 切换删除模式
+const toggleDeleteMode = async () => {
+  if (isDeleteMode.value) {
+    // 当前处于删除模式，退出删除模式
+    isDeleteMode.value = false
+    // 清空选中行
+    selectedRows.value = []
+  } else {
+    // 进入删除模式
+    isDeleteMode.value = true
+    // 清空之前的选择
+    selectedRows.value = []
+  }
+}
+
+// 执行批量删除
+const executeBatchDelete = async () => {
+  if (selectedRows.value.length === 0) {
+    ElMessage.warning('请先选择要删除的行')
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除选中的 ${selectedRows.value.length} 条种子数据吗？此操作无法恢复！`,
+      '确认批量删除',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    );
+
+    const deleteData = {
+      items: selectedRows.value.map(row => ({
+        torrent_id: row.torrent_id,
+        site_name: row.site_name
+      }))
+    };
+
+    const response = await fetch('/api/cross-seed-data/delete', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(deleteData)
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+
+    if (result.success) {
+      ElMessage.success(result.message || `成功删除 ${result.deleted_count} 条数据`);
+      // 清空选中行并退出删除模式
+      selectedRows.value = []
+      isDeleteMode.value = false
+      // 重新获取数据
+      fetchData();
+    } else {
+      ElMessage.error(result.error || '批量删除失败');
+    }
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error(error.message || '网络错误');
+    }
+  }
 }
 
 // 打开批量获取数据对话框
