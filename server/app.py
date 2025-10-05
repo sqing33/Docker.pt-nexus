@@ -188,6 +188,32 @@ def create_app():
         logging.info("正在启动数据追踪线程...")
         start_data_tracker(db_manager, config_manager)
 
+        # --- 启动下载器队列服务 ---
+        logging.info("正在启动下载器队列服务...")
+        try:
+            from core.downloader_queue import create_downloader_queue_service
+
+            # 获取配置
+            app_config = config_manager.get()
+            queue_config = app_config.get("downloader_queue", {})
+
+            # 检查是否启用
+            if queue_config.get("enabled", True):
+                # 创建新的服务实例
+                downloader_queue_service_instance = create_downloader_queue_service(app_config)
+                downloader_queue_service_instance.set_managers(db_manager, config_manager)
+                downloader_queue_service_instance.start()
+
+                # 更新全局实例引用
+                import core.downloader_queue
+                core.downloader_queue.downloader_queue_service = downloader_queue_service_instance
+
+                logging.info("下载器队列服务启动成功")
+            else:
+                logging.info("下载器队列服务已禁用")
+        except Exception as e:
+            logging.error(f"启动下载器队列服务失败: {e}", exc_info=True)
+
         # # --- 启动IYUU后台线程 ---
         # logging.info("正在启动IYUU后台线程...")
         # start_iyuu_thread(db_manager, config_manager)
@@ -230,6 +256,14 @@ if __name__ == "__main__":
             stop_iyuu_thread()
         except Exception as e:
             logging.error(f"停止IYUU线程失败: {e}", exc_info=True)
+
+        try:
+            from core.downloader_queue import downloader_queue_service
+            downloader_queue_service.stop()
+            logging.info("下载器队列服务已停止")
+        except Exception as e:
+            logging.error(f"停止下载器队列服务失败: {e}", exc_info=True)
+
         logging.info("后台线程清理完成。")
 
     atexit.register(cleanup)

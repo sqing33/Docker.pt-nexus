@@ -1335,28 +1335,47 @@ def migrate_publish():
                 # 调用添加到下载器
                 if save_path and downloader_id:
                     try:
-                        from utils import add_torrent_to_downloader
-                        print(
-                            f"[下载器添加] 准备调用add_torrent_to_downloader: URL={result['url']}, Path={save_path}, DownloaderID={downloader_id}"
-                        )
-                        success, message = add_torrent_to_downloader(
-                            result["url"], save_path, downloader_id,
-                            db_manager, config_manager)
-                        result["auto_add_result"] = {
-                            "success": success,
-                            "message": message
+                        from core.downloader_queue import downloader_queue_service
+
+                        # 准备上下文信息
+                        context = {
+                            'source_torrent_id': context.get("source_torrent_id"),
+                            'source_site_name': source_site_name,
+                            'target_site_name': target_site_name,
+                            'title': upload_data.get('title', ''),
+                            'torrent_id': context.get("source_torrent_id")  # 用于批量记录更新
                         }
-                        if success:
-                            print(f"✅ [下载器添加] 成功: {message}")
-                        else:
-                            print(f"❌ [下载器添加] 失败: {message}")
+
+                        print(
+                            f"[下载器添加] 准备添加到异步队列: URL={result['url']}, Path={save_path}, DownloaderID={downloader_id}"
+                        )
+
+                        # 添加到异步队列而不是同步执行
+                        task_id = downloader_queue_service.add_task(
+                            detail_page_url=result["url"],
+                            save_path=save_path,
+                            downloader_id=downloader_id,
+                            batch_id=data.get("batch_id"),
+                            context=context
+                        )
+
+                        result["auto_add_result"] = {
+                            "success": True,
+                            "message": "已添加到下载器队列，将在后台处理",
+                            "task_id": task_id,
+                            "async": True,
+                            "queue_stats": downloader_queue_service.get_queue_stats()
+                        }
+
+                        print(f"✅ [下载器添加] 已添加到队列: task_id={task_id}")
+
                     except Exception as e:
-                        print(f"❌ [下载器添加] 异常: {e}")
+                        print(f"❌ [下载器添加] 队列添加异常: {e}")
                         import traceback
                         traceback.print_exc()
                         result["auto_add_result"] = {
                             "success": False,
-                            "message": f"添加失败: {str(e)}"
+                            "message": f"添加到队列失败: {str(e)}"
                         }
                 else:
                     missing = []
@@ -1778,6 +1797,101 @@ def get_sites_status():
             if 'cursor' in locals() and cursor:
                 cursor.close()
             conn.close()
+
+
+@migrate_bp.route("/migrate/downloader_task/<task_id>/status", methods=["GET"])
+def get_downloader_task_status(task_id):
+    """获取下载器任务状态"""
+    try:
+        from core.downloader_queue import downloader_queue_service
+
+        status_info = downloader_queue_service.get_task_status(task_id)
+        if status_info is None:
+            return jsonify({
+                "success": False,
+                "message": "任务不存在"
+            }), 404
+
+        return jsonify({
+            "success": True,
+            "task": status_info
+        })
+
+    except Exception as e:
+        logging.error(f"获取任务状态失败: {e}", exc_info=True)
+        return jsonify({
+            "success": False,
+            "message": f"获取任务状态失败: {str(e)}"
+        }), 500
+
+
+@migrate_bp.route("/migrate/downloader_task/<task_id>/cancel", methods=["POST"])
+def cancel_downloader_task(task_id):
+    """取消下载器任务"""
+    try:
+        from core.downloader_queue import downloader_queue_service
+
+        success = downloader_queue_service.cancel_task(task_id)
+        if success:
+            return jsonify({
+                "success": True,
+                "message": "任务已取消"
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "message": "无法取消任务（任务不存在或已无法取消）"
+            }), 400
+
+    except Exception as e:
+        logging.error(f"取消任务失败: {e}", exc_info=True)
+        return jsonify({
+            "success": False,
+            "message": f"取消任务失败: {str(e)}"
+        }), 500
+
+
+@migrate_bp.route("/migrate/downloader_queue/stats", methods=["GET"])
+def get_downloader_queue_stats():
+    """获取下载器队列统计信息"""
+    try:
+        from core.downloader_queue import downloader_queue_service
+
+        stats = downloader_queue_service.get_queue_stats()
+        return jsonify({
+            "success": True,
+            "stats": stats
+        })
+
+    except Exception as e:
+        logging.error(f"获取队列统计失败: {e}", exc_info=True)
+        return jsonify({
+            "success": False,
+            "message": f"获取队列统计失败: {str(e)}"
+        }), 500
+
+
+@migrate_bp.route("/migrate/downloader_queue/clear", methods=["POST"])
+def clear_downloader_queue_completed():
+    """清理已完成的任务记录"""
+    try:
+        from core.downloader_queue import downloader_queue_service
+
+        data = request.json or {}
+        max_age_hours = data.get("max_age_hours", 24)
+
+        downloader_queue_service.clear_completed_tasks(max_age_hours)
+        return jsonify({
+            "success": True,
+            "message": f"已清理超过 {max_age_hours} 小时的已完成任务记录"
+        })
+
+    except Exception as e:
+        logging.error(f"清理任务记录失败: {e}", exc_info=True)
+        return jsonify({
+            "success": False,
+            "message": f"清理任务记录失败: {str(e)}"
+        }), 500
 
 
 @migrate_bp.route("/migrate/search_torrent_id", methods=["POST"])
