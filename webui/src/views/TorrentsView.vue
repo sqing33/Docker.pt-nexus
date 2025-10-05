@@ -5,7 +5,7 @@
 
     <!-- [修改] 使用 v-if 确保在加载设置后再渲染表格 -->
     <el-table v-if="settingsLoaded" :data="allData" v-loading="loading" border height="100%" ref="tableRef"
-      row-key="name" :row-class-name="tableRowClassName" @row-click="handleRowClick" @expand-change="handleExpandChange"
+      row-key="unique_id" :row-class-name="tableRowClassName" @row-click="handleRowClick" @expand-change="handleExpandChange"
       @sort-change="handleSortChange" :default-sort="currentSort" empty-text="无数据或当前筛选条件下无结果">
       <!-- ... (其他列保持不变) ... -->
       <el-table-column type="expand" width="1">
@@ -335,6 +335,7 @@ interface OtherSite {
 }
 
 interface Torrent {
+  unique_id: string
   name: string
   save_path: string
   size: number
@@ -1100,10 +1101,10 @@ const getStateTagType = (state: string) => {
 
 const handleRowClick = (row: Torrent) => tableRef.value?.toggleRowExpansion(row)
 const handleExpandChange = (row: Torrent, expanded: Torrent[]) => {
-  expandedRows.value = expanded.map((r) => r.name)
+  expandedRows.value = expanded.map((r) => r.unique_id)
 }
 const tableRowClassName = ({ row }: { row: Torrent }) => {
-  return expandedRows.value.includes(row.name) ? 'expanded-row' : ''
+  return expandedRows.value.includes(row.unique_id) ? 'expanded-row' : ''
 }
 
 // --- [修改] onMounted 启动逻辑 ---

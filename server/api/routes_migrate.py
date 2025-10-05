@@ -2481,6 +2481,49 @@ def _process_batch_fetch(task_id, torrent_names, source_sites_priority,
                     if source_found:
                         break
 
+                # 第二阶段：如果优先级站点都没有找到，在其他存在的源站点中查找
+                if not source_found:
+                    # 获取所有已存在的站点名称（排除已经在优先级列表中的）
+                    existing_sites = set()
+                    for torrent in torrents:
+                        site_name = torrent.get("sites")
+                        if site_name and site_name not in source_sites_priority:
+                            existing_sites.add(site_name)
+
+                    # 在这些其他站点中查找可用的源站点
+                    for site_name in existing_sites:
+                        # 获取站点信息
+                        source_info = db_manager.get_site_by_nickname(site_name)
+                        if not source_info or not source_info.get("cookie"):
+                            continue
+                        # 检查该站点的migration状态
+                        if source_info.get("migration", 0) not in [1, 3]:
+                            continue
+                        # 查找该站点的种子记录
+                        for torrent in torrents:
+                            if torrent.get("sites") == site_name:
+                                # 提取种子ID
+                                comment = torrent.get("details", "")
+                                torrent_id = None
+                                if comment:
+                                    # 尝试从comment中提取ID
+                                    import re
+                                    id_match = re.search(r'id=(\d+)', comment)
+                                    if id_match:
+                                        torrent_id = id_match.group(1)
+                                    elif re.match(r'^\d+$', comment.strip()):
+                                        torrent_id = comment.strip()
+                                if torrent_id:
+                                    source_found = {
+                                        "site": site_name,
+                                        "site_info": source_info,
+                                        "torrent_id": torrent_id,
+                                        "torrent": torrent
+                                    }
+                                    break
+                        if source_found:
+                            break
+
                 if not source_found:
                     BATCH_FETCH_TASKS[task_id]["results"].append({
                         "name":

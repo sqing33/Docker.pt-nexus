@@ -447,38 +447,40 @@ const fetchData = async () => {
   loading.value = true
   error.value = null
   try {
-    const response = await fetch('/api/migrate/get_aggregated_torrents', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        page: currentPage.value,
-        pageSize: pageSize.value,
-        nameSearch: nameSearch.value,
-        pathFilters: activeFilters.value.paths,
-        stateFilters: activeFilters.value.states,
-        downloaderFilters: activeFilters.value.downloaderIds
-      })
+    const params = new URLSearchParams({
+      page: currentPage.value.toString(),
+      page_size: pageSize.value.toString(),
+      search: nameSearch.value,
+      path_filters: JSON.stringify(activeFilters.value.paths),
+      state_filters: JSON.stringify(activeFilters.value.states),
+      downloader_filters: JSON.stringify(activeFilters.value.downloaderIds)
     })
+
+    const response = await fetch(`/api/data?${params.toString()}`)
 
     if (!response.ok) throw new Error(`网络错误: ${response.status}`)
     const result = await response.json()
 
-    if (result.success) {
-      tableData.value = result.data
+    if (!result.error) {
+      // 转换数据格式以匹配现有的 Torrent 接口
+      tableData.value = result.data.map((item: any) => ({
+        name: item.name,
+        save_path: item.save_path,
+        size: item.size,
+        progress: item.progress,
+        state: item.state,
+        sites: item.sites || {},
+        downloader_ids: item.downloader_ids || []
+      }))
       total.value = result.total
 
-      // 提取唯一路径和状态
-      if (uniquePaths.value.length === 0 || !activeFilters.value.paths.length) {
-        uniquePaths.value = [...new Set(result.data.map((t: Torrent) => t.save_path))] as string[]
-      }
+      // 提取唯一状态（路径现在通过专门的API获取）
       if (uniqueStates.value.length === 0 || !activeFilters.value.states.length) {
-        uniqueStates.value = [...new Set(result.data.map((t: Torrent) => t.state))] as string[]
+        uniqueStates.value = [...new Set(tableData.value.map((t: Torrent) => t.state))] as string[]
       }
-
-      pathTreeData.value = buildPathTree(uniquePaths.value)
     } else {
-      error.value = result.message || '获取数据失败'
-      ElMessage.error(result.message || '获取数据失败')
+      error.value = result.error || '获取数据失败'
+      ElMessage.error(result.error || '获取数据失败')
     }
   } catch (e: any) {
     error.value = e.message || '网络错误'
@@ -496,6 +498,30 @@ const fetchDownloadersList = async () => {
     downloadersList.value = allDownloaders.filter((d: any) => d.enabled);
   } catch (e: any) {
     error.value = e.message;
+  }
+}
+
+const fetchAllPaths = async () => {
+  try {
+    const params = new URLSearchParams({
+      page: '1',
+      page_size: '1', // 只需要获取路径信息，不需要实际数据
+      path_filters: JSON.stringify([]), // 清空路径筛选以获取所有路径
+      state_filters: JSON.stringify([]), // 清空状态筛选
+      downloader_filters: JSON.stringify([]) // 清空下载器筛选
+    });
+
+    const response = await fetch(`/api/data?${params.toString()}`);
+
+    if (!response.ok) throw new Error('无法获取路径列表');
+    const result = await response.json();
+
+    if (result.unique_paths) {
+      uniquePaths.value = result.unique_paths;
+      pathTreeData.value = buildPathTree(uniquePaths.value);
+    }
+  } catch (e: any) {
+    console.error('获取路径列表失败:', e);
   }
 }
 
@@ -801,6 +827,7 @@ const getResultStatusText = (status: string) => {
 onMounted(async () => {
   await fetchDownloadersList()
   await loadFiltersFromConfig()
+  await fetchAllPaths() // 获取所有路径
   fetchData()
 })
 

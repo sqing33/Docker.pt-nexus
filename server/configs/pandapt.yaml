@@ -13,6 +13,7 @@ form_fields:
   team: "team_sel[4]"
   category: "type"  # 类别字段映射到type参数
   processing: "processing_sel[4]"
+  tags[4][]: "tags[]"
 
 # 标准化键映射 - 定义源文本到标准化键的映射规则
 # source_parsers部分：定义如何从原始数据解析出标准化参数

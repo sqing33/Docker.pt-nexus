@@ -130,9 +130,8 @@ def get_data_api():
                 "downloader_ids": [],  # 修改为数组以支持多个下载器
             })
         for t in torrents_raw:
-            # 使用种子名称作为唯一标识，支持同一个种子在不同下载器中
-            # 即使保存路径不同，也认为是同一个种子
-            torrent_key = t['name']
+            # 使用种子名称和大小作为唯一标识，以区分同名但不同大小的种子
+            torrent_key = (t['name'], t.get('size', 0))
             agg = agg_torrents[torrent_key]
             if not agg["name"]:
                 agg.update({
@@ -165,13 +164,15 @@ def get_data_api():
                 # --- [修改] 结束 ---
 
         final_torrent_list = []
-        for name, data in agg_torrents.items():
+        for key, data in agg_torrents.items():
+            name, size = key
             # 计算可以转种到的目标站点数量
             # 目标站点是那些当前种子未存在于其上的目标站点
             existing_sites = set(data.get("sites", {}).keys())
             target_sites_count = len(target_sites - existing_sites)
 
             data.update({
+                "unique_id": f"{name}_{size}",
                 "state":
                 ", ".join(sorted(list(data["state"]))),
                 "size_formatted":
