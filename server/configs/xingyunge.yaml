@@ -72,7 +72,7 @@ source_parsers:
       "MV": "category.music_video"
       "体育": "category.sports"
       "音频": "category.music"
-      "短剧": "category.short_play"
+      "短剧": "category.playlet"
       "其他": "category.other"
 
     medium:

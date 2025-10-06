@@ -501,7 +501,7 @@ class TorrentMigrator:
             torrent_response = self.scraper.get(
                 download_url,
                 headers={"Cookie": self.SOURCE_COOKIE},
-                timeout=60,
+                timeout=120,
                 proxies=proxies,
             )
             torrent_response.raise_for_status()
@@ -788,7 +788,7 @@ class TorrentMigrator:
             response = self.scraper.get(search_url,
                                         headers={"Cookie": self.SOURCE_COOKIE},
                                         params=params,
-                                        timeout=60,
+                                        timeout=120,
                                         proxies=proxies)
             response.raise_for_status()
             response.encoding = "utf-8"
@@ -875,7 +875,7 @@ class TorrentMigrator:
                     "id": torrent_id,
                     "hit": "1"
                 },
-                timeout=60,
+                timeout=120,
                 proxies=proxies,
             )
             response.raise_for_status()
@@ -890,7 +890,8 @@ class TorrentMigrator:
             full_bbcode_descr_for_check = ""
             if descr_container_for_check:
                 # Convert raw HTML description to BBCode for an accurate check
-                full_bbcode_descr_for_check = self._html_to_bbcode(descr_container_for_check)
+                full_bbcode_descr_for_check = self._html_to_bbcode(
+                    descr_container_for_check)
 
             # --- [核心修改 1] 开始 ---
             # 先下载种子文件，以便获取其准确的文件名
@@ -901,7 +902,7 @@ class TorrentMigrator:
             torrent_response = self.scraper.get(
                 f"{self.SOURCE_BASE_URL}/{download_link_tag['href']}",
                 headers={"Cookie": self.SOURCE_COOKIE},
-                timeout=60,
+                timeout=120,
                 proxies=proxies,
             )
             torrent_response.raise_for_status()
@@ -1131,44 +1132,60 @@ class TorrentMigrator:
             screenshots_valid = True
             screenshots_sufficient = True
             required_screenshot_count = 3  # 需要至少3张截图
-            
+
             # 使用 intro_data 来检查，因为它包含了从 extractor 提取的原始截图
             if intro_data.get("screenshots"):
-                screenshot_links = intro_data["screenshots"].strip().split('\n')
+                screenshot_links = intro_data["screenshots"].strip().split(
+                    '\n')
                 # 过滤掉空字符串
-                screenshot_links = [link for link in screenshot_links if link.strip()]
-                
+                screenshot_links = [
+                    link for link in screenshot_links if link.strip()
+                ]
+
                 if screenshot_links:
-                    self.logger.info(f"[*] 开始验证 {len(screenshot_links)} 个截图链接的有效性...")
+                    self.logger.info(
+                        f"[*] 开始验证 {len(screenshot_links)} 个截图链接的有效性...")
                     print(f"[*] 开始验证 {len(screenshot_links)} 个截图链接的有效性...")
-                    
+
                     # 检查数量是否足够
                     if len(screenshot_links) < required_screenshot_count:
-                        self.logger.warning(f"⚠️ 截图数量不足（当前: {len(screenshot_links)}，需要: {required_screenshot_count}张）")
-                        print(f"⚠️ 截图数量不足（当前: {len(screenshot_links)}，需要: {required_screenshot_count}张）")
+                        self.logger.warning(
+                            f"⚠️ 截图数量不足（当前: {len(screenshot_links)}，需要: {required_screenshot_count}张）"
+                        )
+                        print(
+                            f"⚠️ 截图数量不足（当前: {len(screenshot_links)}，需要: {required_screenshot_count}张）"
+                        )
                         screenshots_sufficient = False
-                    
+
                     # 验证每个截图的有效性
                     valid_count = 0
                     for i, shot_tag in enumerate(screenshot_links):
-                        if shot_url_match := re.search(r'\[img\](.*?)\[/img\]', shot_tag, re.IGNORECASE):
+                        if shot_url_match := re.search(r'\[img\](.*?)\[/img\]',
+                                                       shot_tag,
+                                                       re.IGNORECASE):
                             shot_url = shot_url_match.group(1)
                             if is_image_url_valid_robust(shot_url):
                                 valid_count += 1
                             else:
-                                self.logger.warning(f"检测到第 {i+1} 个截图链接失效: {shot_url}")
+                                self.logger.warning(
+                                    f"检测到第 {i+1} 个截图链接失效: {shot_url}")
                                 screenshots_valid = False
                         else:
                             # 如果标签格式不正确，也视为无效
-                            self.logger.warning(f"第 {i+1} 个截图标签格式不正确: {shot_tag}")
+                            self.logger.warning(
+                                f"第 {i+1} 个截图标签格式不正确: {shot_tag}")
                             screenshots_valid = False
-                    
+
                     # 最终检查：即使所有链接有效，如果数量不足也需要重新生成
                     if screenshots_valid and valid_count < required_screenshot_count:
-                        self.logger.warning(f"⚠️ 有效截图数量不足（总图片: {len(screenshot_links)}，有效: {valid_count}，需要: {required_screenshot_count}张）")
-                        print(f"⚠️ 有效截图数量不足（总图片: {len(screenshot_links)}，有效: {valid_count}，需要: {required_screenshot_count}张）")
+                        self.logger.warning(
+                            f"⚠️ 有效截图数量不足（总图片: {len(screenshot_links)}，有效: {valid_count}，需要: {required_screenshot_count}张）"
+                        )
+                        print(
+                            f"⚠️ 有效截图数量不足（总图片: {len(screenshot_links)}，有效: {valid_count}，需要: {required_screenshot_count}张）"
+                        )
                         screenshots_sufficient = False
-                    
+
                     if screenshots_valid and screenshots_sufficient:
                         self.logger.info(f"[*] 验证完成，保留 {valid_count} 个有效截图链接。")
                         print(f"[*] 验证完成，保留 {valid_count} 个有效截图链接。")
@@ -1182,7 +1199,7 @@ class TorrentMigrator:
                 self.logger.info("未找到截图字段，将重新生成。")
                 print("未找到截图字段，将重新生成。")
                 screenshots_valid = False
-            
+
             # 如果截图无效或数量不足，则立即重新生成（不再只是标记）
             if not screenshots_valid or not screenshots_sufficient:
                 if not screenshots_valid:
@@ -1191,7 +1208,7 @@ class TorrentMigrator:
                 else:
                     self.logger.warning(f"⚠️ 截图数量不足，立即重新生成截图...")
                     print(f"⚠️ 截图数量不足，立即重新生成截图...")
-                
+
                 # 准备调用截图函数所需参数
                 source_info_for_screenshot = {
                     'main_title': original_main_title
@@ -1203,15 +1220,14 @@ class TorrentMigrator:
                     source_info=source_info_for_screenshot,
                     save_path=self.save_path,
                     torrent_name=processed_torrent_name,
-                    downloader_id=self.downloader_id
-                )
-                
+                    downloader_id=self.downloader_id)
+
                 if new_screenshots:
                     # 更新 intro 字典中的截图
                     intro["screenshots"] = new_screenshots
                     self.logger.success("✅ 成功重新生成并上传截图。")
                     print("✅ 成功重新生成并上传截图。")
-                    
+
                     # 更新 images 列表，保持数据同步
                     # 保留海报（第一个元素），然后添加新截图
                     images = [images[0]] if images and images[0] else []
@@ -1369,14 +1385,16 @@ class TorrentMigrator:
 
                         # 5. 使用结构化检测判断是否已包含官组声明
                         # [修复] 使用完整的、未被 extractor 分离的原始简介内容进行检测
-                        print(f"[调试] 完整简介BBCode长度: {len(full_bbcode_descr_for_check)} 字符")
+                        print(
+                            f"[调试] 完整简介BBCode长度: {len(full_bbcode_descr_for_check)} 字符"
+                        )
                         print(
                             f"[调试] 完整简介BBCode前100字符: {full_bbcode_descr_for_check[:100] if full_bbcode_descr_for_check else '(空)'}"
                         )
 
                         has_official_statement = self._detect_official_statement(
                             full_bbcode_descr_for_check, acknowledgment_config)
-                        
+
                         # 保留原始的 statement 以便追加
                         original_statement = intro.get("statement", "")
                         print(f"[调试] 检测到已有官组声明: {has_official_statement}")

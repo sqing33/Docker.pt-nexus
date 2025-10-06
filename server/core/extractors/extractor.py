@@ -87,7 +87,7 @@ class Extractor:
         """
         # [新增] 图片链接验证辅助函数
         from utils import extract_origin_from_description, check_intro_completeness, upload_data_movie_info
-        from utils.media_helper import is_image_url_valid_robust
+        from utils.media_helper import is_image_url_valid_robust, extract_audio_codec_from_mediainfo
         # Initialize default data structure
         extracted_data = {
             "title": "",
@@ -633,6 +633,14 @@ class Extractor:
         # 视频编码：优先获取"视频编码"，如果没有则获取"编码"
         extracted_data["source_params"]["视频编码"] = basic_info_dict.get("视频编码") or basic_info_dict.get("编码")
         extracted_data["source_params"]["音频编码"] = basic_info_dict.get("音频编码")
+        # 如果页面上没有音频编码，则尝试从mediainfo中提取
+        if not extracted_data["source_params"]["音频编码"] and extracted_data.get("mediainfo"):
+            logging.info("页面未提供音频编码，尝试从MediaInfo中提取...")
+            audio_codec_from_mediainfo = extract_audio_codec_from_mediainfo(extracted_data["mediainfo"])
+            if audio_codec_from_mediainfo:
+                extracted_data["source_params"]["音频编码"] = audio_codec_from_mediainfo
+                logging.info(f"成功从MediaInfo中提取到音频编码: {audio_codec_from_mediainfo}")
+
         extracted_data["source_params"]["分辨率"] = basic_info_dict.get("分辨率")
         extracted_data["source_params"]["制作组"] = basic_info_dict.get("制作组")
         extracted_data["source_params"]["标签"] = tags
@@ -646,17 +654,28 @@ class Extractor:
         if origin_info and GLOBAL_MAPPINGS and "source" in GLOBAL_MAPPINGS:
             source_mappings = GLOBAL_MAPPINGS["source"]
             mapped_origin = None
-            # Try to find a match in the global mappings
+            
+            # 优先精确匹配
             for source_text, standardized_key in source_mappings.items():
-                # 改进的匹配逻辑，支持部分匹配
-                if (str(source_text).strip().lower()
-                        == str(origin_info).strip().lower()
-                        or str(source_text).strip().lower()
-                        in str(origin_info).strip().lower()
-                        or str(origin_info).strip().lower()
-                        in str(source_text).strip().lower()):
+                if str(source_text).strip().lower() == str(origin_info).strip().lower():
                     mapped_origin = standardized_key
                     break
+            
+            # 如果精确匹配失败，再尝试部分匹配（但要小心，避免"中国"匹配"中国香港"）
+            if not mapped_origin:
+                for source_text, standardized_key in source_mappings.items():
+                    source_lower = str(source_text).strip().lower()
+                    origin_lower = str(origin_info).strip().lower()
+                    # 只有当source_text完全包含在origin_info中时才匹配
+                    # 例如："香港" in "中国香港" ✓，但 "中国" in "中国香港" 需要额外判断
+                    if source_lower in origin_lower and source_lower != origin_lower:
+                        # 确保不是前缀匹配导致的误判
+                        # 例如："中国" 不应该匹配 "中国香港"
+                        if origin_lower.startswith(source_lower) and len(origin_lower) > len(source_lower):
+                            # 这种情况跳过，可能有更精确的匹配
+                            continue
+                        mapped_origin = standardized_key
+                        break
 
             # If we found a mapping, use it; otherwise keep the original
             if mapped_origin:
@@ -803,12 +822,11 @@ class ParameterMapper:
                             mapped_tag = standard_key
                             break
 
-            # 如果找到映射，使用映射值；否则保留原始值
+            # 如果找到映射，使用映射值；否则过滤掉
             if mapped_tag:
                 mapped_tags.append(mapped_tag)
             else:
-                # 保留原始标签但记录未映射
-                mapped_tags.append(raw_tag)
+                # 记录未映射的标签，但不会添加到最终列表中
                 unmapped_tags.append(raw_tag)
 
         # 记录未映射的标签
@@ -919,19 +937,14 @@ class ParameterMapper:
             if key not in final_standardized_params:
                 final_standardized_params[key] = title_value
 
-        # 添加processing参数到source参数的映射
-        # 如果存在processing参数但没有source参数，则将processing映射为source
-        if "processing" in final_standardized_params and "source" not in final_standardized_params:
-            final_standardized_params["source"] = final_standardized_params[
-                "processing"]
-        elif "source" not in final_standardized_params:
-            # 如果两者都不存在，尝试从原始参数中获取
-            processing_value = source_params.get(
-                "区域")  # 13city.yaml中定义的source_key
-            if processing_value:
-                final_standardized_params[
-                    "source"] = get_standard_key_for_value(
-                        processing_value, "source")
+        # 如果source参数不存在，尝试从原始参数中获取
+        # 注意：现在统一使用source映射，不再有单独的processing映射
+        if "source" not in final_standardized_params:
+            # 尝试从原始参数中获取（兼容使用"区域"等字段的站点）
+            source_value = source_params.get("产地") or source_params.get("区域")
+            if source_value:
+                final_standardized_params["source"] = get_standard_key_for_value(
+                    source_value, "source")
 
         # 处理标签映射 - 使用站点特定的标签映射
         final_standardized_params["tags"] = self._map_tags(

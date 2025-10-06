@@ -61,17 +61,17 @@ source_parsers:
   # 标准化键映射规则（从原始文本到标准化键）
   standard_keys:
     type:
-      "其他": "category.other"
-      "纪录片": "category.documentaries"
-      "动漫": "category.animation"
-      "短剧": "category.short_play"
-      "电影": "category.movie"
-      "电视剧": "category.tv_series"
-      "综艺": "category.tv_shows"
-      "音乐": "category.music"
-      "有声书": "category.audiobook"
-      "软件": "category.software"
-      "游戏": "category.game"
+      "其他 / Misc": "category.other"
+      "纪录片 / documentary": "category.documentaries"
+      "动漫 / Anime": "category.animation"
+      "短剧 / Short Play": "category.playlet"
+      "电影 / Movies": "category.movie"
+      "电视剧 / TV Series": "category.tv_series"
+      "综艺 / TV Shows": "category.tv_shows"
+      "音乐 / Music": "category.music"
+      "有声书 / Audiobook": "category.audiobook"
+      "软件 / Software": "category.software"
+      "游戏 / Game": "category.game"
 
     medium:
       "Blu-ray": "medium.bluray"

@@ -75,7 +75,7 @@ source_parsers:
       "综艺": "category.tv_shows"
       "纪录片": "category.documentaries"
       "体育": "category.sports"
-      "短剧": "category.short_drama"
+      "短剧": "category.playlet"
       "其他": "category.other"
 
     medium:

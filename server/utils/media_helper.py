@@ -46,11 +46,9 @@ def translate_path(downloader_id: str, remote_path: str) -> str:
                 return remote_path
 
             # 按远程路径长度降序排序，优先匹配最长的路径（更精确）
-            sorted_mappings = sorted(
-                path_mappings,
-                key=lambda x: len(x.get('remote', '')),
-                reverse=True
-            )
+            sorted_mappings = sorted(path_mappings,
+                                     key=lambda x: len(x.get('remote', '')),
+                                     reverse=True)
 
             for mapping in sorted_mappings:
                 remote = mapping.get('remote', '')
@@ -69,7 +67,8 @@ def translate_path(downloader_id: str, remote_path: str) -> str:
                     return local
                 elif remote_path_normalized.startswith(remote + '/'):
                     # 前缀匹配，替换路径
-                    relative_path = remote_path_normalized[len(remote):].lstrip('/')
+                    relative_path = remote_path_normalized[len(remote
+                                                               ):].lstrip('/')
                     return os.path.join(local, relative_path)
 
             # 没有匹配的映射，返回原路径
@@ -187,7 +186,7 @@ def _upload_to_agsv(image_path: str, token: str):
             response = requests.post(upload_url,
                                      headers=headers,
                                      files=files,
-                                     timeout=60)
+                                     timeout=120)
 
         data = response.json()
         if response.status_code == 200 and data.get("status"):
@@ -568,10 +567,9 @@ def upload_data_mediaInfo(mediaInfo: str,
                 proxy_mediainfo = result.get("mediainfo", mediaInfo)
                 # 处理代理返回的 MediaInfo，只保留 Complete name 中的文件名
                 proxy_mediainfo = re.sub(
-                    r'(Complete name\s*:\s*)(.+)',
-                    lambda m: f"{m.group(1)}{os.path.basename(m.group(2).strip())}",
-                    proxy_mediainfo
-                )
+                    r'(Complete name\s*:\s*)(.+)', lambda m:
+                    f"{m.group(1)}{os.path.basename(m.group(2).strip())}",
+                    proxy_mediainfo)
                 return proxy_mediainfo
             else:
                 print(f"通过代理获取 MediaInfo 失败: {result.get('message', '未知错误')}")
@@ -612,8 +610,7 @@ def upload_data_mediaInfo(mediaInfo: str,
         media_info_str = re.sub(
             r'(Complete name\s*:\s*)(.+)',
             lambda m: f"{m.group(1)}{os.path.basename(m.group(2).strip())}",
-            media_info_str
-        )
+            media_info_str)
         print("从文件重新提取 MediaInfo 成功。")
         return media_info_str
     except Exception as e:
@@ -1133,7 +1130,7 @@ def upload_data_screenshot(source_info,
             subprocess.run(cmd_screenshot,
                            check=True,
                            capture_output=True,
-                           timeout=60)
+                           timeout=120)
 
             if not os.path.exists(intermediate_png_path):
                 print(f"❌ 错误: mpv 命令执行成功，但未找到输出文件 {intermediate_png_path}")
@@ -1373,7 +1370,8 @@ def _call_url_format_api(api_config: dict, douban_link: str, imdb_link: str):
         except:
             # 如果不是JSON，可能是直接返回的文本格式
             text_content = response.text.strip()
-            if text_content and ('[img]' in text_content or '◎' in text_content):
+            if text_content and ('[img]' in text_content
+                                 or '◎' in text_content):
                 # 直接返回文本内容作为format
                 return _parse_format_content(text_content)
             else:
@@ -1389,7 +1387,8 @@ def _call_url_format_api(api_config: dict, douban_link: str, imdb_link: str):
             # 获取格式化内容
             format_data = data.get('format', data.get('content', ''))
             if format_data:
-                return _parse_format_content(format_data, data.get('imdb_link', ''))
+                return _parse_format_content(format_data,
+                                             data.get('imdb_link', ''))
             else:
                 return False, "", "API未返回有效的格式化内容", ""
         else:
@@ -1417,7 +1416,8 @@ def _call_iyuu_format_api(api_config: dict, douban_link: str, imdb_link: str):
             error_msg = data.get('msg', '未知错误')
             return False, "", f"API返回错误(状态码{data.get('ret')}): {error_msg}", ""
 
-        format_data = data.get('format') or data.get('data', {}).get('format', '')
+        format_data = data.get('format') or data.get('data', {}).get(
+            'format', '')
         if not format_data:
             return False, "", "API未返回有效的简介内容", ""
 
@@ -1543,7 +1543,7 @@ def add_torrent_to_downloader(detail_page_url: str, save_path: str,
             try:
                 details_response = scraper.get(detail_page_url,
                                                headers=common_headers,
-                                               timeout=60,
+                                               timeout=120,
                                                proxies=proxies)
                 break  # Success, exit retry loop
             except Exception as e:
@@ -1574,7 +1574,7 @@ def add_torrent_to_downloader(detail_page_url: str, save_path: str,
             try:
                 torrent_response = scraper.get(full_download_url,
                                                headers=common_headers,
-                                               timeout=60,
+                                               timeout=120,
                                                proxies=proxies)
                 torrent_response.raise_for_status()
                 break  # Success, exit retry loop
@@ -1836,6 +1836,8 @@ def extract_origin_from_description(description_text: str) -> str:
         r"[地]\s*区[:\s]+([^，,\n\r]+)"
     ]
 
+    print("111", description_text)
+
     for pattern in patterns:
         match = re.search(pattern, description_text)
         if match:
@@ -1845,6 +1847,8 @@ def extract_origin_from_description(description_text: str) -> str:
             # 移除常见的分隔符，如" / "、","等
             origin = re.split(r'\s*/\s*|\s*,\s*|\s*;\s*|\s*&\s*',
                               origin)[0].strip()
+            print("222", origin)
+
             return origin
 
     return ""
@@ -2048,7 +2052,8 @@ def _get_downloader_proxy_config(downloader_id: str = None):
                 proxy_ip = parsed_url.hostname
                 if not proxy_ip:
                     if '://' in host_value:
-                        proxy_ip = host_value.split('://')[1].split(':')[0].split('/')[0]
+                        proxy_ip = host_value.split('://')[1].split(
+                            ':')[0].split('/')[0]
                     else:
                         proxy_ip = host_value.split(':')[0]
                 proxy_config = {
@@ -2082,67 +2087,37 @@ def check_intro_completeness(body_text: str) -> dict:
             "missing_fields": ["所有字段"],
             "found_fields": []
         }
-    
+
     # 定义必要字段的匹配模式
     # 每个字段可以有多个匹配模式（正则表达式）
     required_patterns = {
         "片名": [
-            r"◎\s*片\s*名",
-            r"◎\s*译\s*名",
-            r"◎\s*标\s*题",
-            r"片名\s*[:：]",
-            r"译名\s*[:：]",
-            r"Title\s*[:：]"
+            r"◎\s*片\s*名", r"◎\s*译\s*名", r"◎\s*标\s*题", r"片名\s*[:：]",
+            r"译名\s*[:：]", r"Title\s*[:：]"
         ],
         "年代": [
-            r"◎\s*年\s*代",
-            r"◎\s*年\s*份",
-            r"年份\s*[:：]",
-            r"年代\s*[:：]",
+            r"◎\s*年\s*代", r"◎\s*年\s*份", r"年份\s*[:：]", r"年代\s*[:：]",
             r"Year\s*[:：]"
         ],
         "产地": [
-            r"◎\s*产\s*地",
-            r"◎\s*国\s*家",
-            r"◎\s*地\s*区",
-            r"制片国家/地区\s*[:：]",
-            r"制片国家\s*[:：]",
-            r"国家\s*[:：]",
-            r"产地\s*[:：]",
-            r"Country\s*[:：]"
+            r"◎\s*产\s*地", r"◎\s*国\s*家", r"◎\s*地\s*区", r"制片国家/地区\s*[:：]",
+            r"制片国家\s*[:：]", r"国家\s*[:：]", r"产地\s*[:：]", r"Country\s*[:：]"
         ],
         "类别": [
-            r"◎\s*类\s*别",
-            r"◎\s*类\s*型",
-            r"类型\s*[:：]",
-            r"类别\s*[:：]",
+            r"◎\s*类\s*别", r"◎\s*类\s*型", r"类型\s*[:：]", r"类别\s*[:：]",
             r"Genre\s*[:：]"
         ],
-        "语言": [
-            r"◎\s*语\s*言",
-            r"语言\s*[:：]",
-            r"Language\s*[:：]"
-        ],
-        "导演": [
-            r"◎\s*导\s*演",
-            r"导演\s*[:：]",
-            r"Director\s*[:：]"
-        ],
+        "语言": [r"◎\s*语\s*言", r"语言\s*[:：]", r"Language\s*[:：]"],
+        "导演": [r"◎\s*导\s*演", r"导演\s*[:：]", r"Director\s*[:：]"],
         "简介": [
-            r"◎\s*简\s*介",
-            r"◎\s*剧\s*情",
-            r"◎\s*内\s*容",
-            r"简介\s*[:：]",
-            r"剧情\s*[:：]",
-            r"内容简介\s*[:：]",
-            r"Plot\s*[:：]",
-            r"Synopsis\s*[:：]"
+            r"◎\s*简\s*介", r"◎\s*剧\s*情", r"◎\s*内\s*容", r"简介\s*[:：]",
+            r"剧情\s*[:：]", r"内容简介\s*[:：]", r"Plot\s*[:：]", r"Synopsis\s*[:：]"
         ]
     }
-    
+
     found_fields = []
     missing_fields = []
-    
+
     # 检查每个必要字段
     for field_name, patterns in required_patterns.items():
         field_found = False
@@ -2150,17 +2125,17 @@ def check_intro_completeness(body_text: str) -> dict:
             if re.search(pattern, body_text, re.IGNORECASE):
                 field_found = True
                 break
-        
+
         if field_found:
             found_fields.append(field_name)
         else:
             missing_fields.append(field_name)
-    
+
     # 判断完整性：必须包含以下关键字段
     # 片名、产地、导演、简介 这4个字段是最关键的
     critical_fields = ["片名", "产地", "导演", "简介"]
     is_complete = all(field in found_fields for field in critical_fields)
-    
+
     return {
         "is_complete": is_complete,
         "missing_fields": missing_fields,
@@ -2174,7 +2149,7 @@ def is_image_url_valid_robust(url: str) -> bool:
     """
     if not url:
         return False
-        
+
     try:
         # 首先尝试HEAD请求，允许重定向
         response = requests.head(url, timeout=5, allow_redirects=True)
@@ -2197,6 +2172,35 @@ def is_image_url_valid_robust(url: str) -> bool:
     if content_type and content_type.startswith('image/'):
         return True
     else:
-        logging.warning(
-            f"链接有效但内容可能不是图片: {url} (Content-Type: {content_type})")
+        logging.warning(f"链接有效但内容可能不是图片: {url} (Content-Type: {content_type})")
         return False
+
+
+def extract_audio_codec_from_mediainfo(mediainfo_text: str) -> str:
+    """
+    从 MediaInfo 文本中提取第一个音频流的格式。
+
+    :param mediainfo_text: 完整的 MediaInfo 报告字符串。
+    :return: 音频格式字符串 (例如 "DTS", "AC-3", "FLAC")，如果找不到则返回空字符串。
+    """
+    if not mediainfo_text:
+        return ""
+
+    # 查找第一个 Audio 部分 (支持 "Audio" 和 "Audio #1")
+    audio_section_match = re.search(r"Audio(?: #1)?[\s\S]*?(?=\n\n|\Z)",
+                                    mediainfo_text)
+    if not audio_section_match:
+        logging.warning("在MediaInfo中未找到 'Audio' 部分。")
+        return ""
+
+    audio_section = audio_section_match.group(0)
+
+    # 在 Audio 部分查找 Format
+    format_match = re.search(r"Format\s*:\s*(.+)", audio_section)
+    if format_match:
+        audio_format = format_match.group(1).strip()
+        logging.info(f"从MediaInfo的'Audio'部分提取到格式: {audio_format}")
+        return audio_format
+
+    logging.warning("在MediaInfo的'Audio'部分未找到 'Format' 信息。")
+    return ""
