@@ -1237,6 +1237,11 @@ def upload_data_movie_info(douban_link: str, imdb_link: str):
     # API配置列表，按优先级排序
     api_configs = [
         {
+            'name': 'ptn-ptgen.sqing33.dpdns.org',
+            'base_url': 'https://ptn-ptgen.sqing33.dpdns.org',
+            'type': 'url_format'
+        },
+        {
             'name': 'ptgen.tju.pt',
             'base_url': 'https://ptgen.tju.pt/infogen',
             'type': 'tju_format',
@@ -2161,3 +2166,37 @@ def check_intro_completeness(body_text: str) -> dict:
         "missing_fields": missing_fields,
         "found_fields": found_fields
     }
+
+
+def is_image_url_valid_robust(url: str) -> bool:
+    """
+    一个更稳健的方法，当HEAD请求失败时，会尝试使用GET请求（流式）进行验证。
+    """
+    if not url:
+        return False
+        
+    try:
+        # 首先尝试HEAD请求，允许重定向
+        response = requests.head(url, timeout=5, allow_redirects=True)
+        response.raise_for_status()  # 如果状态码不是2xx，则抛出异常
+
+    except requests.exceptions.RequestException:
+        # 如果HEAD请求失败，尝试GET请求
+        try:
+            response = requests.get(url,
+                                    stream=True,
+                                    timeout=5,
+                                    allow_redirects=True)
+            response.raise_for_status()
+        except requests.exceptions.RequestException as e:
+            logging.warning(f"图片链接GET请求也失败了: {url} - {e}")
+            return False
+
+    # 检查Content-Type
+    content_type = response.headers.get('Content-Type')
+    if content_type and content_type.startswith('image/'):
+        return True
+    else:
+        logging.warning(
+            f"链接有效但内容可能不是图片: {url} (Content-Type: {content_type})")
+        return False

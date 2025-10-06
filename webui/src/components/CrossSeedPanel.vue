@@ -1211,7 +1211,8 @@ const handleImageError = async (url: string, type: 'poster' | 'screenshot', inde
       douban_link: torrentData.value.douban_link,
     },
     savePath: torrent.value.save_path,
-    torrentName: torrent.value.name
+    torrentName: torrent.value.name,
+    downloaderId: torrent.value.downloaderId // 添加下载器ID
   }
 
   try {

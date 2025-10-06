@@ -85,7 +85,9 @@ class Extractor:
         Returns:
             Dict with extracted data in standardized format
         """
+        # [新增] 图片链接验证辅助函数
         from utils import extract_origin_from_description, check_intro_completeness, upload_data_movie_info
+        from utils.media_helper import is_image_url_valid_robust
         # Initialize default data structure
         extracted_data = {
             "title": "",
@@ -309,7 +311,54 @@ class Extractor:
                 original_bbcode = bbcode
 
             # Extract images
-            images = re.findall(r"\[img\].*?\[/img\]", bbcode)
+            images = re.findall(r"\[img\].*?\[/img\]", bbcode, re.IGNORECASE)
+
+            # [新增] 验证图片链接有效性
+            logging.info(f"开始验证 {len(images)} 个图片链接的有效性...")
+            print(f"[*] 开始验证 {len(images)} 个图片链接的有效性...")
+            valid_images = []
+            for img_tag in images:
+                # 从 [img]...[/img] 中提取 URL
+                if match := re.search(r'\[img\](.*?)\[/img\]', img_tag, re.IGNORECASE):
+                    url = match.group(1)
+                    if is_image_url_valid_robust(url):
+                        valid_images.append(img_tag)
+                    else:
+                        logging.warning(f"检测到无效的截图链接，已过滤: {url}")
+                        print(f"  [!] 检测到无效的截图链接，已过滤: {url}")
+            
+            # 后续使用 valid_images 替代 images
+            images = valid_images
+            logging.info(f"验证完成，保留 {len(images)} 个有效图片链接。")
+            print(f"[*] 验证完成，保留 {len(images)} 个有效图片链接。")
+            
+            # [新增] 检查截图数量是否足够
+            # 注意：第一张图片是海报，从第二张开始才是截图
+            # 所以至少需要4张图片：1张海报 + 3张截图
+            MIN_TOTAL_IMAGES = 4  # 1张海报 + 3张截图
+            MIN_SCREENSHOTS = 3   # 至少3张截图
+            
+            # 计算实际截图数量（排除第一张海报）
+            actual_screenshot_count = len(images) - 1 if len(images) > 0 else 0
+            
+            if len(images) < MIN_TOTAL_IMAGES or actual_screenshot_count < MIN_SCREENSHOTS:
+                logging.warning(f"有效截图数量不足（总图片: {len(images)}，截图: {actual_screenshot_count}，需要: 总{MIN_TOTAL_IMAGES}张，截图{MIN_SCREENSHOTS}张），尝试重新获取...")
+                print(f"⚠️ 有效截图数量不足（总图片: {len(images)}，截图: {actual_screenshot_count}，需要: 总{MIN_TOTAL_IMAGES}张，截图{MIN_SCREENSHOTS}张），尝试重新获取...")
+                
+                # 尝试重新获取截图
+                # 这里需要传入必要的参数来重新获取截图
+                # 注意：我们需要从 extracted_data 中获取已有的信息
+                try:
+                    # 从已提取的数据中获取必要信息
+                    # 注意：此时我们在 extractor 中，没有直接访问 save_path 等信息
+                    # 所以我们返回一个特殊标记，让调用方知道需要重新获取截图
+                    extracted_data["intro"]["screenshots_need_refresh"] = True
+                    extracted_data["intro"]["current_screenshot_count"] = len(images)
+                    logging.info("已标记需要重新获取截图，将在后续处理中执行。")
+                    print(f"[*] 已标记需要重新获取截图，将在后续处理中执行。")
+                except Exception as e:
+                    logging.error(f"标记重新获取截图时出错: {e}")
+                    print(f"  [!] 标记重新获取截图时出错: {e}")
 
             # Extract quotes before and after poster
             poster_index = bbcode.find(images[0]) if images else -1
@@ -385,6 +434,11 @@ class Extractor:
                 else:
                     final_statement_quotes.append(quote)
 
+            # Helper function to identify movie description quotes
+            def is_movie_intro_quote(quote_text):
+                keywords = ["◎片　　名", "◎译　　名", "◎年　　代", "◎产　　地", "◎类　　别", "◎语　　言", "◎导　　演", "◎主　　演", "◎简　　介", "◎演　　员", "◎演  员", "◎IMDB评分", "◎IMDb评分", "◎获奖情况", "制片国家/地区"]
+                return any(keyword in quote_text for keyword in keywords)
+
             # Process quotes after poster
             for quote in quotes_after_poster:
                 # 检查是否为mediainfo/bdinfo/技术参数的quote
@@ -397,8 +451,12 @@ class Extractor:
                     # 过滤掉并保存到ardtu_declarations
                     clean_content = re.sub(r"\[\/?quote\]", "", quote).strip()
                     ardtu_declarations.append(clean_content)
-                else:
+                elif is_movie_intro_quote(quote):
+                    # 如果quote看起来像电影简介的一部分，则将其添加到正文
                     quotes_for_body.append(quote)
+                else:
+                    # 否则，它可能是发布说明等，应放在声明区域
+                    final_statement_quotes.append(quote)
 
             # Extract body content
             body = (re.sub(r"\[quote\].*?\[/quote\]|\[img\].*?\[/img\]",

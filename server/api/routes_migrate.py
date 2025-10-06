@@ -2416,11 +2416,11 @@ def _process_batch_fetch(task_id, torrent_names, source_sites_priority,
 
                 if db_manager.db_type == "postgresql":
                     cursor.execute(
-                        "SELECT hash, name, save_path, sites, details FROM torrents WHERE name = %s AND state != %s",
+                        "SELECT hash, name, save_path, sites, details, downloader_id FROM torrents WHERE name = %s AND state != %s",
                         (torrent_name, "不存在"))
                 else:
                     cursor.execute(
-                        "SELECT hash, name, save_path, sites, details FROM torrents WHERE name = ? AND state != ?",
+                        "SELECT hash, name, save_path, sites, details, downloader_id FROM torrents WHERE name = ? AND state != ?",
                         (torrent_name, "不存在"))
 
                 torrents = [dict(row) for row in cursor.fetchall()]
@@ -2560,6 +2560,7 @@ def _process_batch_fetch(task_id, torrent_names, source_sites_priority,
                         search_term=source_found["torrent_id"],
                         save_path=source_found["torrent"].get("save_path", ""),
                         torrent_name=torrent_name,
+                        downloader_id=source_found["torrent"].get("downloader_id"),
                         config_manager=config_manager,
                         db_manager=db_manager)
 

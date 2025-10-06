@@ -1007,7 +1007,8 @@ const handleEdit = async (row: SeedParameter) => {
       // 构造一个基本的 Torrent 对象结构
       const torrentData = {
         ...result.data,
-        name: result.data.title,
+        // 优先使用数据库中的name列，如果不存在则使用title列
+        name: result.data.name || result.data.title,
         // 使用从数据库获取的实际保存路径，如果没有则为空字符串
         save_path: result.data.save_path || '',
         size: 0,
@@ -1016,6 +1017,8 @@ const handleEdit = async (row: SeedParameter) => {
         state: 'completed',
         total_uploaded: 0,
         total_uploaded_formatted: '0 B',
+        // 添加下载器ID（如果从数据库返回了）
+        downloaderId: result.data.downloader_id || null,
         sites: {
           [result.data.site_name]: {
             torrentId: result.data.torrent_id,

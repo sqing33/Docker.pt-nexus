@@ -69,6 +69,8 @@ def get_data_api():
         name_search = request.args.get("nameSearch", "").lower()
         sort_prop = request.args.get("sortProp")
         sort_order = request.args.get("sortOrder")
+        # 新增：获取 exclude_existing 参数
+        exclude_existing = request.args.get("exclude_existing", "false").lower() == "true"
     except (ValueError, json.JSONDecodeError):
         return jsonify({"error": "无效的查询参数"}), 400
 
@@ -231,6 +233,25 @@ def get_data_api():
                 if not not_exist_site_set.intersection(
                     set(t.get("sites", {}).keys()))
             ]
+        
+        # 新增：如果 exclude_existing 为 True，则排除已存在于 seed_parameters 表中的种子
+        if exclude_existing:
+            try:
+                # 查询 seed_parameters 表中所有唯一的种子名称
+                cursor.execute("SELECT DISTINCT name FROM seed_parameters")
+                existing_seed_names = {row["name"] for row in cursor.fetchall()}
+                
+                # 过滤掉已存在的种子
+                filtered_list = [
+                    t for t in filtered_list
+                    if t["name"] not in existing_seed_names
+                ]
+            except Exception as e:
+                logging.error(f"查询 seed_parameters 表失败: {e}", exc_info=True)
+                # 如果查询失败，可以选择返回错误或继续执行而不进行排除
+                # 这里我们选择继续执行，以保证接口的可用性
+                pass
+
 
         # Sorting logic
         if sort_prop and sort_order:

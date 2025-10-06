@@ -359,40 +359,19 @@ team_acknowledgment:
   # 检测模式（正则表达式），按优先级顺序检测
   # 注意：所有模式都限制为第一个 quote 块，且内容长度不超过 max_statement_length
   detection_patterns:
-    # 精确模式1 - 检测我们自己添加的格式（带蓝色粗体）
-    # 格式：[quote][b][color=blue]XXX官组作品，感谢原制作者发布。[/color][/b][/quote]
-    - pattern: '^\[quote\]\[b\]\[color=blue\].{0,50}?官组作品.*?\[\/color\]\[\/b\]\[\/quote\]'
+    # 优先级 1: 通用声明检测
+    # 根据您的反馈优化，此规则将检测第一个 [quote] 块中是否包含以下任一关键词：
+    # "转自", "感谢", "官组", "作品", "出品", "官方"
+    # 只要匹配到其中一个，并且整个 [quote] 块的长度不超过下面的 max_statement_length (100字符)，
+    # 就会被识别为感谢声明，从而防止重复添加。
+    - pattern: '^\[quote\].*?(转自|感谢|官组|作品|出品|官方).*?\[\/quote\]'
       priority: 1
-      description: "检测蓝色粗体格式的官组声明（我们添加的）"
-
-    # 精确模式2 - 检测蓝色格式但文字是"出品"
-    # 格式：[quote][b][color=blue]XXX官组出品，感谢原制作者发布。[/color][/b][/quote]
-    - pattern: '^\[quote\]\[b\]\[color=blue\].{0,50}?官组出品.*?\[\/color\]\[\/b\]\[\/quote\]'
-      priority: 2
-      description: "检测蓝色粗体格式的官组出品声明"
-
-    # 精确模式3 - 检测简单粗体格式（无颜色）
-    # 格式：[quote][b]XXX官组作品，感谢...[/b][/quote]
-    - pattern: '^\[quote\]\[b\].{0,50}?(官组作品|官方作品|官组出品|官方出品).*?\[\/b\]\[\/quote\]'
-      priority: 3
-      description: "检测粗体格式的官组声明"
-
-    # 宽松模式4 - 检测第一个 quote 块中的简短官组声明
-    # 格式：[quote]XXX官组作品[/quote] 或 [quote]官种[/quote]
-    - pattern: '^\[quote\].{0,50}?(官组作品|官方作品|官组出品|官方出品|官种).*?\[\/quote\]'
-      priority: 4
-      description: "检测简短的官组声明"
-
-    # 宽松模式5 - 检测"感谢原制作者"的简短声明
-    # 格式：[quote]感谢原制作者...[/quote]
-    - pattern: '^\[quote\].{0,50}?感谢原制作者.*?\[\/quote\]'
-      priority: 5
-      description: "检测感谢原制作者的简短声明"
+      description: "通用感谢声明检测：匹配包含'转自', '感谢', '官组', '作品'等关键词的简短声明"
 
   # 官组声明最大长度（字符数，用于验证检测到的内容是否为简短声明）
   # 正常的官组声明通常在 20-80 字符之间
   # 超过此长度的 quote 块可能是正文内容，不应被识别为官组声明
-  max_statement_length: 100
+  max_statement_length: 80
 
   # 关键词检测（作为最后的兜底方案，已基本不需要）
   # 只在前 300 字符内检测，且必须是独立的短句
