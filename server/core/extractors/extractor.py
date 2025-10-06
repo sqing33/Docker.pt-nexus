@@ -13,88 +13,10 @@ import yaml
 from typing import Dict, Any, Optional
 from bs4 import BeautifulSoup
 import re
-import time
 import logging
-import ijson
+import requests
 import os
-
-# --- [新增] 本地豆瓣/IMDb 映射加载器 ---
-class DbImdbMapper:
-    _instance = None
-    
-    def __new__(cls, *args, **kwargs):
-        if not cls._instance:
-            cls._instance = super(DbImdbMapper, cls).__new__(cls)
-        return cls._instance
-
-    def __init__(self):
-        # 防止重复初始化
-        if hasattr(self, 'initialized') and self.initialized:
-            return
-        
-        self.dbid_index = {}
-        self.imdbid_index = {}
-        self.initialized = False
-        
-        if not ijson:
-            logging.warning("ijson 库未安装, 无法使用本地JSON文件进行链接补充。")
-            print("[!] ijson 库未安装, 无法使用本地JSON文件进行链接补充。")
-            self.initialized = True
-            return
-
-        try:
-            # 从 config.py 获取 DATA_DIR 的思路，这里直接构造路径
-            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-            data_dir = os.path.join(base_dir, "data")
-            filename = os.path.join(data_dir, 'douban_imdb_map.json')
-            
-            if not os.path.exists(filename):
-                logging.warning(f"本地映射文件 {filename} 不存在，跳过索引建立。")
-                print(f"[!] 本地映射文件 {filename} 不存在，跳过索引建立。")
-                self.initialized = True
-                return
-
-            logging.info("开始读取文件并建立本地 db/imdb 索引...")
-            print("开始读取文件并建立本地 db/imdb 索引...")
-            start_time = time.time()
-            
-            with open(filename, 'rb') as f:
-                for record in ijson.items(f, 'item'):
-                    dbid = record.get('dbid')
-                    imdbid = record.get('imdbid')
-                    
-                    if dbid:
-                        self.dbid_index[str(dbid)] = record
-                    if imdbid:
-                        self.imdbid_index[str(imdbid)] = record
-            
-            end_time = time.time()
-            
-            logging.info(f"索引建立完成！耗时: {end_time - start_time:.2f} 秒")
-            logging.info(f"dbid 索引中有 {len(self.dbid_index)} 条记录")
-            logging.info(f"imdbid 索引中有 {len(self.imdbid_index)} 条记录")
-            print(f"索引建立完成！耗时: {end_time - start_time:.2f} 秒")
-            print(f"dbid 索引中有 {len(self.dbid_index)} 条记录")
-            print(f"imdbid 索引中有 {len(self.imdbid_index)} 条记录")
-            
-            self.initialized = True
-
-        except Exception as e:
-            logging.error(f"建立本地 db/imdb 索引时发生错误: {e}", exc_info=True)
-            print(f"[!] 建立本地 db/imdb 索引时发生错误: {e}")
-            self.initialized = True # 标记为已初始化以防重试
-
-    def get_imdbid_from_dbid(self, dbid: str) -> Optional[str]:
-        record = self.dbid_index.get(str(dbid))
-        return record.get('imdbid') if record else None
-
-    def get_dbid_from_imdbid(self, imdbid: str) -> Optional[int]:
-        record = self.imdbid_index.get(str(imdbid))
-        return record.get('dbid') if record else None
-
-# 在模块加载时创建单例，这样索引只建立一次
-db_imdb_mapper = DbImdbMapper()
-# --- [新增结束] ---
+import urllib.parse
 
 
 CONFIG_DIR = os.path.join(
@@ -249,44 +171,107 @@ class Extractor:
                     if douban_match := re.search(r"(https?://movie\.douban\.com/subject/\d+)", page_text):
                         douban_link = douban_match.group(1)
 
-            # --- [新方案] 使用本地 JSON 文件互补缺失的 IMDb/豆瓣 链接 ---
-            if db_imdb_mapper.initialized and ijson:
-                try:
-                    if (imdb_link and not douban_link) or (douban_link and not imdb_link):
-                        logging.info("检测到 IMDb/豆瓣 链接不完整，尝试使用本地索引补充...")
-                        print("检测到 IMDb/豆瓣 链接不完整，尝试使用本地索引补充...")
+            # --- [新方案] 使用远程 API 服务互补缺失的 IMDb/豆瓣 链接 ---
+            
+            # [新增] Fallback: 如果两个链接都没有，尝试使用副标题进行名称搜索
+            if not imdb_link and not douban_link:
+                subtitle = extracted_data.get("subtitle", "")
+                if subtitle:
+                    # 提取第一个 / 或 | 之前的内容作为电影名
+                    search_name = re.split(r'\s*[|/]\s*', subtitle, 1)[0].strip()
+                    if search_name:
+                        logging.info(f"未找到链接，尝试使用副标题 '{search_name}' 进行名称搜索...")
+                        print(f"[*] 未找到链接，尝试使用副标题 '{search_name}' 进行名称搜索...")
+                        try:
+                            encoded_name = urllib.parse.quote_plus(search_name)
+                            api_base_url = "https://ptn-douban.sqing33.dpdns.org/"
+                            api_url = f"{api_base_url}?name={encoded_name}"
+                            
+                            response = requests.get(api_url, timeout=10)
+                            if response.status_code == 200:
+                                data = response.json().get('data', [])
+                                if data and data[0]:
+                                    found_record = data[0]
+                                    found_imdb_id = found_record.get('imdbid')
+                                    found_douban_id = found_record.get('doubanid')
+                                    
+                                    if found_imdb_id:
+                                        imdb_link = f"https://www.imdb.com/title/{found_imdb_id}/"
+                                        logging.info(f"✅ 成功通过名称搜索补充 IMDb 链接: {imdb_link}")
+                                        print(f"  [+] 成功通过名称搜索补充 IMDb 链接: {imdb_link}")
+                                    
+                                    if found_douban_id:
+                                        douban_link = f"https://movie.douban.com/subject/{found_douban_id}/"
+                                        logging.info(f"✅ 成功通过名称搜索补充豆瓣链接: {douban_link}")
+                                        print(f"  [+] 成功通过名称搜索补充豆瓣链接: {douban_link}")
+                            else:
+                                logging.warning(f"名称搜索 API 查询失败, 状态码: {response.status_code}")
+                                print(f"  [-] 名称搜索 API 查询失败, 状态码: {response.status_code}")
 
-                        if imdb_link and not douban_link:
-                            if imdb_id_match := re.search(r'(tt\d+)', imdb_link):
-                                imdb_id = imdb_id_match.group(1)
-                                print(f"[*] 从 IMDb 链接中提取 ID: {imdb_id}, 查询本地索引...")
-                                
-                                found_dbid = db_imdb_mapper.get_dbid_from_imdbid(imdb_id)
-                                if found_dbid:
-                                    douban_link = f"https://movie.douban.com/subject/{found_dbid}/"
-                                    logging.info(f"✅ 成功从本地索引补充豆瓣链接: {douban_link}")
+                        except requests.exceptions.RequestException as e:
+                            logging.error(f"使用名称搜索 API 时发生网络错误: {e}")
+                            print(f"  [!] 使用名称搜索 API 时发生网络错误: {e}")
+                        except Exception as e:
+                            logging.error(f"使用名称搜索时发生错误: {e}")
+                            print(f"  [!] 使用名称搜索时发生错误: {e}")
+            
+            try:
+                if (imdb_link and not douban_link) or (douban_link and not imdb_link):
+                    logging.info("检测到 IMDb/豆瓣 链接不完整，尝试使用远程 API 补充...")
+                    print("检测到 IMDb/豆瓣 链接不完整，尝试使用远程 API 补充...")
+                    
+                    api_base_url = "https://ptn-douban.sqing33.dpdns.org/"
+                    
+                    if imdb_link and not douban_link:
+                        if imdb_id_match := re.search(r'(tt\d+)', imdb_link):
+                            imdb_id = imdb_id_match.group(1)
+                            api_url = f"{api_base_url}?imdbid={imdb_id}"
+                            logging.info(f"使用 IMDb ID 查询远程 API: {api_url}")
+                            print(f"[*] 正在使用 IMDb ID 查询 API: {api_url}")
+                            
+                            response = requests.get(api_url, timeout=10)
+                            if response.status_code == 200:
+                                data = response.json().get('data', [])
+                                if data and data[0].get('doubanid'):
+                                    douban_id = data[0]['doubanid']
+                                    douban_link = f"https://movie.douban.com/subject/{douban_id}/"
+                                    logging.info(f"✅ 成功从 API 补充豆瓣链接: {douban_link}")
                                     print(f"  [+] 成功补充豆瓣链接: {douban_link}")
                                 else:
-                                    logging.warning(f"本地索引中未找到与 {imdb_id} 匹配的豆瓣ID。")
-                                    print(f"  [-] 本地索引中未找到与 {imdb_id} 匹配的豆瓣ID。")
+                                    logging.warning(f"API 响应中未找到与 {imdb_id} 匹配的豆瓣ID")
+                                    print(f"  [-] API 响应中未找到与 {imdb_id} 匹配的豆瓣ID")
+                            else:
+                                logging.warning(f"API 查询失败, 状态码: {response.status_code}, 响应: {response.text}")
+                                print(f"  [-] API 查询失败, 状态码: {response.status_code}")
+                    
+                    elif douban_link and not imdb_link:
+                        if douban_id_match := re.search(r'subject/(\d+)', douban_link):
+                            douban_id = douban_id_match.group(1)
+                            api_url = f"{api_base_url}?doubanid={douban_id}"
+                            logging.info(f"使用 Douban ID 查询远程 API: {api_url}")
+                            print(f"[*] 正在使用 Douban ID 查询 API: {api_url}")
 
-                        elif douban_link and not imdb_link:
-                            if douban_id_match := re.search(r'subject/(\d+)', douban_link):
-                                douban_id = douban_id_match.group(1)
-                                print(f"[*] 从豆瓣链接中提取 ID: {douban_id}, 查询本地索引...")
-
-                                found_imdbid = db_imdb_mapper.get_imdbid_from_dbid(douban_id)
-                                if found_imdbid:
-                                    imdb_link = f"https://www.imdb.com/title/{found_imdbid}/"
-                                    logging.info(f"✅ 成功从本地索引补充 IMDb 链接: {imdb_link}")
+                            response = requests.get(api_url, timeout=10)
+                            if response.status_code == 200:
+                                data = response.json().get('data', [])
+                                if data and data[0].get('imdbid'):
+                                    imdb_id = data[0]['imdbid']
+                                    imdb_link = f"https://www.imdb.com/title/{imdb_id}/"
+                                    logging.info(f"✅ 成功从 API 补充 IMDb 链接: {imdb_link}")
                                     print(f"  [+] 成功补充 IMDb 链接: {imdb_link}")
                                 else:
-                                    logging.warning(f"本地索引中未找到与 {douban_id} 匹配的IMDb ID。")
-                                    print(f"  [-] 本地索引中未找到与 {douban_id} 匹配的IMDb ID。")
+                                    logging.warning(f"API 响应中未找到与 {douban_id} 匹配的IMDb ID")
+                                    print(f"  [-] API 响应中未找到与 {douban_id} 匹配的IMDb ID")
+                            else:
+                                logging.warning(f"API 查询失败, 状态码: {response.status_code}, 响应: {response.text}")
+                                print(f"  [-] API 查询失败, 状态码: {response.status_code}")
 
-                except Exception as e:
-                    logging.error(f"使用本地索引补充链接时发生错误: {e}", exc_info=True)
-                    print(f"  [!] 使用本地索引补充链接时发生错误: {e}")
+            except requests.exceptions.RequestException as e:
+                logging.error(f"访问远程链接补充 API 时发生网络错误: {e}")
+                print(f"  [!] 访问远程链接补充 API 时发生网络错误: {e}")
+            except Exception as e:
+                logging.error(f"处理远程链接补充 API 响应时发生错误: {e}", exc_info=True)
+                print(f"  [!] 处理远程链接补充 API 响应时发生错误: {e}")
 
             extracted_data["intro"]["imdb_link"] = imdb_link
             extracted_data["intro"]["douban_link"] = douban_link
