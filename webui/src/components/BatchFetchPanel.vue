@@ -466,7 +466,8 @@ const fetchData = async () => {
       nameSearch: nameSearch.value,
       path_filters: JSON.stringify(activeFilters.value.paths),
       state_filters: JSON.stringify(activeFilters.value.states),
-      downloader_filters: JSON.stringify(activeFilters.value.downloaderIds)
+      downloader_filters: JSON.stringify(activeFilters.value.downloaderIds),
+      exclude_existing: 'true'  // 排除已存在于 seed_parameters 表的种子
     })
 
     const response = await fetch(`/api/data?${params.toString()}`)

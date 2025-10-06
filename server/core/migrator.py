@@ -18,7 +18,7 @@ import urllib.parse
 from io import StringIO
 from typing import Dict, Any, Optional, List
 from config import TEMP_DIR, DATA_DIR
-from utils import ensure_scheme, upload_data_mediaInfo, upload_data_title, extract_tags_from_mediainfo, extract_origin_from_description
+from utils import ensure_scheme, upload_data_mediaInfo, upload_data_title, extract_tags_from_mediainfo, extract_origin_from_description, is_image_url_valid_robust
 
 # 导入种子参数模型
 from models.seed_parameter import SeedParameter
@@ -161,8 +161,10 @@ class TorrentMigrator:
         """
         try:
             # 修正路径：configs 目录在 server 下，而不是 DATA_DIR 下
-            config_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "configs")
-            global_mappings_path = os.path.join(config_dir, "global_mappings.yaml")
+            config_dir = os.path.join(
+                os.path.dirname(os.path.dirname(__file__)), "configs")
+            global_mappings_path = os.path.join(config_dir,
+                                                "global_mappings.yaml")
 
             if os.path.exists(global_mappings_path):
                 with open(global_mappings_path, 'r', encoding='utf-8') as f:
@@ -191,8 +193,10 @@ class TorrentMigrator:
         """
         try:
             # 修正路径：configs 目录在 server 下
-            config_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "configs")
-            global_mappings_path = os.path.join(config_dir, "global_mappings.yaml")
+            config_dir = os.path.join(
+                os.path.dirname(os.path.dirname(__file__)), "configs")
+            global_mappings_path = os.path.join(config_dir,
+                                                "global_mappings.yaml")
 
             if os.path.exists(global_mappings_path):
                 with open(global_mappings_path, 'r', encoding='utf-8') as f:
@@ -259,10 +263,14 @@ class TorrentMigrator:
         Returns:
             显示名称（如 "MTeam"），如果未找到则返回 None
         """
-        print(f"[调试-DB] _get_team_display_name_from_db 输入: team_name={team_name}")
+        print(
+            f"[调试-DB] _get_team_display_name_from_db 输入: team_name={team_name}"
+        )
 
         if not team_name or not self.db_manager:
-            print(f"[调试-DB] 提前返回 None: team_name={team_name}, db_manager={self.db_manager}")
+            print(
+                f"[调试-DB] 提前返回 None: team_name={team_name}, db_manager={self.db_manager}"
+            )
             return None
 
         try:
@@ -294,7 +302,9 @@ class TorrentMigrator:
                     description = row_dict.get("description", "")
                     group_field = row_dict.get("group", "")
 
-                    print(f"[调试-DB] 记录 #{idx+1}: description='{description}', group='{group_field}'")
+                    print(
+                        f"[调试-DB] 记录 #{idx+1}: description='{description}', group='{group_field}'"
+                    )
 
                     if not group_field:
                         print(f"[调试-DB]   跳过（group字段为空）")
@@ -306,16 +316,20 @@ class TorrentMigrator:
 
                     # 清理每个 group 项并进行匹配
                     for group_item in group_list:
-                        clean_group_item = self._clean_group_name(group_item).lower()
-                        print(f"[调试-DB]   比较: '{clean_group_item}' vs '{clean_team}'")
+                        clean_group_item = self._clean_group_name(
+                            group_item).lower()
+                        print(
+                            f"[调试-DB]   比较: '{clean_group_item}' vs '{clean_team}'"
+                        )
 
                         # 不区分大小写匹配
                         if clean_group_item == clean_team:
                             self.logger.debug(
                                 f"数据库匹配成功: {team_name} -> {description} "
-                                f"(匹配项: {group_item})"
+                                f"(匹配项: {group_item})")
+                            print(
+                                f"[调试-DB] ✓ 匹配成功！返回 description: '{description}'"
                             )
-                            print(f"[调试-DB] ✓ 匹配成功！返回 description: '{description}'")
                             return description
 
                 # 没有找到匹配
@@ -333,8 +347,9 @@ class TorrentMigrator:
             traceback.print_exc()
             return None
 
-    def _get_team_display_name(self, standard_team_key: str,
-                               acknowledgment_config: Dict[str, Any]) -> Optional[str]:
+    def _get_team_display_name(
+            self, standard_team_key: str,
+            acknowledgment_config: Dict[str, Any]) -> Optional[str]:
         """
         获取制作组的显示名称
 
@@ -349,32 +364,34 @@ class TorrentMigrator:
         Returns:
             制作组显示名称，如果数据库中未找到匹配则返回 None
         """
-        print(f"[调试-Name] _get_team_display_name 输入: standard_team_key={standard_team_key}")
+        print(
+            f"[调试-Name] _get_team_display_name 输入: standard_team_key={standard_team_key}"
+        )
 
         # 首先反向查找原始制作组名称
         original_name = self._reverse_lookup_team_name(standard_team_key)
         print(f"[调试-Name] 反向查找结果: original_name={original_name}")
 
         # 优先级1: 从数据库查询显示名称
-        display_name_from_db = self._get_team_display_name_from_db(original_name)
-        print(f"[调试-Name] 数据库查询结果: display_name_from_db={display_name_from_db}")
+        display_name_from_db = self._get_team_display_name_from_db(
+            original_name)
+        print(
+            f"[调试-Name] 数据库查询结果: display_name_from_db={display_name_from_db}")
 
         if display_name_from_db:
             self.logger.debug(
-                f"使用数据库的显示名称: {standard_team_key} -> {display_name_from_db}"
-            )
+                f"使用数据库的显示名称: {standard_team_key} -> {display_name_from_db}")
             print(f"[调试-Name] ✓ 返回数据库显示名称: {display_name_from_db}")
             return display_name_from_db
 
         # 如果数据库中未找到，返回 None（不添加致谢声明）
-        self.logger.debug(
-            f"数据库中未找到制作组 '{original_name}' 的匹配，不添加致谢声明"
-        )
+        self.logger.debug(f"数据库中未找到制作组 '{original_name}' 的匹配，不添加致谢声明")
         print(f"[调试-Name] 返回 None（数据库未匹配）")
         return None
 
-    def _detect_official_statement(self, statement: str,
-                                   acknowledgment_config: Dict[str, Any]) -> bool:
+    def _detect_official_statement(
+            self, statement: str, acknowledgment_config: Dict[str,
+                                                              Any]) -> bool:
         """
         使用结构化检测判断声明中是否已包含官组声明
 
@@ -397,13 +414,15 @@ class TorrentMigrator:
             return False
 
         # 策略1: 使用正则表达式模式检测
-        detection_patterns = acknowledgment_config.get("detection_patterns", [])
-        max_statement_length = acknowledgment_config.get("max_statement_length", 100)
+        detection_patterns = acknowledgment_config.get("detection_patterns",
+                                                       [])
+        max_statement_length = acknowledgment_config.get(
+            "max_statement_length", 100)
 
         if detection_patterns:
             # 按优先级排序
             sorted_patterns = sorted(detection_patterns,
-                                    key=lambda x: x.get("priority", 999))
+                                     key=lambda x: x.get("priority", 999))
 
             for pattern_config in sorted_patterns:
                 pattern = pattern_config.get("pattern", "")
@@ -416,7 +435,8 @@ class TorrentMigrator:
                     # 使用正则表达式匹配
                     # re.IGNORECASE: 忽略大小写
                     # re.DOTALL: 让 . 匹配包括换行符在内的所有字符
-                    match = re.search(pattern, statement, re.IGNORECASE | re.DOTALL)
+                    match = re.search(pattern, statement,
+                                      re.IGNORECASE | re.DOTALL)
 
                     if match:
                         # 获取匹配到的完整 quote 块
@@ -424,22 +444,24 @@ class TorrentMigrator:
 
                         # 验证长度：必须是简短的声明（避免误检长段落的 quote）
                         if len(matched_text) <= max_statement_length:
-                            self.logger.debug(
-                                f"通过正则模式检测到官组声明: {description}, "
-                                f"长度: {len(matched_text)} 字符")
+                            self.logger.debug(f"通过正则模式检测到官组声明: {description}, "
+                                              f"长度: {len(matched_text)} 字符")
                             return True
                         else:
                             self.logger.debug(
                                 f"匹配到模式 '{description}' 但长度超限 "
-                                f"({len(matched_text)} > {max_statement_length})，跳过")
+                                f"({len(matched_text)} > {max_statement_length})，跳过"
+                            )
 
                 except re.error as e:
                     self.logger.warning(f"正则表达式错误: {pattern}, 错误: {e}")
                     continue
 
         # 策略2: 关键词检测（兜底方案，只检查开头部分）
-        detection_keywords = acknowledgment_config.get("detection_keywords", [])
-        keyword_check_length = acknowledgment_config.get("keyword_check_length", 300)
+        detection_keywords = acknowledgment_config.get("detection_keywords",
+                                                       [])
+        keyword_check_length = acknowledgment_config.get(
+            "keyword_check_length", 300)
 
         if detection_keywords:
             # 只检查声明开头的部分（提高准确性）
@@ -863,6 +885,13 @@ class TorrentMigrator:
 
             soup = BeautifulSoup(response.text, "html.parser")
 
+            # Pre-check for acknowledgment statement on the raw description
+            descr_container_for_check = soup.select_one("div#kdescr")
+            full_bbcode_descr_for_check = ""
+            if descr_container_for_check:
+                # Convert raw HTML description to BBCode for an accurate check
+                full_bbcode_descr_for_check = self._html_to_bbcode(descr_container_for_check)
+
             # --- [核心修改 1] 开始 ---
             # 先下载种子文件，以便获取其准确的文件名
             download_link_tag = soup.select_one(
@@ -977,9 +1006,16 @@ class TorrentMigrator:
             # 如果海报失效，尝试从豆瓣或IMDb获取新海报
             from utils import upload_data_movie_info
 
-            # 检查当前海报是否有效（简单检查是否包含图片标签）
-            current_poster_valid = bool(images and images[0]
-                                        and "[img]" in images[0])
+            # [新] 检查当前海报是否有效（使用新的稳健验证函数）
+            current_poster_valid = False
+            if images and images[0]:
+                # 从BBCode [img]...[/img] 中提取URL
+                if poster_url_match := re.search(r'\[img\](.*?)\[/img\]',
+                                                 images[0], re.IGNORECASE):
+                    poster_url = poster_url_match.group(1)
+                    self.logger.info(f"正在验证海报链接的有效性: {poster_url}")
+                    current_poster_valid = is_image_url_valid_robust(
+                        poster_url)
 
             if not current_poster_valid:
                 self.logger.info("当前海报失效，尝试从豆瓣或IMDb获取新海报...")
@@ -1091,12 +1127,114 @@ class TorrentMigrator:
             processed_torrent_name = re.sub(r'^\[[^\]]+\]\.', '',
                                             processed_torrent_name)
 
+            # --- [核心修改] 在这里统一验证和重新生成截图 ---
+            screenshots_valid = True
+            screenshots_sufficient = True
+            required_screenshot_count = 3  # 需要至少3张截图
+            
+            # 使用 intro_data 来检查，因为它包含了从 extractor 提取的原始截图
+            if intro_data.get("screenshots"):
+                screenshot_links = intro_data["screenshots"].strip().split('\n')
+                # 过滤掉空字符串
+                screenshot_links = [link for link in screenshot_links if link.strip()]
+                
+                if screenshot_links:
+                    self.logger.info(f"[*] 开始验证 {len(screenshot_links)} 个截图链接的有效性...")
+                    print(f"[*] 开始验证 {len(screenshot_links)} 个截图链接的有效性...")
+                    
+                    # 检查数量是否足够
+                    if len(screenshot_links) < required_screenshot_count:
+                        self.logger.warning(f"⚠️ 截图数量不足（当前: {len(screenshot_links)}，需要: {required_screenshot_count}张）")
+                        print(f"⚠️ 截图数量不足（当前: {len(screenshot_links)}，需要: {required_screenshot_count}张）")
+                        screenshots_sufficient = False
+                    
+                    # 验证每个截图的有效性
+                    valid_count = 0
+                    for i, shot_tag in enumerate(screenshot_links):
+                        if shot_url_match := re.search(r'\[img\](.*?)\[/img\]', shot_tag, re.IGNORECASE):
+                            shot_url = shot_url_match.group(1)
+                            if is_image_url_valid_robust(shot_url):
+                                valid_count += 1
+                            else:
+                                self.logger.warning(f"检测到第 {i+1} 个截图链接失效: {shot_url}")
+                                screenshots_valid = False
+                        else:
+                            # 如果标签格式不正确，也视为无效
+                            self.logger.warning(f"第 {i+1} 个截图标签格式不正确: {shot_tag}")
+                            screenshots_valid = False
+                    
+                    # 最终检查：即使所有链接有效，如果数量不足也需要重新生成
+                    if screenshots_valid and valid_count < required_screenshot_count:
+                        self.logger.warning(f"⚠️ 有效截图数量不足（总图片: {len(screenshot_links)}，有效: {valid_count}，需要: {required_screenshot_count}张）")
+                        print(f"⚠️ 有效截图数量不足（总图片: {len(screenshot_links)}，有效: {valid_count}，需要: {required_screenshot_count}张）")
+                        screenshots_sufficient = False
+                    
+                    if screenshots_valid and screenshots_sufficient:
+                        self.logger.info(f"[*] 验证完成，保留 {valid_count} 个有效截图链接。")
+                        print(f"[*] 验证完成，保留 {valid_count} 个有效截图链接。")
+                else:
+                    # 如果 screenshots 字段存在但为空，视为需要生成
+                    self.logger.info("未找到截图链接，将重新生成。")
+                    print("未找到截图链接，将重新生成。")
+                    screenshots_valid = False
+            else:
+                # 如果没有截图字段，也需要生成
+                self.logger.info("未找到截图字段，将重新生成。")
+                print("未找到截图字段，将重新生成。")
+                screenshots_valid = False
+            
+            # 如果截图无效或数量不足，则立即重新生成（不再只是标记）
+            if not screenshots_valid or not screenshots_sufficient:
+                if not screenshots_valid:
+                    self.logger.warning("⚠️ 检测到截图失效，立即重新生成截图...")
+                    print("⚠️ 检测到截图失效，立即重新生成截图...")
+                else:
+                    self.logger.warning(f"⚠️ 截图数量不足，立即重新生成截图...")
+                    print(f"⚠️ 截图数量不足，立即重新生成截图...")
+                
+                # 准备调用截图函数所需参数
+                source_info_for_screenshot = {
+                    'main_title': original_main_title
+                }
+
+                # 立即调用截图函数
+                from utils import upload_data_screenshot
+                new_screenshots = upload_data_screenshot(
+                    source_info=source_info_for_screenshot,
+                    save_path=self.save_path,
+                    torrent_name=processed_torrent_name,
+                    downloader_id=self.downloader_id
+                )
+                
+                if new_screenshots:
+                    # 更新 intro 字典中的截图
+                    intro["screenshots"] = new_screenshots
+                    self.logger.success("✅ 成功重新生成并上传截图。")
+                    print("✅ 成功重新生成并上传截图。")
+                    
+                    # 更新 images 列表，保持数据同步
+                    # 保留海报（第一个元素），然后添加新截图
+                    images = [images[0]] if images and images[0] else []
+                    images.extend(new_screenshots.strip().split('\n'))
+                else:
+                    self.logger.error("❌ 重新生成截图失败。")
+                    print("❌ 重新生成截图失败。")
+                    # 清空截图
+                    intro["screenshots"] = ""
+                    images = [images[0]] if images and images[0] else []
+            else:
+                # 截图有效且数量充足
+                if intro.get("screenshots"):
+                    self.logger.info("✅ 所有截图链接均有效且数量充足。")
+                    print("✅ 所有截图链接均有效且数量充足。")
+
             # 使用upload_data_mediaInfo处理mediainfo
             mediainfo = upload_data_mediaInfo(
                 mediaInfo=mediainfo_text
                 if mediainfo_text else "未找到 Mediainfo 或 BDInfo",
                 save_path=self.save_path,
-                torrent_name=processed_torrent_name)
+                torrent_name=processed_torrent_name,
+                downloader_id=self.downloader_id)
 
             # 提取产地信息并更新到source_params中（如果还没有）
             if "产地" not in source_params or not source_params["产地"]:
@@ -1211,7 +1349,9 @@ class TorrentMigrator:
 
                 # 1. 加载致谢配置
                 acknowledgment_config = self._load_acknowledgment_config()
-                print(f"[调试] 致谢配置加载结果: enabled={acknowledgment_config.get('enabled', False)}")
+                print(
+                    f"[调试] 致谢配置加载结果: enabled={acknowledgment_config.get('enabled', False)}"
+                )
 
                 # 2. 检查是否启用致谢声明
                 if acknowledgment_config.get("enabled", False):
@@ -1220,19 +1360,25 @@ class TorrentMigrator:
                     print(f"[调试] 标准化制作组参数: {team_standard}")
 
                     # 4. 检查是否在排除列表中
-                    exclude_teams = acknowledgment_config.get("exclude_teams", [])
+                    exclude_teams = acknowledgment_config.get(
+                        "exclude_teams", [])
                     print(f"[调试] 排除列表: {exclude_teams}")
 
                     if team_standard and team_standard not in exclude_teams:
                         print(f"[调试] 制作组 '{team_standard}' 未在排除列表中，继续处理")
 
                         # 5. 使用结构化检测判断是否已包含官组声明
-                        original_statement = intro.get("statement", "")
-                        print(f"[调试] 原始声明长度: {len(original_statement)} 字符")
-                        print(f"[调试] 原始声明前100字符: {original_statement[:100] if original_statement else '(空)'}")
+                        # [修复] 使用完整的、未被 extractor 分离的原始简介内容进行检测
+                        print(f"[调试] 完整简介BBCode长度: {len(full_bbcode_descr_for_check)} 字符")
+                        print(
+                            f"[调试] 完整简介BBCode前100字符: {full_bbcode_descr_for_check[:100] if full_bbcode_descr_for_check else '(空)'}"
+                        )
 
                         has_official_statement = self._detect_official_statement(
-                            original_statement, acknowledgment_config)
+                            full_bbcode_descr_for_check, acknowledgment_config)
+                        
+                        # 保留原始的 statement 以便追加
+                        original_statement = intro.get("statement", "")
                         print(f"[调试] 检测到已有官组声明: {has_official_statement}")
 
                         if has_official_statement:
@@ -1251,7 +1397,9 @@ class TorrentMigrator:
                                 self.logger.info(
                                     f"数据库中未找到制作组 '{team_standard}' 的匹配，跳过添加致谢声明"
                                 )
-                                print(f"[调试] 数据库未匹配，跳过添加（team_standard={team_standard}）")
+                                print(
+                                    f"[调试] 数据库未匹配，跳过添加（team_standard={team_standard}）"
+                                )
                             else:
                                 print(f"[调试] 找到显示名称: {display_name}，准备生成致谢声明")
 
@@ -1260,18 +1408,21 @@ class TorrentMigrator:
                                     "template",
                                     "[quote][b][color=blue]{team_name}官组作品，感谢原制作者发布。[/color][/b][/quote]"
                                 )
-                                acknowledgment = template.format(team_name=display_name)
+                                acknowledgment = template.format(
+                                    team_name=display_name)
                                 print(f"[调试] 生成的致谢声明: {acknowledgment}")
 
                                 # 9. 将致谢声明插入到 intro["statement"] 的开头
                                 if original_statement:
-                                    intro["statement"] = acknowledgment + "\n\n" + original_statement
+                                    intro[
+                                        "statement"] = acknowledgment + "\n\n" + original_statement
                                     print("[调试] 致谢声明已插入到现有声明前面")
                                 else:
                                     intro["statement"] = acknowledgment
                                     print("[调试] 致谢声明已设置为唯一声明")
 
-                                self.logger.info(f"已添加官组致谢声明: {display_name}官组作品")
+                                self.logger.info(
+                                    f"已添加官组致谢声明: {display_name}官组作品")
                                 print(f"[调试] ✓ 成功添加官组致谢声明: {display_name}官组作品")
                     else:
                         if not team_standard:
