@@ -68,9 +68,9 @@ source_parsers:
     type:
       "电影": "category.movie"
       "剧集": "category.tv_series"
-      "短剧": "category.short_series"
-      "动画": "category.animation"
-      "动漫": "category.anime"
+      "短剧": "category.playlet"
+      "动画": "category.anime"
+      "动漫": "category.animation"
       "儿童": "category.children"
       "综艺": "category.tv_shows"
       "纪录": "category.documentaries"

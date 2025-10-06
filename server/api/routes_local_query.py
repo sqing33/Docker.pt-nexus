@@ -103,7 +103,7 @@ def batch_check_remote_files(proxy_config, remote_paths):
         response = requests.post(
             f"{proxy_config['proxy_base_url']}/api/file/batch-check",
             json={"remote_paths": remote_paths},
-            timeout=60  # 批量检查可能需要更长时间
+            timeout=120  # 批量检查可能需要更长时间
         )
         response.raise_for_status()
         result = response.json()
@@ -221,7 +221,8 @@ def get_downloaders_with_paths():
                     local = mapping.get("local", "").rstrip("/")
                     if remote and local:
                         # 确保完整匹配路径段，避免 /pt 匹配 /pt2
-                        if save_path == local or save_path.startswith(local + "/"):
+                        if save_path == local or save_path.startswith(local +
+                                                                      "/"):
                             # 将本地路径映射到远程路径
                             mapped_path = save_path.replace(local, remote, 1)
                             if mapped_path not in paths_set:
@@ -279,7 +280,9 @@ def scan_local_files():
                 remote_downloaders.add(dl_id)
                 logger.info(
                     f"下载器 {dl.get('name')} (ID: {dl_id}) 使用代理，将跳过本地文件检查")
-            print(f"[DEBUG] 下载器: {dl.get('name')} (ID: {dl_id}), 远程: {dl_id in remote_downloaders}, 映射数: {len(dl.get('path_mappings', []))}")
+            print(
+                f"[DEBUG] 下载器: {dl.get('name')} (ID: {dl_id}), 远程: {dl_id in remote_downloaders}, 映射数: {len(dl.get('path_mappings', []))}"
+            )
 
         db_manager = local_query_bp.db_manager
         conn = db_manager._get_connection()
@@ -309,14 +312,17 @@ def scan_local_files():
         def apply_path_mapping(remote_path, downloader_id):
             """将远程路径映射为本地路径"""
             mappings = path_mappings_by_downloader.get(downloader_id, [])
-            print(f"[DEBUG] apply_path_mapping: 远程路径={remote_path}, 下载器ID={downloader_id}, 映射规则数={len(mappings)}")
+            print(
+                f"[DEBUG] apply_path_mapping: 远程路径={remote_path}, 下载器ID={downloader_id}, 映射规则数={len(mappings)}"
+            )
             for mapping in mappings:
                 remote = mapping.get("remote", "").rstrip("/")
                 local = mapping.get("local", "").rstrip("/")
                 print(f"[DEBUG]   检查映射: remote={remote}, local={local}")
                 if remote and local:
                     # 确保完整匹配路径段，避免 /pt 匹配 /pt2
-                    if remote_path == remote or remote_path.startswith(remote + "/"):
+                    if remote_path == remote or remote_path.startswith(remote +
+                                                                       "/"):
                         mapped = remote_path.replace(remote, local, 1)
                         print(f"[DEBUG]   ✓ 匹配成功! 映射后={mapped}")
                         return mapped
@@ -343,7 +349,9 @@ def scan_local_files():
                 original_path = row_data['save_path']
                 row_data['is_remote'] = True
                 remote_torrents_by_path[original_path].append(row_data)
-                print(f"[DEBUG] 远程种子: {row_data['name'][:50]} | 路径: {original_path}")
+                print(
+                    f"[DEBUG] 远程种子: {row_data['name'][:50]} | 路径: {original_path}"
+                )
             else:
                 # 本地下载器：应用路径映射
                 original_path = row_data['save_path']
@@ -351,7 +359,9 @@ def scan_local_files():
                 row_data['local_path'] = mapped_path  # 保存映射后的本地路径
                 row_data['is_remote'] = False
                 local_torrents_by_path[mapped_path].append(row_data)
-                print(f"[DEBUG] 本地种子: {row_data['name'][:50]} | 原始: {original_path} | 映射: {mapped_path}")
+                print(
+                    f"[DEBUG] 本地种子: {row_data['name'][:50]} | 原始: {original_path} | 映射: {mapped_path}"
+                )
 
         # 3. 初始化扫描结果
         missing_files = []
@@ -391,7 +401,9 @@ def scan_local_files():
             try:
                 local_items = set(os.listdir(local_path))
                 total_local_items += len(local_items)
-                print(f"[DEBUG] 路径存在，找到 {len(local_items)} 个项目: {list(local_items)[:3]}...")
+                print(
+                    f"[DEBUG] 路径存在，找到 {len(local_items)} 个项目: {list(local_items)[:3]}..."
+                )
 
                 torrents_by_name_in_path = defaultdict(list)
                 for torrent in path_torrents:
@@ -437,7 +449,8 @@ def scan_local_files():
                         logger.debug(f"无法获取大小 {full_path}: {str(e)}")
 
                     # 找到原始的远程路径（从该路径下的任一种子获取）
-                    original_save_path = path_torrents[0]['save_path'] if path_torrents else local_path
+                    original_save_path = path_torrents[0][
+                        'save_path'] if path_torrents else local_path
 
                     orphaned_files.append({
                         "name": item_name,
@@ -452,7 +465,8 @@ def scan_local_files():
                 for name in synced_names:
                     torrent_group = torrents_by_name_in_path[name]
                     # 找到原始的远程路径
-                    original_save_path = torrent_group[0]['save_path'] if torrent_group else local_path
+                    original_save_path = torrent_group[0][
+                        'save_path'] if torrent_group else local_path
                     synced_torrents.append({
                         "name":
                         name,

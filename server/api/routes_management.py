@@ -815,3 +815,47 @@ def get_iyuu_logs():
             "success": False,
             "message": f"获取IYUU日志失败: {str(e)}"
         }), 500
+
+# --- Feedback Image Upload ---
+
+from werkzeug.utils import secure_filename
+import os
+import tempfile
+from utils.media_helper import _upload_to_pixhost
+
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+
+def allowed_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+@management_bp.route('/upload_image', methods=['POST'])
+def upload_image():
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file part'}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+    if file and allowed_file(file.filename):
+        filename = secure_filename(file.filename)
+        temp_dir = tempfile.gettempdir()
+        temp_path = os.path.join(temp_dir, filename)
+        
+        try:
+            file.save(temp_path)
+            image_url = _upload_to_pixhost(temp_path)
+            
+            if image_url:
+                # 将 Pixhost 展示链接转换为图片直链
+                if 'pixhost.to/show/' in image_url:
+                    direct_image_url = image_url.replace('https://pixhost.to/show/', 'https://img1.pixhost.to/images/')
+                else:
+                    direct_image_url = image_url
+                return jsonify({'url': direct_image_url})
+            else:
+                return jsonify({'error': 'Failed to upload to image host'}), 500
+        finally:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+                
+    return jsonify({'error': 'File type not allowed'}), 400

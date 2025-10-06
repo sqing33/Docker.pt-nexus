@@ -319,7 +319,7 @@ def add_fallback_mappings(reverse_mappings):
             'source.china': '中国',
             'source.hongkong': '香港',
             'source.taiwan': '台湾',
-            'source.usa': '美国',
+            'source.western': '美国',
             'source.uk': '英国',
             'source.japan': '日本',
             'source.korea': '韩国',
@@ -1099,7 +1099,7 @@ def migrate_publish():
                                 "id": source_torrent_id,
                                 "hit": "1"
                             },
-                            timeout=60)
+                            timeout=120)
                         response.raise_for_status()
                         response.encoding = "utf-8"
 
@@ -1114,7 +1114,7 @@ def migrate_publish():
                             torrent_response = scraper.get(
                                 f"{SOURCE_BASE_URL}/{download_link_tag['href']}",
                                 headers={"Cookie": SOURCE_COOKIE},
-                                timeout=60,
+                                timeout=120,
                             )
                             torrent_response.raise_for_status()
 
@@ -1339,11 +1339,13 @@ def migrate_publish():
 
                         # 准备上下文信息
                         context = {
-                            'source_torrent_id': context.get("source_torrent_id"),
+                            'source_torrent_id':
+                            context.get("source_torrent_id"),
                             'source_site_name': source_site_name,
                             'target_site_name': target_site_name,
                             'title': upload_data.get('title', ''),
-                            'torrent_id': context.get("source_torrent_id")  # 用于批量记录更新
+                            'torrent_id':
+                            context.get("source_torrent_id")  # 用于批量记录更新
                         }
 
                         print(
@@ -1356,15 +1358,19 @@ def migrate_publish():
                             save_path=save_path,
                             downloader_id=downloader_id,
                             batch_id=data.get("batch_id"),
-                            context=context
-                        )
+                            context=context)
 
                         result["auto_add_result"] = {
-                            "success": True,
-                            "message": "已添加到下载器队列，将在后台处理",
-                            "task_id": task_id,
-                            "async": True,
-                            "queue_stats": downloader_queue_service.get_queue_stats()
+                            "success":
+                            True,
+                            "message":
+                            "已添加到下载器队列，将在后台处理",
+                            "task_id":
+                            task_id,
+                            "async":
+                            True,
+                            "queue_stats":
+                            downloader_queue_service.get_queue_stats()
                         }
 
                         print(f"✅ [下载器添加] 已添加到队列: task_id={task_id}")
@@ -1462,7 +1468,7 @@ def migrate_publish():
                     )
                     cursor.execute(
                         insert_sql,
-                        (batch_id, parameters.get("title"),source_torrent_id,
+                        (batch_id, parameters.get("title"), source_torrent_id,
                          data.get("nickname",
                                   source_site_name), target_site_name,
                          data.get("batch_progress"), video_size_gb, status,
@@ -1807,15 +1813,9 @@ def get_downloader_task_status(task_id):
 
         status_info = downloader_queue_service.get_task_status(task_id)
         if status_info is None:
-            return jsonify({
-                "success": False,
-                "message": "任务不存在"
-            }), 404
+            return jsonify({"success": False, "message": "任务不存在"}), 404
 
-        return jsonify({
-            "success": True,
-            "task": status_info
-        })
+        return jsonify({"success": True, "task": status_info})
 
     except Exception as e:
         logging.error(f"获取任务状态失败: {e}", exc_info=True)
@@ -1825,7 +1825,8 @@ def get_downloader_task_status(task_id):
         }), 500
 
 
-@migrate_bp.route("/migrate/downloader_task/<task_id>/cancel", methods=["POST"])
+@migrate_bp.route("/migrate/downloader_task/<task_id>/cancel",
+                  methods=["POST"])
 def cancel_downloader_task(task_id):
     """取消下载器任务"""
     try:
@@ -1833,10 +1834,7 @@ def cancel_downloader_task(task_id):
 
         success = downloader_queue_service.cancel_task(task_id)
         if success:
-            return jsonify({
-                "success": True,
-                "message": "任务已取消"
-            })
+            return jsonify({"success": True, "message": "任务已取消"})
         else:
             return jsonify({
                 "success": False,
@@ -1845,10 +1843,7 @@ def cancel_downloader_task(task_id):
 
     except Exception as e:
         logging.error(f"取消任务失败: {e}", exc_info=True)
-        return jsonify({
-            "success": False,
-            "message": f"取消任务失败: {str(e)}"
-        }), 500
+        return jsonify({"success": False, "message": f"取消任务失败: {str(e)}"}), 500
 
 
 @migrate_bp.route("/migrate/downloader_queue/stats", methods=["GET"])
@@ -1858,10 +1853,7 @@ def get_downloader_queue_stats():
         from core.downloader_queue import downloader_queue_service
 
         stats = downloader_queue_service.get_queue_stats()
-        return jsonify({
-            "success": True,
-            "stats": stats
-        })
+        return jsonify({"success": True, "stats": stats})
 
     except Exception as e:
         logging.error(f"获取队列统计失败: {e}", exc_info=True)
@@ -2493,7 +2485,8 @@ def _process_batch_fetch(task_id, torrent_names, source_sites_priority,
                     # 在这些其他站点中查找可用的源站点
                     for site_name in existing_sites:
                         # 获取站点信息
-                        source_info = db_manager.get_site_by_nickname(site_name)
+                        source_info = db_manager.get_site_by_nickname(
+                            site_name)
                         if not source_info or not source_info.get("cookie"):
                             continue
                         # 检查该站点的migration状态
@@ -2560,7 +2553,8 @@ def _process_batch_fetch(task_id, torrent_names, source_sites_priority,
                         search_term=source_found["torrent_id"],
                         save_path=source_found["torrent"].get("save_path", ""),
                         torrent_name=torrent_name,
-                        downloader_id=source_found["torrent"].get("downloader_id"),
+                        downloader_id=source_found["torrent"].get(
+                            "downloader_id"),
                         config_manager=config_manager,
                         db_manager=db_manager)
 

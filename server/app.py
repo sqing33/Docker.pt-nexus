@@ -115,6 +115,9 @@ def create_app():
         # 跳过登录接口
         if request.path.startswith("/api/auth/"):
             return None
+        # 跳过反馈图片上传
+        if request.path == "/api/upload_image":
+            return None
         # 跳过健康检查
         if request.path == "/health":
             return None

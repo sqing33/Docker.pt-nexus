@@ -104,11 +104,12 @@ global_standard_keys:
     "480p": "resolution.r480p"
     "Other": "resolution.other"
 
-  #  地区映射
+  #  地区映射（包含产地、区域、处理等字段的统一映射）
   source:
     # 中国相关地区
     "中国": "source.china"
     "中国大陆": "source.china"
+    "中国（含港澳台）": "source.china"
     "CN": "source.china"
     "CN/中国": "source.china"
     "内地": "source.china"
@@ -127,11 +128,12 @@ global_standard_keys:
     "中国台湾": "source.taiwan"
 
     # 美国
-    "美国": "source.usa"
-    "USA": "source.usa"
-    "US": "source.usa"
-    "US/美国": "source.usa"
-    "America": "source.usa"
+    "美国": "source.western"
+    "USA": "source.western"
+    "US": "source.western"
+    "US/美国": "source.western"
+    "America": "source.western"
+    "欧美": "source.western"
 
     # 日本
     "日本": "source.japan"
@@ -205,6 +207,7 @@ global_standard_keys:
     "其他": "source.other"
     "Other": "source.other"
     "Other/其他": "source.other"
+    "Other（其他）": "source.other"
 
   # 制作组映射
   team:
@@ -292,59 +295,6 @@ global_standard_keys:
       "3D": "tag.3d"
       "应求": "tag.应求"
       "default": null
-
-  # 处理/产地映射
-  processing:
-    # 中国相关地区
-    "中国（含港澳台）": "source.china"
-    "中国": "source.china"
-    "中国大陆": "source.china"
-    "CN": "source.china"
-    "CN/中国": "source.china"
-    "内地": "source.china"
-    "大陆": "source.china"
-
-    # 香港
-    "香港": "source.hongkong"
-    "HK": "source.hongkong"
-    "HK/香港": "source.hongkong"
-    "中国香港": "source.hongkong"
-
-    # 台湾
-    "台湾": "source.taiwan"
-    "TW": "source.taiwan"
-    "TW/台湾": "source.taiwan"
-    "中国台湾": "source.taiwan"
-
-    # 美国
-    "美国": "source.usa"
-    "USA": "source.usa"
-    "US": "source.usa"
-    "US/美国": "source.usa"
-    "America": "source.usa"
-
-    # 日本
-    "日本": "source.japan"
-    "JP": "source.japan"
-    "JPN": "source.japan"
-    "JPN/日本": "source.japan"
-
-    # 韩国
-    "韩国": "source.korea"
-    "KR": "source.korea"
-    "Korea": "source.korea"
-    "Kr/韩国": "source.korea"
-
-    # 英国
-    "英国": "source.uk"
-    "UK": "source.uk"
-    "GB": "source.uk"
-    "GB/英国": "source.uk"
-
-    # 其他
-    "其他": "source.other"
-    "Other": "source.other"
-    "Other/其他": "source.other"
 
 # 官组致谢声明配置
 team_acknowledgment:

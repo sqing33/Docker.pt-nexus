@@ -81,7 +81,7 @@ source_parsers:
       "Misc/其他": "category.other"
       "Cartoon/少儿动画": "category.cartoon"
       "Ebook/电子书": "category.ebook"
-      "ShortDrama/短剧": "category.short_drama"
+      "ShortDrama/短剧": "category.playlet"
       "Game/游戏": "category.game"
       "APP/软件": "category.software"
       "Education/教育视频": "category.education"

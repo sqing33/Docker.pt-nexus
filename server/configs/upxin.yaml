@@ -135,6 +135,7 @@ source_parsers:
       "LPCM": "audio.lpcm"
       "DTS": "audio.dts"
       "AC3": "audio.ac3"
+      "AC-3": "audio.ac3"
       "EAC3": "audio.ddp"
       "DD+": "audio.ddp"
       "DD": "audio.ac3"

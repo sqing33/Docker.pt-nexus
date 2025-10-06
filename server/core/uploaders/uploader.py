@@ -33,6 +33,14 @@ MEDIUM_FALLBACK_MAP = {
     "medium.uhd_blu-ray": "medium.blu-ray",
 }
 
+# [新增] 定义HDR格式回退层级地图
+HDR_FORMAT_FALLBACK_MAP = {
+    "hdr.dolby_vision": "hdr.hdr10plus",
+    "hdr.hdr10plus": "hdr.hdr10",
+    "hdr.hdr10": "hdr.hdr",
+    "hdr.hlg": "hdr.hdr",
+}
+
 
 class BaseUploader(ABC):
     """
@@ -266,11 +274,14 @@ class BaseUploader(ABC):
                 current_key = VIDEO_CODEC_FALLBACK_MAP.get(current_key)
             elif mapping_type == "medium":
                 current_key = MEDIUM_FALLBACK_MAP.get(current_key)
+            elif mapping_type == "hdr":
+                current_key = HDR_FORMAT_FALLBACK_MAP.get(current_key)
             else:
-                # 通用类型，同时检查音频、视频和媒介回退
+                # 通用类型，同时检查音频、视频、媒介和HDR回退
                 current_key = (AUDIO_CODEC_FALLBACK_MAP.get(current_key)
                               or VIDEO_CODEC_FALLBACK_MAP.get(current_key)
-                              or MEDIUM_FALLBACK_MAP.get(current_key))
+                              or MEDIUM_FALLBACK_MAP.get(current_key)
+                              or HDR_FORMAT_FALLBACK_MAP.get(current_key))
 
             if current_key:
                 logger.debug(

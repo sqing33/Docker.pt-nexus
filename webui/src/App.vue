@@ -12,6 +12,7 @@
     <el-menu-item index="/sites">做种检索</el-menu-item>
     <el-menu-item index="/settings">设置</el-menu-item>
     <div class="refresh-button-container">
+      <el-button type="primary" @click="feedbackDialogVisible = true" plain>反馈</el-button>
       <el-button type="success" @click="handleGlobalRefresh" :loading="isRefreshing" :disabled="isRefreshing" plain>
         刷新
       </el-button>
@@ -24,12 +25,43 @@
       </keep-alive>
     </router-view>
   </main>
+
+  <!-- Feedback Dialog -->
+  <el-dialog v-model="feedbackDialogVisible" title="意见反馈" width="700px" @close="resetFeedbackForm">
+    <el-form :model="feedbackForm" label-position="top">
+      <el-form-item label="反馈内容（支持富文本编辑，可直接粘贴图片）">
+        <div class="editor-wrapper">
+          <QuillEditor
+            ref="quillEditor"
+            v-model:content="feedbackForm.html"
+            contentType="html"
+            theme="snow"
+            :options="editorOptions"
+            @paste="handlePaste"
+          />
+        </div>
+      </el-form-item>
+      <el-form-item label="联系方式 (可选)" style="margin-top: 50px;">
+        <el-input v-model="feedbackForm.contact" placeholder="如 QQ, Telegram, Email 等" />
+      </el-form-item>
+    </el-form>
+    <template #footer>
+      <span class="dialog-footer">
+        <el-button @click="feedbackDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="submitFeedback" :loading="isSubmittingFeedback">
+          提交
+        </el-button>
+      </span>
+    </template>
+  </el-dialog>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, reactive } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { QuillEditor } from '@vueup/vue-quill'
+import '@vueup/vue-quill/dist/vue-quill.snow.css'
 
 const route = useRoute()
 
@@ -43,6 +75,146 @@ const activeRoute = computed(() => {
 })
 
 const isRefreshing = ref(false)
+
+// Feedback Dialog State
+const feedbackDialogVisible = ref(false)
+const isSubmittingFeedback = ref(false)
+const quillEditor = ref<InstanceType<typeof QuillEditor> | null>(null)
+const feedbackForm = reactive({
+  html: '',
+  contact: ''
+})
+
+// Quill 编辑器配置
+const editorOptions = {
+  modules: {
+    toolbar: [
+      ['bold', 'italic', 'underline', 'strike'],
+      ['blockquote', 'code-block'],
+      [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+      [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
+      [{ 'color': [] }, { 'background': [] }],
+      ['link', 'image'],
+      ['clean']
+    ]
+  },
+  placeholder: '请输入您的宝贵意见或建议，支持粘贴图片...'
+}
+
+// 处理图片粘贴事件
+const handlePaste = async (event: ClipboardEvent) => {
+  const items = event.clipboardData?.items
+  if (!items) return
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i]
+    
+    // 检查是否为图片
+    if (item.type.indexOf('image') !== -1) {
+      event.preventDefault()
+      
+      const file = item.getAsFile()
+      if (!file) continue
+
+      // 显示上传提示
+      ElMessage.info('正在上传图片...')
+
+      try {
+        // 创建 FormData 并上传
+        const formData = new FormData()
+        formData.append('file', file)
+
+        const response = await fetch('/api/upload_image', {
+          method: 'POST',
+          body: formData
+        })
+
+        if (!response.ok) {
+          throw new Error('上传失败')
+        }
+
+        const data = await response.json()
+        const imageUrl = data.url
+
+        // 将图片插入到编辑器
+        const quill = quillEditor.value?.getQuill()
+        if (quill) {
+          const range = quill.getSelection()
+          const index = range ? range.index : quill.getLength()
+          quill.insertEmbed(index, 'image', imageUrl)
+          quill.setSelection(index + 1, 0)
+        }
+
+        ElMessage.success('图片上传成功！')
+      } catch (error) {
+        console.error('Image upload failed:', error)
+        ElMessage.error('图片上传失败，请稍后重试')
+      }
+    }
+  }
+}
+
+const resetFeedbackForm = () => {
+  feedbackForm.html = ''
+  feedbackForm.contact = ''
+  
+  // 清空 Quill 编辑器的内容
+  const quill = quillEditor.value?.getQuill()
+  if (quill) {
+    quill.setText('')
+  }
+}
+
+const submitFeedback = async () => {
+  // 从 HTML 中提取纯文本和图片链接
+  const tempDiv = document.createElement('div')
+  tempDiv.innerHTML = feedbackForm.html
+  
+  const textContent = tempDiv.textContent || tempDiv.innerText || ''
+  const images = tempDiv.querySelectorAll('img')
+  
+  if (!textContent.trim() && images.length === 0) {
+    ElMessage.warning('反馈内容不能为空！')
+    return
+  }
+
+  // 构建提交内容：包含文本和图片链接
+  let combinedText = textContent.trim()
+  
+  if (images.length > 0) {
+    const imageUrls = Array.from(images)
+      .map(img => `img${img.src}img`)
+      .join('\n')
+    combinedText += `\n\n${imageUrls}`
+  }
+
+  isSubmittingFeedback.value = true
+  try {
+    const response = await fetch('https://ptn-feedback.sqing33.dpdns.org/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        text: combinedText,
+        contact: feedbackForm.contact
+      })
+    })
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+
+    ElMessage.success('反馈已提交，感谢您的支持！')
+    feedbackDialogVisible.value = false
+  } catch (error) {
+    console.error('Feedback submission failed:', error)
+    ElMessage.error('提交失败，请稍后再试。')
+  } finally {
+    isSubmittingFeedback.value = false
+  }
+}
+
 
 const activeComponentRefresher = ref<(() => Promise<void>) | null>(null)
 
@@ -95,6 +267,30 @@ body {
   padding: 0;
 }
 </style>
+
+<style>
+/* Quill 编辑器样式优化 */
+.ql-container {
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.ql-editor {
+  min-height: 250px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.ql-editor.ql-blank::before {
+  font-style: normal;
+  color: #c0c4cc;
+}
+
+.ql-snow .ql-picker {
+  font-size: 14px;
+}
+</style>
+
 <style scoped>
 .main-nav {
   border-bottom: solid 1px var(--el-menu-border-color);
@@ -120,5 +316,30 @@ body {
   position: absolute;
   right: 20px;
   top: 3px;
+  display: flex;
+  gap: 10px;
+}
+
+.editor-wrapper {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.editor-wrapper :deep(.quill-editor) {
+  display: flex;
+  flex-direction: column;
+}
+
+.editor-wrapper :deep(.ql-toolbar) {
+  border: 1px solid #dcdfe6;
+  border-bottom: none;
+  border-radius: 4px 4px 0 0;
+}
+
+.editor-wrapper :deep(.ql-container) {
+  border: 1px solid #dcdfe6;
+  border-radius: 0 0 4px 4px;
+  height: 300px;
 }
 </style>

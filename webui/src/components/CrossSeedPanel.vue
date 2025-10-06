@@ -21,7 +21,8 @@
     </header>
 
     <!-- 2. 中间内容区 (自适应高度、可滚动) -->
-    <main class="panel-content" v-loading="isLoading" element-loading-text="正在获取种子信息，请稍候..." element-loading-background="rgba(255, 255, 255, 0.9)">
+    <main class="panel-content" v-loading="isLoading" element-loading-text="正在获取种子信息，请稍候..."
+      element-loading-background="rgba(255, 255, 255, 0.9)">
       <!-- 步骤 0: 核对种子详情 -->
       <div v-if="activeStep === 0" class="step-container details-container">
         <el-tabs v-model="activeTab" type="border-card" class="details-tabs">
@@ -594,7 +595,8 @@
       <div v-if="activeStep === 0" class="button-group">
         <el-button @click="$emit('cancel')">取消</el-button>
 
-        <el-tooltip content="存在待修改的参数 (请确保mediainfo或bdinfo内容有效且包含必要的媒体信息)" placement="top" :disabled="!isNextButtonDisabled">
+        <el-tooltip content="存在待修改的参数 (请确保mediainfo或bdinfo内容有效且包含必要的媒体信息)" placement="top"
+          :disabled="!isNextButtonDisabled">
           <!-- 添加一个 span 作为包裹元素 -->
 
           <el-button type="primary" @click="goToPublishPreviewStep" :disabled="isNextButtonDisabled">
@@ -1340,7 +1342,7 @@ const fetchTorrentInfo = async () => {
         torrent_id: torrentId,
         site_name: englishSiteName
       },
-      timeout: 10000 // 10秒超时
+      timeout: 120000 // 120秒超时
     });
 
     if (dbResponse.data.success) {
@@ -1519,7 +1521,7 @@ const fetchTorrentInfo = async () => {
       torrentName: torrent.value.name,
       downloaderId: torrent.value.downloaderId || (torrent.value.downloaderIds?.length > 0 ? torrent.value.downloaderIds[0] : null),
     }, {
-      timeout: 60000 // 60秒超时，用于抓取和存储
+      timeout: 120000 // 120秒超时，用于抓取和存储
     });
 
     if (storeResponse.data.success) {
@@ -1540,7 +1542,7 @@ const fetchTorrentInfo = async () => {
               torrent_id: torrentId,
               site_name: retryEnglishSiteName
             },
-            timeout: 10000 // 10秒超时
+            timeout: 120000 // 120秒超时
           });
 
           if (dbResponseAfterStore.data.success) {
@@ -2340,7 +2342,7 @@ const _isValidBDInfo = (text: string): boolean => {
 
   // 必须所有必要关键字都存在，或者至少有1个必要关键字且2个以上可选关键字
   return (requiredMatches === bdInfoRequiredKeywords.length) ||
-         (requiredMatches >= 1 && optionalMatches >= 2);
+    (requiredMatches >= 1 && optionalMatches >= 2);
 };
 
 // 检查截图有效性
