@@ -671,10 +671,16 @@ def upload_data_title(title: str, torrent_filename: str = ""):
             main_part = match.group("main_part").strip()
             release_group_name = match.group("release_group")
             internal_tag = match.group("internal_tag")
-            release_group = (f"{internal_tag}-{release_group_name}"
-                             if internal_tag and "@" in internal_tag else
-                             (f"{release_group_name} ({internal_tag})"
-                              if internal_tag else release_group_name))
+            # 修复：保持原始格式，使用@连接而不是括号格式
+            if internal_tag:
+                # 如果internal_tag中已经包含@，说明这是一个完整的组名片段
+                if "@" in internal_tag:
+                    release_group = f"{internal_tag}-{release_group_name}"
+                else:
+                    # 使用@连接，保持 DIY@Audies 的格式
+                    release_group = f"{internal_tag}@{release_group_name}"
+            else:
+                release_group = release_group_name
         else:
             # 检查是否以-NOGROUP结尾
             if title.upper().endswith("-NOGROUP"):
@@ -703,7 +709,7 @@ def upload_data_title(title: str, torrent_filename: str = ""):
     # 4. 技术标签提取（排除已识别的制作组名称）
     tech_patterns_definitions = {
         "medium":
-        r"UHDTV|UHD\s*Blu-?ray|Blu-ray|BluRay|WEB-DL|WEBrip|TVrip|DVDRip|HDTV",
+        r"UHDTV|UHD\s*Blu-?ray|Blu-?ray\s+DIY|Blu-ray|BluRay\s+DIY|BluRay|WEB-DL|WEBrip|TVrip|DVDRip|HDTV",
         "audio":
         r"DTS-HD(?:\s*MA)?(?:\s*\d\.\d)?|(?:Dolby\s*)?TrueHD(?:\s*Atmos)?(?:\s*\d\.\d)?|Atmos(?:\s*TrueHD)?(?:\s*\d\.\d)?|DTS(?:\s*\d\.\d)?|DDP(?:\s*\d\.\d)?|DD\+(?:\s*\d\.\d)?|DD(?:\s*\d\.\d)?|AC3(?:\s*\d\.\d)?|FLAC(?:\s*\d\.\d)?|AAC(?:\s*\d\.\d)?|LPCM(?:\s*\d\.\d)?|AV3A\s*\d\.\d|\d+\s*Audios?|MP2|DUAL",
         "hdr_format":
@@ -739,6 +745,16 @@ def upload_data_title(title: str, torrent_filename: str = ""):
     first_tech_tag_pos = len(title_candidate)
     all_found_tags = []
 
+    # 构建制作组的关键词列表，用于后续过滤
+    release_group_keywords = []
+    if release_group and release_group != "N/A (无发布组)":
+        # 将制作组名称按@和其他分隔符拆分，获取所有组成部分
+        # 例如 "DIY@Audies" -> ["DIY", "Audies"]
+        release_group_keywords = re.split(r'[@\-\s]+', release_group)
+        release_group_keywords = [
+            kw.strip() for kw in release_group_keywords if kw.strip()
+        ]
+
     for key in priority_order:
         pattern = tech_patterns_definitions[key]
         search_pattern = (re.compile(r"(?<!\w)(" + pattern + r")(?!\w)",
@@ -753,7 +769,18 @@ def upload_data_title(title: str, torrent_filename: str = ""):
             m.group(0).strip() if r"\b" in pattern else m.group(1).strip()
             for m in matches
         ]
-        all_found_tags.extend(raw_values)
+
+        # 过滤掉属于制作组名称的部分
+        filtered_values = []
+        for val in raw_values:
+            # 检查这个值是否是制作组关键词之一
+            is_release_group_part = any(val.upper() == kw.upper()
+                                        for kw in release_group_keywords)
+            if not is_release_group_part:
+                filtered_values.append(val)
+
+        all_found_tags.extend(filtered_values)
+        raw_values = filtered_values
         processed_values = (
             [re.sub(r"(DD)\+", r"\1+", val, flags=re.I)
              for val in raw_values] if key == "audio" else raw_values)
@@ -1682,6 +1709,72 @@ def add_torrent_to_downloader(detail_page_url: str, save_path: str,
                 return False, msg
 
 
+def extract_tags_from_title(title_components: list) -> list:
+    """
+    从标题参数中提取标签，主要从媒介和制作组字段提取 DIY 和 VCB-Studio 标签。
+    
+    返回原始标签名称（如 "DIY", "VCB-Studio"），而不是标准化键。
+    这样可以被 ParameterMapper 正确映射到 global_mappings.yaml 中定义的标准化键。
+
+    :param title_components: 标题组件列表，格式为 [{"key": "主标题", "value": "..."}, ...]
+    :return: 一个包含原始标签名称的列表，例如 ['DIY', 'VCB-Studio']
+    """
+    if not title_components:
+        return []
+
+    found_tags = set()
+
+    # 将 title_components 转换为字典以便查找
+    title_dict = {
+        item.get('key'): item.get('value', '')
+        for item in title_components
+    }
+
+    # 定义需要检查的字段和对应的标签映射
+    # 格式：字段名 -> [(正则模式, 原始标签名), ...]
+    # 注意：这里返回的是原始标签名（如 "DIY"），而不是标准化键（如 "tag.diy"）
+    tag_extraction_rules = {
+        '媒介': [
+            (r'\bDIY\b', 'DIY'),
+            (r'\bBlu-?ray\s+DIY\b', 'DIY'),
+            (r'\bBluRay\s+DIY\b', 'DIY'),
+        ],
+        '制作组': [
+            (r'\bDIY\b', 'DIY'),
+            (r'\bVCB-Studio\b', 'VCB-Studio'),
+            (r'\bVCB\b', 'VCB-Studio'),
+        ]
+    }
+
+    # 遍历需要检查的字段
+    for field_name, patterns in tag_extraction_rules.items():
+        field_value = title_dict.get(field_name, '')
+
+        if not field_value:
+            continue
+
+        # 如果字段值是列表，转换为字符串
+        if isinstance(field_value, list):
+            field_value = ' '.join(str(v) for v in field_value)
+        else:
+            field_value = str(field_value)
+
+        # 检查每个正则模式
+        for pattern, tag_name in patterns:
+            if re.search(pattern, field_value, re.IGNORECASE):
+                found_tags.add(tag_name)
+                print(
+                    f"从标题参数 '{field_name}' 中提取到标签: {tag_name} (匹配: {pattern})")
+
+    result_tags = list(found_tags)
+    if result_tags:
+        print(f"从标题参数中提取到的标签: {result_tags}")
+    else:
+        print("从标题参数中未提取到任何标签")
+
+    return result_tags
+
+
 def extract_tags_from_mediainfo(mediainfo_text: str) -> list:
     """
     从 MediaInfo 文本中提取关键词，并返回一个标准化的标签列表。
@@ -2174,7 +2267,8 @@ def is_image_url_valid_robust(url: str) -> bool:
         if content_type and content_type.startswith('image/'):
             return True
         else:
-            logging.warning(f"链接有效但内容可能不是图片: {url} (Content-Type: {content_type})")
+            logging.warning(
+                f"链接有效但内容可能不是图片: {url} (Content-Type: {content_type})")
             return False
 
     except requests.exceptions.RequestException:
@@ -2185,62 +2279,67 @@ def is_image_url_valid_robust(url: str) -> bool:
                                     timeout=5,
                                     allow_redirects=True)
             response.raise_for_status()
-            
+
             # 检查Content-Type
             content_type = response.headers.get('Content-Type')
             if content_type and content_type.startswith('image/'):
                 return True
             else:
-                logging.warning(f"链接有效但内容可能不是图片: {url} (Content-Type: {content_type})")
+                logging.warning(
+                    f"链接有效但内容可能不是图片: {url} (Content-Type: {content_type})")
                 return False
-                
+
         except requests.exceptions.RequestException as e:
             logging.warning(f"图片链接GET请求也失败了: {url} - {e}")
-            
+
             # 第二次尝试：使用代理重试
             config = config_manager.get()
             global_proxy = config.get("network", {}).get("proxy_url")
-            
+
             if global_proxy:
                 logging.info(f"尝试使用代理重新验证图片链接: {url}")
                 try:
                     proxies = {'http': global_proxy, 'https': global_proxy}
-                    
+
                     # 先尝试HEAD请求
-                    response = requests.head(url, 
-                                           timeout=5, 
-                                           allow_redirects=True,
-                                           proxies=proxies)
+                    response = requests.head(url,
+                                             timeout=5,
+                                             allow_redirects=True,
+                                             proxies=proxies)
                     response.raise_for_status()
-                    
+
                     # 检查Content-Type
                     content_type = response.headers.get('Content-Type')
                     if content_type and content_type.startswith('image/'):
                         logging.info(f"通过代理验证成功: {url}")
                         return True
                     else:
-                        logging.warning(f"代理验证：链接有效但内容可能不是图片: {url} (Content-Type: {content_type})")
+                        logging.warning(
+                            f"代理验证：链接有效但内容可能不是图片: {url} (Content-Type: {content_type})"
+                        )
                         return False
-                        
+
                 except requests.exceptions.RequestException:
                     # HEAD请求失败，尝试GET请求
                     try:
                         response = requests.get(url,
-                                              stream=True,
-                                              timeout=5,
-                                              allow_redirects=True,
-                                              proxies=proxies)
+                                                stream=True,
+                                                timeout=5,
+                                                allow_redirects=True,
+                                                proxies=proxies)
                         response.raise_for_status()
-                        
+
                         # 检查Content-Type
                         content_type = response.headers.get('Content-Type')
                         if content_type and content_type.startswith('image/'):
                             logging.info(f"通过代理GET请求验证成功: {url}")
                             return True
                         else:
-                            logging.warning(f"代理GET验证：链接有效但内容可能不是图片: {url} (Content-Type: {content_type})")
+                            logging.warning(
+                                f"代理GET验证：链接有效但内容可能不是图片: {url} (Content-Type: {content_type})"
+                            )
                             return False
-                            
+
                     except requests.exceptions.RequestException as proxy_e:
                         logging.warning(f"使用代理验证图片链接也失败了: {url} - {proxy_e}")
                         return False
