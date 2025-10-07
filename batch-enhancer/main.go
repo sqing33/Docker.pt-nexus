@@ -765,7 +765,7 @@ func filterSeeds(seeds []SeedInfo, options *FilterOptions) ([]SeedInfo, []SeedRe
 	var largestSize, smallestSize float64 = 0, 999999
 
 	// 硬编码5GB限制，防止被修改
-	const minSizeGB = 5.0
+	const minSizeGB = 1.0
 
 	logInfo("开始过滤种子，最小大小要求: %.1fGB", minSizeGB)
 
