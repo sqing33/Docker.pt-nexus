@@ -1310,6 +1310,36 @@ class TorrentMigrator:
                     log_streamer.emit_log(self.task_id, "提取媒体信息",
                                           "MediaInfo 提取失败或不存在", "warning")
 
+            # [新增] 从 MediaInfo 中提取标签并补充到 source_params
+            if mediainfo and mediainfo != "未找到 Mediainfo 或 BDInfo":
+                self.logger.info("开始从 MediaInfo 提取标签...")
+                tags_from_mediainfo = extract_tags_from_mediainfo(mediainfo)
+                if tags_from_mediainfo:
+                    # 将从 MediaInfo 提取的标签与源站点的标签合并（去重）
+                    existing_tags = source_params.get("标签", [])
+                    # 合并标签并去重，保持顺序
+                    merged_tags = list(dict.fromkeys(existing_tags + tags_from_mediainfo))
+                    source_params["标签"] = merged_tags
+                    self.logger.info(f"从 MediaInfo 提取到标签: {tags_from_mediainfo}")
+                    self.logger.info(f"合并后的标签: {merged_tags}")
+                else:
+                    self.logger.info("MediaInfo 中未提取到额外标签")
+
+            # [新增] 从标题参数中提取标签（DIY、VCB-Studio等）
+            from utils import extract_tags_from_title
+            self.logger.info("开始从标题参数提取标签...")
+            tags_from_title = extract_tags_from_title(title_components)
+            if tags_from_title:
+                # 将从标题提取的标签与现有标签合并（去重）
+                existing_tags = source_params.get("标签", [])
+                # 合并标签并去重，保持顺序
+                merged_tags = list(dict.fromkeys(existing_tags + tags_from_title))
+                source_params["标签"] = merged_tags
+                self.logger.info(f"从标题参数提取到标签: {tags_from_title}")
+                self.logger.info(f"合并后的标签: {merged_tags}")
+            else:
+                self.logger.info("标题参数中未提取到额外标签")
+
             # 步骤5：验证简介格式
             if self.task_id:
                 log_streamer.emit_log(self.task_id, "验证简介格式", "正在检查简介完整性...",
