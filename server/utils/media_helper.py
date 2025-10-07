@@ -1836,8 +1836,6 @@ def extract_origin_from_description(description_text: str) -> str:
         r"[地]\s*区[:\s]+([^，,\n\r]+)"
     ]
 
-    print("111", description_text)
-
     for pattern in patterns:
         match = re.search(pattern, description_text)
         if match:
@@ -1847,7 +1845,7 @@ def extract_origin_from_description(description_text: str) -> str:
             # 移除常见的分隔符，如" / "、","等
             origin = re.split(r'\s*/\s*|\s*,\s*|\s*;\s*|\s*&\s*',
                               origin)[0].strip()
-            print("222", origin)
+            print("提取到产地信息:", origin)
 
             return origin
 
@@ -2146,14 +2144,24 @@ def check_intro_completeness(body_text: str) -> dict:
 def is_image_url_valid_robust(url: str) -> bool:
     """
     一个更稳健的方法，当HEAD请求失败时，会尝试使用GET请求（流式）进行验证。
+    如果直接请求失败，会尝试使用全局代理重试一次。
     """
     if not url:
         return False
 
+    # 第一次尝试：不使用代理
     try:
         # 首先尝试HEAD请求，允许重定向
         response = requests.head(url, timeout=5, allow_redirects=True)
         response.raise_for_status()  # 如果状态码不是2xx，则抛出异常
+
+        # 检查Content-Type
+        content_type = response.headers.get('Content-Type')
+        if content_type and content_type.startswith('image/'):
+            return True
+        else:
+            logging.warning(f"链接有效但内容可能不是图片: {url} (Content-Type: {content_type})")
+            return False
 
     except requests.exceptions.RequestException:
         # 如果HEAD请求失败，尝试GET请求
@@ -2163,17 +2171,68 @@ def is_image_url_valid_robust(url: str) -> bool:
                                     timeout=5,
                                     allow_redirects=True)
             response.raise_for_status()
+            
+            # 检查Content-Type
+            content_type = response.headers.get('Content-Type')
+            if content_type and content_type.startswith('image/'):
+                return True
+            else:
+                logging.warning(f"链接有效但内容可能不是图片: {url} (Content-Type: {content_type})")
+                return False
+                
         except requests.exceptions.RequestException as e:
             logging.warning(f"图片链接GET请求也失败了: {url} - {e}")
-            return False
-
-    # 检查Content-Type
-    content_type = response.headers.get('Content-Type')
-    if content_type and content_type.startswith('image/'):
-        return True
-    else:
-        logging.warning(f"链接有效但内容可能不是图片: {url} (Content-Type: {content_type})")
-        return False
+            
+            # 第二次尝试：使用代理重试
+            config = config_manager.get()
+            global_proxy = config.get("network", {}).get("proxy_url")
+            
+            if global_proxy:
+                logging.info(f"尝试使用代理重新验证图片链接: {url}")
+                try:
+                    proxies = {'http': global_proxy, 'https': global_proxy}
+                    
+                    # 先尝试HEAD请求
+                    response = requests.head(url, 
+                                           timeout=5, 
+                                           allow_redirects=True,
+                                           proxies=proxies)
+                    response.raise_for_status()
+                    
+                    # 检查Content-Type
+                    content_type = response.headers.get('Content-Type')
+                    if content_type and content_type.startswith('image/'):
+                        logging.info(f"通过代理验证成功: {url}")
+                        return True
+                    else:
+                        logging.warning(f"代理验证：链接有效但内容可能不是图片: {url} (Content-Type: {content_type})")
+                        return False
+                        
+                except requests.exceptions.RequestException:
+                    # HEAD请求失败，尝试GET请求
+                    try:
+                        response = requests.get(url,
+                                              stream=True,
+                                              timeout=5,
+                                              allow_redirects=True,
+                                              proxies=proxies)
+                        response.raise_for_status()
+                        
+                        # 检查Content-Type
+                        content_type = response.headers.get('Content-Type')
+                        if content_type and content_type.startswith('image/'):
+                            logging.info(f"通过代理GET请求验证成功: {url}")
+                            return True
+                        else:
+                            logging.warning(f"代理GET验证：链接有效但内容可能不是图片: {url} (Content-Type: {content_type})")
+                            return False
+                            
+                    except requests.exceptions.RequestException as proxy_e:
+                        logging.warning(f"使用代理验证图片链接也失败了: {url} - {proxy_e}")
+                        return False
+            else:
+                # 没有配置代理，直接返回失败
+                return False
 
 
 def extract_audio_codec_from_mediainfo(mediainfo_text: str) -> str:

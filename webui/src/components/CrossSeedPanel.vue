@@ -643,6 +643,14 @@
     </template>
     <pre class="log-content-pre">{{ logContent }}</pre>
   </el-card>
+
+  <!-- 日志进度组件 -->
+  <LogProgress 
+    :visible="showLogProgress" 
+    :taskId="logProgressTaskId"
+    @complete="handleLogProgressComplete"
+    @close="showLogProgress = false"
+  />
 </template>
 
 <script setup lang="ts">
@@ -653,6 +661,7 @@ import { ElTooltip } from 'element-plus'
 import axios from 'axios'
 import { Refresh, CircleCheckFilled, CircleCloseFilled, Close } from '@element-plus/icons-vue'
 import { useCrossSeedStore } from '@/stores/crossSeed'
+import LogProgress from './LogProgress.vue'
 
 // 过滤多余空行的辅助函数
 const filterExtraEmptyLines = (text: string): string => {
@@ -880,6 +889,10 @@ const logContent = ref('')
 const showLogCard = ref(false)
 const downloaderList = ref<{ id: string, name: string }[]>([])
 const isDataFromDatabase = ref(false) // Flag to track if data was loaded from database
+
+// 日志进度组件相关
+const showLogProgress = ref(false)
+const logProgressTaskId = ref('')
 
 // 反向映射表，用于将标准值映射到中文显示名称
 const reverseMappings = ref({
@@ -1324,12 +1337,11 @@ const fetchTorrentInfo = async () => {
   }
 
   isLoading.value = true
-  ElNotification({
-    title: '正在获取',
-    message: '正在读取种子信息，请稍候...',
-    type: 'info',
-    duration: 0,
-  })
+  
+  // 生成任务ID并显示进度组件
+  const tempTaskId = `fetch_${torrentId}_${Date.now()}`
+  logProgressTaskId.value = tempTaskId
+  showLogProgress.value = true
 
   let dbError = null;
 
@@ -1340,12 +1352,126 @@ const fetchTorrentInfo = async () => {
     const dbResponse = await axios.get('/api/migrate/get_db_seed_info', {
       params: {
         torrent_id: torrentId,
-        site_name: englishSiteName
+        site_name: englishSiteName,
+        task_id: tempTaskId  // 传递task_id给后端
       },
       timeout: 120000 // 120秒超时
     });
 
-    if (dbResponse.data.success) {
+    // 检查是否需要继续抓取（202状态码）
+    if (dbResponse.status === 202 && dbResponse.data.should_fetch) {
+      console.log('数据库中没有缓存，继续使用同一日志流从源站点抓取...');
+      // 使用返回的task_id继续抓取（不关闭日志流）
+      const continuedTaskId = dbResponse.data.task_id || tempTaskId;
+      
+      // 直接调用 fetch_and_store，传入相同的 task_id
+      try {
+        const storeResponse = await axios.post('/api/migrate/fetch_and_store', {
+          sourceSite: sourceSite.value,
+          searchTerm: torrentId,
+          savePath: torrent.value.save_path,
+          torrentName: torrent.value.name,
+          downloaderId: torrent.value.downloaderId,
+          task_id: continuedTaskId  // 传递相同的task_id以继续使用同一日志流
+        }, {
+          timeout: 120000
+        });
+
+        if (!storeResponse.data.success) {
+          ElNotification.closeAll();
+          ElNotification.error({
+            title: '抓取失败',
+            message: storeResponse.data.message || '从源站点抓取失败',
+            duration: 0,
+            showClose: true,
+          });
+          emit('cancel');
+          isLoading.value = false;
+          return;
+        }
+
+        // 抓取成功后，再次从数据库读取（使用相同逻辑）
+        const finalDbResponse = await axios.get('/api/migrate/get_db_seed_info', {
+          params: {
+            torrent_id: torrentId,
+            site_name: englishSiteName
+          },
+          timeout: 120000
+        });
+
+        if (!finalDbResponse.data.success) {
+          ElNotification.closeAll();
+          ElNotification.error({
+            title: '读取失败',
+            message: '数据抓取成功但从数据库读取失败',
+            duration: 0,
+            showClose: true,
+          });
+          emit('cancel');
+          isLoading.value = false;
+          return;
+        }
+
+        // 处理成功的数据（与下面的逻辑相同）
+        ElNotification.closeAll();
+        ElNotification.success({
+          title: '抓取成功',
+          message: '种子信息已成功抓取并存储到数据库，请核对。'
+        });
+
+        const dbData = finalDbResponse.data.data;
+        if (finalDbResponse.data.reverse_mappings) {
+          reverseMappings.value = finalDbResponse.data.reverse_mappings;
+        }
+
+        torrentData.value = {
+          original_main_title: dbData.title || '',
+          title_components: dbData.title_components || [],
+          subtitle: dbData.subtitle,
+          imdb_link: dbData.imdb_link,
+          douban_link: dbData.douban_link,
+          intro: {
+            statement: filterExtraEmptyLines(dbData.statement) || '',
+            poster: dbData.poster || '',
+            body: filterExtraEmptyLines(dbData.body) || '',
+            screenshots: dbData.screenshots || '',
+            removed_ardtudeclarations: dbData.removed_ardtudeclarations || []
+          },
+          mediainfo: dbData.mediainfo || '',
+          source_params: dbData.source_params || {},
+          standardized_params: {
+            type: dbData.type || '',
+            medium: dbData.medium || '',
+            video_codec: dbData.video_codec || '',
+            audio_codec: dbData.audio_codec || '',
+            resolution: dbData.resolution || '',
+            team: dbData.team || '',
+            source: dbData.source || '',
+            tags: dbData.tags || []
+          },
+          final_publish_parameters: dbData.final_publish_parameters || {},
+          complete_publish_params: dbData.complete_publish_params || {},
+          raw_params_for_preview: dbData.raw_params_for_preview || {}
+        };
+
+        taskId.value = storeResponse.data.task_id;
+        isDataFromDatabase.value = true;
+        activeStep.value = 0;
+        
+        nextTick(() => {
+          checkScreenshotValidity();
+        });
+        
+        isLoading.value = false;
+        return;
+      } catch (error: any) {
+        ElNotification.closeAll();
+        handleApiError(error, '从源站点抓取时发生网络错误');
+        emit('cancel');
+        isLoading.value = false;
+        return;
+      }
+    } else if (dbResponse.data.success) {
       ElNotification.closeAll();
       ElNotification.success({
         title: '读取成功',
@@ -2457,6 +2583,15 @@ const openAllSitesInRow = (row: any[]) => {
     title: '批量打开成功',
     message: `已打开 ${validResults.length} 个种子页面`
   });
+};
+
+// 处理日志进度完成
+const handleLogProgressComplete = () => {
+  console.log('日志进度处理完成');
+  // 进度完成后自动关闭进度窗口
+  setTimeout(() => {
+    showLogProgress.value = false;
+  }, 1000);
 };
 
 </script>

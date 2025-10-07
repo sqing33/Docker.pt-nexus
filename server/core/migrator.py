@@ -23,6 +23,9 @@ from utils import ensure_scheme, upload_data_mediaInfo, upload_data_title, extra
 # 导入种子参数模型
 from models.seed_parameter import SeedParameter
 
+# 导入日志流管理器
+from utils.log_streamer import log_streamer
+
 # 导入新的Extractor和ParameterMapper
 from core.extractors.extractor import Extractor, ParameterMapper
 
@@ -84,7 +87,8 @@ class TorrentMigrator:
                  torrent_name="",
                  config_manager=None,
                  db_manager=None,
-                 downloader_id=None):
+                 downloader_id=None,
+                 task_id=None):
         self.source_site = source_site_info
         self.target_site = target_site_info
         self.search_term = search_term
@@ -93,6 +97,7 @@ class TorrentMigrator:
         self.config_manager = config_manager
         self.db_manager = db_manager
         self.downloader_id = downloader_id
+        self.task_id = task_id  # 任务ID，用于日志流
 
         self.SOURCE_BASE_URL = ensure_scheme(self.source_site.get("base_url"))
         self.SOURCE_NAME = self.source_site["nickname"]
@@ -851,10 +856,24 @@ class TorrentMigrator:
         try:
             self.logger.info(f"--- [步骤1] 开始获取种子信息 (源: {self.SOURCE_NAME}) ---")
             print(f"开始prepare_review_data处理，源站点: {self.SOURCE_NAME}")
+
+            # 发送日志：开始获取种子信息
+            if self.task_id:
+                log_streamer.emit_log(self.task_id, "1. 获取种子信息",
+                                      f"开始从 {self.SOURCE_NAME} 获取种子详情...",
+                                      "processing")
+
             torrent_id = (self.search_term if self.search_term.isdigit() else
                           self.search_and_get_torrent_id(self.search_term))
             if not torrent_id:
+                if self.task_id:
+                    log_streamer.emit_log(self.task_id, "1. 获取种子信息",
+                                          "未能获取到种子ID", "error")
                 raise Exception("未能获取到种子ID，请检查种子名称或ID是否正确。")
+
+            if self.task_id:
+                log_streamer.emit_log(self.task_id, "1. 获取种子信息",
+                                      f"成功获取种子 ID: {torrent_id}", "success")
 
             # 初始化种子参数模型
             # 使用构造函数传入的 db_manager
@@ -963,6 +982,11 @@ class TorrentMigrator:
 
             self.logger.info(f"种子文件已保存到: {original_torrent_path}")
 
+            # 发送日志：开始解析标题
+            if self.task_id:
+                log_streamer.emit_log(self.task_id, "2. 解析参数", "正在解析标题组件...",
+                                      "processing")
+
             # 调用 upload_data_title 时，传入主标题和种子文件名
             title_components = upload_data_title(original_main_title,
                                                  torrent_filename)
@@ -974,8 +998,14 @@ class TorrentMigrator:
                     "key": "主标题",
                     "value": original_main_title
                 }]
+                if self.task_id:
+                    log_streamer.emit_log(self.task_id, "2. 解析参数",
+                                          "标题解析失败，使用原始标题", "warning")
             else:
                 self.logger.success("主标题成功解析为参数。")
+                if self.task_id:
+                    log_streamer.emit_log(self.task_id, "2. 解析参数", "标题解析完成",
+                                          "success")
 
             # 从提取的数据中获取其他信息
             subtitle = extracted_data.get("subtitle", "")
@@ -1006,6 +1036,8 @@ class TorrentMigrator:
 
             # 如果海报失效，尝试从豆瓣或IMDb获取新海报
             from utils import upload_data_movie_info
+
+            # 检查媒体链接（不发送日志，内部处理）
 
             # [新] 检查当前海报是否有效（使用新的稳健验证函数）
             current_poster_valid = False
@@ -1189,6 +1221,11 @@ class TorrentMigrator:
                     if screenshots_valid and screenshots_sufficient:
                         self.logger.info(f"[*] 验证完成，保留 {valid_count} 个有效截图链接。")
                         print(f"[*] 验证完成，保留 {valid_count} 个有效截图链接。")
+                        # 截图有效，发送验证成功日志
+                        if self.task_id:
+                            log_streamer.emit_log(
+                                self.task_id, "3. 验证图片链接",
+                                f"图片链接验证通过 ({valid_count}张)", "success")
                 else:
                     # 如果 screenshots 字段存在但为空，视为需要生成
                     self.logger.info("未找到截图链接，将重新生成。")
@@ -1205,9 +1242,17 @@ class TorrentMigrator:
                 if not screenshots_valid:
                     self.logger.warning("⚠️ 检测到截图失效，立即重新生成截图...")
                     print("⚠️ 检测到截图失效，立即重新生成截图...")
+                    if self.task_id:
+                        log_streamer.emit_log(self.task_id, "3. 生成视频截图",
+                                              "检测到截图失效，开始重新生成...",
+                                              "processing")
                 else:
                     self.logger.warning(f"⚠️ 截图数量不足，立即重新生成截图...")
                     print(f"⚠️ 截图数量不足，立即重新生成截图...")
+                    if self.task_id:
+                        log_streamer.emit_log(self.task_id, "3. 生成视频截图",
+                                              f"截图数量不足，开始重新生成...",
+                                              "processing")
 
                 # 准备调用截图函数所需参数
                 source_info_for_screenshot = {
@@ -1227,6 +1272,9 @@ class TorrentMigrator:
                     intro["screenshots"] = new_screenshots
                     self.logger.success("✅ 成功重新生成并上传截图。")
                     print("✅ 成功重新生成并上传截图。")
+                    if self.task_id:
+                        log_streamer.emit_log(self.task_id, "3. 生成视频截图",
+                                              "截图生成并上传成功", "success")
 
                     # 更新 images 列表，保持数据同步
                     # 保留海报（第一个元素），然后添加新截图
@@ -1238,19 +1286,82 @@ class TorrentMigrator:
                     # 清空截图
                     intro["screenshots"] = ""
                     images = [images[0]] if images and images[0] else []
-            else:
-                # 截图有效且数量充足
-                if intro.get("screenshots"):
-                    self.logger.info("✅ 所有截图链接均有效且数量充足。")
-                    print("✅ 所有截图链接均有效且数量充足。")
 
             # 使用upload_data_mediaInfo处理mediainfo
+            if self.task_id:
+                log_streamer.emit_log(self.task_id, "4. 提取媒体信息",
+                                      "正在提取 MediaInfo...", "processing")
+
             mediainfo = upload_data_mediaInfo(
                 mediaInfo=mediainfo_text
                 if mediainfo_text else "未找到 Mediainfo 或 BDInfo",
                 save_path=self.save_path,
                 torrent_name=processed_torrent_name,
                 downloader_id=self.downloader_id)
+
+            if self.task_id:
+                if mediainfo and mediainfo != "未找到 Mediainfo 或 BDInfo":
+                    log_streamer.emit_log(self.task_id, "4. 提取媒体信息",
+                                          "MediaInfo 提取成功", "success")
+                else:
+                    log_streamer.emit_log(self.task_id, "4. 提取媒体信息",
+                                          "MediaInfo 提取失败或不存在", "warning")
+
+            # 步骤5：验证简介格式
+            if self.task_id:
+                log_streamer.emit_log(self.task_id, "5. 验证简介格式",
+                                      "正在检查简介完整性...", "processing")
+
+            # 检查简介是否有效
+            intro_valid = bool(intro.get("body") and intro.get("body").strip())
+
+            if intro_valid:
+                if self.task_id:
+                    log_streamer.emit_log(self.task_id, "5. 验证简介格式",
+                                          "简介格式验证通过", "success")
+            else:
+                # 如果简介无效，尝试从豆瓣重新获取
+                if douban_link:
+                    if self.task_id:
+                        log_streamer.emit_log(self.task_id, "5. 验证简介格式",
+                                              "简介缺失，尝试从豆瓣获取...", "warning")
+
+                    try:
+                        from utils import upload_data_movie_info
+                        status, posters, description, extracted_imdb = upload_data_movie_info(
+                            douban_link, imdb_link)
+
+                        if status and description:
+                            # 更新简介内容
+                            intro["body"] = description
+                            if self.task_id:
+                                log_streamer.emit_log(self.task_id,
+                                                      "5. 验证简介格式",
+                                                      "成功从豆瓣重新获取简介", "success")
+                        else:
+                            if self.task_id:
+                                log_streamer.emit_log(self.task_id,
+                                                      "5. 验证简介格式", "从豆瓣获取简介失败",
+                                                      "warning")
+                    except Exception as e:
+                        self.logger.warning(f"从豆瓣重新获取简介时出错: {e}")
+                        if self.task_id:
+                            log_streamer.emit_log(self.task_id, "5. 验证简介格式",
+                                                  f"获取简介失败: {str(e)}", "error")
+                else:
+                    if self.task_id:
+                        log_streamer.emit_log(self.task_id, "5. 验证简介格式",
+                                              "简介缺失且无豆瓣链接", "warning")
+
+            # 步骤6：检查声明感谢
+            if self.task_id:
+                log_streamer.emit_log(self.task_id, "6. 检查声明感谢",
+                                      "正在检查官组致谢声明...", "processing")
+
+            # 这部分逻辑将在后面的官组致谢声明处理中完成，这里先标记为处理中
+            # 实际的检查和添加会在后续代码中进行
+
+            # 参数标准化（内部处理，不发送进度日志）
 
             # 提取产地信息并更新到source_params中（如果还没有）
             if "产地" not in source_params or not source_params["产地"]:
@@ -1456,11 +1567,27 @@ class TorrentMigrator:
 
                 print("[调试] 官组致谢声明处理完成")
                 print("=" * 80)
+
+                # 发送步骤6完成日志
+                if self.task_id:
+                    if has_official_statement:
+                        log_streamer.emit_log(self.task_id, "6. 检查声明感谢",
+                                              "存在声明信息", "success")
+                    elif display_name is not None:
+                        log_streamer.emit_log(self.task_id, "6. 检查声明感谢",
+                                              "成功生成声明信息", "success")
+                    else:
+                        log_streamer.emit_log(self.task_id, "6. 检查声明感谢",
+                                              "无需添加声明", "success")
             except Exception as e:
                 self.logger.warning(f"添加官组致谢声明时发生错误: {e}")
                 print(f"[调试] ✗ 添加官组致谢声明时发生错误: {e}")
                 self.logger.debug(traceback.format_exc())
                 traceback.print_exc()
+                # 即使出错也发送完成日志
+                if self.task_id:
+                    log_streamer.emit_log(self.task_id, "6. 检查声明感谢",
+                                          f"处理出错: {str(e)}", "warning")
             # [致谢声明添加结束]
 
             # 输出标准化参数以供前端预览
@@ -1645,6 +1772,11 @@ class TorrentMigrator:
             })
             # ------------------------------------------------------------------------------------------
 
+            # 保存到数据库并发送最终日志（步骤7）
+            if self.task_id:
+                log_streamer.emit_log(self.task_id, "7. 成功获取参数",
+                                      "正在保存参数到数据库...", "processing")
+
             # 保存到数据库（优先）和JSON文件（后备），使用英文站点名作为标识
             save_result = seed_param_model.save_parameters(
                 hash, torrent_id, self.SOURCE_SITE_CODE, seed_parameters)
@@ -1652,10 +1784,18 @@ class TorrentMigrator:
                 self.logger.info(
                     f"种子参数(使用标准化键)已保存: {hash} from {self.SOURCE_NAME} ({self.SOURCE_SITE_CODE})"
                 )
+                if self.task_id:
+                    log_streamer.emit_log(self.task_id, "7. 成功获取参数", "参数已成功获取",
+                                          "success")
+                    # 注意：不在这里关闭日志流，让调用方（routes_migrate.py）来关闭
             else:
                 self.logger.warning(
                     f"种子参数(使用标准化键)保存失败: {hash} from {self.SOURCE_NAME} ({self.SOURCE_SITE_CODE})"
                 )
+                if self.task_id:
+                    log_streamer.emit_log(self.task_id, "7. 成功获取参数", "参数保存失败",
+                                          "error")
+                    # 注意：不在这里关闭日志流，让调用方（routes_migrate.py）来关闭
 
             return {
                 "review_data": review_data_payload,
