@@ -1946,7 +1946,8 @@ def _upload_to_pixhost_direct(image_path: str, api_url: str, params: dict,
             response = requests.post(api_url,
                                      data=params,
                                      files=files,
-                                     headers=headers)
+                                     headers=headers,
+                                     timeout=30)
 
             if response.status_code == 200:
                 data = response.json()
@@ -1954,14 +1955,24 @@ def _upload_to_pixhost_direct(image_path: str, api_url: str, params: dict,
                 print(f"直接上传成功！图片链接: {show_url}")
                 return show_url
             else:
-                print(f"直接上传失败，状态码: {response.status_code}")
-                print(f"错误信息: {response.text}")
+                print(f"   ❌ 直接上传失败 (状态码: {response.status_code})")
                 return None
     except FileNotFoundError:
-        print(f"错误: 找不到指定的图片文件: {image_path}")
+        print(f"   ❌ 错误: 找不到图片文件")
+        return None
+    except requests.exceptions.SSLError as e:
+        print(f"   ❌ 直接上传失败: SSL连接错误")
+        return None
+    except requests.exceptions.ConnectionError as e:
+        print(f"   ❌ 直接上传失败: 网络连接被重置")
+        return None
+    except requests.exceptions.Timeout:
+        print(f"   ❌ 直接上传失败: 请求超时")
         return None
     except Exception as e:
-        print(f"直接上传过程中发生未知错误: {e}")
+        # 只打印异常类型和简短描述，不打印完整堆栈
+        error_type = type(e).__name__
+        print(f"   ❌ 直接上传失败: {error_type}")
         return None
 
 
@@ -1969,12 +1980,8 @@ def _upload_to_pixhost_with_proxy(image_path: str, api_url: str, params: dict,
                                   headers: dict, proxy_url: str):
     """通过代理上传图片到Pixhost"""
     if not proxy_url:
-        print("未配置全局代理，跳过代理上传")
+        print("   ⚠️  未配置全局代理，跳过代理上传")
         return None
-
-    print(f"使用代理: {proxy_url}")
-    print(f"目标URL: {api_url}")
-    print(f"上传文件: {image_path}")
 
     try:
         # 使用标准HTTP代理方式
@@ -1984,8 +1991,6 @@ def _upload_to_pixhost_with_proxy(image_path: str, api_url: str, params: dict,
             # 设置代理
             proxies = {'http': proxy_url, 'https': proxy_url}
 
-            print(f"代理配置: {proxies}")
-
             response = requests.post(api_url,
                                      data=params,
                                      files=files,
@@ -1993,34 +1998,43 @@ def _upload_to_pixhost_with_proxy(image_path: str, api_url: str, params: dict,
                                      proxies=proxies,
                                      timeout=30)
 
-            print(f"代理方式响应状态码: {response.status_code}")
             if response.status_code == 200:
                 try:
                     data = response.json()
                     show_url = data.get('show_url')
                     if show_url:
-                        print(f"代理上传成功！图片链接: {show_url}")
+                        print(f"   ✅ 代理上传成功！图片链接: {show_url}")
                         return show_url
                     else:
-                        print(f"代理上传成功但无法解析返回的URL: {response.text}")
+                        print(f"   ❌ 代理上传响应异常: 无法解析URL")
                         return None
-                except Exception as json_error:
-                    print(f"解析JSON响应时出错: {json_error}")
+                except Exception:
+                    # JSON解析失败，尝试直接使用响应文本
                     if response.text and 'pixhost' in response.text:
-                        print(f"代理上传成功！图片链接: {response.text}")
+                        print(f"   ✅ 代理上传成功！图片链接: {response.text.strip()}")
                         return response.text.strip()
                     else:
-                        print(f"代理上传成功但返回了无效响应: {response.text}")
+                        print(f"   ❌ 代理上传响应异常: 无效格式")
                         return None
             else:
-                print(f"代理上传失败，状态码: {response.status_code}")
-                if response.text:
-                    print(f"响应内容: {response.text[:500]}...")  # 显示更多内容用于调试
+                print(f"   ❌ 代理上传失败 (状态码: {response.status_code})")
                 return None
+    except requests.exceptions.SSLError:
+        print(f"   ❌ 代理上传失败: SSL连接错误")
+        return None
+    except requests.exceptions.ConnectionError:
+        print(f"   ❌ 代理上传失败: 网络连接错误")
+        return None
+    except requests.exceptions.Timeout:
+        print(f"   ❌ 代理上传失败: 请求超时")
+        return None
+    except FileNotFoundError:
+        print(f"   ❌ 错误: 找不到图片文件")
+        return None
     except Exception as e:
-        print(f"代理上传过程中发生错误: {e}")
-        import traceback
-        traceback.print_exc()
+        # 只打印异常类型，不打印完整堆栈
+        error_type = type(e).__name__
+        print(f"   ❌ 代理上传失败: {error_type}")
         return None
 
 

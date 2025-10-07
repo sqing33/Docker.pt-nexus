@@ -2614,6 +2614,8 @@ const handleLogProgressComplete = () => {
   padding-top: var(--header-height);
   padding-bottom: var(--footer-height);
   box-sizing: border-box;
+  /* 确保遮罩层能够正确覆盖 */
+  isolation: isolate;
 }
 
 /* 2. 顶部Header：绝对定位，固定在顶部 */

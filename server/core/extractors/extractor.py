@@ -313,52 +313,25 @@ class Extractor:
             # Extract images
             images = re.findall(r"\[img\].*?\[/img\]", bbcode, re.IGNORECASE)
 
-            # [新增] 验证图片链接有效性
-            logging.info(f"开始验证 {len(images)} 个图片链接的有效性...")
-            print(f"[*] 开始验证 {len(images)} 个图片链接的有效性...")
-            valid_images = []
-            for img_tag in images:
-                # 从 [img]...[/img] 中提取 URL
-                if match := re.search(r'\[img\](.*?)\[/img\]', img_tag, re.IGNORECASE):
-                    url = match.group(1)
-                    if is_image_url_valid_robust(url):
-                        valid_images.append(img_tag)
+            # [新增] 只验证海报（第一张图片）的有效性
+            # 视频截图的验证将在 migrator.py 的 prepare_review_data 中单独进行
+            if images:
+                poster_img = images[0]
+                if match := re.search(r'\[img\](.*?)\[/img\]', poster_img, re.IGNORECASE):
+                    poster_url = match.group(1)
+                    logging.info(f"开始验证海报链接的有效性: {poster_url}")
+                    print(f"[*] 开始验证海报链接的有效性...")
+                    
+                    if is_image_url_valid_robust(poster_url):
+                        logging.info("海报链接验证通过。")
+                        print(f"[*] 海报链接验证通过。")
                     else:
-                        logging.warning(f"检测到无效的截图链接，已过滤: {url}")
-                        print(f"  [!] 检测到无效的截图链接，已过滤: {url}")
+                        logging.warning(f"检测到无效的海报链接: {poster_url}")
+                        print(f"  [!] 检测到无效的海报链接: {poster_url}")
+                        # 海报无效时，将第一张图片置空，后续会从豆瓣/IMDb重新获取
+                        images[0] = ""
             
-            # 后续使用 valid_images 替代 images
-            images = valid_images
-            logging.info(f"验证完成，保留 {len(images)} 个有效图片链接。")
-            print(f"[*] 验证完成，保留 {len(images)} 个有效图片链接。")
-            
-            # [新增] 检查截图数量是否足够
-            # 注意：第一张图片是海报，从第二张开始才是截图
-            # 所以至少需要4张图片：1张海报 + 3张截图
-            MIN_TOTAL_IMAGES = 4  # 1张海报 + 3张截图
-            MIN_SCREENSHOTS = 3   # 至少3张截图
-            
-            # 计算实际截图数量（排除第一张海报）
-            actual_screenshot_count = len(images) - 1 if len(images) > 0 else 0
-            
-            if len(images) < MIN_TOTAL_IMAGES or actual_screenshot_count < MIN_SCREENSHOTS:
-                logging.warning(f"有效截图数量不足（总图片: {len(images)}，截图: {actual_screenshot_count}，需要: 总{MIN_TOTAL_IMAGES}张，截图{MIN_SCREENSHOTS}张），尝试重新获取...")
-                print(f"⚠️ 有效截图数量不足（总图片: {len(images)}，截图: {actual_screenshot_count}，需要: 总{MIN_TOTAL_IMAGES}张，截图{MIN_SCREENSHOTS}张），尝试重新获取...")
-                
-                # 尝试重新获取截图
-                # 这里需要传入必要的参数来重新获取截图
-                # 注意：我们需要从 extracted_data 中获取已有的信息
-                try:
-                    # 从已提取的数据中获取必要信息
-                    # 注意：此时我们在 extractor 中，没有直接访问 save_path 等信息
-                    # 所以我们返回一个特殊标记，让调用方知道需要重新获取截图
-                    extracted_data["intro"]["screenshots_need_refresh"] = True
-                    extracted_data["intro"]["current_screenshot_count"] = len(images)
-                    logging.info("已标记需要重新获取截图，将在后续处理中执行。")
-                    print(f"[*] 已标记需要重新获取截图，将在后续处理中执行。")
-                except Exception as e:
-                    logging.error(f"标记重新获取截图时出错: {e}")
-                    print(f"  [!] 标记重新获取截图时出错: {e}")
+            # 注意：视频截图（images[1:]）不在此处验证，将在 migrator.py 中统一验证和重新生成
 
             # Extract quotes before and after poster
             poster_index = bbcode.find(images[0]) if images else -1
