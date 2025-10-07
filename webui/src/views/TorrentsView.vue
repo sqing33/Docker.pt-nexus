@@ -1442,6 +1442,7 @@ watch(nameSearch, () => {
   max-height: 800px;
   display: flex;
   flex-direction: column;
+  position: relative; /* 添加相对定位，作为 LogProgress 的定位上下文 */
 }
 
 :deep(.cross-seed-card .el-card__body) {

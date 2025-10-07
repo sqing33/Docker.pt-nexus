@@ -1,42 +1,44 @@
 <template>
-  <div v-if="visible" class="log-progress-container">
-    <div class="log-progress-header">
-      <h3>处理进度</h3>
-      <button @click="$emit('close')" class="close-btn" title="关闭">×</button>
-    </div>
-    <div class="log-progress-content">
-      <div
-        v-for="(step, index) in steps"
-        :key="index"
-        class="step-item"
-        :class="{ 
-          'step-processing': step.status === 'processing',
-          'step-success': step.status === 'success',
-          'step-error': step.status === 'error',
-          'step-warning': step.status === 'warning'
-        }"
-      >
-        <span class="step-icon">
-          <i v-if="step.status === 'success'" class="icon-check">✓</i>
-          <i v-else-if="step.status === 'error'" class="icon-error">✗</i>
-          <i v-else-if="step.status === 'warning'" class="icon-warning">!</i>
-          <i v-else-if="step.status === 'processing'" class="icon-spinner">○</i>
-          <span v-else class="step-number">{{ index + 1 }}</span>
-        </span>
-        <div class="step-content">
-          <span class="step-name">{{ step.name }}</span>
-          <span v-if="step.message" class="step-message">{{ step.message }}</span>
+  <div v-if="visible" class="log-progress-overlay">
+    <div class="log-progress-container">
+      <div class="steps-wrapper">
+        <el-steps direction="vertical" :active="activeStepIndex" finish-status="success">
+          <el-step
+            v-for="(step, index) in allSteps"
+            :key="index"
+            :title="step.name"
+            :description="step.message"
+            :status="getStepStatus(step)"
+          >
+            <template #icon>
+              <div v-if="step.status === 'processing'" class="spinner-icon">
+                <el-icon class="is-loading"><Loading /></el-icon>
+              </div>
+              <div v-else-if="step.status === 'success'" class="success-icon">
+                <el-icon><CircleCheck /></el-icon>
+              </div>
+              <div v-else-if="step.status === 'error'" class="error-icon">
+                <el-icon><CircleClose /></el-icon>
+              </div>
+              <div v-else-if="step.status === 'warning'" class="warning-icon">
+                <el-icon><Warning /></el-icon>
+              </div>
+            </template>
+          </el-step>
+        </el-steps>
+        
+        <div v-if="isComplete" class="completion-message">
+          <el-icon class="icon-complete" color="#67C23A"><CircleCheck /></el-icon>
+          <span>所有步骤已完成</span>
         </div>
-      </div>
-      <div v-if="isComplete" class="completion-message">
-        <i class="icon-complete">✓</i> 所有步骤已完成
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { Loading, CircleCheck, CircleClose, Warning } from '@element-plus/icons-vue'
 
 interface Step {
   name: string
@@ -54,9 +56,39 @@ const emit = defineEmits<{
   (e: 'close'): void
 }>()
 
-const steps = ref<Step[]>([])
+// 预定义所有步骤
+const allSteps = ref<Step[]>([
+  { name: '数据库查询', message: '正在检查缓存...', status: 'pending' },
+  { name: '开始抓取', message: '准备从源站点获取...', status: 'pending' },
+  { name: '获取种子信息', message: '', status: 'pending' },
+  { name: '解析参数', message: '', status: 'pending' },
+  { name: '验证图片链接', message: '', status: 'pending' },
+  { name: '提取媒体信息', message: '', status: 'pending' },
+  { name: '验证简介格式', message: '', status: 'pending' },
+  { name: '检查声明感谢', message: '', status: 'pending' },
+  { name: '成功获取参数', message: '', status: 'pending' }
+])
+
 const isComplete = ref(false)
 let eventSource: EventSource | null = null
+
+// 计算当前激活的步骤索引
+const activeStepIndex = computed(() => {
+  const processingIndex = allSteps.value.findIndex(s => s.status === 'processing')
+  if (processingIndex !== -1) return processingIndex
+  
+  const successCount = allSteps.value.filter(s => s.status === 'success').length
+  return successCount
+})
+
+// 获取步骤状态
+const getStepStatus = (step: Step) => {
+  if (step.status === 'success') return 'success'
+  if (step.status === 'error') return 'error'
+  if (step.status === 'warning') return 'warning'
+  if (step.status === 'processing') return 'process'
+  return 'wait'
+}
 
 // 监听 taskId 变化
 watch(() => props.taskId, (newTaskId) => {
@@ -91,8 +123,13 @@ const connectSSE = () => {
   }
 
   // 重置状态
-  steps.value = []
   isComplete.value = false
+  // 重置所有步骤为 pending 状态
+  allSteps.value.forEach(step => {
+    step.status = 'pending'
+    step.message = step.name === '数据库查询' ? '正在检查缓存...' : 
+                   step.name === '开始抓取' ? '准备从源站点获取...' : ''
+  })
 
   // 创建新的 SSE 连接
   eventSource = new EventSource(`/api/migrate/logs/stream/${props.taskId}`)
@@ -106,14 +143,10 @@ const connectSSE = () => {
       } else if (data.type === 'log') {
         updateStep(data.step, data.message, data.status)
       } else if (data.type === 'complete') {
-
-        // 等待3秒后再断开连接和关闭弹窗
-        setTimeout(() => {
-          isComplete.value = true
-          emit('complete')
-          disconnectSSE()
-          emit('close')
-        }, 300000)
+        isComplete.value = true
+        emit('complete')
+        disconnectSSE()
+        emit('close')
       } else if (data.type === 'heartbeat') {
         // 心跳，保持连接
       }
@@ -136,200 +169,177 @@ const disconnectSSE = () => {
 }
 
 const updateStep = (stepName: string, message: string, status: string) => {
-  const existingStep = steps.value.find(s => s.name === stepName)
-  if (existingStep) {
-    existingStep.message = message
-    existingStep.status = status as Step['status']
-  } else {
-    steps.value.push({
-      name: stepName,
-      message,
-      status: status as Step['status']
-    })
+  const stepIndex = allSteps.value.findIndex((s: Step) => s.name === stepName)
+  
+  if (stepIndex !== -1) {
+    const currentStep = allSteps.value[stepIndex]
+    currentStep.message = message
+    currentStep.status = status as Step['status']
+    
+    // 当前步骤完成时，将下一个步骤设置为 processing 状态
+    if (status === 'success' && stepIndex < allSteps.value.length - 1) {
+      const nextStep = allSteps.value[stepIndex + 1]
+      if (nextStep.status === 'pending') {
+        nextStep.status = 'processing'
+      }
+    }
   }
 }
 </script>
 
 <style scoped>
-.log-progress-container {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 500px;
-  max-width: 90vw;
-  max-height: 80vh;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-  z-index: 9999;
-  display: flex;
-  flex-direction: column;
-}
-
-.log-progress-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 20px;
-  border-bottom: 1px solid #e0e0e0;
-}
-
-.log-progress-header h3 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: #333;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 28px;
-  line-height: 1;
-  color: #999;
-  cursor: pointer;
-  padding: 0;
-  width: 30px;
-  height: 30px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 4px;
-  transition: all 0.2s;
-}
-
-.close-btn:hover {
-  background: #f5f5f5;
-  color: #666;
-}
-
-.log-progress-content {
-  padding: 20px;
-  overflow-y: auto;
-  flex: 1;
-}
-
-.step-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 12px 0;
-  border-bottom: 1px solid #f0f0f0;
-  transition: all 0.3s;
-}
-
-.step-item:last-child {
-  border-bottom: none;
-}
-
-.step-icon {
-  flex-shrink: 0;
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  font-size: 14px;
-  font-weight: bold;
-  background: #e0e0e0;
-  color: #666;
-}
-
-.step-processing .step-icon {
-  background: #2196F3;
-  color: white;
-}
-
-.step-success .step-icon {
-  background: #4CAF50;
-  color: white;
-}
-
-.step-error .step-icon {
-  background: #f44336;
-  color: white;
-}
-
-.step-warning .step-icon {
-  background: #ff9800;
-  color: white;
-}
-
-.icon-spinner {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-.step-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.step-name {
-  font-weight: 600;
-  color: #333;
-  font-size: 14px;
-}
-
-.step-message {
-  font-size: 13px;
-  color: #666;
-  line-height: 1.4;
-}
-
-.step-processing .step-message {
-  color: #2196F3;
-}
-
-.step-success .step-message {
-  color: #4CAF50;
-}
-
-.step-error .step-message {
-  color: #f44336;
-}
-
-.step-warning .step-message {
-  color: #ff9800;
-}
-
-.completion-message {
-  margin-top: 16px;
-  padding: 12px;
-  background: #e8f5e9;
-  border-radius: 4px;
-  color: #2e7d32;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.icon-complete {
-  font-size: 18px;
-}
-
-.step-number {
-  font-size: 12px;
-}
-
-/* 添加遮罩层 */
-.log-progress-container::before {
-  content: '';
-  position: fixed;
-  top: 0;
+/* 透明遮罩层覆盖整个CrossSeedPanel区域 */
+.log-progress-overlay {
+  position: absolute;
+  top: 43px;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  z-index: -1;
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(2px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
+
+.log-progress-container {
+  width: 600px;
+  max-width: 90%;
+  max-height: 80vh;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+}
+
+.steps-wrapper {
+  padding: 24px;
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+/* Element Plus Steps 自定义样式 */
+:deep(.el-step__main) {
+  display: flex;
+}
+
+:deep(.el-step__title) {
+  font-size: 15px;
+  font-weight: 500;
+  width:150px;
+  line-height: 32px!important;
+}
+
+:deep(.el-step__description) {
+  font-size: 13px;
+  margin-top:0;
+  line-height: 32px;
+}
+
+:deep(.el-step__icon) {
+  width: 32px;
+  height: 32px;
+}
+
+:deep(.el-step.is-wait .el-step__title) {
+  color: #909399;
+}
+
+:deep(.el-step.is-wait .el-step__description) {
+  color: #c0c4cc;
+}
+
+:deep(.el-step.is-process .el-step__title) {
+  color: #409eff;
+  font-weight: 600;
+}
+
+:deep(.el-step.is-process .el-step__description) {
+  color: #409eff;
+}
+
+:deep(.el-step.is-success .el-step__title) {
+  color: #67c23a;
+}
+
+:deep(.el-step.is-success .el-step__description) {
+  color: #95d475;
+}
+
+:deep(.el-step.is-error .el-step__title) {
+  color: #f56c6c;
+}
+
+:deep(.el-step.is-error .el-step__description) {
+  color: #f56c6c;
+}
+
+.spinner-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.success-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #67c23a;
+  font-size: 20px;
+}
+
+.error-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #f56c6c;
+  font-size: 20px;
+}
+
+.warning-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #e6a23c;
+  font-size: 20px;
+}
+
+.completion-message {
+  margin-top: 24px;
+  padding: 16px;
+  background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+  border-radius: 8px;
+  color: #2e7d32;
+  font-weight: 600;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 2px 8px rgba(103, 194, 58, 0.15);
+}
+
+.icon-complete {
+  font-size: 22px;
+}
+
+/* 滚动条样式 */
+.steps-wrapper::-webkit-scrollbar {
+  width: 6px;
+}
+
+.steps-wrapper::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.steps-wrapper::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.steps-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
 </style>
