@@ -1,6 +1,6 @@
 <!-- src/App.vue -->
 <template>
-  <el-menu v-if="!isLoginPage" :default-active="activeRoute" class="main-nav" mode="horizontal" router>
+  <el-menu v-if="!isLoginPage" :default-active="activeRoute" class="main-nav glass-nav" mode="horizontal" router>
     <div style="padding: 5px 15px;line-height: 32px;">
       <img src="/favicon.ico" alt="Logo" height="32" style="margin-right: 8px; vertical-align: middle;" />
       PT Nexus
@@ -57,13 +57,17 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, reactive } from 'vue'
+import { computed, ref, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { QuillEditor } from '@vueup/vue-quill'
 import '@vueup/vue-quill/dist/vue-quill.snow.css'
+import axios from 'axios'
 
 const route = useRoute()
+
+// 背景图片URL
+const backgroundUrl = ref('https://pic.pting.club/i/2025/10/07/68e4fbfe9be93.jpg')
 
 const isLoginPage = computed(() => route.path === '/login')
 
@@ -255,11 +259,67 @@ const handleGlobalRefresh = async () => {
     ElMessage.warning('当前页面不支持刷新操作。')
   }
 }
+
+// 加载背景设置
+const loadBackgroundSettings = async () => {
+  try {
+    const response = await axios.get('/api/settings')
+    if (response.data?.ui_settings?.background_url) {
+      backgroundUrl.value = response.data.ui_settings.background_url
+      updateBackground(backgroundUrl.value)
+    }
+  } catch (error) {
+    console.error('加载背景设置失败:', error)
+  }
+}
+
+// 更新背景图片
+const updateBackground = (url: string) => {
+  const appElement = document.getElementById('app')
+  if (appElement) {
+    if (url) {
+      appElement.style.backgroundImage = `url('${url}')`
+    } else {
+      appElement.style.backgroundImage = `url('${backgroundUrl.value}')`
+    }
+  }
+}
+
+// 监听背景更新事件
+const handleBackgroundUpdate = (event: any) => {
+  const { backgroundUrl: newUrl } = event.detail
+  backgroundUrl.value = newUrl
+  updateBackground(newUrl)
+}
+
+onMounted(() => {
+  loadBackgroundSettings()
+  window.addEventListener('background-updated', handleBackgroundUpdate)
+})
 </script>
 
 <style>
 #app {
   height: 100vh;
+  position: relative;
+  /* 背景图片设置 */
+  background-image: url('https://pic.pting.club/i/2025/10/07/68e4fbfe9be93.jpg'); /* 替换为您的图片URL */
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+}
+
+/* 透明蒙层 */
+#app::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.5); /* 白色半透明蒙层，可调整透明度 */
+  pointer-events: none; /* 允许点击穿透 */
+  z-index: 0;
 }
 
 body {
@@ -298,6 +358,8 @@ body {
   height: 40px;
   display: flex;
   align-items: center;
+  position: relative;
+  z-index: 1;
 }
 
 .main-content {
@@ -306,6 +368,8 @@ body {
   display: flex;
   flex-direction: column;
   height: calc(100% - 40px);
+  position: relative;
+  z-index: 1;
 }
 
 .main-content.no-nav {

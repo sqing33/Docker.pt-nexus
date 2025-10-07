@@ -1,7 +1,7 @@
 <template>
   <div class="info-view-container" v-loading="areSettingsLoading">
     <!-- 速率图表 -->
-    <div class="chart-card">
+    <div class="chart-card glass-card glass-rounded">
       <div class="chart-header">
         <!-- 左侧：时间段筛选 -->
         <div class="header-left-controls">
@@ -75,7 +75,7 @@
     </div>
 
     <!-- 数据量图表 -->
-    <div class="chart-card">
+    <div class="chart-card glass-card glass-rounded">
       <div class="chart-header">
         <!-- 左侧：时间段筛选 -->
         <div class="header-left-controls">
@@ -691,16 +691,19 @@ onUnmounted(() => {
 }
 
 .chart-card {
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
+  /* 背景样式已移至 glass-morphism.css (使用 glass-card 和 glass-rounded 类) */
   padding: 16px;
-  background-color: #fff;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
   position: relative;
+  z-index: 1;
+}
+
+/* 速率图表卡片需要更高的 z-index，确保其 tooltip 不被下面的图表遮挡 */
+.chart-card:first-child {
+  z-index: 2;
 }
 
 .chart-body {

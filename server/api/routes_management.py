@@ -444,6 +444,13 @@ def update_settings():
     if "iyuu_token" in new_config:
         current_config["iyuu_token"] = new_config["iyuu_token"]
 
+    # 处理 ui_settings 配置
+    if "ui_settings" in new_config:
+        current_config.setdefault("ui_settings", {})
+        # 合并 ui_settings，保留其他已有的设置
+        for key, value in new_config["ui_settings"].items():
+            current_config["ui_settings"][key] = value
+
     if config_manager.save(current_config):
         if restart_needed:
             logging.info("配置已更新，将重启数据追踪服务...")

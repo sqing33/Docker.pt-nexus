@@ -4,7 +4,7 @@
       style="margin: 0; border-radius: 0;"></el-alert>
 
     <!-- 搜索和控制栏 -->
-    <div class="search-and-controls">
+    <div class="search-and-controls glass-table">
       <el-input v-model="searchQuery" placeholder="搜索标题或种子ID..." clearable class="search-input"
         style="width: 300px; margin-right: 15px;" />
 
@@ -105,7 +105,7 @@
     <div class="table-container">
       <el-table :data="tableData" v-loading="loading" border style="width: 100%" empty-text="暂无转种数据"
         :max-height="tableMaxHeight" height="100%" :row-class-name="tableRowClassName"
-        @selection-change="handleSelectionChange">
+        @selection-change="handleSelectionChange" class="glass-table" >
         <el-table-column type="selection" width="55" align="center" :selectable="checkSelectable"></el-table-column>
         <el-table-column prop="torrent_id" label="种子ID" align="center" width="80"
           show-overflow-tooltip></el-table-column>
@@ -204,7 +204,7 @@
         <el-table-column prop="updated_at" label="更新时间" width="140" align="center" sortable>
           <template #default="scope">
             <div class="mapped-cell datetime-cell">
-              {{ scope.row.is_deleted ? '已删除/禁转' : formatDateTime(scope.row.updated_at) }}
+              {{ scope.row.is_deleted || hasRestrictedTag(scope.row.tags) ? '已删除/禁转' : formatDateTime(scope.row.updated_at) }}
             </div>
           </template>
         </el-table-column>
@@ -409,6 +409,7 @@ import CrossSeedPanel from '../components/CrossSeedPanel.vue'
 import BatchFetchPanel from '../components/BatchFetchPanel.vue'
 import { useCrossSeedStore } from '@/stores/crossSeed'
 import type { ISourceInfo } from '@/types'
+import '@/assets/styles/glass-morphism.scss'
 
 // 定义emit事件
 const emit = defineEmits<{
@@ -689,6 +690,11 @@ const getTagType = (tags: string[] | string, index: number) => {
 
   const originalTag = tagList[index]
 
+  // 检查是否为禁转标签，如果是则显示为红色
+  if (originalTag === '禁转' || originalTag === 'tag.禁转') {
+    return 'danger' // 红色
+  }
+
   // 检查标签是否符合 *.* 格式且已映射
   if (!isValidFormat(originalTag) || !isMapped('tags', originalTag)) {
     return 'danger' // 红色
@@ -714,6 +720,11 @@ const getTagClass = (tags: string[] | string, index: number) => {
   if (tagList.length === 0 || index >= tagList.length) return ''
 
   const originalTag = tagList[index]
+
+  // 检查是否为禁转标签
+  if (originalTag === '禁转' || originalTag === 'tag.禁转') {
+    return 'restricted-tag' // 返回禁转标签的自定义类名
+  }
 
   // 检查标签是否符合 *.* 格式且已映射
   if (!isValidFormat(originalTag) || !isMapped('tags', originalTag)) {
@@ -1183,7 +1194,7 @@ onMounted(async () => {
 
 // 为表格行设置CSS类名
 const tableRowClassName = ({ row }: { row: SeedParameter }) => {
-  if (row.is_deleted) {
+  if (row.is_deleted || hasRestrictedTag(row.tags)) {
     return 'deleted-row'
   }
   // 如果行不可选择，添加selected-row-disabled类
@@ -1193,8 +1204,30 @@ const tableRowClassName = ({ row }: { row: SeedParameter }) => {
   return ''
 }
 
+// 检查标签中是否包含禁转标签
+const hasRestrictedTag = (tags: string[] | string): boolean => {
+  let tagList: string[] = []
+  if (typeof tags === 'string') {
+    try {
+      tagList = JSON.parse(tags)
+    } catch {
+      tagList = tags.split(',').map(tag => tag.trim()).filter(tag => tag)
+    }
+  } else if (Array.isArray(tags)) {
+    tagList = tags
+  }
+
+  // 检查是否包含"禁转"或"tag.禁转"
+  return tagList.some(tag => tag === '禁转' || tag === 'tag.禁转')
+}
+
 // 控制表格行是否可选择
 const checkSelectable = (row: SeedParameter) => {
+  // 检查是否包含禁转标签
+  if (hasRestrictedTag(row.tags)) {
+    return false
+  }
+
   // 在删除模式下，所有行都可以被选择（包括已删除的行）
   if (isDeleteMode.value) {
     return true
@@ -1669,7 +1702,9 @@ onUnmounted(() => {
 })
 </script>
 
-<style scoped>
+<style scoped lang="scss">
+@import '@/assets/styles/glass-morphism.scss';
+
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -1868,6 +1903,8 @@ onUnmounted(() => {
   box-sizing: border-box;
 }
 
+
+
 .search-and-controls {
   display: flex;
   align-items: center;
@@ -1943,6 +1980,13 @@ onUnmounted(() => {
 .invalid-tag {
   background-color: #fef0f0 !important;
   border-color: #fbc4c4 !important;
+}
+
+.restricted-tag {
+  background-color: #f56c6c !important;
+  border-color: #f56c6c !important;
+  color: #ffffff !important;
+  font-weight: bold !important;
 }
 
 :deep(.deleted-row) {

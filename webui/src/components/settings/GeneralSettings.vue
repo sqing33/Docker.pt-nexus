@@ -3,7 +3,7 @@
 
     <div class="settings-grid">
       <!-- 用户信息设置卡片 -->
-      <div class="settings-card">
+      <div class="settings-card glass-card glass-rounded glass-transparent-header glass-transparent-body">
         <div class="card-header">
           <div class="header-content">
             <el-icon class="header-icon">
@@ -64,8 +64,46 @@
         </div>
       </div>
 
+      <!-- 背景设置卡片 -->
+      <div class="settings-card glass-card glass-rounded glass-transparent-header glass-transparent-body">
+        <div class="card-header">
+          <div class="header-content">
+            <el-icon class="header-icon">
+              <Picture />
+            </el-icon>
+            <h3>背景设置</h3>
+          </div>
+          <el-button type="primary" :loading="savingBackground" @click="saveBackgroundSettings" size="small">
+            保存
+          </el-button>
+        </div>
+
+        <div class="card-content">
+          <el-form :model="backgroundForm" label-position="top" class="settings-form">
+            <el-form-item label="背景图片URL" class="form-item">
+              <el-input v-model="backgroundForm.background_url" placeholder="请输入背景图片的URL地址" clearable>
+                <template #prefix>
+                  <el-icon>
+                    <Picture />
+                  </el-icon>
+                </template>
+              </el-input>
+            </el-form-item>
+
+            <div class="form-spacer"></div>
+
+            <el-text type="info" size="small" class="proxy-hint">
+              <el-icon size="12">
+                <InfoFilled />
+              </el-icon>
+              设置应用程序的背景图片，支持在线图片URL
+            </el-text>
+          </el-form>
+        </div>
+      </div>
+
       <!-- IYUU设置卡片 -->
-      <div class="settings-card">
+      <div class="settings-card glass-card glass-rounded glass-transparent-header glass-transparent-body">
         <div class="card-header">
           <div class="header-content">
             <el-icon class="header-icon">
@@ -162,7 +200,7 @@
       </el-dialog>
 
       <!-- 图床设置卡片 -->
-      <div class="settings-card">
+      <div class="settings-card glass-card glass-rounded glass-transparent-header glass-transparent-body">
         <div class="card-header">
           <div class="header-content">
             <el-icon class="header-icon">
@@ -240,7 +278,7 @@
       </div>
 
       <!-- 网络代理设置卡片 -->
-      <div class="settings-card">
+      <div class="settings-card glass-card glass-rounded glass-transparent-header glass-transparent-body">
         <div class="card-header">
           <div class="header-content">
             <el-icon class="header-icon">
@@ -278,7 +316,7 @@
       </div>
 
       <!-- 默认下载器设置卡片 -->
-      <div class="settings-card">
+      <div class="settings-card glass-card glass-rounded glass-transparent-header glass-transparent-body">
         <div class="card-header">
           <div class="header-content">
             <el-icon class="header-icon">
@@ -313,7 +351,7 @@
       </div>
 
       <!-- 认证设置卡片 -->
-      <div class="settings-card">
+      <div class="settings-card glass-card glass-rounded glass-transparent-header glass-transparent-body">
         <div class="card-header">
           <div class="header-content">
             <el-icon class="header-icon">
@@ -332,7 +370,7 @@
       </div>
 
       <!-- 权限管理卡片 -->
-      <div class="settings-card">
+      <div class="settings-card glass-card glass-rounded glass-transparent-header glass-transparent-body">
         <div class="card-header">
           <div class="header-content">
             <el-icon class="header-icon">
@@ -351,7 +389,7 @@
       </div>
 
       <!-- 功能扩展卡片 -->
-      <div class="settings-card">
+      <div class="settings-card glass-card glass-rounded glass-transparent-header glass-transparent-body">
         <div class="card-header">
           <div class="header-content">
             <el-icon class="header-icon">
@@ -437,6 +475,12 @@ const iyuuLogsDialogVisible = ref(false)
 const iyuuLogs = ref<IYUULog[]>([])
 const loadingLogs = ref(false)
 
+// 背景设置相关
+const savingBackground = ref(false)
+const backgroundForm = reactive({
+  background_url: ''
+})
+
 // 获取所有设置
 const fetchSettings = async () => {
   try {
@@ -477,6 +521,11 @@ const fetchSettings = async () => {
     // 获取网络代理设置
     if (config.network && config.network.proxy_url && !settingsForm.proxy_url) {
       settingsForm.proxy_url = config.network.proxy_url;
+    }
+
+    // 获取背景设置
+    if (config.ui_settings && config.ui_settings.background_url) {
+      backgroundForm.background_url = config.ui_settings.background_url;
     }
 
     // 获取下载器列表
@@ -651,6 +700,30 @@ const saveProxySettings = async () => {
   }
 };
 
+// 保存背景设置
+const saveBackgroundSettings = async () => {
+  savingBackground.value = true;
+  try {
+    const uiSettings = {
+      ui_settings: {
+        background_url: backgroundForm.background_url
+      }
+    };
+    await axios.post('/api/settings', uiSettings);
+    ElMessage.success('背景设置已保存！');
+    
+    // 立即更新App.vue的背景
+    window.dispatchEvent(new CustomEvent('background-updated', { 
+      detail: { backgroundUrl: backgroundForm.background_url } 
+    }));
+  } catch (error: any) {
+    const errorMessage = error.response?.data?.error || '保存失败。';
+    ElMessage.error(errorMessage);
+  } finally {
+    savingBackground.value = false;
+  }
+};
+
 onMounted(() => {
   fetchSettings();
 });
@@ -659,7 +732,7 @@ onMounted(() => {
 <style scoped>
 .settings-container {
   padding: 20px;
-  background-color: var(--el-bg-color-page);
+  background-color: transparent;
   min-height: calc(100% - 40px);
   overflow-y: auto;
   height: 100%;
@@ -678,10 +751,6 @@ onMounted(() => {
 }
 
 .settings-card {
-  background: var(--el-bg-color);
-  border-radius: 6px;
-  border: 1px solid var(--el-border-color);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
   display: flex;
   flex-direction: column;
 }
@@ -691,8 +760,6 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 16px;
-  border-bottom: 1px solid var(--el-border-color);
-  background-color: var(--el-fill-color-light);
   flex-shrink: 0;
 }
 
@@ -749,7 +816,6 @@ onMounted(() => {
 }
 
 .credential-section {
-  background: var(--el-fill-color-light);
   border-radius: 4px;
   padding: 12px;
   margin-top: 8px;

@@ -71,7 +71,7 @@
       <el-col :span="24">
         <h3 class="downloader-title">下载器状态</h3>
         <div class="downloader-grid">
-          <el-card v-for="downloader in downloaderInfo" :key="downloader.name" class="downloader-card"
+          <el-card v-for="downloader in downloaderInfo" :key="downloader.name" class="downloader-card glass-card glass-rounded"
             :class="{ 'disabled': !downloader.enabled }">
             <div class="downloader-header">
               <div class="downloader-name">
@@ -283,6 +283,8 @@ onMounted(() => {
 </script>
 
 <style scoped>
+@import '@/assets/styles/glass-morphism.scss';
+
 .home-container {
   padding: 24px;
   max-width: 1200px;
@@ -290,14 +292,15 @@ onMounted(() => {
 }
 
 .warning-banner {
-  background: linear-gradient(135deg, #f0f4ff 0%, #e6eeff 100%);
+  background: rgba(240, 244, 255, 0.7);
+  backdrop-filter: blur(10px);
   border-radius: 12px;
   padding: 25px;
   margin-bottom: 24px;
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
   color: #333;
   overflow: hidden;
-  border: 1px solid #dcdfe6;
+  border: 1px solid rgba(220, 223, 230, 0.5);
 }
 
 .warning-content {
@@ -369,10 +372,17 @@ onMounted(() => {
 
 /* 站点卡片样式 */
 .site-card {
-  border: 1px solid #e4e7ed;
+  background-color: rgba(255, 255, 255, 0.7) !important;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(228, 231, 237, 0.5);
   border-radius: 8px;
-  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
   margin-bottom: 24px;
+}
+
+.site-card :deep(.el-card__header) {
+  background-color: transparent;
+  border-bottom: 1px solid rgba(228, 231, 237, 0.5);
 }
 
 .site-card-header {
@@ -581,14 +591,8 @@ onMounted(() => {
   gap: 16px;
 }
 
-.downloader-card {
-  border: 1px solid #dcdfe6;
-  border-radius: 8px;
-  transition: all 0.3s;
-}
-
-.downloader-card:hover {
-  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+.downloader-card :deep(.el-card__body) {
+  background-color: transparent;
 }
 
 .downloader-card.disabled {
