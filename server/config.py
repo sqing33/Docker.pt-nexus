@@ -82,7 +82,8 @@ class ConfigManager:
                         "siteNames": [],
                         "downloaderIds": [],
                     }
-                }
+                },
+                "background_url": ""
             },
             # --- [新增] IYUU Token 设置 ---
             "iyuu_token": "",

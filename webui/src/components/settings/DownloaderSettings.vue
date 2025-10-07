@@ -1,5 +1,5 @@
 <template>
-  <div class="top-actions">
+  <div class="top-actions glass-pagination">
     <el-button type="primary" size="large" @click="addDownloader" :icon="Plus">
       添加下载器
     </el-button>
@@ -18,7 +18,7 @@
   </div>
   <div class="settings-view" v-loading="isLoading">
     <div class="downloader-grid">
-      <el-card v-for="downloader in settings.downloaders" :key="downloader.id" class="downloader-card">
+      <el-card v-for="downloader in settings.downloaders" :key="downloader.id" class="downloader-card glass-card glass-rounded glass-transparent-header glass-transparent-body">
         <template #header>
           <div class="card-header">
             <span>{{ downloader.name || '新下载器' }}</span>
@@ -303,9 +303,7 @@ const savePathMappings = async () => {
   position: sticky;
   top: 0;
   z-index: 10;
-  background-color: var(--el-bg-color-page);
   padding: 16px 24px;
-  border-bottom: 1px solid var(--el-border-color);
   display: flex;
   flex-wrap: nowrap;
   align-items: center;
@@ -316,6 +314,7 @@ const savePathMappings = async () => {
   padding: 24px;
   overflow-y: auto;
   flex-grow: 1;
+  background-color: transparent;
 }
 
 .downloader-grid {

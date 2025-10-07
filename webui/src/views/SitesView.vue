@@ -2,11 +2,11 @@
   <div class="sites-view-container">
     <div class="layout-wrapper">
       <!-- 第一个象限：做种站点统计 -->
-      <div class="quadrant">
+      <div class="quadrant glass-card glass-rounded">
         <h2 class="quadrant-title">做种站点统计</h2>
         <!-- [修改] 添加 table-wrapper 用于在极端情况下提供水平滚动 -->
         <div class="table-wrapper">
-          <el-table v-loading="siteStatsLoading" :data="siteStatsData" class="stats-table" border stripe height="100%"
+          <el-table v-loading="siteStatsLoading" :data="siteStatsData" class="stats-table glass-table"  border height="100%"
             :default-sort="{ prop: 'total_size', order: 'descending' }">
             <template #empty>
               <el-empty description="无站点数据" />
@@ -23,7 +23,7 @@
       </div>
 
       <!-- 第二个象限：做种官组统计 -->
-      <div class="quadrant">
+      <div class="quadrant glass-card glass-rounded">
         <h2 class="quadrant-title" style="display:flex;align-items:center;gap:10px;">
           <span>做种官组统计</span>
           <el-select v-model="selectedSite" placeholder="全部站点" clearable filterable size="small" style="width: 240px"
@@ -33,7 +33,7 @@
         </h2>
         <!-- [修改] 添加 table-wrapper 用于在极端情况下提供水平滚动 -->
         <div class="table-wrapper">
-          <el-table v-loading="groupStatsLoading" :data="groupStatsData" class="stats-table" border stripe height="100%"
+          <el-table v-loading="groupStatsLoading" :data="groupStatsData" class="stats-table glass-table" border height="100%"
             :default-sort="{ prop: 'total_size', order: 'descending' }">
             <template #empty>
               <el-empty description="无官组数据" />
@@ -51,7 +51,7 @@
       </div>
 
       <!-- 第三个象限：本地文件扫描 -->
-      <div class="quadrant local-scan-quadrant">
+      <div class="quadrant local-scan-quadrant glass-card glass-rounded">
         <div class="scan-header">
           <div class="scan-header-left">
             <h2 class="quadrant-title">本地文件扫描</h2>
@@ -75,7 +75,7 @@
         </div>
 
         <!-- 扫描结果统计 -->
-        <div v-if="scanResult" class="scan-summary">
+        <div v-if="scanResult" class="scan-summary glass-card glass-rounded">
           <el-row :gutter="16">
             <el-col :span="4">
               <div class="stat-item">
@@ -111,7 +111,7 @@
         </div>
 
         <!-- 结果详情 -->
-        <div v-if="scanResult" class="scan-results">
+        <div v-if="scanResult" class="scan-results glass-card glass-rounded">
           <div style="display: flex; align-items: center; gap: 12px; ">
             <el-tabs v-model="activeTab" style="flex: 0 0 auto;">
               <el-tab-pane name="missing">
@@ -149,7 +149,7 @@
 
           <div class="tab-content-area">
             <div v-if="activeTab === 'missing'" class="tab-content">
-              <el-table :data="filteredMissingFiles" stripe height="100%"
+              <el-table :data="filteredMissingFiles" class="glass-table glass-transition" height="100%"
                 :default-sort="{ prop: 'size', order: 'descending' }">
                 <el-table-column prop="name" label="种子名称" show-overflow-tooltip align="left" header-align="center" />
                 <el-table-column prop="save_path" label="保存路径" width="250" show-overflow-tooltip
@@ -164,7 +164,7 @@
             </div>
 
             <div v-if="activeTab === 'orphaned'" class="tab-content">
-              <el-table :data="filteredOrphanedFiles" stripe height="100%"
+              <el-table :data="filteredOrphanedFiles" class="glass-table glass-transition" height="100%"
                 :default-sort="{ prop: 'size', order: 'descending' }">
                 <el-table-column prop="name" label="文件/文件夹名称" show-overflow-tooltip align="left"
                   header-align="center" />
@@ -186,7 +186,7 @@
             </div>
 
             <div v-if="activeTab === 'synced'" class="tab-content">
-              <el-table :data="filteredSyncedTorrents" stripe height="100%">
+              <el-table :data="filteredSyncedTorrents" class="glass-table glass-transition" height="100%">
                 <el-table-column prop="name" label="名称" show-overflow-tooltip align="left" header-align="center" />
                 <el-table-column prop="path" label="路径" width="250" show-overflow-tooltip align="left"
                   header-align="center" />
@@ -213,7 +213,7 @@
 
         <!-- 加载中状态 -->
         <div v-if="scanning" v-loading="scanning" element-loading-text="正在扫描本地文件..."
-          element-loading-background="rgba(255, 255, 255, 0.8)" class="loading-container">
+          element-loading-background="transparent" class="loading-container">
         </div>
 
         <!-- 空状态 -->
@@ -455,7 +455,7 @@ onMounted(() => {
 })
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .sites-view-container {
   display: flex;
   flex-direction: column;
@@ -467,7 +467,6 @@ onMounted(() => {
     -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   /* 在大屏幕上隐藏滚动条，但在小屏幕上需要时会显示 */
   overflow: auto;
-  background-color: #f4f7f9;
 }
 
 .layout-wrapper {
@@ -485,12 +484,8 @@ onMounted(() => {
   position: relative;
   display: flex;
   flex-direction: column;
-  background-color: #ffffff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.06);
   padding: 15px;
   overflow: hidden;
-  /* 为象限设置一个最小高度，防止在多行布局时高度不一 */
   min-height: 300px;
 }
 
@@ -517,6 +512,7 @@ onMounted(() => {
 .stats-table {
   width: 100%;
   flex-grow: 1;
+  background-color: rgba(255, 255, 255, 0.3) !important;
 }
 
 :deep(.el-table) {
@@ -567,8 +563,6 @@ onMounted(() => {
 }
 
 .scan-summary {
-  background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 100%);
-  border-radius: 8px;
   padding: 10px;
   flex-shrink: 0;
 }
@@ -576,7 +570,6 @@ onMounted(() => {
 .stat-item {
   text-align: center;
   padding: 12px;
-  background: white;
   border-radius: 6px;
   transition: all 0.3s;
 }
@@ -616,8 +609,6 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: #fafafa;
-  border-radius: 8px;
   padding: 12px;
 }
 
@@ -632,6 +623,10 @@ onMounted(() => {
   flex: 1;
   min-height: 0;
   overflow: hidden;
+}
+
+.glass-transition {
+  background-color: rgba(255, 255, 255, 0.3) !important;
 }
 
 .tab-label {
@@ -650,6 +645,10 @@ onMounted(() => {
 
 :deep(.el-tabs__header) {
   margin: 0;
+}
+
+:deep(.el-tabs__item) {
+  padding: 0 15px!important;
 }
 
 /* --- 响应式布局 --- */

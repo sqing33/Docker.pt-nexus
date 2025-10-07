@@ -1,0 +1,110 @@
+/* 毛玻璃效果公共样式 */
+
+/* 基础毛玻璃样式 - 标准透明度 (70%) */
+.glass-card {
+  background-color: rgba(255, 255, 255, 0.6) !important;
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(220, 223, 230, 0.5);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s;
+}
+
+/* Element Plus 组件透明化辅助类 */
+.glass-transparent-header {
+  :deep(.el-card__header) {
+    background-color: transparent;
+    border-bottom: 1px solid rgba(228, 231, 237, 0.5);
+  }
+}
+
+.glass-transparent-body {
+  :deep(.el-card__body) {
+    background-color: transparent;
+  }
+}
+
+/* 表格毛玻璃效果 */
+.glass-table {
+  background-color: rgba(255, 255, 255, 0.8) !important;
+  backdrop-filter: blur(3px);
+
+  .el-table__inner-wrapper {
+    background-color: transparent !important;
+
+  }
+
+  .el-table__body-wrapper {
+    background-color: transparent !important;
+  }
+
+  .el-table__header-wrapper {
+    background-color: transparent !important;
+
+
+    th.el-table__cell {
+      background-color: rgba(255, 255, 255, 0.1) !important;
+    }
+  }
+
+  /* 确保表头行本身也是透明的 */
+  .el-table__header tr {
+    background-color: transparent !important;
+  }
+
+  tbody tr {
+    background-color: transparent !important;
+  }
+
+  .el-table__row {
+    background-color: transparent !important;
+  }
+
+  /* 确保悬停状态也保持透明 */
+  .el-table__body tr.hover-row>td {
+    background-color: rgba(255, 255, 255, 0.1) !important;
+
+  }
+}
+
+
+/* 分页器毛玻璃效果 */
+.glass-pagination {
+  background-color: rgba(255, 255, 255, 0.7) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  border-radius: 4px;
+  padding: 10px;
+  display: flex;
+}
+
+/* 导航栏毛玻璃效果 */
+.glass-nav {
+  background-color: rgba(255, 255, 255, 0.5) !important;
+  backdrop-filter: blur(5px);
+
+  :deep(.el-menu) {
+    background-color: transparent !important;
+  }
+
+  :deep(.el-menu-item) {
+    background-color: transparent !important;
+
+    &:hover {
+      background-color: rgba(0, 0, 0, 0.05) !important;
+    }
+  }
+}
+
+
+/* 圆角样式变体 */
+.glass-rounded {
+  border-radius: 8px;
+}
+
+.glass-rounded-lg {
+  border-radius: 12px;
+}
+
+.glass-rounded-sm {
+  border-radius: 4px;
+}

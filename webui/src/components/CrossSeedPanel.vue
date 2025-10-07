@@ -144,7 +144,8 @@
                           <el-select v-model="torrentData.standardized_params.tags" multiple filterable allow-create
                             default-first-option placeholder="请选择或输入标签" style="width: 100%">
                             <template #tag="{ data }">
-                              <el-tag v-for="item in data" :key="item.value" :type="getTagType(item.value)" closable
+                              <el-tag v-for="item in data" :key="item.value" :type="getTagType(item.value)" 
+                                :closable="!isRestrictedTag(item.value)"
                                 disable-transitions @close="handleTagClose(item.value)" style="margin: 2px;">
                                 <span>{{ item.currentLabel }}</span>
                               </el-tag>
@@ -595,7 +596,7 @@
       <div v-if="activeStep === 0" class="button-group">
         <el-button @click="$emit('cancel')">取消</el-button>
 
-        <el-tooltip content="存在待修改的参数 (请确保mediainfo或bdinfo内容有效且包含必要的媒体信息)" placement="top"
+        <el-tooltip :content="nextButtonTooltipContent" placement="top"
           :disabled="!isNextButtonDisabled">
           <!-- 添加一个 span 作为包裹元素 -->
 
@@ -2055,6 +2056,11 @@ const allTagOptions = computed(() => {
 
 // 【修改并添加调试代码】方法：根据标签是否有效，返回不同的类型
 const getTagType = (tag: string) => {
+  // 优先检查是否为禁转标签
+  if (tag === '禁转' || tag === 'tag.禁转') {
+    return 'danger'; // 红色
+  }
+
   // 在浏览器开发者工具的控制台(Console)中打印日志，方便调试
   console.log(`[getTagType] 检查标签: "${tag}", 是否无效: ${invalidTagsList.value.includes(tag)}`);
 
@@ -2345,7 +2351,28 @@ const initialTitleComponents = computed(() => {
   }));
 });
 
+// 检查是否为受限标签（禁转或tag.禁转）
+const isRestrictedTag = (tag: string): boolean => {
+  return tag === '禁转' || tag === 'tag.禁转';
+};
+
+// 检查是否包含受限标签
+const hasRestrictedTag = computed(() => {
+  const tags = torrentData.value.standardized_params.tags || [];
+  return tags.some(tag => isRestrictedTag(tag));
+});
+
 const handleTagClose = (tagToRemove: string) => {
+  // 如果是受限标签，不允许删除
+  if (isRestrictedTag(tagToRemove)) {
+    ElNotification.warning({
+      title: '无法删除',
+      message: '禁转标签不允许删除',
+      duration: 2000
+    });
+    return;
+  }
+
   // 找到要删除的标签在数组中的索引
   const index = torrentData.value.standardized_params.tags.indexOf(tagToRemove);
 
@@ -2393,6 +2420,11 @@ const isNextButtonDisabled = computed(() => {
   const hasUnrecognized = unrecognized && unrecognized.value !== '';
   const hasInvalidScreenshots = !screenshotValid.value;
 
+  // 检查是否包含受限标签
+  if (hasRestrictedTag.value) {
+    return true;
+  }
+
   // 检查 mediainfo/bdinfo 的有效性
   const mediaInfoText = torrentData.value.mediainfo || '';
   const hasInvalidMediaInfo = !mediaInfoText || mediaInfoText.trim() === '';
@@ -2426,6 +2458,14 @@ const isNextButtonDisabled = computed(() => {
   }
 
   return false;
+});
+
+// 计算属性：获取下一步按钮的提示文本
+const nextButtonTooltipContent = computed(() => {
+  if (hasRestrictedTag.value) {
+    return '检测到禁转标签，不允许继续发布';
+  }
+  return '存在待修改的参数 (请确保mediainfo或bdinfo内容有效且包含必要的媒体信息)';
 });
 
 // 辅助函数：检查是否为有效的 MediaInfo 格式

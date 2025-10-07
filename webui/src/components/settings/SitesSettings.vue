@@ -1,7 +1,7 @@
 <template>
   <div class="cookie-view-container">
     <!-- 1. 顶部固定区域 -->
-    <div class="top-actions cookie-actions">
+    <div class="top-actions cookie-actions glass-pagination">
       <!-- CookieCloud 表单 -->
       <el-form :model="cookieCloudForm" inline class="cookie-cloud-form">
         <el-form-item label="CookieCloud">
@@ -34,7 +34,7 @@
 
     <!-- 2. 中间可滚动内容区域 -->
     <div class="settings-view" v-loading="isSitesLoading">
-      <el-table :data="paginatedSites" stripe class="settings-table" height="100%">
+      <el-table :data="paginatedSites" class="settings-table glass-table" height="100%">
         <el-table-column prop="nickname" label="站点昵称" width="150" sortable />
         <el-table-column prop="site" label="站点标识" width="200" show-overflow-tooltip />
         <el-table-column prop="base_url" label="基础URL" width="225" show-overflow-tooltip />
@@ -77,7 +77,7 @@
     </div>
 
     <!-- 3. 底部固定区域 -->
-    <div class="settings-footer">
+    <div class="settings-footer glass-pagination">
       <el-radio-group v-model="siteFilter" @change="handleFilterChange">
         <el-radio-button label="active">现有站点</el-radio-button>
         <el-radio-button label="all">所有站点</el-radio-button>
@@ -373,16 +373,13 @@ const handleDelete = (site) => {
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  padding: 16px 24px;
-  background-color: var(--el-bg-color-page);
-  border-bottom: 1px solid var(--el-border-color);
   gap: 16px;
 }
 
 .settings-view {
   flex-grow: 1;
   overflow: hidden;
-  padding: 0 24px;
+  background-color: transparent;
 }
 
 .settings-footer {
@@ -390,8 +387,6 @@ const handleDelete = (site) => {
   justify-content: space-between;
   align-items: center;
   padding: 16px 24px;
-  border-top: 1px solid var(--el-border-color);
-  background-color: var(--el-bg-color-page);
 }
 
 .cookie-cloud-form {

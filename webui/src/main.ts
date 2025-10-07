@@ -11,6 +11,9 @@ import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 
+// 引入公共毛玻璃样式
+import './assets/styles/glass-morphism.scss'
+
 // 如果需要，可以引入 ECharts
 import * as echarts from 'echarts'
 

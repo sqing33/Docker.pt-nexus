@@ -6,7 +6,8 @@
     <!-- [修改] 使用 v-if 确保在加载设置后再渲染表格 -->
     <el-table v-if="settingsLoaded" :data="allData" v-loading="loading" border height="100%" ref="tableRef"
       row-key="unique_id" :row-class-name="tableRowClassName" @row-click="handleRowClick" @expand-change="handleExpandChange"
-      @sort-change="handleSortChange" :default-sort="currentSort" empty-text="无数据或当前筛选条件下无结果">
+      @sort-change="handleSortChange" :default-sort="currentSort" empty-text="无数据或当前筛选条件下无结果"
+      class="glass-table">
       <!-- ... (其他列保持不变) ... -->
       <el-table-column type="expand" width="1">
         <template #default="props">
@@ -144,7 +145,7 @@
       </el-table-column>
     </el-table>
 
-    <el-pagination v-if="totalTorrents > 0" style="margin-top: 15px; justify-content: flex-end"
+    <el-pagination v-if="totalTorrents > 0"  class="glass-pagination" style="justify-content: flex-end"
       v-model:current-page="currentPage" v-model:page-size="pageSize" :page-sizes="[20, 50, 100]"
       :total="totalTorrents" layout="total, sizes, prev, pager, next, jumper" @size-change="handleSizeChange"
       @current-change="handleCurrentChange" background />
@@ -250,7 +251,7 @@
 
     <!-- 站点操作弹窗 -->
     <div v-if="siteOperationDialogVisible" class="filter-overlay" @click.self="siteOperationDialogVisible = false">
-      <el-card class="filter-card" style="max-width: 400px;">
+      <el-card class="filter-card glass-card glass-rounded" style="max-width: 400px;">
         <template #header>
           <div class="filter-card-header">
             <span>站点操作</span>
@@ -294,7 +295,7 @@
             <el-tag type="primary" size="small" effect="dark" style="margin-right: 5px;">蓝色</el-tag> 表示未配置Cookie。
             只有当前种子所在的站点才可点击。
           </p>
-          <div class="site-list-box">
+          <div class="site-list-box glass-site-box">
             <el-tag v-for="site in allSourceSitesStatus" :key="site.name"
               :type="getSiteTagType(site, isSourceSiteSelectable(site.name))"
               :class="{ 'is-selectable': isSourceSiteSelectable(site.name) }" class="site-tag"
@@ -1136,6 +1137,8 @@ watch(nameSearch, () => {
   box-sizing: border-box;
 }
 
+/* 表格和分页器样式已移至 glass-morphism.scss */
+
 .disabled-site {
   opacity: 0.5;
   text-decoration: line-through;
@@ -1327,10 +1330,7 @@ watch(nameSearch, () => {
   margin-right: 0 !important;
 }
 
-:deep(.el-pagination) {
-  margin: 8px 0 !important;
-  padding-right: 10px;
-}
+/* 分页器样式已移至 glass-morphism.css */
 
 .source-site-selection-body {
   padding: 5px 20px 20px 20px;

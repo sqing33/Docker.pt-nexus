@@ -43,12 +43,27 @@ const route = useRoute()
 }
 
 .settings-aside {
-  border-right: 1px solid var(--el-border-color);
+  border-right: 1px solid rgba(220, 223, 230, 0.5);
+  background-color: rgba(255, 255, 255, 0.5) !important;
+  backdrop-filter: blur(5px);
 }
 
 .settings-menu {
   height: 100%;
   border-right: none;
+  background-color: transparent !important;
+}
+
+.settings-menu :deep(.el-menu-item) {
+  background-color: transparent !important;
+}
+
+.settings-menu :deep(.el-menu-item:hover) {
+  background-color: rgba(0, 0, 0, 0.05) !important;
+}
+
+.settings-menu :deep(.el-menu-item.is-active) {
+  background-color: rgba(64, 158, 255, 0.1) !important;
 }
 
 .settings-main {
@@ -57,5 +72,6 @@ const route = useRoute()
   flex-direction: column;
   /* 确保子组件可以正确地 flex 布局 */
   overflow: auto;
+  background-color: transparent;
 }
 </style>
