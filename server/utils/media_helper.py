@@ -649,7 +649,7 @@ def upload_data_title(title: str, torrent_filename: str = ""):
     release_group = ""
     main_part = title
 
-    # 检查特殊制作组
+    # 检查特殊制作组（完整匹配）
     special_groups = ["mUHD-FRDS", "MNHD-FRDS", "DMG&VCB-Studio", "VCB-Studio"]
     found_special_group = False
     for group in special_groups:
@@ -659,7 +659,22 @@ def upload_data_title(title: str, torrent_filename: str = ""):
             found_special_group = True
             break
 
-    # 如果不是特殊制作组，使用通用模式匹配
+    # 如果不是特殊制作组，先尝试匹配 VCB-Studio 变体
+    if not found_special_group:
+        # 匹配类似 -Nekomoe kissaten&VCB-Studio, -LoliHouse&VCB-Studio 等格式
+        # 这个正则会匹配 - 开头，中间可能有多个单词（包含空格）、&符号，最后以 VCB-Studio 结尾
+        vcb_variant_pattern = re.compile(
+            r"^(?P<main_part>.+?)[-](?P<release_group>[\w\s]+&VCB-Studio)$",
+            re.IGNORECASE
+        )
+        vcb_match = vcb_variant_pattern.match(title)
+        if vcb_match:
+            main_part = vcb_match.group("main_part").strip()
+            release_group = vcb_match.group("release_group")
+            found_special_group = True
+            print(f"检测到 VCB-Studio 变体制作组: {release_group}")
+
+    # 如果还不是特殊制作组，使用通用模式匹配
     if not found_special_group:
         # 支持 - 和 @ 两种前缀
         general_regex = re.compile(
@@ -1882,6 +1897,7 @@ def extract_tags_from_mediainfo(mediainfo_text: str) -> list:
         '粤语': ['粤语', 'cantonese'],
         # 字幕标签
         '中字': ['中字', 'chinese', 'chs', 'cht', '简', '繁'],
+        '英字': ['英字', 'english', 'eng', 'en'],
         # HDR 格式标签
         'Dolby Vision': ['dolby vision', '杜比视界'],
         'HDR10+': ['hdr10+'],
@@ -1929,6 +1945,9 @@ def extract_tags_from_mediainfo(mediainfo_text: str) -> list:
             if '中字' in tag_keywords_map and any(
                     kw in line_lower for kw in tag_keywords_map['中字']):
                 found_tags.add('tag.中字')
+            if '英字' in tag_keywords_map and any(
+                    kw in line_lower for kw in tag_keywords_map['英字']):
+                found_tags.add('tag.英字')
 
         # 检查 HDR 格式标签 (全局检查)
         line_lower = line_stripped.lower()

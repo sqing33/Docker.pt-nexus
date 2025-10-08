@@ -19,6 +19,7 @@ from io import StringIO
 from typing import Dict, Any, Optional, List
 from config import TEMP_DIR, DATA_DIR
 from utils import ensure_scheme, upload_data_mediaInfo, upload_data_title, extract_tags_from_mediainfo, extract_origin_from_description, is_image_url_valid_robust
+from utils.completion_checker import check_completion_status, add_completion_tag_if_needed
 
 # 导入种子参数模型
 from models.seed_parameter import SeedParameter
@@ -1348,6 +1349,42 @@ class TorrentMigrator:
                 self.logger.info(f"合并后的标签: {merged_tags}")
             else:
                 self.logger.info("标题参数中未提取到额外标签")
+
+            # [新增] 检查电视剧/动漫是否完结
+            self.logger.info("开始检查电视剧/动漫完结状态...")
+            full_description_for_completion = f"{intro.get('statement', '')}\n{intro.get('body', '')}"
+            
+            completion_status = check_completion_status(
+                title=original_main_title,
+                subtitle=subtitle,
+                description=full_description_for_completion,
+                local_path=self.save_path,
+                downloader_id=self.downloader_id,
+                torrent_name=processed_torrent_name  # 传入处理后的种子名称
+            )
+            
+            if completion_status.get("is_complete"):
+                self.logger.info(
+                    f"✓ 检测到完结状态: {completion_status['reason']} "
+                    f"(置信度: {completion_status['confidence']})"
+                )
+                
+                # 添加完结标签
+                existing_tags = source_params.get("标签", [])
+                updated_tags = add_completion_tag_if_needed(existing_tags, completion_status)
+                source_params["标签"] = updated_tags
+                
+                # 记录详细信息
+                if completion_status.get("details"):
+                    details = completion_status["details"]
+                    if "episode_check" in details:
+                        ep_check = details["episode_check"]
+                        self.logger.info(
+                            f"  集数信息: 简介总集数={ep_check.get('total_episodes')}, "
+                            f"本地集数={ep_check.get('local_episodes')}"
+                        )
+            else:
+                self.logger.info(f"未检测到完结标识: {completion_status['reason']}")
 
             # 步骤5：验证简介格式
             if self.task_id:

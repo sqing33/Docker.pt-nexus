@@ -13,7 +13,6 @@ form_fields:
   team: "team_sel[4]"
   category: "type"  # 类别字段映射到type参数
   processing: "processing_sel[4]"
-  tags[4][]: "tags[]"
 
 # 标准化键映射 - 定义源文本到标准化键的映射规则
 # source_parsers部分：定义如何从原始数据解析出标准化参数
@@ -165,6 +164,28 @@ source_parsers:
       "PDF": "format.pdf"
       "Other": "format.other"
 
+    tag:
+      "禁转": "tag.禁转"
+      "首发": "tag.首发"
+      "驻站": "tag.驻站"
+      "纯净版": "tag.纯净版"
+      "DIY": "tag.DIY"
+      "完结": "tag.完结"
+      "分集": "tag.分集"
+      "国语": "tag.国语"
+      "粤语": "tag.粤语"
+      "中字": "tag.中字"
+      "杜比视界": "tag.杜比视界"
+      "HDR10+": "tag.HDR10+"
+      "HDR10": "tag.HDR10"
+      "菁彩HDR": "tag.菁彩HDR"
+      "特效": "tag.特效"
+      "应求": "tag.应求"
+      "自购": "tag.自购"
+      "ASMR": "tag.ASMR"
+      "网络小说": "tag.网络小说"
+      "漫画": "tag.漫画"
+
 # 参数映射规则 - 定义如何将标准化键映射到站点特定参数
 mappings:
   type:
@@ -269,20 +290,20 @@ mappings:
     "format.other": "5"
     "default": "5"
 
-  tag:
-    "tag.s纯净版": 16
-    "tag.sDIY": 4
-    "tag.s完结": 10
-    "tag.s分集": 17
-    "tag.s国语": 5
-    "tag.s粤语": 13
-    "tag.s中字": 6
-    "tag.s杜比视界": 8
-    "tag.sHDR10+": 9
-    "tag.sHDR10": 7
-    "tag.s菁彩HDR": 15
-    "tag.s特效": 12
-    "tag.sASMR": 21
-    "tag.s网络小说": 19
-    "tag.s漫画": 18
-    "default": null
+    tag:
+      "tag.纯净版": 16
+      "tag.DIY": 4
+      "tag.完结": 10
+      "tag.分集": 17
+      "tag.国语": 5
+      "tag.粤语": 13
+      "tag.中字": 6
+      "tag.杜比视界": 8
+      "tag.HDR10+": 9
+      "tag.HDR10": 7
+      "tag.菁彩HDR": 15
+      "tag.特效": 12
+      "tag.ASMR": 21
+      "tag.网络小说": 19
+      "tag.漫画": 18
+      "default": null

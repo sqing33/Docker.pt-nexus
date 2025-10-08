@@ -131,6 +131,15 @@ type BatchFileCheckResponse struct {
 	Message string            `json:"message"`
 	Results []FileCheckResult `json:"results"`
 }
+type EpisodeCountRequest struct {
+	RemotePath string `json:"remote_path"`
+}
+type EpisodeCountResponse struct {
+	Success       bool   `json:"success"`
+	Message       string `json:"message"`
+	EpisodeCount  int    `json:"episode_count,omitempty"`
+	SeasonNumber  int    `json:"season_number,omitempty"`
+}
 type SubtitleEvent struct {
 	StartTime float64
 	EndTime   float64
@@ -554,6 +563,15 @@ func takeScreenshot(videoPath, outputPath string, timePoint float64, subtitleStr
 		"--target-trc=srgb",
 		// 使用 'hable' 算法进行色调映射，它能在保留高光和阴影细节方面取得良好平衡
 		"--tone-mapping=hable",
+
+		// --- 字体配置参数 ---
+		// 使用 fontconfig 来查找系统字体，确保能找到中文字体
+		"--sub-font-provider=fontconfig",
+		// 优先使用 Noto Sans CJK SC 简体中文字体
+		"--sub-font=Noto Sans CJK SC",
+		// 如果找不到指定字体，fontconfig 会自动查找其他可用的 CJK 字体
+		// 设置字体大小，确保字幕清晰可见
+		"--sub-font-size=52",
 
 		fmt.Sprintf("--o=%s", outputPath),
 		videoPath,
@@ -1199,6 +1217,126 @@ func countExisting(results []FileCheckResult) int {
 	return count
 }
 
+// episodeCountHandler 处理远程目录集数统计
+func episodeCountHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSONResponse(w, r, http.StatusMethodNotAllowed, EpisodeCountResponse{Success: false, Message: "仅支持 POST 方法"})
+		return
+	}
+	var reqData EpisodeCountRequest
+	if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
+		writeJSONResponse(w, r, http.StatusBadRequest, EpisodeCountResponse{Success: false, Message: "无效的 JSON 请求体: " + err.Error()})
+		return
+	}
+	remotePath := reqData.RemotePath
+	if remotePath == "" {
+		writeJSONResponse(w, r, http.StatusBadRequest, EpisodeCountResponse{Success: false, Message: "remote_path 不能为空"})
+		return
+	}
+
+	log.Printf("集数统计请求: 正在统计路径 '%s'", remotePath)
+
+	// 检查路径是否存在
+	if _, err := os.Stat(remotePath); os.IsNotExist(err) {
+		log.Printf("集数统计请求: 路径不存在 '%s'", remotePath)
+		writeJSONResponse(w, r, http.StatusOK, EpisodeCountResponse{
+			Success: false,
+			Message: "路径不存在",
+		})
+		return
+	}
+
+	// 视频文件扩展名
+	videoExtensions := map[string]bool{
+		".mkv": true, ".mp4": true, ".ts": true, ".avi": true,
+		".wmv": true, ".mov": true, ".flv": true, ".m2ts": true,
+	}
+
+	// 剧集文件名模式：支持 S01E01, S01E02, s01e01, S1E1 等格式
+	episodePattern := regexp.MustCompile(`[Ss](\d{1,2})[Ee](\d{1,3})`)
+
+	// 使用 map 存储 (season, episode) 对，去重
+	episodeSet := make(map[string]bool)
+	seasonNumbers := make(map[int]bool)
+
+	// 遍历目录查找视频文件
+	err := filepath.Walk(remotePath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// 跳过目录
+		if info.IsDir() {
+			return nil
+		}
+
+		// 检查是否是视频文件
+		ext := strings.ToLower(filepath.Ext(info.Name()))
+		if !videoExtensions[ext] {
+			return nil
+		}
+
+		// 匹配剧集编号
+		matches := episodePattern.FindStringSubmatch(info.Name())
+		if len(matches) >= 3 {
+			season, _ := strconv.Atoi(matches[1])
+			episode, _ := strconv.Atoi(matches[2])
+			key := fmt.Sprintf("S%dE%d", season, episode)
+			episodeSet[key] = true
+			seasonNumbers[season] = true
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		log.Printf("集数统计请求: 遍历目录失败 '%s': %v", remotePath, err)
+		writeJSONResponse(w, r, http.StatusInternalServerError, EpisodeCountResponse{
+			Success: false,
+			Message: fmt.Sprintf("遍历目录失败: %v", err),
+		})
+		return
+	}
+
+	// 如果没有找到任何剧集文件
+	if len(episodeSet) == 0 {
+		log.Printf("集数统计请求: 未找到剧集文件 '%s'", remotePath)
+		writeJSONResponse(w, r, http.StatusOK, EpisodeCountResponse{
+			Success: true,
+			Message: "未找到剧集文件",
+			EpisodeCount: 0,
+		})
+		return
+	}
+
+	// 确定主要季数（通常统计第一季）
+	mainSeason := 1
+	if len(seasonNumbers) > 0 {
+		// 找到最小的季数作为主季
+		for season := range seasonNumbers {
+			if season < mainSeason || mainSeason == 0 {
+				mainSeason = season
+			}
+		}
+	}
+
+	// 统计主季的集数
+	seasonEpisodeCount := 0
+	for key := range episodeSet {
+		if strings.HasPrefix(key, fmt.Sprintf("S%d", mainSeason)) {
+			seasonEpisodeCount++
+		}
+	}
+
+	log.Printf("集数统计请求: 路径 '%s' 找到第%d季共 %d 集", remotePath, mainSeason, seasonEpisodeCount)
+	writeJSONResponse(w, r, http.StatusOK, EpisodeCountResponse{
+		Success:      true,
+		Message:      "统计完成",
+		EpisodeCount: seasonEpisodeCount,
+		SeasonNumber: mainSeason,
+	})
+}
+
 // ======================= 主函数 (无变动) =======================
 
 func main() {
@@ -1223,7 +1361,8 @@ func main() {
 	http.HandleFunc("/api/media/mediainfo", mediainfoHandler)
 	http.HandleFunc("/api/file/check", fileCheckHandler)
 	http.HandleFunc("/api/file/batch-check", batchFileCheckHandler)
-	log.Println("增强版qBittorrent代理服务器正在启动...")
+	http.HandleFunc("/api/media/episode-count", episodeCountHandler)
+	log.Println("aa增强版qBittorrent代理服务器正在启动...")
 	log.Println("API端点:")
 	log.Println("  POST /api/torrents/all - 获取种子信息")
 	log.Println("  POST /api/stats/server - 获取服务器统计")
@@ -1232,6 +1371,7 @@ func main() {
 	log.Println("  POST /api/media/mediainfo  - 远程获取MediaInfo")
 	log.Println("  POST /api/file/check       - 远程文件存在性检查")
 	log.Println("  POST /api/file/batch-check - 批量远程文件存在性检查")
+	log.Println("  POST /api/media/episode-count - 远程目录集数统计")
 	log.Printf("监听端口: %s", port)
 	if err := http.ListenAndServe(port, nil); err != nil {
 		log.Fatalf("启动服务器失败: %v", err)
