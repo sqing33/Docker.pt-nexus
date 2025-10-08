@@ -350,44 +350,6 @@
         </div>
       </div>
 
-      <!-- 认证设置卡片 -->
-      <div class="settings-card glass-card glass-rounded glass-transparent-header glass-transparent-body">
-        <div class="card-header">
-          <div class="header-content">
-            <el-icon class="header-icon">
-              <Connection />
-            </el-icon>
-            <h3>认证设置</h3>
-          </div>
-        </div>
-
-        <div class="card-content placeholder-content">
-          <el-icon class="placeholder-icon">
-            <Connection />
-          </el-icon>
-          <p class="placeholder-text">功能扩展中</p>
-        </div>
-      </div>
-
-      <!-- 权限管理卡片 -->
-      <div class="settings-card glass-card glass-rounded glass-transparent-header glass-transparent-body">
-        <div class="card-header">
-          <div class="header-content">
-            <el-icon class="header-icon">
-              <Document />
-            </el-icon>
-            <h3>权限管理</h3>
-          </div>
-        </div>
-
-        <div class="card-content placeholder-content">
-          <el-icon class="placeholder-icon">
-            <Document />
-          </el-icon>
-          <p class="placeholder-text">功能扩展中</p>
-        </div>
-      </div>
-
       <!-- 功能扩展卡片 -->
       <div class="settings-card glass-card glass-rounded glass-transparent-header glass-transparent-body">
         <div class="card-header">

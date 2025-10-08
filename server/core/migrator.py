@@ -1317,10 +1317,19 @@ class TorrentMigrator:
                 if tags_from_mediainfo:
                     # 将从 MediaInfo 提取的标签与源站点的标签合并（去重）
                     existing_tags = source_params.get("标签", [])
+                    
+                    # [修复] 统一标签格式：移除 tag. 前缀以确保去重正常工作
+                    # MediaInfo 提取的标签格式为 'tag.中字'，网页提取的为 '中字'
+                    normalized_mediainfo_tags = [
+                        tag.replace('tag.', '') if tag.startswith('tag.') else tag
+                        for tag in tags_from_mediainfo
+                    ]
+                    
                     # 合并标签并去重，保持顺序
-                    merged_tags = list(dict.fromkeys(existing_tags + tags_from_mediainfo))
+                    merged_tags = list(dict.fromkeys(existing_tags + normalized_mediainfo_tags))
                     source_params["标签"] = merged_tags
                     self.logger.info(f"从 MediaInfo 提取到标签: {tags_from_mediainfo}")
+                    self.logger.info(f"标准化后的标签: {normalized_mediainfo_tags}")
                     self.logger.info(f"合并后的标签: {merged_tags}")
                 else:
                     self.logger.info("MediaInfo 中未提取到额外标签")
@@ -1530,19 +1539,24 @@ class TorrentMigrator:
                         print(f"[调试] 制作组 '{team_standard}' 未在排除列表中，继续处理")
 
                         # 5. 使用结构化检测判断是否已包含官组声明
-                        # [修复] 使用完整的、未被 extractor 分离的原始简介内容进行检测
+                        # [修复] 优先使用已提取的statement内容，如果为空才使用原始BBCode
+                        # 这样可以正确处理SSD等特殊站点
+                        original_statement = intro.get("statement", "")
+                        detection_content = original_statement if original_statement.strip() else full_bbcode_descr_for_check
+                        
                         print(
-                            f"[调试] 完整简介BBCode长度: {len(full_bbcode_descr_for_check)} 字符"
+                            f"[调试] 用于检测的内容长度: {len(detection_content)} 字符"
                         )
                         print(
-                            f"[调试] 完整简介BBCode前100字符: {full_bbcode_descr_for_check[:100] if full_bbcode_descr_for_check else '(空)'}"
+                            f"[调试] 用于检测的内容前100字符: {detection_content[:100] if detection_content else '(空)'}"
+                        )
+                        print(
+                            f"[调试] 检测内容来源: {'提取器的statement' if original_statement.strip() else '原始BBCode'}"
                         )
 
                         has_official_statement = self._detect_official_statement(
-                            full_bbcode_descr_for_check, acknowledgment_config)
+                            detection_content, acknowledgment_config)
 
-                        # 保留原始的 statement 以便追加
-                        original_statement = intro.get("statement", "")
                         print(f"[调试] 检测到已有官组声明: {has_official_statement}")
 
                         if has_official_statement:
