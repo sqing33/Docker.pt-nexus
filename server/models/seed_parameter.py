@@ -5,11 +5,9 @@
 
 import json
 import logging
-import os
 from datetime import datetime
 from typing import Dict, Any, Optional, List
 from flask import g
-from config import TEMP_DIR
 
 
 class SeedParameter:
@@ -18,30 +16,13 @@ class SeedParameter:
     def __init__(self, db_manager):
         self.db_manager = db_manager
 
-    def _get_json_file_path(self, torrent_id: str, site_name: str) -> str:
-        """
-        获取参数JSON文件路径
-
-        Args:
-            torrent_id: 种子ID
-            site_name: 站点名称
-
-        Returns:
-            str: JSON文件路径
-        """
-        # 创建站点目录
-        site_dir = os.path.join(TEMP_DIR, "seed_params", site_name)
-        os.makedirs(site_dir, exist_ok=True)
-
-        # 返回文件路径
-        return os.path.join(site_dir, f"{torrent_id}.json")
-
     def save_parameters(self, hash: str, torrent_id: str, site_name: str,
                         parameters: Dict[str, Any]) -> bool:
         """
-        保存种子参数到数据库（优先）和JSON文件（后备）
+        保存种子参数到数据库
 
         Args:
+            hash: 种子hash值
             torrent_id: 种子ID
             site_name: 站点名称
             parameters: 参数字典
@@ -57,7 +38,7 @@ class SeedParameter:
             parameters["torrent_id"] = torrent_id
             parameters["site_name"] = site_name
 
-            # 优先保存到数据库
+            # 保存到数据库
             if self.db_manager:
                 db_success = self._save_to_database(hash, torrent_id,
                                                     site_name, parameters)
@@ -65,12 +46,11 @@ class SeedParameter:
                     logging.info(f"种子参数已保存到数据库: {torrent_id} from {site_name}")
                     return True
                 else:
-                    logging.warning(
-                        f"保存种子参数到数据库失败，回退到JSON文件: {torrent_id} from {site_name}"
-                    )
-
-            # 回退到JSON文件存储
-            return self._save_to_json_file(torrent_id, site_name, parameters)
+                    logging.error(f"保存种子参数到数据库失败: {torrent_id} from {site_name}")
+                    return False
+            else:
+                logging.error("数据库管理器未初始化")
+                return False
 
         except Exception as e:
             logging.error(f"保存种子参数失败: {e}", exc_info=True)
@@ -270,38 +250,10 @@ class SeedParameter:
             if conn:
                 conn.close()
 
-    def _save_to_json_file(self, torrent_id: str, site_name: str,
-                           parameters: Dict[str, Any]) -> bool:
-        """
-        保存种子参数到JSON文件
-
-        Args:
-            torrent_id: 种子ID
-            site_name: 站点名称
-            parameters: 参数字典
-
-        Returns:
-            bool: 保存是否成功
-        """
-        try:
-            # 获取文件路径
-            json_file_path = self._get_json_file_path(torrent_id, site_name)
-
-            # 保存到JSON文件
-            with open(json_file_path, 'w', encoding='utf-8') as f:
-                json.dump(parameters, f, ensure_ascii=False, indent=2)
-
-            logging.info(f"种子参数已保存到JSON文件: {json_file_path}")
-            return True
-
-        except Exception as e:
-            logging.error(f"保存种子参数到JSON文件失败: {e}", exc_info=True)
-            return False
-
     def get_parameters(self, torrent_id: str,
                        site_name: str) -> Optional[Dict[str, Any]]:
         """
-        从数据库（优先）或JSON文件获取种子参数
+        从数据库获取种子参数
 
         Args:
             torrent_id: 种子ID
@@ -311,19 +263,18 @@ class SeedParameter:
             Dict[str, Any]: 参数字典，如果未找到则返回None
         """
         try:
-            # 优先从数据库读取
+            # 从数据库读取
             if self.db_manager:
                 db_params = self._get_from_database(torrent_id, site_name)
                 if db_params:
                     logging.info(f"种子参数已从数据库加载: {torrent_id} from {site_name}")
                     return db_params
                 else:
-                    logging.warning(
-                        f"从数据库未找到种子参数，尝试从JSON文件读取: {torrent_id} from {site_name}"
-                    )
-
-            # 回退到JSON文件读取
-            return self._get_from_json_file(torrent_id, site_name)
+                    logging.info(f"从数据库未找到种子参数: {torrent_id} from {site_name}")
+                    return None
+            else:
+                logging.error("数据库管理器未初始化")
+                return None
 
         except Exception as e:
             logging.error(f"获取种子参数失败: {e}", exc_info=True)
@@ -397,54 +348,6 @@ class SeedParameter:
             if conn:
                 conn.close()
 
-    def _get_from_json_file(self, torrent_id: str,
-                            site_name: str) -> Optional[Dict[str, Any]]:
-        """
-        从JSON文件获取种子参数
-
-        Args:
-            torrent_id: 种子ID
-            site_name: 站点名称
-
-        Returns:
-            Dict[str, Any]: 参数字典，如果未找到则返回None
-        """
-        try:
-            # 获取文件路径
-            json_file_path = self._get_json_file_path(torrent_id, site_name)
-
-            # 检查文件是否存在
-            if not os.path.exists(json_file_path):
-                logging.info(f"种子参数文件不存在: {json_file_path}")
-                return None
-
-            # 从JSON文件读取
-            with open(json_file_path, 'r', encoding='utf-8') as f:
-                parameters = json.load(f)
-
-            # 解析tags字段（如果存在）
-            if "tags" in parameters and isinstance(parameters["tags"], str):
-                try:
-                    parameters["tags"] = json.loads(parameters["tags"])
-                except json.JSONDecodeError:
-                    parameters["tags"] = []
-
-            # 解析title_components字段（如果存在）
-            if "title_components" in parameters and isinstance(
-                    parameters["title_components"], str):
-                try:
-                    parameters["title_components"] = json.loads(
-                        parameters["title_components"])
-                except json.JSONDecodeError:
-                    parameters["title_components"] = []
-
-            logging.info(f"种子参数已从JSON文件加载: {json_file_path}")
-            return parameters
-
-        except Exception as e:
-            logging.error(f"从JSON文件获取种子参数失败: {e}", exc_info=True)
-            return None
-
     def update_parameters(self, torrent_id: str, site_name: str,
                           parameters: Dict[str, Any]) -> bool:
         """
@@ -475,7 +378,7 @@ class SeedParameter:
 
     def delete_parameters(self, torrent_id: str, site_name: str) -> bool:
         """
-        删除种子参数（含数据库和文件）
+        删除种子参数（数据库记录）
 
         Args:
             torrent_id: 种子ID
@@ -485,7 +388,7 @@ class SeedParameter:
             bool: 删除是否成功
         """
         try:
-            # 删除数据库记录优先
+            # 删除数据库记录
             if self.db_manager:
                 conn = self.db_manager._get_connection()
                 cursor = self.db_manager._get_cursor(conn)
@@ -510,25 +413,11 @@ class SeedParameter:
 
                 if deleted_count <= 0:
                     logging.warning(f"在数据库中未找到要删除的种子参数: {torrent_id} from {site_name}")
-
-            # 删除文件（后备操作，清理旧数据）
-            json_file_path = self._get_json_file_path(torrent_id, site_name)
-
-            # 检查文件是否存在，如果存在则删除
-            if os.path.exists(json_file_path):
-                os.remove(json_file_path)
-                logging.info(f"种子参数文件已删除: {json_file_path}")
-
-                # 尝试删除空的站点目录
-                site_dir = os.path.dirname(json_file_path)
-                try:
-                    os.rmdir(site_dir)
-                    logging.info(f"空的站点目录已删除: {site_dir}")
-                except OSError:
-                    # 目录不为空，忽略错误
-                    pass
-
-            return True
+                
+                return True
+            else:
+                logging.error("数据库管理器未初始化")
+                return False
 
         except Exception as e:
             logging.error(f"删除种子参数失败: {e}", exc_info=True)

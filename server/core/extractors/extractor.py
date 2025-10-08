@@ -134,6 +134,7 @@ class Extractor:
             subtitle = re.sub(r"\s*\|\s*[Aa][Bb]y\s+\w+.*$", "", subtitle)
             subtitle = re.sub(r"\s*\|\s*[Bb]y\s+\w+.*$", "", subtitle)
             subtitle = re.sub(r"\s*\|\s*[Aa]\s+\w+.*$", "", subtitle)
+            subtitle = re.sub(r"\s*\|\s*[Aa]\s*\|.*$", "", subtitle)  # 新增：过滤 | A | XXX 格式
             subtitle = re.sub(r"\s*\|\s*[Aa][Tt][Uu]\s*$", "", subtitle)
             subtitle = re.sub(r"\s*\|\s*[Dd][Tt][Uu]\s*$", "", subtitle)
             subtitle = re.sub(r"\s*\|\s*[Pp][Tt][Ee][Rr]\s*$", "", subtitle)
@@ -390,15 +391,36 @@ class Extractor:
 
             # 辅助函数：检查是否为包含技术参数的quote（这些既不是mediainfo也不应该出现在正文中）
             def is_technical_params_quote(quote_text):
+                # 转换为大写进行不区分大小写的匹配
+                quote_upper = quote_text.upper()
+                
                 return (
-                    (".Release.Info" in quote_text and "ENCODER" in quote_text)
+                    # 匹配 .Release.Info 格式
+                    (".Release.Info" in quote_text and "ENCODER" in quote_upper)
                     or
-                    ("ENCODER" in quote_text and "RELEASE NAME" in quote_text)
-                    or (".Release.Info" in quote_text
-                        and ".Media.Info" in quote_text)
-                    or ("ViDEO CODEC" in quote_text
-                        and "AUDiO CODEC" in quote_text)
-                    or (".x265.Info" in quote_text and "x265" in quote_text))
+                    ("ENCODER" in quote_upper and "RELEASE NAME" in quote_upper)
+                    or (".Release.Info" in quote_text and ".Media.Info" in quote_text)
+                    or ("ViDEO CODEC" in quote_upper and "AUDiO CODEC" in quote_upper)
+                    or (".x265.Info" in quote_text and "x265" in quote_text)
+                    or
+                    # [新增] 匹配常见的 Release Info 格式（包含多个技术参数关键词）
+                    (("RELEASE.NAME" in quote_upper or "RELEASE NAME" in quote_upper) 
+                     and ("VIDEO.CODEC" in quote_upper or "VIDEO CODEC" in quote_upper or "FRAME.RATE" in quote_upper or "FRAME RATE" in quote_upper))
+                    or
+                    # [新增] 匹配包含 RELEASE、VIDEO、AUDIO 等多个技术关键词的组合
+                    (quote_upper.count("RELEASE") >= 2 and ("VIDEO" in quote_upper or "AUDIO" in quote_upper))
+                    or
+                    # [新增] 匹配包含 SUBTITLES 和其他技术参数的格式
+                    ("SUBTITLES" in quote_upper and ("RELEASE" in quote_upper or "VIDEO" in quote_upper or "AUDIO" in quote_upper) 
+                     and quote_upper.count(".") >= 5)  # 技术参数通常有很多点号分隔
+                    or
+                    # [新增] 匹配 General Information 样式的发布信息
+                    ("GENERAL INFORMATION" in quote_upper and ("RELEASE" in quote_upper or "VIDEO" in quote_upper))
+                    or
+                    # [新增] 匹配对比截图说明格式：Comparison ... Source___Encode
+                    ("COMPARISON" in quote_upper and "SOURCE" in quote_upper and "ENCODE" in quote_upper 
+                     and ("___" in quote_text or "____" in quote_text))  # 包含下划线分隔符
+                )
 
             # Process quotes
             final_statement_quotes = []
@@ -476,14 +498,61 @@ class Extractor:
                     # 如果quote看起来像电影简介的一部分，则将其添加到正文
                     quotes_for_body.append(quote)
                 else:
-                    # 否则，它可能是发布说明等，应放在声明区域
-                    final_statement_quotes.append(quote)
+                    # 海报后的其他quote应该添加到正文后面，而不是声明区域
+                    quotes_for_body.append(quote)
 
-            # Extract body content
+            # Extract body content (先移除quote和图片标签)
             body = (re.sub(r"\[quote\].*?\[/quote\]|\[img\].*?\[/img\]",
                            "",
                            bbcode,
                            flags=re.DOTALL).replace("\r", "").strip())
+            
+            # [新增] 在BBCode层面过滤对比说明（包含BBCode标签的情况）
+            # 移除包含Comparison和Source/Encode的行（不管是否有[b][size]等标签包裹）
+            lines = body.split('\n')
+            filtered_lines = []
+            skip_next_line = False
+            
+            for i, line in enumerate(lines):
+                if skip_next_line:
+                    skip_next_line = False
+                    continue
+                
+                # 去除BBCode标签后的纯文本用于检测
+                line_without_bbcode = re.sub(r'\[/?[^\]]+\]', '', line)
+                line_upper = line_without_bbcode.upper().strip()
+                
+                # 检测1: Comparison行
+                if 'COMPARISON' in line_upper and ('RIGHT' in line_upper or 'CLICK' in line_upper):
+                    logging.info(f"过滤掉Comparison行: {line[:80]}...")
+                    # 检查下一行是否是Source/Encode行
+                    if i + 1 < len(lines):
+                        next_line = lines[i + 1]
+                        next_line_without_bbcode = re.sub(r'\[/?[^\]]+\]', '', next_line)
+                        if ('SOURCE' in next_line_without_bbcode.upper() and 
+                            'ENCODE' in next_line_without_bbcode.upper() and
+                            next_line.count('_') >= 10):
+                            skip_next_line = True
+                    continue
+                
+                # 检测2: Source___Encode行（单独出现）
+                if (line_upper.startswith('SOURCE') and 
+                    line_upper.endswith('ENCODE') and
+                    line.count('_') >= 10):
+                    logging.info(f"过滤掉Source/Encode行: {line[:80]}...")
+                    continue
+                
+                # 检测3: 同一行包含Comparison和Source/Encode的情况
+                if ('COMPARISON' in line_upper and 
+                    'SOURCE' in line_upper and 
+                    'ENCODE' in line_upper and
+                    line.count('_') >= 5):
+                    logging.info(f"过滤掉完整对比说明行: {line[:80]}...")
+                    continue
+                
+                filtered_lines.append(line)
+            
+            body = '\n'.join(filtered_lines)
 
             # [新增] 检查简介完整性
             logging.info("开始简介完整性检测...")
@@ -607,18 +676,64 @@ class Extractor:
                 logging.info(
                     f"✅ 简介完整性检测通过，包含字段: {completeness_check['found_fields']}")
 
+            # [新增] 额外检查：即使简介完整，也检查是否缺少集数/IMDb/豆瓣链接
+            from utils.description_enhancer import enhance_description_if_needed
+            
+            enhanced_body, enhanced_imdb, description_changed = enhance_description_if_needed(
+                body,
+                extracted_data["intro"].get("imdb_link", ""),
+                extracted_data["intro"].get("douban_link", "")
+            )
+            
+            if description_changed:
+                body = enhanced_body
+                if enhanced_imdb:
+                    extracted_data["intro"]["imdb_link"] = enhanced_imdb
+                    logging.info(f"✅ 简介已增强，更新了IMDb链接: {enhanced_imdb}")
+
             # Add quotes after poster to body (在完整性检测和可能的重新获取之后)
             if quotes_for_body:
                 body = body + "\n\n" + "\n".join(quotes_for_body)
 
-            # [新逻辑] 清理简介中残留的独立关键词行
+            # [新逻辑] 清理简介中残留的独立关键词行和对比说明行
             logging.info("清理简介中残留的独立关键词行 (Mediainfo, Screenshot, etc.)...")
             words_to_remove = {'mediainfo', 'screenshot', 'source', 'encode'}
             lines = body.split('\n')
-            cleaned_lines = [
-                line for line in lines
-                if line.strip().lower() not in words_to_remove
-            ]
+            cleaned_lines = []
+            for line in lines:
+                # 检查是否为独立关键词行
+                if line.strip().lower() in words_to_remove:
+                    continue
+                
+                # [新增] 检查是否为对比截图说明行
+                line_upper = line.upper()
+                line_stripped = line.strip()
+                
+                # 条件1: 包含 Comparison 和 Source/Encode 且有下划线分隔
+                if ('COMPARISON' in line_upper and 
+                    'SOURCE' in line_upper and 
+                    'ENCODE' in line_upper and
+                    ('___' in line or '____' in line or '_______' in line)):
+                    logging.info(f"过滤掉对比说明行(带下划线): {line[:50]}...")
+                    continue
+                
+                # 条件2: 只有 Source 和 Encode 且中间有大量下划线的单行
+                # 例如: "Source________________________Encode"
+                if (line_stripped.upper().startswith('SOURCE') and 
+                    line_stripped.upper().endswith('ENCODE') and
+                    line.count('_') >= 10):  # 至少10个下划线
+                    logging.info(f"过滤掉对比说明行(纯下划线): {line[:50]}...")
+                    continue
+                
+                # 条件3: 单独的 "Comparison" 行（通常出现在对比说明前）
+                if line_stripped.lower().startswith('comparison') and len(line_stripped) < 100:
+                    # 检查是否包含典型的对比说明文本
+                    if 'right' in line_stripped.lower() or 'click' in line_stripped.lower():
+                        logging.info(f"过滤掉对比说明行(Comparison): {line[:50]}...")
+                        continue
+                
+                cleaned_lines.append(line)
+            
             body = '\n'.join(cleaned_lines)
 
             # Format statement string
