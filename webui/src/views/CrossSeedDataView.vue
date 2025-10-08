@@ -1703,8 +1703,6 @@ onUnmounted(() => {
 </script>
 
 <style scoped lang="scss">
-@import '@/assets/styles/glass-morphism.scss';
-
 .modal-overlay {
   position: fixed;
   top: 0;

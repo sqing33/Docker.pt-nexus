@@ -283,8 +283,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-@import '@/assets/styles/glass-morphism.scss';
-
 .home-container {
   padding: 24px;
   max-width: 1200px;

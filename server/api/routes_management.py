@@ -324,6 +324,9 @@ def cookiecloud_sync():
     for site_in_app in app_sites:
         if not site_in_app.get("nickname"):
             continue
+        # 排除 qingwapt 站点
+        if site_in_app["site"].lower() == "qingwapt":
+            continue
         identifiers = {
             site_in_app["nickname"].lower(), site_in_app["site"].lower()
         }

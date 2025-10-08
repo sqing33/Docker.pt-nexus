@@ -1775,6 +1775,93 @@ def extract_tags_from_title(title_components: list) -> list:
     return result_tags
 
 
+def extract_tags_from_description(description_text: str) -> list:
+    """
+    从简介文本的"类别"字段中提取标签。
+    
+    :param description_text: 简介文本内容（包括statement和body）
+    :return: 标签列表，例如 ['tag.喜剧', 'tag.动画']
+    """
+    if not description_text:
+        return []
+    
+    found_tags = []
+    
+    # 从简介中提取类别字段
+    category_match = re.search(r"◎\s*类\s*别\s*(.+?)(?:\n|$)", description_text)
+    if category_match:
+        category_text = category_match.group(1).strip()
+        print(f"从简介中提取到类别: {category_text}")
+        
+        # 定义类别关键词到标签的映射
+        category_tag_map = {
+            '喜剧': 'tag.喜剧',
+            'Comedy': 'tag.喜剧',
+            '动画': 'tag.动画',
+            'Animation': 'tag.动画',
+            '动作': 'tag.动作',
+            'Action': 'tag.动作',
+            '爱情': 'tag.爱情',
+            'Romance': 'tag.爱情',
+            '科幻': 'tag.科幻',
+            'Sci-Fi': 'tag.科幻',
+            '恐怖': 'tag.恐怖',
+            'Horror': 'tag.恐怖',
+            '惊悚': 'tag.惊悚',
+            'Thriller': 'tag.惊悚',
+            '悬疑': 'tag.悬疑',
+            'Mystery': 'tag.悬疑',
+            '犯罪': 'tag.犯罪',
+            'Crime': 'tag.犯罪',
+            '战争': 'tag.战争',
+            'War': 'tag.战争',
+            '冒险': 'tag.冒险',
+            'Adventure': 'tag.冒险',
+            '奇幻': 'tag.奇幻',
+            'Fantasy': 'tag.奇幻',
+            '家庭': 'tag.家庭',
+            'Family': 'tag.家庭',
+            '剧情': 'tag.剧情',
+            'Drama': 'tag.剧情',
+        }
+        
+        # 检查类别文本中是否包含关键词
+        for keyword, tag in category_tag_map.items():
+            if keyword in category_text:
+                found_tags.append(tag)
+                print(f"   从类别中提取到标签: {tag} (匹配关键词: {keyword})")
+    
+    if found_tags:
+        print(f"从简介类别中提取到的标签: {found_tags}")
+    else:
+        print("从简介类别中未提取到任何标签")
+    
+    return found_tags
+
+
+def check_animation_type_from_description(description_text: str) -> bool:
+    """
+    检查简介的类别字段中是否包含"动画"，用于判断是否需要修正类型为动漫。
+    
+    :param description_text: 简介文本内容（包括statement和body）
+    :return: 如果包含"动画"返回True，否则返回False
+    """
+    if not description_text:
+        return False
+    
+    # 从简介中提取类别字段
+    category_match = re.search(r"◎\s*类\s*别\s*(.+?)(?:\n|$)", description_text)
+    if category_match:
+        category_text = category_match.group(1).strip()
+        
+        # 检查类别中是否包含"动画"关键词
+        if "动画" in category_text or "Animation" in category_text:
+            print(f"检测到类别中包含'动画': {category_text}")
+            return True
+    
+    return False
+
+
 def extract_tags_from_mediainfo(mediainfo_text: str) -> list:
     """
     从 MediaInfo 文本中提取关键词，并返回一个标准化的标签列表。

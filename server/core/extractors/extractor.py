@@ -18,7 +18,6 @@ import requests
 import os
 import urllib.parse
 
-
 CONFIG_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "configs")
 from .sites.audiences import AudiencesSpecialExtractor
@@ -121,7 +120,8 @@ class Extractor:
                 h1_top.stripped_strings)[0] if h1_top.stripped_strings else ""
             # Normalize title (replace dots with spaces, but preserve decimal points and codec formats)
             import re
-            title = re.sub(r'(?<!\d)(?<!H)(?<!x)\.|\.(?!\d\b)(?!264)(?!265)', ' ', title)
+            title = re.sub(r'(?<!\d)(?<!H)(?<!x)\.|\.(?!\d\b)(?!264)(?!265)',
+                           ' ', title)
             title = re.sub(r'\s+', ' ', title).strip()
             extracted_data["title"] = title
 
@@ -147,7 +147,8 @@ class Extractor:
             douban_link = ""
 
             # 优先级 1: 查找专用的 div#kimdb 容器
-            kimdb_div = soup.select_one("div#kimdb a[href*='imdb.com/title/tt']")
+            kimdb_div = soup.select_one(
+                "div#kimdb a[href*='imdb.com/title/tt']")
             if kimdb_div and kimdb_div.get('href'):
                 imdb_link = kimdb_div.get('href')
 
@@ -155,60 +156,81 @@ class Extractor:
             descr_text = descr_container.get_text()
             # 如果还没找到 IMDb 链接, 则在简介中搜索
             if not imdb_link:
-                if imdb_match := re.search(r"(https?://www\.imdb\.com/title/tt\d+)", descr_text):
+                if imdb_match := re.search(
+                        r"(https?://www\.imdb\.com/title/tt\d+)", descr_text):
                     imdb_link = imdb_match.group(1)
-            
+
             # 在简介中搜索豆瓣链接
             if not douban_link:
-                if douban_match := re.search(r"(https?://movie\.douban\.com/subject/\d+)", descr_text):
+                if douban_match := re.search(
+                        r"(https?://movie\.douban\.com/subject/\d+)",
+                        descr_text):
                     douban_link = douban_match.group(1)
 
             # 优先级 3 (全局后备): 如果链接仍然缺失, 则搜索整个页面的文本
             if not imdb_link or not douban_link:
                 page_text = soup.get_text()
                 if not imdb_link:
-                    if imdb_match := re.search(r"(https?://www\.imdb\.com/title/tt\d+)", page_text):
+                    if imdb_match := re.search(
+                            r"(https?://www\.imdb\.com/title/tt\d+)",
+                            page_text):
                         imdb_link = imdb_match.group(1)
                 if not douban_link:
-                    if douban_match := re.search(r"(https?://movie\.douban\.com/subject/\d+)", page_text):
+                    if douban_match := re.search(
+                            r"(https?://movie\.douban\.com/subject/\d+)",
+                            page_text):
                         douban_link = douban_match.group(1)
 
             # --- [新方案] 使用远程 API 服务互补缺失的 IMDb/豆瓣 链接 ---
-            
+
             # [新增] Fallback: 如果两个链接都没有，尝试使用副标题进行名称搜索
             if not imdb_link and not douban_link:
                 subtitle = extracted_data.get("subtitle", "")
                 if subtitle:
                     # 提取第一个 / 或 | 之前的内容作为电影名
-                    search_name = re.split(r'\s*[|/]\s*', subtitle, 1)[0].strip()
+                    search_name = re.split(r'\s*[|/]\s*', subtitle,
+                                           1)[0].strip()
                     if search_name:
-                        logging.info(f"未找到链接，尝试使用副标题 '{search_name}' 进行名称搜索...")
+                        logging.info(
+                            f"未找到链接，尝试使用副标题 '{search_name}' 进行名称搜索...")
                         print(f"[*] 未找到链接，尝试使用副标题 '{search_name}' 进行名称搜索...")
                         try:
                             encoded_name = urllib.parse.quote_plus(search_name)
                             api_base_url = "https://ptn-douban.sqing33.dpdns.org/"
                             api_url = f"{api_base_url}?name={encoded_name}"
-                            
+
                             response = requests.get(api_url, timeout=10)
                             if response.status_code == 200:
                                 data = response.json().get('data', [])
                                 if data and data[0]:
                                     found_record = data[0]
                                     found_imdb_id = found_record.get('imdbid')
-                                    found_douban_id = found_record.get('doubanid')
-                                    
+                                    found_douban_id = found_record.get(
+                                        'doubanid')
+
                                     if found_imdb_id:
                                         imdb_link = f"https://www.imdb.com/title/{found_imdb_id}/"
-                                        logging.info(f"✅ 成功通过名称搜索补充 IMDb 链接: {imdb_link}")
-                                        print(f"  [+] 成功通过名称搜索补充 IMDb 链接: {imdb_link}")
-                                    
+                                        logging.info(
+                                            f"✅ 成功通过名称搜索补充 IMDb 链接: {imdb_link}"
+                                        )
+                                        print(
+                                            f"  [+] 成功通过名称搜索补充 IMDb 链接: {imdb_link}"
+                                        )
+
                                     if found_douban_id:
                                         douban_link = f"https://movie.douban.com/subject/{found_douban_id}/"
-                                        logging.info(f"✅ 成功通过名称搜索补充豆瓣链接: {douban_link}")
-                                        print(f"  [+] 成功通过名称搜索补充豆瓣链接: {douban_link}")
+                                        logging.info(
+                                            f"✅ 成功通过名称搜索补充豆瓣链接: {douban_link}")
+                                        print(
+                                            f"  [+] 成功通过名称搜索补充豆瓣链接: {douban_link}"
+                                        )
                             else:
-                                logging.warning(f"名称搜索 API 查询失败, 状态码: {response.status_code}")
-                                print(f"  [-] 名称搜索 API 查询失败, 状态码: {response.status_code}")
+                                logging.warning(
+                                    f"名称搜索 API 查询失败, 状态码: {response.status_code}"
+                                )
+                                print(
+                                    f"  [-] 名称搜索 API 查询失败, 状态码: {response.status_code}"
+                                )
 
                         except requests.exceptions.RequestException as e:
                             logging.error(f"使用名称搜索 API 时发生网络错误: {e}")
@@ -216,38 +238,47 @@ class Extractor:
                         except Exception as e:
                             logging.error(f"使用名称搜索时发生错误: {e}")
                             print(f"  [!] 使用名称搜索时发生错误: {e}")
-            
+
             try:
-                if (imdb_link and not douban_link) or (douban_link and not imdb_link):
+                if (imdb_link and not douban_link) or (douban_link
+                                                       and not imdb_link):
                     logging.info("检测到 IMDb/豆瓣 链接不完整，尝试使用远程 API 补充...")
                     print("检测到 IMDb/豆瓣 链接不完整，尝试使用远程 API 补充...")
-                    
+
                     api_base_url = "https://ptn-douban.sqing33.dpdns.org/"
-                    
+
                     if imdb_link and not douban_link:
                         if imdb_id_match := re.search(r'(tt\d+)', imdb_link):
                             imdb_id = imdb_id_match.group(1)
                             api_url = f"{api_base_url}?imdbid={imdb_id}"
                             logging.info(f"使用 IMDb ID 查询远程 API: {api_url}")
                             print(f"[*] 正在使用 IMDb ID 查询 API: {api_url}")
-                            
+
                             response = requests.get(api_url, timeout=10)
                             if response.status_code == 200:
                                 data = response.json().get('data', [])
                                 if data and data[0].get('doubanid'):
                                     douban_id = data[0]['doubanid']
                                     douban_link = f"https://movie.douban.com/subject/{douban_id}/"
-                                    logging.info(f"✅ 成功从 API 补充豆瓣链接: {douban_link}")
+                                    logging.info(
+                                        f"✅ 成功从 API 补充豆瓣链接: {douban_link}")
                                     print(f"  [+] 成功补充豆瓣链接: {douban_link}")
                                 else:
-                                    logging.warning(f"API 响应中未找到与 {imdb_id} 匹配的豆瓣ID")
-                                    print(f"  [-] API 响应中未找到与 {imdb_id} 匹配的豆瓣ID")
+                                    logging.warning(
+                                        f"API 响应中未找到与 {imdb_id} 匹配的豆瓣ID")
+                                    print(
+                                        f"  [-] API 响应中未找到与 {imdb_id} 匹配的豆瓣ID")
                             else:
-                                logging.warning(f"API 查询失败, 状态码: {response.status_code}, 响应: {response.text}")
-                                print(f"  [-] API 查询失败, 状态码: {response.status_code}")
-                    
+                                logging.warning(
+                                    f"API 查询失败, 状态码: {response.status_code}, 响应: {response.text}"
+                                )
+                                print(
+                                    f"  [-] API 查询失败, 状态码: {response.status_code}"
+                                )
+
                     elif douban_link and not imdb_link:
-                        if douban_id_match := re.search(r'subject/(\d+)', douban_link):
+                        if douban_id_match := re.search(
+                                r'subject/(\d+)', douban_link):
                             douban_id = douban_id_match.group(1)
                             api_url = f"{api_base_url}?doubanid={douban_id}"
                             logging.info(f"使用 Douban ID 查询远程 API: {api_url}")
@@ -259,14 +290,22 @@ class Extractor:
                                 if data and data[0].get('imdbid'):
                                     imdb_id = data[0]['imdbid']
                                     imdb_link = f"https://www.imdb.com/title/{imdb_id}/"
-                                    logging.info(f"✅ 成功从 API 补充 IMDb 链接: {imdb_link}")
+                                    logging.info(
+                                        f"✅ 成功从 API 补充 IMDb 链接: {imdb_link}")
                                     print(f"  [+] 成功补充 IMDb 链接: {imdb_link}")
                                 else:
-                                    logging.warning(f"API 响应中未找到与 {douban_id} 匹配的IMDb ID")
-                                    print(f"  [-] API 响应中未找到与 {douban_id} 匹配的IMDb ID")
+                                    logging.warning(
+                                        f"API 响应中未找到与 {douban_id} 匹配的IMDb ID")
+                                    print(
+                                        f"  [-] API 响应中未找到与 {douban_id} 匹配的IMDb ID"
+                                    )
                             else:
-                                logging.warning(f"API 查询失败, 状态码: {response.status_code}, 响应: {response.text}")
-                                print(f"  [-] API 查询失败, 状态码: {response.status_code}")
+                                logging.warning(
+                                    f"API 查询失败, 状态码: {response.status_code}, 响应: {response.text}"
+                                )
+                                print(
+                                    f"  [-] API 查询失败, 状态码: {response.status_code}"
+                                )
 
             except requests.exceptions.RequestException as e:
                 logging.error(f"访问远程链接补充 API 时发生网络错误: {e}")
@@ -317,11 +356,12 @@ class Extractor:
             # 视频截图的验证将在 migrator.py 的 prepare_review_data 中单独进行
             if images:
                 poster_img = images[0]
-                if match := re.search(r'\[img\](.*?)\[/img\]', poster_img, re.IGNORECASE):
+                if match := re.search(r'\[img\](.*?)\[/img\]', poster_img,
+                                      re.IGNORECASE):
                     poster_url = match.group(1)
                     logging.info(f"开始验证海报链接的有效性: {poster_url}")
                     print(f"[*] 开始验证海报链接的有效性...")
-                    
+
                     if is_image_url_valid_robust(poster_url):
                         logging.info("海报链接验证通过。")
                         print(f"[*] 海报链接验证通过。")
@@ -330,7 +370,7 @@ class Extractor:
                         print(f"  [!] 检测到无效的海报链接: {poster_url}")
                         # 海报无效时，将第一张图片置空，后续会从豆瓣/IMDb重新获取
                         images[0] = ""
-            
+
             # 注意：视频截图（images[1:]）不在此处验证，将在 migrator.py 中统一验证和重新生成
 
             # Extract quotes before and after poster
@@ -351,12 +391,14 @@ class Extractor:
             # 辅助函数：检查是否为包含技术参数的quote（这些既不是mediainfo也不应该出现在正文中）
             def is_technical_params_quote(quote_text):
                 return (
-                    (".Release.Info" in quote_text and "ENCODER" in quote_text) or
-                    ("ENCODER" in quote_text and "RELEASE NAME" in quote_text) or
-                    (".Release.Info" in quote_text and ".Media.Info" in quote_text) or
-                    ("ViDEO CODEC" in quote_text and "AUDiO CODEC" in quote_text) or
-                    (".x265.Info" in quote_text and "x265" in quote_text)
-                )
+                    (".Release.Info" in quote_text and "ENCODER" in quote_text)
+                    or
+                    ("ENCODER" in quote_text and "RELEASE NAME" in quote_text)
+                    or (".Release.Info" in quote_text
+                        and ".Media.Info" in quote_text)
+                    or ("ViDEO CODEC" in quote_text
+                        and "AUDiO CODEC" in quote_text)
+                    or (".x265.Info" in quote_text and "x265" in quote_text))
 
             # Process quotes
             final_statement_quotes = []
@@ -409,14 +451,20 @@ class Extractor:
 
             # Helper function to identify movie description quotes
             def is_movie_intro_quote(quote_text):
-                keywords = ["◎片　　名", "◎译　　名", "◎年　　代", "◎产　　地", "◎类　　别", "◎语　　言", "◎导　　演", "◎主　　演", "◎简　　介", "◎演　　员", "◎演  员", "◎IMDB评分", "◎IMDb评分", "◎获奖情况", "制片国家/地区"]
+                keywords = [
+                    "◎片　　名", "◎译　　名", "◎年　　代", "◎产　　地", "◎类　　别", "◎语　　言",
+                    "◎导　　演", "◎主　　演", "◎简　　介", "◎演　　员", "◎演  员", "◎IMDB评分",
+                    "◎IMDb评分", "◎获奖情况", "制片国家/地区"
+                ]
                 return any(keyword in quote_text for keyword in keywords)
 
             # Process quotes after poster
             for quote in quotes_after_poster:
                 # 检查是否为mediainfo/bdinfo/技术参数的quote
-                is_mediainfo_after = ("General" in quote and "Video" in quote and "Audio" in quote)
-                is_bdinfo_after = ("DISC INFO" in quote and "PLAYLIST REPORT" in quote)
+                is_mediainfo_after = ("General" in quote and "Video" in quote
+                                      and "Audio" in quote)
+                is_bdinfo_after = ("DISC INFO" in quote
+                                   and "PLAYLIST REPORT" in quote)
                 is_release_info_after = ".Release.Info" in quote and "ENCODER" in quote
                 is_technical_after = is_technical_params_quote(quote)
 
@@ -440,99 +488,124 @@ class Extractor:
             # [新增] 检查简介完整性
             logging.info("开始简介完整性检测...")
             completeness_check = check_intro_completeness(body)
-            
+
             if not completeness_check["is_complete"]:
                 logging.warning(
-                    f"检测到简介不完整，缺少字段: {completeness_check['missing_fields']}"
-                )
+                    f"检测到简介不完整，缺少字段: {completeness_check['missing_fields']}")
                 print(f"检测到简介不完整，缺少字段: {completeness_check['missing_fields']}")
                 logging.info(f"已找到字段: {completeness_check['found_fields']}")
                 logging.info("尝试从豆瓣/IMDb重新获取完整简介...")
                 print("尝试从豆瓣/IMDb重新获取完整简介...")
-                
+
                 # 获取已提取的链接
                 imdb_link = extracted_data["intro"].get("imdb_link", "")
                 douban_link = extracted_data["intro"].get("douban_link", "")
-                
+
                 # 如果有链接,尝试重新获取
                 if imdb_link or douban_link:
                     try:
                         status, posters, new_description, new_imdb = upload_data_movie_info(
-                            douban_link, imdb_link
-                        )
-                        
+                            douban_link, imdb_link)
+
                         if status and new_description:
                             # 重新检查新简介的完整性
-                            new_check = check_intro_completeness(new_description)
-                            
+                            new_check = check_intro_completeness(
+                                new_description)
+
                             if new_check["is_complete"]:
                                 logging.info(
                                     f"✅ 重新获取的简介完整，包含字段: {new_check['found_fields']}"
                                 )
-                                
+
                                 # --- [新逻辑] 根据原简介内容决定是替换还是保留 ---
-                                num_found_fields = len(completeness_check.get('found_fields', []))
-                                
+                                num_found_fields = len(
+                                    completeness_check.get('found_fields', []))
+
                                 if num_found_fields <= 2 and body.strip():
                                     # 场景 B: 原简介字段少于等于2个，视为补充信息（如发布说明），用[quote]包裹并保留
-                                    logging.info(f"原简介仅包含 {num_found_fields} 个字段，视为补充信息并保留。")
-                                    print(f"[*] 原简介仅包含 {num_found_fields} 个字段，视为补充信息并保留。")
-                                    
+                                    logging.info(
+                                        f"原简介仅包含 {num_found_fields} 个字段，视为补充信息并保留。"
+                                    )
+                                    print(
+                                        f"[*] 原简介仅包含 {num_found_fields} 个字段，视为补充信息并保留。"
+                                    )
+
                                     original_body_as_quote = f"[quote]{body.strip()}[/quote]"
                                     # 添加到待追加的quote列表开头
-                                    quotes_for_body.insert(0, original_body_as_quote)
-                                    
+                                    quotes_for_body.insert(
+                                        0, original_body_as_quote)
+
                                     # 将body主体替换为新获取的完整简介
                                     body = new_description
-                                    
+
                                 else:
                                     # 场景 A: 原简介字段多于2个但不完整，视为不完整的电影简介，直接替换
-                                    logging.info(f"原简介包含 {num_found_fields} 个字段，不完整，将直接替换。")
-                                    print(f"[*] 原简介包含 {num_found_fields} 个字段，不完整，将直接替换。")
+                                    logging.info(
+                                        f"原简介包含 {num_found_fields} 个字段，不完整，将直接替换。"
+                                    )
+                                    print(
+                                        f"[*] 原简介包含 {num_found_fields} 个字段，不完整，将直接替换。"
+                                    )
                                     body = new_description
 
                                 # --- [新逻辑结束] ---
 
                                 # 同时更新IMDb链接(如果新获取的链接存在)
                                 if new_imdb:
-                                    extracted_data["intro"]["imdb_link"] = new_imdb
-                                
+                                    extracted_data["intro"][
+                                        "imdb_link"] = new_imdb
+
                                 # 重新提取产地信息并更新
-                                new_origin = extract_origin_from_description(new_description)
+                                new_origin = extract_origin_from_description(
+                                    new_description)
                                 if new_origin:
                                     # 应用全局映射
                                     if GLOBAL_MAPPINGS and "source" in GLOBAL_MAPPINGS:
-                                        source_mappings = GLOBAL_MAPPINGS["source"]
+                                        source_mappings = GLOBAL_MAPPINGS[
+                                            "source"]
                                         mapped_origin = None
-                                        for source_text, standardized_key in source_mappings.items():
-                                            if (str(source_text).strip().lower() == str(new_origin).strip().lower() or
-                                                str(source_text).strip().lower() in str(new_origin).strip().lower() or
-                                                str(new_origin).strip().lower() in str(source_text).strip().lower()):
+                                        for source_text, standardized_key in source_mappings.items(
+                                        ):
+                                            if (str(source_text).strip().lower(
+                                            ) == str(new_origin).strip().lower(
+                                            ) or str(source_text).strip(
+                                            ).lower() in str(new_origin).strip(
+                                            ).lower() or str(new_origin).strip(
+                                            ).lower() in str(source_text).
+                                                    strip().lower()):
                                                 mapped_origin = standardized_key
                                                 break
-                                        
+
                                         if mapped_origin:
-                                            extracted_data["source_params"]["产地"] = mapped_origin
-                                            logging.info(f"✅ 从新简介中提取并映射产地: {new_origin} -> {mapped_origin}")
+                                            extracted_data["source_params"][
+                                                "产地"] = mapped_origin
+                                            logging.info(
+                                                f"✅ 从新简介中提取并映射产地: {new_origin} -> {mapped_origin}"
+                                            )
                                         else:
-                                            extracted_data["source_params"]["产地"] = new_origin
-                                            logging.info(f"✅ 从新简介中提取到产地: {new_origin}")
+                                            extracted_data["source_params"][
+                                                "产地"] = new_origin
+                                            logging.info(
+                                                f"✅ 从新简介中提取到产地: {new_origin}")
                                     else:
-                                        extracted_data["source_params"]["产地"] = new_origin
-                                        logging.info(f"✅ 从新简介中提取到产地: {new_origin}")
+                                        extracted_data["source_params"][
+                                            "产地"] = new_origin
+                                        logging.info(
+                                            f"✅ 从新简介中提取到产地: {new_origin}")
                             else:
                                 logging.warning(
                                     f"重新获取的简介仍不完整，缺少: {new_check['missing_fields']}，保留原简介"
                                 )
                         else:
                             logging.warning(f"重新获取简介失败: {posters}")
-                            
+
                     except Exception as e:
                         logging.error(f"重新获取简介时发生错误: {e}", exc_info=True)
                 else:
                     logging.warning("未找到豆瓣或IMDb链接，无法重新获取简介")
             else:
-                logging.info(f"✅ 简介完整性检测通过，包含字段: {completeness_check['found_fields']}")
+                logging.info(
+                    f"✅ 简介完整性检测通过，包含字段: {completeness_check['found_fields']}")
 
             # Add quotes after poster to body (在完整性检测和可能的重新获取之后)
             if quotes_for_body:
@@ -542,7 +615,10 @@ class Extractor:
             logging.info("清理简介中残留的独立关键词行 (Mediainfo, Screenshot, etc.)...")
             words_to_remove = {'mediainfo', 'screenshot', 'source', 'encode'}
             lines = body.split('\n')
-            cleaned_lines = [line for line in lines if line.strip().lower() not in words_to_remove]
+            cleaned_lines = [
+                line for line in lines
+                if line.strip().lower() not in words_to_remove
+            ]
             body = '\n'.join(cleaned_lines)
 
             # Format statement string
@@ -604,15 +680,20 @@ class Extractor:
             1) if type_match else type_text.split("/")[-1]
         extracted_data["source_params"]["媒介"] = basic_info_dict.get("媒介")
         # 视频编码：优先获取"视频编码"，如果没有则获取"编码"
-        extracted_data["source_params"]["视频编码"] = basic_info_dict.get("视频编码") or basic_info_dict.get("编码")
+        extracted_data["source_params"]["视频编码"] = basic_info_dict.get(
+            "视频编码") or basic_info_dict.get("编码")
         extracted_data["source_params"]["音频编码"] = basic_info_dict.get("音频编码")
         # 如果页面上没有音频编码，则尝试从mediainfo中提取
-        if not extracted_data["source_params"]["音频编码"] and extracted_data.get("mediainfo"):
+        if not extracted_data["source_params"]["音频编码"] and extracted_data.get(
+                "mediainfo"):
             logging.info("页面未提供音频编码，尝试从MediaInfo中提取...")
-            audio_codec_from_mediainfo = extract_audio_codec_from_mediainfo(extracted_data["mediainfo"])
+            audio_codec_from_mediainfo = extract_audio_codec_from_mediainfo(
+                extracted_data["mediainfo"])
             if audio_codec_from_mediainfo:
-                extracted_data["source_params"]["音频编码"] = audio_codec_from_mediainfo
-                logging.info(f"成功从MediaInfo中提取到音频编码: {audio_codec_from_mediainfo}")
+                extracted_data["source_params"][
+                    "音频编码"] = audio_codec_from_mediainfo
+                logging.info(
+                    f"成功从MediaInfo中提取到音频编码: {audio_codec_from_mediainfo}")
 
         extracted_data["source_params"]["分辨率"] = basic_info_dict.get("分辨率")
         extracted_data["source_params"]["制作组"] = basic_info_dict.get("制作组")
@@ -627,13 +708,14 @@ class Extractor:
         if origin_info and GLOBAL_MAPPINGS and "source" in GLOBAL_MAPPINGS:
             source_mappings = GLOBAL_MAPPINGS["source"]
             mapped_origin = None
-            
+
             # 优先精确匹配
             for source_text, standardized_key in source_mappings.items():
-                if str(source_text).strip().lower() == str(origin_info).strip().lower():
+                if str(source_text).strip().lower() == str(
+                        origin_info).strip().lower():
                     mapped_origin = standardized_key
                     break
-            
+
             # 如果精确匹配失败，再尝试部分匹配（但要小心，避免"中国"匹配"中国香港"）
             if not mapped_origin:
                 for source_text, standardized_key in source_mappings.items():
@@ -644,7 +726,8 @@ class Extractor:
                     if source_lower in origin_lower and source_lower != origin_lower:
                         # 确保不是前缀匹配导致的误判
                         # 例如："中国" 不应该匹配 "中国香港"
-                        if origin_lower.startswith(source_lower) and len(origin_lower) > len(source_lower):
+                        if origin_lower.startswith(source_lower) and len(
+                                origin_lower) > len(source_lower):
                             # 这种情况跳过，可能有更精确的匹配
                             continue
                         mapped_origin = standardized_key
@@ -916,11 +999,49 @@ class ParameterMapper:
             # 尝试从原始参数中获取（兼容使用"区域"等字段的站点）
             source_value = source_params.get("产地") or source_params.get("区域")
             if source_value:
-                final_standardized_params["source"] = get_standard_key_for_value(
-                    source_value, "source")
+                final_standardized_params[
+                    "source"] = get_standard_key_for_value(
+                        source_value, "source")
 
         # 处理标签映射 - 使用站点特定的标签映射
         final_standardized_params["tags"] = self._map_tags(
             source_params.get("标签", []), site_name)
+
+        # [新增] 从简介中提取标签和进行类型修正
+        from utils.media_helper import extract_tags_from_description, check_animation_type_from_description
+        
+        intro_statement = extracted_params.get("intro", {}).get("statement", "")
+        intro_body = extracted_params.get("intro", {}).get("body", "")
+        full_description_text = f"{intro_statement}\n{intro_body}"
+        
+        # 1. 从简介类别中提取标签（如喜剧、动画等）
+        description_tags = extract_tags_from_description(full_description_text)
+        if description_tags:
+            # 将提取到的标签添加到现有标签列表中，使用集合去重
+            existing_tags = set(final_standardized_params.get("tags", []))
+            existing_tags.update(description_tags)
+            final_standardized_params["tags"] = list(existing_tags)
+            logging.info(f"从简介中补充标签: {description_tags}")
+        
+        # 2. 检查是否需要修正类型为动漫
+        if check_animation_type_from_description(full_description_text):
+            current_type = final_standardized_params.get("type", "")
+            logging.info(f"检测到类别中包含'动画'，当前标准类型: {current_type}")
+            
+            # 获取动漫的标准键
+            anime_standard_key = None
+            global_type_mappings = GLOBAL_MAPPINGS.get("type", {})
+            for source_text, standard_key in global_type_mappings.items():
+                if source_text in ["动漫", "Anime"]:
+                    anime_standard_key = standard_key
+                    break
+            
+            if anime_standard_key:
+                # 只要检测到动画，就修正为动漫
+                final_standardized_params["type"] = anime_standard_key
+                logging.info(f"类型已从'{current_type}'修正为'{anime_standard_key}'")
+                print(f"[*] 类型修正: {current_type} -> {anime_standard_key} (检测到简介类别包含'动画')")
+            else:
+                logging.warning("未在全局映射中找到'动漫'的标准键，无法修正类型")
 
         return final_standardized_params

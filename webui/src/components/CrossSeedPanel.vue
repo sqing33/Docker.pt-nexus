@@ -21,8 +21,7 @@
     </header>
 
     <!-- 2. 中间内容区 (自适应高度、可滚动) -->
-    <main class="panel-content" v-loading="isLoading" element-loading-text="正在获取种子信息，请稍候..."
-      element-loading-background="rgba(255, 255, 255, 0.9)">
+    <main class="panel-content">
       <!-- 步骤 0: 核对种子详情 -->
       <div v-if="activeStep === 0" class="step-container details-container">
         <el-tabs v-model="activeTab" type="border-card" class="details-tabs">
@@ -2213,7 +2212,7 @@ const handlePublish = async () => {
 
   // 触发种子数据刷新
   try {
-    await axios.post('/api/torrents/refresh_data');
+    await axios.post('/api/refresh_data');
     ElNotification.success({
       title: '数据刷新',
       message: '种子数据已刷新'
