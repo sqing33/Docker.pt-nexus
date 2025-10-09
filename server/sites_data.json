@@ -66,7 +66,7 @@
     "special_tracker_domain": null,
     "group": "-HDHome,-HDH,-HDHTV,-SHMA",
     "description": "HDHome",
-    "migration": 1,
+    "migration": 0,
     "speed_limit": 10
   },
   {
@@ -411,7 +411,7 @@
     "special_tracker_domain": null,
     "group": "-ADE,-Audies,-ADWeb,-ADEbook,-ADAudio",
     "description": "Audiences",
-    "migration": 1,
+    "migration": 0,
     "speed_limit": 80
   },
   {
@@ -441,7 +441,7 @@
     "special_tracker_domain": null,
     "group": "HHWEB",
     "description": "HHClub",
-    "migration": 1,
+    "migration": 0,
     "speed_limit": 10
   },
   {
@@ -526,7 +526,7 @@
     "special_tracker_domain": null,
     "group": "-UBits,-UBWEB,-UBTV",
     "description": "UBits",
-    "migration": 3,
+    "migration": 1,
     "speed_limit": 50
   },
   {
@@ -622,7 +622,7 @@
     "base_url": "share.ilolicon.com",
     "special_tracker_domain": null,
     "group": "-iloliWeb",
-    "migration": 1,
+    "migration": 0,
     "speed_limit": 50
   },
   {
@@ -1163,7 +1163,7 @@
     "special_tracker_domain": null,
     "group": "-NHDWeb",
     "description": "NovaHD",
-    "migration": 3,
+    "migration": 2,
     "speed_limit": 20
   },
   {
