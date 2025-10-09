@@ -333,7 +333,7 @@
                   <span v-else>-</span>
                 </template>
               </el-table-column>
-              <el-table-column prop="downloader_add_result" label="下载器状态" width="80" align="center">
+              <el-table-column prop="downloader_add_result" label="下载器状态" width="150" align="center">
                 <template #default="scope">
                   <!-- 检查是否有下载器结果 -->
                   <template v-if="scope.row.downloader_add_result">
@@ -450,6 +450,7 @@ interface SeedParameter {
   created_at: string
   updated_at: string
   is_deleted: boolean
+  is_reviewed: boolean  // 新增：是否已审查
 }
 
 interface PathNode {
@@ -1197,6 +1198,10 @@ const tableRowClassName = ({ row }: { row: SeedParameter }) => {
   if (row.is_deleted || hasRestrictedTag(row.tags)) {
     return 'deleted-row'
   }
+  // 如果未审查，添加unreviewed-row类（灰色背景）
+  if (!row.is_reviewed) {
+    return 'unreviewed-row'
+  }
   // 如果行不可选择，添加selected-row-disabled类
   if (!checkSelectable(row)) {
     return 'selected-row-disabled'
@@ -1243,7 +1248,14 @@ const checkSelectable = (row: SeedParameter) => {
       return false
     }
     // 如果有无效参数，则不可选择
-    return !hasInvalidParams(row)
+    if (hasInvalidParams(row)) {
+      return false
+    }
+    // 如果未审查（is_reviewed 为 false 或 0），则不可选择
+    if (!row.is_reviewed) {
+      return false
+    }
+    return true
   }
 }
 
@@ -1424,26 +1436,20 @@ const closeBatchFetchDialog = () => {
   batchFetchDialogVisible.value = false
 }
 
-// ✨ CHANGE START: New helper function and computed property
 /**
- * 检查进度字符串（如 '2/2'）是否代表已完成
- * @param progressStr 进度字符串
+ * 检查下载器状态是否包含"成功"或"失败"
+ * @param downloaderResult 下载器添加结果字符串
  */
-const isProgressComplete = (progressStr: string): boolean => {
-  if (!progressStr) return false;
-  const match = progressStr.match(/(\d+)\/(\d+)/);
-  if (match) {
-    const current = parseInt(match[1]);
-    const total = parseInt(match[2]);
-    // 进度完成的条件是：总数大于0，且当前值等于总数
-    return total > 0 && current === total;
-  }
-  return false;
+const hasDownloaderFinalStatus = (downloaderResult: string | undefined): boolean => {
+  if (!downloaderResult) return false;
+  // 检查字符串中是否包含"成功"或"失败"
+  return downloaderResult.includes('成功') || downloaderResult.includes('失败');
 };
 
 /**
  * 计算属性：判断是否有任务正在进行中
- * 用于决定是否显示“开启自动刷新”按钮
+ * 用于决定是否显示"开启自动刷新"按钮
+ * 基于下载器状态判断：如果最新记录的下载器状态没有包含"成功"或"失败"，则认为任务还在进行中
  */
 const isBatchRunning = computed(() => {
   // 如果没有记录，则认为没有任务在运行
@@ -1452,13 +1458,9 @@ const isBatchRunning = computed(() => {
   // 获取最新一条记录（通常是第一条）
   const latestRecord = records.value[0];
 
-  // 如果最新记录没有进度信息，可以认为任务刚开始，或状态未知，显示刷新按钮
-  if (!latestRecord.progress) return true;
-
-  // 如果最新记录的进度未满，则任务仍在进行中
-  return !isProgressComplete(latestRecord.progress);
+  // 如果最新记录的下载器状态没有最终状态（成功或失败），则任务仍在进行中
+  return !hasDownloaderFinalStatus(latestRecord.downloader_add_result);
 });
-// ✨ CHANGE END
 
 // 启动定时刷新
 const startAutoRefresh = () => {
@@ -1473,18 +1475,33 @@ const startAutoRefresh = () => {
     if (recordDialogVisible.value) {
       await refreshRecords()
 
-      // ✨ CHANGE START: New logic to stop auto-refresh based on the latest record's progress
-      // 检查最新一条记录的进度是否已完成
-      if (records.value.length > 0 && isProgressComplete(records.value[0].progress || '')) {
-        // 延迟3秒后停止，以确保最终状态已完全显示
-        setTimeout(() => {
-          // 在停止前再次检查，防止在3秒延迟期间有新任务开始
-          if (records.value.length > 0 && isProgressComplete(records.value[0].progress || '')) {
-            stopAutoRefresh();
-          }
-        }, 3000);
+      // 双重检测机制：同时检测进度和下载器状态
+      if (records.value.length > 0) {
+        const latestRecord = records.value[0]
+        
+        // 检测1：进度是否完成（100%）
+        const progressComplete = latestRecord.progress && calculateProgress(latestRecord.progress) === 100
+        
+        // 检测2：下载器状态是否包含"成功"或"失败"
+        const downloaderHasFinalStatus = hasDownloaderFinalStatus(latestRecord.downloader_add_result)
+        
+        // 只有当两个条件都满足时才停止刷新
+        if (progressComplete && downloaderHasFinalStatus) {
+          // 延迟3秒后停止，以确保最终状态已完全显示
+          setTimeout(() => {
+            // 在停止前再次检查，防止在3秒延迟期间有新任务开始
+            if (records.value.length > 0) {
+              const currentRecord = records.value[0]
+              const currentProgressComplete = currentRecord.progress && calculateProgress(currentRecord.progress) === 100
+              const currentDownloaderFinalStatus = hasDownloaderFinalStatus(currentRecord.downloader_add_result)
+              
+              if (currentProgressComplete && currentDownloaderFinalStatus) {
+                stopAutoRefresh()
+              }
+            }
+          }, 3000)
+        }
       }
-      // ✨ CHANGE END
     } else {
       // 如果记录窗口已关闭，停止定时器
       stopAutoRefresh()
@@ -1994,6 +2011,15 @@ onUnmounted(() => {
 
 :deep(.deleted-row:hover) {
   background-color: #fde2e2 !important;
+}
+
+/* 未审查行的样式（黄色背景） */
+:deep(.unreviewed-row) {
+  background-color: #fef9e7 !important;
+}
+
+:deep(.unreviewed-row:hover) {
+  background-color: #fdedb3 !important;
 }
 
 .title-cell {

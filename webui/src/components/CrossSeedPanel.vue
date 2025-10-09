@@ -1990,12 +1990,14 @@ const goToPublishPreviewStep = async () => {
 
     console.log('发送到后端的标准参数:', torrentData.value.standardized_params);
 
-    // 调用新的更新接口
+    // 调用新的更新接口，此时会将 is_reviewed 设置为 true
     const response = await axios.post('/api/migrate/update_db_seed_info', {
       torrent_id: torrentId,
       site_name: siteName,
       updated_parameters: updatedParameters
     });
+    
+    console.log('已调用更新接口，is_reviewed 将被设置为 true');
 
     ElNotification.closeAll();
 

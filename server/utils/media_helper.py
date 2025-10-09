@@ -1691,22 +1691,29 @@ def add_torrent_to_downloader(detail_page_url: str, save_path: str,
                     'paused': False
                 }
 
-                # 如果站点设置了速度限制，则添加速度限制参数
-                # 数据库中存储的是MB/s，需要转换为bytes/s传递给下载器API
-                if site_info and site_info.get('speed_limit', 0) > 0:
-                    speed_limit = int(
-                        site_info['speed_limit']) * 1024 * 1024  # 转换为 bytes/s
-                    tr_params['uploadLimit'] = speed_limit
-                    tr_params['uploadLimited'] = True
-                    logging.info(
-                        f"为站点 '{site_info['nickname']}' 设置上传速度限制: {site_info['speed_limit']} MB/s"
-                    )
-
+                # 先添加种子
                 result = client.add_torrent(**tr_params)
                 logging.info(
                     f"已将种子添加到 Transmission '{client_name}': ID={result.id}")
 
-            return True, f"成功将种子添加到下载器 '{client_name}'。"
+                # 如果站点设置了速度限制，则在添加后设置速度限制
+                # add_torrent 方法不支持速度限制参数，需要使用 change_torrent 方法
+                if site_info and site_info.get('speed_limit', 0) > 0:
+                    # 转换为 KBps: MB/s * 1024 = KBps
+                    speed_limit_kbps = int(site_info['speed_limit']) * 1024
+                    try:
+                        client.change_torrent(
+                            result.id,
+                            upload_limit=speed_limit_kbps,
+                            upload_limited=True
+                        )
+                        logging.info(
+                            f"为站点 '{site_info['nickname']}' 设置上传速度限制: {site_info['speed_limit']} MB/s ({speed_limit_kbps} KBps)"
+                        )
+                    except Exception as e:
+                        logging.warning(f"设置速度限制失败，但种子已添加成功: {e}")
+
+            return True, f"成功添加到 '{client_name}'。"
 
         except Exception as e:
             logging.warning(f"第 {attempt + 1} 次尝试添加种子到下载器失败: {e}")
@@ -2020,11 +2027,12 @@ def extract_origin_from_description(description_text: str) -> str:
         return ""
 
     # 使用正则表达式匹配 "◎产　　地　日本" 这种格式
-    # 支持多种变体：◎产地、◎产　　地、◎国　　家等
+    # 支持多种变体：◎产地、◎产　　地、◎国　　家、◎国家地区等
     patterns = [
         r"◎\s*产\s*地\s*(.+?)(?:\s|$)",  # 匹配 ◎产地 日本
         r"◎\s*国\s*家\s*(.+?)(?:\s|$)",  # 匹配 ◎国家 日本
         r"◎\s*地\s*区\s*(.+?)(?:\s|$)",  # 匹配 ◎地区 日本
+        r"◎\s*国家地区\s*(.+?)(?:\s|$)",  # 匹配 ◎国家地区 日本
         r"制片国家/地区[:\s]+(.+?)(?:\s|$)",  # 匹配 制片国家/地区: 日本
         r"制片国家[:\s]+(.+?)(?:\s|$)",  # 匹配 制片国家: 日本
         r"国家[:\s]+(.+?)(?:\s|$)",  # 匹配 国家: 日本

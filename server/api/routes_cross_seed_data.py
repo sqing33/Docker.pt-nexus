@@ -287,7 +287,7 @@ def get_cross_seed_data():
         if db_manager.db_type == "postgresql":
             query = f"""
                 SELECT hash, torrent_id, site_name, nickname, save_path, title, subtitle, type, medium, video_codec,
-                       audio_codec, resolution, team, source, tags, title_components, is_deleted, updated_at
+                       audio_codec, resolution, team, source, tags, title_components, is_deleted, is_reviewed, updated_at
                 FROM seed_parameters
                 {where_clause}
                 ORDER BY created_at DESC
@@ -298,7 +298,7 @@ def get_cross_seed_data():
             placeholder = "?" if db_manager.db_type == "sqlite" else "%s"
             query = f"""
                 SELECT hash, torrent_id, site_name, nickname, save_path, title, subtitle, type, medium, video_codec,
-                       audio_codec, resolution, team, source, tags, title_components, is_deleted, updated_at
+                       audio_codec, resolution, team, source, tags, title_components, is_deleted, is_reviewed, updated_at
                 FROM seed_parameters
                 {where_clause}
                 ORDER BY created_at DESC
@@ -336,6 +336,13 @@ def get_cross_seed_data():
             if 'is_deleted' in item:
                 if isinstance(item['is_deleted'], int):
                     item['is_deleted'] = bool(item['is_deleted'])
+                # PostgreSQL already returns boolean, no conversion needed
+
+            # Ensure is_reviewed field is boolean for consistent frontend handling
+            # MySQL/SQLite return integers (0/1), PostgreSQL returns booleans (false/true)
+            if 'is_reviewed' in item:
+                if isinstance(item['is_reviewed'], int):
+                    item['is_reviewed'] = bool(item['is_reviewed'])
                 # PostgreSQL already returns boolean, no conversion needed
 
             # Extract "无法识别" field from title_components

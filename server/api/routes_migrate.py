@@ -703,6 +703,7 @@ def update_db_seed_info():
                 "tags": standardized_params.get('tags', []),
                 "title_components": title_components,
                 "standardized_params": standardized_params,
+                "is_reviewed": True,  # 标记为已审查
                 "final_publish_parameters": {
                     # [修改] 预览标题也使用新生成的标题
                     "主标题 (预览)": preview_title,
@@ -769,7 +770,6 @@ def update_db_seed_info():
             update_result = seed_param_model.update_parameters(
                 torrent_id, english_site_name, final_parameters)
 
-            # 后续代码保持不变...
             if update_result:
                 logging.info(
                     f"种子参数更新成功: {torrent_id} from {site_name} ({english_site_name})"
@@ -1409,7 +1409,7 @@ def migrate_publish():
                             "success":
                             True,
                             "message":
-                            "已添加到下载器队列，将在后台处理",
+                            "已添加到下载队列",
                             "task_id":
                             task_id,
                             "async":

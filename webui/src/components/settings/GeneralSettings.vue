@@ -133,9 +133,9 @@
                 <div
                   style="display: flex; margin:auto;align-items: center; gap: 20px; justify-content: center; padding: 15px 0;">
                   <el-switch v-model="iyuuForm.auto_query_enabled" active-text="启用" inactive-text="禁用" />
-                  <el-input-number v-model="iyuuForm.query_interval_hours" :min="1" :max="168" placeholder="小时"
+                  <el-input-number v-model="iyuuForm.query_interval_days" :min="1" placeholder="天数"
                     controls-position="right" style="width: 120px;" />
-                  <span>小时</span>
+                  <span>天</span>
                 </div>
               </el-form-item>
 
@@ -389,6 +389,7 @@ const form = ref({ old_password: '', username: '', password: '' })
 const iyuuForm = reactive({
   token: '',
   query_interval_hours: 72,
+  query_interval_days: 3, // 以天为单位显示
   auto_query_enabled: true
 })
 
@@ -469,6 +470,8 @@ const fetchSettings = async () => {
     // 获取IYUU设置
     if (config.iyuu_settings) {
       iyuuForm.query_interval_hours = config.iyuu_settings.query_interval_hours || 72
+      // 将小时转换为天数显示（向上取整）
+      iyuuForm.query_interval_days = Math.ceil(iyuuForm.query_interval_hours / 24)
       iyuuForm.auto_query_enabled = config.iyuu_settings.auto_query_enabled !== false // 默认为true
     }
 
@@ -524,12 +527,15 @@ const saveIyuuSettings = async () => {
     }
 
     // 保存IYUU其他设置
+    // 将天数转换为小时保存到后端
     const iyuuSettings = {
-      query_interval_hours: iyuuForm.query_interval_hours,
+      query_interval_hours: iyuuForm.query_interval_days * 24,
       auto_query_enabled: iyuuForm.auto_query_enabled
     }
 
     await axios.post('/api/iyuu/settings', iyuuSettings)
+    // 更新本地的小时值，以便下次加载时正确显示
+    iyuuForm.query_interval_hours = iyuuSettings.query_interval_hours
     ElMessage.success('IYUU 设置已保存！')
   } catch (error: any) {
     const errorMessage = error.response?.data?.error || '保存失败。'
