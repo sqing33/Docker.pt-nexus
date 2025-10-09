@@ -665,8 +665,7 @@ def upload_data_title(title: str, torrent_filename: str = ""):
         # 这个正则会匹配 - 开头，中间可能有多个单词（包含空格）、&符号，最后以 VCB-Studio 结尾
         vcb_variant_pattern = re.compile(
             r"^(?P<main_part>.+?)[-](?P<release_group>[\w\s]+&VCB-Studio)$",
-            re.IGNORECASE
-        )
+            re.IGNORECASE)
         vcb_match = vcb_variant_pattern.match(title)
         if vcb_match:
             main_part = vcb_match.group("main_part").strip()
@@ -1799,15 +1798,15 @@ def extract_tags_from_description(description_text: str) -> list:
     """
     if not description_text:
         return []
-    
+
     found_tags = []
-    
+
     # 从简介中提取类别字段
     category_match = re.search(r"◎\s*类\s*别\s*(.+?)(?:\n|$)", description_text)
     if category_match:
         category_text = category_match.group(1).strip()
         print(f"从简介中提取到类别: {category_text}")
-        
+
         # 定义类别关键词到标签的映射
         category_tag_map = {
             '喜剧': 'tag.喜剧',
@@ -1839,18 +1838,18 @@ def extract_tags_from_description(description_text: str) -> list:
             '剧情': 'tag.剧情',
             'Drama': 'tag.剧情',
         }
-        
+
         # 检查类别文本中是否包含关键词
         for keyword, tag in category_tag_map.items():
             if keyword in category_text:
                 found_tags.append(tag)
                 print(f"   从类别中提取到标签: {tag} (匹配关键词: {keyword})")
-    
+
     if found_tags:
         print(f"从简介类别中提取到的标签: {found_tags}")
     else:
         print("从简介类别中未提取到任何标签")
-    
+
     return found_tags
 
 
@@ -1863,17 +1862,17 @@ def check_animation_type_from_description(description_text: str) -> bool:
     """
     if not description_text:
         return False
-    
+
     # 从简介中提取类别字段
     category_match = re.search(r"◎\s*类\s*别\s*(.+?)(?:\n|$)", description_text)
     if category_match:
         category_text = category_match.group(1).strip()
-        
+
         # 检查类别中是否包含"动画"关键词
         if "动画" in category_text or "Animation" in category_text:
             print(f"检测到类别中包含'动画': {category_text}")
             return True
-    
+
     return False
 
 
@@ -1896,8 +1895,8 @@ def extract_tags_from_mediainfo(mediainfo_text: str) -> list:
         '国语': ['国语', 'mandarin'],
         '粤语': ['粤语', 'cantonese'],
         # 字幕标签
-        '中字': ['中字', 'chinese', 'chs', 'cht', '简', '繁'],
-        '英字': ['英字', 'english', 'eng', 'en'],
+        '中字': ['中字', 'chinese', '简', '繁'],
+        '英字': ['英字', 'english'],
         # HDR 格式标签
         'Dolby Vision': ['dolby vision', '杜比视界'],
         'HDR10+': ['hdr10+'],

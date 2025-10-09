@@ -1,0 +1,115 @@
+name: Sync to Public Repository
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  filter-and-publish:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout private repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Set up Git
+        run: |
+          git config --global user.name "GitHub Actions Bot"
+          git config --global user.email "actions@github.com"
+      
+      - name: Install BFG Repo-Cleaner
+        run: |
+          echo "📦 Installing BFG Repo-Cleaner..."
+          sudo apt-get update
+          sudo apt-get install -y default-jre
+          wget https://repo1.maven.org/maven2/com/madgag/bfg/1.14.0/bfg-1.14.0.jar -O /tmp/bfg.jar
+          echo "✅ BFG installed successfully"
+      
+      - name: Create temporary clone for filtering
+        run: |
+          echo "📋 Creating temporary clone..."
+          cd /tmp
+          git clone --mirror "${GITHUB_WORKSPACE}/.git" repo-mirror.git
+          cd repo-mirror.git
+      
+      - name: Clean repository history with BFG
+        run: |
+          set -e
+          cd /tmp/repo-mirror.git
+          
+          BFG_ARGS=()
+          
+          # 添加 --no-blob-protection 参数，清理所有提交包括 HEAD
+          BFG_ARGS+=(--no-blob-protection)
+          
+          # 处理要删除的文件列表
+          if [ -f "${GITHUB_WORKSPACE}/.bfg_delete_files" ]; then
+            FILES_TO_DELETE=$(grep -vE '^#|^$' "${GITHUB_WORKSPACE}/.bfg_delete_files" | tr '\n' ',' | sed 's/,$//')
+            if [ -n "$FILES_TO_DELETE" ]; then
+              echo "🗑️  Files to delete: $FILES_TO_DELETE"
+              BFG_ARGS+=(--delete-files "{$FILES_TO_DELETE}")
+            fi
+          fi
+          
+          # 处理要删除的文件夹列表
+          if [ -f "${GITHUB_WORKSPACE}/.bfg_delete_folders" ]; then
+            FOLDERS_TO_DELETE=$(grep -vE '^#|^$' "${GITHUB_WORKSPACE}/.bfg_delete_folders" | tr '\n' ',' | sed 's/,$//')
+            if [ -n "$FOLDERS_TO_DELETE" ]; then
+              echo "🗑️  Folders to delete: $FOLDERS_TO_DELETE"
+              BFG_ARGS+=(--delete-folders "{$FOLDERS_TO_DELETE}")
+            fi
+          fi
+          
+          # 检查除了 --no-blob-protection 之外是否还有其他清理参数
+          if [ ${#BFG_ARGS[@]} -le 1 ]; then
+            echo "⚠️  No files or folders specified for cleanup."
+          else
+            echo "🧹 Cleaning repository with BFG..."
+            echo "Arguments: ${BFG_ARGS[@]}"
+            java -jar /tmp/bfg.jar "${BFG_ARGS[@]}" .
+            
+            echo "📦 Compacting repository..."
+            git reflog expire --expire=now --all
+            git gc --prune=now --aggressive
+          fi
+          
+          # 删除配置文件本身
+          echo "🗑️  Removing BFG config files from history..."
+          java -jar /tmp/bfg.jar --no-blob-protection --delete-files "{.bfg_delete_files,.bfg_delete_folders}" .
+          git reflog expire --expire=now --all
+          git gc --prune=now --aggressive
+      
+      - name: Push to public repository
+        env:
+          PUBLIC_REPO_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN }}
+          PUBLIC_REPO_URL: ${{ secrets.PUBLIC_REPO_URL }}
+        run: |
+          cd /tmp/repo-mirror.git
+          
+          # 自动过滤 https:// 或 http:// 前缀
+          CLEAN_URL="${PUBLIC_REPO_URL}"
+          CLEAN_URL="${CLEAN_URL#https://}"
+          CLEAN_URL="${CLEAN_URL#http://}"
+          
+          echo "🚀 Pushing filtered content to public repository..."
+          echo "Target: ${CLEAN_URL}"
+          
+          # 设置公开仓库的远程地址
+          git remote add public https://${PUBLIC_REPO_TOKEN}@${CLEAN_URL}
+          
+          # 强制推送镜像到公开仓库
+          git push --mirror --force public
+          
+          echo "✅ Successfully pushed filtered content to public repository"
+      
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -rf /tmp/repo-mirror.git /tmp/bfg.jar
+          echo "🧹 Cleanup completed"
