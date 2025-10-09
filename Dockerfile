@@ -18,7 +18,7 @@ FROM golang:1.21-alpine AS go-builder
 
 WORKDIR /app/batch-enhancer
 
-COPY ./batch-enhancer/go.mod ./batch-enhancer/go.sum ./
+COPY ./batch-enhancer/go.mod ./
 
 RUN go mod download
 
@@ -31,8 +31,8 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
 # Install system dependencies first
 RUN apt-get update && \
