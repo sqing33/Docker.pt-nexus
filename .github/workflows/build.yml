@@ -41,19 +41,32 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: 6. 提取 Docker 元数据
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: |
-            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
-            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=sha,prefix=,format=short
+      - name: 6. 准备 Docker 标签
+        id: prepare-tags
+        run: |
+          # 读取用户输入的标签（逗号分隔）
+          INPUT_TAGS="${{ github.event.inputs.tags }}"
+          
+          # 准备两个仓库的完整标签列表
+          GHCR_REPO="ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}"
+          DOCKERHUB_REPO="${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}"
+          
+          # 将逗号分隔的标签转换为完整的镜像标签
+          TAGS=""
+          IFS=',' read -ra TAG_ARRAY <<< "$INPUT_TAGS"
+          for tag in "${TAG_ARRAY[@]}"; do
+            # 去除首尾空格
+            tag=$(echo "$tag" | xargs)
+            # 添加两个仓库的标签
+            TAGS="${TAGS}${GHCR_REPO}:${tag},"
+            TAGS="${TAGS}${DOCKERHUB_REPO}:${tag},"
+          done
+          
+          # 移除最后的逗号
+          TAGS="${TAGS%,}"
+          
+          echo "生成的标签: $TAGS"
+          echo "tags=$TAGS" >> $GITHUB_OUTPUT
 
       - name: 7. 构建并推送到多个镜像仓库
         uses: docker/build-push-action@v6
@@ -61,8 +74,7 @@ jobs:
           context: .
           platforms: linux/amd64
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ steps.prepare-tags.outputs.tags }}
 
   build-pt-nexus-box-proxy:
     runs-on: ubuntu-latest
@@ -119,11 +131,20 @@ jobs:
             echo "成功构建: $OUTPUT_NAME"
           done
 
-      - name: 4. 创建 Release 并上传二进制文件和安装脚本
+      - name: 4. 准备 Release 标签
+        id: prepare-release-tag
+        run: |
+          # 从输入的标签中提取第一个作为 release tag
+          INPUT_TAGS="${{ github.event.inputs.tags }}"
+          FIRST_TAG=$(echo "$INPUT_TAGS" | cut -d',' -f1 | xargs)
+          echo "使用的 Release 标签: $FIRST_TAG"
+          echo "tag=$FIRST_TAG" >> $GITHUB_OUTPUT
+
+      - name: 5. 创建 Release 并上传二进制文件和安装脚本
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ github.event.inputs.tags }}
-          name: Release ${{ github.event.inputs.tags }}
+          tag_name: ${{ steps.prepare-release-tag.outputs.tag }}
+          name: Release ${{ steps.prepare-release-tag.outputs.tag }}
           draft: false
           prerelease: false
           files: |
