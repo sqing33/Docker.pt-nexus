@@ -48,7 +48,8 @@ def create_app():
     def validate_internal_token(token):
         """验证动态生成的内部认证token，支持更大的时间窗口容错"""
         try:
-            internal_secret = os.getenv("INTERNAL_SECRET", "pt-nexus-2024-secret-key")
+            internal_secret = os.getenv("INTERNAL_SECRET",
+                                        "pt-nexus-2024-secret-key")
             current_timestamp = int(time.time()) // 3600  # 当前小时
 
             # 扩大时间窗口：检查前后2小时的token（容错机制）
@@ -58,17 +59,19 @@ def create_app():
                 expected_signature = hmac.new(
                     internal_secret.encode(),
                     f"pt-nexus-internal-{timestamp}".encode(),
-                    hashlib.sha256
-                ).hexdigest()[:16]
+                    hashlib.sha256).hexdigest()[:16]
 
                 if hmac.compare_digest(token, expected_signature):
                     # 记录验证成功的时间偏移，用于监控时钟同步问题
                     if time_offset != 0:
-                        logging.warning(f"内部认证token验证成功，但存在时间偏移: {time_offset}小时")
+                        logging.warning(
+                            f"内部认证token验证成功，但存在时间偏移: {time_offset}小时")
                     return True
 
             # 如果所有时间窗口都验证失败，记录详细信息用于调试
-            logging.error(f"内部认证token验证失败: token={token[:8]}..., current_hour={current_timestamp}")
+            logging.error(
+                f"内部认证token验证失败: token={token[:8]}..., current_hour={current_timestamp}"
+            )
             return False
         except Exception as e:
             logging.error(f"验证内部token时出错: {e}")
@@ -125,7 +128,8 @@ def create_app():
         # 内部服务认证跳过逻辑
         # 1. 网络隔离：localhost和内部Docker网络跳过认证
         remote_addr = request.environ.get('REMOTE_ADDR', '')
-        if remote_addr in ['127.0.0.1', '::1'] or remote_addr.startswith('172.') or remote_addr.startswith('192.168.'):
+        if remote_addr in ['127.0.0.1', '::1'] or remote_addr.startswith(
+                '172.') or remote_addr.startswith('192.168.'):
             return None
 
         # 2. 内部API Key认证：使用动态token验证
@@ -203,8 +207,10 @@ def create_app():
             # 检查是否启用
             if queue_config.get("enabled", True):
                 # 创建新的服务实例
-                downloader_queue_service_instance = create_downloader_queue_service(app_config)
-                downloader_queue_service_instance.set_managers(db_manager, config_manager)
+                downloader_queue_service_instance = create_downloader_queue_service(
+                    app_config)
+                downloader_queue_service_instance.set_managers(
+                    db_manager, config_manager)
                 downloader_queue_service_instance.start()
 
                 # 更新全局实例引用
@@ -218,8 +224,8 @@ def create_app():
             logging.error(f"启动下载器队列服务失败: {e}", exc_info=True)
 
         # # --- 启动IYUU后台线程 ---
-        # logging.info("正在启动IYUU后台线程...")
-        # start_iyuu_thread(db_manager, config_manager)
+        logging.info("正在启动IYUU后台线程...")
+        start_iyuu_thread(db_manager, config_manager)
     else:
         logging.info("检测到调试监控进程，跳过后台线程启动。")
 

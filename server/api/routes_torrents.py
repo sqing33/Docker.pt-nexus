@@ -327,3 +327,39 @@ def refresh_data_api():
         print(f"【API】触发刷新失败: {e}")
         logging.error(f"触发刷新失败: {e}")
         return jsonify({"error": "触发刷新失败"}), 500
+
+
+@torrents_bp.route("/iyuu_query", methods=["POST"])
+def iyuu_query_api():
+    """手动触发指定种子的IYUU查询（同步执行）"""
+    db_manager = torrents_bp.db_manager
+    config_manager = torrents_bp.config_manager
+    
+    try:
+        data = request.get_json()
+        torrent_name = data.get("name")
+        torrent_size = data.get("size")
+        
+        if not torrent_name:
+            return jsonify({"error": "缺少种子名称参数"}), 400
+        
+        if not torrent_size:
+            return jsonify({"error": "缺少种子大小参数"}), 400
+        
+        # 从 core.iyuu 导入必要的函数
+        from core.iyuu import iyuu_thread
+        
+        if not iyuu_thread or not iyuu_thread.is_alive():
+            return jsonify({"error": "IYUU线程未运行"}), 400
+        
+        # 同步执行IYUU查询，等待完成后返回
+        try:
+            iyuu_thread._process_single_torrent(torrent_name, torrent_size)
+            return jsonify({"message": f"种子 '{torrent_name}' 的IYUU查询已完成", "success": True}), 200
+        except Exception as e:
+            logging.error(f"手动IYUU查询执行失败: {e}", exc_info=True)
+            return jsonify({"error": f"IYUU查询失败: {str(e)}", "success": False}), 500
+        
+    except Exception as e:
+        logging.error(f"iyuu_query_api 出错: {e}", exc_info=True)
+        return jsonify({"error": "触发IYUU查询失败", "success": False}), 500

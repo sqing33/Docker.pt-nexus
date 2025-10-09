@@ -69,7 +69,6 @@
     <!-- 下载器信息展示 -->
     <el-row :gutter="24" style="margin-top: 24px;">
       <el-col :span="24">
-        <h3 class="downloader-title">下载器状态</h3>
         <div class="downloader-grid">
           <el-card v-for="downloader in downloaderInfo" :key="downloader.name" class="downloader-card glass-card glass-rounded"
             :class="{ 'disabled': !downloader.enabled }">

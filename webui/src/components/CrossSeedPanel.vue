@@ -559,7 +559,7 @@
                   </div>
                   <span class="status-text"
                     :class="{ 'success': result.downloaderStatus.success, 'error': !result.downloaderStatus.success }">
-                    {{ result.downloaderStatus.success ? `种子已添加到 '${result.downloaderStatus.downloaderName}'` : '添加失败'
+                    {{ result.downloaderStatus.success ? `种子已添加到\n'${result.downloaderStatus.downloaderName}'` : '添加失败'
                     }}
                   </span>
                 </div>
@@ -3488,6 +3488,10 @@ const handleLogProgressComplete = () => {
   margin-right: 6px;
   display: flex;
   align-items: center;
+}
+
+.status-text {
+  white-space: pre-line;
 }
 
 .status-text.success {
