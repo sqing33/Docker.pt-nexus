@@ -554,8 +554,8 @@ class DatabaseManager:
                     SELECT
                         {time_group_fn} AS hour_group,
                         downloader_id,
-                        MAX(0, MAX(cumulative_uploaded) - MIN(cumulative_uploaded)) AS total_uploaded,
-                        MAX(0, MAX(cumulative_downloaded) - MIN(cumulative_downloaded)) AS total_downloaded,
+                        GREATEST(0, MAX(cumulative_uploaded) - MIN(cumulative_uploaded)) AS total_uploaded,
+                        GREATEST(0, MAX(cumulative_downloaded) - MIN(cumulative_downloaded)) AS total_downloaded,
                         AVG(upload_speed) AS avg_upload_speed,
                         AVG(download_speed) AS avg_download_speed,
                         COUNT(*) AS samples

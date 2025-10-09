@@ -1,4 +1,4 @@
-name: Sync to Public Repository
+name: 推送开源内容到公开库
 
 on:
   push:
