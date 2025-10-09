@@ -220,8 +220,15 @@ class IYUUThread(Thread):
             return {}
 
     def _perform_iyuu_search(self, agg_torrents, configured_sites,
-                             all_torrents):
-        """执行IYUU搜索逻辑"""
+                             all_torrents, force_query=False):
+        """执行IYUU搜索逻辑
+        
+        Args:
+            agg_torrents: 聚合的种子数据
+            configured_sites: 配置的站点列表
+            all_torrents: 所有种子数据
+            force_query: 是否强制查询，忽略时间间隔限制（默认False）
+        """
         try:
             # 获取IYUU token
             config = self.config_manager.get()
@@ -273,16 +280,18 @@ class IYUUThread(Thread):
                 if not self._is_running:  # 检查线程是否应该停止
                     break
 
-                # 检查是否需要进行IYUU查询（距离上次查询超过设置的时间间隔或从未查询过）
-                # 获取设置的查询间隔时间（默认为72小时）
-                config = self.config_manager.get()
-                iyuu_settings = config.get("iyuu_settings", {})
-                query_interval_hours = iyuu_settings.get("query_interval_hours", 72)
+                # 如果不是强制查询，则检查时间间隔
+                if not force_query:
+                    # 检查是否需要进行IYUU查询（距离上次查询超过设置的时间间隔或从未查询过）
+                    # 获取设置的查询间隔时间（默认为72小时）
+                    config = self.config_manager.get()
+                    iyuu_settings = config.get("iyuu_settings", {})
+                    query_interval_hours = iyuu_settings.get("query_interval_hours", 72)
 
-                if not self._should_query_iyuu(name, query_interval_hours):
-                    skip_message = f"[{i+1}/{total_torrents}] 🔄 种子组 '{name}' 距离上次查询不足{query_interval_hours}小时，跳过查询"
-                    log_iyuu_message(skip_message, "INFO")
-                    continue
+                    if not self._should_query_iyuu(name, query_interval_hours):
+                        skip_message = f"[{i+1}/{total_torrents}] 🔄 种子组 '{name}' 距离上次查询不足{query_interval_hours}小时，跳过查询"
+                        log_iyuu_message(skip_message, "INFO")
+                        continue
 
                 print(f"[{i+1}/{total_torrents}] 🔍 正在处理种子组: {name}")
 
@@ -417,6 +426,16 @@ class IYUUThread(Thread):
                         )
 
                     log_iyuu_message(f"在torrents表中找到 {len(matched_sites)} 个已存在的站点", "INFO")
+
+                    # 为缺失站点添加种子记录
+                    if matched_sites:
+                        torrent_data = {
+                            'hash': selected_hash,
+                            'name': name,
+                            'save_path': filtered_torrents[0].get('save_path', ''),
+                            'size': filtered_torrents[0].get('size', 0),
+                        }
+                        self._add_missing_site_torrents(name, torrent_data, matched_sites)
 
                     # 更新所有同名种子记录的iyuu_last_check时间（包括不支持IYUU的站点）
                     self._update_iyuu_last_check(name, matched_sites,
@@ -675,6 +694,82 @@ class IYUUThread(Thread):
             if 'cursor' in locals() and cursor:
                 cursor.close()
             if 'conn' in locals() and conn:
+                conn.close()
+
+    def _process_single_torrent(self, torrent_name, torrent_size, force_query=True):
+        """处理单个种子的IYUU查询
+        
+        Args:
+            torrent_name: 种子名称
+            torrent_size: 种子大小（字节）
+            force_query: 是否强制查询，忽略时间间隔限制（默认True）
+        """
+        from datetime import datetime
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        log_iyuu_message(f"[{current_time}] 开始执行单个种子的IYUU查询: {torrent_name} (大小: {torrent_size} 字节)", "INFO")
+        if force_query:
+            log_iyuu_message("强制查询模式：忽略时间间隔限制", "INFO")
+        
+        conn = None
+        try:
+            conn = self.db_manager._get_connection()
+            cursor = self.db_manager._get_cursor(conn)
+            ph = self.db_manager.get_placeholder()
+            
+            # 查询指定名称和大小的种子数据，只筛选体积大于200MB的种子
+            cursor.execute(
+                f"SELECT hash, name, sites, size, save_path FROM torrents WHERE name = {ph} AND size = {ph} AND size > 207374182",
+                (torrent_name, torrent_size)
+            )
+            torrents_raw = [dict(row) for row in cursor.fetchall()]
+            
+            if not torrents_raw:
+                log_iyuu_message(f"未找到种子: {torrent_name} (大小: {torrent_size})", "WARNING")
+                return
+            
+            # 获取配置的站点列表
+            configured_sites = self._get_configured_sites()
+            
+            # 按种子名称进行聚合
+            all_torrents = defaultdict(list)
+            agg_torrents = defaultdict(list)
+            
+            for t in torrents_raw:
+                site = t.get('sites', None)
+                torrent_info = {
+                    'hash': t['hash'],
+                    'sites': site,
+                    'size': t.get('size', 0),
+                    'save_path': t.get('save_path', '')
+                }
+                all_torrents[torrent_name].append(torrent_info)
+                
+                # 只有当站点是IYUU支持的站点时才添加到聚合列表中
+                if site and site in configured_sites and site not in ['青蛙', '柠檬不甜']:
+                    agg_torrents[torrent_name].append(torrent_info)
+            
+            if not agg_torrents:
+                log_iyuu_message(f"种子 '{torrent_name}' 没有支持的站点可用于IYUU查询", "WARNING")
+                return
+            
+            log_iyuu_message(f"找到种子 '{torrent_name}'，包含 {len(agg_torrents[torrent_name])} 个支持的站点", "INFO")
+            
+            # 获取已配置的站点列表
+            log_iyuu_message(f"数据库中存在 {len(configured_sites)} 个配置站点", "INFO")
+            
+            # 执行IYUU搜索逻辑，传入force_query参数
+            self._perform_iyuu_search(agg_torrents, configured_sites, all_torrents, force_query=force_query)
+            
+            log_iyuu_message(f"=== 种子 '{torrent_name}' 的IYUU查询任务执行完成 ===", "INFO")
+            
+        except Exception as e:
+            logging.error(f"处理单个种子数据时出错: {e}", exc_info=True)
+            log_iyuu_message(f"处理种子时出错: {str(e)}", "ERROR")
+        finally:
+            if conn:
+                if 'cursor' in locals() and cursor:
+                    cursor.close()
                 conn.close()
 
     def stop(self):

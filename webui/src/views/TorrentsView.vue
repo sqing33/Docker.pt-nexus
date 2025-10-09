@@ -251,7 +251,7 @@
 
     <!-- 站点操作弹窗 -->
     <div v-if="siteOperationDialogVisible" class="filter-overlay" @click.self="siteOperationDialogVisible = false">
-      <el-card class="filter-card glass-card glass-rounded" style="max-width: 400px;">
+      <el-card class="filter-card" style="max-width: 400px;">
         <template #header>
           <div class="filter-card-header">
             <span>站点操作</span>
@@ -305,6 +305,7 @@
           </div>
         </div>
         <div class="filter-card-footer">
+          <el-button type="warning" @click="triggerIYUUQuery" :loading="iyuuQueryLoading" plain>IYUU查询</el-button>
           <el-button @click="sourceSelectionDialogVisible = false">取消</el-button>
         </div>
       </el-card>
@@ -433,6 +434,7 @@ const pathTreeData = ref<PathNode[]>([])
 
 const sourceSelectionDialogVisible = ref<boolean>(false);
 const allSourceSitesStatus = ref<SiteStatus[]>([]);
+const iyuuQueryLoading = ref<boolean>(false);
 
 const crossSeedStore = useCrossSeedStore();
 
@@ -707,13 +709,14 @@ const startCrossSeed = (row: Torrent) => {
       return hasDetailsLink || hasTorrentId;
     });
 
-  if (availableSources.length === 0) {
-    ElMessage.error('该种子没有找到可用的、已配置为源站点的做种站点。');
-    return;
-  }
-
   // 将当前要操作的种子信息存入 store
   crossSeedStore.setParams(row);
+  
+  // 即使没有可用的源站点，也打开弹窗，让用户可以使用 IYUU 查询
+  if (availableSources.length === 0) {
+    ElMessage.warning('该种子暂无可用的源站点，您可以使用 IYUU 查询来发现更多站点。');
+  }
+  
   sourceSelectionDialogVisible.value = true;
 };
 
@@ -844,6 +847,51 @@ const getSiteDetails = (siteName: string) => {
   const siteData = selectedTorrentForMigration.value.sites[siteName];
   if (!siteData) return null;
   return { siteName, ...siteData };
+};
+
+// IYUU 查询功能
+const triggerIYUUQuery = async () => {
+  const row = selectedTorrentForMigration.value;
+  if (!row) {
+    ElMessage.error('未找到选中的种子信息');
+    return;
+  }
+
+  iyuuQueryLoading.value = true;
+
+  try {
+    const response = await fetch('/api/iyuu_query', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        name: row.name,
+        size: row.size
+      })
+    });
+
+    const result = await response.json();
+
+    if (response.ok && result.success) {
+      ElMessage.success(result.message || 'IYUU查询已完成');
+      // 刷新数据
+      await fetchData();
+      
+      // 更新 store 中的种子信息为最新数据
+      const updatedRow = allData.value.find(t => t.name === row.name && t.size === row.size);
+      if (updatedRow) {
+        crossSeedStore.setParams(updatedRow);
+      }
+    } else {
+      ElMessage.error(result.error || 'IYUU查询失败');
+    }
+  } catch (error: any) {
+    console.error('触发IYUU查询时出错:', error);
+    ElMessage.error('触发IYUU查询时发生网络错误');
+  } finally {
+    iyuuQueryLoading.value = false;
+  }
 };
 
 
