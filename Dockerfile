@@ -66,6 +66,6 @@ RUN mkdir -p /app/data
 VOLUME /app/data
 
 EXPOSE 5272
-EXPOSE 35274
+EXPOSE 5275
 
 CMD ["./start-services.sh"]

@@ -138,7 +138,7 @@ fi
 
 # 询问用户输入端口
 echo "请输入代理服务端口 (默认: 9090):"
-read -r PORT_INPUT
+read -r PORT_INPUT < /dev/tty
 if [ -z "$PORT_INPUT" ]; then
     PORT_INPUT="9090"
 fi
