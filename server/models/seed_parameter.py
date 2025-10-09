@@ -98,8 +98,8 @@ class SeedParameter:
                     INSERT INTO seed_parameters
                     (hash, torrent_id, site_name, nickname, save_path, name, title, subtitle, imdb_link, douban_link, type, medium,
                      video_codec, audio_codec, resolution, team, source, tags, poster, screenshots,
-                     statement, body, mediainfo, title_components, removed_ardtudeclarations, downloader_id, created_at, updated_at)
-                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+                     statement, body, mediainfo, title_components, removed_ardtudeclarations, downloader_id, is_reviewed, created_at, updated_at)
+                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
                     ON CONFLICT (hash, torrent_id, site_name)
                     DO UPDATE SET
                         nickname = EXCLUDED.nickname,
@@ -125,6 +125,7 @@ class SeedParameter:
                         title_components = EXCLUDED.title_components,
                         removed_ardtudeclarations = EXCLUDED.removed_ardtudeclarations,
                         downloader_id = EXCLUDED.downloader_id,
+                        is_reviewed = EXCLUDED.is_reviewed,
                         updated_at = EXCLUDED.updated_at
                 """
             elif self.db_manager.db_type == "mysql":
@@ -133,8 +134,8 @@ class SeedParameter:
                     INSERT INTO seed_parameters
                     (hash, torrent_id, site_name, nickname, save_path, name, title, subtitle, imdb_link, douban_link, type, medium,
                      video_codec, audio_codec, resolution, team, source, tags, poster, screenshots,
-                     statement, body, mediainfo, title_components, removed_ardtudeclarations, downloader_id, created_at, updated_at)
-                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+                     statement, body, mediainfo, title_components, removed_ardtudeclarations, downloader_id, is_reviewed, created_at, updated_at)
+                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
                     ON DUPLICATE KEY UPDATE
                         torrent_id = VALUES(torrent_id),
                         nickname = VALUES(nickname),
@@ -160,6 +161,7 @@ class SeedParameter:
                         title_components = VALUES(title_components),
                         removed_ardtudeclarations = VALUES(removed_ardtudeclarations),
                         downloader_id = VALUES(downloader_id),
+                        is_reviewed = VALUES(is_reviewed),
                         updated_at = VALUES(updated_at)
                 """
             else:  # SQLite
@@ -168,8 +170,8 @@ class SeedParameter:
                     INSERT INTO seed_parameters
                     (hash, torrent_id, site_name, nickname, save_path, name, title, subtitle, imdb_link, douban_link, type, medium,
                      video_codec, audio_codec, resolution, team, source, tags, poster, screenshots,
-                     statement, body, mediainfo, title_components, removed_ardtudeclarations, downloader_id, created_at, updated_at)
-                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+                     statement, body, mediainfo, title_components, removed_ardtudeclarations, downloader_id, is_reviewed, created_at, updated_at)
+                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
                     ON CONFLICT (hash, torrent_id, site_name)
                     DO UPDATE SET
                         torrent_id = excluded.torrent_id,
@@ -196,6 +198,7 @@ class SeedParameter:
                         title_components = excluded.title_components,
                         removed_ardtudeclarations = excluded.removed_ardtudeclarations,
                         downloader_id = excluded.downloader_id,
+                        is_reviewed = excluded.is_reviewed,
                         updated_at = excluded.updated_at
                 """
 
@@ -232,7 +235,8 @@ class SeedParameter:
                       parameters.get("screenshots",
                                      ""), parameters.get("statement", ""),
                       parameters.get("body", ""), mediainfo, title_components,
-                      removed_ardtudeclarations, parameters.get("downloader_id"), parameters["created_at"], parameters["updated_at"])
+                      removed_ardtudeclarations, parameters.get("downloader_id"), 
+                      parameters.get("is_reviewed", False), parameters["created_at"], parameters["updated_at"])
 
             cursor.execute(insert_sql, params)
             conn.commit()

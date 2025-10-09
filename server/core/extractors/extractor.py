@@ -375,7 +375,8 @@ class Extractor:
             # 注意：视频截图（images[1:]）不在此处验证，将在 migrator.py 中统一验证和重新生成
 
             # Extract quotes before and after poster
-            poster_index = bbcode.find(images[0]) if images else -1
+            # [修复] 改进判断逻辑：即使没有海报，也要正确区分感谢声明和正文内容
+            poster_index = bbcode.find(images[0]) if (images and images[0]) else -1
             quotes_before_poster = []
             quotes_after_poster = []
 
@@ -384,10 +385,31 @@ class Extractor:
                 quote_content = match.group(0)
                 quote_start = match.start()
 
-                if poster_index != -1 and quote_start < poster_index:
-                    quotes_before_poster.append(quote_content)
+                # [修复] 当没有海报时，通过内容特征判断是否为感谢声明
+                if poster_index != -1:
+                    # 有海报：使用位置判断
+                    if quote_start < poster_index:
+                        quotes_before_poster.append(quote_content)
+                    else:
+                        quotes_after_poster.append(quote_content)
                 else:
-                    quotes_after_poster.append(quote_content)
+                    # 无海报：通过关键词判断是否为感谢声明
+                    # 感谢声明通常包含这些特征
+                    is_acknowledgment = (
+                        "官组" in quote_content or
+                        "感谢" in quote_content or
+                        "原制作者" in quote_content or
+                        "FRDS" in quote_content or
+                        "FraMeSToR" in quote_content or
+                        "CHD" in quote_content or
+                        "字幕组" in quote_content or
+                        len(quote_content) < 200  # 短quote更可能是声明
+                    )
+                    
+                    if is_acknowledgment:
+                        quotes_before_poster.append(quote_content)
+                    else:
+                        quotes_after_poster.append(quote_content)
 
             # 辅助函数：检查是否为包含技术参数的quote（这些既不是mediainfo也不应该出现在正文中）
             def is_technical_params_quote(quote_text):

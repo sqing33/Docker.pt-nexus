@@ -462,7 +462,7 @@ const fetchData = async () => {
   try {
     const params = new URLSearchParams({
       page: currentPage.value.toString(),
-      page_size: pageSize.value.toString(),
+      pageSize: pageSize.value.toString(),
       nameSearch: nameSearch.value,
       path_filters: JSON.stringify(activeFilters.value.paths),
       state_filters: JSON.stringify(activeFilters.value.states),

@@ -152,7 +152,7 @@
               <el-table :data="filteredMissingFiles" class="glass-table glass-transition" height="100%"
                 :default-sort="{ prop: 'size', order: 'descending' }">
                 <el-table-column prop="name" label="种子名称" show-overflow-tooltip align="left" header-align="center" />
-                <el-table-column prop="save_path" label="保存路径" width="250" show-overflow-tooltip
+                <el-table-column prop="save_path" label="保存路径"  align="center" width="250" show-overflow-tooltip
                   header-align="center" />
                 <el-table-column prop="size" label="大小" width="110" sortable align="center">
                   <template #default="{ row }">
@@ -168,7 +168,7 @@
                 :default-sort="{ prop: 'size', order: 'descending' }">
                 <el-table-column prop="name" label="文件/文件夹名称" show-overflow-tooltip align="left"
                   header-align="center" />
-                <el-table-column prop="path" label="所在路径" width="250" show-overflow-tooltip align="left"
+                <el-table-column prop="path" label="所在路径" width="250" align="center" show-overflow-tooltip 
                   header-align="center" />
                 <el-table-column prop="size" label="大小" width="120" sortable align="center">
                   <template #default="{ row }">
@@ -188,7 +188,7 @@
             <div v-if="activeTab === 'synced'" class="tab-content">
               <el-table :data="filteredSyncedTorrents" class="glass-table glass-transition" height="100%">
                 <el-table-column prop="name" label="名称" show-overflow-tooltip align="left" header-align="center" />
-                <el-table-column prop="path" label="路径" width="250" show-overflow-tooltip align="left"
+                <el-table-column prop="path" label="路径" width="250" show-overflow-tooltip align="center"
                   header-align="center" />
                 <el-table-column prop="torrents_count" label="任务数" width="120" align="center" header-align="center">
                   <template #default="{ row }">

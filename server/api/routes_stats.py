@@ -52,7 +52,9 @@ def get_date_range_and_grouping(time_range_str, for_speed=False):
         # For speed data, we need higher resolution for shorter time ranges
         if time_range_str in ["today", "yesterday"]:
             group_by_format = "%Y-%m-%d %H:%M"
-        elif time_range_str in ["this_week", "last_week"] and (end_dt - start_dt).total_seconds() <= 7 * 24 * 3600:
+        elif time_range_str in [
+                "this_week", "last_week"
+        ] and (end_dt - start_dt).total_seconds() <= 7 * 24 * 3600:
             # For week ranges, use hourly grouping (168 points) for better resolution
             group_by_format = "%Y-%m-%d %H:00"
         elif start_dt and (end_dt - start_dt).total_seconds() > 0:
@@ -66,7 +68,10 @@ def get_time_group_fn(db_type, format_str):
         return f"DATE_FORMAT(stat_datetime, '{format_str.replace('%M', '%i')}')"
     elif db_type == "postgresql":
         # Convert strftime format to PostgreSQL TO_CHAR format
-        pg_format = format_str.replace('%Y', 'YYYY').replace('%m', 'MM').replace('%d', 'DD').replace('%H', 'HH24').replace('%M', 'MI')
+        pg_format = format_str.replace('%Y', 'YYYY').replace(
+            '%m', 'MM').replace('%d',
+                                'DD').replace('%H',
+                                              'HH24').replace('%M', 'MI')
         return f"TO_CHAR(stat_datetime, '{pg_format}')"
     else:  # sqlite
         return f"STRFTIME('{format_str}', stat_datetime)"
@@ -80,38 +85,38 @@ def get_chart_data_api():
 
     time_range = request.args.get("range", "this_week")
     start_dt, end_dt, group_by_format = get_date_range_and_grouping(time_range)
-    
+
     # 获取下载器信息
     enabled_downloaders = [{
         "id": d["id"],
         "name": d["name"]
-    } for d in config_manager.get().get("downloaders", [])
-                            if d.get("enabled")]
+    } for d in config_manager.get().get("downloaders", []) if d.get("enabled")]
     downloader_ids = {d['id'] for d in enabled_downloaders}
-    
+
     # 设定决策边界：48小时
     from datetime import datetime, timedelta
     long_period_threshold = datetime.now() - timedelta(hours=48)
-    
+
     # 判断是否为长周期查询
     is_long_period_query = start_dt and start_dt < long_period_threshold
-    
+
     conn, cursor = None, None
     try:
         conn = db_manager._get_connection()
         cursor = db_manager._get_cursor(conn)
-        
+
         if is_long_period_query:
             # 长周期查询：同时查询聚合表 traffic_stats_hourly 和原始表 traffic_stats
             logging.info(f"使用聚合表和原始表查询长时间范围数据: {time_range}")
-            
+
             # 对于长周期查询，使用更粗的分组粒度（按天或月）
             if "%H" in group_by_format:
                 coarse_group_format = group_by_format.split(" %H")[0]  # 去掉小时部分
             else:
                 coarse_group_format = group_by_format
-                
-            time_group_fn = get_time_group_fn(db_manager.db_type, coarse_group_format)
+
+            time_group_fn = get_time_group_fn(db_manager.db_type,
+                                              coarse_group_format)
             ph = db_manager.get_placeholder()
 
             # 查询聚合表 traffic_stats_hourly - 使用累计字段计算差值
@@ -136,7 +141,8 @@ def get_chart_data_api():
                     FROM traffic_stats_hourly
                     WHERE stat_datetime >= {ph}
                 """
-            params_hourly = [start_dt.strftime("%Y-%m-%d %H:%M:%S")] if start_dt else []
+            params_hourly = [start_dt.strftime("%Y-%m-%d %H:%M:%S")
+                             ] if start_dt else []
             if end_dt and start_dt:
                 query_hourly += f" AND stat_datetime < {ph}"
                 params_hourly.append(end_dt.strftime("%Y-%m-%d %H:%M:%S"))
@@ -144,18 +150,21 @@ def get_chart_data_api():
                     GROUP BY time_group, downloader_id
                     ORDER BY time_group
             """
-            
+
             cursor.execute(query_hourly, tuple(params_hourly))
             rows_hourly = cursor.fetchall()
-            
+
             # 计算最近3天的开始时间（这部分数据可能在聚合表中不完整）
             from datetime import datetime, timedelta
             recent_threshold = datetime.now() - timedelta(days=3)
-            recent_start = max(start_dt, recent_threshold) if start_dt > recent_threshold else recent_threshold
-            
+            recent_start = max(
+                start_dt, recent_threshold
+            ) if start_dt > recent_threshold else recent_threshold
+
             # 查询原始表 traffic_stats 中最近3天的数据 - 使用累计字段计算差值
             if recent_start < end_dt:
-                time_group_fn_fine = get_time_group_fn(db_manager.db_type, group_by_format)
+                time_group_fn_fine = get_time_group_fn(db_manager.db_type,
+                                                       group_by_format)
 
                 if db_manager.db_type == "postgresql":
                     query_fine = f"""
@@ -185,10 +194,10 @@ def get_chart_data_api():
                         GROUP BY time_group, downloader_id
                         ORDER BY time_group
                 """
-                
+
                 cursor.execute(query_fine, tuple(params_fine))
                 rows_fine = cursor.fetchall()
-                
+
                 # 合并两个查询结果
                 rows = rows_hourly + rows_fine
             else:
@@ -196,11 +205,12 @@ def get_chart_data_api():
         else:
             # 短周期查询：使用原始表 traffic_stats
             logging.info(f"使用原始表查询短时间范围数据: {time_range}")
-            
+
             # 如果 group_by_format 为 None，设置默认值
             if not group_by_format:
                 group_by_format = "%Y-%m-%d %H:00"
-            time_group_fn = get_time_group_fn(db_manager.db_type, group_by_format)
+            time_group_fn = get_time_group_fn(db_manager.db_type,
+                                              group_by_format)
             ph = db_manager.get_placeholder()
 
             # --- 修改 SQL 查询，使用累计字段计算差值 ---
@@ -225,7 +235,8 @@ def get_chart_data_api():
                     FROM traffic_stats
                     WHERE stat_datetime >= {ph}
                 """
-            params = [start_dt.strftime("%Y-%m-%d %H:%M:%S")] if start_dt else []
+            params = [start_dt.strftime("%Y-%m-%d %H:%M:%S")
+                      ] if start_dt else []
             if end_dt and start_dt:
                 query += f" AND stat_datetime < {ph}"
                 params.append(end_dt.strftime("%Y-%m-%d %H:%M:%S"))
@@ -233,16 +244,17 @@ def get_chart_data_api():
                     GROUP BY time_group, downloader_id
                     ORDER BY time_group
             """
-            
+
             # 如果没有参数但查询中有占位符，则返回空数据
             if not params:
-                logging.info("No params for chart data query, returning empty data")
+                logging.info(
+                    "No params for chart data query, returning empty data")
                 return jsonify({
                     "labels": [],
                     "datasets": {},
                     "downloaders": enabled_downloaders
                 })
-            
+
             # 添加调试日志
             logging.info(f"Chart data query: {query}")
             logging.info(f"Chart data params: {params}")
@@ -269,7 +281,7 @@ def get_chart_data_api():
         # 3. 填充数据 - 修复聚合表和原始表数据覆盖问题
         # 使用累加方式处理相同时间段的数据，避免后者覆盖前者
         processed_data = {}  # 记录已处理的(time_group, downloader_id)组合
-        
+
         for row in rows:
             downloader_id = row['downloader_id']
             # 只处理在当前配置中启用的下载器
@@ -280,11 +292,11 @@ def get_chart_data_api():
             if time_group in label_map:
                 idx = label_map[time_group]
                 key = (time_group, downloader_id)
-                
+
                 # 获取当前行的数据
                 uploaded = int(row['total_ul'] or 0)
                 downloaded = int(row['total_dl'] or 0)
-                
+
                 # 如果该时间段和下载器的组合已经处理过，则累加数据
                 if key in processed_data:
                     datasets[downloader_id]['uploaded'][idx] += uploaded
@@ -414,13 +426,13 @@ def get_speed_chart_data_api():
         "id": d["id"],
         "name": d["name"]
     } for d in config_manager.get().get("downloaders", []) if d.get("enabled")]
-    
+
     # 设定决策边界：48小时
     from datetime import datetime, timedelta
     start_dt, end_dt, group_by_format = get_date_range_and_grouping(
         time_range, for_speed=True)
     long_period_threshold = datetime.now() - timedelta(hours=48)
-    
+
     # 判断是否为长周期查询
     is_long_period_query = start_dt and start_dt < long_period_threshold
 
@@ -428,54 +440,60 @@ def get_speed_chart_data_api():
     try:
         conn = db_manager._get_connection()
         cursor = db_manager._get_cursor(conn)
-        
+
         if is_long_period_query:
             # 长周期查询：同时查询聚合表 traffic_stats_hourly 和原始表 traffic_stats
             logging.info(f"使用聚合表和原始表查询长时间范围速度数据: {time_range}")
-            
+
             # 对于长周期查询，检查是否需要保持小时级别的分组
             # 特别处理本周和上周的时间范围，保持小时级别的分组以提供更好的分辨率
             use_coarse_grouping = True
-            if time_range in ["this_week", "last_week"] and "%H" in group_by_format:
+            if time_range in ["this_week", "last_week"
+                              ] and "%H" in group_by_format:
                 use_coarse_grouping = False
-                
+
             if use_coarse_grouping and "%H" in group_by_format:
                 coarse_group_format = group_by_format.split(" %H")[0]  # 去掉小时部分
             else:
                 coarse_group_format = group_by_format
-                
-            time_group_fn = get_time_group_fn(db_manager.db_type, coarse_group_format)
+
+            time_group_fn = get_time_group_fn(db_manager.db_type,
+                                              coarse_group_format)
             ph = db_manager.get_placeholder()
-            
+
             # 查询聚合表 traffic_stats_hourly
             query_hourly = f"SELECT {time_group_fn} AS time_group, downloader_id, AVG(avg_upload_speed) AS ul_speed, AVG(avg_download_speed) AS dl_speed FROM traffic_stats_hourly WHERE stat_datetime >= {ph}"
-            params_hourly = [start_dt.strftime("%Y-%m-%d %H:%M:%S")] if start_dt else []
+            params_hourly = [start_dt.strftime("%Y-%m-%d %H:%M:%S")
+                             ] if start_dt else []
             if end_dt and start_dt:
                 query_hourly += f" AND stat_datetime < {ph}"
                 params_hourly.append(end_dt.strftime("%Y-%m-%d %H:%M:%S"))
             query_hourly += " GROUP BY time_group, downloader_id ORDER BY time_group"
-            
+
             cursor.execute(query_hourly, tuple(params_hourly))
             rows_hourly = cursor.fetchall()
-            
+
             # 计算最近3天的开始时间（这部分数据可能在聚合表中不完整）
             from datetime import datetime, timedelta
             recent_threshold = datetime.now() - timedelta(days=3)
-            recent_start = max(start_dt, recent_threshold) if start_dt > recent_threshold else recent_threshold
-            
+            recent_start = max(
+                start_dt, recent_threshold
+            ) if start_dt > recent_threshold else recent_threshold
+
             # 查询原始表 traffic_stats 中最近3天的数据
             if recent_start < end_dt:
-                time_group_fn_fine = get_time_group_fn(db_manager.db_type, group_by_format)
+                time_group_fn_fine = get_time_group_fn(db_manager.db_type,
+                                                       group_by_format)
                 query_fine = f"SELECT {time_group_fn_fine} AS time_group, downloader_id, AVG(upload_speed) AS ul_speed, AVG(download_speed) AS dl_speed FROM traffic_stats WHERE stat_datetime >= {ph}"
                 params_fine = [recent_start.strftime("%Y-%m-%d %H:%M:%S")]
                 if end_dt and recent_start:
                     query_fine += f" AND stat_datetime < {ph}"
                     params_fine.append(end_dt.strftime("%Y-%m-%d %H:%M:%S"))
                 query_fine += " GROUP BY time_group, downloader_id ORDER BY time_group"
-                
+
                 cursor.execute(query_fine, tuple(params_fine))
                 rows_fine = cursor.fetchall()
-                
+
                 # 合并两个查询结果
                 rows = rows_hourly + rows_fine
             else:
@@ -483,32 +501,38 @@ def get_speed_chart_data_api():
         else:
             # 短周期查询：使用原始表 traffic_stats
             logging.info(f"使用原始表查询短时间范围速度数据: {time_range}")
-            
+
             # 如果 group_by_format 为 None，设置默认值
             if not group_by_format:
                 group_by_format = "%Y-%m-%d %H:00" if not for_speed else "%Y-%m-%d %H:%M"
-            time_group_fn = get_time_group_fn(db_manager.db_type, group_by_format)
+            time_group_fn = get_time_group_fn(db_manager.db_type,
+                                              group_by_format)
 
             query = f"SELECT {time_group_fn} AS time_group, downloader_id, AVG(upload_speed) AS ul_speed, AVG(download_speed) AS dl_speed FROM traffic_stats WHERE stat_datetime >= {db_manager.get_placeholder()}"
-            params = [start_dt.strftime("%Y-%m-%d %H:%M:%S")] if start_dt else []
+            params = [start_dt.strftime("%Y-%m-%d %H:%M:%S")
+                      ] if start_dt else []
             if end_dt and start_dt:
                 query += f" AND stat_datetime < {db_manager.get_placeholder()}"
                 params.append(end_dt.strftime("%Y-%m-%d %H:%M:%S"))
             query += " GROUP BY time_group, downloader_id ORDER BY time_group"
-            
+
             # 如果没有参数但查询中有占位符，则返回空数据
             if not params:
-                logging.info("No params for speed chart data query, returning empty data")
+                logging.info(
+                    "No params for speed chart data query, returning empty data"
+                )
                 return jsonify({
                     "labels": [],
                     "datasets": [],
                     "downloaders": enabled_downloaders
                 })
-                
+
             # 添加调试日志
             logging.info(f"Speed chart data query: {query}")
             logging.info(f"Speed chart data params: {params}")
-            logging.info(f"Number of placeholders in speed query: {query.count(db_manager.get_placeholder())}")
+            logging.info(
+                f"Number of placeholders in speed query: {query.count(db_manager.get_placeholder())}"
+            )
             logging.info(f"Number of speed params: {len(params)}")
 
             cursor.execute(query, tuple(params))
@@ -581,9 +605,10 @@ def get_group_stats_api():
         site_nickname = request.args.get("site", "").strip()
 
         if site_nickname:
-            # 统计：先筛选做种站点为指定站点的种子，再按官组与“官组所属站点”聚合
+            # 统计：先筛选做种站点为指定站点的种子，再按官组与"官组所属站点"聚合
+            ph = db_manager.get_placeholder()
             if db_manager.db_type == "mysql":
-                ph = db_manager.get_placeholder()
+                # MySQL 的查询不受影响，无需修改
                 query = f"""
                     SELECT s.nickname AS site_name,
                            ut.`group` AS group_suffix,
@@ -599,8 +624,9 @@ def get_group_stats_api():
                     GROUP BY s.nickname, ut.`group`
                     ORDER BY torrent_count DESC;
                 """
-                cursor.execute(query, (site_nickname, ))
-            else:
+            elif db_manager.db_type == "postgresql":
+                # --- 修改开始 ---
+                # 将 LIKE '%,...' 中的 % 替换为 %%
                 query = f"""
                     SELECT s.nickname AS site_name,
                            ut.{group_col_quoted} AS group_suffix,
@@ -609,14 +635,36 @@ def get_group_stats_api():
                     FROM (
                         SELECT name, {group_col_quoted}, MAX(size) AS size
                         FROM torrents
-                        WHERE {group_col_quoted} IS NOT NULL AND {group_col_quoted} != '' AND sites = {db_manager.get_placeholder()}
+                        WHERE {group_col_quoted} IS NOT NULL AND {group_col_quoted} != '' AND sites = {ph}
                         GROUP BY name, {group_col_quoted}
                     ) AS ut
-                    JOIN sites AS s ON (',' || s."group" || ',' LIKE '%,' || ut.{group_col_quoted} || ',%')
+                    JOIN sites AS s ON (',' || s."group" || ',' LIKE '%%,' || ut.{group_col_quoted} || ',%%')
                     GROUP BY s.nickname, ut.{group_col_quoted}
                     ORDER BY torrent_count DESC;
                 """
-                cursor.execute(query, (site_nickname, ))
+                # --- 修改结束 ---
+            else:  # sqlite
+                # --- 修改开始 ---
+                # 将 LIKE '%,...' 中的 % 替换为 %%
+                query = f"""
+                    SELECT s.nickname AS site_name,
+                           ut.{group_col_quoted} AS group_suffix,
+                           COUNT(ut.name) AS torrent_count,
+                           SUM(ut.size) AS total_size
+                    FROM (
+                        SELECT name, {group_col_quoted}, MAX(size) AS size
+                        FROM torrents
+                        WHERE {group_col_quoted} IS NOT NULL AND {group_col_quoted} != '' AND sites = {ph}
+                        GROUP BY name, {group_col_quoted}
+                    ) AS ut
+                    JOIN sites AS s ON (',' || s."group" || ',' LIKE '%%,' || ut.{group_col_quoted} || ',%%')
+                    GROUP BY s.nickname, ut.{group_col_quoted}
+                    ORDER BY torrent_count DESC;
+                """
+                # --- 修改结束 ---
+
+            # 同时，确保执行时使用正确的元组格式
+            cursor.execute(query, (site_nickname, ))
 
             results = [{
                 "site_name":

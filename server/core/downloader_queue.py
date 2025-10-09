@@ -495,8 +495,7 @@ class DownloaderQueueService:
             placeholder = self.db_manager.get_placeholder()
             update_sql = f"""
                 UPDATE batch_enhance_records
-                SET downloader_add_result = %s,
-                    updated_at = CURRENT_TIMESTAMP
+                SET downloader_add_result = %s
                 WHERE batch_id = %s AND torrent_id = %s
             """
 
