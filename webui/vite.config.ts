@@ -24,7 +24,7 @@ export default defineConfig({
       },
       // Go服务代理
       '/go-api': {
-        target: 'http://localhost:35274', // <--- 指向 Go 后端地址
+        target: 'http://localhost:5275', // <--- 指向 Go 后端地址
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/go-api/, '') // 去掉 /go-api 前缀
       },
