@@ -277,8 +277,8 @@ if __name__ == "__main__":
 
     atexit.register(cleanup)
 
-    # 从环境变量获取端口，如果未设置则使用默认值 15272
-    port = int(os.getenv("PORT", 15273))
+    # 从环境变量获取端口，如果未设置则使用默认值 5274
+    port = int(os.getenv("PORT", 5274))
 
     logging.info(f"以开发模式启动 Flask 服务器，监听端口 http://0.0.0.0:{port} ...")
 

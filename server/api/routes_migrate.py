@@ -55,8 +55,19 @@ def save_cross_seed_settings():
             return jsonify({"error": "无效的设置数据格式。"}), 400
 
         current_config = config_manager.get()
-        # 更新配置中的 cross_seed 部分
-        current_config["cross_seed"] = new_settings
+        
+        # 提取并保存 cross_seed 配置（排除 proxy_url）
+        cross_seed_settings = {
+            k: v for k, v in new_settings.items() 
+            if k != "proxy_url"
+        }
+        current_config["cross_seed"] = cross_seed_settings
+        
+        # 如果请求中包含 proxy_url，也一并保存到 network 配置中
+        if "proxy_url" in new_settings:
+            current_config.setdefault("network", {})
+            current_config["network"]["proxy_url"] = new_settings.get("proxy_url", "")
+            logging.info(f"同时更新网络代理配置: {current_config['network']['proxy_url']}")
 
         if config_manager.save(current_config):
             return jsonify({"message": "转种设置已成功保存！"})

@@ -16,45 +16,56 @@ RUN pnpm build
 # Stage 2: Build Go batch enhancer
 FROM golang:1.21-alpine AS go-builder
 
-WORKDIR /app
+WORKDIR /app/batch-enhancer
 
-COPY ./batch-enhancer-simple/go.mod ./
-COPY ./batch-enhancer-simple/main.go ./
+COPY ./batch-enhancer/go.mod ./
 
-RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o batch-enhancer main.go
+RUN go mod download
+
+COPY ./batch-enhancer/main.go ./
+
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o batch-enhancer main.go
 
 # Stage 3: Final runtime
 FROM python:3.12-slim
 
 WORKDIR /app
 
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
-COPY --from=builder /app/webui/dist ./dist
-COPY --from=go-builder /app/batch-enhancer ./batch-enhancer
+# Install system dependencies first
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    ffmpeg \
+    mediainfo \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
-COPY ./server/requirements.txt .
-
+# Copy Python requirements and install
+COPY ./server/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY ./server .
+# Copy server code
+COPY ./server ./
 
-RUN apt update && \
-    apt install -y ffmpeg mediainfo && \
-    apt clean && \
-    rm -rf /var/lib/apt/lists/*
+# Copy built frontend
+COPY --from=builder /app/webui/dist ./dist
 
-# Make batch enhancer executable
+# Copy Go batch enhancer
+COPY --from=go-builder /app/batch-enhancer/batch-enhancer ./batch-enhancer
 RUN chmod +x ./batch-enhancer
+
+# Copy startup script
+COPY ./start-services.sh ./start-services.sh
+RUN chmod +x ./start-services.sh
+
+# Create data directory
+RUN mkdir -p /app/data
 
 VOLUME /app/data
 
 EXPOSE 5272
-EXPOSE 9092
-
-# Start script that runs both services
-COPY ./start-services.sh .
-RUN chmod +x ./start-services.sh
+EXPOSE 5275
 
 CMD ["./start-services.sh"]

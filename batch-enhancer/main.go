@@ -135,9 +135,9 @@ type BencodeParser struct {
 
 // 配置
 var (
-	coreAPIURL     = getEnv("CORE_API_URL", "http://localhost:15273")
-	port           = getEnv("PORT", "9092")
-	tempDir        = getEnv("TEMP_DIR", "/app/Code/Dockerfile/Docker.pt-nexus/server/data/tmp")
+	coreAPIURL     = getEnv("CORE_API_URL", "http://localhost:5274")
+	port           = getEnv("PORT", "5275")
+	tempDir        = getEnv("TEMP_DIR", "/app/data/tmp")
 	internalSecret = getEnv("INTERNAL_SECRET", "pt-nexus-2024-secret-key") // 共享密钥，用于生成动态token
 )
 
@@ -1624,7 +1624,7 @@ func main() {
 	logInfo("   - 服务端口: %s", port)
 	logInfo("   - 核心API地址: %s", coreAPIURL)
 	logInfo("   - 临时目录: %s", tempDir)
-	logInfo("   - 视频大小过滤阈值: 5.0GB (硬编码)")
+	logInfo("   - 视频大小过滤阈值: 1.0GB (硬编码)")
 	logInfo("   - 站点请求间隔: %v (全局控制)", minRequestInterval)
 	logInfo("   - 内部认证方式: 网络隔离 + API Key")
 	if internalSecret != "" && internalSecret != "pt-nexus-2024-secret-key" {
