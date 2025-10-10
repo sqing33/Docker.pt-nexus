@@ -98,33 +98,8 @@ def _upload_to_pixhost(image_path: str):
         print(f"错误：文件不存在 {image_path}")
         return None
 
-    # 读取代理配置
-    config = config_manager.get()
-    proxy_mode = config.get("cross_seed", {}).get("pixhost_proxy_mode",
-                                                  "retry")
-    global_proxy = config.get("network", {}).get("proxy_url")
-
-    # 根据代理模式决定上传策略
-    if proxy_mode == "always" and global_proxy:
-        print(f"代理模式设置为总是使用代理，使用代理: {global_proxy}")
-        return _upload_to_pixhost_with_proxy(image_path, api_url, params,
-                                             headers, global_proxy)
-    elif proxy_mode == "never":
-        print("代理模式设置为不使用代理，直接上传")
-        return _upload_to_pixhost_direct(image_path, api_url, params, headers)
-    else:
-        # 默认模式：失败时重试或没有配置代理时直接上传
-        print("使用默认上传策略：先尝试直接上传")
-        result = _upload_to_pixhost_direct(image_path, api_url, params,
-                                           headers)
-
-        # 如果直接上传失败且配置了代理，则尝试代理上传
-        if not result and global_proxy and proxy_mode == "retry":
-            print("直接上传失败，尝试使用代理上传...")
-            result = _upload_to_pixhost_with_proxy(image_path, api_url, params,
-                                                   headers, global_proxy)
-
-        return result
+    # 直接上传，不使用全局代理
+    return _upload_to_pixhost_direct(image_path, api_url, params, headers)
 
 
 def _get_agsv_auth_token():
@@ -1562,21 +1537,8 @@ def add_torrent_to_downloader(detail_page_url: str, save_path: str,
         }
         scraper = cloudscraper.create_scraper()
 
-        # Add proxy support for downloading torrent
+        # 站点级别的代理已不使用全局代理配置
         proxies = None
-        if site_info.get("proxy"):
-            try:
-                conf = (config_manager.get() or {})
-                # 优先使用转种设置中的代理地址，其次兼容旧的 network.proxy_url
-                proxy_url = (conf.get("cross_seed", {})
-                             or {}).get("proxy_url") or (conf.get(
-                                 "network", {}) or {}).get("proxy_url")
-                if proxy_url:
-                    proxies = {"http": proxy_url, "https": proxy_url}
-                    logging.info(f"使用代理下载种子: {proxy_url}")
-            except Exception as e:
-                logging.warning(f"代理设置失败: {e}")
-                proxies = None
 
         # Add retry logic for network requests
         max_retries = 3
@@ -2182,66 +2144,6 @@ def _upload_to_pixhost_direct(image_path: str, api_url: str, params: dict,
         return None
 
 
-def _upload_to_pixhost_with_proxy(image_path: str, api_url: str, params: dict,
-                                  headers: dict, proxy_url: str):
-    """通过代理上传图片到Pixhost"""
-    if not proxy_url:
-        print("   ⚠️  未配置全局代理，跳过代理上传")
-        return None
-
-    try:
-        # 使用标准HTTP代理方式
-        with open(image_path, 'rb') as f:
-            files = {'img': f}
-
-            # 设置代理
-            proxies = {'http': proxy_url, 'https': proxy_url}
-
-            response = requests.post(api_url,
-                                     data=params,
-                                     files=files,
-                                     headers=headers,
-                                     proxies=proxies,
-                                     timeout=30)
-
-            if response.status_code == 200:
-                try:
-                    data = response.json()
-                    show_url = data.get('show_url')
-                    if show_url:
-                        print(f"   ✅ 代理上传成功！图片链接: {show_url}")
-                        return show_url
-                    else:
-                        print(f"   ❌ 代理上传响应异常: 无法解析URL")
-                        return None
-                except Exception:
-                    # JSON解析失败，尝试直接使用响应文本
-                    if response.text and 'pixhost' in response.text:
-                        print(f"   ✅ 代理上传成功！图片链接: {response.text.strip()}")
-                        return response.text.strip()
-                    else:
-                        print(f"   ❌ 代理上传响应异常: 无效格式")
-                        return None
-            else:
-                print(f"   ❌ 代理上传失败 (状态码: {response.status_code})")
-                return None
-    except requests.exceptions.SSLError:
-        print(f"   ❌ 代理上传失败: SSL连接错误")
-        return None
-    except requests.exceptions.ConnectionError:
-        print(f"   ❌ 代理上传失败: 网络连接错误")
-        return None
-    except requests.exceptions.Timeout:
-        print(f"   ❌ 代理上传失败: 请求超时")
-        return None
-    except FileNotFoundError:
-        print(f"   ❌ 错误: 找不到图片文件")
-        return None
-    except Exception as e:
-        # 只打印异常类型，不打印完整堆栈
-        error_type = type(e).__name__
-        print(f"   ❌ 代理上传失败: {error_type}")
-        return None
 
 
 def _get_downloader_proxy_config(downloader_id: str = None):
@@ -2405,60 +2307,8 @@ def is_image_url_valid_robust(url: str) -> bool:
         except requests.exceptions.RequestException as e:
             logging.warning(f"图片链接GET请求也失败了: {url} - {e}")
 
-            # 第二次尝试：使用代理重试
-            config = config_manager.get()
-            global_proxy = config.get("network", {}).get("proxy_url")
-
-            if global_proxy:
-                logging.info(f"尝试使用代理重新验证图片链接: {url}")
-                try:
-                    proxies = {'http': global_proxy, 'https': global_proxy}
-
-                    # 先尝试HEAD请求
-                    response = requests.head(url,
-                                             timeout=5,
-                                             allow_redirects=True,
-                                             proxies=proxies)
-                    response.raise_for_status()
-
-                    # 检查Content-Type
-                    content_type = response.headers.get('Content-Type')
-                    if content_type and content_type.startswith('image/'):
-                        logging.info(f"通过代理验证成功: {url}")
-                        return True
-                    else:
-                        logging.warning(
-                            f"代理验证：链接有效但内容可能不是图片: {url} (Content-Type: {content_type})"
-                        )
-                        return False
-
-                except requests.exceptions.RequestException:
-                    # HEAD请求失败，尝试GET请求
-                    try:
-                        response = requests.get(url,
-                                                stream=True,
-                                                timeout=5,
-                                                allow_redirects=True,
-                                                proxies=proxies)
-                        response.raise_for_status()
-
-                        # 检查Content-Type
-                        content_type = response.headers.get('Content-Type')
-                        if content_type and content_type.startswith('image/'):
-                            logging.info(f"通过代理GET请求验证成功: {url}")
-                            return True
-                        else:
-                            logging.warning(
-                                f"代理GET验证：链接有效但内容可能不是图片: {url} (Content-Type: {content_type})"
-                            )
-                            return False
-
-                    except requests.exceptions.RequestException as proxy_e:
-                        logging.warning(f"使用代理验证图片链接也失败了: {url} - {proxy_e}")
-                        return False
-            else:
-                # 没有配置代理，直接返回失败
-                return False
+            # 不使用全局代理重试，直接返回失败
+            return False
 
 
 def extract_audio_codec_from_mediainfo(mediainfo_text: str) -> str:

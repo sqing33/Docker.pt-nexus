@@ -51,11 +51,6 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="proxy" label="代理" width="70" align="center">
-          <template #default="scope">
-            <el-tag :type="scope.row.proxy ? 'success' : 'info'">{{ scope.row.proxy ? '启用' : '关闭' }}</el-tag>
-          </template>
-        </el-table-column>
         <el-table-column label="Cookie" width="100" align="center">
           <template #default="scope">
             <el-tag :type="scope.row.has_cookie ? 'success' : 'danger'">
@@ -109,9 +104,6 @@
           <div class="form-tip">
             如果站点的Tracker域名与主域名的二级域名（则域名去掉前缀后缀部分）不同，请在此填写。
           </div>
-        </el-form-item>
-        <el-form-item label="使用代理">
-          <el-switch v-model="siteForm.proxy" :active-value="1" :inactive-value="0" />
         </el-form-item>
         <el-form-item label="关联官组" prop="group">
           <el-input v-model="siteForm.group" placeholder="例如：PT, PTWEB"></el-input>
@@ -171,7 +163,6 @@ const siteForm = ref({
   special_tracker_domain: '',
   group: '',
   cookie: '',
-  proxy: 0,
   speed_limit: 0, // 前端显示和输入使用 MB/s 单位
 })
 

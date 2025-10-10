@@ -41,7 +41,7 @@ batch-enhancer-simple/
 
 ### 2. Docker集成
 - 多阶段构建：Go服务 + Python服务
-- 同时暴露5272（主服务）和5275（Go服务）端口
+- 同时暴露5272（主服务）和35273（Go服务）端口
 - 启动脚本自动启动两个服务
 
 ## 📊 性能对比
@@ -65,16 +65,16 @@ cd batch-enhancer-simple
 ### Docker部署
 ```bash
 docker build -t pt-nexus .
-docker run -p 5272:5272 -p 5275:5275 pt-nexus
+docker run -p 5272:5272 -p 35273:35273 pt-nexus
 ```
 
 ### API测试
 ```bash
 # 健康检查
-curl http://localhost:5275/health
+curl http://localhost:35273/health
 
 # 批量转种
-curl -X POST http://localhost:5275/batch-enhance \
+curl -X POST http://localhost:35273/batch-enhance \
   -H "Content-Type: application/json" \
   -d '{
     "target_site_name": "crabpt",

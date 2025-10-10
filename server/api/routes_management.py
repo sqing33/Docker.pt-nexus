@@ -154,13 +154,13 @@ def get_sites():
         # 根据数据库类型使用正确的引号
         if db_manager.db_type == "postgresql":
             select_fields = """
-                s.id, s.nickname, s.site, s.base_url, s.special_tracker_domain, s."group", s.proxy, s.speed_limit,
+                s.id, s.nickname, s.site, s.base_url, s.special_tracker_domain, s."group", s.speed_limit,
                 CASE WHEN s.cookie IS NOT NULL AND s.cookie != '' THEN 1 ELSE 0 END as has_cookie,
                 s.cookie
             """
         else:
             select_fields = """
-                s.id, s.nickname, s.site, s.base_url, s.special_tracker_domain, s.`group`, s.proxy, s.speed_limit,
+                s.id, s.nickname, s.site, s.base_url, s.special_tracker_domain, s.`group`, s.speed_limit,
                 CASE WHEN s.cookie IS NOT NULL AND s.cookie != '' THEN 1 ELSE 0 END as has_cookie,
                 s.cookie
             """
@@ -437,11 +437,7 @@ def update_settings():
     if "cookiecloud" in new_config:
         current_config["cookiecloud"] = new_config["cookiecloud"]
 
-    if "network" in new_config:
-        # 仅更新网络代理配置
-        current_config.setdefault("network", {})
-        current_config["network"]["proxy_url"] = new_config["network"].get(
-            "proxy_url", "")
+    # network.proxy_url 配置已移除，不再保存全局代理配置
 
     # 处理 iyuu_token 配置
     if "iyuu_token" in new_config:

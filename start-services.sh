@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # 启动 batch-enhancer (Go 服务)
-echo "Starting batch-enhancer service on port 5275..."
+echo "Starting batch-enhancer service on port 35273..."
 ./batch-enhancer &
 
 # 等待一秒确保 Go 服务启动

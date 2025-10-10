@@ -669,45 +669,8 @@ class BaseUploader(ABC):
                         logger.info(
                             f"正在向 {self.site_name} 站点提交发布请求... (尝试 {attempt + 1}/{max_retries})"
                         )
-                        # 若站点启用代理且配置了全局代理地址，则通过代理请求
+                        # 站点级别的代理已移除，不再使用全局代理
                         proxies = None
-                        try:
-                            from config import config_manager
-                            use_proxy = bool(self.site_info.get("proxy"))
-                            conf = (config_manager.get() or {})
-                            # 优先使用转种设置中的代理地址，其次兼容旧的 network.proxy_url
-                            proxy_url = (conf.get("cross_seed", {})
-                                         or {}).get("proxy_url") or (
-                                             conf.get("network", {})
-                                             or {}).get("proxy_url")
-                            if use_proxy and proxy_url:
-                                proxies = {
-                                    "http": proxy_url,
-                                    "https": proxy_url
-                                }
-                        except Exception:
-                            proxies = None
-
-                        # 检查是否是重试并且 Connection reset by peer 错误，强制使用代理
-                        if attempt > 0 and last_exception and "Connection reset by peer" in str(
-                                last_exception):
-                            logger.info(
-                                "检测到 Connection reset by peer 错误，强制使用代理重试...")
-                            try:
-                                from config import config_manager
-                                conf = (config_manager.get() or {})
-                                proxy_url = (conf.get("cross_seed", {})
-                                             or {}).get("proxy_url") or (
-                                                 conf.get("network", {})
-                                                 or {}).get("proxy_url")
-                                if proxy_url:
-                                    proxies = {
-                                        "http": proxy_url,
-                                        "https": proxy_url
-                                    }
-                                    logger.info(f"使用代理重试: {proxy_url}")
-                            except Exception as proxy_error:
-                                logger.warning(f"代理设置失败: {proxy_error}")
 
                         response = self.scraper.post(
                             self.post_url,

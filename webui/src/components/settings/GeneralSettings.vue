@@ -244,30 +244,6 @@
                 </div>
               </div>
 
-              <div v-else-if="settingsForm.image_hoster === 'pixhost'" key="pixhost" class="credential-section">
-                <div class="credential-header">
-                  <el-icon class="credential-icon">
-                    <Connection />
-                  </el-icon>
-                  <span class="credential-title">Pixhost 代理设置</span>
-                </div>
-
-                <div class="credential-form">
-                  <el-form-item label="代理模式" class="form-item compact">
-                    <el-select v-model="settingsForm.pixhost_proxy_mode" size="small">
-                      <el-option label="失败时使用代理重试" value="retry" />
-                      <el-option label="总是使用代理" value="always" />
-                      <el-option label="不使用代理" value="never" />
-                    </el-select>
-                  </el-form-item>
-                  <el-text type="info" size="small">
-                    <el-icon size="12">
-                      <InfoFilled />
-                    </el-icon>
-                    使用全局网络代理设置进行图片上传
-                  </el-text>
-                </div>
-              </div>
 
               <div v-else key="other" class="placeholder-section">
                 <el-text type="info" size="small">当前图床无需额外配置</el-text>
@@ -277,43 +253,6 @@
         </div>
       </div>
 
-      <!-- 网络代理设置卡片 -->
-      <div class="settings-card glass-card glass-rounded glass-transparent-header glass-transparent-body">
-        <div class="card-header">
-          <div class="header-content">
-            <el-icon class="header-icon">
-              <Connection />
-            </el-icon>
-            <h3>网络代理设置</h3>
-          </div>
-          <el-button type="primary" @click="saveProxySettings" :loading="savingProxy" size="small">
-            保存
-          </el-button>
-        </div>
-
-        <div class="card-content">
-          <el-form :model="settingsForm" label-position="top" class="settings-form">
-            <el-form-item label="代理地址" class="form-item">
-              <el-input v-model="settingsForm.proxy_url" placeholder="例如：http://127.0.0.1:7890">
-                <template #prepend>
-                  <el-icon size="12">
-                    <Link />
-                  </el-icon>
-                </template>
-              </el-input>
-            </el-form-item>
-
-            <div class="form-spacer"></div>
-
-            <el-text type="warning" size="small" class="proxy-hint">
-              <el-icon size="12">
-                <Warning />
-              </el-icon>
-              代理设置将应用于所有支持代理的站点请求
-            </el-text>
-          </el-form>
-        </div>
-      </div>
 
       <!-- 默认下载器设置卡片 -->
       <div class="settings-card glass-card glass-rounded glass-transparent-header glass-transparent-body">
@@ -405,20 +344,15 @@ interface CrossSeedSettings {
   image_hoster: string;
   agsv_email?: string;
   agsv_password?: string;
-  pixhost_proxy_mode?: string;
-  proxy_url?: string;
   default_downloader?: string;
 }
 
 const savingCrossSeed = ref(false);
-const savingProxy = ref(false);
 
 const settingsForm = reactive<CrossSeedSettings>({
   image_hoster: 'pixhost',
   agsv_email: '',
   agsv_password: '',
-  pixhost_proxy_mode: 'retry',
-  proxy_url: '',
   default_downloader: '',
 });
 
@@ -477,16 +411,6 @@ const fetchSettings = async () => {
 
     // 获取转种设置
     Object.assign(settingsForm, config.cross_seed || {});
-
-    // 确保pixhost_proxy_mode字段存在并设置默认值
-    if (!settingsForm.pixhost_proxy_mode) {
-      settingsForm.pixhost_proxy_mode = 'retry';
-    }
-
-    // 获取网络代理设置
-    if (config.network && config.network.proxy_url && !settingsForm.proxy_url) {
-      settingsForm.proxy_url = config.network.proxy_url;
-    }
 
     // 获取背景设置
     if (config.ui_settings && config.ui_settings.background_url) {
@@ -632,7 +556,6 @@ const saveCrossSeedSettings = async () => {
       image_hoster: settingsForm.image_hoster,
       agsv_email: settingsForm.agsv_email,
       agsv_password: settingsForm.agsv_password,
-      pixhost_proxy_mode: settingsForm.pixhost_proxy_mode,
       default_downloader: settingsForm.default_downloader
     };
 
@@ -643,28 +566,6 @@ const saveCrossSeedSettings = async () => {
     ElMessage.error(errorMessage);
   } finally {
     savingCrossSeed.value = false;
-  }
-};
-
-// 保存网络代理设置
-const saveProxySettings = async () => {
-  savingProxy.value = true;
-  try {
-    // 保存网络代理设置
-    if (settingsForm.proxy_url !== undefined) {
-      const networkSettings = {
-        network: {
-          proxy_url: settingsForm.proxy_url
-        }
-      };
-      await axios.post('/api/settings', networkSettings);
-      ElMessage.success('代理设置已保存！');
-    }
-  } catch (error: any) {
-    const errorMessage = error.response?.data?.error || '保存失败。';
-    ElMessage.error(errorMessage);
-  } finally {
-    savingProxy.value = false;
   }
 };
 

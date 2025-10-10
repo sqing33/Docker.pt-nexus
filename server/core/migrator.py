@@ -104,7 +104,6 @@ class TorrentMigrator:
         self.SOURCE_NAME = self.source_site["nickname"]
         self.SOURCE_SITE_CODE = self.source_site["site"]  # 添加英文站点名
         self.SOURCE_COOKIE = self.source_site["cookie"]
-        self.SOURCE_PROXY = self.source_site.get("proxy", False)
 
         # 只有在 target_site_info 存在时才初始化目标相关属性
         if self.target_site:
@@ -112,7 +111,6 @@ class TorrentMigrator:
                 self.target_site.get("base_url"))
             self.TARGET_COOKIE = self.target_site.get("cookie")
             self.TARGET_UPLOAD_MODULE = self.target_site["site"]
-            self.TARGET_PROXY = self.target_site.get("proxy", False)
 
         # Initialize scraper and logger
         session = requests.Session()
@@ -495,11 +493,6 @@ class TorrentMigrator:
             self.logger.info(
                 f"正在从源站点 {self.SOURCE_NAME} 下载种子文件 (ID: {torrent_id})...")
 
-            # 获取代理配置
-            proxies = self._get_proxies(self.SOURCE_PROXY)
-            if proxies:
-                self.logger.info(f"使用代理下载种子文件: {proxies}")
-
             # 构造下载链接
             download_url = f"{self.SOURCE_BASE_URL}/download.php?id={torrent_id}"
 
@@ -508,7 +501,6 @@ class TorrentMigrator:
                 download_url,
                 headers={"Cookie": self.SOURCE_COOKIE},
                 timeout=120,
-                proxies=proxies,
             )
             torrent_response.raise_for_status()
 
@@ -721,22 +713,8 @@ class TorrentMigrator:
                 self.logger.warning(f"清理临时文件 {f} 失败: {e}")
 
     def _get_proxies(self, use_proxy):
-        """获取代理配置"""
-        if not use_proxy or not self.config_manager:
-            return None
-
-        try:
-            conf = (self.config_manager.get() or {})
-            # 优先使用转种设置中的代理地址，其次兼容旧的 network.proxy_url
-            proxy_url = (conf.get("cross_seed", {})
-                         or {}).get("proxy_url") or (conf.get("network", {})
-                                                     or {}).get("proxy_url")
-            if proxy_url:
-                self.logger.info(f"使用代理: {proxy_url}")
-                return {"http": proxy_url, "https": proxy_url}
-        except Exception as e:
-            self.logger.warning(f"代理设置失败: {e}")
-
+        """获取代理配置 - 站点级别的代理已不使用全局代理"""
+        # 站点级别的代理功能已移除，不再使用全局代理
         return None
 
     def _html_to_bbcode(self, tag):
@@ -786,16 +764,10 @@ class TorrentMigrator:
         }
         self.logger.info(f"正在源站 '{self.SOURCE_NAME}' 搜索种子: '{torrent_name}'")
         try:
-            # 获取代理配置
-            proxies = self._get_proxies(self.SOURCE_PROXY)
-            if proxies:
-                self.logger.info(f"使用代理进行搜索: {proxies}")
-
             response = self.scraper.get(search_url,
                                         headers={"Cookie": self.SOURCE_COOKIE},
                                         params=params,
-                                        timeout=120,
-                                        proxies=proxies)
+                                        timeout=120)
             response.raise_for_status()
             response.encoding = "utf-8"
             self.logger.success("搜索请求成功！")
@@ -883,10 +855,6 @@ class TorrentMigrator:
             seed_param_model = SeedParameter(self.db_manager)
 
             self.logger.info(f"正在获取种子(ID: {torrent_id})的详细信息...")
-            # 获取代理配置
-            proxies = self._get_proxies(self.SOURCE_PROXY)
-            if proxies:
-                self.logger.info(f"使用代理获取详情页: {proxies}")
 
             response = self.scraper.get(
                 f"{self.SOURCE_BASE_URL}/details.php",
@@ -896,7 +864,6 @@ class TorrentMigrator:
                     "hit": "1"
                 },
                 timeout=120,
-                proxies=proxies,
             )
             response.raise_for_status()
             response.encoding = "utf-8"
@@ -923,7 +890,6 @@ class TorrentMigrator:
                 f"{self.SOURCE_BASE_URL}/{download_link_tag['href']}",
                 headers={"Cookie": self.SOURCE_COOKIE},
                 timeout=120,
-                proxies=proxies,
             )
             torrent_response.raise_for_status()
 

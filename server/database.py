@@ -95,9 +95,9 @@ class DatabaseManager:
         try:
             # 根据数据库类型使用正确的标识符引用符
             if self.db_type == "postgresql":
-                sql = f"INSERT INTO sites (site, nickname, base_url, special_tracker_domain, \"group\", description, cookie, proxy, speed_limit) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})"
+                sql = f"INSERT INTO sites (site, nickname, base_url, special_tracker_domain, \"group\", description, cookie, speed_limit) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})"
             else:
-                sql = f"INSERT INTO sites (site, nickname, base_url, special_tracker_domain, `group`, description, cookie, proxy, speed_limit) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})"
+                sql = f"INSERT INTO sites (site, nickname, base_url, special_tracker_domain, `group`, description, cookie, speed_limit) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})"
             # 去除cookie字符串首尾的换行符和多余空白字符
             cookie = site_data.get("cookie")
             if cookie:
@@ -111,7 +111,6 @@ class DatabaseManager:
                 site_data.get("group"),
                 site_data.get("description"),
                 cookie,
-                int(site_data.get("proxy", 0)),
                 int(site_data.get("speed_limit", 0)),
             )
             cursor.execute(sql, params)
@@ -138,9 +137,9 @@ class DatabaseManager:
         try:
             # 根据数据库类型使用正确的标识符引用符
             if self.db_type == "postgresql":
-                sql = f"UPDATE sites SET nickname = {ph}, base_url = {ph}, special_tracker_domain = {ph}, \"group\" = {ph}, description = {ph}, cookie = {ph}, proxy = {ph}, speed_limit = {ph} WHERE id = {ph}"
+                sql = f"UPDATE sites SET nickname = {ph}, base_url = {ph}, special_tracker_domain = {ph}, \"group\" = {ph}, description = {ph}, cookie = {ph}, speed_limit = {ph} WHERE id = {ph}"
             else:
-                sql = f"UPDATE sites SET nickname = {ph}, base_url = {ph}, special_tracker_domain = {ph}, `group` = {ph}, description = {ph}, cookie = {ph}, proxy = {ph}, speed_limit = {ph} WHERE id = {ph}"
+                sql = f"UPDATE sites SET nickname = {ph}, base_url = {ph}, special_tracker_domain = {ph}, `group` = {ph}, description = {ph}, cookie = {ph}, speed_limit = {ph} WHERE id = {ph}"
             # 去除cookie字符串首尾的换行符和多余空白字符
             cookie = site_data.get("cookie")
             if cookie:
@@ -153,7 +152,6 @@ class DatabaseManager:
                 site_data.get("group"),
                 site_data.get("description"),
                 cookie,
-                int(site_data.get("proxy", 0)),
                 int(site_data.get("speed_limit", 0)),
                 site_data.get("id"),
             )
@@ -275,7 +273,7 @@ class DatabaseManager:
                             final_speed_limit = json_speed_limit
                         # --- [核心修改逻辑结束] ---
 
-                        # 构建更新语句，不包含 cookie, proxy
+                        # 构建更新语句，不包含 cookie
                         if self.db_type == "postgresql":
                             update_sql = """
                                 UPDATE sites
@@ -384,7 +382,7 @@ class DatabaseManager:
                 "CREATE TABLE IF NOT EXISTS torrent_upload_stats (hash VARCHAR(40) NOT NULL, downloader_id VARCHAR(36) NOT NULL, uploaded BIGINT DEFAULT 0, PRIMARY KEY (hash, downloader_id)) ENGINE=InnoDB ROW_FORMAT=Dynamic"
             )
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS `sites` (`id` mediumint NOT NULL AUTO_INCREMENT, `site` varchar(255) UNIQUE DEFAULT NULL, `nickname` varchar(255) DEFAULT NULL, `base_url` varchar(255) DEFAULT NULL, `special_tracker_domain` varchar(255) DEFAULT NULL, `group` varchar(255) DEFAULT NULL, `description` varchar(255) DEFAULT NULL, `cookie` TEXT DEFAULT NULL, `migration` int(11) NOT NULL DEFAULT 1, `proxy` TINYINT(1) NOT NULL DEFAULT 0, `speed_limit` int(11) NOT NULL DEFAULT 0, PRIMARY KEY (`id`)) ENGINE=InnoDB ROW_FORMAT=DYNAMIC"
+                "CREATE TABLE IF NOT EXISTS `sites` (`id` mediumint NOT NULL AUTO_INCREMENT, `site` varchar(255) UNIQUE DEFAULT NULL, `nickname` varchar(255) DEFAULT NULL, `base_url` varchar(255) DEFAULT NULL, `special_tracker_domain` varchar(255) DEFAULT NULL, `group` varchar(255) DEFAULT NULL, `description` varchar(255) DEFAULT NULL, `cookie` TEXT DEFAULT NULL, `migration` int(11) NOT NULL DEFAULT 1, `speed_limit` int(11) NOT NULL DEFAULT 0, PRIMARY KEY (`id`)) ENGINE=InnoDB ROW_FORMAT=DYNAMIC"
             )
             # 创建种子参数表，用于存储从源站点提取的种子参数
             cursor.execute(
@@ -413,7 +411,7 @@ class DatabaseManager:
                 "CREATE TABLE IF NOT EXISTS torrent_upload_stats (hash VARCHAR(40) NOT NULL, downloader_id VARCHAR(36) NOT NULL, uploaded BIGINT DEFAULT 0, PRIMARY KEY (hash, downloader_id))"
             )
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS sites (id SERIAL PRIMARY KEY, site VARCHAR(255) UNIQUE, nickname VARCHAR(255), base_url VARCHAR(255), special_tracker_domain VARCHAR(255), \"group\" VARCHAR(255), description VARCHAR(255), cookie TEXT, migration INTEGER NOT NULL DEFAULT 1, proxy SMALLINT NOT NULL DEFAULT 0, speed_limit INTEGER NOT NULL DEFAULT 0)"
+                "CREATE TABLE IF NOT EXISTS sites (id SERIAL PRIMARY KEY, site VARCHAR(255) UNIQUE, nickname VARCHAR(255), base_url VARCHAR(255), special_tracker_domain VARCHAR(255), \"group\" VARCHAR(255), description VARCHAR(255), cookie TEXT, migration INTEGER NOT NULL DEFAULT 1, speed_limit INTEGER NOT NULL DEFAULT 0)"
             )
             # 创建种子参数表，用于存储从源站点提取的种子参数
             cursor.execute(
@@ -454,7 +452,7 @@ class DatabaseManager:
                 "CREATE TABLE IF NOT EXISTS torrent_upload_stats (hash TEXT NOT NULL, downloader_id TEXT NOT NULL, uploaded INTEGER DEFAULT 0, PRIMARY KEY (hash, downloader_id))"
             )
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS sites (id INTEGER PRIMARY KEY AUTOINCREMENT, site TEXT UNIQUE, nickname TEXT, base_url TEXT, special_tracker_domain TEXT, `group` TEXT, description TEXT, cookie TEXT, migration INTEGER NOT NULL DEFAULT 1, proxy INTEGER NOT NULL DEFAULT 0, speed_limit INTEGER NOT NULL DEFAULT 0)"
+                "CREATE TABLE IF NOT EXISTS sites (id INTEGER PRIMARY KEY AUTOINCREMENT, site TEXT UNIQUE, nickname TEXT, base_url TEXT, special_tracker_domain TEXT, `group` TEXT, description TEXT, cookie TEXT, migration INTEGER NOT NULL DEFAULT 1, speed_limit INTEGER NOT NULL DEFAULT 0)"
             )
             # 创建种子参数表，用于存储从源站点提取的种子参数
             cursor.execute(
@@ -478,6 +476,9 @@ class DatabaseManager:
             )
 
         conn.commit()
+
+        # 执行数据库迁移：删除 proxy 列
+        self._migrate_remove_proxy_column(conn, cursor)
 
         # 同步站点数据
         self.sync_sites_from_json()
@@ -704,6 +705,90 @@ class DatabaseManager:
                 cursor.close()
             if conn:
                 conn.close()
+
+    def _migrate_remove_proxy_column(self, conn, cursor):
+        """数据库迁移：删除 sites 表中的 proxy 列"""
+        try:
+            logging.info("检查是否需要删除 sites 表中的 proxy 列...")
+            
+            # 检查 proxy 列是否存在
+            column_exists = False
+            
+            if self.db_type == "mysql":
+                cursor.execute("SHOW COLUMNS FROM sites LIKE 'proxy'")
+                column_exists = cursor.fetchone() is not None
+                
+                if column_exists:
+                    logging.info("检测到 proxy 列，正在删除...")
+                    cursor.execute("ALTER TABLE sites DROP COLUMN proxy")
+                    conn.commit()
+                    logging.info("✓ 成功删除 sites 表中的 proxy 列 (MySQL)")
+                    
+            elif self.db_type == "postgresql":
+                cursor.execute("""
+                    SELECT column_name 
+                    FROM information_schema.columns 
+                    WHERE table_name='sites' AND column_name='proxy'
+                """)
+                column_exists = cursor.fetchone() is not None
+                
+                if column_exists:
+                    logging.info("检测到 proxy 列，正在删除...")
+                    cursor.execute('ALTER TABLE sites DROP COLUMN proxy')
+                    conn.commit()
+                    logging.info("✓ 成功删除 sites 表中的 proxy 列 (PostgreSQL)")
+                    
+            else:  # SQLite
+                # SQLite 不支持 DROP COLUMN（旧版本），需要重建表
+                cursor.execute("PRAGMA table_info(sites)")
+                columns = cursor.fetchall()
+                column_exists = any(col[1] == 'proxy' for col in columns)
+                
+                if column_exists:
+                    logging.info("检测到 proxy 列，正在重建表以删除该列...")
+                    
+                    # 创建新表（不包含 proxy 列）
+                    cursor.execute("""
+                        CREATE TABLE sites_new (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            site TEXT UNIQUE,
+                            nickname TEXT,
+                            base_url TEXT,
+                            special_tracker_domain TEXT,
+                            `group` TEXT,
+                            description TEXT,
+                            cookie TEXT,
+                            migration INTEGER NOT NULL DEFAULT 1,
+                            speed_limit INTEGER NOT NULL DEFAULT 0
+                        )
+                    """)
+                    
+                    # 复制数据（排除 proxy 列）
+                    cursor.execute("""
+                        INSERT INTO sites_new 
+                        (id, site, nickname, base_url, special_tracker_domain, `group`, 
+                         description, cookie, migration, speed_limit)
+                        SELECT id, site, nickname, base_url, special_tracker_domain, `group`,
+                               description, cookie, migration, speed_limit
+                        FROM sites
+                    """)
+                    
+                    # 删除旧表
+                    cursor.execute("DROP TABLE sites")
+                    
+                    # 重命名新表
+                    cursor.execute("ALTER TABLE sites_new RENAME TO sites")
+                    
+                    conn.commit()
+                    logging.info("✓ 成功删除 sites 表中的 proxy 列 (SQLite)")
+            
+            if not column_exists:
+                logging.info("proxy 列不存在，无需迁移")
+                
+        except Exception as e:
+            logging.warning(f"迁移删除 proxy 列时出错（可能已经删除）: {e}")
+            # 不要因为迁移失败而中断初始化
+            conn.rollback()
 
     def _sync_downloaders_from_config(self, cursor):
         """从配置文件同步下载器列表到 downloader_clients 表。"""

@@ -10,11 +10,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # 配置文件路径
-# DATA_DIR = "/app/Code/Dockerfile/Docker.pt-nexus/server/data"
-# SITES_DATA_FILE = "/app/Code/Dockerfile/Docker.pt-nexus/server/sites_data.json"
+SITES_DATA_FILE = "/app/Code/Dockerfile/Docker.pt-nexus/server/sites_data.json"
 
 DATA_DIR = "/app/data"
-SITES_DATA_FILE = "/app/sites_data.json"
+# SITES_DATA_FILE = "/app/sites_data.json"
 
 os.makedirs(DATA_DIR, exist_ok=True)
 
@@ -36,9 +35,6 @@ class ConfigManager:
         return {
             "downloaders": [],
             "realtime_speed_enabled": True,
-            "network": {
-                "proxy_url": ""
-            },
             "auth": {
                 "username": "admin",
                 "password_hash": "",
@@ -190,14 +186,6 @@ class ConfigManager:
                         "states": [],
                         "downloaderIds": []
                     }
-
-                # --- [新增] 网络代理配置兼容 ---
-                if "network" not in self._config:
-                    self._config["network"] = default_conf["network"]
-                else:
-                    # 确保 proxy_url 字段存在
-                    if "proxy_url" not in self._config["network"]:
-                        self._config["network"]["proxy_url"] = ""
 
             except (json.JSONDecodeError, IOError) as e:
                 logging.error(f"无法读取或解析 {CONFIG_FILE}: {e}。将加载一个安全的默认配置。")

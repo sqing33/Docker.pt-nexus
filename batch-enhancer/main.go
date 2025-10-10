@@ -135,8 +135,8 @@ type BencodeParser struct {
 
 // 配置
 var (
-	coreAPIURL     = getEnv("CORE_API_URL", "http://localhost:5274")
-	port           = getEnv("PORT", "5275")
+	coreAPIURL     = getEnv("CORE_API_URL", "http://localhost:35274")
+	port           = getEnv("PORT", "35273")
 	tempDir        = getEnv("TEMP_DIR", "/app/data/tmp")
 	internalSecret = getEnv("INTERNAL_SECRET", "pt-nexus-2024-secret-key") // 共享密钥，用于生成动态token
 )

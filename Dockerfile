@@ -38,6 +38,7 @@ ENV PYTHONUNBUFFERED=1
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     ffmpeg \
+    mpv \
     mediainfo \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
@@ -66,6 +67,6 @@ RUN mkdir -p /app/data
 VOLUME /app/data
 
 EXPOSE 5272
-EXPOSE 5275
+EXPOSE 35273
 
 CMD ["./start-services.sh"]

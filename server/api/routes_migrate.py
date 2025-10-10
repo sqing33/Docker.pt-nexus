@@ -55,19 +55,8 @@ def save_cross_seed_settings():
             return jsonify({"error": "无效的设置数据格式。"}), 400
 
         current_config = config_manager.get()
-        
-        # 提取并保存 cross_seed 配置（排除 proxy_url）
-        cross_seed_settings = {
-            k: v for k, v in new_settings.items() 
-            if k != "proxy_url"
-        }
-        current_config["cross_seed"] = cross_seed_settings
-        
-        # 如果请求中包含 proxy_url，也一并保存到 network 配置中
-        if "proxy_url" in new_settings:
-            current_config.setdefault("network", {})
-            current_config["network"]["proxy_url"] = new_settings.get("proxy_url", "")
-            logging.info(f"同时更新网络代理配置: {current_config['network']['proxy_url']}")
+        # 更新配置中的 cross_seed 部分
+        current_config["cross_seed"] = new_settings
 
         if config_manager.save(current_config):
             return jsonify({"message": "转种设置已成功保存！"})
@@ -98,11 +87,12 @@ def get_db_seed_info():
                 "success": False,
                 "message": "错误：torrent_id和site_name参数不能为空"
             }), 400
-        
+
         # 如果前端提供了task_id，使用它；否则生成新的
         if task_id:
             log_streamer.create_stream(task_id)
-            log_streamer.emit_log(task_id, "数据库查询", "正在从数据库读取种子信息...", "processing")
+            log_streamer.emit_log(task_id, "数据库查询", "正在从数据库读取种子信息...",
+                                  "processing")
 
         db_manager = migrate_bp.db_manager
 
@@ -111,7 +101,7 @@ def get_db_seed_info():
             # 初始化种子参数模型
             from models.seed_parameter import SeedParameter
             seed_param_model = SeedParameter(db_manager)
-            
+
             parameters = seed_param_model.get_parameters(torrent_id, site_name)
 
             if parameters:
@@ -147,10 +137,11 @@ def get_db_seed_info():
                     "source_torrent_id": torrent_id,
                     "requires_torrent_download": True,  # 需要下载种子文件
                 }
-                
+
                 if task_id:
                     # 标记数据库查询步骤完成
-                    log_streamer.emit_log(task_id, "数据库查询", "数据库读取完成", "success")
+                    log_streamer.emit_log(task_id, "数据库查询", "数据库读取完成",
+                                          "success")
                     # 发送完成步骤
                     log_streamer.emit_log(task_id, "完成", "数据加载完成", "success")
                     # 关闭日志流
@@ -164,12 +155,14 @@ def get_db_seed_info():
                     "reverse_mappings": reverse_mappings
                 })
             else:
-                logging.info(f"数据库中未找到种子信息: {torrent_id} from {site_name}，将从源站点抓取")
-                
+                logging.info(
+                    f"数据库中未找到种子信息: {torrent_id} from {site_name}，将从源站点抓取")
+
                 # 标记数据库查询为失败，准备从源站点抓取
                 if task_id:
-                    log_streamer.emit_log(task_id, "数据库查询", "数据库中未找到缓存", "error")
-                
+                    log_streamer.emit_log(task_id, "数据库查询", "数据库中未找到缓存",
+                                          "error")
+
                 return jsonify({
                     "success": False,
                     "message": "数据库中未找到种子信息",
@@ -467,7 +460,7 @@ def migrate_fetch_and_store():
     task_id = data.get("task_id")
     if not task_id:
         task_id = str(uuid.uuid4())
-    
+
     # 创建或获取日志流
     log_streamer.create_stream(task_id)
     log_streamer.emit_log(task_id, "开始抓取", "正在从源站点抓取种子信息...", "processing")
@@ -526,12 +519,12 @@ def migrate_fetch_and_store():
             logging.info(
                 f"种子信息抓取并存储成功: {search_term} from {source_site_name} ({english_site_name})"
             )
-            
+
             # 标记"开始抓取"步骤为成功
             log_streamer.emit_log(task_id, "开始抓取", "种子信息抓取完成", "success")
             # 关闭日志流
             log_streamer.close_stream(task_id)
-            
+
             return jsonify({
                 "success": True,
                 "task_id": new_task_id,
@@ -540,9 +533,10 @@ def migrate_fetch_and_store():
             })
         else:
             # 抓取失败，标记为错误
-            log_streamer.emit_log(task_id, "开始抓取", result.get("logs", "抓取失败"), "error")
+            log_streamer.emit_log(task_id, "开始抓取", result.get("logs", "抓取失败"),
+                                  "error")
             log_streamer.close_stream(task_id)
-            
+
             return jsonify({
                 "success": False,
                 "message": result.get("logs", "未知错误")
@@ -2703,6 +2697,7 @@ def batch_fetch_progress():
 #                    实时日志流 API (SSE)
 # ===================================================================
 
+
 @migrate_bp.route("/migrate/logs/stream/<task_id>", methods=["GET"])
 def stream_logs(task_id):
     """实时推送任务日志流 (Server-Sent Events)
@@ -2710,6 +2705,7 @@ def stream_logs(task_id):
     前端通过 EventSource 连接此端点，接收实时日志事件
     每个事件包含：step（步骤名）、message（消息）、status（状态）等信息
     """
+
     def generate():
         """生成 SSE 事件流"""
         try:
@@ -2719,26 +2715,26 @@ def stream_logs(task_id):
                 # 如果流不存在，创建一个新的
                 stream = log_streamer.create_stream(task_id)
                 logging.info(f"为任务 {task_id} 创建新的日志流")
-            
+
             # 发送连接成功消息
             yield f"data: {json.dumps({'type': 'connected', 'task_id': task_id})}\n\n"
-            
+
             # 持续从队列读取日志事件
             while True:
                 try:
                     # 等待新的日志事件（超时1秒）
                     event = stream.get(timeout=1.0)
-                    
+
                     # None 表示流结束
                     if event is None:
                         yield f"data: {json.dumps({'type': 'complete'})}\n\n"
                         logging.info(f"任务 {task_id} 日志流结束")
                         break
-                    
+
                     # 发送日志事件
                     event['type'] = 'log'
                     yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
-                    
+
                 except Exception as queue_error:
                     # 队列超时或其他错误，发送心跳保持连接
                     if "Empty" in str(type(queue_error).__name__):
@@ -2747,11 +2743,11 @@ def stream_logs(task_id):
                     else:
                         logging.error(f"队列读取错误: {queue_error}")
                         break
-                        
+
         except Exception as e:
             logging.error(f"SSE流生成错误: {e}", exc_info=True)
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
-    
+
     # 返回 SSE 响应
     return Response(
         stream_with_context(generate()),
@@ -2760,5 +2756,4 @@ def stream_logs(task_id):
             'Cache-Control': 'no-cache',
             'X-Accel-Buffering': 'no',  # 禁用 Nginx 缓冲
             'Connection': 'keep-alive'
-        }
-    )
+        })
