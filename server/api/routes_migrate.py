@@ -2456,13 +2456,13 @@ def _process_batch_fetch(task_id, torrent_names, source_sites_priority,
                 conn = db_manager._get_connection()
                 cursor = db_manager._get_cursor(conn)
 
-                if db_manager.db_type == "postgresql":
-                    cursor.execute(
-                        "SELECT hash, name, save_path, sites, details, downloader_id FROM torrents WHERE name = %s AND state != %s",
-                        (torrent_name, "不存在"))
-                else:
+                if db_manager.db_type == "sqlite":
                     cursor.execute(
                         "SELECT hash, name, save_path, sites, details, downloader_id FROM torrents WHERE name = ? AND state != ?",
+                        (torrent_name, "不存在"))
+                else:  # postgresql or mysql
+                    cursor.execute(
+                        "SELECT hash, name, save_path, sites, details, downloader_id FROM torrents WHERE name = %s AND state != %s",
                         (torrent_name, "不存在"))
 
                 torrents = [dict(row) for row in cursor.fetchall()]

@@ -88,6 +88,7 @@ def create_app():
     from api.routes_cross_seed_data import cross_seed_data_bp
     from api.routes_config import bp_config
     from api.routes_local_query import local_query_bp
+    from api.routes_go_proxy import go_proxy_bp
 
     # 将核心服务实例注入到每个蓝图中，以便路由函数可以访问
     # 使用 setattr 避免类型检查器报错
@@ -179,6 +180,17 @@ def create_app():
     app.register_blueprint(cross_seed_data_bp)
     app.register_blueprint(bp_config)
     app.register_blueprint(local_query_bp)
+    app.register_blueprint(go_proxy_bp, url_prefix="/go-api")
+
+    # --- 健康检查端点 ---
+    @app.route("/health", methods=["GET"])
+    def health_check():
+        """健康检查端点，用于服务状态监控"""
+        return jsonify({
+            "status": "healthy",
+            "service": "pt-nexus-core",
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+        }), 200
 
     # --- 步骤 4: 执行初始数据聚合 ---
     logging.info("正在执行初始数据聚合...")

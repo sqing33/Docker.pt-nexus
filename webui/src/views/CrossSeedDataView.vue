@@ -1306,8 +1306,8 @@ const handleBatchCrossSeed = async () => {
     recordDialogVisible.value = true;
     startAutoRefresh(); // 关键改动：在这里启动定时器
 
-    // 4. 通过vite代理调用Go服务的API来开始任务
-    const response = await fetch('/go-api/batch-enhance', {
+    // 4. 通过Python代理调用Go服务的API来开始任务
+    const response = await fetch('/api/go-api/batch-enhance', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -1536,8 +1536,8 @@ const refreshRecords = async () => {
     // 清空批次映射，确保每次刷新从1开始
     resetBatchNumberMap()
 
-    // 通过vite代理调用Go服务的记录API
-    const response = await fetch('/go-api/records', {
+    // 通过Python代理调用Go服务的记录API
+    const response = await fetch('/api/go-api/records', {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json'
@@ -1577,7 +1577,7 @@ const refreshRecords = async () => {
 const clearRecordsLocal = async () => {
   try {
     // 调用清空记录的API
-    const response = await fetch('/go-api/records', {
+    const response = await fetch('/api/go-api/records', {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json'

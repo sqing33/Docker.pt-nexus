@@ -95,7 +95,10 @@ def _prepare_api_config(downloader_config):
         allowed_keys = ["host", "username", "password"]
 
     # 只提取需要的字段
-    api_config = {k: v for k, v in downloader_config.items() if k in allowed_keys}
+    api_config = {
+        k: v
+        for k, v in downloader_config.items() if k in allowed_keys
+    }
 
     # Transmission 特殊处理：智能解析 host 和 port
     if downloader_config["type"] == "transmission":
@@ -493,7 +496,8 @@ class DataTracker(Thread):
             params_to_insert = []
 
             for entry in buffer:
-                timestamp_str = entry["timestamp"].strftime("%Y-%m-%d %H:%M:%S")
+                timestamp_str = entry["timestamp"].strftime(
+                    "%Y-%m-%d %H:%M:%S")
                 for data_point in entry["points"]:
                     client_id = data_point["downloader_id"]
                     current_dl = data_point["total_dl"]
@@ -613,6 +617,8 @@ class DataTracker(Thread):
                 if (t_info["hash"] not in torrents_to_upsert
                         or t_info["progress"]
                         > torrents_to_upsert[t_info["hash"]]["progress"]):
+                    site_name = self._find_site_nickname(
+                        t_info["trackers"], core_domain_map, t_info["comment"])
                     torrents_to_upsert[t_info["hash"]] = {
                         "hash":
                         t_info["hash"],
@@ -627,8 +633,7 @@ class DataTracker(Thread):
                         "state":
                         format_state(t_info["state"]),
                         "sites":
-                        self._find_site_nickname(t_info["trackers"],
-                                                 core_domain_map),
+                        site_name,
                         "details":
                         _extract_url_from_comment(t_info["comment"]),
                         "group":
@@ -710,28 +715,37 @@ class DataTracker(Thread):
             # 更新在torrents表中存在的hash值的is_deleted字段为0
             if hashes_in_torrents:
                 print(f"【刷新线程】发现 {len(hashes_in_torrents)} 个种子在torrents表中存在")
-                update_placeholders = ",".join([placeholder] * len(hashes_in_torrents))
+                update_placeholders = ",".join([placeholder] *
+                                               len(hashes_in_torrents))
                 # 根据数据库类型使用正确的布尔值
                 if self.db_manager.db_type == 'postgresql':
                     update_query = f"UPDATE seed_parameters SET is_deleted = FALSE WHERE hash IN ({update_placeholders})"
                 else:
                     update_query = f"UPDATE seed_parameters SET is_deleted = 0 WHERE hash IN ({update_placeholders})"
                 cursor.execute(update_query, tuple(hashes_in_torrents))
-                print(f"【刷新线程】已更新 {len(hashes_in_torrents)} 个种子的is_deleted字段为0")
-                logging.info(f"已更新 {len(hashes_in_torrents)} 个种子的is_deleted字段为0")
+                print(
+                    f"【刷新线程】已更新 {len(hashes_in_torrents)} 个种子的is_deleted字段为0")
+                logging.info(
+                    f"已更新 {len(hashes_in_torrents)} 个种子的is_deleted字段为0")
 
             # 更新在torrents表中不存在的hash值的is_deleted字段为1
             if hashes_not_in_torrents:
-                print(f"【刷新线程】发现 {len(hashes_not_in_torrents)} 个种子在torrents表中不存在")
-                update_placeholders = ",".join([placeholder] * len(hashes_not_in_torrents))
+                print(
+                    f"【刷新线程】发现 {len(hashes_not_in_torrents)} 个种子在torrents表中不存在"
+                )
+                update_placeholders = ",".join([placeholder] *
+                                               len(hashes_not_in_torrents))
                 # 根据数据库类型使用正确的布尔值
                 if self.db_manager.db_type == 'postgresql':
                     update_query = f"UPDATE seed_parameters SET is_deleted = TRUE WHERE hash IN ({update_placeholders})"
                 else:
                     update_query = f"UPDATE seed_parameters SET is_deleted = 1 WHERE hash IN ({update_placeholders})"
                 cursor.execute(update_query, tuple(hashes_not_in_torrents))
-                print(f"【刷新线程】已更新 {len(hashes_not_in_torrents)} 个种子的is_deleted字段为1")
-                logging.info(f"已更新 {len(hashes_not_in_torrents)} 个种子的is_deleted字段为1")
+                print(
+                    f"【刷新线程】已更新 {len(hashes_not_in_torrents)} 个种子的is_deleted字段为1"
+                )
+                logging.info(
+                    f"已更新 {len(hashes_not_in_torrents)} 个种子的is_deleted字段为1")
 
             if torrents_to_upsert:
                 params = [(*d.values(), now_str)
@@ -817,6 +831,15 @@ class DataTracker(Thread):
             # 检查数据是从代理获取的还是从客户端获取的
             if isinstance(t, dict):
                 # 从代理获取的数据是字典格式
+                # 处理 tracker 信息：代理可能返回 tracker (单数) 字段而不是 trackers (复数)
+                trackers_list = []
+                if "trackers" in t and t["trackers"]:
+                    # 如果有 trackers 字段（复数）
+                    trackers_list = t["trackers"]
+                elif "tracker" in t and t["tracker"]:
+                    # 如果只有 tracker 字段（单数），将其转换为列表格式
+                    trackers_list = [{"url": t["tracker"]}]
+                
                 info = {
                     "name": t.get("name", ""),
                     "hash": t.get("hash", ""),
@@ -825,11 +848,27 @@ class DataTracker(Thread):
                     "progress": t.get("progress", 0),
                     "state": t.get("state", ""),
                     "comment": t.get("comment", ""),
-                    "trackers": t.get("trackers", []),
+                    "trackers": trackers_list,
                     "uploaded": t.get("uploaded", 0),
                 }
             else:
                 # 从客户端获取的数据是对象格式
+                # 获取 trackers 信息
+                trackers_data = []
+                try:
+                    # 尝试获取 trackers 属性
+                    if hasattr(t, 'trackers'):
+                        trackers_data = t.trackers
+                    # 如果 trackers 为空，尝试通过 API 获取
+                    if not trackers_data and client_instance:
+                        try:
+                            torrent_trackers = client_instance.torrents_trackers(t.hash)
+                            trackers_data = torrent_trackers if torrent_trackers else []
+                        except Exception as e:
+                            logging.warning(f"无法通过API获取种子 {t.hash} 的trackers: {e}")
+                except Exception as e:
+                    logging.warning(f"获取种子 {t.hash} 的trackers时出错: {e}")
+                
                 info = {
                     "name": t.name,
                     "hash": t.hash,
@@ -838,7 +877,7 @@ class DataTracker(Thread):
                     "progress": t.progress,
                     "state": t.state,
                     "comment": t.get("comment", ""),
-                    "trackers": t.trackers,
+                    "trackers": trackers_data,
                     "uploaded": t.uploaded,
                 }
 
@@ -924,13 +963,29 @@ class DataTracker(Thread):
                 }
         return {}
 
-    def _find_site_nickname(self, trackers, core_domain_map):
+    def _find_site_nickname(self, trackers, core_domain_map, comment=None):
+        # 首先尝试从 trackers 匹配
         if trackers:
             for tracker_entry in trackers:
-                hostname = _parse_hostname_from_url(tracker_entry.get("url"))
+                tracker_url = tracker_entry.get("url")
+                hostname = _parse_hostname_from_url(tracker_url)
                 core_domain = _extract_core_domain(hostname)
                 if core_domain in core_domain_map:
-                    return core_domain_map[core_domain]
+                    matched_site = core_domain_map[core_domain]
+                    return matched_site
+        
+        # 如果 trackers 为空或未匹配到，尝试从 comment 中提取 URL 并匹配
+        if comment:
+            comment_url = _extract_url_from_comment(comment)
+            if comment_url:
+                hostname = _parse_hostname_from_url(comment_url)
+                if hostname:
+                    core_domain = _extract_core_domain(hostname)
+                    if core_domain in core_domain_map:
+                        matched_site = core_domain_map[core_domain]
+                        logging.info(f"通过 comment URL 匹配到站点: {matched_site} (域名: {core_domain})")
+                        return matched_site
+        
         return None
 
     def _find_torrent_group(self, name, group_to_site_map_lower):
