@@ -5,7 +5,7 @@ import logging
 go_proxy_bp = Blueprint('go_proxy', __name__)
 
 # Go服务配置
-GO_SERVICE_URL = "http://localhost:35273"
+GO_SERVICE_URL = "http://localhost:5275"
 
 
 @go_proxy_bp.route('/batch-enhance', methods=['POST'])
