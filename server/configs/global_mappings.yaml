@@ -401,6 +401,7 @@ global_standard_keys:
     "内地": "source.china"
     "大陆": "source.china"
     "Mainland(大陆)": "source.china"
+    "国剧": "source.china"
 
     # 香港
     "香港": "source.hongkong"
@@ -408,6 +409,7 @@ global_standard_keys:
     "HK": "source.hongkong"
     "HK/香港": "source.hongkong"
     "Hongkong(香港)": "source.hongkong"
+    "港剧": "source.hongkong"
 
     # 台湾
     "台湾": "source.taiwan"
@@ -415,6 +417,7 @@ global_standard_keys:
     "TW": "source.taiwan"
     "TW/台湾": "source.taiwan"
     "Taiwan(台湾)": "source.taiwan"
+    "台剧": "source.taiwan"
 
     # 美国
     "美国": "source.western"
@@ -424,6 +427,7 @@ global_standard_keys:
     "America": "source.western"
     "欧美": "source.western"
     "West(欧美)": "source.western"
+    "美剧": "source.western"
 
     # 日本
     "日本": "source.japan"
@@ -431,6 +435,7 @@ global_standard_keys:
     "JPN": "source.japan"
     "JPN/日本": "source.japan"
     "Japan(日本)": "source.japan"
+    "日剧": "source.japan"
 
     # 韩国
     "韩国": "source.korea"
@@ -438,6 +443,7 @@ global_standard_keys:
     "Korea": "source.korea"
     "Kr/韩国": "source.korea"
     "Korea(韩国)": "source.korea"
+    "韩剧": "source.korea"
 
     # 英国
     "英国": "source.uk"
@@ -445,6 +451,7 @@ global_standard_keys:
     "GB": "source.uk"
     "GB/英国": "source.uk"
     "UK/英国": "source.uk"
+    "英剧": "source.uk"
 
     # 法国
     "法国": "source.france"
@@ -498,6 +505,14 @@ global_standard_keys:
     "TH": "source.thailand"
     "TH/泰国": "source.thailand"
     "Thailand(泰国)": "source.thailand"
+
+    # 新加坡
+    "新加坡": "source.singapore"
+    "新剧": "source.singapore"
+
+    # 马来西亚
+    "马来西亚": "source.malaysia"
+    "马剧": "source.malaysia"
 
     # 其他
     "其他": "source.other"
@@ -772,3 +787,87 @@ team_acknowledgment:
 
   # 关键词检测范围（字符数，只检查声明开头的部分）
   keyword_check_length: 300
+
+# ==============================================================================
+# Fallback Strategy Configuration (降级策略配置)
+# ==============================================================================
+
+# Chains for parameter fallback. If a specific parameter is not supported by the
+# target site, the system will try the next parameter in the list.
+# 参数降级链。如果目标站点不支持某个特定参数，系统将尝试列表中的下一个参数。
+fallback_chains:
+  audio_codec:
+    # Dolby / TrueHD Family
+    "audio.truehd_atmos":
+      - "audio.truehd"
+      - "audio.other"
+    "audio.ddp_atmos":
+      - "audio.ddp"
+      - "audio.ac3"
+      - "audio.other"
+    "audio.truehd":
+      - "audio.other"
+    "audio.ddp":
+      - "audio.ac3"
+      - "audio.other"
+
+    # DTS Family
+    "audio.dtsx":
+      - "audio.dts_hd_ma"
+      - "audio.dts"
+      - "audio.other"
+    "audio.dts_hd_ma":
+      - "audio.dts"
+      - "audio.other"
+    "audio.dts_hd_hr":
+      - "audio.dts"
+      - "audio.other"
+    "audio.dts":
+      - "audio.other"
+ 
+  video_codec:
+    "video.x265":
+      - "video.h265"
+      - "video.h264"
+      - "video.other"
+    "video.h265":
+      - "video.h264"
+      - "video.other"
+      
+  medium:
+    "medium.remux":
+      - "medium.bluray"
+      - "medium.encode"
+      - "medium.other"
+    "medium.uhd_bluray":
+      - "medium.bluray"
+      - "medium.encode"
+      - "medium.other"
+      
+  hdr_format:
+    "hdr.dolby_vision":
+      - "hdr.hdr10_plus"
+      - "hdr.hdr10"
+      - "hdr.sdr"
+    "hdr.hdr10_plus":
+      - "hdr.hdr10"
+      - "hdr.sdr"
+
+# General configuration for the fallback mechanism.
+# 降级机制的通用配置。
+fallback_config:
+  # Enable or disable the fallback feature.
+  # 启用或禁用降级功能。
+  enabled: true
+  
+  # Log when a fallback occurs.
+  # 发生降级时记录日志。
+  log_fallback: true
+  
+  # Maximum depth for a fallback chain to prevent infinite loops.
+  # 降级链的最大深度，以防止无限循环。
+  max_fallback_depth: 5
+  
+  # If a fallback chain fails or is not found, use the default value from the mapping.
+  # 如果降级链失败或未找到，则使用映射中的默认值。
+  use_default_on_failure: true

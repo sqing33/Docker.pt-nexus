@@ -1,0 +1,122 @@
+site_name: "CHDBits"
+
+form_fields:
+  category: "type"
+  source: "source_sel"
+  medium: "medium_sel"
+  resolution: "standard_sel"
+  video_codec: "codec_sel"
+  audio_codec: "audiocodec_sel"
+
+source_parsers:
+  source_params:
+    type:
+      source_key: "类型"
+    medium:
+      source_key: "媒介"
+    video_codec:
+      source_key: "视频编码"
+    audio_codec:
+      source_key: "音频编码"
+    resolution:
+      source_key: "分辨率"
+    team:
+      source_key: "制作组"
+
+  standard_keys:
+    type:
+      "Movies": "category.movie"
+      "TV Series": "category.tv_series"
+      "Documentaries": "category.documentaries"
+      "Animations": "category.animations"
+      "TV Shows": "category.tv_shows"
+      "Sports": "category.sports"
+      "Music": "category.music"
+      "HQ Audio": "category.music"
+      "Game": "category.game"
+
+    medium:
+      "Blu-ray": "medium.bluray"
+      "UHD Blu-ray": "medium.uhd_bluray"
+      "Remux": "medium.remux"
+      "Encode": "medium.encode"
+      "HDTV": "medium.hdtv"
+      "WEB-DL": "medium.webdl"
+      "CD": "medium.cd"
+      "Other": "medium.other"
+
+    video_codec:
+      "H.265": "video.h265"
+      "H.264/AVC": "video.h264"
+      "VC-1": "video.vc1"
+      "MPEG-2": "video.mpeg2"
+      "MPEG-4": "video.mpeg4"
+      "AV1": "video.av1"
+      "Other": "video.other"
+
+    audio_codec:
+      "DTS-HD": "audio.dts_hd_ma"
+      "TrueHD": "audio.truehd"
+      "LPCM": "audio.lpcm"
+      "DTS": "audio.dts"
+      "AC3": "audio.ac3"
+      "AAC": "audio.aac"
+      "FLAC": "audio.flac"
+      "APE": "audio.ape"
+      "WAV": "audio.wav"
+      "ALAC": "audio.alac"
+      "Other": "audio.other"
+
+    resolution:
+      "8K": "resolution.r4320p"
+      "4K": "resolution.r2160p"
+      "1080p": "resolution.r1080p"
+      "1080i": "resolution.r1080i"
+      "720p": "resolution.r720p"
+      "Other": "resolution.other"
+
+    source:
+      "美剧": "source.western"
+      "日剧": "source.japan"
+      "港剧": "source.hongkong"
+      "韩剧": "source.korea"
+      "英剧": "source.uk"
+      "台剧": "source.taiwan"
+      "国剧": "source.china"
+      "新剧": "source.singapore"
+      "马剧": "source.malaysia"
+
+    team:
+      "CMCT": "team.cmct"
+      "WiKi": "team.wiki"
+      "MTeam": "team.mteam"
+      "DOUHD": "team.douhd"
+      "HONE": "team.hone"
+      "BYNDR": "team.byndr"
+      "HHWEB": "team.hhweb"
+
+    tag:
+      "动画": "tag.动画"
+      "禁转": "tag.禁转"
+      "合集": "tag.合集"
+      "原生": "tag.原生"
+      "国配": "tag.国语"
+      "中字": "tag.中字"
+      "特效": "tag.特效"
+      "自译": "tag.自译"
+      "DoVi": "tag.Dolby_Vision"
+      "HDR10": "tag.hdr10"
+      "HDR10+": "tag.hdr10plus"
+      "菁彩HDR": "tag.菁彩HDR"
+      "HLG": "tag.hlg"
+      "CC": "tag.cc"
+      "3D": "tag.3d"
+      "国语": "tag.国语"
+      "粤语": "tag.粤语"
+      "杜比": "tag.杜比"
+      "特效字幕": "tag.特效字幕"
+      "英字": "tag.英字"
+      "4K": "tag.4K"
+      "Blu-ray": "tag.Blu-ray"
+      "LIVE现场": "tag.LIVE现场"
+      "default": null

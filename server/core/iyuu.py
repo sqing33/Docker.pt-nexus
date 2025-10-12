@@ -219,8 +219,12 @@ class IYUUThread(Thread):
             logging.error(f"获取数据库站点信息时出错: {e}", exc_info=True)
             return {}
 
-    def _perform_iyuu_search(self, agg_torrents, configured_sites,
-                             all_torrents, force_query=False, return_stats=False):
+    def _perform_iyuu_search(self,
+                             agg_torrents,
+                             configured_sites,
+                             all_torrents,
+                             force_query=False,
+                             return_stats=False):
         """执行IYUU搜索逻辑
         
         Args:
@@ -240,7 +244,7 @@ class IYUUThread(Thread):
             'updated_records': 0,
             'sites_found': []
         }
-        
+
         try:
             # 获取IYUU token
             config = self.config_manager.get()
@@ -259,26 +263,20 @@ class IYUUThread(Thread):
             # 创建站点映射
             sites_map = {site['id']: site for site in all_sites}
 
-            # 创建IYUU站点名称到数据库站点昵称的映射表
-            # 只包含需要映射的站点（IYUU名称与数据库昵称不同的情况）
-            site_name_mapping = {
-                # IYUU名称 -> 数据库昵称
-                "优堡": "我堡",
-                "观众": "人人",
-                "柠檬": "柠檬不酸",
-                "hdclone": "HDClone",
-                "我的PT(CC)": "我的PT",
-                "LongPT": "龙PT",
-                "March": "三月传媒",
-                "hdbao": "红豆包",
-                "LuckPT": "幸运",
-                "13city": "13City",
-                "PTSKit": "PTSkit",
-                "时光": "时光HDT",
-                "春天": "不可说",
-            }
+            # 从数据库动态创建 IYUU 'site' 字段到本地 'nickname' 的映射
+            try:
+                conn = self.db_manager._get_connection()
+                cursor = self.db_manager._get_cursor(conn)
+                cursor.execute("SELECT site, nickname FROM sites WHERE site IS NOT NULL AND site != '' AND nickname IS NOT NULL AND nickname != ''")
+                # 主要映射：IYUU API 'site' field -> local 'nickname'
+                iyuu_site_to_db_nickname_map = {row['site']: row['nickname'] for row in cursor.fetchall()}
+                cursor.close()
+                conn.close()
+            except Exception as e:
+                logging.error(f"从数据库获取站点映射时出错: {e}", exc_info=True)
+                iyuu_site_to_db_nickname_map = {}
 
-            # 获取数据库中现有的站点信息
+            # 获取数据库中现有的站点信息 (keyed by nickname)
             existing_sites = self._get_existing_sites()
             print(f"数据库中存在 {len(existing_sites)} 个配置站点")
 
@@ -298,7 +296,8 @@ class IYUUThread(Thread):
                     # 获取设置的查询间隔时间（默认为72小时）
                     config = self.config_manager.get()
                     iyuu_settings = config.get("iyuu_settings", {})
-                    query_interval_hours = iyuu_settings.get("query_interval_hours", 72)
+                    query_interval_hours = iyuu_settings.get(
+                        "query_interval_hours", 72)
 
                     if not self._should_query_iyuu(name, query_interval_hours):
                         skip_message = f"[{i+1}/{total_torrents}] 🔄 种子组 '{name}' 距离上次查询不足{query_interval_hours}小时，跳过查询"
@@ -322,8 +321,8 @@ class IYUUThread(Thread):
                 # 如果没有支持的站点，则跳过
                 if not filtered_torrents:
                     log_iyuu_message(
-                        f"[{i+1}/{total_torrents}] ⚠️ 种子组 '{name}' 没有支持的站点，跳过查询", "INFO"
-                    )
+                        f"[{i+1}/{total_torrents}] ⚠️ 种子组 '{name}' 没有支持的站点，跳过查询",
+                        "INFO")
                     # 更新所有同名种子记录的iyuu_last_check时间（包括不支持IYUU的站点）
                     self._update_iyuu_last_check(name, [],
                                                  all_torrents.get(name, []))
@@ -337,8 +336,8 @@ class IYUUThread(Thread):
                     selected_hash = filtered_torrents[attempt]['hash']
                     site_name = filtered_torrents[attempt]['sites']
                     log_iyuu_message(
-                        f"使用的hash [{attempt+1}/{min(max_attempts, len(filtered_torrents))}]: {selected_hash} (站点: {site_name})", "INFO"
-                    )
+                        f"使用的hash [{attempt+1}/{min(max_attempts, len(filtered_torrents))}]: {selected_hash} (站点: {site_name})",
+                        "INFO")
 
                     try:
                         # 执行搜索
@@ -346,16 +345,16 @@ class IYUUThread(Thread):
                                                    sid_sha1)
                         # 如果成功查询到结果，则跳出循环
                         log_iyuu_message(
-                            f"[{i+1}/{total_torrents}] ✅ Hash {selected_hash[:8]}... 查询成功，停止尝试其他hash", "INFO"
-                        )
+                            f"[{i+1}/{total_torrents}] ✅ Hash {selected_hash[:8]}... 查询成功，停止尝试其他hash",
+                            "INFO")
                         break
                     except Exception as e:
                         error_msg = str(e)
                         # 如果是"未查询到可辅种数据"错误，则尝试下一个hash
                         if "未查询到可辅种数据" in error_msg or "400" in error_msg:
                             log_iyuu_message(
-                                f"[{i+1}/{total_torrents}] ⚠️  Hash {selected_hash[:8]}... 未查询到可辅种数据，尝试下一个hash...", "INFO"
-                            )
+                                f"[{i+1}/{total_torrents}] ⚠️  Hash {selected_hash[:8]}... 未查询到可辅种数据，尝试下一个hash...",
+                                "INFO")
                             continue
                         else:
                             # 其他错误则重新抛出
@@ -364,8 +363,8 @@ class IYUUThread(Thread):
                 # 如果所有尝试都失败了
                 if results is None:
                     log_iyuu_message(
-                        f"[{i+1}/{total_torrents}] ❌ 种子组 '{name}' 所有hash都未查询到可辅种数据", "INFO"
-                    )
+                        f"[{i+1}/{total_torrents}] ❌ 种子组 '{name}' 所有hash都未查询到可辅种数据",
+                        "INFO")
                     # 更新所有同名种子记录的iyuu_last_check时间（包括不支持IYUU的站点）
                     self._update_iyuu_last_check(name, [],
                                                  all_torrents.get(name, []))
@@ -393,26 +392,30 @@ class IYUUThread(Thread):
                             "details_page", "details.php?id={}").replace(
                                 "{}", str(item.get("torrent_id")))
                         full_url = f"{scheme}://{site_info.get('base_url', '')}/{details_page}"
-                        
+
                         # 将链接中的 api 替换为 kp（例如：api.m-team.cc -> kp.m-team.cc）
                         full_url = full_url.replace("://api.", "://kp.")
 
-                        # 获取IYUU站点名称
-                        iyuu_site_name = site_info.get(
-                            "nickname") or site_info.get(
-                                "site") or f"SID {sid}"
+                        iyuu_site_field = site_info.get("site")
+                        iyuu_nickname = site_info.get("nickname")
+                        db_site_name = None
 
-                        # 尝试映射到数据库中的站点名称
-                        db_site_name = site_name_mapping.get(
-                            iyuu_site_name, iyuu_site_name)
+                        # 优先使用 'site' 字段进行映射
+                        if iyuu_site_field and iyuu_site_field in iyuu_site_to_db_nickname_map:
+                            db_site_name = iyuu_site_to_db_nickname_map[iyuu_site_field]
+                        # 否则，直接使用 IYUU 的 nickname 作为后备 (假设它可能与 torrents.sites 匹配)
+                        elif iyuu_nickname:
+                            db_site_name = iyuu_nickname
 
-                        # 检查站点是否在torrents表中存在的站点列表中
-                        if db_site_name in configured_sites:
+                        # 检查映射到的站点名称是否在 configured_sites (来自 torrents 表) 中
+                        if db_site_name and db_site_name in configured_sites:
+                            # 获取原始的IYUU站点名称用于日志记录
+                            iyuu_display_name = iyuu_nickname or iyuu_site_field or f"SID {sid}"
                             # 如果站点在数据库中也有配置信息，则使用它
                             site_info_dict = existing_sites.get(
                                 db_site_name, {})
                             matched_sites.append({
-                                'iyuu_name': iyuu_site_name,
+                                'iyuu_name': iyuu_display_name,
                                 'db_name': db_site_name,
                                 'url': full_url,
                                 'site_info': site_info_dict
@@ -421,11 +424,12 @@ class IYUUThread(Thread):
                     # 统计找到的站点
                     if matched_sites:
                         result_stats['total_found'] += len(matched_sites)
-                        result_stats['sites_found'].extend([site['db_name'] for site in matched_sites])
-                        
+                        result_stats['sites_found'].extend(
+                            [site['db_name'] for site in matched_sites])
+
                         log_iyuu_message(
-                            f"[{i+1}/{total_torrents}] 种子 {selected_hash[:8]}... 在 {len(matched_sites)} 个已存在的站点发现！", "INFO"
-                        )
+                            f"[{i+1}/{total_torrents}] 种子 {selected_hash[:8]}... 在 {len(matched_sites)} 个已存在的站点发现！",
+                            "INFO")
                         for site in matched_sites:
                             iyuu_site_name = site['iyuu_name']
                             db_site_name = site['db_name']
@@ -433,29 +437,36 @@ class IYUUThread(Thread):
 
                             if iyuu_site_name != db_site_name:
                                 log_iyuu_message(
-                                    f"✅ 匹配站点: {iyuu_site_name} -> {db_site_name}", "INFO"
-                                )
+                                    f"✅ 匹配站点: {iyuu_site_name} -> {db_site_name}",
+                                    "INFO")
                             else:
-                                log_iyuu_message(f"✅ 匹配站点: {iyuu_site_name}", "INFO")
+                                log_iyuu_message(f"✅ 匹配站点: {iyuu_site_name}",
+                                                 "INFO")
                             log_iyuu_message(f"   链接: {full_url}", "INFO")
                     else:
                         log_iyuu_message(
-                            f"[{i+1}/{total_torrents}] 种子 {selected_hash[:8]}... 未在任何已存在的站点发现。", "INFO"
-                        )
+                            f"[{i+1}/{total_torrents}] 种子 {selected_hash[:8]}... 未在任何已存在的站点发现。",
+                            "INFO")
 
-                    log_iyuu_message(f"在torrents表中找到 {len(matched_sites)} 个已存在的站点", "INFO")
+                    log_iyuu_message(
+                        f"在torrents表中找到 {len(matched_sites)} 个已存在的站点", "INFO")
 
                     # 为缺失站点添加种子记录
                     if matched_sites:
                         torrent_data = {
                             'hash': selected_hash,
                             'name': name,
-                            'save_path': filtered_torrents[0].get('save_path', ''),
+                            'save_path':
+                            filtered_torrents[0].get('save_path', ''),
                             'size': filtered_torrents[0].get('size', 0),
                         }
-                        
+
                         # 统计新增和更新的记录数
-                        new_count, updated_count = self._add_missing_site_torrents(name, torrent_data, matched_sites, return_count=True)
+                        new_count, updated_count = self._add_missing_site_torrents(
+                            name,
+                            torrent_data,
+                            matched_sites,
+                            return_count=True)
                         result_stats['new_records'] += new_count
                         result_stats['updated_records'] += updated_count
 
@@ -465,7 +476,8 @@ class IYUUThread(Thread):
 
                 # 每次查询之间间隔5秒（除了最后一个）
                 if i < len(test_torrents) - 1:
-                    log_iyuu_message(f"[{i+1}/{total_torrents}] 等待5秒后进行下一次查询...", "INFO")
+                    log_iyuu_message(
+                        f"[{i+1}/{total_torrents}] 等待5秒后进行下一次查询...", "INFO")
                     for _ in range(5):  # 每秒检查一次是否需要停止
                         if not self._is_running:
                             return result_stats if return_stats else None
@@ -610,8 +622,11 @@ class IYUUThread(Thread):
             if 'conn' in locals() and conn:
                 conn.close()
 
-    def _add_missing_site_torrents(self, torrent_name, torrent_data,
-                                   matched_sites, return_count=False):
+    def _add_missing_site_torrents(self,
+                                   torrent_name,
+                                   torrent_data,
+                                   matched_sites,
+                                   return_count=False):
         """为缺失站点添加种子记录
         
         Args:
@@ -722,7 +737,7 @@ class IYUUThread(Thread):
 
             conn.commit()
             print(f"成功处理 {len(missing_sites)} 个缺失站点的种子记录")
-            
+
             # 返回统计信息
             if return_count:
                 return len(missing_sites), 0  # 新增记录数，更新记录数（这里只有新增）
@@ -739,7 +754,10 @@ class IYUUThread(Thread):
             if 'conn' in locals() and conn:
                 conn.close()
 
-    def _process_single_torrent(self, torrent_name, torrent_size, force_query=True):
+    def _process_single_torrent(self,
+                                torrent_name,
+                                torrent_size,
+                                force_query=True):
         """处理单个种子的IYUU查询
         
         Args:
@@ -752,11 +770,13 @@ class IYUUThread(Thread):
         """
         from datetime import datetime
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
-        log_iyuu_message(f"[{current_time}] 开始执行单个种子的IYUU查询: {torrent_name} (大小: {torrent_size} 字节)", "INFO")
+
+        log_iyuu_message(
+            f"[{current_time}] 开始执行单个种子的IYUU查询: {torrent_name} (大小: {torrent_size} 字节)",
+            "INFO")
         if force_query:
             log_iyuu_message("强制查询模式：忽略时间间隔限制", "INFO")
-        
+
         # 初始化结果统计
         result_stats = {
             'total_found': 0,
@@ -764,31 +784,31 @@ class IYUUThread(Thread):
             'updated_records': 0,
             'sites_found': []
         }
-        
+
         conn = None
         try:
             conn = self.db_manager._get_connection()
             cursor = self.db_manager._get_cursor(conn)
             ph = self.db_manager.get_placeholder()
-            
+
             # 查询指定名称和大小的种子数据，只筛选体积大于200MB的种子
             cursor.execute(
                 f"SELECT hash, name, sites, size, save_path FROM torrents WHERE name = {ph} AND size = {ph} AND size > 207374182",
-                (torrent_name, torrent_size)
-            )
+                (torrent_name, torrent_size))
             torrents_raw = [dict(row) for row in cursor.fetchall()]
-            
+
             if not torrents_raw:
-                log_iyuu_message(f"未找到种子: {torrent_name} (大小: {torrent_size})", "WARNING")
+                log_iyuu_message(f"未找到种子: {torrent_name} (大小: {torrent_size})",
+                                 "WARNING")
                 return result_stats
-            
+
             # 获取配置的站点列表
             configured_sites = self._get_configured_sites()
-            
+
             # 按种子名称进行聚合
             all_torrents = defaultdict(list)
             agg_torrents = defaultdict(list)
-            
+
             for t in torrents_raw:
                 site = t.get('sites', None)
                 torrent_info = {
@@ -798,28 +818,40 @@ class IYUUThread(Thread):
                     'save_path': t.get('save_path', '')
                 }
                 all_torrents[torrent_name].append(torrent_info)
-                
+
                 # 只有当站点是IYUU支持的站点时才添加到聚合列表中
-                if site and site in configured_sites and site not in ['青蛙', '柠檬不甜']:
+                if site and site in configured_sites and site not in [
+                        '青蛙', '柠檬不甜'
+                ]:
                     agg_torrents[torrent_name].append(torrent_info)
-            
+
             if not agg_torrents:
-                log_iyuu_message(f"种子 '{torrent_name}' 没有支持的站点可用于IYUU查询", "WARNING")
+                log_iyuu_message(f"种子 '{torrent_name}' 没有支持的站点可用于IYUU查询",
+                                 "WARNING")
                 return result_stats
-            
-            log_iyuu_message(f"找到种子 '{torrent_name}'，包含 {len(agg_torrents[torrent_name])} 个支持的站点", "INFO")
-            
+
+            log_iyuu_message(
+                f"找到种子 '{torrent_name}'，包含 {len(agg_torrents[torrent_name])} 个支持的站点",
+                "INFO")
+
             # 获取已配置的站点列表
             log_iyuu_message(f"数据库中存在 {len(configured_sites)} 个配置站点", "INFO")
-            
+
             # 执行IYUU搜索逻辑，传入force_query参数和结果统计
-            result_stats = self._perform_iyuu_search(agg_torrents, configured_sites, all_torrents, force_query=force_query, return_stats=True)
-            
-            log_iyuu_message(f"=== 种子 '{torrent_name}' 的IYUU查询任务执行完成 ===", "INFO")
-            log_iyuu_message(f"查询结果统计: 找到 {result_stats['total_found']} 条记录，新增 {result_stats['new_records']} 条，更新 {result_stats['updated_records']} 条", "INFO")
-            
+            result_stats = self._perform_iyuu_search(agg_torrents,
+                                                     configured_sites,
+                                                     all_torrents,
+                                                     force_query=force_query,
+                                                     return_stats=True)
+
+            log_iyuu_message(f"=== 种子 '{torrent_name}' 的IYUU查询任务执行完成 ===",
+                             "INFO")
+            log_iyuu_message(
+                f"查询结果统计: 找到 {result_stats['total_found']} 条记录，新增 {result_stats['new_records']} 条，更新 {result_stats['updated_records']} 条",
+                "INFO")
+
             return result_stats
-            
+
         except Exception as e:
             logging.error(f"处理单个种子数据时出错: {e}", exc_info=True)
             log_iyuu_message(f"处理种子时出错: {str(e)}", "ERROR")
@@ -848,9 +880,9 @@ _rate_limit_delay = 5.0  # 请求间隔时间（秒）
 # --- IYUU 缓存管理类 ---
 class IYUUSiteCache:
     """IYUU站点数据缓存管理类"""
-    
+
     CACHE_EXPIRY_DAYS = 7  # 缓存过期时间（天）
-    
+
     def __init__(self, cache_dir):
         """初始化缓存管理器
         
@@ -860,7 +892,7 @@ class IYUUSiteCache:
         self.cache_dir = cache_dir
         self.cache_file = os.path.join(cache_dir, "iyuu_site_cache.json")
         os.makedirs(cache_dir, exist_ok=True)
-    
+
     def _is_cache_valid(self, cache_data):
         """检查缓存是否有效（未过期）
         
@@ -872,16 +904,16 @@ class IYUUSiteCache:
         """
         if not cache_data or "timestamp" not in cache_data:
             return False
-        
+
         try:
             cache_time = datetime.fromisoformat(cache_data["timestamp"])
             current_time = datetime.now()
             time_diff = current_time - cache_time
-            
+
             return time_diff < timedelta(days=self.CACHE_EXPIRY_DAYS)
         except (ValueError, TypeError):
             return False
-    
+
     def _sites_list_changed(self, cached_sites, current_sites):
         """检查站点列表是否发生变化
         
@@ -894,9 +926,9 @@ class IYUUSiteCache:
         """
         cached_set = set(cached_sites) if cached_sites else set()
         current_set = set(current_sites) if current_sites else set()
-        
+
         return cached_set != current_set
-    
+
     def load_cache(self, current_sites_list):
         """加载缓存数据
         
@@ -912,35 +944,36 @@ class IYUUSiteCache:
             if not os.path.exists(self.cache_file):
                 log_iyuu_message("未找到IYUU缓存文件，需要重新获取", "INFO")
                 return None, None, True
-            
+
             with open(self.cache_file, 'r', encoding='utf-8') as f:
                 cache_data = json.load(f)
-            
+
             # 检查缓存是否过期
             if not self._is_cache_valid(cache_data):
                 log_iyuu_message("IYUU缓存已过期（超过7天），需要重新获取", "INFO")
                 return None, None, True
-            
+
             # 检查站点列表是否变化
             cached_sites_list = cache_data.get("sites_list", [])
             if self._sites_list_changed(cached_sites_list, current_sites_list):
                 log_iyuu_message("站点列表发生变化，需要重新获取sid_sha1", "INFO")
                 return None, None, True
-            
+
             # 缓存有效，返回缓存的数据
             sid_sha1 = cache_data.get("sid_sha1")
             supported_sites = cache_data.get("supported_sites", [])
-            
-            log_iyuu_message(f"使用IYUU缓存数据（缓存时间: {cache_data.get('timestamp')}）", "INFO")
+
+            log_iyuu_message(
+                f"使用IYUU缓存数据（缓存时间: {cache_data.get('timestamp')}）", "INFO")
             log_iyuu_message(f"缓存的sid_sha1: {sid_sha1}", "INFO")
             log_iyuu_message(f"缓存的支持站点数量: {len(supported_sites)}", "INFO")
-            
+
             return sid_sha1, supported_sites, False
-            
+
         except Exception as e:
             logging.error(f"加载IYUU缓存时出错: {e}", exc_info=True)
             return None, None, True
-    
+
     def save_cache(self, sid_sha1, supported_sites, sites_list):
         """保存缓存数据
         
@@ -956,13 +989,13 @@ class IYUUSiteCache:
                 "supported_sites": supported_sites,
                 "sites_list": sites_list
             }
-            
+
             with open(self.cache_file, 'w', encoding='utf-8') as f:
                 json.dump(cache_data, f, ensure_ascii=False, indent=2)
-            
+
             log_iyuu_message(f"IYUU缓存已保存到: {self.cache_file}", "INFO")
             log_iyuu_message(f"缓存包含 {len(supported_sites)} 个支持的站点", "INFO")
-            
+
         except Exception as e:
             logging.error(f"保存IYUU缓存时出错: {e}", exc_info=True)
 
@@ -975,7 +1008,11 @@ def get_sha1_hex(text: str) -> str:
     return hashlib.sha1(text.encode('utf-8')).hexdigest()
 
 
-def make_api_request(method: str, url: str, token: str, max_retries: int = 3, **kwargs) -> dict:
+def make_api_request(method: str,
+                     url: str,
+                     token: str,
+                     max_retries: int = 3,
+                     **kwargs) -> dict:
     """
     封装 API 请求，统一处理 headers 和错误，支持重试机制。
     
@@ -1030,7 +1067,8 @@ def make_api_request(method: str, url: str, token: str, max_retries: int = 3, **
             data = response.json()
             if data.get("code") != 0:
                 error_msg = data.get("msg", "未知 API 错误")
-                raise Exception(f"API 错误: {error_msg} (代码: {data.get('code')})")
+                raise Exception(
+                    f"API 错误: {error_msg} (代码: {data.get('code')})")
 
             return data
 
@@ -1038,7 +1076,9 @@ def make_api_request(method: str, url: str, token: str, max_retries: int = 3, **
             error_msg = f"网络请求失败: {e}"
             if attempt < max_retries - 1:
                 wait_time = 5 * (attempt + 1)  # 递增等待时间：5秒、10秒、15秒
-                log_iyuu_message(f"请求失败 (尝试 {attempt + 1}/{max_retries}): {error_msg}", "WARNING")
+                log_iyuu_message(
+                    f"请求失败 (尝试 {attempt + 1}/{max_retries}): {error_msg}",
+                    "WARNING")
                 log_iyuu_message(f"等待 {wait_time} 秒后重试...", "INFO")
                 time.sleep(wait_time)
             else:
@@ -1047,7 +1087,9 @@ def make_api_request(method: str, url: str, token: str, max_retries: int = 3, **
             error_msg = f"无法解析服务器返回的 JSON 数据: {e}"
             if attempt < max_retries - 1:
                 wait_time = 5 * (attempt + 1)
-                log_iyuu_message(f"JSON解析失败 (尝试 {attempt + 1}/{max_retries}): {error_msg}", "WARNING")
+                log_iyuu_message(
+                    f"JSON解析失败 (尝试 {attempt + 1}/{max_retries}): {error_msg}",
+                    "WARNING")
                 log_iyuu_message(f"等待 {wait_time} 秒后重试...", "INFO")
                 time.sleep(wait_time)
             else:
@@ -1060,7 +1102,9 @@ def make_api_request(method: str, url: str, token: str, max_retries: int = 3, **
             # 对于其他错误，进行重试
             if attempt < max_retries - 1:
                 wait_time = 5 * (attempt + 1)
-                log_iyuu_message(f"请求失败 (尝试 {attempt + 1}/{max_retries}): {error_msg}", "WARNING")
+                log_iyuu_message(
+                    f"请求失败 (尝试 {attempt + 1}/{max_retries}): {error_msg}",
+                    "WARNING")
                 log_iyuu_message(f"等待 {wait_time} 秒后重试...", "INFO")
                 time.sleep(wait_time)
             else:
@@ -1118,11 +1162,11 @@ def get_sid_sha1(token: str, all_sites: list) -> str:
 def get_filtered_sid_sha1_and_sites(token: str, db_manager) -> tuple:
     """获取过滤后的sid_sha1和站点列表，只包含在torrents表中存在的站点"""
     print("=== 开始获取过滤后的sid_sha1和站点列表 ===")
-    
+
     # 初始化缓存管理器
     from config import DATA_DIR
     cache = IYUUSiteCache(DATA_DIR)
-    
+
     # 1. 获取torrents表中存在的站点列表
     try:
         conn = db_manager._get_connection()
@@ -1157,14 +1201,15 @@ def get_filtered_sid_sha1_and_sites(token: str, db_manager) -> tuple:
     except Exception as e:
         logging.error(f"获取torrents表中的站点信息时出错: {e}", exc_info=True)
         raise
-    
+
     # 2. 尝试从缓存加载数据
-    cached_sid_sha1, cached_sites, needs_update = cache.load_cache(torrent_sites_list)
-    
+    cached_sid_sha1, cached_sites, needs_update = cache.load_cache(
+        torrent_sites_list)
+
     if not needs_update:
         # 缓存有效，直接返回缓存的数据
         return cached_sid_sha1, cached_sites
-    
+
     # 3. 缓存无效或需要更新，重新获取IYUU支持的所有可辅种站点
     try:
         supported_sites = get_supported_sites(token)
@@ -1177,64 +1222,52 @@ def get_filtered_sid_sha1_and_sites(token: str, db_manager) -> tuple:
     print("等待额外延迟以避免请求频率过快...")
     time.sleep(2)
 
-    # 4. 使用site_name_mapping映射替换nickname
-    site_name_mapping = {
-        # IYUU名称 -> 数据库昵称
-        "优堡": "我堡",
-        "观众": "人人",
-        "柠檬": "柠檬不酸",
-        "hdclone": "HDClone",
-        "我的PT(CC)": "我的PT",
-        "LongPT": "龙PT",
-        "March": "三月传媒",
-        "hdbao": "红豆包",
-        "LuckPT": "幸运",
-        "13city": "13City",
-        "PTSKit": "PTSkit",
-        "时光": "时光HDT",
-        "春天": "不可说",
-    }
+    # 4. 从数据库获取 site -> nickname 映射
+    try:
+        conn = db_manager._get_connection()
+        cursor = db_manager._get_cursor(conn)
+        cursor.execute("SELECT site, nickname FROM sites WHERE site IS NOT NULL AND site != '' AND nickname IS NOT NULL AND nickname != ''")
+        db_site_to_nickname_map = {row['site']: row['nickname'] for row in cursor.fetchall()}
+        cursor.close()
+        conn.close()
+    except Exception as e:
+        logging.error(f"从数据库获取站点映射时出错: {e}", exc_info=True)
+        db_site_to_nickname_map = {}
 
-    # 创建反向映射 (数据库昵称 -> IYUU名称)
-    reverse_mapping = {v: k for k, v in site_name_mapping.items()}
-
-    # 4. 过滤出IYUU支持且在torrents表中存在的站点
+    # 5. 过滤出IYUU支持且在torrents表中存在的站点
     filtered_site_ids = []
-    site_id_mapping = {}  # 用于存储站点ID映射
-    filtered_sites = []  # 用于存储过滤后的站点信息
+    filtered_sites = []
+    
+    # 使用集合以优化查找性能
+    processed_site_ids = set()
 
     for site in supported_sites:
-        iyuu_nickname = site.get('nickname')
         iyuu_id = site.get('id')
-
-        if not iyuu_nickname or not iyuu_id:
+        if not iyuu_id or iyuu_id in processed_site_ids:
             continue
 
-        # 检查站点是否在torrents表中存在
-        # 先检查原始名称
-        if iyuu_nickname in torrent_sites_list:
-            filtered_site_ids.append(iyuu_id)
-            site_id_mapping[iyuu_nickname] = iyuu_id
-            filtered_sites.append(site)
-            continue
-
-        # 再检查映射后的名称
-        if iyuu_nickname in site_name_mapping:
-            db_nickname = site_name_mapping[iyuu_nickname]
-            if db_nickname in torrent_sites_list:
+        # 根据用户反馈：IYUU API的'site'字段与数据库'sites'表的'site'列相同
+        iyuu_site_field = site.get('site')
+        
+        if iyuu_site_field and iyuu_site_field in db_site_to_nickname_map:
+            # 根据 'sites.site' -> 'sites.nickname' 的映射关系，找到对应的本地昵称
+            db_nickname = db_site_to_nickname_map[iyuu_site_field]
+            
+            # 根据用户反馈：'torrents.sites'列的内容与'sites.nickname'列相同
+            # 所以检查这个昵称是否在 torrents 表中存在
+            if db_nickname in torrent_sites:
                 filtered_site_ids.append(iyuu_id)
-                site_id_mapping[db_nickname] = iyuu_id
                 filtered_sites.append(site)
+                processed_site_ids.add(iyuu_id)
                 continue
-
-        # 检查反向映射 (数据库中的名称是否需要映射到IYUU)
-        for db_site in torrent_sites_list:
-            if db_site in reverse_mapping and reverse_mapping[
-                    db_site] == iyuu_nickname:
-                filtered_site_ids.append(iyuu_id)
-                site_id_mapping[db_site] = iyuu_id
-                filtered_sites.append(site)
-                break
+        
+        # 作为后备方案，如果上述逻辑不匹配，直接用IYUU的nickname匹配torrents表中的sites字段
+        # (因为torrents.sites 就是 nickname)
+        iyuu_nickname = site.get('nickname')
+        if iyuu_nickname and iyuu_nickname in torrent_sites:
+            filtered_site_ids.append(iyuu_id)
+            filtered_sites.append(site)
+            processed_site_ids.add(iyuu_id)
 
     print(f"过滤后得到 {len(filtered_site_ids)} 个支持的站点ID")
     print(f"站点ID列表: {filtered_site_ids}")
@@ -1262,17 +1295,20 @@ def get_filtered_sid_sha1_and_sites(token: str, db_manager) -> tuple:
         if not sid_sha1:
             raise Exception("未能从 API 获取 sid_sha1。")
         print(f"成功生成过滤后的 sid_sha1: {sid_sha1}")
-        
+
         # 6. 保存缓存
         cache.save_cache(sid_sha1, filtered_sites, torrent_sites_list)
-        
+
         return sid_sha1, filtered_sites
     except Exception as e:
         logging.error(f"生成sid_sha1时出错: {e}")
         raise
 
 
-def query_cross_seed(token: str, infohash: str, sid_sha1: str, max_retries: int = 3) -> list:
+def query_cross_seed(token: str,
+                     infohash: str,
+                     sid_sha1: str,
+                     max_retries: int = 3) -> list:
     """查询指定 infohash 的辅种信息，支持重试机制
     
     Args:
@@ -1312,27 +1348,29 @@ def query_cross_seed(token: str, infohash: str, sid_sha1: str, max_retries: int 
 
             results = data[infohash.lower()].get("torrent", [])
             return results
-            
+
         except Exception as e:
             error_msg = str(e)
             # 如果是"未查询到可辅种数据"错误，不进行重试，直接返回空列表
             if "未查询到可辅种数据" in error_msg or "400" in error_msg:
                 return []
-            
+
             # 对于API错误（如token无效等），不进行重试，直接抛出
             if "API 错误" in error_msg or "Token" in error_msg:
                 raise e
-            
+
             # 对于其他错误，进行重试
             if attempt < max_retries - 1:
                 wait_time = 5 * (attempt + 1)  # 递增等待时间：5秒、10秒、15秒
-                log_iyuu_message(f"查询辅种信息失败 (尝试 {attempt + 1}/{max_retries}): {error_msg}", "WARNING")
+                log_iyuu_message(
+                    f"查询辅种信息失败 (尝试 {attempt + 1}/{max_retries}): {error_msg}",
+                    "WARNING")
                 log_iyuu_message(f"等待 {wait_time} 秒后重试...", "INFO")
                 time.sleep(wait_time)
             else:
                 log_iyuu_message(f"查询辅种信息失败，已达到最大重试次数: {error_msg}", "ERROR")
                 raise e
-    
+
     return []  # 理论上不会执行到这里，但为了安全起见
 
 
@@ -1346,11 +1384,7 @@ iyuu_logs = []
 def log_iyuu_message(message, level="INFO"):
     """记录IYUU日志消息"""
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    log_entry = {
-        "timestamp": timestamp,
-        "level": level,
-        "message": message
-    }
+    log_entry = {"timestamp": timestamp, "level": level, "message": message}
     iyuu_logs.append(log_entry)
 
     # 限制日志数量，只保留最近100条

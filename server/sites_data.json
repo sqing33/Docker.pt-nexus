@@ -106,7 +106,7 @@
     "special_tracker_domain": null,
     "group": "-WiKi,-TTG,-NGB",
     "description": "TTG",
-    "migration": 1,
+    "migration": 0,
     "speed_limit": 10
   },
   {
@@ -479,8 +479,8 @@
     "special_tracker_domain": null,
     "group": "-ZWEX",
     "description": "ZHUQUE",
-    "migration": 2,
-    "speed_limit": 10
+    "migration": 0,
+    "speed_limit": 25
   },
   {
     "site": "zmpt",

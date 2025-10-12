@@ -752,40 +752,6 @@ class TorrentMigrator:
                 content.append(self._html_to_bbcode(child))
         return "".join(content)
 
-    def search_and_get_torrent_id(self, torrent_name):
-        search_url = f"{self.SOURCE_BASE_URL}/torrents.php"
-        search_torrent_name = re.sub(r'(?<!\d)\.|\.(?!\d\b)', ' ',
-                                     torrent_name)
-        params = {
-            "incldead": "1",
-            "search": search_torrent_name,
-            "search_area": "0",
-            "search_mode": "2"
-        }
-        self.logger.info(f"正在源站 '{self.SOURCE_NAME}' 搜索种子: '{torrent_name}'")
-        try:
-            response = self.scraper.get(search_url,
-                                        headers={"Cookie": self.SOURCE_COOKIE},
-                                        params=params,
-                                        timeout=120)
-            response.raise_for_status()
-            response.encoding = "utf-8"
-            self.logger.success("搜索请求成功！")
-            soup = BeautifulSoup(response.text, "html.parser")
-            link = soup.find("a", title=torrent_name) or soup.select_one(
-                'table.torrentname a[href*="details.php?id="]')
-            if (isinstance(link, Tag) and (href := link.get("href"))
-                    and isinstance(href, str)
-                    and (match := re.search(r"id=(\d+)", href))):
-                torrent_id = match.group(1)
-                self.logger.success(f"成功找到种子ID: {torrent_id}")
-                return torrent_id
-            self.logger.warning("未在搜索结果中找到完全匹配的种子。")
-            return None
-        except Exception as e:
-            self.logger.opt(exception=True).error(f"搜索过程中发生错误: {e}")
-            return None
-
     def _extract_data_by_site_type(self, soup, torrent_id):
         """
         根据站点类型选择对应的提取器提取数据
@@ -828,7 +794,7 @@ class TorrentMigrator:
         """重构后的方法：获取、解析信息，并输出标准化参数。"""
         try:
             self.logger.info(f"--- [步骤1] 开始获取种子信息 (源: {self.SOURCE_NAME}) ---")
-            print(f"开始prepare_review_data处理，源站点: {self.SOURCE_NAME}")
+            print(f"开始获取种子信息，源站点: {self.SOURCE_NAME}")
 
             # 发送日志：开始获取种子信息
             if self.task_id:
@@ -836,8 +802,7 @@ class TorrentMigrator:
                                       f"开始从 {self.SOURCE_NAME} 获取种子详情...",
                                       "processing")
 
-            torrent_id = (self.search_term if self.search_term.isdigit() else
-                          self.search_and_get_torrent_id(self.search_term))
+            torrent_id = (self.search_term)
             if not torrent_id:
                 if self.task_id:
                     log_streamer.emit_log(self.task_id, "获取种子信息", "未能获取到种子ID",
@@ -1284,18 +1249,22 @@ class TorrentMigrator:
                 if tags_from_mediainfo:
                     # 将从 MediaInfo 提取的标签与源站点的标签合并（去重）
                     existing_tags = source_params.get("标签", [])
-                    
+
                     # [修复] 统一标签格式：移除 tag. 前缀以确保去重正常工作
                     # MediaInfo 提取的标签格式为 'tag.中字'，网页提取的为 '中字'
                     normalized_mediainfo_tags = [
-                        tag.replace('tag.', '') if tag.startswith('tag.') else tag
+                        tag.replace('tag.', '')
+                        if tag.startswith('tag.') else tag
                         for tag in tags_from_mediainfo
                     ]
-                    
+
                     # 合并标签并去重，保持顺序
-                    merged_tags = list(dict.fromkeys(existing_tags + normalized_mediainfo_tags))
+                    merged_tags = list(
+                        dict.fromkeys(existing_tags +
+                                      normalized_mediainfo_tags))
                     source_params["标签"] = merged_tags
-                    self.logger.info(f"从 MediaInfo 提取到标签: {tags_from_mediainfo}")
+                    self.logger.info(
+                        f"从 MediaInfo 提取到标签: {tags_from_mediainfo}")
                     self.logger.info(f"标准化后的标签: {normalized_mediainfo_tags}")
                     self.logger.info(f"合并后的标签: {merged_tags}")
                 else:
@@ -1309,7 +1278,8 @@ class TorrentMigrator:
                 # 将从标题提取的标签与现有标签合并（去重）
                 existing_tags = source_params.get("标签", [])
                 # 合并标签并去重，保持顺序
-                merged_tags = list(dict.fromkeys(existing_tags + tags_from_title))
+                merged_tags = list(
+                    dict.fromkeys(existing_tags + tags_from_title))
                 source_params["标签"] = merged_tags
                 self.logger.info(f"从标题参数提取到标签: {tags_from_title}")
                 self.logger.info(f"合并后的标签: {merged_tags}")
@@ -1319,7 +1289,7 @@ class TorrentMigrator:
             # [新增] 检查电视剧/动漫是否完结
             self.logger.info("开始检查电视剧/动漫完结状态...")
             full_description_for_completion = f"{intro.get('statement', '')}\n{intro.get('body', '')}"
-            
+
             completion_status = check_completion_status(
                 title=original_main_title,
                 subtitle=subtitle,
@@ -1328,18 +1298,17 @@ class TorrentMigrator:
                 downloader_id=self.downloader_id,
                 torrent_name=processed_torrent_name  # 传入处理后的种子名称
             )
-            
+
             if completion_status.get("is_complete"):
-                self.logger.info(
-                    f"✓ 检测到完结状态: {completion_status['reason']} "
-                    f"(置信度: {completion_status['confidence']})"
-                )
-                
+                self.logger.info(f"✓ 检测到完结状态: {completion_status['reason']} "
+                                 f"(置信度: {completion_status['confidence']})")
+
                 # 添加完结标签
                 existing_tags = source_params.get("标签", [])
-                updated_tags = add_completion_tag_if_needed(existing_tags, completion_status)
+                updated_tags = add_completion_tag_if_needed(
+                    existing_tags, completion_status)
                 source_params["标签"] = updated_tags
-                
+
                 # 记录详细信息
                 if completion_status.get("details"):
                     details = completion_status["details"]
@@ -1347,8 +1316,7 @@ class TorrentMigrator:
                         ep_check = details["episode_check"]
                         self.logger.info(
                             f"  集数信息: 简介总集数={ep_check.get('total_episodes')}, "
-                            f"本地集数={ep_check.get('local_episodes')}"
-                        )
+                            f"本地集数={ep_check.get('local_episodes')}")
             else:
                 self.logger.info(f"未检测到完结标识: {completion_status['reason']}")
 
@@ -1545,11 +1513,10 @@ class TorrentMigrator:
                         # [修复] 优先使用已提取的statement内容，如果为空才使用原始BBCode
                         # 这样可以正确处理SSD等特殊站点
                         original_statement = intro.get("statement", "")
-                        detection_content = original_statement if original_statement.strip() else full_bbcode_descr_for_check
-                        
-                        print(
-                            f"[调试] 用于检测的内容长度: {len(detection_content)} 字符"
-                        )
+                        detection_content = original_statement if original_statement.strip(
+                        ) else full_bbcode_descr_for_check
+
+                        print(f"[调试] 用于检测的内容长度: {len(detection_content)} 字符")
                         print(
                             f"[调试] 用于检测的内容前100字符: {detection_content[:100] if detection_content else '(空)'}"
                         )

@@ -364,14 +364,15 @@ def _get_smart_screenshot_points(video_path: str,
     return sorted(screenshot_points)
 
 
-def _find_target_video_file(path: str) -> str | None:
+def _find_target_video_file(path: str) -> tuple[str | None, bool]:
     """
-    根据路径智能查找目标视频文件。
+    根据路径智能查找目标视频文件，并检测是否为原盘文件。
     - 如果是电影目录，返回最大的视频文件。
     - 如果是剧集目录，返回按名称排序的第一个视频文件。
+    - 检测是否为原盘文件（检查 BDMV/CERTIFICATE 目录）
 
     :param path: 要搜索的目录或文件路径。
-    :return: 目标视频文件的完整路径，如果找不到则返回 None。
+    :return: 元组 (目标视频文件的完整路径, 是否为原盘文件)
     """
     print(f"开始在路径 '{path}' 中查找目标视频文件...")
     VIDEO_EXTENSIONS = {
@@ -380,17 +381,32 @@ def _find_target_video_file(path: str) -> str | None:
 
     if not os.path.exists(path):
         print(f"错误：提供的路径不存在: {path}")
-        return None
+        return None, False
 
     # 如果提供的路径本身就是一个视频文件，直接返回
     if os.path.isfile(path) and os.path.splitext(
             path)[1].lower() in VIDEO_EXTENSIONS:
         print(f"路径直接指向一个视频文件，将使用: {path}")
-        return path
+        return path, False
 
     if not os.path.isdir(path):
         print(f"错误：路径不是一个有效的目录或视频文件: {path}")
-        return None
+        return None, False
+
+    # 检查是否为原盘文件（检查 BDMV/CERTIFICATE 目录）
+    is_bluray_disc = False
+    bdmv_path = os.path.join(path, "BDMV")
+    certificate_path = os.path.join(path, "CERTIFICATE")
+
+    if os.path.exists(bdmv_path) and os.path.isdir(bdmv_path):
+        print(f"检测到 BDMV 目录: {bdmv_path}")
+        if certificate_path and os.path.exists(
+                certificate_path) and os.path.isdir(certificate_path):
+            print(f"检测到 CERTIFICATE 目录: {certificate_path}")
+            is_bluray_disc = True
+            print("确认：检测到原盘文件结构 (BDMV/CERTIFICATE)")
+        else:
+            print("警告：检测到 BDMV 目录但未找到 CERTIFICATE 目录，可能不是标准原盘")
 
     video_files = []
     for root, _, files in os.walk(path):
@@ -400,7 +416,7 @@ def _find_target_video_file(path: str) -> str | None:
 
     if not video_files:
         print(f"在目录 '{path}' 中未找到任何视频文件。")
-        return None
+        return None, is_bluray_disc
 
     # --- 智能判断是剧集还是电影 ---
     # 匹配 S01E01, s01e01, season 1 episode 1 等格式
@@ -415,7 +431,7 @@ def _find_target_video_file(path: str) -> str | None:
         video_files.sort()
         target_file = video_files[0]
         print(f"已选择剧集文件: {target_file}")
-        return target_file
+        return target_file, is_bluray_disc
     else:
         print("未检测到剧集格式，将按电影处理（选择最大文件）。")
         largest_file = ""
@@ -432,10 +448,10 @@ def _find_target_video_file(path: str) -> str | None:
 
         if largest_file:
             print(f"已选择最大文件 ({(max_size / 1024**3):.2f} GB): {largest_file}")
-            return largest_file
+            return largest_file, is_bluray_disc
         else:
             print("无法确定最大的文件。")
-            return None
+            return None, is_bluray_disc
 
 
 # --- [修改] 主函数，整合了新的文件查找逻辑 ---
@@ -568,11 +584,16 @@ def upload_data_mediaInfo(mediaInfo: str,
         print(f"已提供 content_name，将在精确路径中搜索: '{path_to_search}'")
 
     # 使用新构建的路径来查找视频文件
-    target_video_file = _find_target_video_file(path_to_search)
+    target_video_file, is_bluray_disc = _find_target_video_file(path_to_search)
 
     if not target_video_file:
         print("未能在指定路径中找到合适的视频文件，提取失败。")
         return mediaInfo
+
+    # 检查是否为原盘文件
+    if is_bluray_disc:
+        print("检测到原盘文件结构 (BDMV/CERTIFICATE)，返回指定消息")
+        return "bdinfo提取暂未实现，请手动获取。"
 
     try:
         print(f"准备使用 MediaInfo 工具从 '{target_video_file}' 提取...")
@@ -1071,10 +1092,15 @@ def upload_data_screenshot(source_info,
             return ""
 
     # --- 本地截图逻辑 ---
-    target_video_file = _find_target_video_file(full_video_path)
+    target_video_file, is_bluray_disc = _find_target_video_file(
+        full_video_path)
     if not target_video_file:
         print("错误：在指定路径中未找到视频文件。")
         return ""
+
+    # 对于原盘文件，仍然进行截图处理（保持原有逻辑）
+    if is_bluray_disc:
+        print("检测到原盘文件结构，但仍将进行截图处理")
 
     if not shutil.which("mpv"):
         print("错误：找不到 mpv。请确保它已安装并已添加到系统环境变量 PATH 中。")
@@ -1664,11 +1690,9 @@ def add_torrent_to_downloader(detail_page_url: str, save_path: str,
                     # 转换为 KBps: MB/s * 1024 = KBps
                     speed_limit_kbps = int(site_info['speed_limit']) * 1024
                     try:
-                        client.change_torrent(
-                            result.id,
-                            upload_limit=speed_limit_kbps,
-                            upload_limited=True
-                        )
+                        client.change_torrent(result.id,
+                                              upload_limit=speed_limit_kbps,
+                                              upload_limited=True)
                         logging.info(
                             f"为站点 '{site_info['nickname']}' 设置上传速度限制: {site_info['speed_limit']} MB/s ({speed_limit_kbps} KBps)"
                         )
@@ -2142,8 +2166,6 @@ def _upload_to_pixhost_direct(image_path: str, api_url: str, params: dict,
         error_type = type(e).__name__
         print(f"   ❌ 直接上传失败: {error_type}")
         return None
-
-
 
 
 def _get_downloader_proxy_config(downloader_id: str = None):

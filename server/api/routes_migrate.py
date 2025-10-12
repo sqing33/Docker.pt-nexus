@@ -1936,50 +1936,6 @@ def clear_downloader_queue_completed():
         }), 500
 
 
-@migrate_bp.route("/migrate/search_torrent_id", methods=["POST"])
-def search_torrent_id():
-    """通过种子名称搜索获取种子ID"""
-    db_manager = migrate_bp.db_manager
-    data = request.json
-    source_site_name = data.get("sourceSite")
-    torrent_name = data.get("torrentName")
-
-    if not source_site_name or not torrent_name:
-        return jsonify({"success": False, "message": "源站点和种子名称不能为空"}), 400
-
-    try:
-        # 获取源站点信息
-        source_info = db_manager.get_site_by_nickname(source_site_name)
-        if not source_info or not source_info.get("cookie"):
-            return jsonify({
-                "success": False,
-                "message": f"源站点 '{source_site_name}' 配置不完整"
-            }), 404
-
-        # 使用TorrentMigrator的搜索功能
-        migrator = TorrentMigrator(source_site_info=source_info,
-                                   target_site_info=None,
-                                   search_term=torrent_name,
-                                   config_manager=config_manager,
-                                   db_manager=db_manager)
-
-        # 调用搜索方法获取种子ID
-        torrent_id = migrator.search_and_get_torrent_id(torrent_name)
-
-        if torrent_id:
-            return jsonify({
-                "success": True,
-                "torrent_id": torrent_id,
-                "message": "搜索成功"
-            })
-        else:
-            return jsonify({"success": False, "message": "未找到匹配的种子"}), 404
-
-    except Exception as e:
-        logging.error(f"search_torrent_id 发生意外错误: {e}", exc_info=True)
-        return jsonify({"success": False, "message": f"服务器内部错误: {e}"}), 500
-
-
 @migrate_bp.route("/migrate/update_preview_data", methods=["POST"])
 def update_preview_data():
     """更新预览数据"""

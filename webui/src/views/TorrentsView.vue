@@ -25,7 +25,7 @@
                   </el-tag>
                 </div>
                 <!-- 对于有链接的站点，使用链接 -->
-                <a v-else-if="hasLink(props.row.sites[siteName], siteName)"
+                <a v-else-if="props.row.sites[siteName] && hasLink(props.row.sites[siteName], siteName)"
                   :href="getLink(props.row.sites[siteName], siteName)!" target="_blank" style="text-decoration: none">
                   <el-tag effect="dark" :type="getTagType(props.row.sites[siteName])" style="text-align: center">
                     {{ siteName }}
@@ -267,11 +267,11 @@
           </div>
           <p>站点名称: {{ selectedSite?.name }}</p>
           <p>当前状态: {{ selectedSite?.data.state }}</p>
-          <div v-if="hasLink(selectedSite?.data, selectedSite?.name)" class="site-operation-link">
+          <div v-if="selectedSite && selectedSite.data && hasLink(selectedSite.data, selectedSite.name)" class="site-operation-link">
             <p class="label">详情页链接:</p>
-            <el-link :href="getLink(selectedSite?.data, selectedSite?.name)" target="_blank" type="primary"
+            <el-link :href="getLink(selectedSite.data, selectedSite.name)!" target="_blank" type="primary"
               :underline="false">
-              {{ getLink(selectedSite?.data, selectedSite?.name) }}
+              {{ getLink(selectedSite.data, selectedSite.name) }}
             </el-link>
           </div>
           <div class="site-operation-buttons">
@@ -301,7 +301,9 @@
             <el-tag v-for="site in allSourceSitesStatus" :key="site.name"
               :type="getSiteTagType(site, isSourceSiteSelectable(site.name))"
               :class="{ 'is-selectable': isSourceSiteSelectable(site.name) }" class="site-tag"
-              @click="isSourceSiteSelectable(site.name) && confirmSourceSiteAndProceed(getSiteDetails(site.name))">
+              @click="isSourceSiteSelectable(site.name) && confirmSourceSiteAndProceed(getSiteDetails(site.name))"
+              v-loading="sourceSiteQueryLoading[site.name]" element-loading-spinner="el-icon-loading"
+              element-loading-background="rgba(0, 0, 0, 0.5)">
               {{ site.name }}
             </el-tag>
           </div>
@@ -355,6 +357,7 @@ interface Torrent {
 }
 interface SiteStatus {
   name: string;
+  site: string; // IYUU中的站点标识符，例如 'tjupt'
   has_cookie: boolean;
   is_source: boolean;
   is_target: boolean;
@@ -451,6 +454,9 @@ const selectedSourceSite = computed(() => crossSeedStore.sourceInfo?.name || '')
 const siteOperationDialogVisible = ref<boolean>(false);
 const selectedTorrentName = ref<string>('');
 const selectedSite = ref<OtherSite | null>(null);
+
+// 用于跟踪在源站点选择弹窗中进行IYUU查询的站点
+const sourceSiteQueryLoading = ref<Record<string, boolean>>({});
 
 const sorted_all_sites = computed(() => {
   const collator = new Intl.Collator('zh-CN', { numeric: true })
@@ -724,64 +730,56 @@ const startCrossSeed = (row: Torrent) => {
 
 const confirmSourceSiteAndProceed = async (sourceSite: any) => {
   const row = selectedTorrentForMigration.value;
-  if (!row) {
-    ElMessage.error('发生内部错误：未找到选中的种子信息。');
-    sourceSelectionDialogVisible.value = false;
+  if (!row || !sourceSite) {
+    ElMessage.error('发生内部错误：未找到选中的种子或站点信息。');
     return;
   }
 
   const siteDetails = row.sites[sourceSite.siteName];
-  let torrentId = null;
+  const siteName = sourceSite.siteName;
 
+  // 1. 检查站点是否有有效链接
+  if (!hasLink(siteDetails, siteName)) {
+    // 2. 如果没有链接，触发IYUU查询
+    ElMessage.info(`站点 [${siteName}] 缺少详情链接，正在触发 IYUU 查询...`);
+    sourceSiteQueryLoading.value[siteName] = true;
+    // 调用全局的IYUU查询函数
+    await triggerIYUUQuery();
+    // 查询完成后，无论成功与否，都结束加载状态
+    sourceSiteQueryLoading.value[siteName] = false;
+    // 停止执行，让用户在弹窗刷新后再次点击
+    return;
+  }
+
+  // 3. 如果有链接，执行原有的获取ID和转种的逻辑
+  let torrentId = null;
   const idMatch = siteDetails?.comment?.match(/id=(\d+)/);
   if (idMatch && idMatch[1]) {
     torrentId = idMatch[1];
   } else if (siteDetails?.comment && /^\d+$/.test(siteDetails.comment.trim())) {
     torrentId = siteDetails.comment.trim();
   } else {
-    try {
-      const response = await fetch('/api/migrate/search_torrent_id', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sourceSite: sourceSite.siteName, torrentName: row.name })
-      });
-      const result = await response.json();
-      if (result.success && result.torrent_id) {
-        torrentId = result.torrent_id;
-        ElMessage.success(`通过种子名称搜索成功获取到ID: ${torrentId}`);
-      } else {
-        ElMessage.error(`无法从源站点 ${sourceSite.siteName} 获取种子ID：${result.message || '搜索失败'}`);
-        sourceSelectionDialogVisible.value = false;
-        return;
-      }
-    } catch (error: any) {
-      ElMessage.error(`搜索种子ID时发生网络错误：${error.message}`);
-      sourceSelectionDialogVisible.value = false;
-      return;
-    }
+    ElMessage.error(`无法从源站点 ${siteName} 的详情页链接中提取种子ID。请尝试使用IYUU查询更新链接。`);
+    return; // 留在弹窗中，让用户重试或使用IYUU
   }
 
+  // 后续逻辑保持不变
   if (siteDetails) {
     // @ts-ignore
     siteDetails.torrentId = torrentId;
   }
 
-  const sourceSiteName = sourceSite.siteName;
-  const sourceSiteIdentifier = allSourceSitesStatus.value.find(s => s.name === sourceSiteName)?.site || sourceSiteName.toLowerCase();
-
-  ElMessage.success(`准备从站点 [${sourceSiteName}] 开始迁移种子...`);
-
-  // 设置 store，触发转种弹窗
+  const sourceSiteIdentifier = allSourceSitesStatus.value.find(s => s.name === siteName)?.site || siteName.toLowerCase();
+  ElMessage.success(`准备从站点 [${siteName}] 开始迁移种子...`);
   const sourceInfo: ISourceInfo = {
-    name: sourceSiteName,
+    name: siteName,
     site: sourceSiteIdentifier,
     torrentId,
   };
   crossSeedStore.setSourceInfo(sourceInfo);
-  crossSeedStore.setTaskId(row.name + '_' + Date.now()); // 使用时间戳确保唯一性
+  crossSeedStore.setTaskId(row.name + '_' + Date.now());
 
   sourceSelectionDialogVisible.value = false;
-  // crossSeedDialogVisible 会通过 computed 属性自动变为 true
 };
 
 const isSourceSiteSelectable = (siteName: string): boolean => {

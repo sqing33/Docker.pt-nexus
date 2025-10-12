@@ -8,38 +8,7 @@ import yaml
 from loguru import logger
 from abc import ABC, abstractmethod
 from utils import cookies_raw2jar, ensure_scheme, extract_tags_from_mediainfo, extract_origin_from_description
-
-# [新增] 定义一个全局的、固定的音频编码回退层级地图
-# 键: 更精确的格式, 值: 它的下一个回退选项
-AUDIO_CODEC_FALLBACK_MAP = {
-    "audio.truehd_atmos": "audio.truehd",
-    "audio.dtsx": "audio.dts_hd_ma",
-    "audio.dts_hd_ma": "audio.dts",
-    "audio.ddp": "audio.ac3",
-}
-
-# [新增] 定义视频编码回退层级地图
-# 键: 更精确的格式, 值: 它的下一个回退选项
-VIDEO_CODEC_FALLBACK_MAP = {
-    "video.x265": "video.h265",
-    "video.x264": "video.h264",
-}
-
-# [新增] 定义媒介回退层级地图
-# 键: 更精确的格式, 值: 它的下一个回退选项
-MEDIUM_FALLBACK_MAP = {
-    "medium.remux": "medium.encode",
-    "medium.uhd_bluray": "medium.bluray",
-    "medium.uhd_blu-ray": "medium.blu-ray",
-}
-
-# [新增] 定义HDR格式回退层级地图
-HDR_FORMAT_FALLBACK_MAP = {
-    "hdr.dolby_vision": "hdr.hdr10plus",
-    "hdr.hdr10plus": "hdr.hdr10",
-    "hdr.hdr10": "hdr.hdr",
-    "hdr.hlg": "hdr.hdr",
-}
+from .fallback_manager import FallbackManager
 
 # 加载全局默认 title_components 配置
 DEFAULT_TITLE_COMPONENTS = {}
@@ -92,6 +61,13 @@ class BaseUploader(ABC):
         # 从配置中提取source_parsers和mappings
         self.source_parsers = self.config.get("source_parsers", {})
         self.mappings = self.config.get("mappings", {})
+
+        # [新增] 初始化降级管理器
+        config_dir = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+            "configs")
+        global_mappings_path = os.path.join(config_dir, "global_mappings.yaml")
+        self.fallback_manager = FallbackManager(global_mappings_path)
 
     def _load_site_config(self, site_name: str) -> dict:
         """加载站点的YAML配置文件"""
@@ -227,84 +203,41 @@ class BaseUploader(ABC):
                       use_length_priority: bool = True,
                       mapping_type: str = "general") -> str:
         """
-        [修正] 通用的映射查找函数，使用正则表达式的单词边界来防止错误的子字符串匹配。
-        支持音频、视频编码和媒介的回退机制。
-
-        :param mapping_type: 映射类型，可以是 "audio"、"video"、"medium" 或 "general"
+        通用的映射查找函数，支持自动降级。
         """
         if not mapping_dict or not key_to_find:
             return mapping_dict.get(default_key, "")
 
-        current_key = str(key_to_find)
+        # 1. 尝试精确匹配
+        for key, value in mapping_dict.items():
+            if str(key).lower() == str(key_to_find).lower().strip():
+                print(f"精确匹配成功: '{key_to_find}' -> '{value}'")
+                return value
 
-        # 启动一个循环，用于尝试当前key及其所有回退key
-        while current_key:
-            # 1. 尝试精确匹配
-            for key, value in mapping_dict.items():
-                if str(key).lower() == current_key.lower().strip():
-                    logger.debug(
-                        f"映射查找成功 (精确匹配): '{current_key}' -> '{value}'")
-                    return value
-
-            # 2. [核心修正] 如果精确匹配失败，尝试使用带单词边界的正则进行部分匹配
-            # 这样可以匹配 'DTS' in 'DTS-HD' 但不会匹配 'DTS' in 'DTSX'
+        # 2. 尝试正则部分匹配
+        try:
+            pattern = r'\b' + re.escape(str(key_to_find).lower()) + r'\b'
             sorted_items = sorted(
                 mapping_dict.items(), key=lambda x: len(x[0]),
                 reverse=True) if use_length_priority else list(
                     mapping_dict.items())
 
-            try:
-                # 构造一个安全的正则表达式，匹配整个单词
-                # e.g., 'dts' -> r'\bdts\b'
-                # e.g., 'dts-hd' -> r'\bdts-hd\b'
-                escaped_current_key = re.escape(current_key.lower())
-                pattern = r'\b' + escaped_current_key + r'\b'
+            for key, value in sorted_items:
+                if re.search(pattern, str(key).lower()):
+                    print(f"正则匹配成功: '{key_to_find}' in '{key}' -> '{value}'")
+                    return value
+        except re.error:
+            pass
 
-                for key, value in sorted_items:
-                    # 我们只检查一种情况：要查找的键(current_key)是否作为"单词"出现在字典键(key)中
-                    # 例如，查找 'dts' 是否是 'dts-hd' 的一部分
-                    if re.search(pattern, str(key).lower()):
-                        logger.debug(
-                            f"映射查找成功 (正则部分匹配): '{current_key}' in '{key}' -> '{value}'"
-                        )
-                        return value
+        # 3. [新增] 使用降级管理器尝试降级
+        if mapping_type != "general":
+            fallback_result = self.fallback_manager.find_with_fallback(
+                mapping_dict, str(key_to_find), mapping_type)
+            if fallback_result:
+                return fallback_result
 
-            except re.error:
-                # 正则表达式编译错误时，回退到简单的 in 检查，以防万一
-                for key, value in sorted_items:
-                    if current_key.lower() in str(key).lower():
-                        logger.debug(
-                            f"映射查找成功 (回退部分匹配): '{current_key}' in '{key}' -> '{value}'"
-                        )
-                        return value
-
-            # 3. 如果所有匹配都失败，查找下一个回退选项
-            original_key = current_key
-
-            # 根据映射类型选择相应的回退映射表
-            if mapping_type == "audio":
-                current_key = AUDIO_CODEC_FALLBACK_MAP.get(current_key)
-            elif mapping_type == "video":
-                current_key = VIDEO_CODEC_FALLBACK_MAP.get(current_key)
-            elif mapping_type == "medium":
-                current_key = MEDIUM_FALLBACK_MAP.get(current_key)
-            elif mapping_type == "hdr":
-                current_key = HDR_FORMAT_FALLBACK_MAP.get(current_key)
-            else:
-                # 通用类型，同时检查音频、视频、媒介和HDR回退
-                current_key = (AUDIO_CODEC_FALLBACK_MAP.get(current_key)
-                               or VIDEO_CODEC_FALLBACK_MAP.get(current_key)
-                               or MEDIUM_FALLBACK_MAP.get(current_key)
-                               or HDR_FORMAT_FALLBACK_MAP.get(current_key))
-
-            if current_key:
-                logger.debug(
-                    f"直接匹配 '{original_key}' 失败, 尝试回退到 '{current_key}'...")
-            else:
-                logger.debug(f"'{original_key}' 无更多回退选项。")
-
-        # 如果循环结束仍未找到任何匹配项，返回默认值
-        logger.debug(f"所有尝试均失败，为 '{key_to_find}' 使用默认值。")
+        # 4. 所有尝试失败，返回默认值
+        print(f"所有匹配失败，使用默认值: '{key_to_find}'")
         return mapping_dict.get(default_key, "")
 
     def _map_standardized_params(self, standardized_params: dict) -> dict:
@@ -357,9 +290,10 @@ class BaseUploader(ABC):
         codec_field = self.config.get("form_fields",
                                       {}).get("video_codec", "codec_sel[4]")
         codec_mapping = self.mappings.get("video_codec", {})
+        print(f"开始查找视频编码映射: '{codec_str}' (类型: video_codec)")
         mapped_params[codec_field] = self._find_mapping(codec_mapping,
                                                         codec_str,
-                                                        mapping_type="video")
+                                                        mapping_type="video_codec")
         logger.debug(
             f"DEBUG: 视频编码映射 '{codec_str}' -> '{mapped_params[codec_field]}'")
 
@@ -369,9 +303,10 @@ class BaseUploader(ABC):
                                       {}).get("audio_codec",
                                               "audiocodec_sel[4]")
         audio_mapping = self.mappings.get("audio_codec", {})
+        print(f"开始查找音频编码映射: '{audio_str}' (类型: audio_codec)")
         mapped_params[audio_field] = self._find_mapping(audio_mapping,
                                                         audio_str,
-                                                        mapping_type="audio")
+                                                        mapping_type="audio_codec")
         logger.debug(
             f"DEBUG: 音频编码映射 '{audio_str}' -> '{mapped_params[audio_field]}'")
 
@@ -381,8 +316,9 @@ class BaseUploader(ABC):
                                            {}).get("resolution",
                                                    "standard_sel[4]")
         resolution_mapping = self.mappings.get("resolution", {})
+        print(f"开始查找分辨率映射: '{resolution_str}' (类型: resolution)")
         mapped_params[resolution_field] = self._find_mapping(
-            resolution_mapping, resolution_str)
+            resolution_mapping, resolution_str, mapping_type="resolution")
 
         # 处理制作组映射
         release_group_str = standardized_params.get("team", "")
@@ -606,7 +542,7 @@ class BaseUploader(ABC):
                 print(f"DEBUG: 临时目录路径: {tmp_dir}")
 
                 # 使用种子标题作为文件夹名（与Go端和download_torrent_only保持一致）
-                title = self.upload_data.get("title", "")
+                title = self.upload_data.get("original_main_title") or self.upload_data.get("title", "")
                 if title:
                     # 清理文件名中的非法字符，限制长度为150
                     safe_title = re.sub(r'[\\/:*?"<>|]', '_', title)[:150]
