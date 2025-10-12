@@ -32,38 +32,6 @@ source_parsers:
     team:
       source_key: "制作组"
 
-  title_components:
-    title:
-      source_key: "主标题"
-    season_episode:
-      source_key: "季集"
-    year:
-      source_key: "年份"
-    status:
-      source_key: "剧集状态"
-    edition:
-      source_key: "发布版本"
-    resolution:
-      source_key: "分辨率"
-    platform:
-      source_key: "片源平台"
-    medium:
-      source_key: "媒介"
-    video_codec:
-      source_key: "视频编码"
-    video_format:
-      source_key: "视频格式"
-    hdr_format:
-      source_key: "HDR格式"
-    bit_depth:
-      source_key: "色深"
-    frame_rate:
-      source_key: "帧率"
-    audio_codec:
-      source_key: "音频编码"
-    team:
-      source_key: "制作组"
-
   # 标准化键映射规则（从原始文本到标准化键）
   # 将站点下拉菜单的文本映射到全局标准化键
   standard_keys:
@@ -83,36 +51,36 @@ source_parsers:
       "HDTV": "medium.hdtv"
       "DVD": "medium.dvd"
       "CD": "medium.cd"
-      "SACD": "medium.sacd" # 自定义标准键
-      "CD+VCD": "medium.cd_vcd" # 自定义标准键
-      "CD+DVD": "medium.cd_dvd" # 自定义标准键
-      "黑胶": "medium.vinyl" # 自定义标准键
+      "SACD": "medium.sacd"
+      "CD+VCD": "medium.cd_vcd"
+      "CD+DVD": "medium.cd_dvd"
+      "黑胶": "medium.vinyl"
       "UHD原盘": "medium.uhd_bluray"
       "Other/其他": "medium.other"
-      "UHD DIY": "medium.uhd_diy" # 自定义标准键
-      "UHD Remux": "medium.remux" # 视为UHD Remux
-      "UHD压制": "medium.encode" # 视为UHD Encode
+      "UHD DIY": "medium.uhd_diy"
+      "UHD Remux": "medium.uhd_remux"
+      "UHD压制": "medium.uhd_encode"
       "BD原盘": "medium.bluray"
-      "BD DIY": "medium.bluray_diy" # 自定义标准键
+      "BD DIY": "medium.bluray_diy"
       "BD Remux": "medium.remux"
       "1080P/i压制": "medium.encode"
       "720P压制": "medium.encode"
-      "MiniSD": "medium.minisd" # 自定义标准键
+      "MiniSD": "medium.minisd"
 
     video_codec:
       "MPEG-2": "video.mpeg2"
-      "MPEG-4": "video.mpeg4" # 自定义标准键
+      "MPEG-4": "video.mpeg4"
       "Xvid": "video.xvid"
       "AV1": "video.av1"
       "Other/其他": "video.other"
       "VC-1": "video.vc1"
       "x265": "video.x265"
       "H.265/HEVC": "video.h265"
-      "x264": "video.h264"
+      "x264": "video.x264"
       "H.264/AVC": "video.h264"
 
     audio_codec:
-      "DDP Atmos": "audio.ddp_atmos" # 自定义标准键
+      "DDP Atmos": "audio.ddp_atmos"
       "TrueHD Atmos": "audio.truehd_atmos"
       "DTS:X": "audio.dtsx"
       "True-HD": "audio.truehd"
@@ -123,7 +91,7 @@ source_parsers:
       "WAV": "audio.wav"
       "APE": "audio.ape"
       "FLAC": "audio.flac"
-      "DSD": "audio.dsd" # 自定义标准键
+      "DSD": "audio.dsd"
       "AAC": "audio.aac"
       "DDP/DD+/EAC3": "audio.ddp"
       "Dolby Digital/DD": "audio.ac3"
@@ -131,9 +99,9 @@ source_parsers:
       "OGG": "audio.ogg"
       "Other/其他": "audio.other"
       "m4a": "audio.m4a"
-      "ALAC": "audio.alac" # 自定义标准键
+      "ALAC": "audio.alac"
       "MP3": "audio.mp3"
-      "TTA": "audio.tta" # 自定义标准键
+      "TTA": "audio.tta"
       "AC3": "audio.ac3"
 
     resolution:
@@ -216,10 +184,12 @@ mappings:
     "medium.uhd_bluray": "19"
     "medium.other": "1"
     "medium.uhd_diy": "18"
-    "medium.remux": "13" # BD Remux 和 UHD Remux 都映射到 Remux
-    "medium.encode": "12" # 1080p/i 和 UHD 压制都映射到 Encode
+    "medium.uhd_remux": "17"
+    "medium.uhd_encode": "16"
     "medium.bluray": "15"
     "medium.bluray_diy": "14"
+    "medium.remux": "13"
+    "medium.encode": "12"
     "medium.minisd": "10"
     "default": "1"
 
@@ -232,7 +202,8 @@ mappings:
     "video.vc1": "6"
     "video.x265": "7"
     "video.h265": "8"
-    "video.h264": "10" # x264和H.264都映射到此
+    "video.x264": "9"
+    "video.h264": "10"
     "default": "5"
 
   audio_codec:
@@ -250,7 +221,7 @@ mappings:
     "audio.dsd": "13"
     "audio.aac": "1"
     "audio.ddp": "11"
-    "audio.ac3": "10" # Dolby Digital/DD 和 AC3
+    "audio.ac3": "2"
     "audio.mpeg": "9"
     "audio.ogg": "8"
     "audio.other": "7"

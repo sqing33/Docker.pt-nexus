@@ -577,10 +577,10 @@ def get_downloader_info_api():
         else:
             today_query = """SELECT
                                 downloader_id,
-                                MAX(0,
+                                GREATEST(0,
                                     MAX(cumulative_downloaded) - MIN(cumulative_downloaded)
                                 ) as today_dl,
-                                MAX(0,
+                                GREATEST(0,
                                     MAX(cumulative_uploaded) - MIN(cumulative_uploaded)
                                 ) as today_ul
                              FROM traffic_stats

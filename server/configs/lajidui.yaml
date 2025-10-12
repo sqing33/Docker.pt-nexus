@@ -35,37 +35,6 @@ source_parsers:
     team:
       source_key: "制作组"
 
-  title_components:
-    video_codec:
-      source_key: "视频编码"
-    title:
-      source_key: "主标题"
-    season_episode:
-      source_key: "季集"
-    year:
-      source_key: "年份"
-    status:
-      source_key: "剧集状态"
-    edition:
-      source_key: "发布版本"
-    resolution:
-      source_key: "分辨率"
-    platform:
-      source_key: "片源平台"
-    medium:
-      source_key: "媒介"
-    video_format:
-      source_key: "视频格式"
-    hdr_format:
-      source_key: "HDR格式"
-    bit_depth:
-      source_key: "色深"
-    frame_rate:
-      source_key: "帧率"
-    audio_codec:
-      source_key: "音频编码"
-    team:
-      source_key: "制作组"
 
   # 标准化键映射规则（从原始文本到标准化键）
   standard_keys:
@@ -128,9 +97,9 @@ source_parsers:
       "Other": "video.other"
 
     resolution:
-      "8k": "resolution.r8k"
-      "4k": "resolution.r4k"
-      "2k": "resolution.r2k"
+      "8k": "resolution.r8640p"
+      "4k": "resolution.r4320p"
+      "2k": "resolution.r2160p"
       "1080p": "resolution.r1080p"
       "1080i": "resolution.r1080i"
       "720p": "resolution.r720p"
@@ -200,7 +169,7 @@ mappings:
     "category.other": "409"
     "category.cartoon": "410"
     "category.ebook": "411"
-    "category.short_drama": "412"
+    "category.playlet": "412"
     "category.game": "413"
     "category.software": "414"
     "category.education": "415"
@@ -251,8 +220,8 @@ mappings:
     "default": "5"
 
   resolution:
-    "resolution.r8k": "7"
-    "resolution.r4k": "6"
+    "resolution.r8k": "7"      # 8k
+    "resolution.r4320p": "6"   # 4k  
     "resolution.r2k": "5"
     "resolution.r1080p": "1"
     "resolution.r1080i": "2"
@@ -315,6 +284,8 @@ mappings:
 
   tag:
     "tag.已刮削": 8
+    "tag.禁转": 1
+    "tag.首发": 2
     "tag.DIY": 4
     "tag.国语": 5
     "tag.中字": 6

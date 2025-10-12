@@ -31,34 +31,6 @@ source_parsers:
     source:
       source_key: "产地"
 
-  title_components:
-    title:
-      source_key: "主标题"
-    season_episode:
-      source_key: "季集"
-    year:
-      source_key: "年份"
-    status:
-      source_key: "剧集状态"
-    resolution:
-      source_key: "分辨率"
-    platform:
-      source_key: "片源平台"
-    medium:
-      source_key: "媒介"
-    video_codec:
-      source_key: "视频编码"
-    video_format:
-      source_key: "视频格式"
-    hdr_format:
-      source_key: "HDR格式"
-    frame_rate:
-      source_key: "帧率"
-    audio_codec:
-      source_key: "音频编码"
-    team:
-      source_key: "制作组"
-
   # 标准化键映射规则（从原始文本到标准化键）
   standard_keys:
     type:
@@ -144,7 +116,7 @@ mappings:
     "category.music_video": "406"
     "category.sports": "407"
     "category.music": "408"
-    "category.short_play": "412"
+    "category.playlet": "412"
     "category.other": "409"
     "default": "409"
 

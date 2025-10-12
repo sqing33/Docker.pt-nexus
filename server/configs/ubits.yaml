@@ -1,0 +1,241 @@
+# UBits站点的配置文件
+# 基于三层解耦模型重构，包含source_parsers和标准化的mappings
+
+site_name: "UBits"
+
+# 表单字段定义 - 定义站点上传表单中各字段的标识符
+form_fields:
+  category: "type"
+  medium: "medium_sel[4]"
+  video_codec: "codec_sel[4]"
+  audio_codec: "audiocodec_sel[4]"
+  resolution: "standard_sel[4]"
+  team: "team_sel[4]"
+  source: "source_sel[4]"
+  tags[4][]: "tags[4][]"
+
+# 标准化键映射 - 定义源文本到标准化键的映射规则
+# source_parsers部分：定义如何从原始数据解析出标准化参数
+source_parsers:
+  source_params:
+    type:
+      source_key: "类型"
+    medium:
+      source_key: "媒介"
+    video_codec:
+      source_key: "视频编码"
+    audio_codec:
+      source_key: "音频编码"
+    resolution:
+      source_key: "分辨率"
+    team:
+      source_key: "制作组"
+    source:
+      source_key: "地区"
+    tags[4][]:
+      source_key: "标签"
+
+  # 标准化键映射规则（从原始文本到标准化键）
+  # 将站点下拉菜单的文本映射到全局标准化键
+  standard_keys:
+    type:
+      "电影(Movie)": "category.movie"
+      "纪录片(Documentaries)": "category.documentaries"
+      "动漫(Animations)": "category.animation"
+      "电视剧(TV Series)": "category.tv_series"
+      "综艺（TV Shows）": "category.tv_shows"
+      "演唱会(Misic Videos)": "category.music_video"
+      "体育节目(Sports)": "category.sports"
+      "音乐CD(Music CD Tracker)": "category.music"
+      "Other": "category.other"
+
+    medium:
+      "4K UHD原盘(UltraHD Blu-ray)": "medium.uhd_bluray"
+      "蓝光原盘(Blu-ray)": "medium.bluray"
+      "流媒体(WEB-DL)": "medium.webdl"
+      "REMUX": "medium.remux"
+      "压制(Encode)": "medium.encode"
+      "HD DVD": "medium.hddvd"
+      "HDTV": "medium.hdtv"
+      "DVDR": "medium.dvdr"
+      "Lossless Music": "medium.lossless_music"
+      "Track": "medium.track"
+
+    video_codec:
+      "H265(HEVC/x265)": "video.h265"
+      "H264(AVC/x264)": "video.h264"
+      "AV1": "video.av1"
+      "VC-1": "video.vc1"
+      "MPEG-2": "video.mpeg2"
+      "AVS": "video.avs"
+      "Xvid": "video.xvid"
+      "MPEG-4": "video.mpeg4"
+      "Other": "video.other"
+
+    audio_codec:
+      "Dolby Atmos": "audio.dolby_atmos"
+      "DTS:X": "audio.dtsx"
+      "TrueHD": "audio.truehd"
+      "DTS-HD MA/HR": "audio.dts_hd_ma"
+      "LPCM": "audio.lpcm"
+      "DD+(Dolby Digital Plus)": "audio.ddp"
+      "DD(AC3)": "audio.ac3"
+      "DTS": "audio.dts"
+      "AAC": "audio.aac"
+      "FLAC": "audio.flac"
+      "APE": "audio.ape"
+      "OGG": "audio.ogg"
+      "MP3": "audio.mp3"
+      "Other": "audio.other"
+
+    resolution:
+      "4320p": "resolution.r4320p"
+      "2160p": "resolution.r2160p"
+      "1440p": "resolution.r1440p"
+      "1080p": "resolution.r1080p"
+      "1080i": "resolution.r1080i"
+      "720p": "resolution.r720p"
+      "SD": "resolution.sd"
+
+    team:
+      "UBits": "team.ubits"
+      "UBWEB": "team.ubweb"
+      "UBTV": "team.ubtv"
+      "Other": "team.other"
+
+    source:
+      "中国大陆(China Mainland)": "source.china"
+      "中国香港(China HK)": "source.hongkong"
+      "中国台湾(China Taiwan)": "source.taiwan"
+      "欧美(Euro/American)": "source.western"
+      "日本(Japanese)": "source.japan"
+      "韩国(Korea)": "source.korea"
+      "泰国(Thailand)": "source.thailand"
+      "印度(India)": "source.india"
+      "俄罗斯(Russia)": "source.russia"
+      "其它(Other)": "source.other"
+
+    tag:
+      "禁转": "tag.禁转"
+      "原生原盘": "tag.原生原盘"
+      "DIY": "tag.DIY"
+      "国语": "tag.国语"
+      "粤语": "tag.粤语"
+      "中字": "tag.中字"
+      "高分国剧": "tag.高分国剧"
+      "特效": "tag.特效"
+      "杜比视界": "tag.杜比视界"
+      "HDR10+": "tag.hdr10plus"
+      "菁彩HDR": "tag.菁彩HDR"
+      "HDR10": "tag.hdr10"
+      "连载": "tag.连载"
+      "合集": "tag.合集"
+      "HLG": "tag.hlg"
+      "自购": "tag.自购"
+      "菜单修改": "tag.菜单修改"
+
+# 参数映射规则 - 定义如何将标准化键映射到站点特定参数
+mappings:
+  type:
+    "category.movie": "401"
+    "category.documentaries": "404"
+    "category.animation": "405"
+    "category.tv_series": "402"
+    "category.tv_shows": "403"
+    "category.music_video": "409"
+    "category.sports": "407"
+    "category.music": "406"
+    "category.other": "408"
+    "default": "401"
+
+  medium:
+    "medium.uhd_bluray": "10"
+    "medium.bluray": "1"
+    "medium.webdl": "4"
+    "medium.remux": "3"
+    "medium.encode": "7"
+    "medium.hddvd": "2"
+    "medium.hdtv": "5"
+    "medium.dvdr": "6"
+    "medium.lossless_music": "8"
+    "medium.track": "9"
+    "default": "7"
+
+  video_codec:
+    "video.h265": "7"
+    "video.h264": "1"
+    "video.av1": "11"
+    "video.vc1": "2"
+    "video.mpeg2": "4"
+    "video.avs": "10"
+    "video.xvid": "3"
+    "video.mpeg4": "9"
+    "video.other": "5"
+    "default": "5"
+
+  audio_codec:
+    "audio.dolby_atmos": "8"
+    "audio.dtsx": "9"
+    "audio.truehd": "10"
+    "audio.dts_hd_ma": "11"
+    "audio.lpcm": "13"
+    "audio.ddp": "12"
+    "audio.ac3": "14"
+    "audio.dts": "3"
+    "audio.aac": "6"
+    "audio.flac": "1"
+    "audio.ape": "2"
+    "audio.ogg": "5"
+    "audio.mp3": "4"
+    "audio.other": "7"
+    "default": "7"
+
+  resolution:
+    "resolution.r4320p": "6"
+    "resolution.r2160p": "5"
+    "resolution.r1440p": "7"
+    "resolution.r1080p": "1"
+    "resolution.r1080i": "2"
+    "resolution.r720p": "3"
+    "resolution.sd": "4"
+    "default": "3"
+
+  team:
+    "team.ubits": "1"
+    "team.ubweb": "6"
+    "team.ubtv": "7"
+    "team.other": "5"
+    "default": "5"
+
+  source:
+    "source.china": "1"
+    "source.hongkong": "2"
+    "source.taiwan": "3"
+    "source.western": "4"
+    "source.japan": "5"
+    "source.korea": "6"
+    "source.thailand": "7"
+    "source.india": "8"
+    "source.russia": "9"
+    "source.other": "11"
+    "default": "1"
+
+  tag:
+    "tag.禁转": 1
+    "tag.原生原盘": 17
+    "tag.DIY": 4
+    "tag.国语": 5
+    "tag.粤语": 11
+    "tag.中字": 6
+    "tag.高分国剧": 21
+    "tag.特效": 12
+    "tag.杜比视界": 8
+    "tag.hdr10plus": 10
+    "tag.菁彩HDR": 18
+    "tag.hdr10": 9
+    "tag.连载": 23
+    "tag.合集": 20
+    "tag.hlg": 19
+    "tag.自购": 22
+    "tag.菜单修改": 14
+    "default": null

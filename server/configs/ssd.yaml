@@ -1,9 +1,5 @@
-# 不可说(SSD)站点的配置文件
-# 基于三层解耦模型，包含表单字段定义、源数据解析规则和标准化参数映射
-
 site_name: "SSD"
 
-# 1. 表单字段定义 - 定义站点上传表单中各字段的HTML 'name'属性
 form_fields:
   category: "type"
   source: "source_sel"
@@ -11,103 +7,47 @@ form_fields:
   resolution: "standard_sel"
   video_codec: "codec_sel"
   audio_codec: "audiocodec_sel"
-  # 标签是独立的checkbox，将在mappings部分处理，此处不定义
 
-# 2. 源数据解析规则 - 定义如何从种子详情页提取原始信息
 source_parsers:
-  # 2.1 从“基本信息”区域提取的参数
   source_params:
     type:
       source_key: "类型"
     medium:
-      source_key: "媒介" # 注意：SSD页面上显示为“格式”
-    video_codec:
-      source_key: "视频编码"
-    audio_codec:
-      source_key: "音频编码"
-    resolution:
-      source_key: "分辨率"
-    team:
-      source_key: "制作组"
-    source:
-      source_key: "产地" # 注意：SSD页面上显示为“地区”
-
-  # 2.2 从标题中提取的参数 (这是一个标准的备用解析模板)
-  title_components:
-    title:
-      source_key: "主标题"
-    season_episode:
-      source_key: "季集"
-    year:
-      source_key: "年份"
-    status:
-      source_key: "剧集状态"
-    edition:
-      source_key: "发布版本"
-    resolution:
-      source_key: "分辨率"
-    platform:
-      source_key: "片源平台"
-    medium:
       source_key: "媒介"
     video_codec:
       source_key: "视频编码"
-    video_format:
-      source_key: "视频格式"
-    hdr_format:
-      source_key: "HDR格式"
-    bit_depth:
-      source_key: "色深"
-    frame_rate:
-      source_key: "帧率"
     audio_codec:
       source_key: "音频编码"
+    resolution:
+      source_key: "分辨率"
     team:
       source_key: "制作组"
+    source:
+      source_key: "产地"
 
-  # 2.3 标准化键映射 - 将提取到的原始文本值映射为内部标准键
   standard_keys:
     type:
-      "Movies": "category.movie"
-      "电影": "category.movie"
-      "TV Series": "category.tv_series"
-      "剧集": "category.tv_series"
-      "Docs": "category.documentaries"
-      "纪录": "category.documentaries"
-      "TV Shows": "category.tv_shows"
-      "综艺": "category.tv_shows"
-      "Sports": "category.sports"
-      "体育": "category.sports"
-      "MV": "category.music_video"
-      "音乐视频": "category.music_video"
-      "Music": "category.music"
-      "音乐": "category.music"
-      "Audio": "category.audio"
-      "有声": "category.audio"
-      "Other": "category.other"
-      "其他类型": "category.other"
+      "Movies(电影)": "category.movie"
+      "TV Series(剧集)": "category.tv_series"
+      "Docs(纪录)": "category.documentaries"
+      "TV Shows(综艺)": "category.tv_shows"
+      "Sports(体育)": "category.sports"
+      "MV(音乐视频)": "category.music_video"
+      "Music(音乐)": "category.music"
+      "Audio(有声)": "category.audio"
+      "Other(其他类型)": "category.other"
 
     source:
-      "Mainland": "source.china"
-      "大陆": "source.china"
-      "Hongkong": "source.hongkong"
-      "香港": "source.hongkong"
-      "Taiwan": "source.taiwan"
-      "台湾": "source.taiwan"
-      "West": "source.western"
-      "欧美": "source.western"
-      "Japan": "source.japan"
-      "日本": "source.japan"
-      "Korea": "source.korea"
-      "韩国": "source.korea"
-      "India": "source.india"
-      "印度": "source.india"
-      "Russia": "source.russia"
-      "俄国": "source.russia"
-      "Thailand": "source.thailand"
-      "泰国": "source.thailand"
-      "Other": "source.other"
-      "其他地区": "source.other"
+      "Mainland(大陆)": "source.china"
+      "Hongkong(香港)": "source.hongkong"
+      "Taiwan(台湾)": "source.taiwan"
+      "West(欧美)": "source.western"
+      "Japan(日本)": "source.japan"
+      "Korea(韩国)": "source.korea"
+      "India(印度)": "source.india"
+      "Russia(俄国)": "source.russia"
+      "Thailand(泰国)": "source.thailand"
+      "Other(其他地区)": "source.other"
 
     medium:
       "Blu-ray": "medium.bluray"
@@ -162,15 +102,12 @@ source_parsers:
       "HONE": "team.hone"
       "BYNDR": "team.byndr"
       "HHWEB": "team.hhweb"
-      # 可在此继续添加更多制作组
-    
-    # 标签映射
+
     tag:
       "动画": "tag.动画"
       "禁转": "tag.禁转"
       "合集": "tag.合集"
       "原生": "tag.原生"
-      "自购": "tag.自购"
       "国配": "tag.国语"
       "中字": "tag.中字"
       "特效": "tag.特效"
@@ -182,8 +119,6 @@ source_parsers:
       "HLG": "tag.hlg"
       "CC": "tag.cc"
       "3D": "tag.3d"
-      "应求": "tag.应求"
-      "官方": "tag.官方"
       "国语": "tag.国语"
       "粤语": "tag.粤语"
       "杜比": "tag.杜比"
@@ -193,81 +128,3 @@ source_parsers:
       "Blu-ray": "tag.Blu-ray"
       "LIVE现场": "tag.LIVE现场"
       "default": null
-
-# 3. 参数映射规则 - 定义如何将标准化键映射到站点上传表单所需的具体'value'
-mappings:
-  type:
-    "category.movie": "501"
-    "category.tv_series": "502"
-    "category.documentaries": "503"
-    "category.tv_shows": "505"
-    "category.sports": "506"
-    "category.music_video": "507"
-    "category.music": "508"
-    "category.audio": "510"
-    "category.other": "509"
-    "default": "501" # 默认选择电影
-
-  source:
-    "source.china": "1"
-    "source.hongkong": "2"
-    "source.taiwan": "3"
-    "source.western": "4"
-    "source.japan": "5"
-    "source.korea": "6"
-    "source.india": "7"
-    "source.russia": "8"
-    "source.thailand": "9"
-    "source.other": "99"
-    "default": "4" # 默认选择欧美
-
-  medium:
-    "medium.bluray": "1"
-    "medium.remux": "4"
-    "medium.minibd": "2"
-    "medium.bdrip": "6"
-    "medium.webdl": "7"
-    "medium.webrip": "8"
-    "medium.hdtv": "5"
-    "medium.tvrip": "9"
-    "medium.dvd": "3"
-    "medium.dvdrip": "10"
-    "medium.cd": "11"
-    "medium.other": "99"
-    "default": "99"
-
-  resolution:
-    "resolution.r2160p": "1"
-    "resolution.r1080p": "2"
-    "resolution.r1080i": "3"
-    "resolution.r720p": "4"
-    "resolution.sd": "5"
-    "resolution.other": "99"
-    "default": "2" # 默认选择1080p
-
-  video_codec:
-    "video.h265": "1"
-    "video.h264": "2"
-    "video.vc1": "3"
-    "video.mpeg2": "4"
-    "video.av1": "5"
-    "video.other": "99"
-    "default": "2" # 默认选择H.264
-
-  audio_codec:
-    "audio.dts_hd_ma": "1"
-    "audio.truehd": "2"
-    "audio.lpcm": "6"
-    "audio.dts": "3"
-    "audio.ddp": "11"
-    "audio.ac3": "4"
-    "audio.aac": "5"
-    "audio.flac": "7"
-    "audio.ape": "8"
-    "audio.wav": "9"
-    "audio.mp3": "10"
-    "audio.opus": "12"
-    "audio.other": "99"
-    "default": "99"
-    
-

@@ -447,18 +447,18 @@ class SeedParameter:
             if self.db_manager.db_type == "postgresql":
                 if sites:
                     cursor.execute(
-                        "SELECT hash FROM torrents WHERE name = %s AND sites = %s",
+                        f"SELECT hash FROM torrents WHERE name = {ph} AND sites = {ph}",
                         (name, sites))
                 else:
-                    cursor.execute("SELECT hash FROM torrents WHERE name = %s",
+                    cursor.execute(f"SELECT hash FROM torrents WHERE name = {ph}",
                                    (name, ))
             else:
                 if sites:
                     cursor.execute(
-                        "SELECT hash FROM torrents WHERE name = ? AND sites = ?",
+                        f"SELECT hash FROM torrents WHERE name = {ph} AND sites = {ph}",
                         (name, sites))
                 else:
-                    cursor.execute("SELECT hash FROM torrents WHERE name = ?",
+                    cursor.execute(f"SELECT hash FROM torrents WHERE name = {ph}",
                                    (name, ))
 
             results = cursor.fetchall()

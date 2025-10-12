@@ -1,0 +1,192 @@
+# HDDolby站点的配置文件
+# 基于三层解耦模型重构，包含source_parsers和标准化的mappings
+
+site_name: "HDDolby"
+
+# 表单字段定义 - 定义站点上传表单中各字段的标识符
+form_fields:
+  category: "type"
+  medium: "medium_sel"
+  video_codec: "codec_sel"
+  audio_codec: "audiocodec_sel"
+  resolution: "standard_sel"
+  team: "team_sel"
+  tags[]: "tags[]"
+
+# 标准化键映射 - 定义源文本到标准化键的映射规则
+# source_parsers部分：定义如何从原始数据解析出标准化参数
+source_parsers:
+  source_params:
+    type:
+      source_key: "类型"
+    medium:
+      source_key: "媒介"
+    video_codec:
+      source_key: "编码"
+    audio_codec:
+      source_key: "音频编码"
+    resolution:
+      source_key: "分辨率"
+    team:
+      source_key: "制作组"
+    tags[]:
+      source_key: "标签"
+
+  # 标准化键映射规则（从原始文本到标准化键）
+  # 将站点下拉菜单的文本映射到全局标准化键
+  standard_keys:
+    type:
+      "Movies/电影": "category.movie"
+      "TV Series/电视剧": "category.tv_series"
+      "TV Shows/综艺": "category.tv_shows"
+      "Documentaries/纪录片": "category.documentaries"
+      "Animations/动画": "category.animation"
+      "Music Videos/音乐 MV": "category.music_video"
+      "Sports/体育": "category.sports"
+      "HQ Audio/无损音乐": "category.music"
+      "Games/游戏": "category.game"
+      "Misc/其他": "category.other"
+
+    medium:
+      "UHD Blu-ray": "medium.uhd_bluray"
+      "Blu-ray": "medium.bluray"
+      "UHD Remux": "medium.uhd_remux"
+      "Remux": "medium.remux"
+      "Remux TV": "medium.remux_tv"
+      "UHD Remux TV": "medium.uhd_remux_tv"
+      "Encode": "medium.encode"
+      "Encode TV": "medium.encode_tv"
+      "WEB-DL/WEBRip": "medium.webdl"
+      "WEB-DL/WEBRip TV": "medium.webdl_tv"
+      "HDTV": "medium.hdtv"
+      "DVD": "medium.dvd"
+      "CD": "medium.cd"
+      "Track": "medium.track"
+      "MiniBD": "medium.minibd"
+      "Other": "medium.other"
+
+    video_codec:
+      "H.265/HEVC": "video.h265"
+      "H.264/AVC": "video.h264"
+      "VC-1": "video.vc1"
+      "x264": "video.x264"
+      "MPEG/MPEG-2": "video.mpeg2"
+      "Other": "video.other"
+
+    audio_codec:
+      "DTS:X": "audio.dtsx"
+      "DTS-HDMA": "audio.dts_hd_ma"
+      "TrueHD": "audio.truehd"
+      "LPCM": "audio.lpcm"
+      "DTS": "audio.dts"
+      "AC3/EAC3": "audio.ac3"
+      "AAC": "audio.aac"
+      "FLAC": "audio.flac"
+      "APE": "audio.ape"
+      "WAV": "audio.wav"
+      "MPEG": "audio.mpeg"
+      "Other": "audio.other"
+
+    resolution:
+      "1080p": "resolution.r1080p"
+      "1080i": "resolution.r1080i"
+      "4K/2160p": "resolution.r2160p"
+      "720p": "resolution.r720p"
+      "SD": "resolution.sd"
+      "iPad": "resolution.ipad"
+
+    team:
+      "HDU": "team.hdu"
+      "Other": "team.other"
+
+# 参数映射规则 - 定义如何将标准化键映射到站点特定参数
+mappings:
+  type:
+    "category.movie": "401"
+    "category.tv_series": "402"
+    "category.tv_shows": "403"
+    "category.documentaries": "404"
+    "category.animation": "405"
+    "category.music_video": "406"
+    "category.sports": "407"
+    "category.music": "408"
+    "category.game": "410"
+    "category.other": "411"
+    "default": "401"
+
+  medium:
+    "medium.uhd_bluray": "11"
+    "medium.bluray": "1"
+    "medium.remux": "3"
+    "medium.uhd_remux": "15"
+    "medium.remux_tv": "12"
+    "medium.uhd_remux_tv": "16"
+    "medium.encode": "7"
+    "medium.encode_tv": "14"
+    "medium.webdl": "10"
+    "medium.webdl_tv": "13"
+    "medium.hdtv": "5"
+    "medium.dvd": "6"
+    "medium.cd": "8"
+    "medium.track": "9"
+    "medium.minibd": "4"
+    "medium.other": "0"
+    "default": "0"
+
+  video_codec:
+    "video.h265": "14"
+    "video.h264": "1"
+    "video.vc1": "2"
+    "video.x264": "16"
+    "video.mpeg2": "18"
+    "video.other": "5"
+    "default": "5"
+
+  audio_codec:
+    "audio.dtsx": "16"
+    "audio.dts_hd_ma": "1"
+    "audio.truehd": "3"
+    "audio.lpcm": "11"
+    "audio.dts": "4"
+    "audio.ac3": "2"
+    "audio.aac": "6"
+    "audio.flac": "7"
+    "audio.ape": "10"
+    "audio.wav": "17"
+    "audio.mpeg": "18"
+    "audio.other": "13"
+    "default": "13"
+
+  resolution:
+    "resolution.r1080p": "1"
+    "resolution.r1080i": "2"
+    "resolution.r2160p": "5"
+    "resolution.r720p": "3"
+    "resolution.sd": "4"
+    "resolution.ipad": "6"
+    "default": "0"
+
+  team:
+    "team.hdu": "2"
+    "team.other": "5"
+    "default": "5"
+
+  tag:
+    "tag.国语": "gy"
+    "tag.粤语": "yy"
+    "tag.日语": "ja"
+    "tag.韩语": "ko"
+    "tag.特效": "tx"
+    "tag.中字": "zz"
+    "tag.连载": "lz"
+    "tag.完结": "wj"
+    "tag.DIY": "diy"
+    "tag.dolby_vision": "db"
+    "tag.hdr10": "hdr10"
+    "tag.hdr10plus": "hdrm"
+    "tag.hlg": "hlg"
+    "tag.hdr_vivid": "hdrv"
+    "tag.高码率": "hq"
+    "tag.高帧率": "hfr"
+    "tag.应求": "yq"
+    "default": null

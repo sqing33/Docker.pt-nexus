@@ -1,0 +1,293 @@
+# PtVicomo站点的配置文件
+# 基于三层解耦模型重构，包含source_parsers和标准化的mappings
+
+site_name: "PtVicomo"
+
+# 表单字段定义 - 定义站点上传表单中各字段的标识符
+form_fields:
+  category: "type"
+  medium: "medium_sel[4]"
+  video_codec: "codec_sel[4]"
+  audio_codec: "audiocodec_sel[4]"
+  resolution: "standard_sel[4]"
+  team: "team_sel[4]"
+  source: "source_sel[4]"
+  tags[4][]: "tags[4][]"
+
+# 标准化键映射 - 定义源文本到标准化键的映射规则
+# source_parsers部分：定义如何从原始数据解析出标准化参数
+source_parsers:
+  source_params:
+    type:
+      source_key: "类型"
+    medium:
+      source_key: "媒介"
+    video_codec:
+      source_key: "视频编码"
+    audio_codec:
+      source_key: "音频编码"
+    resolution:
+      source_key: "分辨率"
+    team:
+      source_key: "制作组"
+    source:
+      source_key: "国家/地区"
+    tags[4][]:
+      source_key: "标签"
+
+  # 标准化键映射规则（从原始文本到标准化键）
+  # 将站点下拉菜单的文本映射到全局标准化键
+  standard_keys:
+    type:
+      "电影": "category.movie"
+      "电视剧": "category.tv_series"
+      "短剧": "category.playlet"
+      "纪录片": "category.documentaries"
+      "动画": "category.animation"
+      "儿童动画": "category.cartoon"
+      "综艺": "category.tv_shows"
+      "音乐": "category.music"
+      "MV": "category.music_video"
+
+    medium:
+      "UHD Blu-ray": "medium.uhd_bluray"
+      "Blu-ray": "medium.bluray"
+      "Remux": "medium.remux"
+      "Encode": "medium.encode"
+      "WEB-DL": "medium.webdl"
+      "HDTV": "medium.hdtv"
+      "DVDR": "medium.dvdr"
+      "DVD": "medium.dvd"
+      "CD": "medium.cd"
+      "Track": "medium.track"
+      "Other": "medium.other"
+
+    video_codec:
+      "H.266/VVC": "video.h266"
+      "AV1": "video.av1"
+      "H.265/HEVC": "video.h265"
+      "H.264/AVC": "video.h264"
+      "VP9": "video.vp9"
+      "MPEG-4/Xvid": "video.mpeg4"
+      "VP8": "video.vp8"
+      "VC-1": "video.vc1"
+      "Other": "video.other"
+
+    audio_codec:
+      "Dolby TrueHD": "audio.truehd"
+      "DTS:X": "audio.dtsx"
+      "DTS-HDMA": "audio.dts_hd_ma"
+      "DDP/EAC-3": "audio.ddp"
+      "DTS": "audio.dts"
+      "FLAC": "audio.flac"
+      "AAC": "audio.aac"
+      "DD/AC3": "audio.ac3"
+      "MP3": "audio.mp3"
+      "APE": "audio.ape"
+      "LPCM": "audio.lpcm"
+      "WAV": "audio.wav"
+      "M4A": "audio.m4a"
+      "OGG": "audio.ogg"
+      "Other": "audio.other"
+
+    resolution:
+      "8K/4320p": "resolution.r4320p"
+      "4K/2160p": "resolution.r2160p"
+      "1080p": "resolution.r1080p"
+      "1080i": "resolution.r1080i"
+      "720p": "resolution.r720p"
+      "480p": "resolution.r480p"
+      "Other": "resolution.other"
+
+    team:
+      "Eleph": "team.eleph"
+      "ElephWeb": "team.elephweb"
+      "DYZ": "team.dyz"
+      "HDHome": "team.hdhome"
+      "HDH": "team.hdh"
+      "HDHTV": "team.hdhtv"
+      "FRDS": "team.frds"
+      "PTerWEB": "team.pterweb"
+      "HHWEB": "team.hhweb"
+      "HaresWEB": "team.haresweb"
+      "QHstudIo": "team.qhstudio"
+      "HDSky": "team.hdsky"
+      "HDSWEB": "team.hdsweb"
+      "OurTV": "team.ourtv"
+      "CHDBits": "team.chdbits"
+      "CHDWEB": "team.chdweb"
+      "YingWEB": "team.yingweb"
+      "ADWeb": "team.adweb"
+      "AGSVWEB": "team.agsvweb"
+      "CMCT": "team.cmct"
+      "Wiki": "team.wiki"
+      "PTP": "team.ptp"
+      "BeyondHD": "team.beyondhd"
+      "AHDBits": "team.ahdbits"
+      "AHD": "team.ahd"
+      "AHDTV": "team.ahdtv"
+      "AHDWEB": "team.ahdweb"
+      "ZmWeb": "team.zmweb"
+      "GodDramas": "team.goddramas"
+      "UKR": "team.ukr"
+      "Other": "team.other"
+
+    source:
+      "中国大陆": "source.china"
+      "港澳台地区": "source.hongkong_taiwan"
+      "欧美": "source.western"
+      "韩国": "source.korea"
+      "日本": "source.japan"
+      "东南亚": "source.southeast_asia"
+      "印度": "source.india"
+      "其他国家/地区": "source.other"
+
+    tag:
+      "禁转": "tag.禁转"
+      "DIY": "tag.DIY"
+      "首发": "tag.首发"
+      "特效": "tag.特效"
+      "稀缺": "tag.稀缺"
+      "国语": "tag.国语"
+      "中字": "tag.中字"
+      "Dolby Vison": "tag.dolby_vision"
+      "Dolby Atmos": "tag.dolby_atmos"
+      "HDR": "tag.HDR"
+      "驻站": "tag.驻站"
+      "合集": "tag.合集"
+      "HDR 10+": "tag.hdr10plus"
+      "PTP金种": "tag.ptp_golden"
+      "完结": "tag.完结"
+      "HDR 10": "tag.hdr10"
+
+# 参数映射规则 - 定义如何将标准化键映射到站点特定参数
+mappings:
+  type:
+    "category.movie": "401"
+    "category.tv_series": "402"
+    "category.playlet": "415"
+    "category.documentaries": "404"
+    "category.animation": "405"
+    "category.cartoon": "416"
+    "category.tv_shows": "403"
+    "category.music": "409"
+    "category.music_video": "406"
+    "default": "401"
+
+  medium:
+    "medium.uhd_bluray": "8"
+    "medium.bluray": "9"
+    "medium.remux": "10"
+    "medium.encode": "11"
+    "medium.webdl": "17"
+    "medium.hdtv": "12"
+    "medium.dvdr": "13"
+    "medium.dvd": "14"
+    "medium.cd": "15"
+    "medium.track": "18"
+    "medium.other": "16"
+    "default": "11"
+
+  video_codec:
+    "video.h266": "7"
+    "video.av1": "10"
+    "video.h265": "6"
+    "video.h264": "1"
+    "video.vp9": "8"
+    "video.mpeg4": "4"
+    "video.vp8": "9"
+    "video.vc1": "2"
+    "video.other": "5"
+    "default": "5"
+
+  audio_codec:
+    "audio.truehd": "16"
+    "audio.dtsx": "14"
+    "audio.dts_hd_ma": "15"
+    "audio.ddp": "19"
+    "audio.dts": "3"
+    "audio.flac": "1"
+    "audio.aac": "6"
+    "audio.ac3": "9"
+    "audio.mp3": "4"
+    "audio.ape": "2"
+    "audio.lpcm": "18"
+    "audio.wav": "11"
+    "audio.m4a": "12"
+    "audio.ogg": "5"
+    "audio.other": "7"
+    "default": "7"
+
+  resolution:
+    "resolution.r4320p": "6"
+    "resolution.r2160p": "5"
+    "resolution.r1080p": "1"
+    "resolution.r1080i": "2"
+    "resolution.r720p": "7"
+    "resolution.r480p": "8"
+    "resolution.other": "9"
+    "default": "7"
+
+  team:
+    "team.eleph": "3"
+    "team.elephweb": "2"
+    "team.dyz": "35"
+    "team.hdhome": "29"
+    "team.hdh": "27"
+    "team.hdhtv": "28"
+    "team.frds": "10"
+    "team.pterweb": "11"
+    "team.hhweb": "12"
+    "team.haresweb": "13"
+    "team.qhstudio": "14"
+    "team.hdsky": "15"
+    "team.hdsweb": "16"
+    "team.ourtv": "18"
+    "team.chdbits": "19"
+    "team.chdweb": "23"
+    "team.yingweb": "17"
+    "team.adweb": "22"
+    "team.agsvweb": "21"
+    "team.cmct": "20"
+    "team.wiki": "26"
+    "team.ptp": "25"
+    "team.beyondhd": "24"
+    "team.ahdbits": "30"
+    "team.ahd": "31"
+    "team.ahdtv": "32"
+    "team.ahdweb": "33"
+    "team.zmweb": "34"
+    "team.goddramas": "8"
+    "team.ukr": "9"
+    "team.other": "5"
+    "default": "5"
+
+  source:
+    "source.china": "30"
+    "source.hongkong_taiwan": "31"
+    "source.western": "32"
+    "source.korea": "33"
+    "source.japan": "34"
+    "source.southeast_asia": "35"
+    "source.india": "36"
+    "source.other": "37"
+    "default": "30"
+
+  tag:
+    "tag.禁转": 1
+    "tag.DIY": 4
+    "tag.首发": 2
+    "tag.特效": 8
+    "tag.稀缺": 12
+    "tag.国语": 5
+    "tag.中字": 6
+    "tag.dolby_vision": 9
+    "tag.dolby_atmos": 17
+    "tag.HDR": 7
+    "tag.驻站": 14
+    "tag.合集": 15
+    "tag.hdr10plus": 10
+    "tag.ptp_golden": 16
+    "tag.完结": 13
+    "tag.hdr10": 11
+    "default": null

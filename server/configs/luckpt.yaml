@@ -31,37 +31,6 @@ source_parsers:
     source:
       source_key: "产地"
 
-  title_components:
-    title:
-      source_key: "主标题"
-    year:
-      source_key: "年份"
-    season_episode:
-      source_key: "季集"
-    status:
-      source_key: "剧集状态"
-    edition:
-      source_key: "发布版本"
-    resolution:
-      source_key: "分辨率"
-    platform:
-      source_key: "片源平台"
-    medium:
-      source_key: "媒介"
-    video_codec:
-      source_key: "视频编码"
-    video_format:
-      source_key: "视频格式"
-    hdr_format:
-      source_key: "HDR格式"
-    bit_depth:
-      source_key: "色深"
-    frame_rate:
-      source_key: "帧率"
-    audio_codec:
-      source_key: "音频编码"
-    team:
-      source_key: "制作组"
 
   # 标准化键映射规则（从原始文本到标准化键）
   standard_keys:
@@ -69,54 +38,47 @@ source_parsers:
       "电影": "category.movie"
       "电视剧": "category.tv_series"
       "动画": "category.animation"
-      "动漫": "category.animation"
       "MV": "category.music_video"
       "音乐": "category.music"
+      "其他": "category.other"
       "综艺": "category.tv_shows"
       "纪录片": "category.documentaries"
       "体育": "category.sports"
       "短剧": "category.playlet"
-      "其他": "category.other"
 
     medium:
-      "Blu-ray": "medium.bluray"
-      "BluRay": "medium.bluray"
-      "UHD Blu-ray": "medium.uhd_bluray"
-      "Remux": "medium.remux"
-      "Encode": "medium.encode"
-      "MiniBD": "medium.minibd"
-      "WEB-DL": "medium.webdl"
-      "WEBDL": "medium.webdl"
-      "HDTV": "medium.hdtv"
-      "DVD": "medium.dvd"
-      "CD": "medium.cd"
       "Track": "medium.track"
+      "CD": "medium.cd"
+      "DVD": "medium.dvd"
+      "HDTV": "medium.hdtv"
+      "MiniBD": "medium.minibd"
+      "Encode": "medium.encode"
+      "Remux": "medium.remux"
+      "Blu-ray": "medium.bluray"
+      "UHD Blu-ray": "medium.uhd_bluray"
+      "WEB-DL": "medium.webdl"
       "Other": "medium.other"
 
     video_codec:
       "H.264/AVC": "video.h264"
-      "H.265/HEVC": "video.h265"
+      "AV1": "video.av1"
       "VC-1": "video.vc1"
       "MPEG-2": "video.mpeg2"
-      "AV1": "video.av1"
-      "MPEG-4/XviD": "video.xvid"
       "Other": "video.other"
+      "H.265/HEVC": "video.h265"
+      "MPEG-4/XviD": "video.xvid"
 
     audio_codec:
       "FLAC": "audio.flac"
       "APE": "audio.ape"
       "DTS": "audio.dts"
-      "DTS-X": "audio.dtsx"
-      "DTS-HD": "audio.dts_hd_ma"
       "MP3": "audio.mp3"
       "OGG": "audio.ogg"
       "AAC": "audio.aac"
       "Other": "audio.other"
       "DD/AC3": "audio.ac3"
-      "AC3": "audio.ac3"
       "TrueHD Atmos": "audio.truehd_atmos"
       "DDP/E-AC3": "audio.ddp"
-      "E-AC3": "audio.ddp"
       "LPCM": "audio.lpcm"
       "TrueHD": "audio.truehd"
       "DTS:X": "audio.dtsx"
@@ -126,31 +88,37 @@ source_parsers:
 
     resolution:
       "1080p/1080i": "resolution.r1080p"
-      "1080p": "resolution.r1080p"
-      "1080i": "resolution.r1080p"
       "720p/720i": "resolution.r720p"
-      "720p": "resolution.r720p"
-      "720i": "resolution.r720p"
       "480p/480i": "resolution.r480p"
-      "480p": "resolution.r480p"
-      "480i": "resolution.r480p"
       "2K/1440p/1440i": "resolution.r1440p"
-      "1440p": "resolution.r1440p"
-      "1440i": "resolution.r1440p"
       "4K/2160p/2160i": "resolution.r2160p"
-      "2160p": "resolution.r2160p"
-      "2160i": "resolution.r2160p"
       "8K/4320p/4320i": "resolution.r4320p"
-      "4320p": "resolution.r4320p"
-      "4320i": "resolution.r4320p"
       "Other": "resolution.other"
 
     team:
+      "Other": "team.other"
       "LUCKWEB": "team.luckweb"
       "LUCKMUSIC": "team.luckmusic"
       "FRDS": "team.frds"
       "StarfallWeb": "team.starfallweb"
-      "Other": "team.other"
+
+    tag:
+      "禁转": "tag.禁转"
+      "首发": "tag.首发"
+      "DIY": "tag.DIY"
+      "国语": "tag.国语"
+      "中字": "tag.中字"
+      "英语": "tag.英语"
+      "菁彩HDR": "tag.菁彩HDR"
+      "Dolby Vision": "tag.Dolby_Vision"
+      "HDR10": "tag.hdr10"
+      "HDR10+": "tag.hdr10plus"
+      "合集": "tag.合集"
+      "特效": "tag.特效"
+      "粤语": "tag.粤语"
+      "大包": "tag.大包"
+      "完结": "tag.完结"
+      "连载": "tag.连载"
 
 # 参数映射规则 - 定义如何将标准化键映射到站点特定参数
 mappings:
@@ -160,35 +128,35 @@ mappings:
     "category.animation": "405"
     "category.music_video": "406"
     "category.music": "408"
+    "category.other": "409"
     "category.tv_shows": "410"
     "category.documentaries": "411"
     "category.sports": "412"
-    "category.short_drama": "413"
-    "category.other": "409"
+    "category.playlet": "413"
     "default": "409"
 
   medium:
+    "medium.track": "9"
+    "medium.cd": "8"
+    "medium.dvd": "6"
+    "medium.hdtv": "5"
+    "medium.minibd": "4"
+    "medium.encode": "7"
+    "medium.remux": "3"
     "medium.bluray": "1"
     "medium.uhd_bluray": "10"
-    "medium.remux": "3"
-    "medium.encode": "7"
-    "medium.minibd": "4"
     "medium.webdl": "11"
-    "medium.hdtv": "5"
-    "medium.dvd": "6"
-    "medium.cd": "8"
-    "medium.track": "9"
     "medium.other": "13"
     "default": "13"
 
   video_codec:
     "video.h264": "1"
-    "video.h265": "6"
+    "video.av1": "2"
     "video.vc1": "3"
     "video.mpeg2": "4"
-    "video.av1": "2"
-    "video.xvid": "12"
     "video.other": "5"
+    "video.h265": "6"
+    "video.xvid": "12"
     "default": "5"
 
   audio_codec:
@@ -221,21 +189,24 @@ mappings:
     "default": "8"
 
   team:
+    "team.other": "5"
     "team.luckweb": "7"
     "team.luckmusic": "8"
     "team.frds": "9"
     "team.starfallweb": "10"
-    "team.other": "5"
     "default": "5"
 
   tag:
+    "tag.禁转": 1
+    "tag.首发": 2
     "tag.DIY": 4
     "tag.国语": 5
     "tag.中字": 6
+    "tag.英语": 22
     "tag.菁彩HDR": 21
-    "tag.Dolby Vision": 20
-    "tag.HDR10": 19
-    "tag.HDR10+": 18
+    "tag.Dolby_Vision": 20
+    "tag.hdr10": 19
+    "tag.hdr10plus": 18
     "tag.合集": 17
     "tag.特效": 16
     "tag.粤语": 14

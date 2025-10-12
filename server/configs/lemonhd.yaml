@@ -1,0 +1,184 @@
+# LemonHD站点的配置文件
+# 基于三层解耦模型重构，包含source_parsers和标准化的mappings
+
+site_name: "LemonHD"
+
+# 表单字段定义 - 定义站点上传表单中各字段的标识符
+form_fields:
+  category: "type"
+  medium: "medium_sel"
+  video_codec: "codec_sel"
+  audio_codec: "audiocodec_sel"
+  resolution: "standard_sel"
+  source: "team_sel"
+  tags[]: "tags[]"
+
+# 标准化键映射 - 定义源文本到标准化键的映射规则
+# source_parsers部分：定义如何从原始数据解析出标准化参数
+source_parsers:
+  source_params:
+    type:
+      source_key: "类型"
+    medium:
+      source_key: "媒介"
+    video_codec:
+      source_key: "编码"
+    audio_codec:
+      source_key: "音频编码"
+    resolution:
+      source_key: "分辨率"
+    source:
+      source_key: "地区"
+
+  # 标准化键映射规则（从原始文本到标准化键）
+  # 将站点下拉菜单的文本映射到全局标准化键
+  standard_keys:
+    type:
+      "Movies 电影": "category.movie"
+      "Music 音乐": "category.music"
+      "Animations 动画": "category.animation"
+      "Music Videos MV": "category.music_video"
+      "Documentaries 纪录片": "category.documentaries"
+      "TV Series 剧集": "category.tv_series"
+      "TV Shows 综艺": "category.tv_shows"
+      "3D": "category.3d"
+
+    medium:
+      "Blu-ray": "medium.bluray"
+      "Encode": "medium.encode"
+      "Remux": "medium.remux"
+      "WEB-DL": "medium.webdl"
+      "HDTV": "medium.hdtv"
+      "4K-UltraHD": "medium.uhd_bluray"
+      "8K-UltraHD": "medium.uhd_bluray"
+      "DVD": "medium.dvd"
+      "Other": "medium.other"
+
+    video_codec:
+      "H.264/AVC": "video.h264"
+      "H.265/HEVC": "video.h265"
+      "VC-1": "video.vc1"
+      "MPEG-2": "video.mpeg2"
+      "Other": "video.other"
+
+    audio_codec:
+      "Atmos TrueHD": "audio.truehd_atmos"
+      "TrueHD": "audio.truehd"
+      "DTS-HD MA": "audio.dts_hd_ma"
+      "DTS X": "audio.dtsx"
+      "DTS": "audio.dts"
+      "AC3/DD": "audio.ac3"
+      "EAC3/DDP": "audio.ddp"
+      "AAC": "audio.aac"
+      "LPCM": "audio.lpcm"
+      "FLAC": "audio.flac"
+      "WAV": "audio.wav"
+      "APE": "audio.ape"
+      "Other": "audio.other"
+
+    resolution:
+      "480p": "resolution.r480p"
+      "720p": "resolution.r720p"
+      "1080i": "resolution.r1080i"
+      "1080p": "resolution.r1080p"
+      "2160p": "resolution.r2160p"
+      "4320p": "resolution.r4320p"
+      "Other": "resolution.other"
+
+    source:
+      "EU/US 欧美": "source.western"
+      "HK/TW 港台": "source.hongkong"
+      "CN 中国大陆": "source.china"
+      "JP/KO 日韩": "source.japan"
+      "IN 印度": "source.india"
+      "Other 其他": "source.other"
+
+    tag:
+      "官组": "tag.官组"
+      "DIY": "tag.DIY"
+      "禁转": "tag.禁转"
+      "中字": "tag.中字"
+      "国语": "tag.国语"
+      "粤语": "tag.粤语"
+      "DV": "tag.DV"
+      "HDR": "tag.HDR"
+      "柠檬爱原盘": "tag.untouch"
+
+# 参数映射规则 - 定义如何将标准化键映射到站点特定参数
+mappings:
+  type:
+    "category.movie": "401"
+    "category.music": "411"
+    "category.animation": "405"
+    "category.music_video": "406"
+    "category.documentaries": "404"
+    "category.tv_series": "402"
+    "category.tv_shows": "403"
+    "category.3d": "410"
+    "default": "401"
+
+  medium:
+    "medium.bluray": "1"
+    "medium.encode": "13"
+    "medium.remux": "12"
+    "medium.webdl": "10"
+    "medium.hdtv": "11"
+    "medium.uhd_bluray": "3"
+    "medium.dvd": "2"
+    "medium.other": "5"
+    "default": "5"
+
+  video_codec:
+    "video.h264": "1"
+    "video.h265": "3"
+    "video.vc1": "2"
+    "video.mpeg2": "4"
+    "video.other": "100"
+    "default": "100"
+
+  audio_codec:
+    "audio.truehd_atmos": "1"
+    "audio.truehd": "2"
+    "audio.dts_hd_ma": "3"
+    "audio.dtsx": "4"
+    "audio.dts": "5"
+    "audio.ac3": "6"
+    "audio.ddp": "7"
+    "audio.aac": "8"
+    "audio.lpcm": "9"
+    "audio.flac": "10"
+    "audio.wav": "11"
+    "audio.ape": "12"
+    "audio.other": "100"
+    "default": "100"
+
+  resolution:
+    "resolution.r480p": "4"
+    "resolution.r720p": "3"
+    "resolution.r1080i": "2"
+    "resolution.r1080p": "1"
+    "resolution.r2160p": "5"
+    "resolution.r4320p": "6"
+    "resolution.other": "100"
+    "default": "100"
+
+  source:
+    "source.western": "1"
+    "source.hongkong": "2"
+    "source.china": "3"
+    "source.japan": "4"
+    "source.india": "5"
+    "source.other": "10"
+    "default": "10"
+
+  tag:
+    "tag.官组": 1
+    "tag.DIY": 1
+    "tag.禁转": 1
+    "tag.中字": 1
+    "tag.国语": 1
+    "tag.粤语": 1
+    "tag.DV": 1
+    "tag.HDR": 1
+    "tag.untouch": 1
+    "default": null

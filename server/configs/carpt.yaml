@@ -30,61 +30,27 @@ source_parsers:
     team:
       source_key: "制作组"
 
-  title_components:
-    title:
-      source_key: "主标题"
-    season_episode:
-      source_key: "季集"
-    year:
-      source_key: "年份"
-    status:
-      source_key: "剧集状态"
-    edition:
-      source_key: "发布版本"
-    resolution:
-      source_key: "分辨率"
-    platform:
-      source_key: "片源平台"
-    medium:
-      source_key: "媒介"
-    video_codec:
-      source_key: "视频编码"
-    video_format:
-      source_key: "视频格式"
-    hdr_format:
-      source_key: "HDR格式"
-    bit_depth:
-      source_key: "色深"
-    frame_rate:
-      source_key: "帧率"
-    audio_codec:
-      source_key: "音频编码"
-    team:
-      source_key: "制作组"
-    source:
-      source_key: "产地"
-
   # 标准化键映射规则（从原始文本到标准化键）
   standard_keys:
     type:
-      "电影": "category.movie"
-      "连续剧": "category.tv_series"
-      "动漫": "category.animation"
-      "纪录片": "category.documentaries"
-      "综艺": "category.tv_shows"
-      "音乐": "category.music"
-      "其他": "category.other"
+      "电影/Movies": "category.movie"
+      "连续剧/TV-Series": "category.tv_series"
+      "动漫/Animation": "category.animation"
+      "纪录片/Documentary": "category.documentaries"
+      "综艺/TV-Show": "category.tv_shows"
+      "音乐/Music": "category.music"
+      "其他/Other": "category.other"
 
     medium:
-      "Blu-ray": "medium.bluray"
-      "Blu-rayUHD": "medium.uhd_bluray"
-      "Remux": "medium.remux"
       "Encode": "medium.encode"
       "WEB": "medium.webdl"
       "HDTV": "medium.hdtv"
       "DVDRip": "medium.dvdr"
       "CD": "medium.cd"
       "Other": "medium.other"
+      "Blu-ray": "medium.bluray"
+      "Blu-rayUHD": "medium.uhd_bluray"
+      "Remux": "medium.remux"
 
     video_codec:
       "H.264/AVC/x264": "video.h264"

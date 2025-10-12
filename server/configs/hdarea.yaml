@@ -1,0 +1,190 @@
+# HDArea站点的配置文件
+# 基于三层解耦模型重构，包含source_parsers和标准化的mappings
+
+site_name: "HDArea"
+
+# 表单字段定义 - 定义站点上传表单中各字段的标识符
+form_fields:
+  category: "type"
+  medium: "medium_sel"
+  video_codec: "codec_sel"
+  audio_codec: "audiocodec_sel"
+  resolution: "standard_sel"
+  team: "team_sel"
+
+# 标准化键映射 - 定义源文本到标准化键的映射规则
+# source_parsers部分：定义如何从原始数据解析出标准化参数
+source_parsers:
+  source_params:
+    type:
+      source_key: "类型"
+    medium:
+      source_key: "媒介"
+    video_codec:
+      source_key: "编码"
+    audio_codec:
+      source_key: "音频编码"
+    resolution:
+      source_key: "分辨率"
+    team:
+      source_key: "制作组"
+
+  # 标准化键映射规则（从原始文本到标准化键）
+  # 将站点下拉菜单的文本映射到全局标准化键
+  standard_keys:
+    type:
+      "Movie UHD-4K": "category.movie_uhd"
+      "Movies Blu-ray": "category.movie_bluray"
+      "Movies REMUX": "category.movie_remux"
+      "Movies 3D": "category.movie_3d"
+      "Movies 1080p": "category.movie_1080p"
+      "Movies 720p": "category.movie_720p"
+      "Movies DVD": "category.movie_dvd"
+      "Movies WEB-DL": "category.movie_webdl"
+      "Movies HDTV": "category.movie_hdtv"
+      "Movies iPad": "category.movie_ipad"
+      "Documentaries": "category.documentaries"
+      "Animations": "category.animation"
+      "TV Series": "category.tv_series"
+      "TV Shows": "category.tv_shows"
+      "Music Videos": "category.music_video"
+      "Sports": "category.sports"
+      "Misc": "category.other"
+      "HQ Audio": "category.music"
+
+    medium:
+      "Blu-ray": "medium.bluray"
+      "REMUX": "medium.remux"
+      "Encode": "medium.encode"
+      "WEB-DL": "medium.webdl"
+      "MiniBD": "medium.minibd"
+      "HDTV": "medium.hdtv"
+      "HD DVD": "medium.hddvd"
+      "DVDR": "medium.dvdr"
+      "CD": "medium.cd"
+
+    video_codec:
+      "x264": "video.x264"
+      "MPEG-4": "video.mpeg4"
+      "x265": "video.x265"
+      "MPEG-2": "video.mpeg2"
+      "Xvid": "video.xvid"
+      "VC-1": "video.vc1"
+      "Other": "video.other"
+
+    audio_codec:
+      "AAC": "audio.aac"
+      "DD5.1/AC3": "audio.ac3"
+      "TrueHD": "audio.truehd"
+      "DTS": "audio.dts"
+      "DTS-HD MA": "audio.dts_hd_ma"
+      "LPCM": "audio.lpcm"
+      "WAV": "audio.wav"
+      "APE": "audio.ape"
+      "FLAC": "audio.flac"
+      "TrueHD Atmos": "audio.truehd_atmos"
+      "DD2.0/AC3": "audio.ac3"
+
+    resolution:
+      "720p": "resolution.r720p"
+      "1080p": "resolution.r1080p"
+      "SD": "resolution.sd"
+      "1080i": "resolution.r1080i"
+      "4K": "resolution.r2160p"
+
+    team:
+      "EPiC": "team.epic"
+      "HDArea": "team.hdarea"
+      "HDWING": "team.hdwing"
+      "WiKi": "team.wiki"
+      "TTG": "team.ttg"
+      "other": "team.other"
+      "MTeam": "team.mteam"
+      "HDApad": "team.hdapad"
+      "CHD": "team.chd"
+      "HDAccess": "team.hdaccess"
+      "HDATV": "team.hdatv"
+      "cXcY": "team.cxcy"
+      "CMCT": "team.cmct"
+
+# 参数映射规则 - 定义如何将标准化键映射到站点特定参数
+mappings:
+  type:
+    "category.movie_uhd": "300"
+    "category.movie_bluray": "401"
+    "category.movie_remux": "415"
+    "category.movie_3d": "416"
+    "category.movie_1080p": "410"
+    "category.movie_720p": "411"
+    "category.movie_dvd": "414"
+    "category.movie_webdl": "412"
+    "category.movie_hdtv": "413"
+    "category.movie_ipad": "417"
+    "category.documentaries": "404"
+    "category.animation": "405"
+    "category.tv_series": "402"
+    "category.tv_shows": "403"
+    "category.music_video": "406"
+    "category.sports": "407"
+    "category.other": "409"
+    "category.music": "408"
+    "default": "401"
+
+  medium:
+    "medium.bluray": "1"
+    "medium.remux": "3"
+    "medium.encode": "7"
+    "medium.webdl": "9"
+    "medium.minibd": "4"
+    "medium.hdtv": "5"
+    "medium.hddvd": "2"
+    "medium.dvdr": "6"
+    "medium.cd": "8"
+    "default": "7"
+
+  video_codec:
+    "video.x264": "7"
+    "video.mpeg4": "1"
+    "video.x265": "6"
+    "video.mpeg2": "4"
+    "video.xvid": "3"
+    "video.vc1": "2"
+    "video.other": "5"
+    "default": "5"
+
+  audio_codec:
+    "audio.aac": "6"
+    "audio.ac3": "5"
+    "audio.truehd": "7"
+    "audio.dts": "3"
+    "audio.dts_hd_ma": "4"
+    "audio.lpcm": "8"
+    "audio.wav": "9"
+    "audio.ape": "2"
+    "audio.flac": "1"
+    "audio.truehd_atmos": "10"
+    "default": "6"
+
+  resolution:
+    "resolution.r720p": "3"
+    "resolution.r1080p": "1"
+    "resolution.sd": "4"
+    "resolution.r1080i": "2"
+    "resolution.r2160p": "5"
+    "default": "3"
+
+  team:
+    "team.epic": "1"
+    "team.hdarea": "2"
+    "team.hdwing": "3"
+    "team.wiki": "4"
+    "team.ttg": "5"
+    "team.other": "6"
+    "team.mteam": "7"
+    "team.hdapad": "8"
+    "team.chd": "9"
+    "team.hdaccess": "10"
+    "team.hdatv": "11"
+    "team.cxcy": "12"
+    "team.cmct": "13"
+    "default": "6"

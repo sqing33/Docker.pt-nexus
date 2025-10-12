@@ -28,36 +28,6 @@ source_parsers:
     team:
       source_key: "制作组"
 
-  title_components:
-    title:
-      source_key: "主标题"
-    season_episode:
-      source_key: "季集"
-    year:
-      source_key: "年份"
-    status:
-      source_key: "剧集状态"
-    edition:
-      source_key: "发布版本"
-    resolution:
-      source_key: "分辨率"
-    platform:
-      source_key: "片源平台"
-    medium:
-      source_key: "媒介"
-    video_format:
-      source_key: "视频格式"
-    hdr_format:
-      source_key: "HDR格式"
-    bit_depth:
-      source_key: "色深"
-    frame_rate:
-      source_key: "帧率"
-    audio_codec:
-      source_key: "音频编码"
-    team:
-      source_key: "制作组"
-
   # 标准化键映射规则（从原始文本到标准化键）
   standard_keys:
     type:
@@ -74,18 +44,19 @@ source_parsers:
       "游戏 / Game": "category.game"
 
     medium:
-      "Blu-ray": "medium.bluray"
-      "Remux": "medium.remux"
-      "Encode": "medium.encode"
-      "MiniBD": "medium.minibd"
-      "HDTV": "medium.hdtv"
-      "DVDR": "medium.dvdr"
-      "DVD": "medium.dvd"
+      "其他资料": "medium.other"
       "CD": "medium.cd"
+      "DVDR": "medium.dvdr"
+      "HDTV": "medium.hdtv"
+      "MiniBD": "medium.minibd"
+      "Encode": "medium.encode"
+      "Remux": "medium.remux"
+      "HD DVD": "medium.hddvd"
+      "Blu-ray": "medium.bluray"
       "WEB-DL": "medium.webdl"
-      "Other": "medium.other"
 
     audio_codec:
+      "Other": "audio.other"
       "FLAC": "audio.flac"
       "APE": "audio.ape"
       "DTS": "audio.dts"
@@ -95,7 +66,6 @@ source_parsers:
       "MP3": "audio.mp3"
       "ALAC": "audio.alac"
       "WAV": "audio.wav"
-      "Other": "audio.other"
 
     resolution:
       "480p": "resolution.r480p"
@@ -133,19 +103,20 @@ mappings:
     "default": "409"
 
   medium:
-    "medium.bluray": "1"
-    "medium.remux": "3"
-    "medium.encode": "7"
-    "medium.minibd": "4"
-    "medium.hdtv": "5"
-    "medium.dvdr": "6"
-    "medium.dvd": "6"
-    "medium.cd": "8"
-    "medium.webdl": "10"
     "medium.other": "12"
+    "medium.cd": "8"
+    "medium.dvdr": "6"
+    "medium.hdtv": "5"
+    "medium.minibd": "4"
+    "medium.encode": "7"
+    "medium.remux": "3"
+    "medium.hddvd": "2"
+    "medium.bluray": "1"
+    "medium.webdl": "10"
     "default": "12"
 
   audio_codec:
+    "audio.other": "7"
     "audio.flac": "1"
     "audio.ape": "2"
     "audio.dts": "3"
@@ -155,7 +126,6 @@ mappings:
     "audio.mp3": "4"
     "audio.alac": "9"
     "audio.wav": "10"
-    "audio.other": "7"
     "default": "7"
 
   resolution:

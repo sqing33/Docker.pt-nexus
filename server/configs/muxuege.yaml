@@ -25,38 +25,6 @@ source_parsers:
     team:
       source_key: "制作组"
 
-  title_components:
-    title:
-      source_key: "主标题"
-    season_episode:
-      source_key: "季集"
-    year:
-      source_key: "年份"
-    status:
-      source_key: "剧集状态"
-    edition:
-      source_key: "发布版本"
-    resolution:
-      source_key: "分辨率"
-    platform:
-      source_key: "片源平台"
-    medium:
-      source_key: "媒介"
-    video_codec:
-      source_key: "视频编码"
-    video_format:
-      source_key: "视频格式"
-    hdr_format:
-      source_key: "HDR格式"
-    bit_depth:
-      source_key: "色深"
-    frame_rate:
-      source_key: "帧率"
-    audio_codec:
-      source_key: "音频编码"
-    team:
-      source_key: "制作组"
-
   # 标准化键映射规则 (从原始文本到标准化键)
   standard_keys:
     type:
@@ -69,7 +37,7 @@ source_parsers:
       "体育": "category.sports"
       "音乐": "category.music"
       "其他": "category.other"
-      "系统镜像": "category.os" # 自定义标准键
+      "系统镜像": "category.os"
 
     medium:
       "Track": "medium.track"
@@ -79,9 +47,9 @@ source_parsers:
       "MiniBD": "medium.minibd"
       "Encode": "medium.encode"
       "Remux": "medium.remux"
-      "HD DVD": "medium.hddvd" # 自定义标准键
+      "HD DVD": "medium.hddvd"
       "Blu-ray": "medium.bluray"
-      "web": "medium.webdl" # 将 web 映射为 webdl
+      "web": "medium.webdl"
 
     video_codec:
       "H.264": "video.h264"
@@ -95,20 +63,20 @@ source_parsers:
       "1080p": "resolution.r1080p"
       "1080i": "resolution.r1080i"
       "720p": "resolution.r720p"
-      "SD": "resolution.sd" # 自定义标准键
+      "SD": "resolution.sd"
       "2160p": "resolution.r2160p"
 
     team:
       "StarfallWeb": "team.starfallweb"
       "HDS": "team.hds"
-      "CHD": "team.chd" # 此处假设为CHD的通用标识
+      "CHD": "team.chd"
       "MySiLU": "team.mysilu"
       "WiKi": "team.wiki"
       "Other": "team.other"
       "likesnow": "team.likesnow"
       "MTeam": "team.mteam"
       "3Mweb": "team.3mweb"
-      "AiMWeb": "team.ailmweb" # 注意全局文件中是 AilMWeb
+      "AiMWeb": "team.aimweb"
       "Tmp": "team.tmp"
       "TPTV": "team.tptv"
       "Mweb": "team.mweb"
@@ -156,7 +124,7 @@ mappings:
     "resolution.r720p": "3"
     "resolution.sd": "4"
     "resolution.r2160p": "5"
-    "default": "1" # 默认设为 1080p
+    "default": "1"
 
   team:
     "team.starfallweb": "6"
@@ -168,7 +136,7 @@ mappings:
     "team.likesnow": "7"
     "team.mteam": "8"
     "team.3mweb": "9"
-    "team.ailmweb": "10"
+    "team.aimweb": "10"
     "team.tmp": "11"
     "team.tptv": "12"
     "team.mweb": "13"

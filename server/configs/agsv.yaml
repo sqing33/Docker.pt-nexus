@@ -31,52 +31,21 @@ source_parsers:
     source:
       source_key: "产地"
 
-  title_components:
-    title:
-      source_key: "主标题"
-    season_episode:
-      source_key: "季集"
-    year:
-      source_key: "年份"
-    status:
-      source_key: "剧集状态"
-    edition:
-      source_key: "发布版本"
-    resolution:
-      source_key: "分辨率"
-    platform:
-      source_key: "片源平台"
-    medium:
-      source_key: "媒介"
-    video_codec:
-      source_key: "视频编码"
-    video_format:
-      source_key: "视频格式"
-    hdr_format:
-      source_key: "HDR格式"
-    bit_depth:
-      source_key: "色深"
-    frame_rate:
-      source_key: "帧率"
-    audio_codec:
-      source_key: "音频编码"
-    team:
-      source_key: "制作组"
-
   # 标准化键映射规则（从原始文本到标准化键）
   standard_keys:
     type:
-      "电影": "category.movie"
-      "电视剧": "category.tv_series"
-      "综艺": "category.tv_shows"
-      "学习": "category.ebook"
-      "动漫": "category.animation"
-      "音乐": "category.music"
-      "体育": "category.sports"
-      "纪录片": "category.documentaries"
-      "软件": "category.software"
-      "游戏": "category.games"
-      "其他": "category.other"
+      "Movie(电影)": "category.movie"
+      "TV Series(电视剧)": "category.tv_series"
+      "TV Shows(综艺)": "category.tv_shows"
+      "Anime(动漫)": "category.animation"
+      "Documentaries(纪录片)": "category.documentaries"
+      "Playlet（短剧）": "category.playlet"
+      "Sports(体育)": "category.sports"
+      "MV(演唱)": "category.music_video"
+      "Music(音乐)": "category.music"
+      "Audio(音频)": "category.audio"
+      "Game(游戏)": "category.game"
+      "E-Book(电子书/有声书)": "category.ebook"
 
     medium:
       "UHD Blu-ray": "medium.uhd_bluray"
@@ -93,13 +62,9 @@ source_parsers:
     video_codec:
       "H.264/AVC": "video.h264"
       "H.265/HEVC": "video.h265"
-      "x264": "video.x264"
-      "x265": "video.x265"
       "VC-1": "video.vc1"
       "MPEG-2": "video.mpeg2"
       "AV1": "video.av1"
-      "VP9": "video.vp9"
-      "Xvid": "video.xvid"
       "Other": "video.other"
 
     audio_codec:
@@ -122,15 +87,11 @@ source_parsers:
       "Other": "audio.other"
 
     resolution:
-      "8K": "resolution.r8k"
-      "4K": "resolution.r4k"
-      "2160p": "resolution.r2160p"
-      "1440p": "resolution.r1440p"
-      "1080p": "resolution.r1080p"
-      "1080i": "resolution.r1080i"
-      "720p": "resolution.r720p"
-      "480p": "resolution.r480p"
-      "480i": "resolution.r480p"
+      "480p/480i": "resolution.r480p"
+      "720p/720i": "resolution.r720p"
+      "1080p/1080i": "resolution.r1080p"
+      "4K/2160p/2160i": "resolution.r2160p"
+      "8K/4320p/4320i": "resolution.r4320p"
       "Other": "resolution.other"
 
     team:
@@ -154,12 +115,13 @@ mappings:
     "category.tv_shows": "403"
     "category.animation": "405"
     "category.documentaries": "404"
-    "category.music": "406"
+    "category.playlet": "419"
     "category.sports": "407"
+    "category.music_video": "406"
+    "category.music": "411"
+    "category.audio": "408"
+    "category.game": "413"
     "category.ebook": "415"
-    "category.software": "413"
-    "category.games": "413"
-    "category.other": "413"
     "default": "413"
 
   medium:
@@ -181,8 +143,6 @@ mappings:
     "video.vc1": "2"
     "video.mpeg2": "4"
     "video.av1": "12"
-    "video.vp9": "10"
-    "video.xvid": "11"
     "video.other": "5"
     "default": "5"
 
@@ -207,10 +167,8 @@ mappings:
     "default": "7"
 
   resolution:
-    "resolution.r8k": "6"
-    "resolution.r4k": "5"
+    "resolution.r4320p": "6"
     "resolution.r2160p": "5"
-    "resolution.r1440p": "5"
     "resolution.r1080p": "1"
     "resolution.r1080i": "1"
     "resolution.r720p": "3"

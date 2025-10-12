@@ -1,0 +1,246 @@
+# Kufei站点的配置文件
+# 基于三层解耦模型重构，包含source_parsers和标准化的mappings
+
+site_name: "Kufei"
+
+# 表单字段定义 - 定义站点上传表单中各字段的标识符
+form_fields:
+  category: "type"
+  medium: "medium_sel[4]"
+  video_codec: "codec_sel[4]"
+  resolution: "standard_sel[4]"
+  team: "team_sel[4]"
+  audio_codec: "audiocodec_sel[4]"
+  tags[]: "tags[4][]"
+
+# 标准化键映射 - 定义源文本到标准化键的映射规则
+# source_parsers部分：定义如何从原始数据解析出标准化参数
+source_parsers:
+  source_params:
+    type:
+      source_key: "类型"
+    medium:
+      source_key: "媒介"
+    video_codec:
+      source_key: "编码"
+    resolution:
+      source_key: "分辨率"
+    team:
+      source_key: "制作组"
+    audio_codec:
+      source_key: "音频编码"
+
+  # 标准化键映射规则（从原始文本到标准化键）
+  # 将站点下拉菜单的文本映射到全局标准化键
+  standard_keys:
+    type:
+      "Movies/电影": "category.movie"
+      "TV Series/电视剧": "category.tv_series"
+      "TV Shows/综艺": "category.tv_shows"
+      "Animations/动画、动漫": "category.animation"
+      "Documentaries/纪录片": "category.documentaries"
+      "Music Videos/音乐、视频": "category.music_video"
+      "Sports/体育": "category.sports"
+      "Concern/演唱会": "category.concert"
+      "Education/教育": "category.education"
+      "Others/其他": "category.other"
+      "Audio Books/有声读物": "category.audiobook"
+      "Drama/戏剧": "category.drama"
+      "Software/软件": "category.software"
+      "E-Books/电子书": "category.ebook"
+      "Games/游戏": "category.game"
+
+    medium:
+      "Others": "medium.other"
+      "SACD": "medium.sacd"
+      "CD": "medium.cd"
+      "DVD": "medium.dvd"
+      "HDTV": "medium.hdtv"
+      "WEB-DL": "medium.webdl"
+      "Encode": "medium.encode"
+      "MiniSD": "medium.minisd"
+      "720P 压制": "medium.encode_720p"
+      "1080P/i 压制": "medium.encode_1080p"
+      "BD Remux": "medium.remux"
+      "BD DIY": "medium.bluray_diy"
+      "BD 原盘": "medium.bluray"
+      "UHD 压制": "medium.uhd_encode"
+      "UHD Remux": "medium.uhd_remux"
+      "UHD DIY": "medium.uhd_diy"
+      "UHD原盘": "medium.uhd_bluray"
+
+    video_codec:
+      "H.264/AVC": "video.h264"
+      "X264": "video.x264"
+      "H.265/HEVC": "video.h265"
+      "X265": "video.x265"
+      "VC-1": "video.vc1"
+      "MPEG-2": "video.mpeg2"
+      "MPEG-4": "video.mpeg4"
+      "Xvid": "video.xvid"
+      "AV1": "video.av1"
+      "Othe": "video.other"
+
+    resolution:
+      "Other": "resolution.other"
+      "SD": "resolution.sd"
+      "720p": "resolution.r720p"
+      "1080i": "resolution.r1080i"
+      "1080p": "resolution.r1080p"
+      "8K/4320P": "resolution.r4320p"
+      "4K/UHD/2160P": "resolution.r2160p"
+
+    team:
+      "HDS": "team.hds"
+      "CHD": "team.chd"
+      "MySiLU": "team.mysilu"
+      "WiKi": "team.wiki"
+      "Other": "team.other"
+
+    audio_codec:
+      "Other": "audio.other"
+      "LPCM": "audio.lpcm"
+      "DDP Atmos": "audio.ddp_atmos"
+      "MPEG": "audio.mpeg"
+      "TTA": "audio.tta"
+      "OGG": "audio.ogg"
+      "DSD": "audio.dsd"
+      "WAV": "audio.wav"
+      "AAC": "audio.aac"
+      "AC3": "audio.ac3"
+      "Dolby Digital/DD": "audio.ac3"
+      "DDP/DD+": "audio.ddp"
+      "FLAC": "audio.flac"
+      "True-HD": "audio.truehd"
+      "DTS-HD HR": "audio.dts_hd_hr"
+      "DTS-HDMA": "audio.dts_hd_ma"
+      "DTS X": "audio.dtsx"
+      "DTS": "audio.dts"
+      "TrueHD Atmos": "audio.truehd_atmos"
+      "MP3": "audio.mp3"
+      "APE": "audio.ape"
+
+    tag:
+      "音乐": "tag.music"
+      "禁转": "tag.禁转"
+      "动漫": "tag.动漫"
+      "首发": "tag.首发"
+      "DIY": "tag.DIY"
+      "英语": "tag.英语"
+      "国语": "tag.国语"
+      "中字": "tag.中字"
+      "HDR": "tag.HDR"
+      "游戏": "tag.game"
+      "应求": "tag.应求"
+      "完结": "tag.完结"
+      "书籍": "tag.books"
+
+# 参数映射规则 - 定义如何将标准化键映射到站点特定参数
+mappings:
+  type:
+    "category.movie": "401"
+    "category.tv_series": "402"
+    "category.tv_shows": "403"
+    "category.animation": "405"
+    "category.documentaries": "404"
+    "category.music_video": "406"
+    "category.sports": "407"
+    "category.concert": "414"
+    "category.education": "413"
+    "category.other": "409"
+    "category.audiobook": "416"
+    "category.drama": "415"
+    "category.software": "412"
+    "category.ebook": "411"
+    "category.game": "410"
+    "default": "401"
+
+  medium:
+    "medium.other": "16"
+    "medium.sacd": "15"
+    "medium.cd": "14"
+    "medium.dvd": "13"
+    "medium.hdtv": "12"
+    "medium.webdl": "11"
+    "medium.encode": "18"
+    "medium.minisd": "10"
+    "medium.encode_720p": "9"
+    "medium.encode_1080p": "8"
+    "medium.remux": "6"
+    "medium.bluray_diy": "5"
+    "medium.bluray": "4"
+    "medium.uhd_encode": "7"
+    "medium.uhd_remux": "3"
+    "medium.uhd_diy": "2"
+    "medium.uhd_bluray": "1"
+    "default": "18"
+
+  video_codec:
+    "video.h264": "1"
+    "video.x264": "2"
+    "video.h265": "3"
+    "video.x265": "4"
+    "video.vc1": "5"
+    "video.mpeg2": "6"
+    "video.mpeg4": "7"
+    "video.xvid": "8"
+    "video.av1": "9"
+    "video.other": "10"
+    "default": "10"
+
+  resolution:
+    "resolution.other": "7"
+    "resolution.sd": "4"
+    "resolution.r720p": "3"
+    "resolution.r1080i": "2"
+    "resolution.r1080p": "1"
+    "resolution.r4320p": "5"
+    "resolution.r2160p": "6"
+    "default": "7"
+  
+  audio_codec:
+    "audio.other": "7"
+    "audio.lpcm": "14"
+    "audio.ddp_atmos": "24"
+    "audio.mpeg": "23"
+    "audio.tta": "22"
+    "audio.ogg": "21"
+    "audio.dsd": "20"
+    "audio.wav": "19"
+    "audio.aac": "18"
+    "audio.ac3": "17"
+    "audio.ddp": "15"
+    "audio.flac": "1"
+    "audio.truehd": "13"
+    "audio.dts_hd_hr": "12"
+    "audio.dts_hd_ma": "11"
+    "audio.dtsx": "10"
+    "audio.dts": "9"
+    "audio.truehd_atmos": "8"
+    "audio.mp3": "4"
+    "audio.ape": "2"
+    "default": "7"
+
+  team:
+    "team.hds": "1"
+    "team.chd": "2"
+    "team.mysilu": "3"
+    "team.wiki": "4"
+    "team.other": "5"
+    "default": "5"
+
+  tag:
+    "tag.music": 10
+    "tag.禁转": 1
+    "tag.动漫": 9
+    "tag.首发": 2
+    "tag.DIY": 4
+    "tag.英语": 8
+    "tag.国语": 5
+    "tag.中字": 6
+    "tag.HDR": 7
+    "tag.game": 14
+    "tag.应求": 13
+    "tag.完结": 12
+    "tag.books": 11
+    "default": null

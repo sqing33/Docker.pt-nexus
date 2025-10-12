@@ -29,50 +29,18 @@ source_parsers:
     team:
       source_key: "制作组"
 
-  title_components:
-    title:
-      source_key: "主标题"
-    season_episode:
-      source_key: "季集"
-    year:
-      source_key: "年份"
-    status:
-      source_key: "剧集状态"
-    edition:
-      source_key: "发布版本"
-    resolution:
-      source_key: "分辨率"
-    platform:
-      source_key: "片源平台"
-    medium:
-      source_key: "媒介"
-    video_codec:
-      source_key: "视频编码"
-    video_format:
-      source_key: "视频格式"
-    hdr_format:
-      source_key: "HDR格式"
-    bit_depth:
-      source_key: "色深"
-    frame_rate:
-      source_key: "帧率"
-    audio_codec:
-      source_key: "音频编码"
-    team:
-      source_key: "制作组"
-
   # 标准化键映射规则（从原始文本到标准化键）
   standard_keys:
     type:
-      "Movies/电影": "category.movie"
-      "TV Series/电视剧": "category.tv_series"
-      "TV Shows/综艺": "category.tv_shows"
-      "Documentaries/记录片": "category.documentaries"
-      "Animations/动漫、动画": "category.animation"
-      "MV/演唱会": "category.music_video"
-      "Sports/体育": "category.sports"
-      "Music/音乐": "category.music"
-      "Othes/其他": "category.other"
+      "电影/Movies": "category.movie"
+      "电视剧/TV Series": "category.tv_series"
+      "综艺/TV Shows": "category.tv_shows"
+      "记录片/Documentaries": "category.documentaries"
+      "动漫、动画/Animations": "category.animation"
+      "演唱会/MV": "category.music_video"
+      "体育/Sports": "category.sports"
+      "音乐/Music": "category.music"
+      "其他/Othes": "category.other"
 
     medium:
       "DVD": "medium.dvd"
@@ -89,12 +57,12 @@ source_parsers:
       "Blu-ray": "medium.bluray"
 
     video_codec:
-      "H264/x264/AVC": "video.h264"
+      "AVC/H.264/x264": "video.h264"
       "VC-1": "video.vc1"
       "Xvid": "video.xvid"
       "MPEG-2": "video.mpeg2"
       "Other": "video.other"
-      "H265/HEVC/x265": "video.h265"
+      "HEVC/H.265/x265": "video.h265"
 
     audio_codec:
       "FLAC": "audio.flac"
@@ -114,12 +82,11 @@ source_parsers:
       "Other": "audio.other"
 
     resolution:
-      "1080p": "resolution.r1080p"
-      "1080i": "resolution.r1080i"
+      "1080p/i": "resolution.r1080p"
       "720p": "resolution.r720p"
       "SD": "resolution.sd"
-      "2160p/4K": "resolution.r2160p"
-      "4320p/8K": "resolution.r4320p"
+      "4K/2160p": "resolution.r2160p"
+      "8K/4320p": "resolution.r4320p"
 
     team:
       "HDSky": "team.hdsky"

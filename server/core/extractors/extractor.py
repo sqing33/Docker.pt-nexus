@@ -24,12 +24,14 @@ from .sites.audiences import AudiencesSpecialExtractor
 
 # 加载全局映射配置
 GLOBAL_MAPPINGS = {}
+DEFAULT_TITLE_COMPONENTS = {}
 try:
     global_mappings_path = os.path.join(CONFIG_DIR, "global_mappings.yaml")
     if os.path.exists(global_mappings_path):
         with open(global_mappings_path, 'r', encoding='utf-8') as f:
             global_config = yaml.safe_load(f)
             GLOBAL_MAPPINGS = global_config.get("global_standard_keys", {})
+            DEFAULT_TITLE_COMPONENTS = global_config.get("default_title_components", {})
 except Exception as e:
     print(f"警告：无法加载全局映射配置: {e}")
 from .sites.ssd import SSDSpecialExtractor
@@ -1095,7 +1097,8 @@ class ParameterMapper:
                     raw_value, param_key)
 
         title_standard_values = {}
-        title_components_config = source_parsers.get("title_components", {})
+        # 使用默认的 title_components 配置，如果站点配置中没有定义
+        title_components_config = source_parsers.get("title_components", DEFAULT_TITLE_COMPONENTS)
         title_params = {
             item["key"]: item["value"]
             for item in title_components

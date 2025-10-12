@@ -3494,6 +3494,7 @@ const handleLogProgressComplete = () => {
 
 .status-text {
   white-space: pre-line;
+  text-align: center;
 }
 
 .status-text.success {

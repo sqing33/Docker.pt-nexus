@@ -29,63 +29,31 @@ source_parsers:
     team:
       source_key: "制作组"
 
-  title_components:
-    title:
-      source_key: "主标题"
-    season_episode:
-      source_key: "季集"
-    year:
-      source_key: "年份"
-    status:
-      source_key: "剧集状态"
-    edition:
-      source_key: "发布版本"
-    resolution:
-      source_key: "分辨率"
-    platform:
-      source_key: "片源平台"
-    medium:
-      source_key: "媒介"
-    video_codec:
-      source_key: "视频编码"
-    video_format:
-      source_key: "视频格式"
-    hdr_format:
-      source_key: "HDR格式"
-    bit_depth:
-      source_key: "色深"
-    frame_rate:
-      source_key: "帧率"
-    audio_codec:
-      source_key: "音频编码"
-    team:
-      source_key: "制作组"
-
   # 标准化键映射规则（从原始文本到标准化键）
   standard_keys:
     type:
-      "电影": "category.movie"
-      "电视剧": "category.tv_series"
-      "综艺": "category.tv_shows"
-      "纪录片": "category.documentaries"
-      "动漫": "category.animation"
+      "其他": "category.other"
+      "音频": "category.music"
       "MV": "category.music_video"
       "体育": "category.sports"
-      "音频": "category.music"
       "短剧": "category.playlet"
-      "其他": "category.other"
+      "纪录片": "category.documentaries"
+      "动漫": "category.animation"
+      "综艺": "category.tv_shows"
+      "电视剧": "category.tv_series"
+      "电影": "category.movie"
 
     medium:
+      "Other": "medium.other"
+      "Track": "medium.track"
+      "CD": "medium.cd"
+      "DVD": "medium.dvd"
+      "HDTV": "medium.hdtv"
+      "WEB-DL": "medium.webdl"
+      "Encode": "medium.encode"
+      "Remux": "medium.remux"
       "Blu-ray": "medium.bluray"
       "UHD Blu-ray": "medium.uhd_bluray"
-      "Remux": "medium.remux"
-      "Encode": "medium.encode"
-      "WEB-DL": "medium.webdl"
-      "HDTV": "medium.hdtv"
-      "DVD": "medium.dvd"
-      "CD": "medium.cd"
-      "Track": "medium.track"
-      "Other": "medium.other"
 
     video_codec:
       "H.264/AVC": "video.h264"
@@ -96,21 +64,21 @@ source_parsers:
       "Other": "video.other"
 
     audio_codec:
-      "FLAC": "audio.flac"
-      "MP3": "audio.mp3"
-      "WAV": "audio.wav"
-      "M4A": "audio.m4a"
-      "DTS": "audio.dts"
-      "DTS-HD MA": "audio.dts_hd_ma"
-      "DTS:X": "audio.dtsx"
-      "TrueHD": "audio.truehd"
-      "LPCM": "audio.lpcm"
-      "DD/AC3": "audio.ac3"
-      "DDP/E-AC3": "audio.ddp"
-      "TrueHD Atmos": "audio.truehd_atmos"
-      "APE": "audio.ape"
-      "AAC": "audio.aac"
       "ALAC": "audio.alac"
+      "AAC": "audio.aac"
+      "APE": "audio.ape"
+      "TrueHD Atmos": "audio.truehd_atmos"
+      "DDP/E-AC3": "audio.ddp"
+      "DD/AC3": "audio.ac3"
+      "LPCM": "audio.lpcm"
+      "TrueHD": "audio.truehd"
+      "DTS:X": "audio.dtsx"
+      "DTS-HD MA": "audio.dts_hd_ma"
+      "DTS": "audio.dts"
+      "M4A": "audio.m4a"
+      "WAV": "audio.wav"
+      "MP3": "audio.mp3"
+      "FLAC": "audio.flac"
       "Other": "audio.other"
       "OPUS": "audio.opus"
       "AV3V": "audio.av3v"
@@ -124,43 +92,43 @@ source_parsers:
       "Other": "resolution.other"
 
     team:
-      "HDS": "team.hds"
-      "CHD": "team.chd"
       "WiKi": "team.wiki"
       "MySiLU": "team.mysilu"
-      "rain": "team.rain"
+      "HDS": "team.hds"
+      "CHD": "team.chd"
+      "Other": "team.other"
       "rainweb": "team.rainweb"
+      "rain": "team.rain"
       "StarfallWeb": "team.starfallweb"
       "AGSVWEB": "team.agsvweb"
       "Starfall": "team.starfall"
-      "Other": "team.other"
 
 # 参数映射规则 - 定义如何将标准化键映射到站点特定参数
 mappings:
   type:
-    "category.movie": "401"
-    "category.tv_series": "402"
-    "category.tv_shows": "403"
-    "category.documentaries": "404"
-    "category.animation": "405"
+    "category.other": "409"
+    "category.music": "408"
     "category.music_video": "406"
     "category.sports": "407"
-    "category.music": "408"
-    "category.short_play": "410"
-    "category.other": "409"
+    "category.playlet": "410"
+    "category.documentaries": "404"
+    "category.animation": "405"
+    "category.tv_shows": "403"
+    "category.tv_series": "402"
+    "category.movie": "401"
     "default": "409"
 
   medium:
+    "medium.other": "10"
+    "medium.track": "9"
+    "medium.cd": "8"
+    "medium.dvd": "6"
+    "medium.hdtv": "5"
+    "medium.webdl": "4"
+    "medium.encode": "7"
+    "medium.remux": "3"
     "medium.bluray": "1"
     "medium.uhd_bluray": "2"
-    "medium.remux": "3"
-    "medium.webdl": "4"
-    "medium.hdtv": "5"
-    "medium.dvd": "6"
-    "medium.encode": "7"
-    "medium.cd": "8"
-    "medium.track": "9"
-    "medium.other": "10"
     "default": "10"
 
   video_codec:
@@ -173,21 +141,21 @@ mappings:
     "default": "6"
 
   audio_codec:
-    "audio.flac": "1"
-    "audio.mp3": "2"
-    "audio.wav": "3"
-    "audio.m4a": "4"
-    "audio.dts": "5"
-    "audio.dts_hd_ma": "6"
-    "audio.dtsx": "7"
-    "audio.truehd": "8"
-    "audio.lpcm": "9"
-    "audio.ac3": "10"
-    "audio.ddp": "11"
-    "audio.truehd_atmos": "12"
-    "audio.ape": "13"
-    "audio.aac": "14"
     "audio.alac": "15"
+    "audio.aac": "14"
+    "audio.ape": "13"
+    "audio.truehd_atmos": "12"
+    "audio.ddp": "11"
+    "audio.ac3": "10"
+    "audio.lpcm": "9"
+    "audio.truehd": "8"
+    "audio.dtsx": "7"
+    "audio.dts_hd_ma": "6"
+    "audio.dts": "5"
+    "audio.m4a": "4"
+    "audio.wav": "3"
+    "audio.mp3": "2"
+    "audio.flac": "1"
     "audio.other": "16"
     "audio.opus": "17"
     "audio.av3v": "18"
@@ -203,13 +171,13 @@ mappings:
     "default": "6"
 
   team:
+    "team.wiki": "4"
+    "team.mysilu": "3"
     "team.hds": "1"
     "team.chd": "2"
-    "team.mysilu": "3"
-    "team.wiki": "4"
     "team.other": "5"
-    "team.rain": "6"
     "team.rainweb": "7"
+    "team.rain": "6"
     "team.starfallweb": "8"
     "team.agsvweb": "9"
     "team.starfall": "10"

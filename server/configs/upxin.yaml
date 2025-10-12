@@ -32,133 +32,66 @@ source_parsers:
     processing:
       source_key: "处理"
 
-  title_components:
-    title:
-      source_key: "主标题"
-    season_episode:
-      source_key: "季集"
-    year:
-      source_key: "年份"
-    status:
-      source_key: "剧集状态"
-    edition:
-      source_key: "发布版本"
-    resolution:
-      source_key: "分辨率"
-    platform:
-      source_key: "片源平台"
-    medium:
-      source_key: "媒介"
-    video_codec:
-      source_key: "视频编码"
-    video_format:
-      source_key: "视频格式"
-    hdr_format:
-      source_key: "HDR格式"
-    bit_depth:
-      source_key: "色深"
-    frame_rate:
-      source_key: "帧率"
-    audio_codec:
-      source_key: "音频编码"
-    team:
-      source_key: "制作组"
-
   # 标准化键映射规则（从原始文本到标准化键）
   standard_keys:
     type:
-      "Movies": "category.movie"
-      "电影": "category.movie"
-      "TV Series": "category.tv_series"
-      "电视剧": "category.tv_series"
-      "TV Shows": "category.tv_shows"
-      "综艺": "category.tv_shows"
-      "Documentaries": "category.documentaries"
-      "纪录片": "category.documentaries"
-      "Animations": "category.animation"
-      "动漫": "category.animation"
-      "动画": "category.animation"
-      "Music Videos": "category.music_video"
-      "音乐 MV": "category.music_video"
-      "Sports": "category.sports"
-      "体育": "category.sports"
-      "HQ Audio": "category.music"
-      "无损音乐": "category.music"
-      "音乐": "category.music"
-      "Games": "category.game"
-      "游戏": "category.game"
-      "Misc": "category.other"
-      "其他": "category.other"
+      "Movies/电影": "category.movie"
+      "TV Series/电视剧": "category.tv_series"
+      "TV Shows/综艺": "category.tv_shows"
+      "Documentaries/纪录片": "category.documentaries"
+      "Animations/动画": "category.animation"
+      "Music Videos/音乐 MV": "category.music_video"
+      "Sports/体育": "category.sports"
+      "HQ Audio/无损音乐": "category.music"
+      "Games/游戏": "category.game"
+      "Misc/其他": "category.other"
 
     medium:
       "Blu-ray": "medium.bluray"
-      "BD": "medium.bluray"
-      "BluRay": "medium.bluray"
       "UHD Blu-ray": "medium.uhd_bluray"
+      "HDTV": "medium.hdtv"
+      "DVD": "medium.dvd"
       "Remux": "medium.remux"
+      "UHD Remux": "medium.uhd_remux"
+      "UHD Remux TV": "medium.uhd_remux_tv"
       "Remux TV": "medium.remux_tv"
       "Encode": "medium.encode"
       "Encode TV": "medium.encode_tv"
-      "WEB-DL": "medium.webdl"
-      "WEBRip": "medium.webrip"
-      "WEB": "medium.webdl"
-      "WEB-DL TV": "medium.webdl_tv"
-      "WEBRip TV": "medium.webrip_tv"
-      "HDTV": "medium.hdtv"
-      "TVrip": "medium.hdtv"
-      "DVD": "medium.dvd"
+      "WEB-DL/WEBRip": "medium.webdl"
+      "WEB-DL/WEBRip TV": "medium.webdl_tv"
       "MiniBD": "medium.minibd"
       "CD": "medium.cd"
-      "UHD Remux": "medium.uhd_remux"
-      "UHD Remux TV": "medium.uhd_remux_tv"
       "Track": "medium.track"
       "Other": "medium.other"
 
     video_codec:
-      "H.265": "video.h265"
-      "HEVC": "video.h265"
-      "x265": "video.x265"
-      "H.264": "video.h264"
-      "AVC": "video.h264"
-      "x264": "video.x264"
+      "H.264/AVC": "video.h264"
+      "H.265/HEVC": "video.h265"
       "VC-1": "video.vc1"
-      "XviD": "video.xvid"
-      "MPEG-2": "video.mpeg2"
-      "MPEG": "video.mpeg"
+      "x264": "video.x264"
+      "Xvid": "video.xvid"
+      "MPEG/MPEG-2": "video.mpeg2"
       "Other": "video.other"
 
     audio_codec:
       "DTS:X": "audio.dtsx"
-      "DTS-HD MA": "audio.dts_hd_ma"
       "DTS-HDMA": "audio.dts_hd_ma"
       "TrueHD": "audio.truehd"
       "LPCM": "audio.lpcm"
       "DTS": "audio.dts"
-      "AC3": "audio.ac3"
-      "AC-3": "audio.ac3"
-      "EAC3": "audio.ddp"
-      "DD+": "audio.ddp"
-      "DD": "audio.ac3"
+      "AC3/EAC3": "audio.ac3"
       "AAC": "audio.aac"
       "FLAC": "audio.flac"
       "APE": "audio.ape"
       "WAV": "audio.wav"
       "MPEG": "audio.mpeg"
-      "MP3": "audio.mp3"
       "Other": "audio.other"
 
     resolution:
-      "8K": "resolution.r4320p"
-      "4320p": "resolution.r4320p"
-      "4K": "resolution.r2160p"
-      "2160p": "resolution.r2160p"
-      "UHD": "resolution.r2160p"
       "1080p": "resolution.r1080p"
       "1080i": "resolution.r1080i"
+      "4K/2160p": "resolution.r2160p"
       "720p": "resolution.r720p"
-      "720i": "resolution.r720p"
-      "480p": "resolution.r480p"
-      "480i": "resolution.r480p"
       "SD": "resolution.sd"
       "iPad": "resolution.ipad"
       "Other": "resolution.other"

@@ -111,11 +111,6 @@ source_parsers:
       "720P": "resolution.r720p"
       "SD": "resolution.sd"
       "其它 (Other)": "resolution.other"
-      "8K": "resolution.r4320p"
-      "4K": "resolution.r2160p"
-      "1080p": "resolution.r1080p"
-      "1080i": "resolution.r1080i"
-      "720p": "resolution.r720p"
 
     medium:
       "UHD Blu-ray": "medium.uhd_bluray"
@@ -150,7 +145,6 @@ source_parsers:
       "VP8/9": "video.vp9"
       "AV1": "video.av1"
       "其它 (Other)": "video.other"
-      "Other": "video.other"
 
     audio_codec:
       "DTS-HDMA:X 7.1": "audio.dts_hdma_x71"
@@ -172,7 +166,6 @@ source_parsers:
       "WAV": "audio.wav"
       "OGG": "audio.ogg"
       "其它 (Other)": "audio.other"
-      "Other": "audio.other"
       "DTS-HDMA": "audio.dts_hdma"
       "E-AC3 Atmos(DDP Atmos)": "audio.ddp_atmos"
       "E-AC3(DDP)": "audio.ddp"
@@ -181,7 +174,6 @@ source_parsers:
     team:
       "FFWEB": "team.ffweb"
       "其它 (Other)": "team.other"
-      "Other": "team.other"
 
     processing:
       "G/所有人": "processing.g"

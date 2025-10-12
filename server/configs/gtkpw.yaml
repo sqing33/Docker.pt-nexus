@@ -1,0 +1,170 @@
+# PTGTK站点的配置文件
+# 基于三层解耦模型重构，包含source_parsers和标准化的mappings
+
+site_name: "PTGTK"
+
+# 表单字段定义 - 定义站点上传表单中各字段的标识符
+form_fields:
+  category: "type"
+  medium: "medium_sel[4]"
+  video_codec: "codec_sel[4]"
+  resolution: "standard_sel[4]"
+  team: "team_sel[4]"
+  tags[]: "tags[4][]"
+
+# 标准化键映射 - 定义源文本到标准化键的映射规则
+# source_parsers部分：定义如何从原始数据解析出标准化参数
+source_parsers:
+  source_params:
+    type:
+      source_key: "类型"
+    medium:
+      source_key: "媒介"
+    video_codec:
+      source_key: "编码"
+    resolution:
+      source_key: "分辨率"
+    team:
+      source_key: "制作组"
+
+  # 标准化键映射规则（从原始文本到标准化键）
+  # 将站点下拉菜单的文本映射到全局标准化键
+  standard_keys:
+    type:
+      "Movies(电影)": "category.movie"
+      "Animations(动画)": "category.animation"
+      "Documentaries(纪录片)": "category.documentaries"
+      "TV Series(剧集)": "category.tv_series"
+      "TV Shows(综艺)": "category.tv_shows"
+      "Music Videos(MV)": "category.music_video"
+      "Sports(运动题材)": "category.sports"
+      "HQ Audio(高清音频)": "category.music"
+      "Misc(其他)": "category.other"
+      "Book(图书)": "category.ebook"
+      "Music Album(音乐专辑)": "category.music"
+      "Education(资料)": "category.education"
+
+    medium:
+      "Track": "medium.track"
+      "CD": "medium.cd"
+      "DVDR": "medium.dvdr"
+      "HDTV": "medium.hdtv"
+      "MiniBD": "medium.minibd"
+      "Encode": "medium.encode"
+      "Remux": "medium.remux"
+      "HD DVD": "medium.hddvd"
+      "Blu-ray": "medium.bluray"
+      "UHD": "medium.uhd_bluray"
+      "WEB-DL": "medium.webdl"
+
+    video_codec:
+      "H.264": "video.h264"
+      "VC-1": "video.vc1"
+      "Xvid": "video.xvid"
+      "MPEG-2": "video.mpeg2"
+      "Other": "video.other"
+      "H.265/HEVC": "video.h265"
+      "AV1": "video.av1"
+      "VP9": "video.vp9"
+
+    resolution:
+      "1080p": "resolution.r1080p"
+      "1080i": "resolution.r1080i"
+      "720p": "resolution.r720p"
+      "SD": "resolution.sd"
+      "2160p/4K": "resolution.r2160p"
+      "4320p/8K": "resolution.r4320p"
+
+    team:
+      "CMCT": "team.cmct"
+      "HDS": "team.hds"
+      "CHD": "team.chd"
+      "MySiLU": "team.mysilu"
+      "WiKi": "team.wiki"
+      "Other": "team.other"
+      "MARK": "team.mark"
+      "MTeam": "team.mteam"
+      "FRDS": "team.frds"
+      "PTHome": "team.pthome"
+      "beAst": "team.beast"
+
+    tag:
+      "禁转": "tag.禁转"
+      "首发": "tag.首发"
+      "DIY": "tag.DIY"
+      "国语": "tag.国语"
+      "中字": "tag.中字"
+      "HDR": "tag.HDR"
+
+# 参数映射规则 - 定义如何将标准化键映射到站点特定参数
+mappings:
+  type:
+    "category.movie": "401"
+    "category.animation": "405"
+    "category.documentaries": "404"
+    "category.tv_series": "402"
+    "category.tv_shows": "403"
+    "category.music_video": "406"
+    "category.sports": "407"
+    "category.music": "408"
+    "category.other": "409"
+    "category.ebook": "410"
+    "category.education": "412"
+    "default": "401"
+
+  medium:
+    "medium.track": "9"
+    "medium.cd": "8"
+    "medium.dvdr": "6"
+    "medium.hdtv": "5"
+    "medium.minibd": "4"
+    "medium.encode": "7"
+    "medium.remux": "3"
+    "medium.hddvd": "2"
+    "medium.bluray": "1"
+    "medium.uhd_bluray": "10"
+    "medium.webdl": "11"
+    "default": "7"
+
+  video_codec:
+    "video.h264": "1"
+    "video.vc1": "2"
+    "video.xvid": "3"
+    "video.mpeg2": "4"
+    "video.other": "5"
+    "video.h265": "6"
+    "video.av1": "7"
+    "video.vp9": "8"
+    "default": "5"
+
+  resolution:
+    "resolution.r1080p": "1"
+    "resolution.r1080i": "2"
+    "resolution.r720p": "3"
+    "resolution.sd": "4"
+    "resolution.r2160p": "5"
+    "resolution.r4320p": "6"
+    "default": "4"
+
+  team:
+    "team.cmct": "6"
+    "team.hds": "1"
+    "team.chd": "2"
+    "team.mysilu": "3"
+    "team.wiki": "4"
+    "team.other": "5"
+    "team.mark": "7"
+    "team.mteam": "8"
+    "team.frds": "9"
+    "team.pthome": "10"
+    "team.beast": "11"
+    "default": "5"
+
+  tag:
+    "tag.禁转": 1
+    "tag.首发": 2
+    "tag.DIY": 4
+    "tag.国语": 5
+    "tag.中字": 6
+    "tag.HDR": 7
+    "default": null

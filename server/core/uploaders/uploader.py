@@ -41,6 +41,20 @@ HDR_FORMAT_FALLBACK_MAP = {
     "hdr.hlg": "hdr.hdr",
 }
 
+# 加载全局默认 title_components 配置
+DEFAULT_TITLE_COMPONENTS = {}
+try:
+    config_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "configs")
+    global_mappings_path = os.path.join(config_dir, "global_mappings.yaml")
+    if os.path.exists(global_mappings_path):
+        with open(global_mappings_path, 'r', encoding='utf-8') as f:
+            global_config = yaml.safe_load(f)
+            DEFAULT_TITLE_COMPONENTS = global_config.get(
+                "default_title_components", {})
+except Exception as e:
+    logger.warning(f"警告：无法加载全局默认 title_components 配置: {e}")
+
 
 class BaseUploader(ABC):
     """
@@ -123,7 +137,7 @@ class BaseUploader(ABC):
         }
 
         for key, parser_config in self.source_parsers.get(
-                "title_components", {}).items():
+                "title_components", DEFAULT_TITLE_COMPONENTS).items():
             source_key = parser_config.get("source_key")
             if source_key and source_key in title_params:
                 # 只有当source_params中没有该字段时才使用title_components中的值
@@ -279,9 +293,9 @@ class BaseUploader(ABC):
             else:
                 # 通用类型，同时检查音频、视频、媒介和HDR回退
                 current_key = (AUDIO_CODEC_FALLBACK_MAP.get(current_key)
-                              or VIDEO_CODEC_FALLBACK_MAP.get(current_key)
-                              or MEDIUM_FALLBACK_MAP.get(current_key)
-                              or HDR_FORMAT_FALLBACK_MAP.get(current_key))
+                               or VIDEO_CODEC_FALLBACK_MAP.get(current_key)
+                               or MEDIUM_FALLBACK_MAP.get(current_key)
+                               or HDR_FORMAT_FALLBACK_MAP.get(current_key))
 
             if current_key:
                 logger.debug(
@@ -322,10 +336,16 @@ class BaseUploader(ABC):
         elif is_bdinfo and ('blu' in str(medium_str).lower()
                             or 'dvd' in str(medium_str).lower()):
             mapped_params[medium_field] = self._find_mapping(
-                medium_mapping, medium_str, use_length_priority=False, mapping_type="medium")
+                medium_mapping,
+                medium_str,
+                use_length_priority=False,
+                mapping_type="medium")
         else:
             mapped_params[medium_field] = self._find_mapping(
-                medium_mapping, medium_str, use_length_priority=False, mapping_type="medium")
+                medium_mapping,
+                medium_str,
+                use_length_priority=False,
+                mapping_type="medium")
         logger.debug(
             f"DEBUG: 媒介映射 '{medium_str}' -> '{mapped_params[medium_field]}'")
 
@@ -645,76 +665,76 @@ class BaseUploader(ABC):
                 logger.error(f"保存参数到文件失败: {save_error}")
 
             # 执行实际发布 【已注释，用于测试模式】
-            torrent_path = self.upload_data["modified_torrent_path"]
-            with open(torrent_path, "rb") as torrent_file:
-                files = {
-                    "file": (
-                        os.path.basename(torrent_path),
-                        torrent_file,
-                        "application/x-bittorent",
-                    ),
-                    "nfo": ("", b"", "application/octet-stream"),
-                }
-                cleaned_cookie_str = self.site_info.get("cookie", "").strip()
-                if not cleaned_cookie_str:
-                    logger.error("目标站点 Cookie 为空，无法发布。")
-                    return False, "目标站点 Cookie 未配置。"
-                cookie_jar = cookies_raw2jar(cleaned_cookie_str)
-                # 添加重试机制
-                max_retries = 3
-                last_exception = None
+            # torrent_path = self.upload_data["modified_torrent_path"]
+            # with open(torrent_path, "rb") as torrent_file:
+            #     files = {
+            #         "file": (
+            #             os.path.basename(torrent_path),
+            #             torrent_file,
+            #             "application/x-bittorent",
+            #         ),
+            #         "nfo": ("", b"", "application/octet-stream"),
+            #     }
+            #     cleaned_cookie_str = self.site_info.get("cookie", "").strip()
+            #     if not cleaned_cookie_str:
+            #         logger.error("目标站点 Cookie 为空，无法发布。")
+            #         return False, "目标站点 Cookie 未配置。"
+            #     cookie_jar = cookies_raw2jar(cleaned_cookie_str)
+            #     # 添加重试机制
+            #     max_retries = 3
+            #     last_exception = None
 
-                for attempt in range(max_retries):
-                    try:
-                        logger.info(
-                            f"正在向 {self.site_name} 站点提交发布请求... (尝试 {attempt + 1}/{max_retries})"
-                        )
-                        # 站点级别的代理已移除，不再使用全局代理
-                        proxies = None
+            #     for attempt in range(max_retries):
+            #         try:
+            #             logger.info(
+            #                 f"正在向 {self.site_name} 站点提交发布请求... (尝试 {attempt + 1}/{max_retries})"
+            #             )
+            #             # 站点级别的代理已移除，不再使用全局代理
+            #             proxies = None
 
-                        response = self.scraper.post(
-                            self.post_url,
-                            headers=self.headers,
-                            cookies=cookie_jar,
-                            data=form_data,
-                            files=files,
-                            timeout=self.timeout,
-                            proxies=proxies,
-                        )
-                        response.raise_for_status()
+            #             response = self.scraper.post(
+            #                 self.post_url,
+            #                 headers=self.headers,
+            #                 cookies=cookie_jar,
+            #                 data=form_data,
+            #                 files=files,
+            #                 timeout=self.timeout,
+            #                 proxies=proxies,
+            #             )
+            #             response.raise_for_status()
 
-                        # 成功则跳出循环
-                        last_exception = None
-                        break
+            #             # 成功则跳出循环
+            #             last_exception = None
+            #             break
 
-                    except Exception as e:
-                        last_exception = e
-                        logger.warning(f"第 {attempt + 1} 次尝试发布失败: {e}")
+            #         except Exception as e:
+            #             last_exception = e
+            #             logger.warning(f"第 {attempt + 1} 次尝试发布失败: {e}")
 
-                        # 如果不是最后一次尝试，等待一段时间后重试
-                        if attempt < max_retries - 1:
-                            import time
-                            wait_time = 2**attempt  # 指数退避
-                            logger.info(
-                                f"等待 {wait_time} 秒后进行第 {attempt + 2} 次尝试...")
-                            time.sleep(wait_time)
-                        else:
-                            logger.error("所有重试均已失败")
+            #             # 如果不是最后一次尝试，等待一段时间后重试
+            #             if attempt < max_retries - 1:
+            #                 import time
+            #                 wait_time = 2**attempt  # 指数退避
+            #                 logger.info(
+            #                     f"等待 {wait_time} 秒后进行第 {attempt + 2} 次尝试...")
+            #                 time.sleep(wait_time)
+            #             else:
+            #                 logger.error("所有重试均已失败")
 
-            # 如果所有重试都失败了，重新抛出最后一个异常
-            if last_exception:
-                raise last_exception
+            # # 如果所有重试都失败了，重新抛出最后一个异常
+            # if last_exception:
+            #     raise last_exception
 
             # 测试模式：模拟成功响应
-            # logger.info("测试模式：跳过实际发布，模拟成功响应")
-            # success_url = f"https://demo.site.test/details.php?id=12345&uploaded=1&test=true"
-            # response = type(
-            #     'MockResponse', (), {
-            #         'url': success_url,
-            #         'text':
-            #         f'<html><body>发布成功！种子ID: 12345 - TEST MODE</body></html>',
-            #         'raise_for_status': lambda: None
-            #     })()
+            logger.info("测试模式：跳过实际发布，模拟成功响应")
+            success_url = f"https://demo.site.test/details.php?id=12345&uploaded=1&test=true"
+            response = type(
+                'MockResponse', (), {
+                    'url': success_url,
+                    'text':
+                    f'<html><body>发布成功！种子ID: 12345 - TEST MODE</body></html>',
+                    'raise_for_status': lambda: None
+                })()
 
             # 4. 处理响应（这是通用的成功/失败判断逻辑）
             # 可以通过 "钩子" 方法处理个别站点的URL修正

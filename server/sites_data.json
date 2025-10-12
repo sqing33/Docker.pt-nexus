@@ -66,7 +66,7 @@
     "special_tracker_domain": null,
     "group": "-HDHome,-HDH,-HDHTV,-SHMA",
     "description": "HDHome",
-    "migration": 0,
+    "migration": 1,
     "speed_limit": 10
   },
   {
@@ -101,12 +101,12 @@
   },
   {
     "site": "ttg",
-    "nickname": "听听歌",
+    "nickname": "TTG",
     "base_url": "totheglory.im",
     "special_tracker_domain": null,
     "group": "-WiKi,-TTG,-NGB",
     "description": "TTG",
-    "migration": 0,
+    "migration": 1,
     "speed_limit": 10
   },
   {
@@ -181,7 +181,7 @@
     "special_tracker_domain": null,
     "group": "-CHDBits,-CHDWEB,-CHD",
     "description": "CHDBits",
-    "migration": 0,
+    "migration": 1,
     "speed_limit": 50
   },
   {
@@ -201,12 +201,12 @@
     "special_tracker_domain": null,
     "group": "-HDArea,-EPiC,-HDATV,-HDApad",
     "description": "HDArea",
-    "migration": 0,
+    "migration": 3,
     "speed_limit": 10
   },
   {
     "site": "hdtime",
-    "nickname": "时光HDT",
+    "nickname": "HDtime",
     "base_url": "hdtime.org",
     "special_tracker_domain": null,
     "group": "-HDtime",
@@ -345,7 +345,7 @@
     "special_tracker_domain": null,
     "group": "-HAIDAN,-HaiDanWEB",
     "description": "HAIDAN",
-    "migration": 0,
+    "migration": 2,
     "speed_limit": 10
   },
   {
@@ -441,7 +441,7 @@
     "special_tracker_domain": null,
     "group": "HHWEB",
     "description": "HHClub",
-    "migration": 0,
+    "migration": 1,
     "speed_limit": 10
   },
   {
@@ -469,7 +469,7 @@
     "base_url": "ptchina.org",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 0,
+    "migration": 2,
     "speed_limit": 10
   },
   {
@@ -479,7 +479,7 @@
     "special_tracker_domain": null,
     "group": "-ZWEX",
     "description": "ZHUQUE",
-    "migration": 0,
+    "migration": 2,
     "speed_limit": 10
   },
   {
@@ -526,7 +526,7 @@
     "special_tracker_domain": null,
     "group": "-UBits,-UBWEB,-UBTV",
     "description": "UBits",
-    "migration": 1,
+    "migration": 3,
     "speed_limit": 50
   },
   {
@@ -584,7 +584,7 @@
     "special_tracker_domain": null,
     "group": "-Eleph,-ElephWeb",
     "description": "象岛",
-    "migration": 1,
+    "migration": 3,
     "speed_limit": 80
   },
   {
@@ -631,7 +631,7 @@
     "base_url": "pt.gtkpw.xyz",
     "special_tracker_domain": "gtkpw",
     "group": null,
-    "migration": 0,
+    "migration": 2,
     "speed_limit": 10
   },
   {
@@ -677,7 +677,7 @@
     "special_tracker_domain": null,
     "group": "-QHstudIo,-Dream,-DBTV,-CornerMV",
     "description": "HDDolby",
-    "migration": 0,
+    "migration": 1,
     "speed_limit": 10
   },
   {
@@ -733,7 +733,7 @@
     "special_tracker_domain": "ilovelemonhd.me",
     "group": "-LHD,-LeagueWEB",
     "description": "LemonHD",
-    "migration": 0,
+    "migration": 2,
     "speed_limit": 10
   },
   {
@@ -751,7 +751,7 @@
     "base_url": "ptzone.xyz",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 0,
+    "migration": 2,
     "speed_limit": 10
   },
   {
@@ -769,7 +769,7 @@
     "base_url": "kufei.org",
     "special_tracker_domain": null,
     "group": "-Kufei",
-    "migration": 0,
+    "migration": 2,
     "speed_limit": 10
   },
   {

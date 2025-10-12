@@ -7,11 +7,10 @@ site_name: "PTLover"
 form_fields:
   medium: "medium_sel[4]"
   video_codec: "codec_sel[4]"
-  audio_codec: "audiocodec_sel[4]"
+  audio_codec: "audiocodec_sel[4]"  # HTML表单中没有音频编码字段，但保留以兼容
   resolution: "standard_sel[4]"
   team: "team_sel[4]"
   source: "source_sel[4]"
-  processing: "processing_sel[4]"
   category: "type"  # 类别字段映射到type参数
 
 # 标准化键映射 - 定义源文本到标准化键的映射规则
@@ -32,133 +31,62 @@ source_parsers:
       source_key: "制作组"
     source:
       source_key: "产地"
-    processing:
-      source_key: "区域"
-
-  title_components:
-    title:
-      source_key: "主标题"
-    year:
-      source_key: "年份"
-    season_episode:
-      source_key: "季集"
-    status:
-      source_key: "剧集状态"
-    edition:
-      source_key: "发布版本"
-    resolution:
-      source_key: "分辨率"
-    platform:
-      source_key: "片源平台"
-    medium:
-      source_key: "媒介"
-    video_codec:
-      source_key: "视频编码"
-    video_format:
-      source_key: "视频格式"
-    hdr_format:
-      source_key: "HDR格式"
-    bit_depth:
-      source_key: "色深"
-    frame_rate:
-      source_key: "帧率"
-    audio_codec:
-      source_key: "音频编码"
-    team:
-      source_key: "制作组"
 
   # 标准化键映射规则（从原始文本到标准化键）
   standard_keys:
     type:
-      "电影": "category.movie"
-      "电视剧": "category.tv_series"
       "综艺": "category.tv_shows"
-      "动漫": "category.animation"
-      "MV": "category.music_video"
-      "音乐": "category.music"
-      "纪录片": "category.documentaries"
-      "体育": "category.sports"
+      "HQ音频": "category.music"
       "其他": "category.other"
+      "体育": "category.sports"
+      "MV": "category.music_video"
+      "脱口秀": "category.tv_shows"
+      "电视剧": "category.tv_series"
+      "动画": "category.animation"
+      "纪录片": "category.documentaries"
+      "电影": "category.movie"
+      "游戏": "category.game"
+      "音频": "category.music"
+      "直播秀": "category.live_show"
       "写真": "category.photography"
       "绘本": "category.illustration"
       "国产": "category.domestic"
       "步兵": "category.unedited"
       "骑兵": "category.edited"
-      "直播秀": "category.live_show"
-      "游戏": "category.game"
 
     medium:
-      "UHD Blu-ray": "medium.uhd_bluray"
-      "Blu-ray": "medium.bluray"
-      "BD": "medium.bluray"
-      "BluRay": "medium.bluray"
-      "Blu-ray DIY": "medium.bluray_diy"
-      "HD DVD": "medium.hddvd"
-      "Remux": "medium.remux"
-      "Encode": "medium.encode"
-      "WEB-DL": "medium.webdl"
-      "WEBRip": "medium.webrip"
-      "WEB": "medium.webdl"
-      "HDTV": "medium.hdtv"
-      "TVrip": "medium.hdtv"
-      "DVD": "medium.dvd"
-      "MiniBD": "medium.minibd"
-      "CD": "medium.cd"
       "Track": "medium.track"
+      "CD": "medium.cd"
+      "DVDR": "medium.dvd"
+      "HDTV": "medium.hdtv"
+      "MiniBD": "medium.minibd"
+      "Encode": "medium.encode"
+      "Remux": "medium.remux"
+      "HD DVD": "medium.hddvd"
+      "Blu-ray": "medium.bluray"
+      "WEB-DL(TV)": "medium.webdl"
       "BDMV": "medium.bdmv"
-      "Other": "medium.other"
 
     video_codec:
-      "H.265": "video.h265"
-      "HEVC": "video.h265"
-      "x265": "video.x265"
       "H.264": "video.h264"
-      "AVC": "video.h264"
-      "x264": "video.x264"
       "VC-1": "video.vc1"
-      "XviD": "video.xvid"
+      "Xvid": "video.xvid"
       "MPEG-2": "video.mpeg2"
-      "MPEG-4": "video.mpeg4"
-      "AV1": "video.av1"
-      "VP9": "video.vp9"
       "Other": "video.other"
-
-    audio_codec:
-      "FLAC": "audio.flac"
-      "APE": "audio.ape"
-      "DTS": "audio.dts"
-      "DTS-HD": "audio.dts_hd_ma"
-      "DTS-X": "audio.dtsx"
-      "MP3": "audio.mp3"
-      "OGG": "audio.ogg"
-      "AAC": "audio.aac"
-      "DD/AC3": "audio.ac3"
-      "AC3": "audio.ac3"
-      "TrueHD Atmos": "audio.truehd_atmos"
-      "DDP/E-AC3": "audio.ddp"
-      "E-AC3": "audio.ddp"
-      "LPCM": "audio.lpcm"
-      "TrueHD": "audio.truehd"
-      "DTS:X": "audio.dtsx"
-      "DTS-HD MA": "audio.dts_hd_ma"
-      "M4A": "audio.m4a"
-      "WAV": "audio.wav"
-      "Other": "audio.other"
+      "H.265(HEVC)": "video.h265"
+      "AV1": "video.av1"
+      "AVC": "video.h264"
+      "MPEG-4": "video.mpeg4"
+      "VP9": "video.vp9"
 
     resolution:
-      "8K": "resolution.r4320p"
-      "4320p": "resolution.r4320p"
-      "4K": "resolution.r2160p"
-      "2160p": "resolution.r2160p"
-      "UHD": "resolution.r2160p"
       "1080p": "resolution.r1080p"
       "1080i": "resolution.r1080i"
       "720p": "resolution.r720p"
-      "720i": "resolution.r720p"
-      "480p": "resolution.r480p"
-      "480i": "resolution.r480p"
       "SD": "resolution.sd"
-      "Other": "resolution.other"
+      "2160P": "resolution.r2160p"
+      "8K": "resolution.r4320p"
+      "480P": "resolution.r480p"
 
     team:
       "TTG": "team.ttg"
@@ -188,115 +116,68 @@ source_parsers:
       "Other": "team.other"
 
     source:
-      "中国": "source.china"
-      "CN": "source.china"
       "大陆": "source.china"
       "香港": "source.hongkong"
-      "HK": "source.hongkong"
       "台湾": "source.taiwan"
-      "TW": "source.taiwan"
-      "美国": "source.western"
-      "US": "source.western"
       "欧美": "source.western"
-      "欧洲": "source.western"
-      "EU": "source.western"
       "日本": "source.japan"
-      "JPN": "source.japan"
-      "JP": "source.japan"
       "韩国": "source.korea"
-      "KR": "source.korea"
       "印度": "source.india"
-      "IN": "source.india"
       "Other": "source.other"
-
-    processing:
-      "中国（含港澳台）": "processing.china"
-      "日本": "processing.japan"
-      "泰国": "processing.thailand"
-      "印度": "processing.india"
-      "韩国": "processing.korea"
-      "欧美": "processing.western"
-      "Other（其他）": "processing.other"
 
 # 参数映射规则 - 定义如何将标准化键映射到站点特定参数
 mappings:
   type:
-    "category.movie": "401"
-    "category.tv_series": "402"
     "category.tv_shows": "414"
-    "category.animation": "405"
-    "category.music_video": "406"
     "category.music": "408"
-    "category.documentaries": "404"
-    "category.sports": "407"
     "category.other": "409"
+    "category.sports": "407"
+    "category.music_video": "406"
+    "category.tv_series": "402"
+    "category.animation": "405"
+    "category.documentaries": "404"
+    "category.movie": "401"
+    "category.game": "418"
+    "category.live_show": "411"
     "category.photography": "420"
     "category.illustration": "417"
     "category.domestic": "416"
     "category.unedited": "415"
     "category.edited": "410"
-    "category.live_show": "411"
-    "category.game": "418"
     "default": "409"
 
   medium:
-    "medium.uhd_bluray": "1"
-    "medium.bluray": "1"
-    "medium.bluray_diy": "1"
-    "medium.hddvd": "2"
-    "medium.remux": "3"
-    "medium.encode": "7"
-    "medium.webdl": "10"
-    "medium.webrip": "7"
-    "medium.hdtv": "5"
-    "medium.dvd": "6"
-    "medium.minibd": "4"
-    "medium.cd": "8"
     "medium.track": "9"
+    "medium.cd": "8"
+    "medium.dvd": "6"
+    "medium.hdtv": "5"
+    "medium.minibd": "4"
+    "medium.encode": "7"
+    "medium.remux": "3"
+    "medium.hddvd": "2"
+    "medium.bluray": "1"
+    "medium.webdl": "10"
     "medium.bdmv": "11"
-    "medium.other": "0"
     "default": "0"
 
   video_codec:
-    "video.h265": "6"
     "video.h264": "1"
     "video.vc1": "2"
     "video.xvid": "3"
     "video.mpeg2": "4"
-    "video.mpeg4": "9"
-    "video.av1": "7"
-    "video.vp9": "10"
     "video.other": "5"
+    "video.h265": "6"
+    "video.av1": "7"
     "default": "5"
 
-  audio_codec:
-    "audio.flac": "1"
-    "audio.ape": "2"
-    "audio.dts": "3"
-    "audio.mp3": "4"
-    "audio.ogg": "5"
-    "audio.aac": "6"
-    "audio.ac3": "7"
-    "audio.truehd_atmos": "8"
-    "audio.ddp": "9"
-    "audio.lpcm": "10"
-    "audio.truehd": "11"
-    "audio.dtsx": "12"
-    "audio.dts_hd_ma": "13"
-    "audio.m4a": "14"
-    "audio.wav": "15"
-    "audio.other": "16"
-    "default": "16"
-
   resolution:
-    "resolution.r4320p": "6"
-    "resolution.r2160p": "5"
     "resolution.r1080p": "1"
     "resolution.r1080i": "2"
     "resolution.r720p": "3"
-    "resolution.r480p": "7"
     "resolution.sd": "4"
-    "resolution.other": "0"
+    "resolution.r2160p": "5"
+    "resolution.r4320p": "6"
+    "resolution.r480p": "7"
     "default": "0"
 
   source:
@@ -338,17 +219,9 @@ mappings:
     "team.other": "5"
     "default": "5"
 
-  processing:
-    "processing.china": "1"
-    "processing.japan": "2"
-    "processing.thailand": "3"
-    "processing.india": "4"
-    "processing.korea": "5"
-    "processing.western": "6"
-    "processing.other": "7"
-    "default": "7"
-
   tag:
+    "tag.禁转": 1
+    "tag.首发": 2
     "tag.DIY": 4
     "tag.国语": 5
     "tag.中字": 6

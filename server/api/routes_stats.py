@@ -136,8 +136,8 @@ def get_chart_data_api():
                     SELECT
                         {time_group_fn} AS time_group,
                         downloader_id,
-                        MAX(0, MAX(cumulative_uploaded) - MIN(cumulative_uploaded)) AS total_ul,
-                        MAX(0, MAX(cumulative_downloaded) - MIN(cumulative_downloaded)) AS total_dl
+                        GREATEST(0, MAX(cumulative_uploaded) - MIN(cumulative_uploaded)) AS total_ul,
+                        GREATEST(0, MAX(cumulative_downloaded) - MIN(cumulative_downloaded)) AS total_dl
                     FROM traffic_stats_hourly
                     WHERE stat_datetime >= {ph}
                 """
@@ -181,8 +181,8 @@ def get_chart_data_api():
                         SELECT
                             {time_group_fn_fine} AS time_group,
                             downloader_id,
-                            MAX(0, MAX(cumulative_uploaded) - MIN(cumulative_uploaded)) AS total_ul,
-                            MAX(0, MAX(cumulative_downloaded) - MIN(cumulative_downloaded)) AS total_dl
+                            GREATEST(0, MAX(cumulative_uploaded) - MIN(cumulative_uploaded)) AS total_ul,
+                            GREATEST(0, MAX(cumulative_downloaded) - MIN(cumulative_downloaded)) AS total_dl
                         FROM traffic_stats
                         WHERE stat_datetime >= {ph}
                     """
@@ -230,8 +230,8 @@ def get_chart_data_api():
                     SELECT
                         {time_group_fn} AS time_group,
                         downloader_id,
-                        MAX(0, MAX(cumulative_uploaded) - MIN(cumulative_uploaded)) AS total_ul,
-                        MAX(0, MAX(cumulative_downloaded) - MIN(cumulative_downloaded)) AS total_dl
+                        GREATEST(0, MAX(cumulative_uploaded) - MIN(cumulative_uploaded)) AS total_ul,
+                        GREATEST(0, MAX(cumulative_downloaded) - MIN(cumulative_downloaded)) AS total_dl
                     FROM traffic_stats
                     WHERE stat_datetime >= {ph}
                 """

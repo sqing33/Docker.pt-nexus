@@ -354,8 +354,21 @@ def iyuu_query_api():
         
         # 同步执行IYUU查询，等待完成后返回
         try:
-            iyuu_thread._process_single_torrent(torrent_name, torrent_size)
-            return jsonify({"message": f"种子 '{torrent_name}' 的IYUU查询已完成", "success": True}), 200
+            result_stats = iyuu_thread._process_single_torrent(torrent_name, torrent_size)
+            
+            # 根据查询结果生成更详细的消息
+            if result_stats['total_found'] > 0:
+                message = f"种子 '{torrent_name}' 的IYUU查询已完成，找到 {result_stats['total_found']} 条记录"
+                if result_stats['new_records'] > 0:
+                    message += f"，新增 {result_stats['new_records']} 条种子记录"
+            else:
+                message = f"种子 '{torrent_name}' 的IYUU查询已完成，未找到可辅种记录"
+            
+            return jsonify({
+                "message": message, 
+                "success": True,
+                "stats": result_stats
+            }), 200
         except Exception as e:
             logging.error(f"手动IYUU查询执行失败: {e}", exc_info=True)
             return jsonify({"error": f"IYUU查询失败: {str(e)}", "success": False}), 500

@@ -29,89 +29,37 @@ source_parsers:
     team:
       source_key: "制作组"
 
-  title_components:
-    title:
-      source_key: "主标题"
-    season_episode:
-      source_key: "季集"
-    year:
-      source_key: "年份"
-    status:
-      source_key: "剧集状态"
-    edition:
-      source_key: "发布版本"
-    resolution:
-      source_key: "分辨率"
-    platform:
-      source_key: "片源平台"
-    medium:
-      source_key: "媒介"
-    video_codec:
-      source_key: "视频编码"
-    video_format:
-      source_key: "视频格式"
-    hdr_format:
-      source_key: "HDR格式"
-    bit_depth:
-      source_key: "色深"
-    frame_rate:
-      source_key: "帧率"
-    audio_codec:
-      source_key: "音频编码"
-    team:
-      source_key: "制作组"
 
   # 标准化键映射规则（从原始文本到标准化键）
   standard_keys:
     type:
       "Movies": "category.movie"
-      "电影": "category.movie"
       "TV Series": "category.tv_series"
-      "电视剧": "category.tv_series"
       "Animations": "category.animation"
-      "动漫": "category.animation"
-      "动画": "category.animation"
       "TV Shows": "category.tv_shows"
-      "综艺": "category.tv_shows"
       "Documentaries": "category.documentaries"
-      "纪录片": "category.documentaries"
       "Sports": "category.sports"
-      "体育": "category.sports"
       "Music Videos": "category.music_video"
-      "音乐视频": "category.music_video"
       "HQ Audio": "category.music"
-      "高品质音频": "category.music"
-      "音乐": "category.music"
-      "其他": "category.other"
       "Misc": "category.other"
-      "未知": "category.other"
       "other": "category.other"
 
     medium:
-      "UHD Blu-ray": "medium.uhd_bluray"
-      "Blu-ray": "medium.bluray"
-      "BD": "medium.bluray"
-      "BluRay": "medium.bluray"
-      "Remux": "medium.remux"
-      "Encode": "medium.encode"
-      "MiniBD": "medium.minibd"
-      "HDTV": "medium.hdtv"
-      "DVDR": "medium.dvdr"
-      "WEB-DL": "medium.webdl"
-      "WEBRip": "medium.webrip"
-      "WEB": "medium.webdl"
-      "CD": "medium.cd"
       "Track": "medium.track"
+      "CD": "medium.cd"
+      "DVDR": "medium.dvdr"
+      "HDTV": "medium.hdtv"
+      "MiniBD": "medium.minibd"
+      "Encode": "medium.encode"
+      "Remux": "medium.remux"
       "HD DVD": "medium.hddvd"
+      "Blu-ray": "medium.bluray"
+      "WEBDL": "medium.webdl"
       "Other": "medium.other"
 
     video_codec:
       "H.264": "video.h264"
-      "AVC": "video.h264"
-      "x264": "video.x264"
       "H.265": "video.h265"
-      "HEVC": "video.h265"
-      "x265": "video.x265"
       "MPEG-2": "video.mpeg2"
       "MPEG-4": "video.mpeg4"
       "XviD": "video.xvid"
@@ -119,6 +67,7 @@ source_parsers:
       "VC-1": "video.vc1"
       "AV1": "video.av1"
       "Other": "video.other"
+      "AVC": "video.h264"
 
     audio_codec:
       "FLAC": "audio.flac"
@@ -127,7 +76,6 @@ source_parsers:
       "AAC": "audio.aac"
       "DTS": "audio.dts"
       "AC3": "audio.ac3"
-      "DD": "audio.ac3"
       "DTS-HD": "audio.dts_hd_ma"
       "TrueHD": "audio.truehd"
       "LPCM": "audio.lpcm"
@@ -137,19 +85,29 @@ source_parsers:
       "Other": "audio.other"
 
     resolution:
-      "8K": "resolution.r4320p"
-      "4320p": "resolution.r4320p"
-      "4K": "resolution.r2160p"
-      "2160p": "resolution.r2160p"
-      "1440p": "resolution.r1440p"
       "1080p": "resolution.r1080p"
       "1080i": "resolution.r1080i"
       "720p": "resolution.r720p"
       "SD": "resolution.sd"
       "ED": "resolution.ed"
+      "1440p": "resolution.r1440p"
+      "2160p": "resolution.r2160p"
+      "4320p": "resolution.r4320p"
       "Other": "resolution.other"
 
     team:
+      "rainweb": "team.rainweb"
+      "Other": "team.other"
+      "Ubits": "team.ubits"
+      "rain": "team.rain"
+      "HHWEB": "team.hhweb"
+      "PTP": "team.ptp"
+      "TLF": "team.tlf"
+      "Hares": "team.hares"
+      "QHstudIo": "team.qhstudio"
+      "PTHome": "team.pthome"
+      "HDHome": "team.hdhome"
+      "HHClub": "team.hhclub"
       "Audies": "team.audies"
       "PTer": "team.pter"
       "OurBits": "team.ourbits"
@@ -160,18 +118,6 @@ source_parsers:
       "WiKi": "team.wiki"
       "TTG": "team.ttg"
       "BTN/NTb": "team.btn_ntb"
-      "HHWEB": "team.hhweb"
-      "Ubits": "team.ubits"
-      "rainweb": "team.rainweb"
-      "rain": "team.rain"
-      "PTP": "team.ptp"
-      "TLF": "team.tlf"
-      "Hares": "team.hares"
-      "QHstudIo": "team.qhstudio"
-      "PTHome": "team.pthome"
-      "HDHome": "team.hdhome"
-      "HHClub": "team.hhclub"
-      "Other": "team.other"
 
 # 参数映射规则 - 定义如何将标准化键映射到站点特定参数
 mappings:
@@ -184,22 +130,20 @@ mappings:
     "category.sports": "407"
     "category.music_video": "406"
     "category.music": "408"
-    "category.other": "410"
-    "default": "410"
+    "category.other": "409"
+    "default": "409"
 
   medium:
-    "medium.uhd_bluray": "1"
-    "medium.bluray": "1"
-    "medium.remux": "3"
-    "medium.encode": "7"
-    "medium.minibd": "4"
-    "medium.hdtv": "5"
-    "medium.dvdr": "6"
-    "medium.webdl": "10"
-    "medium.webrip": "7"
-    "medium.cd": "8"
     "medium.track": "9"
+    "medium.cd": "8"
+    "medium.dvdr": "6"
+    "medium.hdtv": "5"
+    "medium.minibd": "4"
+    "medium.encode": "7"
+    "medium.remux": "3"
     "medium.hddvd": "2"
+    "medium.bluray": "1"
+    "medium.webdl": "10"
     "medium.other": "11"
     "default": "11"
 
@@ -232,18 +176,30 @@ mappings:
     "default": "13"
 
   resolution:
-    "resolution.r4320p": "8"
-    "resolution.r2160p": "7"
-    "resolution.r1440p": "6"
     "resolution.r1080p": "1"
     "resolution.r1080i": "2"
     "resolution.r720p": "3"
     "resolution.sd": "4"
     "resolution.ed": "5"
+    "resolution.r1440p": "6"
+    "resolution.r2160p": "7"
+    "resolution.r4320p": "8"
     "resolution.other": "9"
     "default": "9"
 
   team:
+    "team.rainweb": "23"
+    "team.other": "21"
+    "team.ubits": "13"
+    "team.rain": "24"
+    "team.hhweb": "22"
+    "team.ptp": "20"
+    "team.tlf": "19"
+    "team.hares": "18"
+    "team.qhstudio": "17"
+    "team.pthome": "16"
+    "team.hdhome": "15"
+    "team.hhclub": "14"
     "team.audies": "1"
     "team.pter": "11"
     "team.ourbits": "10"
@@ -254,21 +210,11 @@ mappings:
     "team.wiki": "5"
     "team.ttg": "4"
     "team.btn_ntb": "3"
-    "team.hhweb": "22"
-    "team.ubits": "13"
-    "team.rainweb": "23"
-    "team.rain": "24"
-    "team.ptp": "20"
-    "team.tlf": "19"
-    "team.hares": "18"
-    "team.qhstudio": "17"
-    "team.pthome": "16"
-    "team.hdhome": "15"
-    "team.hhclub": "14"
-    "team.other": "21"
     "default": "21"
 
   tag:
+    "tag.禁转": 1
+    "tag.首发": 2
     "tag.DIY": 4
     "tag.国语": 5
     "tag.中字": 6

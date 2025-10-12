@@ -1,6 +1,3 @@
-# 13City站点的配置文件
-# 基于三层解耦模型重构，包含source_parsers和标准化的mappings
-
 site_name: "13City"
 
 # 表单字段定义 - 定义站点上传表单中各字段的标识符
@@ -33,108 +30,60 @@ source_parsers:
     source:
       source_key: "区域"
 
-  title_components:
-    title:
-      source_key: "主标题"
-    season_episode:
-      source_key: "季集"
-    year:
-      source_key: "年份"
-    status:
-      source_key: "剧集状态"
-    edition:
-      source_key: "发布版本"
-    resolution:
-      source_key: "分辨率"
-    platform:
-      source_key: "片源平台"
-    medium:
-      source_key: "媒介"
-    video_codec:
-      source_key: "视频编码"
-    video_format:
-      source_key: "视频格式"
-    hdr_format:
-      source_key: "HDR格式"
-    bit_depth:
-      source_key: "色深"
-    frame_rate:
-      source_key: "帧率"
-    audio_codec:
-      source_key: "音频编码"
-    team:
-      source_key: "制作组"
-
   # 标准化键映射规则（从原始文本到标准化键）
   standard_keys:
     type:
-      "电影": "category.movie"
-      "电视剧": "category.tv_series"
-      "综艺": "category.tv_shows"
-      "动漫": "category.animation"
-      "MV": "category.music_video"
-      "音乐": "category.music"
-      "电子书": "category.ebook"
-      "纪录片": "category.documentaries"
-      "其他": "category.other"
+      "电影/Movies": "category.movie"
+      "连续剧/TV Series": "category.tv_series"
+      "综艺/TV Shows": "category.tv_shows"
+      "动漫/Animations": "category.animation"
+      "演唱会、MV/Music Videos": "category.music_video"
+      "音乐/Music": "category.music"
+      "电子书&有声读物/E-book": "category.ebook"
+      "纪录片/Docmentaries": "category.documentaries"
 
     medium:
-      "Blu-ray": "medium.bluray"
-      "BluRay": "medium.bluray"
-      "UHD Blu-ray": "medium.uhd_bluray"
-      "Remux": "medium.remux"
-      "Encode": "medium.encode"
-      "MiniBD": "medium.minibd"
-      "WEB-DL": "medium.webdl"
-      "WEBRip": "medium.webrip"
-      "HDTV": "medium.hdtv"
-      "DVD": "medium.dvd"
-      "DVDR": "medium.dvdr"
-      "CD": "medium.cd"
       "Track": "medium.track"
+      "CD": "medium.cd"
+      "DVDR": "medium.dvdr"
+      "HDTV": "medium.hdtv"
+      "MiniBD": "medium.minibd"
+      "Encode": "medium.encode"
+      "Remux": "medium.remux"
+      "HD DVD": "medium.hddvd"
+      "Blu-ray": "medium.bluray"
+      "WEB-DL": "medium.webdl"
+      "BluRay": "medium.bluray"
+      "WEBRip": "medium.webrip"
       "Other": "medium.other"
 
     video_codec:
-      "H.264/AVC": "video.h264"
-      "H.265/HEVC": "video.h265"
-      "VC-1": "video.vc1"
+      "AVC/H.264/x264": "video.h264"
+      "HEVC/H.265/x265": "video.h265"
       "MPEG-2": "video.mpeg2"
-      "AV1": "video.av1"
-      "VP9": "video.vp9"
+      "VC-1": "video.vc1"
+      "VPB/VP9": "video.vp9"
       "Xvid": "video.xvid"
       "Other": "video.other"
 
     audio_codec:
       "FLAC": "audio.flac"
       "APE": "audio.ape"
-      "DTS": "audio.dts"
-      "DTS-HD": "audio.dts_hd_ma"
-      "DTS-X": "audio.dtsx"
+      "DTS-HD/DTS": "audio.dts"
       "MP3": "audio.mp3"
       "OGG": "audio.ogg"
       "AAC": "audio.aac"
-      "Other": "audio.other"
-      "DD/AC3": "audio.ac3"
-      "AC3": "audio.ac3"
-      "TrueHD Atmos": "audio.truehd_atmos"
       "DDP/E-AC3": "audio.ddp"
-      "E-AC3": "audio.ddp"
-      "LPCM": "audio.lpcm"
       "TrueHD": "audio.truehd"
-      "DTS:X": "audio.dtsx"
-      "DTS-HD MA": "audio.dts_hd_ma"
-      "M4A": "audio.m4a"
-      "WAV": "audio.wav"
+      "TrueHD Atmos": "audio.truehd_atmos"
+      "LPCM": "audio.lpcm"
+      "Other": "audio.other"
 
     resolution:
-      "8K": "resolution.r8k"
-      "4K": "resolution.r4k"
-      "2160p": "resolution.r2160p"
-      "1440p": "resolution.r1440p"
+      "8K": "resolution.r4320p"
+      "4K": "resolution.r2160p"
       "1080p": "resolution.r1080p"
       "1080i": "resolution.r1080i"
-      "720p": "resolution.r720p"
-      "480p": "resolution.r480p"
       "Other": "resolution.other"
 
     team:
@@ -180,18 +129,17 @@ mappings:
     "default": "401"
 
   medium:
-    "medium.bluray": "1"
-    "medium.uhd_bluray": "10"
-    "medium.remux": "3"
-    "medium.encode": "7"
+    "medium.track": "9"
+    "medium.cd": "8"
+    "medium.dvdr": "6"
+    "medium.hdtv": "5"
     "medium.minibd": "4"
+    "medium.encode": "7"
+    "medium.remux": "3"
+    "medium.hddvd": "2"
+    "medium.bluray": "1"
     "medium.webdl": "10"
     "medium.webrip": "12"
-    "medium.hdtv": "5"
-    "medium.dvd": "6"
-    "medium.dvdr": "6"
-    "medium.cd": "8"
-    "medium.track": "9"
     "medium.other": "13"
     "default": "13"
 
@@ -226,14 +174,10 @@ mappings:
     "default": "11"
 
   resolution:
-    "resolution.r8k": "1"
-    "resolution.r4k": "2"
+    "resolution.r4320p": "1"
     "resolution.r2160p": "2"
-    "resolution.r1440p": "5"
     "resolution.r1080p": "3"
     "resolution.r1080i": "4"
-    "resolution.r720p": "5"
-    "resolution.r480p": "5"
     "resolution.other": "5"
     "default": "5"
 
