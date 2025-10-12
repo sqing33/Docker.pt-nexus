@@ -36,13 +36,13 @@ source_parsers:
       "Documentaries(纪录片)": "category.documentaries"
       "TV Series(剧集)": "category.tv_series"
       "TV Shows(综艺)": "category.tv_shows"
-      "Music Videos(MV)": "category.music_video"
+      "Music Videos(MV)": "category.mv"
       "Sports(运动题材)": "category.sports"
       "HQ Audio(高清音频)": "category.music"
       "Misc(其他)": "category.other"
       "Book(图书)": "category.ebook"
       "Music Album(音乐专辑)": "category.music"
-      "Education(资料)": "category.education"
+      "Education(资料)": "category.study"
 
     medium:
       "Track": "medium.track"
@@ -104,12 +104,12 @@ mappings:
     "category.documentaries": "404"
     "category.tv_series": "402"
     "category.tv_shows": "403"
-    "category.music_video": "406"
+    "category.mv": "406"
     "category.sports": "407"
     "category.music": "408"
     "category.other": "409"
     "category.ebook": "410"
-    "category.education": "412"
+    "category.study": "412"
     "default": "401"
 
   medium:

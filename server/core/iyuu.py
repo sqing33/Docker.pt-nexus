@@ -393,6 +393,9 @@ class IYUUThread(Thread):
                             "details_page", "details.php?id={}").replace(
                                 "{}", str(item.get("torrent_id")))
                         full_url = f"{scheme}://{site_info.get('base_url', '')}/{details_page}"
+                        
+                        # 将链接中的 api 替换为 kp（例如：api.m-team.cc -> kp.m-team.cc）
+                        full_url = full_url.replace("://api.", "://kp.")
 
                         # 获取IYUU站点名称
                         iyuu_site_name = site_info.get(

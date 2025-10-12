@@ -47,7 +47,7 @@ source_parsers:
       "儿童动画": "category.cartoon"
       "综艺": "category.tv_shows"
       "音乐": "category.music"
-      "MV": "category.music_video"
+      "MV": "category.mv"
 
     medium:
       "UHD Blu-ray": "medium.uhd_bluray"
@@ -171,7 +171,7 @@ mappings:
     "category.cartoon": "416"
     "category.tv_shows": "403"
     "category.music": "409"
-    "category.music_video": "406"
+    "category.mv": "406"
     "default": "401"
 
   medium:

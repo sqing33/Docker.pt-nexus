@@ -32,9 +32,9 @@ source_parsers:
       "Docs(纪录)": "category.documentaries"
       "TV Shows(综艺)": "category.tv_shows"
       "Sports(体育)": "category.sports"
-      "MV(音乐视频)": "category.music_video"
+      "MV(音乐视频)": "category.mv"
       "Music(音乐)": "category.music"
-      "Audio(有声)": "category.audio"
+      "Audio(有声)": "category.audiobook"
       "Other(其他类型)": "category.other"
 
     source:

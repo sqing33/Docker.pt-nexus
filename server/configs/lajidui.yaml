@@ -44,7 +44,7 @@ source_parsers:
       "TV Shows/综艺": "category.tv_shows"
       "Documentaries/纪录片": "category.documentaries"
       "Animations/动漫": "category.animation"
-      "Music Videos/音乐视频": "category.music_video"
+      "Music Videos/音乐视频": "category.mv"
       "Sports/体育": "category.sports"
       "Audio/音频": "category.audio"
       "Misc/其他": "category.other"
@@ -53,7 +53,7 @@ source_parsers:
       "ShortDrama/短剧": "category.playlet"
       "Game/游戏": "category.game"
       "APP/软件": "category.software"
-      "Education/教育视频": "category.education"
+      "Education/教育视频": "category.study"
       "Audiobook/有声书": "category.audiobook"
 
     medium:
@@ -163,7 +163,7 @@ mappings:
     "category.tv_shows": "403"
     "category.documentaries": "404"
     "category.animation": "405"
-    "category.music_video": "406"
+    "category.mv": "406"
     "category.sports": "407"
     "category.audio": "408"
     "category.other": "409"
@@ -172,7 +172,7 @@ mappings:
     "category.playlet": "412"
     "category.game": "413"
     "category.software": "414"
-    "category.education": "415"
+    "category.study": "415"
     "category.audiobook": "416"
     "default": "409"
 

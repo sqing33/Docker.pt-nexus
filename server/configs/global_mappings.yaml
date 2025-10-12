@@ -40,40 +40,47 @@ global_standard_keys:
     "Animation": "category.animation"
     "Anime": "category.animation"
     "动画": "category.animation"
-    "Cartoon/少儿动画": "category.cartoon"
-    "儿童": "category.children"
-    "Animations": "category.animation"
     "动漫 / Animations": "category.animation"
+    "Animations": "category.animation"
+    "Cartoon/少儿动画": "category.cartoon"
+    "儿童": "category.cartoon"
 
     # 音乐相关
-    "MV": "category.music_video"
-    "Music Videos/音乐视频": "category.music_video"
-    "演唱会、MV/Music Videos": "category.music_video"
-    "MV(演唱)": "category.music_video"
-    "Music Video": "category.music_video"
-    "演唱会/音乐会": "category.music_video"
-    "MV/演唱会": "category.music_video"
-    "Concern/演唱会": "category.concert"
     "音乐": "category.music"
     "Music/音乐": "category.music"
-    "HQ音乐": "category.music"
-    "HQ Audio/音乐": "category.music"
     "音乐/Music": "category.music"
     "Music(音乐)": "category.music"
     "Music": "category.music"
+    "HQ音乐": "category.music"
+    "HQ Audio/音乐": "category.music"
+    "音乐 / Music": "category.music"
+    "无损音乐": "category.music"
+    "HQ音频": "category.music"
+    "HQ Audio": "category.music"
+
+    # 音乐视频相关
+    "MV": "category.mv"
+    "Music Videos/音乐视频": "category.mv"
+    "演唱会、MV/Music Videos": "category.mv"
+    "MV(演唱)": "category.mv"
+    "MV(音乐视频)": "category.mv"
+    "Music Video": "category.mv"
+    "演唱会/音乐会": "category.mv"
+    "MV/演唱会": "category.mv"
+    "Concern/演唱会": "category.mv"
+    "音乐 MV": "category.mv"
+
+    # 音频相关
     "Audio/音频": "category.audio"
     "音频": "category.audio"
     "Audio(音频)": "category.audio"
     "Audio": "category.audio"
-    "HQ音频": "category.music"
-    "HQ Audio": "category.music"
-    "音乐 / Music": "category.music"
-    "MV(音乐视频)": "category.music_video"
-    "Music(音乐)": "category.music"
-    "Audio(有声)": "category.audio"
-    "音乐 MV": "category.music_video"
-    "无损音乐": "category.music"
+
+    # 有声书相关
+    "Audiobook/有声书": "category.audiobook"
     "Audio Books/有声读物": "category.audiobook"
+    "有声书 / Audiobook": "category.audiobook"
+    "Audio(有声)": "category.audiobook"
 
     # 纪录片相关
     "纪录片": "category.documentaries"
@@ -85,6 +92,7 @@ global_standard_keys:
     "纪录": "category.documentaries"
     "纪录片 / Documentaries": "category.documentaries"
     "Docs(纪录)": "category.documentaries"
+    "Drama/戏剧": "category.drama"
 
     # 短剧相关
     "短剧": "category.playlet"
@@ -93,13 +101,12 @@ global_standard_keys:
     "Playlet（短剧）": "category.playlet"
     "Playlet": "category.playlet"
     "短剧/ShortDrama": "category.playlet"
-    "Drama/戏剧": "category.drama"
 
     # 游戏相关
+    "游戏": "category.game"
     "Game/游戏": "category.game"
     "Game(游戏)": "category.game"
     "Game": "category.game"
-    "游戏": "category.game"
 
     # 电子书相关
     "电子书": "category.ebook"
@@ -108,21 +115,18 @@ global_standard_keys:
     "E-Book(电子书/有声书)": "category.ebook"
     "Ebook": "category.ebook"
     "书籍": "category.books"
-    "有声书 / Audiobook": "category.audiobook"
-    "Audiobook/有声书": "category.audiobook"
 
     # 体育相关
     "体育": "category.sports"
     "Sports/体育运动": "category.sports"
     "Sports(体育)": "category.sports"
     "Sports": "category.sports"
-    "Sports(体育)": "category.sports"
 
     # 学习教育相关
     "学习": "category.study"
     "Study/学习": "category.study"
-    "Education/教育视频": "category.education"
-    "Education(资料)": "category.education"
+    "Education/教育视频": "category.study"
+    "Education(资料)": "category.study"
 
     # 排行榜相关
     "TOP250": "category.top250"
@@ -134,32 +138,6 @@ global_standard_keys:
     "APP/软件": "category.software"
     "software/软件": "category.software"
     "系统镜像": "category.os"
-
-    # 有声书相关
-    "Audiobook/有声书": "category.audiobook"
-
-    # 写真相关
-    "写真": "category.photography"
-
-    # 绘本相关
-    "绘本": "category.illustration"
-
-    # 国产相关
-    "国产": "category.domestic"
-
-    # 步兵相关
-    "步兵": "category.unedited"
-
-    # 骑兵相关
-    "骑兵": "category.edited"
-
-    # 直播秀相关
-    "直播秀": "category.live_show"
-
-    # 3D相关
-    "3D": "category.3d"
-    "3D(3D)": "category.3d"
-    "3D/3D": "category.3d"
 
     # HDArea特有类型
     "Movie UHD-4K": "category.movie_uhd"
@@ -179,32 +157,36 @@ global_standard_keys:
     "Misc/其他": "category.other"
     "Other": "category.other"
     "Othes/其他": "category.other"
+    "其他 / Misc": "category.other"
+    "Other(其他类型)": "category.other"
+    "Misc": "category.other"
+    "other": "category.other"
     "文档": "category.document"
     "Blu-Ray原盘": "category.blu_ray"
     "OS/系统镜像": "category.os"
-    "Misc": "category.other"
-    "other": "category.other"
-    "其他 / Misc": "category.other"
-    "Other(其他类型)": "category.other"
 
   # 媒介映射
   medium:
     # 蓝光相关
     "Blu-ray": "medium.bluray"
-    "BluRay": "medium.bluray_alt"
-    "Blu-rayUHD": "medium.uhd_bluray"
+    "BluRay": "medium.bluray"
+    "BD 原盘": "medium.bluray"
+    "BD原盘": "medium.bluray"
+    "BD DIY": "medium.bluray_diy"
+    "BD Remux": "medium.bluray_remux"
+    "Remux": "medium.remux"
+    "Remux TV": "medium.remux_tv"
+
+    # UHD/4K蓝光相关
     "UHD Blu-ray": "medium.uhd_bluray"
+    "Blu-rayUHD": "medium.uhd_bluray"
     "UHD": "medium.uhd_bluray"
     "UHD原盘": "medium.uhd_bluray"
     "UHD DIY": "medium.uhd_diy"
     "UHD Remux": "medium.uhd_remux"
     "UHD Remux TV": "medium.uhd_remux_tv"
     "UHD 压制": "medium.uhd_encode"
-    "BD 原盘": "medium.bluray"
-    "BD DIY": "medium.bluray_diy"
-    "BD Remux": "medium.bluray_remux"
-    "Remux": "medium.remux"
-    "Remux TV": "medium.remux_tv"
+    "UHD压制": "medium.uhd_encode"
 
     # DVD相关
     "DVD": "medium.dvd"
@@ -212,48 +194,40 @@ global_standard_keys:
     "DVDRip": "medium.dvdr"
     "HD DVD": "medium.hddvd"
     "VCD": "medium.vcd"
-    "其他资料": "medium.other"
 
     # WEB相关
     "WEB": "medium.webdl"
     "WEB-DL": "medium.webdl"
     "WEBRip": "medium.webrip"
     "WEB-DL/WEBRip": "medium.webdl"
-    "WEB-DL/WEBRip TV": "medium.webdl_tv"
+    "WEB-DL/WEBRip TV": "medium.webdl"
     "WEB-DL(TV)": "medium.webdl"
 
     # HDTV相关
     "HDTV": "medium.hdtv"
     "UHDTV": "medium.uhdtv"
+    "TVRip": "medium.tvrip"
 
-    # 其他媒介
+    # 编码相关
     "Encode": "medium.encode"
     "Encode TV": "medium.encode_tv"
     "1080p/i压制": "medium.encode_1080p"
     "1080P/i压制": "medium.encode"
     "720P压制": "medium.encode"
+
+    # 音频相关
     "CD": "medium.cd"
     "Track": "medium.track"
-    "MiniBD": "medium.minibd"
-    "MiniSD": "medium.minisd"
-    "BDRip": "medium.bdrip"
-    "WEB-DL": "medium.webdl"
-    "WEBRip": "medium.webrip"
-    "HDTV": "medium.hdtv"
-    "TVRip": "medium.tvrip"
-    "DVD": "medium.dvd"
-    "DVDRip": "medium.dvdrip"
     "SACD": "medium.sacd"
     "CD+VCD": "medium.cd_vcd"
     "CD+DVD": "medium.cd_dvd"
     "黑胶": "medium.vinyl"
-    "UHD原盘": "medium.uhd_bluray"
-    "UHD DIY": "medium.uhd_diy"
-    "UHD Remux": "medium.uhd_remux"
-    "UHD压制": "medium.uhd_encode"
-    "BD原盘": "medium.bluray"
-    "BD DIY": "medium.bluray_diy"
-    "BD Remux": "medium.remux"
+
+    # 其他媒介
+    "MiniBD": "medium.minibd"
+    "MiniSD": "medium.minisd"
+    "BDRip": "medium.bdrip"
+    "其他资料": "medium.other"
     "Other": "medium.other"
     "Other/其他": "medium.other"
 
@@ -276,12 +250,10 @@ global_standard_keys:
     "h265": "video.h265"
     "x265": "video.x265"
     "X265": "video.x265"
-    "H.266/VVC": "video.h266"
-    "AVS3": "video.avs3"
-    "AVS+": "video.avsplus"
-    "AVS2": "video.avs2"
+    "H.265(HEVC)": "video.h265"
 
     # 其他编码
+    "H.266/VVC": "video.h266"
     "AV1": "video.av1"
     "VP9": "video.vp9"
     "VPB/VP9": "video.vp9"
@@ -292,14 +264,10 @@ global_standard_keys:
     "MPEG-4": "video.mpeg4"
     "H.261": "video.h261"
     "Xvid": "video.xvid"
+
+    # 其他
     "Other": "video.other"
     "Other/其他": "video.other"
-    "H.265(HEVC)": "video.h265"
-    "AVC": "video.h264"
-    "H.265/HEVC": "video.h265"
-    "H.264/AVC": "video.h264"
-    "x265": "video.x265"
-    "x264": "video.x264"
 
   # 音频编码映射
   audio_codec:
@@ -316,15 +284,22 @@ global_standard_keys:
     # AC3/DDP相关
     "DDP": "audio.ddp"
     "DDP/E-AC3": "audio.ddp"
-    "E-AC-3": "audio.ddp"
-    "E-AC3": "audio.ddp"
     "DDP/DD+/EAC3": "audio.ddp"
     "DDP/DD+": "audio.ddp"
+    "DDP Atmos": "audio.ddp_atmos"
+    "E-AC-3": "audio.ddp"
+    "E-AC3": "audio.ddp"
     "DD": "audio.ac3"
     "DD/AC3": "audio.ac3"
+    "Dolby Digital/DD": "audio.ac3"
     "AC3": "audio.ac3"
     "AC-3": "audio.ac3"
     "AC3/EAC3": "audio.ac3"
+
+    # 杜比音频
+    "TrueHD": "audio.truehd"
+    "True-HD": "audio.truehd"
+    "TrueHD Atmos": "audio.truehd_atmos"
 
     # 无损音频
     "FLAC": "audio.flac"
@@ -333,101 +308,76 @@ global_standard_keys:
     "WAV": "audio.wav"
     "LPCM": "audio.lpcm"
     "PCM": "audio.pcm"
+    "DSD": "audio.dsd"
+    "TTA": "audio.tta"
 
     # 有损音频
-    "MP3": "audio.mp3"
     "AAC": "audio.aac"
+    "MP3": "audio.mp3"
     "OGG": "audio.ogg"
     "M4A": "audio.m4a"
+    "m4a": "audio.m4a"
     "MPEG": "audio.mpeg"
     "Opus": "audio.opus"
+    "OPUS": "audio.opus"
 
-    # 杜比音频
-    "TrueHD": "audio.truehd"
-    "TrueHD Atmos": "audio.truehd_atmos"
+    # 其他音频编码
+    "AV3V": "audio.av3v"
+    "AV3A": "audio.av3a"
+    "AVSA": "audio.avsa"
 
     # 其他
     "Other": "audio.other"
     "Other/其他": "audio.other"
-    "DTS-HD": "audio.dts_hd_ma"
-    "TrueHD": "audio.truehd"
-    "True-HD": "audio.truehd"
-    "LPCM": "audio.lpcm"
-    "DTS": "audio.dts"
-    "E-AC-3": "audio.ddp"
-    "AC-3": "audio.ac3"
-    "AAC": "audio.aac"
-    "FLAC": "audio.flac"
-    "APE": "audio.ape"
-    "WAV": "audio.wav"
-    "MP3": "audio.mp3"
-    "OPUS": "audio.opus"
-    "AV3V": "audio.av3v"
-    "DDP Atmos": "audio.ddp_atmos"
-    "TrueHD Atmos": "audio.truehd_atmos"
-    "DTS-HDMA": "audio.dts_hd_ma"
-    "DTS-HD HR": "audio.dts_hd_hr"
-    "DDP/DD+/EAC3": "audio.ddp"
-    "Dolby Digital/DD": "audio.ac3"
-    "m4a": "audio.m4a"
-    "ALAC": "audio.alac"
-    "TTA": "audio.tta"
-    "DSD": "audio.dsd"
-    "AV3A": "audio.av3a"
-    "AVSA": "audio.avsa"
-    "HDR Vivid": "tag.hdr_vivid"
-    "高码率": "tag.高码率"
-    "高帧率": "tag.高帧率"
-    "日语": "tag.日语"
-    "韩语": "tag.韩语"
 
   # 分辨率映射
   resolution:
     # 8K分辨率
     "8K": "resolution.r4320p"
-    "4320p": "resolution.r4320p"
-    "8K/4320p/4320i": "resolution.r4320p"
-    "8K/4320P": "resolution.r4320p"
     "8K/4320p": "resolution.r4320p"
+    "8K/4320P": "resolution.r4320p"
+    "8K/4320p/4320i": "resolution.r4320p"
+    "4320p": "resolution.r4320p"
 
     # 4K分辨率
     "4K": "resolution.r2160p"
-    "2160p": "resolution.r2160p"
     "4K/2160p": "resolution.r2160p"
+    "4K/2160P": "resolution.r2160p"
     "4K/2160p/2160i": "resolution.r2160p"
     "4K/UHD/2160P": "resolution.r2160p"
-    "4K/2160P": "resolution.r2160p"
+    "2160p": "resolution.r2160p"
+    "2160P": "resolution.r2160p"
 
     # 2K分辨率
     "2K": "resolution.r1440p"
-    "1440p": "resolution.r1440p"
-    "2K/1440p/1440i": "resolution.r1440p"
     "2K/1440p": "resolution.r1440p"
+    "2K/1440p/1440i": "resolution.r1440p"
+    "1440p": "resolution.r1440p"
     "1440P": "resolution.r1440p"
 
     # 1080P分辨率
     "1080p": "resolution.r1080p"
+    "1080P": "resolution.r1080p"
     "1080p/i": "resolution.r1080p"
     "1080p/1080i": "resolution.r1080p"
-    "1080P": "resolution.r1080p"
 
     # 1080I分辨率
     "1080i": "resolution.r1080i"
 
     # 720P分辨率
     "720p": "resolution.r720p"
+    "720P": "resolution.r720p"
     "720p/i": "resolution.r720p"
     "720p/720i": "resolution.r720p"
-    "720P": "resolution.r720p"
+
+    # 540P分辨率
+    "540p": "resolution.r540p"
+    "540P": "resolution.r540p"
 
     # 480P分辨率
     "480p": "resolution.r480p"
     "480P": "resolution.r480p"
     "480p/480i": "resolution.r480p"
-
-    # 540P分辨率
-    "540p": "resolution.r540p"
-    "540P": "resolution.r540p"
 
     # SD分辨率
     "SD": "resolution.sd"
@@ -438,56 +388,56 @@ global_standard_keys:
     # 其他分辨率
     "Other": "resolution.other"
     "Other/其他": "resolution.other"
-    "2160P": "resolution.r2160p"
-    "8K": "resolution.r4320p"
-    "8K/4320P": "resolution.r4320p"
-    "4K/UHD/2160P": "resolution.r2160p"
-    "480P": "resolution.r480p"
 
-  #  地区映射（包含产地、区域、处理等字段的统一映射）
+  # 地区映射（包含产地、区域、处理等字段的统一映射）
   source:
     # 中国相关地区
     "中国": "source.china"
     "中国大陆": "source.china"
-    "CN/中国大陆": "source.china"
     "中国（含港澳台）": "source.china"
     "CN": "source.china"
     "CN/中国": "source.china"
+    "CN/中国大陆": "source.china"
     "内地": "source.china"
     "大陆": "source.china"
+    "Mainland(大陆)": "source.china"
 
     # 香港
     "香港": "source.hongkong"
+    "中国香港": "source.hongkong"
     "HK": "source.hongkong"
     "HK/香港": "source.hongkong"
-    "中国香港": "source.hongkong"
+    "Hongkong(香港)": "source.hongkong"
 
     # 台湾
     "台湾": "source.taiwan"
+    "中国台湾": "source.taiwan"
     "TW": "source.taiwan"
     "TW/台湾": "source.taiwan"
-    "中国台湾": "source.taiwan"
+    "Taiwan(台湾)": "source.taiwan"
 
     # 美国
     "美国": "source.western"
-    "US/美国": "source.western"
-    "USA": "source.western"
     "US": "source.western"
+    "USA": "source.western"
     "US/美国": "source.western"
     "America": "source.western"
     "欧美": "source.western"
+    "West(欧美)": "source.western"
 
     # 日本
     "日本": "source.japan"
     "JP": "source.japan"
     "JPN": "source.japan"
     "JPN/日本": "source.japan"
+    "Japan(日本)": "source.japan"
 
     # 韩国
     "韩国": "source.korea"
     "KR": "source.korea"
     "Korea": "source.korea"
     "Kr/韩国": "source.korea"
+    "Korea(韩国)": "source.korea"
 
     # 英国
     "英国": "source.uk"
@@ -515,11 +465,13 @@ global_standard_keys:
     "印度": "source.india"
     "IN": "source.india"
     "IN/印度": "source.india"
+    "India(印度)": "source.india"
 
     # 俄罗斯
     "俄罗斯": "source.russia"
     "RU": "source.russia"
     "RU/俄罗斯": "source.russia"
+    "Russia(俄国)": "source.russia"
 
     # 加拿大
     "加拿大": "source.canada"
@@ -545,23 +497,13 @@ global_standard_keys:
     "泰国": "source.thailand"
     "TH": "source.thailand"
     "TH/泰国": "source.thailand"
+    "Thailand(泰国)": "source.thailand"
 
     # 其他
     "其他": "source.other"
     "Other": "source.other"
     "Other/其他": "source.other"
     "Other（其他）": "source.other"
-    "EU/欧洲": "source.europe"
-    "欧美": "source.western"
-    "Mainland(大陆)": "source.china"
-    "Hongkong(香港)": "source.hongkong"
-    "Taiwan(台湾)": "source.taiwan"
-    "West(欧美)": "source.western"
-    "Japan(日本)": "source.japan"
-    "Korea(韩国)": "source.korea"
-    "India(印度)": "source.india"
-    "Russia(俄国)": "source.russia"
-    "Thailand(泰国)": "source.thailand"
     "Other(其他地区)": "source.other"
 
     # 制作组映射
@@ -577,8 +519,8 @@ global_standard_keys:
     "AilMWeb": "team.ailmweb"
     "AiMWeb": "team.aimweb"
     "ANK-Raws": "team.ank-raws"
-    "Audies": "team.audies"
     "Audiences": "team.audiences"
+    "Audies": "team.audies"
     "beAst": "team.beast"
     "BeiTai": "team.beitai"
     "BeyondHD": "team.beyondhd"
@@ -596,10 +538,13 @@ global_standard_keys:
     "CHD/CHDBits": "team.chdbits"
     "CHDWEB": "team.chdweb"
     "CMCT": "team.cmct"
+    "CornerMV": "team.cornermv"
     "CSPT": "team.cspt"
     "CSWEB": "team.csweb"
+    "DBTV": "team.dbtv"
     "DIC": "team.dic"
     "DJWEB": "team.djweb"
+    "Dream": "team.dream"
     "DYZ": "team.dyz"
     "DYZ-Movie": "team.dyztv"
     "EPSiLON": "team.epsilon"
@@ -609,13 +554,14 @@ global_standard_keys:
     "GodDramas": "team.goddramas"
     "Hares": "team.hares"
     "HDFans": "team.hdfans"
-    "HDS": "team.hds"
     "HDC": "team.hdc"
     "HDC/HDChina": "team.hdchina"
+    "HDo": "team.hdo"
     "HDHome": "team.hdhome"
     "HDK": "team.hdk"
     "HDKGame": "team.hdkgame"
     "HDKWeb": "team.hdkweb"
+    "HDS": "team.hdsky"
     "HDS/HDSky": "team.hdsky"
     "HDSky": "team.hdsky"
     "HDTime": "team.hdtime"
@@ -628,16 +574,17 @@ global_standard_keys:
     "LemonHD": "team.lemonhd"
     "LHD": "team.lhd"
     "LittleBakas!": "team.littlebakas"
+    "MARK": "team.mark"
     "M-team": "team.mteam"
     "MTeam": "team.mteam"
-    "MWeb": "team.mweb"
     "Moozzi2": "team.moozzi2"
+    "MWeb": "team.mweb"
     "MySiLU": "team.mysilu"
     "NONE": "team.none"
     "OpenCD": "team.opencd"
     "OurBits": "team.ourbits"
-    "OurTV": "team.ourtv"
     "Ourbits": "team.ourbits"
+    "OurTV": "team.ourtv"
     "Pack": "team.pack"
     "PTChina": "team.ptchina"
     "PTCafe": "team.ptcafe"
@@ -657,6 +604,7 @@ global_standard_keys:
     "Snow-Raws": "team.snow-raws"
     "Starfall": "team.starfall"
     "StarfallWeb": "team.starfallweb"
+    "Telesto": "team.telesto"
     "TLF": "team.tlf"
     "TJUPT": "team.tjupt"
     "TTG": "team.ttg"
@@ -668,12 +616,6 @@ global_standard_keys:
     "ZmMusic": "team.zmmusic"
     "ZmPT": "team.zmpt"
     "ZmWeb": "team.zmweb"
-    "MARK": "team.mark"
-    "Dream": "team.dream"
-    "DBTV": "team.dbtv"
-    "CornerMV": "team.cornermv"
-    "Telesto": "team.telesto"
-    "HDo": "team.hdo"
     "原创": "team.original"
     "Other": "team.other"
     "Other/其他": "team.other"

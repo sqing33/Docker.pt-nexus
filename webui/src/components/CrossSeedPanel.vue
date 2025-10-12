@@ -593,7 +593,7 @@
     <footer class="panel-footer">
       <!-- 步骤 0 的按钮 -->
       <div v-if="activeStep === 0" class="button-group">
-        <el-button @click="$emit('cancel')">取消</el-button>
+        <el-button @click="handleCancelClick">取消</el-button>
 
         <el-tooltip :content="nextButtonTooltipContent" placement="top"
           :disabled="!isNextButtonDisabled">
@@ -608,7 +608,7 @@
       <!-- 步骤 1 的按钮 -->
       <div v-if="activeStep === 1" class="button-group">
         <el-button @click="handlePreviousStep" :disabled="isLoading">上一步</el-button>
-        <el-button type="primary" @click="$emit('complete')" v-if="props.showCompleteButton">修改完成</el-button>
+        <el-button type="primary" @click="handleCompleteClick" v-if="props.showCompleteButton">修改完成</el-button>
         <el-tooltip :content="isScrolledToBottom ? '' : '请先滚动到页面底部审查完种子信息再发布！'" :disabled="isScrolledToBottom"
           placement="top">
           <el-button type="primary" @click="goToSelectSiteStep" :disabled="isLoading || !isScrolledToBottom"
@@ -619,7 +619,7 @@
       </div>
       <!-- 步骤 2 的按钮 -->
       <div v-if="activeStep === 2" class="button-group">
-        <el-button @click="handlePreviousStep" :disabled="isLoading">上一步</el-button>
+        <el-button @click="handleCancelClick" :disabled="isLoading">取消</el-button>
         <el-button type="primary" @click="handlePublish" :loading="isLoading"
           :disabled="selectedTargetSites.length === 0">
           立即发布
@@ -627,7 +627,7 @@
       </div>
       <!-- 步骤 3 的按钮 -->
       <div v-if="activeStep === 3" class="button-group">
-        <el-button type="primary" @click="$emit('complete')">完成</el-button>
+        <el-button type="primary" @click="handleCompleteClick">完成</el-button>
       </div>
     </footer>
   </div>
@@ -754,7 +754,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['complete', 'cancel']);
+const emit = defineEmits(['complete', 'cancel', 'close-with-refresh']);
 
 const crossSeedStore = useCrossSeedStore();
 
@@ -2230,6 +2230,21 @@ const handlePreviousStep = () => {
   if (activeStep.value > 0) {
     activeStep.value--
   }
+}
+
+// 处理取消按钮点击
+const handleCancelClick = () => {
+  // 如果在步骤3（完成发布），触发带刷新的关闭
+  if (activeStep.value === 3) {
+    emit('close-with-refresh');
+  } else {
+    emit('cancel');
+  }
+}
+
+// 处理完成按钮点击
+const handleCompleteClick = () => {
+  emit('complete');
 }
 
 const getCleanMessage = (logs: string): string => {

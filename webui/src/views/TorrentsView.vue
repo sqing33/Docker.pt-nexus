@@ -161,7 +161,9 @@
         </template>
         <div class="cross-seed-content" v-if="selectedTorrentForMigration">
           <CrossSeedPanel
-            @complete="handleCrossSeedComplete" @cancel="closeCrossSeedDialog" />
+            @complete="handleCrossSeedComplete" 
+            @cancel="closeCrossSeedDialog"
+            @close-with-refresh="handleCloseWithRefresh" />
         </div>
       </el-card>
     </div>
@@ -839,6 +841,14 @@ const handleCrossSeedComplete = () => {
   ElMessage.success('转种操作已完成！');
   crossSeedStore.reset();
   // 可选：刷新数据以显示最新状态
+  fetchData();
+};
+
+// 处理带刷新的关闭事件（在步骤3点击关闭按钮时触发）
+const handleCloseWithRefresh = () => {
+  ElMessage.success('转种操作已完成！');
+  crossSeedStore.reset();
+  // 刷新数据以显示最新状态
   fetchData();
 };
 

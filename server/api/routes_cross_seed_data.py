@@ -443,6 +443,7 @@ def delete_cross_seed_data():
     conn = None
     try:
         data = request.get_json()
+        print(data)
 
         # 判断是批量删除还是单个删除
         if data and 'items' in data:
@@ -470,25 +471,14 @@ def delete_cross_seed_data():
                 torrent_id = item['torrent_id']
                 site_name = item['site_name']
 
-                # 查询记录是否存在
-                if db_manager.db_type == "postgresql":
-                    select_query = "SELECT 1 FROM seed_parameters WHERE torrent_id = %s AND site_name = %s LIMIT 1"
-                    cursor.execute(select_query, (torrent_id, site_name))
-                else:
-                    select_query = "SELECT 1 FROM seed_parameters WHERE torrent_id = ? AND site_name = ? LIMIT 1"
-                    cursor.execute(select_query, (torrent_id, site_name))
-
-                result = cursor.fetchone()
-                if not result:
-                    logging.info(f"记录不存在，跳过: {torrent_id}, {site_name}")
-                    continue
-
                 # 执行删除
-                if db_manager.db_type == "mysql" or db_manager.db_type == "sqlite":
+                if db_manager.db_type == "sqlite":
                     delete_query = "DELETE FROM seed_parameters WHERE torrent_id = ? AND site_name = ?"
+                    print(delete_query, (torrent_id, site_name))
                     cursor.execute(delete_query, (torrent_id, site_name))
                 else:  # postgresql
                     delete_query = "DELETE FROM seed_parameters WHERE torrent_id = %s AND site_name = %s"
+                    print(delete_query, (torrent_id, site_name))
                     cursor.execute(delete_query, (torrent_id, site_name))
 
                 deleted_count += 1
@@ -511,29 +501,14 @@ def delete_cross_seed_data():
             conn = db_manager._get_connection()
             cursor = db_manager._get_cursor(conn)
 
-            # 查询记录是否存在
-            if db_manager.db_type == "postgresql":
-                select_query = "SELECT 1 FROM seed_parameters WHERE torrent_id = %s AND site_name = %s LIMIT 1"
-                cursor.execute(select_query, (torrent_id, site_name))
-            else:
-                select_query = "SELECT 1 FROM seed_parameters WHERE torrent_id = ? AND site_name = ? LIMIT 1"
-                cursor.execute(select_query, (torrent_id, site_name))
-
-            result = cursor.fetchone()
-            if not result:
-                return jsonify({
-                    "success":
-                    False,
-                    "error":
-                    f"找不到种子数据: {torrent_id} from {site_name}"
-                }), 404
-
             # 执行删除
-            if db_manager.db_type == "mysql" or db_manager.db_type == "sqlite":
+            if db_manager.db_type == "sqlite":
                 delete_query = "DELETE FROM seed_parameters WHERE torrent_id = ? AND site_name = ?"
+                print(delete_query, (torrent_id, site_name))
                 cursor.execute(delete_query, (torrent_id, site_name))
             else:  # postgresql
                 delete_query = "DELETE FROM seed_parameters WHERE torrent_id = %s AND site_name = %s"
+                print(delete_query, (torrent_id, site_name))
                 cursor.execute(delete_query, (torrent_id, site_name))
 
             conn.commit()

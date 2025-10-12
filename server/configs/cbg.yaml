@@ -44,7 +44,7 @@ source_parsers:
       "短剧": "category.playlet"
       "动画": "category.anime"
       "动漫": "category.animation"
-      "儿童": "category.children"
+      "儿童": "category.cartoon"
       "综艺": "category.tv_shows"
       "纪录": "category.documentaries"
       "音乐": "category.music"

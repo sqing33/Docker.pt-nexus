@@ -46,11 +46,11 @@ source_parsers:
       "体育": "category.sports"
       "软件": "category.software"
       "游戏": "category.game"
-      "演唱会/音乐会": "category.music_video"
+      "演唱会/音乐会": "category.mv"
       "其他": "category.other"
       "电子书": "category.ebook"
       "有声书": "category.audiobook"
-      "MV (音乐短片)": "category.music_video"
+      "MV (音乐短片)": "category.mv"
       "音乐": "category.music"
 
     medium:
@@ -165,7 +165,7 @@ mappings:
     "category.sports": "407"
     "category.software": "412"
     "category.game": "411"
-    "category.music_video": "413"
+    "category.mv": "413"
     "category.other": "409"
     "category.ebook": "410"
     "category.audiobook": "414"
