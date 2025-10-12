@@ -291,9 +291,8 @@ class BaseUploader(ABC):
                                       {}).get("video_codec", "codec_sel[4]")
         codec_mapping = self.mappings.get("video_codec", {})
         print(f"开始查找视频编码映射: '{codec_str}' (类型: video_codec)")
-        mapped_params[codec_field] = self._find_mapping(codec_mapping,
-                                                        codec_str,
-                                                        mapping_type="video_codec")
+        mapped_params[codec_field] = self._find_mapping(
+            codec_mapping, codec_str, mapping_type="video_codec")
         logger.debug(
             f"DEBUG: 视频编码映射 '{codec_str}' -> '{mapped_params[codec_field]}'")
 
@@ -304,9 +303,8 @@ class BaseUploader(ABC):
                                               "audiocodec_sel[4]")
         audio_mapping = self.mappings.get("audio_codec", {})
         print(f"开始查找音频编码映射: '{audio_str}' (类型: audio_codec)")
-        mapped_params[audio_field] = self._find_mapping(audio_mapping,
-                                                        audio_str,
-                                                        mapping_type="audio_codec")
+        mapped_params[audio_field] = self._find_mapping(
+            audio_mapping, audio_str, mapping_type="audio_codec")
         logger.debug(
             f"DEBUG: 音频编码映射 '{audio_str}' -> '{mapped_params[audio_field]}'")
 
@@ -542,7 +540,9 @@ class BaseUploader(ABC):
                 print(f"DEBUG: 临时目录路径: {tmp_dir}")
 
                 # 使用种子标题作为文件夹名（与Go端和download_torrent_only保持一致）
-                title = self.upload_data.get("original_main_title") or self.upload_data.get("title", "")
+                title = self.upload_data.get(
+                    "original_main_title") or self.upload_data.get(
+                        "title", "")
                 if title:
                     # 清理文件名中的非法字符，限制长度为150
                     safe_title = re.sub(r'[\\/:*?"<>|]', '_', title)[:150]
@@ -601,76 +601,76 @@ class BaseUploader(ABC):
                 logger.error(f"保存参数到文件失败: {save_error}")
 
             # 执行实际发布 【已注释，用于测试模式】
-            # torrent_path = self.upload_data["modified_torrent_path"]
-            # with open(torrent_path, "rb") as torrent_file:
-            #     files = {
-            #         "file": (
-            #             os.path.basename(torrent_path),
-            #             torrent_file,
-            #             "application/x-bittorent",
-            #         ),
-            #         "nfo": ("", b"", "application/octet-stream"),
-            #     }
-            #     cleaned_cookie_str = self.site_info.get("cookie", "").strip()
-            #     if not cleaned_cookie_str:
-            #         logger.error("目标站点 Cookie 为空，无法发布。")
-            #         return False, "目标站点 Cookie 未配置。"
-            #     cookie_jar = cookies_raw2jar(cleaned_cookie_str)
-            #     # 添加重试机制
-            #     max_retries = 3
-            #     last_exception = None
+            torrent_path = self.upload_data["modified_torrent_path"]
+            with open(torrent_path, "rb") as torrent_file:
+                files = {
+                    "file": (
+                        os.path.basename(torrent_path),
+                        torrent_file,
+                        "application/x-bittorent",
+                    ),
+                    "nfo": ("", b"", "application/octet-stream"),
+                }
+                cleaned_cookie_str = self.site_info.get("cookie", "").strip()
+                if not cleaned_cookie_str:
+                    logger.error("目标站点 Cookie 为空，无法发布。")
+                    return False, "目标站点 Cookie 未配置。"
+                cookie_jar = cookies_raw2jar(cleaned_cookie_str)
+                # 添加重试机制
+                max_retries = 3
+                last_exception = None
 
-            #     for attempt in range(max_retries):
-            #         try:
-            #             logger.info(
-            #                 f"正在向 {self.site_name} 站点提交发布请求... (尝试 {attempt + 1}/{max_retries})"
-            #             )
-            #             # 站点级别的代理已移除，不再使用全局代理
-            #             proxies = None
+                for attempt in range(max_retries):
+                    try:
+                        logger.info(
+                            f"正在向 {self.site_name} 站点提交发布请求... (尝试 {attempt + 1}/{max_retries})"
+                        )
+                        # 站点级别的代理已移除，不再使用全局代理
+                        proxies = None
 
-            #             response = self.scraper.post(
-            #                 self.post_url,
-            #                 headers=self.headers,
-            #                 cookies=cookie_jar,
-            #                 data=form_data,
-            #                 files=files,
-            #                 timeout=self.timeout,
-            #                 proxies=proxies,
-            #             )
-            #             response.raise_for_status()
+                        response = self.scraper.post(
+                            self.post_url,
+                            headers=self.headers,
+                            cookies=cookie_jar,
+                            data=form_data,
+                            files=files,
+                            timeout=self.timeout,
+                            proxies=proxies,
+                        )
+                        response.raise_for_status()
 
-            #             # 成功则跳出循环
-            #             last_exception = None
-            #             break
+                        # 成功则跳出循环
+                        last_exception = None
+                        break
 
-            #         except Exception as e:
-            #             last_exception = e
-            #             logger.warning(f"第 {attempt + 1} 次尝试发布失败: {e}")
+                    except Exception as e:
+                        last_exception = e
+                        logger.warning(f"第 {attempt + 1} 次尝试发布失败: {e}")
 
-            #             # 如果不是最后一次尝试，等待一段时间后重试
-            #             if attempt < max_retries - 1:
-            #                 import time
-            #                 wait_time = 2**attempt  # 指数退避
-            #                 logger.info(
-            #                     f"等待 {wait_time} 秒后进行第 {attempt + 2} 次尝试...")
-            #                 time.sleep(wait_time)
-            #             else:
-            #                 logger.error("所有重试均已失败")
+                        # 如果不是最后一次尝试，等待一段时间后重试
+                        if attempt < max_retries - 1:
+                            import time
+                            wait_time = 2**attempt  # 指数退避
+                            logger.info(
+                                f"等待 {wait_time} 秒后进行第 {attempt + 2} 次尝试...")
+                            time.sleep(wait_time)
+                        else:
+                            logger.error("所有重试均已失败")
 
             # # 如果所有重试都失败了，重新抛出最后一个异常
             # if last_exception:
             #     raise last_exception
 
             # 测试模式：模拟成功响应
-            logger.info("测试模式：跳过实际发布，模拟成功响应")
-            success_url = f"https://demo.site.test/details.php?id=12345&uploaded=1&test=true"
-            response = type(
-                'MockResponse', (), {
-                    'url': success_url,
-                    'text':
-                    f'<html><body>发布成功！种子ID: 12345 - TEST MODE</body></html>',
-                    'raise_for_status': lambda: None
-                })()
+            # logger.info("测试模式：跳过实际发布，模拟成功响应")
+            # success_url = f"https://demo.site.test/details.php?id=12345&uploaded=1&test=true"
+            # response = type(
+            #     'MockResponse', (), {
+            #         'url': success_url,
+            #         'text':
+            #         f'<html><body>发布成功！种子ID: 12345 - TEST MODE</body></html>',
+            #         'raise_for_status': lambda: None
+            #     })()
 
             # 4. 处理响应（这是通用的成功/失败判断逻辑）
             # 可以通过 "钩子" 方法处理个别站点的URL修正
