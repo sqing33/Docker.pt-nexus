@@ -10,11 +10,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # 配置文件路径
-DATA_DIR = "/app/Code/Dockerfile/Docker.pt-nexus/server/data"
-SITES_DATA_FILE = "/app/Code/Dockerfile/Docker.pt-nexus/server/sites_data.json"
+# DATA_DIR = "/app/Code/Dockerfile/Docker.pt-nexus/server/data"
+# SITES_DATA_FILE = "/app/Code/Dockerfile/Docker.pt-nexus/server/sites_data.json"
 
-# DATA_DIR = "/app/data"
-# SITES_DATA_FILE = "/app/sites_data.json"
+DATA_DIR = "/app/data"
+SITES_DATA_FILE = "/app/sites_data.json"
 
 os.makedirs(DATA_DIR, exist_ok=True)
 
