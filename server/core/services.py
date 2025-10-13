@@ -685,18 +685,19 @@ class DataTracker(Thread):
                     print(
                         f"【刷新线程】发现下载器 {downloader_id} 中有 {len(hashes_to_delete)} 个种子已被删除"
                     )
-                    # 从torrents表中删除这些种子（但保留torrent_upload_stats表中的数据）
+                    # 从torrents表中删除这些种子，但保护IYUU添加的未做种种子
                     delete_placeholders = ",".join([placeholder] *
                                                    len(hashes_to_delete))
-                    delete_query = f"DELETE FROM torrents WHERE hash IN ({delete_placeholders}) AND downloader_id = {placeholder}"
+                    # 修改删除逻辑：只删除状态不是'未做种'的种子，保护IYUU添加的未做种记录
+                    delete_query = f"DELETE FROM torrents WHERE hash IN ({delete_placeholders}) AND downloader_id = {placeholder} AND state != '未做种'"
                     cursor.execute(delete_query,
                                    tuple(hashes_to_delete) + (downloader_id, ))
                     deleted_count = cursor.rowcount
                     print(
-                        f"【刷新线程】已删除下载器 {downloader_id} 中的 {deleted_count} 个已移除的种子记录"
+                        f"【刷新线程】已删除下载器 {downloader_id} 中的 {deleted_count} 个已移除的种子记录（保护了未做种种子）"
                     )
                     logging.info(
-                        f"已删除下载器 {downloader_id} 中的 {deleted_count} 个已移除的种子记录")
+                        f"已删除下载器 {downloader_id} 中的 {deleted_count} 个已移除的种子记录（保护了未做种种子）")
 
             # 更新seed_parameters表中的is_deleted字段
             print("【刷新线程】开始更新seed_parameters表中的is_deleted字段...")
@@ -753,11 +754,11 @@ class DataTracker(Thread):
                 print(f"【刷新线程】准备写入 {len(params)} 条种子主信息到数据库")
                 # 根据数据库类型使用正确的引号和冲突处理语法
                 if self.db_manager.db_type == "mysql":
-                    sql = """INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, `group`, downloader_id, last_seen) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE name=VALUES(name), save_path=VALUES(save_path), size=VALUES(size), progress=VALUES(progress), state=VALUES(state), sites=VALUES(sites), details=VALUES(details), `group`=VALUES(`group`), downloader_id=VALUES(downloader_id), last_seen=VALUES(last_seen)"""
+                    sql = """INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, `group`, downloader_id, last_seen) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE name=VALUES(name), save_path=VALUES(save_path), size=VALUES(size), progress=VALUES(progress), state=VALUES(state), sites=VALUES(sites), details=IF(VALUES(details) != '', VALUES(details), details), `group`=VALUES(`group`), downloader_id=VALUES(downloader_id), last_seen=VALUES(last_seen)"""
                 elif self.db_manager.db_type == "postgresql":
-                    sql = """INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, "group", downloader_id, last_seen) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT(hash) DO UPDATE SET name=excluded.name, save_path=excluded.save_path, size=excluded.size, progress=excluded.progress, state=excluded.state, sites=excluded.sites, details=excluded.details, "group"=excluded."group", downloader_id=excluded.downloader_id, last_seen=excluded.last_seen"""
+                    sql = """INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, "group", downloader_id, last_seen) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT(hash) DO UPDATE SET name=excluded.name, save_path=excluded.save_path, size=excluded.size, progress=excluded.progress, state=excluded.state, sites=excluded.sites, details=CASE WHEN excluded.details != '' THEN excluded.details ELSE VALUES(details) END, "group"=excluded."group", downloader_id=excluded.downloader_id, last_seen=excluded.last_seen"""
                 else:  # sqlite
-                    sql = """INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, `group`, downloader_id, last_seen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(hash) DO UPDATE SET name=excluded.name, save_path=excluded.save_path, size=excluded.size, progress=excluded.progress, state=excluded.state, sites=excluded.sites, details=excluded.details, `group`=excluded.`group`, downloader_id=excluded.downloader_id, last_seen=excluded.last_seen"""
+                    sql = """INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, `group`, downloader_id, last_seen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(hash) DO UPDATE SET name=excluded.name, save_path=excluded.save_path, size=excluded.size, progress=excluded.progress, state=excluded.state, sites=excluded.sites, details=CASE WHEN excluded.details != '' THEN excluded.details ELSE VALUES(details) END, `group`=excluded.`group`, downloader_id=excluded.downloader_id, last_seen=excluded.last_seen"""
                 cursor.executemany(sql, params)
                 print(f"【刷新线程】已批量处理 {len(params)} 条种子主信息。")
                 logging.info(f"已批量处理 {len(params)} 条种子主信息。")

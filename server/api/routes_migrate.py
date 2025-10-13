@@ -2414,11 +2414,11 @@ def _process_batch_fetch(task_id, torrent_names, source_sites_priority,
 
                 if db_manager.db_type == "sqlite":
                     cursor.execute(
-                        "SELECT hash, name, save_path, sites, details, downloader_id FROM torrents WHERE name = ? AND state != ?",
+                        "SELECT hash, name, save_path, size, sites, details, downloader_id FROM torrents WHERE name = ? AND state != ?",
                         (torrent_name, "不存在"))
                 else:  # postgresql or mysql
                     cursor.execute(
-                        "SELECT hash, name, save_path, sites, details, downloader_id FROM torrents WHERE name = %s AND state != %s",
+                        "SELECT hash, name, save_path, size, sites, details, downloader_id FROM torrents WHERE name = %s AND state != %s",
                         (torrent_name, "不存在"))
 
                 torrents = [dict(row) for row in cursor.fetchall()]
@@ -2479,7 +2479,116 @@ def _process_batch_fetch(task_id, torrent_names, source_sites_priority,
                     if source_found:
                         break
 
-                # 第二阶段：如果优先级站点都没有找到，在其他存在的源站点中查找
+                # 第二阶段：如果优先级站点都没有找到，使用 IYUU 查询
+                if not source_found:
+                    try:
+                        # 导入 IYUU 线程
+                        from core.iyuu import iyuu_thread
+
+                        if iyuu_thread and iyuu_thread.is_alive():
+                            # 获取种子大小（使用第一个种子的大小，因为同名种子大小应该相同）
+                            torrent_size = 0
+                            if torrents:
+                                torrent_size = torrents[0].get('size', 0)
+
+                            logging.info(
+                                f"优先级站点未找到，尝试使用 IYUU 查询: {torrent_name} (大小: {torrent_size} 字节)"
+                            )
+
+                            # 执行 IYUU 查询
+                            result_stats = iyuu_thread._process_single_torrent(
+                                torrent_name, torrent_size)
+
+                            if result_stats and result_stats.get(
+                                    'total_found', 0) > 0:
+                                logging.info(
+                                    f"IYUU 查询找到 {result_stats['total_found']} 条记录，重新查询数据库"
+                                )
+
+                                # 重新查询数据库，获取更新后的种子记录
+                                conn = db_manager._get_connection()
+                                cursor = db_manager._get_cursor(conn)
+
+                                if db_manager.db_type == "sqlite":
+                                    cursor.execute(
+                                        "SELECT hash, name, save_path, sites, details, downloader_id FROM torrents WHERE name = ? AND state != ?",
+                                        (torrent_name, "不存在"))
+                                else:  # postgresql or mysql
+                                    cursor.execute(
+                                        "SELECT hash, name, save_path, sites, details, downloader_id FROM torrents WHERE name = %s AND state != %s",
+                                        (torrent_name, "不存在"))
+
+                                updated_torrents = [
+                                    dict(row) for row in cursor.fetchall()
+                                ]
+                                cursor.close()
+                                conn.close()
+
+                                if updated_torrents:
+                                    torrents = updated_torrents
+                                    logging.info(f"IYUU 查询后重新检查优先级站点")
+
+                                    # 重新按优先级查找可用的源站点
+                                    for priority_site in source_sites_priority:
+                                        # 获取站点信息
+                                        source_info = db_manager.get_site_by_nickname(
+                                            priority_site)
+                                        if not source_info or not source_info.get(
+                                                "cookie"):
+                                            continue
+
+                                        # 检查该站点的migration状态
+                                        if source_info.get("migration",
+                                                           0) not in [1, 3]:
+                                            continue
+
+                                        # 查找该站点的种子记录（在更新后的torrents中）
+                                        for torrent in torrents:
+                                            if torrent.get(
+                                                    "sites") == priority_site:
+                                                # 提取种子ID
+                                                comment = torrent.get(
+                                                    "details", "")
+                                                torrent_id = None
+
+                                                if comment:
+                                                    # 尝试从comment中提取ID
+                                                    import re
+                                                    id_match = re.search(
+                                                        r'id=(\d+)', comment)
+                                                    if id_match:
+                                                        torrent_id = id_match.group(
+                                                            1)
+                                                    elif re.match(
+                                                            r'^\d+$',
+                                                            comment.strip()):
+                                                        torrent_id = comment.strip(
+                                                        )
+
+                                                if torrent_id:
+                                                    source_found = {
+                                                        "site": priority_site,
+                                                        "site_info":
+                                                        source_info,
+                                                        "torrent_id":
+                                                        torrent_id,
+                                                        "torrent": torrent
+                                                    }
+                                                    logging.info(
+                                                        f"IYUU 查询后在优先级站点中找到: {priority_site}"
+                                                    )
+                                                    break
+
+                                        if source_found:
+                                            break
+                                else:
+                                    logging.info(f"IYUU 查询未找到新的种子记录")
+                        else:
+                            logging.warning("IYUU 线程未运行，跳过 IYUU 查询")
+                    except Exception as e:
+                        logging.error(f"IYUU 查询失败: {e}", exc_info=True)
+
+                # 第三阶段：如果 IYUU 查询后还是没有找到，在其他存在的源站点中查找
                 if not source_found:
                     # 获取所有已存在的站点名称（排除已经在优先级列表中的）
                     existing_sites = set()

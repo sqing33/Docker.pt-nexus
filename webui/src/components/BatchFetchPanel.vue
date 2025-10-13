@@ -753,18 +753,26 @@ const startBatchFetch = async () => {
       })
     })
 
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
-
     const result = await response.json()
+    
+    if (!response.ok) {
+      // 处理HTTP错误状态码，显示服务器返回的错误信息
+      const errorMessage = result.message || `HTTP error! status: ${response.status}`
+      ElMessage.error(errorMessage)
+      return
+    }
+
     if (result.success) {
       currentTaskId.value = result.task_id
       ElMessage.success('批量获取任务已启动')
       closeBatchFetchDialog()
       openProgressDialog()
     } else {
+      // 处理业务逻辑错误，显示服务器返回的错误信息
       ElMessage.error(result.message || '批量获取任务启动失败')
     }
   } catch (error: any) {
+    // 处理网络错误或其他异常
     ElMessage.error(error.message || '网络错误')
   }
 }

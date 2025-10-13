@@ -1539,7 +1539,7 @@ def add_torrent_to_downloader(detail_page_url: str, save_path: str,
     conn = db_manager._get_connection()
     cursor = db_manager._get_cursor(conn)
     cursor.execute(
-        "SELECT nickname, base_url, cookie, proxy, speed_limit FROM sites")
+        "SELECT nickname, base_url, cookie, speed_limit FROM sites")
     site_info = None
     for site in cursor.fetchall():
         # [修复] 确保 base_url 存在且不为空

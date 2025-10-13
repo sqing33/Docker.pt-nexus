@@ -219,6 +219,67 @@ class IYUUThread(Thread):
             logging.error(f"获取数据库站点信息时出错: {e}", exc_info=True)
             return {}
 
+    def _get_priority_hash_for_torrent_group(self, torrent_name, all_torrents_for_name, configured_sites):
+        """为种子组获取优先使用的hash，优先选择IYUU支持站点的hash
+        
+        Args:
+            torrent_name: 种子名称
+            all_torrents_for_name: 同名种子的所有记录
+            configured_sites: 配置的站点列表
+            
+        Returns:
+            tuple: (优先hash列表, 过滤后的种子列表)
+        """
+        # 获取IYUU支持的站点列表
+        try:
+            config = self.config_manager.get()
+            iyuu_token = config.get("iyuu_token", "")
+            if not iyuu_token:
+                return [], []
+
+            # 获取IYUU支持的站点信息
+            sid_sha1, all_sites = get_filtered_sid_sha1_and_sites(iyuu_token, self.db_manager)
+            
+            # 创建IYUU站点映射
+            iyuu_supported_sites = set()
+            for site in all_sites:
+                iyuu_nickname = site.get('nickname')
+                if iyuu_nickname:
+                    iyuu_supported_sites.add(iyuu_nickname)
+            
+            # 过滤出IYUU支持的站点种子，并按优先级排序
+            iyuu_supported_torrents = []
+            other_torrents = []
+            
+            for torrent in all_torrents_for_name:
+                site_name = torrent.get('sites')
+                if (site_name and site_name in configured_sites and 
+                    site_name in iyuu_supported_sites and 
+                    site_name not in ['青蛙', '柠檬不甜']):
+                    iyuu_supported_torrents.append(torrent)
+                elif site_name and site_name in configured_sites and site_name not in ['青蛙', '柠檬不甜']:
+                    other_torrents.append(torrent)
+            
+            # 合并列表，IYUU支持的站点在前
+            priority_torrents = iyuu_supported_torrents + other_torrents
+            
+            # 提取hash列表
+            priority_hashes = [t['hash'] for t in priority_torrents]
+            
+            log_iyuu_message(f"种子组 '{torrent_name}': 找到 {len(iyuu_supported_torrents)} 个IYUU支持站点，{len(other_torrents)} 个其他支持站点", "INFO")
+            
+            return priority_hashes, priority_torrents
+            
+        except Exception as e:
+            logging.error(f"获取优先hash时出错: {e}", exc_info=True)
+            # 出错时返回所有支持站点的hash
+            filtered_torrents = [
+                t for t in all_torrents_for_name
+                if t.get('sites') and t['sites'] in configured_sites
+                and t['sites'] not in ['青蛙', '柠檬不甜']
+            ]
+            return [t['hash'] for t in filtered_torrents], filtered_torrents
+
     def _perform_iyuu_search(self,
                              agg_torrents,
                              configured_sites,
@@ -267,9 +328,14 @@ class IYUUThread(Thread):
             try:
                 conn = self.db_manager._get_connection()
                 cursor = self.db_manager._get_cursor(conn)
-                cursor.execute("SELECT site, nickname FROM sites WHERE site IS NOT NULL AND site != '' AND nickname IS NOT NULL AND nickname != ''")
+                cursor.execute(
+                    "SELECT site, nickname FROM sites WHERE site IS NOT NULL AND site != '' AND nickname IS NOT NULL AND nickname != ''"
+                )
                 # 主要映射：IYUU API 'site' field -> local 'nickname'
-                iyuu_site_to_db_nickname_map = {row['site']: row['nickname'] for row in cursor.fetchall()}
+                iyuu_site_to_db_nickname_map = {
+                    row['site']: row['nickname']
+                    for row in cursor.fetchall()
+                }
                 cursor.close()
                 conn.close()
             except Exception as e:
@@ -306,17 +372,9 @@ class IYUUThread(Thread):
 
                 print(f"[{i+1}/{total_torrents}] 🔍 正在处理种子组: {name}")
 
-                # 尝试最多3个不同的hash进行查询
-                max_attempts = 3
-                results = None
-                selected_hash = None
-
-                # 获取当前种子组的所有torrents，按站点过滤
-                filtered_torrents = [
-                    t for t in torrents
-                    if t.get('sites') and t['sites'] in configured_sites
-                    and t['sites'] not in ['青蛙', '柠檬不甜']
-                ]
+                # 获取优先hash列表和过滤后的种子列表
+                priority_hashes, filtered_torrents = self._get_priority_hash_for_torrent_group(
+                    name, all_torrents.get(name, []), configured_sites)
 
                 # 如果没有支持的站点，则跳过
                 if not filtered_torrents:
@@ -328,15 +386,22 @@ class IYUUThread(Thread):
                                                  all_torrents.get(name, []))
                     continue
 
-                for attempt in range(min(max_attempts,
-                                         len(filtered_torrents))):
-                    if attempt >= len(filtered_torrents):
+                # 尝试最多3个不同的hash进行查询
+                max_attempts = 3
+                results = None
+                selected_hash = None
+
+                for attempt in range(min(max_attempts, len(priority_hashes))):
+                    if attempt >= len(priority_hashes):
                         break
 
-                    selected_hash = filtered_torrents[attempt]['hash']
-                    site_name = filtered_torrents[attempt]['sites']
+                    selected_hash = priority_hashes[attempt]
+                    # 找到对应的种子信息用于日志记录
+                    torrent_info = next((t for t in filtered_torrents if t['hash'] == selected_hash), None)
+                    site_name = torrent_info['sites'] if torrent_info else '未知'
+                    
                     log_iyuu_message(
-                        f"使用的hash [{attempt+1}/{min(max_attempts, len(filtered_torrents))}]: {selected_hash} (站点: {site_name})",
+                        f"使用的hash [{attempt+1}/{min(max_attempts, len(priority_hashes))}]: {selected_hash} (站点: {site_name})",
                         "INFO")
 
                     try:
@@ -402,7 +467,8 @@ class IYUUThread(Thread):
 
                         # 优先使用 'site' 字段进行映射
                         if iyuu_site_field and iyuu_site_field in iyuu_site_to_db_nickname_map:
-                            db_site_name = iyuu_site_to_db_nickname_map[iyuu_site_field]
+                            db_site_name = iyuu_site_to_db_nickname_map[
+                                iyuu_site_field]
                         # 否则，直接使用 IYUU 的 nickname 作为后备 (假设它可能与 torrents.sites 匹配)
                         elif iyuu_nickname:
                             db_site_name = iyuu_nickname
@@ -807,7 +873,6 @@ class IYUUThread(Thread):
 
             # 按种子名称进行聚合
             all_torrents = defaultdict(list)
-            agg_torrents = defaultdict(list)
 
             for t in torrents_raw:
                 site = t.get('sites', None)
@@ -819,23 +884,25 @@ class IYUUThread(Thread):
                 }
                 all_torrents[torrent_name].append(torrent_info)
 
-                # 只有当站点是IYUU支持的站点时才添加到聚合列表中
-                if site and site in configured_sites and site not in [
-                        '青蛙', '柠檬不甜'
-                ]:
-                    agg_torrents[torrent_name].append(torrent_info)
+            # 获取优先hash列表和过滤后的种子列表
+            priority_hashes, filtered_torrents = self._get_priority_hash_for_torrent_group(
+                torrent_name, all_torrents[torrent_name], configured_sites)
 
-            if not agg_torrents:
+            if not filtered_torrents:
                 log_iyuu_message(f"种子 '{torrent_name}' 没有支持的站点可用于IYUU查询",
                                  "WARNING")
                 return result_stats
 
             log_iyuu_message(
-                f"找到种子 '{torrent_name}'，包含 {len(agg_torrents[torrent_name])} 个支持的站点",
+                f"找到种子 '{torrent_name}'，包含 {len(filtered_torrents)} 个支持的站点",
                 "INFO")
 
             # 获取已配置的站点列表
             log_iyuu_message(f"数据库中存在 {len(configured_sites)} 个配置站点", "INFO")
+
+            # 创建agg_torrents用于_perform_iyuu_search
+            agg_torrents = defaultdict(list)
+            agg_torrents[torrent_name] = filtered_torrents
 
             # 执行IYUU搜索逻辑，传入force_query参数和结果统计
             result_stats = self._perform_iyuu_search(agg_torrents,
@@ -1226,8 +1293,13 @@ def get_filtered_sid_sha1_and_sites(token: str, db_manager) -> tuple:
     try:
         conn = db_manager._get_connection()
         cursor = db_manager._get_cursor(conn)
-        cursor.execute("SELECT site, nickname FROM sites WHERE site IS NOT NULL AND site != '' AND nickname IS NOT NULL AND nickname != ''")
-        db_site_to_nickname_map = {row['site']: row['nickname'] for row in cursor.fetchall()}
+        cursor.execute(
+            "SELECT site, nickname FROM sites WHERE site IS NOT NULL AND site != '' AND nickname IS NOT NULL AND nickname != ''"
+        )
+        db_site_to_nickname_map = {
+            row['site']: row['nickname']
+            for row in cursor.fetchall()
+        }
         cursor.close()
         conn.close()
     except Exception as e:
@@ -1237,7 +1309,7 @@ def get_filtered_sid_sha1_and_sites(token: str, db_manager) -> tuple:
     # 5. 过滤出IYUU支持且在torrents表中存在的站点
     filtered_site_ids = []
     filtered_sites = []
-    
+
     # 使用集合以优化查找性能
     processed_site_ids = set()
 
@@ -1248,11 +1320,11 @@ def get_filtered_sid_sha1_and_sites(token: str, db_manager) -> tuple:
 
         # 根据用户反馈：IYUU API的'site'字段与数据库'sites'表的'site'列相同
         iyuu_site_field = site.get('site')
-        
+
         if iyuu_site_field and iyuu_site_field in db_site_to_nickname_map:
             # 根据 'sites.site' -> 'sites.nickname' 的映射关系，找到对应的本地昵称
             db_nickname = db_site_to_nickname_map[iyuu_site_field]
-            
+
             # 根据用户反馈：'torrents.sites'列的内容与'sites.nickname'列相同
             # 所以检查这个昵称是否在 torrents 表中存在
             if db_nickname in torrent_sites:
@@ -1260,7 +1332,7 @@ def get_filtered_sid_sha1_and_sites(token: str, db_manager) -> tuple:
                 filtered_sites.append(site)
                 processed_site_ids.add(iyuu_id)
                 continue
-        
+
         # 作为后备方案，如果上述逻辑不匹配，直接用IYUU的nickname匹配torrents表中的sites字段
         # (因为torrents.sites 就是 nickname)
         iyuu_nickname = site.get('nickname')
