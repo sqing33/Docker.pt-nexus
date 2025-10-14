@@ -843,6 +843,9 @@ fallback_chains:
       - "medium.bluray"
       - "medium.encode"
       - "medium.other"
+    "medium.bdrip":
+      - "medium.encode"
+      - "medium.other"
       
   hdr_format:
     "hdr.dolby_vision":

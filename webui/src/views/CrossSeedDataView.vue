@@ -345,16 +345,14 @@
                         {{ formatDownloaderAddResult(scope.row.downloader_add_result) }}
                       </template>
 
-                      <!-- 表格中可见的内容：一个只显示'错误'的 Tag -->
-                      <el-tag type="danger" size="small">
-                        错误
-                      </el-tag>
+                      <!-- 表格中可见的内容：直接显示文本，不使用tag -->
+                      <span style="color: #f56c6c;">错误</span>
                     </el-tooltip>
 
                     <!-- ✨ 如果是成功状态或其他非失败状态 -->
-                    <el-tag v-else :type="getDownloaderAddStatusType(scope.row.downloader_add_result)" size="small">
+                    <span v-else :style="{ color: getDownloaderAddStatusColor(scope.row.downloader_add_result) }">
                       {{ formatDownloaderAddResult(scope.row.downloader_add_result) }}
-                    </el-tag>
+                    </span>
                   </template>
 
                   <!-- 如果没有下载器结果，显示 - -->
@@ -507,6 +505,8 @@ const batchNumberMap = ref<Map<string, number>>(new Map()) // 批次ID到序号�
 // 定时刷新相关
 const refreshTimer = ref<ReturnType<typeof setInterval> | null>(null)
 const REFRESH_INTERVAL = 5000 // 5秒刷新一次
+const additionalRefreshCount = ref<number>(0) // 额外刷新次数计数器
+const ADDITIONAL_REFRESH_LIMIT = 3 // 完成后额外刷新3次
 
 interface SeedRecord {
   id: number
@@ -1467,6 +1467,9 @@ const startAutoRefresh = () => {
   // 先清除任何现有的定时器
   stopAutoRefresh()
 
+  // 重置额外刷新计数器
+  additionalRefreshCount.value = 0
+
   // 立即刷新一次
   refreshRecords()
 
@@ -1485,21 +1488,15 @@ const startAutoRefresh = () => {
         // 检测2：下载器状态是否包含"成功"或"失败"
         const downloaderHasFinalStatus = hasDownloaderFinalStatus(latestRecord.downloader_add_result)
         
-        // 只有当两个条件都满足时才停止刷新
+        // 只有当两个条件都满足时才进入额外刷新逻辑
         if (progressComplete && downloaderHasFinalStatus) {
-          // 延迟3秒后停止，以确保最终状态已完全显示
-          setTimeout(() => {
-            // 在停止前再次检查，防止在3秒延迟期间有新任务开始
-            if (records.value.length > 0) {
-              const currentRecord = records.value[0]
-              const currentProgressComplete = currentRecord.progress && calculateProgress(currentRecord.progress) === 100
-              const currentDownloaderFinalStatus = hasDownloaderFinalStatus(currentRecord.downloader_add_result)
-              
-              if (currentProgressComplete && currentDownloaderFinalStatus) {
-                stopAutoRefresh()
-              }
-            }
-          }, 3000)
+          // 增加额外刷新计数
+          additionalRefreshCount.value++
+          
+          // 如果额外刷新次数达到限制，则停止刷新
+          if (additionalRefreshCount.value >= ADDITIONAL_REFRESH_LIMIT) {
+            stopAutoRefresh()
+          }
         }
       }
     } else {
@@ -1515,6 +1512,8 @@ const stopAutoRefresh = () => {
     clearInterval(refreshTimer.value)
     refreshTimer.value = null
   }
+  // 重置额外刷新计数器
+  additionalRefreshCount.value = 0
 }
 
 // 打开记录查看对话框
@@ -1657,6 +1656,13 @@ const getDownloaderAddStatusType = (result: string) => {
   if (result.startsWith('成功')) return 'success'
   if (result.startsWith('失败')) return 'danger'
   return 'info'
+}
+
+// 获取下载器添加状态的颜色
+const getDownloaderAddStatusColor = (result: string) => {
+  if (result.startsWith('成功')) return '#67c23a'  // 绿色
+  if (result.startsWith('失败')) return '#f56c6c'  // 红色
+  return '#909399'  // 灰色
 }
 
 // 格式化下载器添加结果显示

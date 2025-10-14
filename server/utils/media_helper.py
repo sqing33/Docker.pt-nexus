@@ -1590,12 +1590,36 @@ def add_torrent_to_downloader(detail_page_url: str, save_path: str,
         if not torrent_id_match: raise ValueError("无法从详情页URL中提取种子ID。")
         torrent_id = torrent_id_match.group(1)
 
-        download_link_tag = soup.select_one(
-            f'a.index[href^="download.php?id={torrent_id}"]')
-        if not download_link_tag: raise RuntimeError("在详情页HTML中未能找到下载链接！")
+        # 检查是否需要使用特殊下载器
+        download_link = None
+        site_base_url = ensure_scheme(site_info['base_url'])
+        
+        # 检查是否为haidan站点
+        if 'haidan.video' in site_base_url:
+            try:
+                from core.downloaders.sites.haidan import HaidanDownloader
+                downloader = HaidanDownloader(site_info['nickname'], scraper)
+                # 使用上传标题来匹配种子
+                upload_title = os.path.basename(save_path) if save_path else ""
+                download_link = downloader.extract_download_link(
+                    details_response.text, upload_title
+                )
+                if download_link:
+                    full_download_url = download_link
+                    logging.info("使用haidan特殊下载器成功提取下载链接")
+                else:
+                    logging.warning("haidan特殊下载器未能找到下载链接，使用默认方法")
+            except Exception as e:
+                logging.warning(f"haidan特殊下载器失败: {e}，使用默认方法")
+        
+        # 如果特殊下载器失败或不是haidan站点，使用默认方法
+        if not download_link:
+            download_link_tag = soup.select_one(
+                f'a.index[href^="download.php?id={torrent_id}"]')
+            if not download_link_tag: raise RuntimeError("在详情页HTML中未能找到下载链接！")
 
-        download_url_part = download_link_tag['href']
-        full_download_url = f"{ensure_scheme(site_info['base_url'])}/{download_url_part}"
+            download_url_part = download_link_tag['href']
+            full_download_url = f"{site_base_url}/{download_url_part}"
 
         common_headers["Referer"] = detail_page_url
         # Add retry logic for torrent download
@@ -1699,7 +1723,7 @@ def add_torrent_to_downloader(detail_page_url: str, save_path: str,
                     except Exception as e:
                         logging.warning(f"设置速度限制失败，但种子已添加成功: {e}")
 
-            return True, f"成功添加到 '{client_name}'。"
+            return True, f"成功添加到 '{client_name}'"
 
         except Exception as e:
             logging.warning(f"第 {attempt + 1} 次尝试添加种子到下载器失败: {e}")

@@ -574,7 +574,7 @@ def get_downloader_info_api():
                              WHERE stat_datetime::date = CURRENT_DATE
                              GROUP BY downloader_id"""
             cursor.execute(today_query)
-        else:
+        elif db_manager.db_type == "mysql":
             today_query = """SELECT
                                 downloader_id,
                                 GREATEST(0,
@@ -584,15 +584,21 @@ def get_downloader_info_api():
                                     MAX(cumulative_uploaded) - MIN(cumulative_uploaded)
                                 ) as today_ul
                              FROM traffic_stats
-                             WHERE """
-
-            # 添加日期条件
-            if db_manager.db_type == "mysql":
-                today_query += "DATE(stat_datetime) = CURDATE()"
-            else:  # SQLite
-                today_query += "DATE(stat_datetime) = DATE('now', 'localtime')"
-
-            today_query += " GROUP BY downloader_id"
+                             WHERE DATE(stat_datetime) = CURDATE()
+                             GROUP BY downloader_id"""
+            cursor.execute(today_query)
+        else:  # SQLite
+            today_query = """SELECT
+                                downloader_id,
+                                CASE WHEN MAX(cumulative_downloaded) - MIN(cumulative_downloaded) > 0 
+                                     THEN MAX(cumulative_downloaded) - MIN(cumulative_downloaded) 
+                                     ELSE 0 END as today_dl,
+                                CASE WHEN MAX(cumulative_uploaded) - MIN(cumulative_uploaded) > 0 
+                                     THEN MAX(cumulative_uploaded) - MIN(cumulative_uploaded) 
+                                     ELSE 0 END as today_ul
+                             FROM traffic_stats
+                             WHERE DATE(stat_datetime) = DATE('now', 'localtime')
+                             GROUP BY downloader_id"""
             cursor.execute(today_query)
 
         today_stats = {r["downloader_id"]: dict(r) for r in cursor.fetchall()}

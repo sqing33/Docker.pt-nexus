@@ -180,7 +180,7 @@ def create_app():
     app.register_blueprint(cross_seed_data_bp)
     app.register_blueprint(bp_config)
     app.register_blueprint(local_query_bp)
-    app.register_blueprint(go_proxy_bp, url_prefix="/go-api")
+    app.register_blueprint(go_proxy_bp, url_prefix="/api/go-api")
 
     # --- 健康检查端点 ---
     @app.route("/health", methods=["GET"])

@@ -1851,7 +1851,7 @@ class TorrentMigrator:
 
             self.logger.info("--- [步骤2] 任务执行完毕 ---")
             final_url = None
-            if url_match := re.search(r"(https?://[^\s]+details\.php\?id=\d+)",
+            if url_match := re.search(r"(https?://[^\s]+details\.php\?[^\s]+)",
                                       str(message)):
                 final_url = url_match.group(1)
 

@@ -505,8 +505,15 @@ class BaseUploader(ABC):
                 )
                 standardized_params = self._parse_source_data()
 
-            # 2. 将标准化参数映射为站点特定参数
-            mapped_params = self._map_standardized_params(standardized_params)
+            # 2. 检查是否为特殊上传器，如果是则使用子类的映射逻辑
+            if hasattr(self, '_map_parameters') and callable(
+                    getattr(self, '_map_parameters')):
+                # 特殊上传器使用子类的映射逻辑
+                mapped_params = self._map_parameters()
+            else:
+                # 公共上传器使用基类的映射逻辑
+                mapped_params = self._map_standardized_params(
+                    standardized_params)
 
             description = self._build_description()
             final_main_title = self._build_title(standardized_params)
@@ -657,9 +664,9 @@ class BaseUploader(ABC):
                         else:
                             logger.error("所有重试均已失败")
 
-            # # 如果所有重试都失败了，重新抛出最后一个异常
-            # if last_exception:
-            #     raise last_exception
+            # 如果所有重试都失败了，重新抛出最后一个异常
+            if last_exception:
+                raise last_exception
 
             # 测试模式：模拟成功响应
             # logger.info("测试模式：跳过实际发布，模拟成功响应")
@@ -914,6 +921,8 @@ def create_uploader(site_name: str, site_info: dict,
                 class_name = "AgsvUploader"
             elif site_name == "crabpt":
                 class_name = "CrabptUploader"
+            elif site_name == "haidan":
+                class_name = "HaidanUploader"
 
             # 获取上传器类
             uploader_class = getattr(site_module, class_name)

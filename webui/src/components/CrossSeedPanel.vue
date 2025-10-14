@@ -2656,48 +2656,34 @@ const handleLogProgressComplete = () => {
 /* ======================================= */
 /*        [核心布局样式 - 最终版]        */
 /* ======================================= */
-:root {
-  --header-height: 75px;
-  --footer-height: 70px;
-}
 
-/* 1. 主面板容器：使用相对定位创建上下文 */
+/* 1. 主面板容器：使用 Flexbox 布局 */
 .cross-seed-panel {
-  position: relative;
-  height: 100%;
-  width: 100%;
-  /* 为页头和页脚留出空间 */
-  padding-top: var(--header-height);
-  padding-bottom: var(--footer-height);
-  box-sizing: border-box;
-  /* 确保遮罩层能够正确覆盖 */
-  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 50px);
 }
 
-/* 2. 顶部Header：绝对定位，固定在顶部 */
+/* 2. 顶部Header：固定高度 */
 .panel-header {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: var(--header-height);
+  height: 35px;
   background-color: #ffffff;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-  border: none;
   display: flex;
   align-items: center;
   justify-content: center;
   padding-bottom: 10px;
+  flex-shrink: 0;
   z-index: 10;
 }
 
-/* 3. 中间内容区：占据所有剩余空间，并启用滚动 */
+/* 3. 中间内容区：自适应高度，启用滚动 */
 .panel-content {
-  height: 640px;
+  flex: 1;
   overflow-y: auto;
-  margin-top: 25px;
+  overflow-x: hidden;
   padding: 24px;
-  position: relative;
+  min-height: 0; /* 关键：允许内容区域收缩 */
 }
 
 /* 每个步骤内容的容器 */
@@ -2705,22 +2691,19 @@ const handleLogProgressComplete = () => {
   height: 100%;
   display: flex;
   flex-direction: column;
+  min-height: 0; /* 关键：允许内容区域收缩 */
 }
 
-/* 4. 底部Footer：绝对定位，固定在底部 */
+/* 4. 底部Footer：固定高度，始终可见 */
 .panel-footer {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: var(--footer-height);
   background-color: #ffffff;
   border-top: 1px solid #e4e7ed;
   box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.05);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding-top: 10px;
+  padding: 10px 0;
+  flex-shrink: 0; /* 关键：防止按钮区域被压缩 */
   z-index: 10;
 }
 
@@ -2817,7 +2800,7 @@ const handleLogProgressComplete = () => {
   background-color: #fff;
   border-bottom: 1px solid #e4e7ed;
   height: calc(100% - 1px);
-  overflow: hidden;
+  overflow: visible;
   display: flex;
 }
 
@@ -2829,8 +2812,31 @@ const handleLogProgressComplete = () => {
 
 :deep(.el-tabs__content) {
   flex: 1;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: 20px;
+  height: 100vh;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.2) rgba(0, 0, 0, 0.05);
+}
+ 
+/* Webkit浏览器滚动条美化 */
+:deep(.el-tabs__content::-webkit-scrollbar) {
+  width: 6px;
+}
+
+:deep(.el-tabs__content::-webkit-scrollbar-track) {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 3px;
+}
+
+:deep(.el-tabs__content::-webkit-scrollbar-thumb) {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+
+:deep(.el-tabs__content::-webkit-scrollbar-thumb:hover) {
+  background: rgba(0, 0, 0, 0.3);
 }
 
 :deep(.el-form-item) {
@@ -2898,16 +2904,25 @@ const handleLogProgressComplete = () => {
   height: 1px;
 }
 
-.screenshot-container,
-.poster-statement-split {
+.screenshot-container {
   display: flex;
   gap: 24px;
+  max-height: calc(100vh - 280px);
+  overflow: hidden;
+}
+
+.screenshot-text-column,
+.screenshot-preview-column {
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .poster-statement-split {
   display: grid;
   grid-template-columns: 1fr 1fr;
   height: 100%;
+  max-height: calc(100vh - 280px);
+  overflow: hidden;
 }
 
 .left-panel,
@@ -2917,6 +2932,8 @@ const handleLogProgressComplete = () => {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .screenshot-text-column {

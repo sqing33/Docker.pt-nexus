@@ -131,13 +131,27 @@ def get_chart_data_api():
                     FROM traffic_stats_hourly
                     WHERE stat_datetime >= {ph}
                 """
-            else:
+            elif db_manager.db_type == "mysql":
                 query_hourly = f"""
                     SELECT
                         {time_group_fn} AS time_group,
                         downloader_id,
                         GREATEST(0, MAX(cumulative_uploaded) - MIN(cumulative_uploaded)) AS total_ul,
                         GREATEST(0, MAX(cumulative_downloaded) - MIN(cumulative_downloaded)) AS total_dl
+                    FROM traffic_stats_hourly
+                    WHERE stat_datetime >= {ph}
+                """
+            else:  # SQLite
+                query_hourly = f"""
+                    SELECT
+                        {time_group_fn} AS time_group,
+                        downloader_id,
+                        CASE WHEN MAX(cumulative_uploaded) - MIN(cumulative_uploaded) > 0 
+                             THEN MAX(cumulative_uploaded) - MIN(cumulative_uploaded) 
+                             ELSE 0 END AS total_ul,
+                        CASE WHEN MAX(cumulative_downloaded) - MIN(cumulative_downloaded) > 0 
+                             THEN MAX(cumulative_downloaded) - MIN(cumulative_downloaded) 
+                             ELSE 0 END AS total_dl
                     FROM traffic_stats_hourly
                     WHERE stat_datetime >= {ph}
                 """
@@ -176,13 +190,27 @@ def get_chart_data_api():
                         FROM traffic_stats
                         WHERE stat_datetime >= {ph}
                     """
-                else:
+                elif db_manager.db_type == "mysql":
                     query_fine = f"""
                         SELECT
                             {time_group_fn_fine} AS time_group,
                             downloader_id,
                             GREATEST(0, MAX(cumulative_uploaded) - MIN(cumulative_uploaded)) AS total_ul,
                             GREATEST(0, MAX(cumulative_downloaded) - MIN(cumulative_downloaded)) AS total_dl
+                        FROM traffic_stats
+                        WHERE stat_datetime >= {ph}
+                    """
+                else:  # SQLite
+                    query_fine = f"""
+                        SELECT
+                            {time_group_fn_fine} AS time_group,
+                            downloader_id,
+                            CASE WHEN MAX(cumulative_uploaded) - MIN(cumulative_uploaded) > 0 
+                                 THEN MAX(cumulative_uploaded) - MIN(cumulative_uploaded) 
+                                 ELSE 0 END AS total_ul,
+                            CASE WHEN MAX(cumulative_downloaded) - MIN(cumulative_downloaded) > 0 
+                                 THEN MAX(cumulative_downloaded) - MIN(cumulative_downloaded) 
+                                 ELSE 0 END AS total_dl
                         FROM traffic_stats
                         WHERE stat_datetime >= {ph}
                     """
@@ -225,13 +253,27 @@ def get_chart_data_api():
                     FROM traffic_stats
                     WHERE stat_datetime >= {ph}
                 """
-            else:
+            elif db_manager.db_type == "mysql":
                 query = f"""
                     SELECT
                         {time_group_fn} AS time_group,
                         downloader_id,
                         GREATEST(0, MAX(cumulative_uploaded) - MIN(cumulative_uploaded)) AS total_ul,
                         GREATEST(0, MAX(cumulative_downloaded) - MIN(cumulative_downloaded)) AS total_dl
+                    FROM traffic_stats
+                    WHERE stat_datetime >= {ph}
+                """
+            else:  # SQLite
+                query = f"""
+                    SELECT
+                        {time_group_fn} AS time_group,
+                        downloader_id,
+                        CASE WHEN MAX(cumulative_uploaded) - MIN(cumulative_uploaded) > 0 
+                             THEN MAX(cumulative_uploaded) - MIN(cumulative_uploaded) 
+                             ELSE 0 END AS total_ul,
+                        CASE WHEN MAX(cumulative_downloaded) - MIN(cumulative_downloaded) > 0 
+                             THEN MAX(cumulative_downloaded) - MIN(cumulative_downloaded) 
+                             ELSE 0 END AS total_dl
                     FROM traffic_stats
                     WHERE stat_datetime >= {ph}
                 """

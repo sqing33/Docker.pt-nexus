@@ -286,6 +286,19 @@ onMounted(() => {
   padding: 24px;
   max-width: 1200px;
   margin: 0 auto;
+  height: 100vh;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+/* 隐藏滚动条但保持滚动功能 */
+.home-container::-webkit-scrollbar {
+  display: none;
+}
+
+.home-container {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
 }
 
 .warning-banner {

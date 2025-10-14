@@ -215,7 +215,8 @@ class CrabptUploader(SpecialUploader):
                     torrent_dir = os.path.join(tmp_dir, safe_title)
                 else:
                     # 如果没有title，使用torrent文件名作为备选
-                    torrent_path = self.upload_data.get("modified_torrent_path", "")
+                    torrent_path = self.upload_data.get(
+                        "modified_torrent_path", "")
                     if torrent_path:
                         torrent_name = os.path.basename(torrent_path)
                         if torrent_name.endswith('.torrent'):
@@ -225,7 +226,8 @@ class CrabptUploader(SpecialUploader):
                             torrent_name = torrent_name.split('.modified.')[0]
                         # 清理文件名中的非法字符
                         import re
-                        torrent_name = re.sub(r'[\\/:*?"<>|]', '_', torrent_name)
+                        torrent_name = re.sub(r'[\\/:*?"<>|]', '_',
+                                              torrent_name)
                         torrent_dir = os.path.join(tmp_dir, torrent_name)
                     else:
                         torrent_dir = os.path.join(tmp_dir, "unknown_torrent")
@@ -273,7 +275,8 @@ class CrabptUploader(SpecialUploader):
         logger.info(f"正在为 {self.site_name} 站点适配上传参数...")
         try:
             # 1. 直接从 upload_data 中获取由 migrator 准备好的标准化参数
-            standardized_params = self.upload_data.get("standardized_params", {})
+            standardized_params = self.upload_data.get("standardized_params",
+                                                       {})
 
             # 添加回退和警告逻辑，以防 standardized_params 未被传递
             if not standardized_params:

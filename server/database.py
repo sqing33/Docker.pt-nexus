@@ -281,12 +281,19 @@ class DatabaseManager:
                                     "group" = %s, description = %s, migration = %s, speed_limit = %s
                                 WHERE id = %s
                             """
-                        else:
+                        elif self.db_type == "mysql":
                             update_sql = """
                                 UPDATE sites
                                 SET site = %s, nickname = %s, base_url = %s, special_tracker_domain = %s,
                                     `group` = %s, description = %s, migration = %s, speed_limit = %s
                                 WHERE id = %s
+                            """
+                        else:  # SQLite
+                            update_sql = """
+                                UPDATE sites
+                                SET site = ?, nickname = ?, base_url = ?, special_tracker_domain = ?,
+                                    "group" = ?, description = ?, migration = ?, speed_limit = ?
+                                WHERE id = ?
                             """
 
                         # 执行更新，传入经过逻辑判断后的 final_speed_limit
@@ -305,7 +312,7 @@ class DatabaseManager:
                         updated_count += 1
                         logging.debug(f"更新了站点: {site_name}")
                     else:
-                        # 根据数据库类型使用正确的标识符引用符
+                        # 根据数据库类型使用正确的标识符引用符和占位符
                         if self.db_type == "postgresql":
                             # 添加新站点
                             cursor.execute(
@@ -321,13 +328,28 @@ class DatabaseManager:
                                   site_info.get('description'),
                                   site_info.get('migration', 0),
                                   site_info.get('speed_limit', 0)))
-                        else:
+                        elif self.db_type == "mysql":
                             # 添加新站点
                             cursor.execute(
                                 """
                                 INSERT INTO sites
                                 (site, nickname, base_url, special_tracker_domain, `group`, description, migration, speed_limit)
                                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                            """, (site_info.get('site'),
+                                  site_info.get('nickname'),
+                                  site_info.get('base_url'),
+                                  site_info.get('special_tracker_domain'),
+                                  site_info.get('group'),
+                                  site_info.get('description'),
+                                  site_info.get('migration', 0),
+                                  site_info.get('speed_limit', 0)))
+                        else:  # SQLite
+                            # 添加新站点
+                            cursor.execute(
+                                """
+                                INSERT INTO sites
+                                (site, nickname, base_url, special_tracker_domain, "group", description, migration, speed_limit)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                             """, (site_info.get('site'),
                                   site_info.get('nickname'),
                                   site_info.get('base_url'),
@@ -550,13 +572,31 @@ class DatabaseManager:
                     WHERE stat_datetime < {ph}
                     GROUP BY hour_group, downloader_id
                 """
-            else:
+            elif self.db_type == "mysql":
                 aggregate_query = f"""
                     SELECT
                         {time_group_fn} AS hour_group,
                         downloader_id,
                         GREATEST(0, MAX(cumulative_uploaded) - MIN(cumulative_uploaded)) AS total_uploaded,
                         GREATEST(0, MAX(cumulative_downloaded) - MIN(cumulative_downloaded)) AS total_downloaded,
+                        AVG(upload_speed) AS avg_upload_speed,
+                        AVG(download_speed) AS avg_download_speed,
+                        COUNT(*) AS samples
+                    FROM traffic_stats
+                    WHERE stat_datetime < {ph}
+                    GROUP BY hour_group, downloader_id
+                """
+            else:  # SQLite - 使用CASE语句替代GREATEST函数
+                aggregate_query = f"""
+                    SELECT
+                        {time_group_fn} AS hour_group,
+                        downloader_id,
+                        CASE WHEN MAX(cumulative_uploaded) - MIN(cumulative_uploaded) > 0 
+                             THEN MAX(cumulative_uploaded) - MIN(cumulative_uploaded) 
+                             ELSE 0 END AS total_uploaded,
+                        CASE WHEN MAX(cumulative_downloaded) - MIN(cumulative_downloaded) > 0 
+                             THEN MAX(cumulative_downloaded) - MIN(cumulative_downloaded) 
+                             ELSE 0 END AS total_downloaded,
                         AVG(upload_speed) AS avg_upload_speed,
                         AVG(download_speed) AS avg_download_speed,
                         COUNT(*) AS samples
