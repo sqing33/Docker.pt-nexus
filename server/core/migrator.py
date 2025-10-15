@@ -1625,6 +1625,8 @@ class TorrentMigrator:
                 "标签": standardized_params.get("tags", []),
             }
 
+            print(f"aaaaaaaaaaaaa标准化参数预览: {final_publish_parameters}")
+
             # 构建完整的发布参数用于预览（兼容现有BaseUploader）
             complete_publish_params = {
                 "title_components": title_components,

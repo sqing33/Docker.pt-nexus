@@ -684,7 +684,6 @@ global_standard_keys:
     "泰语": "tag.泰语"
     "阿拉伯语": "tag.阿拉伯语"
     "外语": "tag.外语"
-    
 
     # HDR相关标签
     "HDR": "tag.HDR"
@@ -748,7 +747,7 @@ default_title_components:
   platform:
     source_key: "片源平台"
   medium:
-    source_key: "媒介"  # 默认使用"媒介"
+    source_key: "媒介" # 默认使用"媒介"
   video_codec:
     source_key: "视频编码"
   video_format:
@@ -803,6 +802,110 @@ team_acknowledgment:
   keyword_check_length: 300
 
 # ==============================================================================
+# Content Filtering Configuration (内容过滤配置)
+# ==============================================================================
+
+# 不需要的内容模式（用于过滤ARDTU工具和其他自动发布工具的声明）
+content_filtering:
+  # 启用内容过滤功能
+  enabled: true
+
+  # 不需要的声明和签名模式
+  unwanted_patterns:
+    # ARDTU工具相关
+    - "ARDTU工具自动发布"
+    - "有错误请评论或举报"
+    - "郑重声明："
+    - "本站提供的所有作品均是用户自行搜集并且上传"
+    - "禁止任何涉及商业盈利目的使用"
+    - "请在下载后24小时内尽快删除"
+    - "By ARDTU"
+    - "ARDTU"
+
+    # 财神CSWEB相关
+    - "财神CSWEB提供的所有资源均是在网上搜集且由用户上传"
+    - "不可用于任何形式的商业盈利活动"
+
+    # 工具签名
+    - "| A | By ATU"
+    - "| ARDTU"
+
+    # 不规范的技术信息标记
+    - ".Release.Info"
+
+  # MediaInfo/BDInfo检测关键词（用于识别技术信息块）
+  mediainfo_keywords:
+    required:
+      - "General"
+      - "Video"
+      - "Audio"
+
+  bdinfo_keywords:
+    required:
+      - "DISC INFO"
+      - "PLAYLIST REPORT"
+
+  # 技术参数quote检测规则
+  technical_params_detection:
+    # 包含这些组合的quote会被识别为技术参数并过滤
+    patterns:
+      - keywords: [".Release.Info", "ENCODER"]
+        description: "Release.Info格式的技术参数"
+
+      - keywords: ["ENCODER", "RELEASE NAME"]
+        description: "包含编码器和发布名称的技术信息"
+
+      - keywords: [".Release.Info", ".Media.Info"]
+        description: "Release.Info和Media.Info组合"
+
+      - keywords: ["ViDEO CODEC", "AUDiO CODEC"]
+        description: "视频和音频编码器信息"
+
+      - keywords: [".x265.Info", "x265"]
+        description: "x265编码信息"
+
+      - keywords: ["RELEASE.NAME", "VIDEO.CODEC"]
+        description: "发布名称和视频编码"
+
+      - keywords: ["RELEASE NAME", "VIDEO CODEC"]
+        description: "发布名称和视频编码（空格版本）"
+
+      - keywords: ["RELEASE.NAME", "FRAME.RATE"]
+        description: "发布名称和帧率"
+
+      - keywords: ["RELEASE NAME", "FRAME RATE"]
+        description: "发布名称和帧率（空格版本）"
+
+      - keywords: ["SUBTITLES", "RELEASE"]
+        min_dots: 5
+        description: "包含字幕和发布信息的技术参数"
+
+      - keywords: ["GENERAL INFORMATION", "RELEASE"]
+        description: "通用发布信息"
+
+      - keywords: ["GENERAL INFORMATION", "VIDEO"]
+        description: "通用视频信息"
+
+      - keywords: ["COMPARISON", "SOURCE", "ENCODE"]
+        has_underscores: true
+        description: "对比截图说明（Source___Encode格式）"
+
+  # 对比说明过滤规则
+  comparison_filtering:
+    enabled: true
+    patterns:
+      - "COMPARISON.*RIGHT.*SOURCE.*ENCODE"
+      - "COMPARISON.*CLICK.*SOURCE.*ENCODE"
+      - "SOURCE_{10,}ENCODE" # 至少10个下划线
+
+  # 独立关键词过滤（在简介正文中出现的单独一行的关键词）
+  standalone_keywords_to_remove:
+    - "mediainfo"
+    - "screenshot"
+    - "source"
+    - "encode"
+
+# ==============================================================================
 # Fallback Strategy Configuration (降级策略配置)
 # ==============================================================================
 
@@ -838,7 +941,7 @@ fallback_chains:
       - "audio.other"
     "audio.dts":
       - "audio.other"
- 
+
   video_codec:
     "video.x265":
       - "video.h265"
@@ -847,7 +950,7 @@ fallback_chains:
     "video.h265":
       - "video.h264"
       - "video.other"
-      
+
   medium:
     "medium.remux":
       - "medium.bluray"
@@ -860,7 +963,7 @@ fallback_chains:
     "medium.bdrip":
       - "medium.encode"
       - "medium.other"
-      
+
   hdr_format:
     "hdr.dolby_vision":
       - "hdr.hdr10_plus"
@@ -876,15 +979,15 @@ fallback_config:
   # Enable or disable the fallback feature.
   # 启用或禁用降级功能。
   enabled: true
-  
+
   # Log when a fallback occurs.
   # 发生降级时记录日志。
   log_fallback: true
-  
+
   # Maximum depth for a fallback chain to prevent infinite loops.
   # 降级链的最大深度，以防止无限循环。
   max_fallback_depth: 5
-  
+
   # If a fallback chain fails or is not found, use the default value from the mapping.
   # 如果降级链失败或未找到，则使用映射中的默认值。
   use_default_on_failure: true

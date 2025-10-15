@@ -1591,19 +1591,21 @@ def add_torrent_to_downloader(detail_page_url: str, save_path: str,
 
         # 检查是否需要使用特殊下载器
         site_base_url = ensure_scheme(site_info['base_url'])
-        full_download_url = None # 初始化full_download_url
+        full_download_url = None  # 初始化full_download_url
 
         # 检查是否为haidan站点
         if 'haidan.video' in site_base_url:
             # Haidan站点的特殊逻辑
-            download_link_tag = soup.find('a', href=re.compile(r"download.php\?id="))
-            
+            download_link_tag = soup.find(
+                'a', href=re.compile(r"download.php\?id="))
+
             if not download_link_tag: raise RuntimeError("在详情页HTML中未能找到下载链接！")
 
-            download_url_part = str(download_link_tag['href']) # 显式转换为str
-            
+            download_url_part = str(download_link_tag['href'])  # 显式转换为str
+
             # 替换下载链接中的id为从detail_page_url中提取的torrent_id
-            download_url_part = re.sub(r"id=\d+", f"id={torrent_id}", download_url_part)
+            download_url_part = re.sub(r"id=\d+", f"id={torrent_id}",
+                                       download_url_part)
 
             full_download_url = f"{site_base_url}/{download_url_part}"
         else:
@@ -1612,9 +1614,9 @@ def add_torrent_to_downloader(detail_page_url: str, save_path: str,
                 f'a.index[href^="download.php?id={torrent_id}"]')
             if not download_link_tag: raise RuntimeError("在详情页HTML中未能找到下载链接！")
 
-            download_url_part = str(download_link_tag['href']) # 显式转换为str
+            download_url_part = str(download_link_tag['href'])  # 显式转换为str
             full_download_url = f"{site_base_url}/{download_url_part}"
-        
+
         # 确保full_download_url已被赋值
         if not full_download_url:
             raise RuntimeError("未能成功构建种子下载链接！")
@@ -2091,18 +2093,20 @@ def _check_other_language_in_audio_section(audio_lines) -> str | None:
     """
     # 定义其他语言的关键词映射
     language_keywords = {
-        '英语': ['english', 'eng', 'en'],
-        '日语': ['japanese', 'jpn', 'ja', 'jp', '日语'],
-        '韩语': ['korean', 'kor', 'ko', '韩语'],
-        '法语': ['french', 'fra', 'fre', 'fr', '法语'],
-        '德语': ['german', 'deu', 'ger', 'de', '德语'],
-        '俄语': ['russian', 'rus', 'ru', '俄语'],
-        '印地语': ['hindi', 'hin', 'hi', '印地语'],
-        '西班牙语': ['spanish', 'spa', 'es', '西班牙语'],
-        '葡萄牙语': ['portuguese', 'por', 'pt', '葡萄牙语'],
-        '意大利语': ['italian', 'ita', 'it', '意大利语'],
-        '泰语': ['thai', 'tha', 'th', '泰语'],
-        '阿拉伯语': ['arabic', 'ara', 'ar', '阿拉伯语'],
+        '英语': [
+            'english',
+        ],
+        '日语': ['japanese', '日语'],
+        '韩语': ['korean', '韩语'],
+        '法语': ['french', '法语'],
+        '德语': ['german', '德语'],
+        '俄语': ['russian', '俄语'],
+        '印地语': ['hindi', '印地语'],
+        '西班牙语': ['spanish', '西班牙语'],
+        '葡萄牙语': ['portuguese', '葡萄牙语'],
+        '意大利语': ['italian', '意大利语'],
+        '泰语': ['thai', '泰语'],
+        '阿拉伯语': ['arabic', '阿拉伯语'],
     }
 
     for line in audio_lines:

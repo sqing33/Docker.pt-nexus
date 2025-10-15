@@ -25,13 +25,16 @@ from .sites.audiences import AudiencesSpecialExtractor
 # 加载全局映射配置
 GLOBAL_MAPPINGS = {}
 DEFAULT_TITLE_COMPONENTS = {}
+CONTENT_FILTERING_CONFIG = {}
 try:
     global_mappings_path = os.path.join(CONFIG_DIR, "global_mappings.yaml")
     if os.path.exists(global_mappings_path):
         with open(global_mappings_path, 'r', encoding='utf-8') as f:
             global_config = yaml.safe_load(f)
             GLOBAL_MAPPINGS = global_config.get("global_standard_keys", {})
-            DEFAULT_TITLE_COMPONENTS = global_config.get("default_title_components", {})
+            DEFAULT_TITLE_COMPONENTS = global_config.get(
+                "default_title_components", {})
+            CONTENT_FILTERING_CONFIG = global_config.get("content_filtering", {})
 except Exception as e:
     print(f"警告：无法加载全局映射配置: {e}")
 from .sites.ssd import SSDSpecialExtractor
@@ -74,6 +77,60 @@ class Extractor:
             extracted_data = self._extract_with_public_extractor(soup)
 
         return extracted_data
+
+    def _is_unwanted_content(self, text: str) -> bool:
+        """
+        检查文本是否包含不需要的内容模式（使用配置文件中的规则）
+        
+        Args:
+            text: 要检查的文本
+            
+        Returns:
+            如果文本包含不需要的模式则返回True
+        """
+        if not CONTENT_FILTERING_CONFIG.get("enabled", False):
+            return False
+            
+        unwanted_patterns = CONTENT_FILTERING_CONFIG.get("unwanted_patterns", [])
+        return any(pattern in text for pattern in unwanted_patterns)
+
+    def _clean_subtitle(self, subtitle: str) -> str:
+        """
+        清理副标题，移除制作组信息和不需要的内容
+        
+        Args:
+            subtitle: 原始副标题
+            
+        Returns:
+            清理后的副标题
+        """
+        if not subtitle:
+            return subtitle
+            
+        # 首先使用硬编码的规则（兼容性）
+        subtitle = re.sub(r"\s*\|\s*[Aa][Bb]y\s+\w+.*$", "", subtitle)
+        subtitle = re.sub(r"\s*\|\s*[Bb]y\s+\w+.*$", "", subtitle)
+        subtitle = re.sub(r"\s*\|\s*[Aa]\s+\w+.*$", "", subtitle)
+        subtitle = re.sub(r"\s*\|\s*[Aa]\s*\|.*$", "", subtitle)
+        subtitle = re.sub(r"\s*\|\s*[Aa][Tt][Uu]\s*$", "", subtitle)
+        subtitle = re.sub(r"\s*\|\s*[Dd][Tt][Uu]\s*$", "", subtitle)
+        subtitle = re.sub(r"\s*\|\s*[Pp][Tt][Ee][Rr]\s*$", "", subtitle)
+        
+        # 然后使用配置文件中的规则
+        if CONTENT_FILTERING_CONFIG.get("enabled", False):
+            unwanted_patterns = CONTENT_FILTERING_CONFIG.get("unwanted_patterns", [])
+            for pattern in unwanted_patterns:
+                # 如果配置中的模式在副标题中找到，则移除整个模式或相关部分
+                if pattern in subtitle:
+                    # 对于副标题，我们更精细化处理，只移除包含模式的行或部分
+                    lines = subtitle.split('\n')
+                    filtered_lines = []
+                    for line in lines:
+                        if pattern not in line:
+                            filtered_lines.append(line)
+                    subtitle = '\n'.join(filtered_lines)
+        
+        return subtitle.strip()
 
     def _extract_with_public_extractor(self,
                                        soup: BeautifulSoup) -> Dict[str, Any]:
@@ -132,14 +189,8 @@ class Extractor:
         subtitle_td = soup.find("td", string=re.compile(r"\s*副标题\s*"))
         if subtitle_td and subtitle_td.find_next_sibling("td"):
             subtitle = subtitle_td.find_next_sibling("td").get_text(strip=True)
-            # Clean subtitle from group information
-            subtitle = re.sub(r"\s*\|\s*[Aa][Bb]y\s+\w+.*$", "", subtitle)
-            subtitle = re.sub(r"\s*\|\s*[Bb]y\s+\w+.*$", "", subtitle)
-            subtitle = re.sub(r"\s*\|\s*[Aa]\s+\w+.*$", "", subtitle)
-            subtitle = re.sub(r"\s*\|\s*[Aa]\s*\|.*$", "", subtitle)  # 新增：过滤 | A | XXX 格式
-            subtitle = re.sub(r"\s*\|\s*[Aa][Tt][Uu]\s*$", "", subtitle)
-            subtitle = re.sub(r"\s*\|\s*[Dd][Tt][Uu]\s*$", "", subtitle)
-            subtitle = re.sub(r"\s*\|\s*[Pp][Tt][Ee][Rr]\s*$", "", subtitle)
+            # Clean subtitle from group information using both hardcoded rules and config
+            subtitle = self._clean_subtitle(subtitle)
             extracted_data["subtitle"] = subtitle
 
         # Extract description information
@@ -378,7 +429,8 @@ class Extractor:
 
             # Extract quotes before and after poster
             # [修复] 改进判断逻辑：即使没有海报，也要正确区分感谢声明和正文内容
-            poster_index = bbcode.find(images[0]) if (images and images[0]) else -1
+            poster_index = bbcode.find(images[0]) if (images
+                                                      and images[0]) else -1
             quotes_before_poster = []
             quotes_after_poster = []
 
@@ -398,16 +450,13 @@ class Extractor:
                     # 无海报：通过关键词判断是否为感谢声明
                     # 感谢声明通常包含这些特征
                     is_acknowledgment = (
-                        "官组" in quote_content or
-                        "感谢" in quote_content or
-                        "原制作者" in quote_content or
-                        "FRDS" in quote_content or
-                        "FraMeSToR" in quote_content or
-                        "CHD" in quote_content or
-                        "字幕组" in quote_content or
-                        len(quote_content) < 200  # 短quote更可能是声明
+                        "官组" in quote_content or "感谢" in quote_content
+                        or "原制作者" in quote_content or "FRDS" in quote_content
+                        or "FraMeSToR" in quote_content
+                        or "CHD" in quote_content or "字幕组" in quote_content
+                        or len(quote_content) < 200  # 短quote更可能是声明
                     )
-                    
+
                     if is_acknowledgment:
                         quotes_before_poster.append(quote_content)
                     else:
@@ -417,33 +466,39 @@ class Extractor:
             def is_technical_params_quote(quote_text):
                 # 转换为大写进行不区分大小写的匹配
                 quote_upper = quote_text.upper()
-                
+
                 return (
                     # 匹配 .Release.Info 格式
-                    (".Release.Info" in quote_text and "ENCODER" in quote_upper)
-                    or
-                    ("ENCODER" in quote_upper and "RELEASE NAME" in quote_upper)
-                    or (".Release.Info" in quote_text and ".Media.Info" in quote_text)
-                    or ("ViDEO CODEC" in quote_upper and "AUDiO CODEC" in quote_upper)
-                    or (".x265.Info" in quote_text and "x265" in quote_text)
-                    or
+                    (".Release.Info" in quote_text and "ENCODER" in quote_upper
+                     ) or ("ENCODER" in quote_upper
+                           and "RELEASE NAME" in quote_upper)
+                    or (".Release.Info" in quote_text
+                        and ".Media.Info" in quote_text)
+                    or ("ViDEO CODEC" in quote_upper
+                        and "AUDiO CODEC" in quote_upper)
+                    or (".x265.Info" in quote_text and "x265" in quote_text) or
                     # [新增] 匹配常见的 Release Info 格式（包含多个技术参数关键词）
-                    (("RELEASE.NAME" in quote_upper or "RELEASE NAME" in quote_upper) 
-                     and ("VIDEO.CODEC" in quote_upper or "VIDEO CODEC" in quote_upper or "FRAME.RATE" in quote_upper or "FRAME RATE" in quote_upper))
-                    or
+                    (("RELEASE.NAME" in quote_upper
+                      or "RELEASE NAME" in quote_upper) and
+                     ("VIDEO.CODEC" in quote_upper or "VIDEO CODEC"
+                      in quote_upper or "FRAME.RATE" in quote_upper
+                      or "FRAME RATE" in quote_upper)) or
                     # [新增] 匹配包含 RELEASE、VIDEO、AUDIO 等多个技术关键词的组合
-                    (quote_upper.count("RELEASE") >= 2 and ("VIDEO" in quote_upper or "AUDIO" in quote_upper))
-                    or
+                    (quote_upper.count("RELEASE") >= 2 and
+                     ("VIDEO" in quote_upper or "AUDIO" in quote_upper)) or
                     # [新增] 匹配包含 SUBTITLES 和其他技术参数的格式
-                    ("SUBTITLES" in quote_upper and ("RELEASE" in quote_upper or "VIDEO" in quote_upper or "AUDIO" in quote_upper) 
+                    ("SUBTITLES" in quote_upper and
+                     ("RELEASE" in quote_upper or "VIDEO" in quote_upper
+                      or "AUDIO" in quote_upper)
                      and quote_upper.count(".") >= 5)  # 技术参数通常有很多点号分隔
                     or
                     # [新增] 匹配 General Information 样式的发布信息
-                    ("GENERAL INFORMATION" in quote_upper and ("RELEASE" in quote_upper or "VIDEO" in quote_upper))
-                    or
+                    ("GENERAL INFORMATION" in quote_upper and
+                     ("RELEASE" in quote_upper or "VIDEO" in quote_upper)) or
                     # [新增] 匹配对比截图说明格式：Comparison ... Source___Encode
-                    ("COMPARISON" in quote_upper and "SOURCE" in quote_upper and "ENCODE" in quote_upper 
-                     and ("___" in quote_text or "____" in quote_text))  # 包含下划线分隔符
+                    ("COMPARISON" in quote_upper and "SOURCE" in quote_upper
+                     and "ENCODE" in quote_upper and
+                     ("___" in quote_text or "____" in quote_text))  # 包含下划线分隔符
                 )
 
             # Process quotes
@@ -530,52 +585,52 @@ class Extractor:
                            "",
                            bbcode,
                            flags=re.DOTALL).replace("\r", "").strip())
-            
+
             # [新增] 在BBCode层面过滤对比说明（包含BBCode标签的情况）
             # 移除包含Comparison和Source/Encode的行（不管是否有[b][size]等标签包裹）
             lines = body.split('\n')
             filtered_lines = []
             skip_next_line = False
-            
+
             for i, line in enumerate(lines):
                 if skip_next_line:
                     skip_next_line = False
                     continue
-                
+
                 # 去除BBCode标签后的纯文本用于检测
                 line_without_bbcode = re.sub(r'\[/?[^\]]+\]', '', line)
                 line_upper = line_without_bbcode.upper().strip()
-                
+
                 # 检测1: Comparison行
-                if 'COMPARISON' in line_upper and ('RIGHT' in line_upper or 'CLICK' in line_upper):
+                if 'COMPARISON' in line_upper and ('RIGHT' in line_upper
+                                                   or 'CLICK' in line_upper):
                     logging.info(f"过滤掉Comparison行: {line[:80]}...")
                     # 检查下一行是否是Source/Encode行
                     if i + 1 < len(lines):
                         next_line = lines[i + 1]
-                        next_line_without_bbcode = re.sub(r'\[/?[^\]]+\]', '', next_line)
-                        if ('SOURCE' in next_line_without_bbcode.upper() and 
-                            'ENCODE' in next_line_without_bbcode.upper() and
-                            next_line.count('_') >= 10):
+                        next_line_without_bbcode = re.sub(
+                            r'\[/?[^\]]+\]', '', next_line)
+                        if ('SOURCE' in next_line_without_bbcode.upper() and
+                                'ENCODE' in next_line_without_bbcode.upper()
+                                and next_line.count('_') >= 10):
                             skip_next_line = True
                     continue
-                
+
                 # 检测2: Source___Encode行（单独出现）
-                if (line_upper.startswith('SOURCE') and 
-                    line_upper.endswith('ENCODE') and
-                    line.count('_') >= 10):
+                if (line_upper.startswith('SOURCE')
+                        and line_upper.endswith('ENCODE')
+                        and line.count('_') >= 10):
                     logging.info(f"过滤掉Source/Encode行: {line[:80]}...")
                     continue
-                
+
                 # 检测3: 同一行包含Comparison和Source/Encode的情况
-                if ('COMPARISON' in line_upper and 
-                    'SOURCE' in line_upper and 
-                    'ENCODE' in line_upper and
-                    line.count('_') >= 5):
+                if ('COMPARISON' in line_upper and 'SOURCE' in line_upper
+                        and 'ENCODE' in line_upper and line.count('_') >= 5):
                     logging.info(f"过滤掉完整对比说明行: {line[:80]}...")
                     continue
-                
+
                 filtered_lines.append(line)
-            
+
             body = '\n'.join(filtered_lines)
 
             # [新增] 检查简介完整性
@@ -702,13 +757,11 @@ class Extractor:
 
             # [新增] 额外检查：即使简介完整，也检查是否缺少集数/IMDb/豆瓣链接
             from utils.description_enhancer import enhance_description_if_needed
-            
+
             enhanced_body, enhanced_imdb, description_changed = enhance_description_if_needed(
-                body,
-                extracted_data["intro"].get("imdb_link", ""),
-                extracted_data["intro"].get("douban_link", "")
-            )
-            
+                body, extracted_data["intro"].get("imdb_link", ""),
+                extracted_data["intro"].get("douban_link", ""))
+
             if description_changed:
                 body = enhanced_body
                 if enhanced_imdb:
@@ -728,36 +781,37 @@ class Extractor:
                 # 检查是否为独立关键词行
                 if line.strip().lower() in words_to_remove:
                     continue
-                
+
                 # [新增] 检查是否为对比截图说明行
                 line_upper = line.upper()
                 line_stripped = line.strip()
-                
+
                 # 条件1: 包含 Comparison 和 Source/Encode 且有下划线分隔
-                if ('COMPARISON' in line_upper and 
-                    'SOURCE' in line_upper and 
-                    'ENCODE' in line_upper and
+                if ('COMPARISON' in line_upper and 'SOURCE' in line_upper
+                        and 'ENCODE' in line_upper and
                     ('___' in line or '____' in line or '_______' in line)):
                     logging.info(f"过滤掉对比说明行(带下划线): {line[:50]}...")
                     continue
-                
+
                 # 条件2: 只有 Source 和 Encode 且中间有大量下划线的单行
                 # 例如: "Source________________________Encode"
-                if (line_stripped.upper().startswith('SOURCE') and 
-                    line_stripped.upper().endswith('ENCODE') and
-                    line.count('_') >= 10):  # 至少10个下划线
+                if (line_stripped.upper().startswith('SOURCE')
+                        and line_stripped.upper().endswith('ENCODE')
+                        and line.count('_') >= 10):  # 至少10个下划线
                     logging.info(f"过滤掉对比说明行(纯下划线): {line[:50]}...")
                     continue
-                
+
                 # 条件3: 单独的 "Comparison" 行（通常出现在对比说明前）
-                if line_stripped.lower().startswith('comparison') and len(line_stripped) < 100:
+                if line_stripped.lower().startswith('comparison') and len(
+                        line_stripped) < 100:
                     # 检查是否包含典型的对比说明文本
-                    if 'right' in line_stripped.lower() or 'click' in line_stripped.lower():
+                    if 'right' in line_stripped.lower(
+                    ) or 'click' in line_stripped.lower():
                         logging.info(f"过滤掉对比说明行(Comparison): {line[:50]}...")
                         continue
-                
+
                 cleaned_lines.append(line)
-            
+
             body = '\n'.join(cleaned_lines)
 
             # Format statement string
@@ -973,7 +1027,10 @@ class ParameterMapper:
 
         # 首先尝试使用站点特定配置
         site_config = self.load_site_config(site_name)
-        site_mappings = site_config.get("mappings", {}).get("tag", {})
+        # [修复] 应该使用 source_parsers.standard_keys.tag 而不是 mappings.tag
+        site_mappings = site_config.get("source_parsers",
+                                        {}).get("standard_keys",
+                                                {}).get("tag", {})
 
         # 确保我们总是有全局映射作为后备
         global_tag_mappings = GLOBAL_MAPPINGS.get("tag", {})
@@ -1065,6 +1122,17 @@ class ParameterMapper:
 
             value_str = str(raw_value).strip()
 
+            # 处理合作制作组：如果包含@符号，优先使用@后面的制作组名称
+            if "@" in value_str:
+                # 分割字符串，@后面的部分作为主要制作组
+                parts = value_str.split("@")
+                if len(parts) >= 2 and parts[1].strip():
+                    # 使用@后面的制作组名称进行映射
+                    value_str = parts[1].strip()
+                    logging.info(
+                        f"检测到合作制作组 '{raw_value}'，使用 '@' 后的制作组 '{value_str}' 进行映射"
+                    )
+
             # 优先级 1: 尝试在全局映射中查找
             global_mappings = GLOBAL_MAPPINGS.get(param_key, {})
             for source_text, standard_key in global_mappings.items():
@@ -1098,7 +1166,8 @@ class ParameterMapper:
 
         title_standard_values = {}
         # 使用默认的 title_components 配置，如果站点配置中没有定义
-        title_components_config = source_parsers.get("title_components", DEFAULT_TITLE_COMPONENTS)
+        title_components_config = source_parsers.get("title_components",
+                                                     DEFAULT_TITLE_COMPONENTS)
         title_params = {
             item["key"]: item["value"]
             for item in title_components
@@ -1149,11 +1218,12 @@ class ParameterMapper:
 
         # [新增] 从简介中提取标签和进行类型修正
         from utils.media_helper import extract_tags_from_description, check_animation_type_from_description
-        
-        intro_statement = extracted_params.get("intro", {}).get("statement", "")
+
+        intro_statement = extracted_params.get("intro",
+                                               {}).get("statement", "")
         intro_body = extracted_params.get("intro", {}).get("body", "")
         full_description_text = f"{intro_statement}\n{intro_body}"
-        
+
         # 1. 从简介类别中提取标签（如喜剧、动画等）
         description_tags = extract_tags_from_description(full_description_text)
         if description_tags:
@@ -1162,12 +1232,12 @@ class ParameterMapper:
             existing_tags.update(description_tags)
             final_standardized_params["tags"] = list(existing_tags)
             logging.info(f"从简介中补充标签: {description_tags}")
-        
+
         # 2. 检查是否需要修正类型为动漫
         if check_animation_type_from_description(full_description_text):
             current_type = final_standardized_params.get("type", "")
             logging.info(f"检测到类别中包含'动画'，当前标准类型: {current_type}")
-            
+
             # 获取动漫的标准键
             anime_standard_key = None
             global_type_mappings = GLOBAL_MAPPINGS.get("type", {})
@@ -1175,12 +1245,14 @@ class ParameterMapper:
                 if source_text in ["动漫", "Anime"]:
                     anime_standard_key = standard_key
                     break
-            
+
             if anime_standard_key:
                 # 只要检测到动画，就修正为动漫
                 final_standardized_params["type"] = anime_standard_key
                 logging.info(f"类型已从'{current_type}'修正为'{anime_standard_key}'")
-                print(f"[*] 类型修正: {current_type} -> {anime_standard_key} (检测到简介类别包含'动画')")
+                print(
+                    f"[*] 类型修正: {current_type} -> {anime_standard_key} (检测到简介类别包含'动画')"
+                )
             else:
                 logging.warning("未在全局映射中找到'动漫'的标准键，无法修正类型")
 

@@ -5,9 +5,24 @@ Audiences特殊站点种子详情参数提取器
 """
 
 import re
+import os
+import yaml
 from bs4 import BeautifulSoup
 from utils import extract_tags_from_mediainfo, extract_origin_from_description
 from config import TEMP_DIR
+
+# 加载内容过滤配置
+CONFIG_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), "configs")
+CONTENT_FILTERING_CONFIG = {}
+try:
+    global_mappings_path = os.path.join(CONFIG_DIR, "global_mappings.yaml")
+    if os.path.exists(global_mappings_path):
+        with open(global_mappings_path, 'r', encoding='utf-8') as f:
+            global_config = yaml.safe_load(f)
+            CONTENT_FILTERING_CONFIG = global_config.get("content_filtering", {})
+except Exception as e:
+    print(f"警告：无法加载内容过滤配置: {e}")
 
 
 class AudiencesSpecialExtractor:
@@ -221,22 +236,12 @@ class AudiencesSpecialExtractor:
 
     def _is_unwanted_declaration(self, text):
         """
-        判断是否为不需要的声明信息
+        判断是否为不需要的声明信息（使用配置文件中的规则）
         """
-        unwanted_patterns = [
-            "ARDTU工具自动发布",
-            "有错误请评论或举报",
-            "郑重声明：",
-            "本站提供的所有作品均是用户自行搜集并且上传",
-            "禁止任何涉及商业盈利目的使用",
-            "请在下载后24小时内尽快删除",
-            "财神CSWEB提供的所有资源均是在网上搜集且由用户上传",
-            "不可用于任何形式的商业盈利活动",
-            "By ARDTU",
-            ".Release.Info",  # 不规范的MediaInfo声明
-            "| A | By ATU"  # 特定工具签名
-        ]
-
+        if not CONTENT_FILTERING_CONFIG.get("enabled", False):
+            return False
+            
+        unwanted_patterns = CONTENT_FILTERING_CONFIG.get("unwanted_patterns", [])
         return any(pattern in text for pattern in unwanted_patterns)
 
     def extract_basic_info(self):
@@ -267,7 +272,9 @@ class AudiencesSpecialExtractor:
         """
         # 提取主标题
         h1_top = self.soup.select_one("h1#top")
-        original_main_title = list(h1_top.stripped_strings)[0] if h1_top and h1_top.stripped_strings else ""
+        original_main_title = list(
+            h1_top.stripped_strings
+        )[0] if h1_top and h1_top.stripped_strings else ""
 
         # 从标题中提取制作组的正则表达式
         # 匹配常见的制作组格式，例如: [ABC] 或 -ABC 或 [ABC-RIP] 等

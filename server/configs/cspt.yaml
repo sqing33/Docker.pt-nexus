@@ -1,6 +1,5 @@
 site_name: "Cspt"
 
-# 表单字段定义
 form_fields:
   medium: "source_sel[4]"
   video_codec: "codec_sel[4]"
@@ -9,8 +8,6 @@ form_fields:
   team: "team_sel[4]"
   category: "type"
 
-# 标准化键映射 - 定义源文本到标准化键的映射规则
-# source_parsers部分：定义如何从原始数据解析出标准化参数
 source_parsers:
   source_params:
     type:
@@ -28,7 +25,6 @@ source_parsers:
     source:
       source_key: "产地"
 
-  # 标准化键映射规则（从原始文本到标准化键）
   standard_keys:
     type:
       "电影": "category.movie"
@@ -53,7 +49,6 @@ source_parsers:
       "Track": "medium.track"
       "Other": "medium.other"
 
-    # 视频编码映射
     video_codec:
       "H.264/AVC": "video.h264"
       "H.265/HEVC": "video.h265"
@@ -62,7 +57,6 @@ source_parsers:
       "AV1": "video.av1"
       "Other": "video.other"
 
-    # 音频编码映射
     audio_codec:
       "ALAC": "audio.alac"
       "AAC": "audio.aac"
@@ -121,7 +115,6 @@ source_parsers:
       "完结": "tag.完结"
       "儿童": "tag.儿童"
 
-# 参数映射规则 - 定义如何将标准化键映射到站点特定参数
 mappings:
   type:
     "category.movie": "401"

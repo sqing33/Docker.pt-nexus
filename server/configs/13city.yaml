@@ -1,6 +1,5 @@
 site_name: "13City"
 
-# 表单字段定义 - 定义站点上传表单中各字段的标识符
 form_fields:
   medium: "medium_sel[4]"
   video_codec: "codec_sel[4]"
@@ -8,11 +7,9 @@ form_fields:
   resolution: "standard_sel[4]"
   team: "team_sel[4]"
   source: "processing_sel[4]"
-  category: "type"  # 类别字段映射到type参数
-  tags[4][]: "tags[]"  # 标签字段映射到tags参数
+  category: "type"
+  tags[4][]: "tags[]"
 
-# 标准化键映射 - 定义源文本到标准化键的映射规则
-# source_parsers部分：定义如何从原始数据解析出标准化参数
 source_parsers:
   source_params:
     type:
@@ -30,7 +27,6 @@ source_parsers:
     source:
       source_key: "区域"
 
-  # 标准化键映射规则（从原始文本到标准化键）
   standard_keys:
     type:
       "电影/Movies": "category.movie"
@@ -114,7 +110,6 @@ source_parsers:
       "欧美": "source.western"
       "Other（其他）": "source.other"
 
-# 参数映射规则 - 定义如何将标准化键映射到站点特定参数
 mappings:
   type:
     "category.movie": "401"

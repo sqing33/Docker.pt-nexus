@@ -1,9 +1,5 @@
-# UBits站点的配置文件
-# 基于三层解耦模型重构，包含source_parsers和标准化的mappings
-
 site_name: "UBits"
 
-# 表单字段定义 - 定义站点上传表单中各字段的标识符
 form_fields:
   category: "type"
   medium: "medium_sel[4]"
@@ -14,8 +10,6 @@ form_fields:
   source: "source_sel[4]"
   tags[4][]: "tags[4][]"
 
-# 标准化键映射 - 定义源文本到标准化键的映射规则
-# source_parsers部分：定义如何从原始数据解析出标准化参数
 source_parsers:
   source_params:
     type:
@@ -32,11 +26,7 @@ source_parsers:
       source_key: "制作组"
     source:
       source_key: "地区"
-    tags[4][]:
-      source_key: "标签"
 
-  # 标准化键映射规则（从原始文本到标准化键）
-  # 将站点下拉菜单的文本映射到全局标准化键
   standard_keys:
     type:
       "电影(Movie)": "category.movie"
@@ -134,7 +124,6 @@ source_parsers:
       "自购": "tag.自购"
       "菜单修改": "tag.菜单修改"
 
-# 参数映射规则 - 定义如何将标准化键映射到站点特定参数
 mappings:
   type:
     "category.movie": "401"
