@@ -1004,8 +1004,8 @@ func screenshotHandler(w http.ResponseWriter, r *http.Request) {
 		log.Printf("开始处理第 %d/%d 张截图...", i+1, len(screenshotPoints))
 
 		timestamp := time.Now().UnixNano()
-		intermediatePngPath := filepath.Join(tempDir, fmt.Sprintf("ss_%d_%d_temp.png", i+1, timestamp))
-		finalJpegPath := filepath.Join(tempDir, fmt.Sprintf("ss_%d_%d.jpg", i+1, timestamp))
+		intermediatePngPath := filepath.Join(tempDir, fmt.Sprintf("s%d_%d.png", i+1, timestamp%1000000)) // 更短的文件名
+		finalJpegPath := filepath.Join(tempDir, fmt.Sprintf("s%d_%d.jpg", i+1, timestamp%1000000)) // 更短的文件名
 
 		// 步骤1: 截图
 		if err := takeScreenshot(videoPath, intermediatePngPath, point, subtitleIndex); err != nil {

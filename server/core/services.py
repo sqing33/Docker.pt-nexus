@@ -674,30 +674,74 @@ class DataTracker(Thread):
                     "mysql", "postgresql"
                 ] else "?"
                 cursor.execute(
-                    f"SELECT hash FROM torrents WHERE downloader_id = {placeholder}",
+                    f"SELECT hash, name, state FROM torrents WHERE downloader_id = {placeholder}",
                     (downloader_id, ))
-                db_hashes = {row["hash"] for row in cursor.fetchall()}
+                db_torrents = {row["hash"]: {"name": row["name"], "state": row["state"]} for row in cursor.fetchall()}
 
                 # 找出需要删除的种子（在数据库中但不在当前下载器中）
-                hashes_to_delete = db_hashes - downloader_current_hashes
+                hashes_to_delete = db_torrents.keys() - downloader_current_hashes
 
                 if hashes_to_delete:
                     print(
                         f"【刷新线程】发现下载器 {downloader_id} 中有 {len(hashes_to_delete)} 个种子已被删除"
                     )
-                    # 从torrents表中删除这些种子，但保护IYUU添加的未做种种子
-                    delete_placeholders = ",".join([placeholder] *
-                                                   len(hashes_to_delete))
-                    # 修改删除逻辑：只删除状态不是'未做种'的种子，保护IYUU添加的未做种记录
-                    delete_query = f"DELETE FROM torrents WHERE hash IN ({delete_placeholders}) AND downloader_id = {placeholder} AND state != '未做种'"
-                    cursor.execute(delete_query,
-                                   tuple(hashes_to_delete) + (downloader_id, ))
-                    deleted_count = cursor.rowcount
-                    print(
-                        f"【刷新线程】已删除下载器 {downloader_id} 中的 {deleted_count} 个已移除的种子记录（保护了未做种种子）"
-                    )
-                    logging.info(
-                        f"已删除下载器 {downloader_id} 中的 {deleted_count} 个已移除的种子记录（保护了未做种种子）")
+                    
+                    # 获取当前所有正在做种的种子名称（包括当前正在处理的种子和数据库中其他下载器的种子）
+                    current_seeding_names = set()
+                    
+                    # 添加当前正在处理的种子中正在做种的名称
+                    for hash_value, torrent_data in torrents_to_upsert.items():
+                        if torrent_data["state"] not in ["未做种", "已暂停", "已停止", "错误", "等待", "队列"]:
+                            current_seeding_names.add(torrent_data["name"])
+                    
+                    # 添加数据库中其他下载器的正在做种的种子名称
+                    other_downloaders_placeholders = ",".join([placeholder] * len(enabled_downloader_ids - {downloader_id}))
+                    if enabled_downloader_ids - {downloader_id}:  # 如果还有其他下载器
+                        cursor.execute(
+                            f"SELECT DISTINCT name FROM torrents WHERE downloader_id IN ({other_downloaders_placeholders}) AND state NOT IN ('未做种', '已暂停', '已停止', '错误', '等待', '队列')",
+                            tuple(enabled_downloader_ids - {downloader_id})
+                        )
+                        other_seeding_names = {row["name"] for row in cursor.fetchall()}
+                        current_seeding_names.update(other_seeding_names)
+                    
+                    # 分类要删除的种子
+                    hashes_to_delete_normal = []  # 状态不是'未做种'的，直接删除
+                    hashes_to_delete_inactive_seed = []  # 状态是'未做种'但没有其他同名种子在做种的，也要删除
+                    
+                    for hash_value in hashes_to_delete:
+                        torrent_info = db_torrents[hash_value]
+                        if torrent_info["state"] != "未做种":
+                            # 状态不是'未做种'，直接删除
+                            hashes_to_delete_normal.append(hash_value)
+                        else:
+                            # 状态是'未做种'，检查是否有其他同名种子在做种
+                            if torrent_info["name"] not in current_seeding_names:
+                                # 没有其他同名种子在做种，删除这个'未做种'的种子
+                                hashes_to_delete_inactive_seed.append(hash_value)
+                    
+                    # 初始化删除计数器
+                    deleted_count_normal = 0
+                    deleted_count_inactive = 0
+                    
+                    # 删除状态不是'未做种'的种子
+                    if hashes_to_delete_normal:
+                        delete_placeholders = ",".join([placeholder] * len(hashes_to_delete_normal))
+                        delete_query = f"DELETE FROM torrents WHERE hash IN ({delete_placeholders}) AND downloader_id = {placeholder}"
+                        cursor.execute(delete_query, tuple(hashes_to_delete_normal) + (downloader_id, ))
+                        deleted_count_normal = cursor.rowcount
+                        print(f"【刷新线程】已删除下载器 {downloader_id} 中的 {deleted_count_normal} 个已移除的非未做种种子")
+                    
+                    # 删除状态是'未做种'但没有其他同名种子在做种的种子
+                    if hashes_to_delete_inactive_seed:
+                        delete_placeholders = ",".join([placeholder] * len(hashes_to_delete_inactive_seed))
+                        delete_query = f"DELETE FROM torrents WHERE hash IN ({delete_placeholders}) AND downloader_id = {placeholder}"
+                        cursor.execute(delete_query, tuple(hashes_to_delete_inactive_seed) + (downloader_id, ))
+                        deleted_count_inactive = cursor.rowcount
+                        print(f"【刷新线程】已删除下载器 {downloader_id} 中的 {deleted_count_inactive} 个已移除的未做种种子（没有其他同名种子在做种）")
+                    
+                    total_deleted = deleted_count_normal + deleted_count_inactive
+                    print(f"【刷新线程】已删除下载器 {downloader_id} 中的 {total_deleted} 个已移除的种子记录")
+                    logging.info(f"已删除下载器 {downloader_id} 中的 {total_deleted} 个已移除的种子记录")
 
             # 更新seed_parameters表中的is_deleted字段
             print("【刷新线程】开始更新seed_parameters表中的is_deleted字段...")

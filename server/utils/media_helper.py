@@ -1140,12 +1140,12 @@ def upload_data_screenshot(source_info,
         print(f"\n--- 开始处理第 {i+1}/{len(screenshot_points)} 张截图 ---")
 
         safe_name = re.sub(r'[\\/*?:"<>|\'\s\.]+', '_',
-                           source_info.get('main_title', f'screenshot_{i+1}'))
-        timestamp = f"{time.time():.0f}"
+                           source_info.get('main_title', f's_{i+1}'))  # 更短的文件名
+        timestamp = f"{int(time.time()) % 1000000}"  # 更短的时间戳
         intermediate_png_path = os.path.join(
-            TEMP_DIR, f"{safe_name}_{i+1}_{timestamp}_temp.png")
+            TEMP_DIR, f"s_{i+1}_{timestamp}.png")  # 更短的文件名
         final_jpeg_path = os.path.join(TEMP_DIR,
-                                       f"{safe_name}_{i+1}_{timestamp}.jpg")
+                                       f"s_{i+1}_{timestamp}.jpg")  # 更短的文件名
         temp_files_to_cleanup.extend([intermediate_png_path, final_jpeg_path])
 
         # --- [核心修改] ---
@@ -1538,8 +1538,7 @@ def add_torrent_to_downloader(detail_page_url: str, save_path: str,
     # 1. 查找对应的站点配置
     conn = db_manager._get_connection()
     cursor = db_manager._get_cursor(conn)
-    cursor.execute(
-        "SELECT nickname, base_url, cookie, speed_limit FROM sites")
+    cursor.execute("SELECT nickname, base_url, cookie, speed_limit FROM sites")
     site_info = None
     for site in cursor.fetchall():
         # [修复] 确保 base_url 存在且不为空
@@ -1591,35 +1590,36 @@ def add_torrent_to_downloader(detail_page_url: str, save_path: str,
         torrent_id = torrent_id_match.group(1)
 
         # 检查是否需要使用特殊下载器
-        download_link = None
         site_base_url = ensure_scheme(site_info['base_url'])
-        
+        full_download_url = None # 初始化full_download_url
+
         # 检查是否为haidan站点
         if 'haidan.video' in site_base_url:
-            try:
-                from core.downloaders.sites.haidan import HaidanDownloader
-                downloader = HaidanDownloader(site_info['nickname'], scraper)
-                # 使用上传标题来匹配种子
-                upload_title = os.path.basename(save_path) if save_path else ""
-                download_link = downloader.extract_download_link(
-                    details_response.text, upload_title
-                )
-                if download_link:
-                    full_download_url = download_link
-                    logging.info("使用haidan特殊下载器成功提取下载链接")
-                else:
-                    logging.warning("haidan特殊下载器未能找到下载链接，使用默认方法")
-            except Exception as e:
-                logging.warning(f"haidan特殊下载器失败: {e}，使用默认方法")
-        
-        # 如果特殊下载器失败或不是haidan站点，使用默认方法
-        if not download_link:
+            # Haidan站点的特殊逻辑
+            download_link_tag = soup.find('a', href=re.compile(r"download.php\?id="))
+            
+            if not download_link_tag: raise RuntimeError("在详情页HTML中未能找到下载链接！")
+
+            download_url_part = str(download_link_tag['href']) # 显式转换为str
+            
+            # 替换下载链接中的id为从detail_page_url中提取的torrent_id
+            download_url_part = re.sub(r"id=\d+", f"id={torrent_id}", download_url_part)
+
+            full_download_url = f"{site_base_url}/{download_url_part}"
+        else:
+            # 其他站点的通用逻辑
             download_link_tag = soup.select_one(
                 f'a.index[href^="download.php?id={torrent_id}"]')
             if not download_link_tag: raise RuntimeError("在详情页HTML中未能找到下载链接！")
 
-            download_url_part = download_link_tag['href']
+            download_url_part = str(download_link_tag['href']) # 显式转换为str
             full_download_url = f"{site_base_url}/{download_url_part}"
+        
+        # 确保full_download_url已被赋值
+        if not full_download_url:
+            raise RuntimeError("未能成功构建种子下载链接！")
+
+        print(f"种子下载链接: {full_download_url}")
 
         common_headers["Referer"] = detail_page_url
         # Add retry logic for torrent download
@@ -1730,7 +1730,6 @@ def add_torrent_to_downloader(detail_page_url: str, save_path: str,
 
             # 如果不是最后一次尝试，等待一段时间后重试
             if attempt < max_retries - 1:
-                import time
                 wait_time = 2**attempt  # 指数退避
                 logging.info(f"等待 {wait_time} 秒后进行第 {attempt + 2} 次尝试...")
                 time.sleep(wait_time)
@@ -1911,6 +1910,19 @@ def extract_tags_from_mediainfo(mediainfo_text: str) -> list:
         # 语言标签
         '国语': ['国语', 'mandarin'],
         '粤语': ['粤语', 'cantonese'],
+        '英语': ['英语', 'english'],
+        '日语': ['日语', 'Japanese', 'japanese'],
+        '韩语': ['韩语', 'korean'],
+        '法语': ['法语', 'french'],
+        '德语': ['德语', 'german'],
+        '俄语': ['俄语', 'russian'],
+        '印地语': ['印地语', 'hindi'],
+        '西班牙语': ['西班牙语', 'spanish'],
+        '葡萄牙语': ['葡萄牙语', 'portuguese'],
+        '意大利语': ['意大利语', 'italian'],
+        '泰语': ['泰语', 'thai'],
+        '阿拉伯语': ['阿拉伯语', 'arabic'],
+        '外语': ['外语', 'foreign'],
         # 字幕标签
         '中字': ['中字', 'chinese', '简', '繁'],
         '英字': ['英字', 'english'],
@@ -1944,10 +1956,19 @@ def extract_tags_from_mediainfo(mediainfo_text: str) -> list:
         if 'video' in line_stripped.lower() and '#' in line_stripped:
             is_audio_section = False
             is_text_section = False
-            # 处理音频块中的国语检测
+            # 处理音频块中的语言检测
             if audio_section_lines:
+                # 检查是否包含国语
                 if _check_mandarin_in_audio_section(audio_section_lines):
                     found_tags.add('tag.国语')
+                # 检查是否包含其他语言
+                else:
+                    language = _check_other_language_in_audio_section(
+                        audio_section_lines)
+                    if language:
+                        found_tags.add(f'tag.{language}')
+                        # 同时添加外语标签
+                        found_tags.add('tag.外语')
                 audio_section_lines = []  # 清空音频块
             continue
 
@@ -1988,10 +2009,45 @@ def extract_tags_from_mediainfo(mediainfo_text: str) -> list:
             # 注意：站点可能没有 HDRVivid 标签，但我们先提取出来
             found_tags.add('tag.HDRVivid')
 
+        # 全局检查语言标签（不在特定块中也检查）
+        line_lower = line_stripped.lower()
+        for tag_key, keywords in tag_keywords_map.items():
+            if tag_key in [
+                    '中字', '英字', 'Dolby Vision', 'HDR10+', 'HDR10', 'HDR',
+                    'HDRVivid'
+            ]:
+                continue  # 跳过字幕和HDR标签，这些已在特定块中处理
+            for keyword in keywords:
+                if keyword.lower() in line_lower:
+                    # 检查是否是语言标签
+                    if tag_key in [
+                            '国语', '粤语', '英语', '日语', '韩语', '法语', '德语', '俄语',
+                            '印地语', '西班牙语', '葡萄牙语', '意大利语', '泰语', '阿拉伯语'
+                    ]:
+                        # 如果不是中文相关语言，添加外语标签
+                        if tag_key not in ['国语', '粤语'
+                                           ] and '外语' not in found_tags:
+                            found_tags.add('tag.外语')
+                        # 同时添加具体语言标签
+                        if f'tag.{tag_key}' not in found_tags:
+                            found_tags.add(f'tag.{tag_key}')
+                    else:
+                        # 非语言标签直接添加
+                        if f'tag.{tag_key}' not in found_tags:
+                            found_tags.add(f'tag.{tag_key}')
+                    break  # 找到匹配后跳出内层循环
+
     # 处理最后一个音频块（如果文件末尾没有video块）
     if audio_section_lines:
+        # 检查是否包含国语
         if _check_mandarin_in_audio_section(audio_section_lines):
             found_tags.add('tag.国语')
+        # 检查是否包含其他语言
+        else:
+            language = _check_other_language_in_audio_section(
+                audio_section_lines)
+            if language:
+                found_tags.add(f'tag.{language}')
 
     # 为所有标签添加 tag. 前缀
     prefixed_tags = set()
@@ -2024,6 +2080,46 @@ def _check_mandarin_in_audio_section(audio_lines):
             return True
 
     return False
+
+
+def _check_other_language_in_audio_section(audio_lines) -> str | None:
+    """
+    检查音频块中是否包含其他语言（非中文）相关标识。
+    
+    :param audio_lines: 音频块的所有行
+    :return: 如果检测到其他语言返回"外语"，否则返回None
+    """
+    # 定义其他语言的关键词映射
+    language_keywords = {
+        '英语': ['english', 'eng', 'en'],
+        '日语': ['japanese', 'jpn', 'ja', 'jp', '日语'],
+        '韩语': ['korean', 'kor', 'ko', '韩语'],
+        '法语': ['french', 'fra', 'fre', 'fr', '法语'],
+        '德语': ['german', 'deu', 'ger', 'de', '德语'],
+        '俄语': ['russian', 'rus', 'ru', '俄语'],
+        '印地语': ['hindi', 'hin', 'hi', '印地语'],
+        '西班牙语': ['spanish', 'spa', 'es', '西班牙语'],
+        '葡萄牙语': ['portuguese', 'por', 'pt', '葡萄牙语'],
+        '意大利语': ['italian', 'ita', 'it', '意大利语'],
+        '泰语': ['thai', 'tha', 'th', '泰语'],
+        '阿拉伯语': ['arabic', 'ara', 'ar', '阿拉伯语'],
+    }
+
+    for line in audio_lines:
+        if not line:  # 确保行不为空
+            continue
+        line_lower = line.lower()
+        for language, keywords in language_keywords.items():
+            for keyword in keywords:
+                if keyword in line_lower:
+                    # 确保不是中文相关的关键词
+                    if not any(chinese_kw in line for chinese_kw in
+                               ['中文', '国语', 'mandarin', 'cantonese', '粤语']):
+                        print(
+                            f"检测到其他语言: {language} (关键词: {keyword}, 行: {line})")
+                        return language  # 返回具体语言名称，而不是'外语'
+
+    return None
 
 
 def extract_origin_from_description(description_text: str) -> str:
@@ -2101,18 +2197,22 @@ def extract_resolution_from_mediainfo(mediainfo_text: str) -> str:
     if width_match:
         # 处理带空格的数字格式，如 "1 920" -> "1920"
         w_groups = width_match.groups()
-        if len(w_groups) >= 2 and w_groups[1]:
+        if w_groups and len(w_groups) >= 2 and w_groups[1]:
             width = int(f"{w_groups[0]}{w_groups[1]}")
+        elif w_groups and len(w_groups) >= 1 and w_groups[0]:
+            width = int(w_groups[0])
         else:
-            width = int(w_groups[0]) if w_groups[0] else None
+            width = None
 
     if height_match:
         # 处理带空格的数字格式，如 "1 080" -> "1080"
         h_groups = height_match.groups()
-        if len(h_groups) >= 2 and h_groups[1]:
+        if h_groups and len(h_groups) >= 2 and h_groups[1]:
             height = int(f"{h_groups[0]}{h_groups[1]}")
+        elif h_groups and len(h_groups) >= 1 and h_groups[0]:
+            height = int(h_groups[0])
         else:
-            height = int(h_groups[0]) if h_groups[0] else None
+            height = None
 
     # 如果没有找到标准格式，尝试其他格式
     if not width or not height:

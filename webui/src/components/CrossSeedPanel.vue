@@ -569,7 +569,7 @@
                   <el-button type="primary" size="small" @click="showSiteLog(result.siteName, result.logs)">
                     查看日志
                   </el-button>
-                  <a v-if="result.success && result.url" :href="result.url" target="_blank" rel="noopener noreferrer"
+                  <a v-if="result.success && result.url" :href="filterUploadedParam(result.url)" target="_blank" rel="noopener noreferrer"
                     style="transform: translateY(-3px);">
                     <el-button type="success" size="small">
                       查看种子
@@ -2650,6 +2650,21 @@ const handleLogProgressComplete = () => {
   }, 1000);
 };
 
+// 过滤URL中的uploaded参数
+const filterUploadedParam = (url: string): string => {
+  if (!url) return url;
+  
+  try {
+    const urlObj = new URL(url);
+    urlObj.searchParams.delete('uploaded');
+    return urlObj.toString();
+  } catch (error) {
+    // 如果URL格式不正确，返回原始URL
+    console.warn('Invalid URL format:', url, error);
+    return url;
+  }
+};
+
 </script>
 
 <style scoped>
@@ -2662,7 +2677,6 @@ const handleLogProgressComplete = () => {
   display: flex;
   flex-direction: column;
   height: calc(90vh - 50px);
-  position: relative;
 }
 
 /* 2. 顶部Header：固定高度 */
@@ -2840,7 +2854,7 @@ const handleLogProgressComplete = () => {
 }
 
 :deep(.el-form-item) {
-  margin-bottom: 12px;
+  margin-bottom: 16px;
 }
 
 .fill-height-form {
@@ -2890,7 +2904,7 @@ const handleLogProgressComplete = () => {
 .subtitle-unrecognized-grid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  gap: 12px 16px;
+  gap: 16px;
   align-items: start;
   min-width: 0;
   /* 防止网格项溢出 */

@@ -16,7 +16,7 @@
         <span class="hint-green">做种且可跳转种子详情页</span> - <span class="hint-blue">做种但无详情页</span> - <span class="hint-red">可铺种但未做种</span>
       </span>
       <span v-else-if="activeRoute === '/data'" class="page-hint">
-        <span class="hint-red">种子不存在/禁转</span> - <span class="hint-yellow">未审查种子信息</span>
+        <span class="hint-red">种子有误/不存在/禁转</span> - <span class="hint-yellow">未审查种子信息</span>
       </span>
     </div>
     <div class="refresh-button-container">
@@ -27,12 +27,10 @@
     </div>
   </el-menu>
   <main :class="['main-content', isLoginPage ? 'no-nav' : '']">
-    <router-view v-slot="{ Component }">
-      <keep-alive>
-        <component :is="Component" @ready="handleComponentReady" />
-      </keep-alive>
-    </router-view>
-  </main>
+  <router-view v-slot="{ Component }">
+    <component :is="Component" @ready="handleComponentReady" />
+  </router-view>
+</main>
 
   <!-- Feedback Dialog -->
   <el-dialog v-model="feedbackDialogVisible" title="意见反馈" width="700px" @close="resetFeedbackForm">
