@@ -2661,7 +2661,8 @@ const handleLogProgressComplete = () => {
 .cross-seed-panel {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 50px);
+  height: calc(90vh - 50px);
+  position: relative;
 }
 
 /* 2. 顶部Header：固定高度 */
@@ -2683,7 +2684,6 @@ const handleLogProgressComplete = () => {
   overflow-y: auto;
   overflow-x: hidden;
   padding: 24px;
-  min-height: 0; /* 关键：允许内容区域收缩 */
 }
 
 /* 每个步骤内容的容器 */
@@ -2696,13 +2696,13 @@ const handleLogProgressComplete = () => {
 
 /* 4. 底部Footer：固定高度，始终可见 */
 .panel-footer {
+  height: 50px;
   background-color: #ffffff;
   border-top: 1px solid #e4e7ed;
   box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.05);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 10px 0;
   flex-shrink: 0; /* 关键：防止按钮区域被压缩 */
   z-index: 10;
 }

@@ -135,10 +135,9 @@ type BencodeParser struct {
 
 // 配置
 var (
-	coreAPIURL     = getEnv("CORE_API_URL", "http://localhost:35274")
+	coreAPIURL     string
 	port           = getEnv("PORT", "5275")
-	// tempDir        = getEnv("TEMP_DIR", "/app/data/tmp")
-	tempDir        = getEnv("TEMP_DIR", "/app/Code/Dockerfile/Docker.pt-nexus/server/data/tmp")
+	tempDir        string
 	internalSecret = getEnv("INTERNAL_SECRET", "pt-nexus-secret-key") // 共享密钥，用于生成动态token
 )
 
@@ -148,6 +147,19 @@ var (
 	siteRequestMutex    sync.Mutex
 	minRequestInterval  = 5 * time.Second
 )
+
+func init() {
+	// 根据 DEV_ENV 环境变量设置 coreAPIURL 和 tempDir 默认值
+	if os.Getenv("DEV_ENV") != "" {
+		// 开发环境
+		coreAPIURL = getEnv("CORE_API_URL", "http://localhost:35274")
+		tempDir = getEnv("TEMP_DIR", "/root/Code/Dockerfile/Docker.pt-nexus/server/data/tmp")
+	} else {
+		// 生产环境
+		coreAPIURL = getEnv("CORE_API_URL", "http://localhost:5274")
+		tempDir = getEnv("TEMP_DIR", "/app/data/tmp")
+	}
+}
 
 func getEnv(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
