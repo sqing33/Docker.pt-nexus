@@ -150,7 +150,7 @@ var (
 
 func init() {
 	// 根据 DEV_ENV 环境变量设置 coreAPIURL 和 tempDir 默认值
-	if os.Getenv("DEV_ENV") != "" {
+	if os.Getenv("DEV_ENV") == "true" {
 		// 开发环境
 		coreAPIURL = getEnv("CORE_API_URL", "http://localhost:35274")
 		tempDir = getEnv("TEMP_DIR", "/root/Code/Dockerfile/Docker.pt-nexus/server/data/tmp")

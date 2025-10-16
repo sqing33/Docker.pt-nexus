@@ -367,6 +367,7 @@ def _get_smart_screenshot_points(video_path: str,
 def _find_target_video_file(path: str) -> tuple[str | None, bool]:
     """
     根据路径智能查找目标视频文件，并检测是否为原盘文件。
+    - 优先检查种子名称匹配的文件（处理电影直接放在下载目录根目录的情况）
     - 如果是电影目录，返回最大的视频文件。
     - 如果是剧集目录，返回按名称排序的第一个视频文件。
     - 检测是否为原盘文件（检查 BDMV/CERTIFICATE 目录）
@@ -408,6 +409,30 @@ def _find_target_video_file(path: str) -> tuple[str | None, bool]:
         else:
             print("警告：检测到 BDMV 目录但未找到 CERTIFICATE 目录，可能不是标准原盘")
 
+    # 优先检查种子名称匹配的文件（处理电影直接放在根目录的情况）
+    # 这种情况通常发生在没有文件夹包裹的电影文件
+    parent_dir = os.path.dirname(path)
+    file_name = os.path.basename(path)
+
+    # 检查父目录中是否有匹配的文件名（不含扩展名）
+    if parent_dir != path:  # 确保这不是根目录的情况
+        try:
+            for file in os.listdir(parent_dir):
+                if not file.startswith('.') and not os.path.isdir(os.path.join(parent_dir, file)):
+                    if os.path.splitext(file)[1].lower() in VIDEO_EXTENSIONS:
+                        # 检查文件名是否匹配（忽略扩展名）
+                        file_name_without_ext = os.path.splitext(file)[0]
+                        if (file_name in file_name_without_ext or
+                            file_name_without_ext in file_name or
+                            file_name.replace(' ', '') in file_name_without_ext.replace(' ', '') or
+                            file_name_without_ext.replace(' ', '') in file_name.replace(' ', '')):
+                            full_path = os.path.join(parent_dir, file)
+                            print(f"找到匹配的视频文件: {full_path}")
+                            return full_path, is_bluray_disc
+        except OSError as e:
+            print(f"读取父目录失败: {e}")
+
+    # 如果没有找到匹配的文件，继续原来的查找逻辑
     video_files = []
     for root, _, files in os.walk(path):
         for file in files:
@@ -418,40 +443,56 @@ def _find_target_video_file(path: str) -> tuple[str | None, bool]:
         print(f"在目录 '{path}' 中未找到任何视频文件。")
         return None, is_bluray_disc
 
-    # --- 智能判断是剧集还是电影 ---
-    # 匹配 S01E01, s01e01, season 1 episode 1 等格式
-    series_pattern = re.compile(
-        r'[._\s-](S\d{1,2}E\d{1,3}|Season[._\s-]?\d{1,2}|E\d{1,3})[._\s-]',
-        re.IGNORECASE)
-    is_series = any(series_pattern.search(f) for f in video_files)
+    # 如果只有一个视频文件，直接使用
+    if len(video_files) == 1:
+        print(f"找到唯一的视频文件: {video_files[0]}")
+        return video_files[0], is_bluray_disc
 
-    if is_series:
-        print("检测到剧集命名格式，将选择第一集。")
-        # 按文件名排序，通常第一集会在最前面
-        video_files.sort()
-        target_file = video_files[0]
-        print(f"已选择剧集文件: {target_file}")
-        return target_file, is_bluray_disc
+    # 如果有多个视频文件，尝试找到最匹配的文件名
+    best_match = ""
+    best_score = -1
+    for video_file in video_files:
+        base_name = os.path.basename(video_file).lower()
+        path_name = file_name.lower()
+
+        # 计算匹配度
+        score = 0
+        if path_name in base_name:
+            score += 10
+        if base_name in path_name:
+            score += 5
+
+        # 长度越接近，得分越高
+        if abs(len(base_name) - len(path_name)) < 5:
+            score += 3
+
+        if score > best_score:
+            best_score = score
+            best_match = video_file
+
+    if best_match and best_score > 0:
+        print(f"选择最佳匹配的视频文件: {best_match} (匹配度: {best_score})")
+        return best_match, is_bluray_disc
+
+    # 如果没有找到好的匹配，选择最大的文件
+    largest_file = ""
+    max_size = -1
+    for f in video_files:
+        try:
+            size = os.path.getsize(f)
+            if size > max_size:
+                max_size = size
+                largest_file = f
+        except OSError as e:
+            print(f"无法获取文件大小 '{f}': {e}")
+            continue
+
+    if largest_file:
+        print(f"已选择最大文件 ({(max_size / 1024**3):.2f} GB): {largest_file}")
+        return largest_file, is_bluray_disc
     else:
-        print("未检测到剧集格式，将按电影处理（选择最大文件）。")
-        largest_file = ""
-        max_size = -1
-        for f in video_files:
-            try:
-                size = os.path.getsize(f)
-                if size > max_size:
-                    max_size = size
-                    largest_file = f
-            except OSError as e:
-                print(f"无法获取文件大小 '{f}': {e}")
-                continue
-
-        if largest_file:
-            print(f"已选择最大文件 ({(max_size / 1024**3):.2f} GB): {largest_file}")
-            return largest_file, is_bluray_disc
-        else:
-            print("无法确定最大的文件。")
-            return None, is_bluray_disc
+        print("无法确定最大的文件。")
+        return None, is_bluray_disc
 
 
 # --- [修改] 主函数，整合了新的文件查找逻辑 ---

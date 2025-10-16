@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       tags:
-        description: 'Tags to push (comma-separated, e.g., latest,v1.0.0)'
+        description: "Tags to push (comma-separated, e.g., latest,v1.0.0)"
         required: true
-        default: 'latest'
+        default: "latest"
 
 env:
   IMAGE_NAME: pt-nexus
@@ -21,6 +21,35 @@ jobs:
     steps:
       - name: 1. 检出代码
         uses: actions/checkout@v4
+
+      - name: 1.5. 下载 批量转种 程序
+        env:
+          PRIVATE_REPO_TOKEN: ${{ secrets.PRIVATE_REPO_TOKEN }}
+          PRIVATE_REPO_URL: ${{ secrets.PRIVATE_REPO_URL }}
+        run: |
+          if [ -n "$PRIVATE_REPO_TOKEN" ] && [ -n "$PRIVATE_REPO_URL" ]; then
+            echo "📥 下载 批量转种 程序"
+            
+            # 创建 batch-enhancer 目录
+            mkdir -p batch-enhancer
+            
+            # 下载 main.go 文件
+            curl -H "Authorization: token $PRIVATE_REPO_TOKEN" \
+                 -H "Accept: application/vnd.github.v3.raw" \
+                 -L "$PRIVATE_REPO_URL/refs/heads/main/batch-enhancer/main.go" \
+                 -o batch-enhancer/main.go
+            
+            if [ -f batch-enhancer/main.go ]; then
+              echo "✅ 成功下载 batch-enhancer/main.go"
+              echo "文件大小: $(wc -l < batch-enhancer/main.go) 行"
+            else
+              echo "❌ 下载 batch-enhancer/main.go 失败"
+              exit 1
+            fi
+          else
+            echo "⚠️  未配置私有仓库访问信息，跳过文件下载"
+            echo "   请设置 PRIVATE_REPO_TOKEN 和 PRIVATE_REPO_URL secrets"
+          fi
 
       - name: 2. 设置 QEMU
         uses: docker/setup-qemu-action@v3
@@ -46,11 +75,11 @@ jobs:
         run: |
           # 读取用户输入的标签（逗号分隔）
           INPUT_TAGS="${{ github.event.inputs.tags }}"
-          
+
           # 准备两个仓库的完整标签列表
           GHCR_REPO="ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}"
           DOCKERHUB_REPO="${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}"
-          
+
           # 将逗号分隔的标签转换为完整的镜像标签
           TAGS=""
           IFS=',' read -ra TAG_ARRAY <<< "$INPUT_TAGS"
@@ -61,10 +90,10 @@ jobs:
             TAGS="${TAGS}${GHCR_REPO}:${tag},"
             TAGS="${TAGS}${DOCKERHUB_REPO}:${tag},"
           done
-          
+
           # 移除最后的逗号
           TAGS="${TAGS%,}"
-          
+
           echo "生成的标签: $TAGS"
           echo "tags=$TAGS" >> $GITHUB_OUTPUT
 
@@ -89,7 +118,7 @@ jobs:
       - name: 2. 设置 Go 环境
         uses: actions/setup-go@v4
         with:
-          go-version: '1.21'
+          go-version: "1.21"
 
       - name: 3. 构建多平台代理程序
         run: |

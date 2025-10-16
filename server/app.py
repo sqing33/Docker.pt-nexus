@@ -207,7 +207,6 @@ def create_app():
         logging.info("正在启动数据追踪线程...")
         start_data_tracker(db_manager, config_manager)
 
-
         # # --- 启动IYUU后台线程 ---
         logging.info("正在启动IYUU后台线程...")
         start_iyuu_thread(db_manager, config_manager)
@@ -251,13 +250,12 @@ if __name__ == "__main__":
         except Exception as e:
             logging.error(f"停止IYUU线程失败: {e}", exc_info=True)
 
-
         logging.info("后台线程清理完成。")
 
     atexit.register(cleanup)
 
     # 根据 DEV_ENV 环境变量设置端口
-    if os.getenv("DEV_ENV") != "":
+    if os.getenv("DEV_ENV") == "true":
         # 开发环境
         port = 35274
     else:

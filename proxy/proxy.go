@@ -13,6 +13,7 @@ import (
 	_ "image/png"
 	"io"
 	"log"
+	"math"
 	"math/rand"
 	"mime/multipart"
 	"net/http"
@@ -755,6 +756,8 @@ func findSubtitleEventsForPGS(videoPath string, subtitleStreamIndex int, duratio
 func findTargetVideoFile(path string) (string, error) {
 	log.Printf("开始在路径 '%s' 中智能查找目标视频文件...", path)
 	videoExtensions := map[string]bool{".mkv": true, ".mp4": true, ".ts": true, ".avi": true, ".wmv": true, ".mov": true, ".flv": true, ".m2ts": true}
+
+	// 首先检查路径是否存在
 	info, err := os.Stat(path)
 	if os.IsNotExist(err) {
 		return "", fmt.Errorf("提供的路径不存在: %s", path)
@@ -762,6 +765,8 @@ func findTargetVideoFile(path string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("无法获取路径信息: %v", err)
 	}
+
+	// 如果路径直接指向一个视频文件，直接返回
 	if !info.IsDir() {
 		if videoExtensions[strings.ToLower(filepath.Ext(path))] {
 			log.Printf("路径直接指向一个视频文件，将使用: %s", path)
@@ -769,6 +774,31 @@ func findTargetVideoFile(path string) (string, error) {
 		}
 		return "", fmt.Errorf("路径是一个文件，但不是支持的视频格式: %s", path)
 	}
+
+	// 如果是目录，优先检查是否有种子名称匹配的文件
+	// 这种情况通常发生在没有文件夹包裹的电影文件
+	parentDir := filepath.Dir(path)
+	fileName := filepath.Base(path)
+
+	// 检查父目录中是否有匹配的文件名（不含扩展名）
+	if parentDir != path { // 确保这不是根目录的情况
+		files, err := os.ReadDir(parentDir)
+		if err == nil {
+			for _, file := range files {
+				if !file.IsDir() && videoExtensions[strings.ToLower(filepath.Ext(file.Name()))] {
+					// 检查文件名是否匹配（忽略扩展名）
+					fileNameWithoutExt := strings.TrimSuffix(file.Name(), filepath.Ext(file.Name()))
+					if strings.Contains(fileName, fileNameWithoutExt) || strings.Contains(fileNameWithoutExt, fileName) {
+						fullPath := filepath.Join(parentDir, file.Name())
+						log.Printf("找到匹配的视频文件: %s", fullPath)
+						return fullPath, nil
+					}
+				}
+			}
+		}
+	}
+
+	// 如果没有找到匹配的文件，继续原来的查找逻辑
 	var videoFiles []string
 	err = filepath.Walk(path, func(filePath string, fileInfo os.FileInfo, err error) error {
 		if err != nil {
@@ -785,41 +815,64 @@ func findTargetVideoFile(path string) (string, error) {
 	if len(videoFiles) == 0 {
 		return "", fmt.Errorf("在目录 '%s' 中未找到任何视频文件", path)
 	}
-	seriesPattern := regexp.MustCompile(`(?i)[\._\s-](S\d{1,2}E\d{1,3}|Season[\._\s-]?\d{1,2}|E\d{1,3})[\._\s-]`)
-	isSeries := false
+
+	// 如果只有一个视频文件，直接使用
+	if len(videoFiles) == 1 {
+		log.Printf("找到唯一的视频文件: %s", videoFiles[0])
+		return videoFiles[0], nil
+	}
+
+	// 如果有多个视频文件，尝试找到最匹配的文件名
+	bestMatch := ""
+	bestScore := -1
+	for _, videoFile := range videoFiles {
+		baseName := strings.ToLower(filepath.Base(videoFile))
+		pathName := strings.ToLower(fileName)
+
+		// 计算匹配度
+		score := 0
+		if strings.Contains(baseName, pathName) {
+			score += 10
+		}
+		if strings.Contains(pathName, baseName) {
+			score += 5
+		}
+
+		// 长度越接近，得分越高
+		if math.Abs(float64(len(baseName)-len(pathName))) < 5 {
+			score += 3
+		}
+
+		if score > bestScore {
+			bestScore = score
+			bestMatch = videoFile
+		}
+	}
+
+	if bestMatch != "" {
+		log.Printf("选择最佳匹配的视频文件: %s (匹配度: %d)", bestMatch, bestScore)
+		return bestMatch, nil
+	}
+
+	// 如果没有找到好的匹配，选择最大的文件
+	var largestFile string
+	var maxSize int64 = -1
 	for _, f := range videoFiles {
-		if seriesPattern.MatchString(filepath.Base(f)) {
-			isSeries = true
-			break
+		fileInfo, err := os.Stat(f)
+		if err != nil {
+			log.Printf("警告: 无法获取文件 '%s' 的大小: %v", f, err)
+			continue
+		}
+		if fileInfo.Size() > maxSize {
+			maxSize = fileInfo.Size()
+			largestFile = f
 		}
 	}
-	if isSeries {
-		log.Printf("检测到剧集命名格式，将选择第一集。")
-		sort.Strings(videoFiles)
-		targetFile := videoFiles[0]
-		log.Printf("已选择剧集文件: %s", targetFile)
-		return targetFile, nil
-	} else {
-		log.Printf("未检测到剧集格式，将按电影处理（选择最大文件）。")
-		var largestFile string
-		var maxSize int64 = -1
-		for _, f := range videoFiles {
-			fileInfo, err := os.Stat(f)
-			if err != nil {
-				log.Printf("警告: 无法获取文件 '%s' 的大小: %v", f, err)
-				continue
-			}
-			if fileInfo.Size() > maxSize {
-				maxSize = fileInfo.Size()
-				largestFile = f
-			}
-		}
-		if largestFile == "" {
-			return "", fmt.Errorf("无法确定最大的视频文件")
-		}
-		log.Printf("已选择最大文件 (%.2f GB): %s", float64(maxSize)/1024/1024/1024, largestFile)
-		return largestFile, nil
+	if largestFile == "" {
+		return "", fmt.Errorf("无法确定最大的视频文件")
 	}
+	log.Printf("已选择最大文件 (%.2f GB): %s", float64(maxSize)/1024/1024/1024, largestFile)
+	return largestFile, nil
 }
 
 // ======================= HTTP 处理器 (核心修改在这里) =======================

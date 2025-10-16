@@ -5,8 +5,8 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
 // 根据 DEV_ENV 环境变量设置代理目标
-const isDevEnv = process.env.DEV_ENV !== undefined && process.env.DEV_ENV !== '';
-const proxyTarget = isDevEnv ? 'http://localhost:35274' : 'http://localhost:5274';
+const isDevEnv = process.env.DEV_ENV == 'true'
+const proxyTarget = isDevEnv ? 'http://localhost:35274' : 'http://localhost:5274'
 
 // https://vitejs.dev/config/
 export default defineConfig({
