@@ -106,7 +106,7 @@ class Extractor:
         """
         if not subtitle:
             return subtitle
-            
+        
         # 首先使用硬编码的规则（兼容性）
         subtitle = re.sub(r"\s*\|\s*[Aa][Bb]y\s+\w+.*$", "", subtitle)
         subtitle = re.sub(r"\s*\|\s*[Bb]y\s+\w+.*$", "", subtitle)
@@ -117,18 +117,19 @@ class Extractor:
         subtitle = re.sub(r"\s*\|\s*[Pp][Tt][Ee][Rr]\s*$", "", subtitle)
         
         # 然后使用配置文件中的规则
+        # 对于副标题：删除匹配到的模式及其之后的所有内容
         if CONTENT_FILTERING_CONFIG.get("enabled", False):
             unwanted_patterns = CONTENT_FILTERING_CONFIG.get("unwanted_patterns", [])
+            
             for pattern in unwanted_patterns:
-                # 如果配置中的模式在副标题中找到，则移除整个模式或相关部分
                 if pattern in subtitle:
-                    # 对于副标题，我们更精细化处理，只移除包含模式的行或部分
-                    lines = subtitle.split('\n')
-                    filtered_lines = []
-                    for line in lines:
-                        if pattern not in line:
-                            filtered_lines.append(line)
-                    subtitle = '\n'.join(filtered_lines)
+                    # 找到模式的位置，删除该模式及其之后的内容
+                    pattern_index = subtitle.find(pattern)
+                    if pattern_index != -1:
+                        subtitle = subtitle[:pattern_index].strip()
+                        # 如果删除后没有内容了，返回空字符串
+                        if not subtitle:
+                            return ""
         
         return subtitle.strip()
 
@@ -403,8 +404,24 @@ class Extractor:
                     break
                 original_bbcode = bbcode
 
-            # Extract images
+            # Extract images - 同时处理[img]和[url]格式的图片链接
             images = re.findall(r"\[img\].*?\[/img\]", bbcode, re.IGNORECASE)
+            
+            # [新增] 提取[url=图片链接][/url]格式的图片并转换为[img]格式
+            url_images = re.findall(r'\[url=([^\]]*\.(?:jpg|jpeg|png|gif|bmp|webp)(?:[^\]]*))\]\s*\[/url\]', bbcode, re.IGNORECASE)
+            print(f"[调试extractor] 提取到的[img]格式图片数量: {len(images)}")
+            print(f"[调试extractor] 提取到的[url]格式图片数量: {len(url_images)}")
+            for url_img in url_images:
+                images.append(f"[img]{url_img}[/img]")
+                print(f"[调试extractor] 添加转换后的图片: {url_img[:80]}")
+            
+            # [新增] 应用BBCode清理函数到bbcode，移除[url]格式的图片和其他需要清理的标签
+            from utils.formatters import process_bbcode_images_and_cleanup
+            print(f"[调试extractor] 清理前bbcode长度: {len(bbcode)}")
+            print(f"[调试extractor] 清理前bbcode前200字符: {bbcode[:200]}")
+            bbcode = process_bbcode_images_and_cleanup(bbcode)
+            print(f"[调试extractor] 清理后bbcode长度: {len(bbcode)}")
+            print(f"[调试extractor] 清理后bbcode前200字符: {bbcode[:200]}")
 
             # [新增] 只验证海报（第一张图片）的有效性
             # 视频截图的验证将在 migrator.py 的 prepare_review_data 中单独进行
@@ -523,9 +540,7 @@ class Extractor:
                                                   quote,
                                                   flags=re.IGNORECASE).strip()
                     found_mediainfo_in_quote = True
-                    # 将mediainfo/bdinfo quote也保存到removed_ardtudeclarations中
-                    clean_content = re.sub(r"\[\/?quote\]", "", quote).strip()
-                    ardtu_declarations.append(clean_content)
+                    # MediaInfo/BDInfo是技术信息，不应该被过滤掉，直接跳过处理
                     continue
 
                 is_ardtutool_auto_publish = ("ARDTU工具自动发布" in quote)
@@ -569,8 +584,17 @@ class Extractor:
                 is_release_info_after = ".Release.Info" in quote and "ENCODER" in quote
                 is_technical_after = is_technical_params_quote(quote)
 
-                if is_mediainfo_after or is_bdinfo_after or is_release_info_after or is_technical_after:
-                    # 过滤掉并保存到ardtu_declarations
+                if is_mediainfo_after or is_bdinfo_after or is_release_info_after:
+                    # MediaInfo/BDInfo是技术信息，不应该被过滤掉，需要提取
+                    if not found_mediainfo_in_quote:
+                        mediainfo_from_quote = re.sub(r"\[/?quote\]",
+                                                      "",
+                                                      quote,
+                                                      flags=re.IGNORECASE).strip()
+                        found_mediainfo_in_quote = True
+                    continue
+                elif is_technical_after:
+                    # 只有技术参数quote才被过滤掉
                     clean_content = re.sub(r"\[\/?quote\]", "", quote).strip()
                     ardtu_declarations.append(clean_content)
                 elif is_movie_intro_quote(quote):
@@ -585,6 +609,14 @@ class Extractor:
                            "",
                            bbcode,
                            flags=re.DOTALL).replace("\r", "").strip())
+            
+            # [新增] 在构建body后，应用BBCode清理函数处理残留的空标签和列表标记
+            from utils.formatters import process_bbcode_images_and_cleanup
+            print(f"[调试extractor] body清理前长度: {len(body)}")
+            print(f"[调试extractor] body清理前前200字符: {body[:200]}")
+            body = process_bbcode_images_and_cleanup(body)
+            print(f"[调试extractor] body清理后长度: {len(body)}")
+            print(f"[调试extractor] body清理后前200字符: {body[:200]}")
 
             # [新增] 在BBCode层面过滤对比说明（包含BBCode标签的情况）
             # 移除包含Comparison和Source/Encode的行（不管是否有[b][size]等标签包裹）

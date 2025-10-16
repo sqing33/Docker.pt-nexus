@@ -5,14 +5,14 @@ site_name: "HDKyl"
 
 # 表单字段定义 - 定义站点上传表单中各字段的标识符
 form_fields:
-  processing: "processing_sel[4]"
+  year: "processing_sel[4]"
   medium: "medium_sel[4]"
   video_codec: "codec_sel[4]"
   audio_codec: "audiocodec_sel[4]"
   resolution: "standard_sel[4]"
   source: "source_sel[4]"
   team: "team_sel[4]"
-  category: "type"  # 类别字段映射到type参数
+  category: "type" # 类别字段映射到type参数
 
 # 标准化键映射 - 定义源文本到标准化键的映射规则
 # source_parsers部分：定义如何从原始数据解析出标准化参数
@@ -20,7 +20,7 @@ source_parsers:
   source_params:
     type:
       source_key: "类型"
-    processing:
+    year:
       source_key: "年代"
     medium:
       source_key: "媒介"
@@ -34,7 +34,6 @@ source_parsers:
       source_key: "产地"
     team:
       source_key: "制作组"
-
 
   # 标准化键映射规则（从原始文本到标准化键）
   standard_keys:
@@ -54,18 +53,18 @@ source_parsers:
       "TV Shows/综艺": "category.tv_shows"
       "Misc/其他": "category.other"
 
-    processing:
-      "2025": "processing.2025"
-      "2024": "processing.2024"
-      "2023": "processing.2023"
-      "2022": "processing.2022"
-      "2021": "processing.2021"
-      "2020": "processing.2020"
-      "2019": "processing.2019"
-      "2018": "processing.2018"
-      "2017": "processing.2017"
-      "2016": "processing.2016"
-      "Earlier/更早": "processing.earlier"
+    year:
+      "2025": "year.2025"
+      "2024": "year.2024"
+      "2023": "year.2023"
+      "2022": "year.2022"
+      "2021": "year.2021"
+      "2020": "year.2020"
+      "2019": "year.2019"
+      "2018": "year.2018"
+      "2017": "year.2017"
+      "2016": "year.2016"
+      "Earlier/更早": "year.earlier"
 
     medium:
       "UHD Blu-ray": "medium.uhd_bluray"
@@ -185,18 +184,18 @@ mappings:
     "category.tv_shows": "420"
     "default": "401"
 
-  processing:
-    "processing.2025": "11"
-    "processing.2024": "10"
-    "processing.2023": "1"
-    "processing.2022": "2"
-    "processing.2021": "3"
-    "processing.2020": "4"
-    "processing.2019": "5"
-    "processing.2018": "6"
-    "processing.2017": "7"
-    "processing.2016": "8"
-    "processing.earlier": "9"
+  year:
+    "year.2025": "11"
+    "year.2024": "10"
+    "year.2023": "1"
+    "year.2022": "2"
+    "year.2021": "3"
+    "year.2020": "4"
+    "year.2019": "5"
+    "year.2018": "6"
+    "year.2017": "7"
+    "year.2016": "8"
+    "year.earlier": "9"
     "default": "9"
 
   medium:

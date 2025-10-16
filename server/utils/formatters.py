@@ -140,3 +140,51 @@ def ensure_scheme(url: str, default_scheme: str = "https://") -> str:
     if url.startswith(("http://", "https://")):
         return url
     return f"{default_scheme}{url.lstrip('/')}"
+
+
+def process_bbcode_images_and_cleanup(bbcode_text: str) -> str:
+    """
+    处理BBCode文本中的图片链接和清理不需要的标签
+    
+    功能：
+    1. 处理嵌套的 [url=链接][img]图片[/img][/url] 格式，在移除[img]时同时清理外层的[url]
+    2. 处理空的 [url=图片链接][/url] 格式，转换为 [img]图片链接[/img]
+    3. 删除空的 [b][/b] 标签
+    4. 删除 [*] 和 [/*] 列表标签
+    
+    Args:
+        bbcode_text: 原始BBCode文本
+        
+    Returns:
+        处理后的BBCode文本
+    """
+    if not bbcode_text:
+        return bbcode_text
+    
+    processed_text = bbcode_text
+    
+    # 1. 处理嵌套的 [url=链接][img]图片[/img][/url] 格式
+    # 当[img]被移除时，同时清理外层的[url]标签
+    # 先匹配这种嵌套格式并完全删除（因为图片已经被提取到images列表中）
+    nested_url_img_pattern = r'\[url=[^\]]+\]\[img\][^\[]*\[/img\]\[/url\]'
+    processed_text = re.sub(nested_url_img_pattern, '', processed_text, flags=re.IGNORECASE)
+    
+    # 2. 处理空的 [url=图片链接][/url] 格式，转换为 [img]图片链接[/img]
+    # 匹配包含图片扩展名的URL，支持查询参数
+    url_img_pattern = r'\[url=([^\]]*\.(?:jpg|jpeg|png|gif|bmp|webp)(?:[^\]]*))\]\s*\[/url\]'
+    processed_text = re.sub(url_img_pattern, r'[img]\1[/img]', processed_text, flags=re.IGNORECASE)
+    
+    # 3. 删除空的 [b][/b] 标签（包括中间有换行的情况）
+    # 匹配 [b] 后面只有空白字符（包括换行）和 [/b] 的情况
+    processed_text = re.sub(r'\[b\]\s*\n\s*\[/b\]\n?', '', processed_text, flags=re.IGNORECASE)
+    # 再处理同一行的情况
+    processed_text = re.sub(r'\[b\]\s*\[/b\]', '', processed_text, flags=re.IGNORECASE)
+    
+    # 4. 删除 [*] 和 [/*] 标签（列表标签）
+    processed_text = re.sub(r'\[\*\]', '', processed_text)
+    processed_text = re.sub(r'\[\/\*\]', '', processed_text)
+    
+    # 5. 清理多余的空行
+    processed_text = re.sub(r'\n\s*\n\s*\n', '\n\n', processed_text)
+    
+    return processed_text.strip()

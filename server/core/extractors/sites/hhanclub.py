@@ -12,14 +12,16 @@ from utils import extract_tags_from_mediainfo, extract_origin_from_description
 
 # 加载内容过滤配置
 CONFIG_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), "configs")
+    os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.dirname(__file__)))), "configs")
 CONTENT_FILTERING_CONFIG = {}
 try:
     global_mappings_path = os.path.join(CONFIG_DIR, "global_mappings.yaml")
     if os.path.exists(global_mappings_path):
         with open(global_mappings_path, 'r', encoding='utf-8') as f:
             global_config = yaml.safe_load(f)
-            CONTENT_FILTERING_CONFIG = global_config.get("content_filtering", {})
+            CONTENT_FILTERING_CONFIG = global_config.get(
+                "content_filtering", {})
 except Exception as e:
     print(f"警告：无法加载内容过滤配置: {e}")
 
@@ -167,8 +169,9 @@ class HHCLUBSpecialExtractor:
         """
         if not CONTENT_FILTERING_CONFIG.get("enabled", False):
             return False
-            
-        unwanted_patterns = CONTENT_FILTERING_CONFIG.get("unwanted_patterns", [])
+
+        unwanted_patterns = CONTENT_FILTERING_CONFIG.get(
+            "unwanted_patterns", [])
         return any(pattern in text for pattern in unwanted_patterns)
 
     def extract_basic_info(self):
@@ -185,18 +188,25 @@ class HHCLUBSpecialExtractor:
                     key = spans[0].get_text(strip=True).rstrip(":：")
                     value = spans[1].get_text(strip=True)
 
-                    # 字段映射
+                    # 字段映射 - 修正字段名匹配，更具体的匹配优先
                     if "大小" in key: basic_info_dict["大小"] = value
                     elif "类型" in key: basic_info_dict["类型"] = value
                     elif "来源" in key: basic_info_dict["来源"] = value
                     elif "媒介" in key: basic_info_dict["媒介"] = value
-                    elif "视频编码" in key: basic_info_dict["视频编码"] = value
-                    elif "音频编码" in key: basic_info_dict["音频编码"] = value
-                    elif "分辨率" in key: basic_info_dict["分辨率"] = value
-                    elif "处理" in key: basic_info_dict["处理"] = value
-                    elif "制作组" in key: basic_info_dict["制作组"] = value
-                    elif "发布者" in key: basic_info_dict["发布者"] = value
-                    elif "发布时间" in key: basic_info_dict["发布时间"] = value
+                    elif "音频编码" in key:
+                        basic_info_dict["音频编码"] = value  # 音频编码优先匹配
+                    elif "编码" in key:
+                        basic_info_dict["视频编码"] = value  # HTML中是"编码"而不是"视频编码"
+                    elif "分辨率" in key:
+                        basic_info_dict["分辨率"] = value
+                    elif "处理" in key:
+                        basic_info_dict["处理"] = value
+                    elif "制作组" in key:
+                        basic_info_dict["制作组"] = value
+                    elif "发布者" in key:
+                        basic_info_dict["发布者"] = value
+                    elif "发布时间" in key:
+                        basic_info_dict["发布时间"] = value
 
         # 如果没有提取到制作组信息，尝试从标题中提取
         if not basic_info_dict.get("制作组"):
@@ -238,15 +248,34 @@ class HHCLUBSpecialExtractor:
 
     def extract_tags(self):
         """
-        提取标签，使用新的辅助函数定位。
+        提取标签，优先在指定容器内查找，然后使用辅助函数定位。
         """
         tags = []
-        container = self._find_section_container("标签")
-        if container:
-            for span in container.select("a span"):
-                tag_text = span.get_text(strip=True)
-                if tag_text:
-                    tags.append(tag_text)
+
+        # 优先在指定的容器内查找标签
+        main_container = self.soup.select_one(
+            "div.bg-content_bg.rounded-md.py-10.px-20.text-black")
+        if main_container:
+            # 在主容器内查找标签部分
+            tag_section = main_container.find("div",
+                                              string=re.compile(r"\s*标签\s*"))
+            if tag_section:
+                tag_container = tag_section.find_next_sibling("div")
+                if tag_container:
+                    for span in tag_container.select("a span"):
+                        tag_text = span.get_text(strip=True)
+                        if tag_text:
+                            tags.append(tag_text)
+
+        # 如果在指定容器内没找到，使用原来的方法作为备用
+        if not tags:
+            container = self._find_section_container("标签")
+            if container:
+                for span in container.select("a span"):
+                    tag_text = span.get_text(strip=True)
+                    if tag_text:
+                        tags.append(tag_text)
+
         return tags
 
     def extract_subtitle(self):
@@ -327,19 +356,5 @@ class HHCLUBSpecialExtractor:
             "mediainfo": mediainfo,
             "title": main_title  # 主标题也应包含在最终结果中
         }
-
-        if torrent_id:
-            try:
-                import os, json
-                from config import TEMP_DIR
-                save_dir = os.path.join(TEMP_DIR, "extracted_data")
-                os.makedirs(save_dir, exist_ok=True)
-                save_path = os.path.join(
-                    save_dir, f"hhanclub_extracted_{torrent_id}.json")
-                with open(save_path, "w", encoding="utf-8") as f:
-                    json.dump(extracted_data, f, ensure_ascii=False, indent=2)
-                print(f"提取的数据已保存到: {save_path}")
-            except Exception as e:
-                print(f"保存提取数据时出错: {e}")
 
         return extracted_data

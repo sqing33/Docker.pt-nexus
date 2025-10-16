@@ -170,6 +170,7 @@ global_standard_keys:
     # 蓝光相关
     "Blu-ray": "medium.bluray"
     "BluRay": "medium.bluray"
+    "FHD Blu-ray": "medium.bluray"
     "BD 原盘": "medium.bluray"
     "BD原盘": "medium.bluray"
     "BD DIY": "medium.bluray_diy"
@@ -237,6 +238,7 @@ global_standard_keys:
     "H.264": "video.h264"
     "H.264/AVC": "video.h264"
     "AVC/H.264/x264": "video.h264"
+    "AVC/H264/x264": "video.h264"
     "AVC": "video.h264"
     "h264": "video.h264"
     "x264": "video.x264"
@@ -246,6 +248,7 @@ global_standard_keys:
     "H.265": "video.h265"
     "H.265/HEVC": "video.h265"
     "HEVC/H.265/x265": "video.h265"
+    "HEVC/H265/x265": "video.h265"
     "HEVC": "video.h265"
     "h265": "video.h265"
     "x265": "video.x265"
@@ -276,6 +279,7 @@ global_standard_keys:
     "DTS-HD/DTS": "audio.dts"
     "DTS-HD": "audio.dts_hd"
     "DTS-HD MA": "audio.dts_hd_ma"
+    "DTS-HD|MA": "audio.dts_hd_ma"
     "DTS-HDMA": "audio.dts_hd_ma"
     "DTS-HD HR": "audio.dts_hd_hr"
     "DTS:X": "audio.dtsx"
@@ -284,6 +288,7 @@ global_standard_keys:
     # AC3/DDP相关
     "DDP": "audio.ddp"
     "DDP/E-AC3": "audio.ddp"
+    "DDP/EAC3": "audio.ddp"
     "DDP/DD+/EAC3": "audio.ddp"
     "DDP/DD+": "audio.ddp"
     "DDP Atmos": "audio.ddp_atmos"
@@ -330,6 +335,19 @@ global_standard_keys:
     "Other": "audio.other"
     "Other/其他": "audio.other"
 
+  year:
+    "2025": "year.2025"
+    "2024": "year.2024"
+    "2023": "year.2023"
+    "2022": "year.2022"
+    "2021": "year.2021"
+    "2020": "year.2020"
+    "2019": "year.2019"
+    "2018": "year.2018"
+    "2017": "year.2017"
+    "2016": "year.2016"
+    "Earlier/更早": "year.earlier"
+
   # 分辨率映射
   resolution:
     # 8K分辨率
@@ -345,6 +363,7 @@ global_standard_keys:
     "4K/2160P": "resolution.r2160p"
     "4K/2160p/2160i": "resolution.r2160p"
     "4K/UHD/2160P": "resolution.r2160p"
+    "2160p/4K": "resolution.r2160p"
     "2160p": "resolution.r2160p"
     "2160P": "resolution.r2160p"
 
@@ -402,6 +421,7 @@ global_standard_keys:
     "大陆": "source.china"
     "Mainland(大陆)": "source.china"
     "国剧": "source.china"
+    "大陆剧": "source.china"
 
     # 香港
     "香港": "source.hongkong"
@@ -595,7 +615,6 @@ global_standard_keys:
     "Moozzi2": "team.moozzi2"
     "MWeb": "team.mweb"
     "MySiLU": "team.mysilu"
-    "NONE": "team.none"
     "OpenCD": "team.opencd"
     "OurBits": "team.ourbits"
     "Ourbits": "team.ourbits"
@@ -632,6 +651,7 @@ global_standard_keys:
     "ZmPT": "team.zmpt"
     "ZmWeb": "team.zmweb"
     "原创": "team.original"
+    "NONE": "team.other"
     "Other": "team.other"
     "Other/其他": "team.other"
 
@@ -727,6 +747,7 @@ global_standard_keys:
     "VCB-Studio": "tag.vcb_studio"
     "官组": "tag.官组"
     "柠檬爱原盘": "tag.untouch"
+    "转载": "tag.转载"
     "default": null
 
 # 默认 title_components 配置
@@ -819,8 +840,6 @@ content_filtering:
     - "本站提供的所有作品均是用户自行搜集并且上传"
     - "禁止任何涉及商业盈利目的使用"
     - "请在下载后24小时内尽快删除"
-    - "By ARDTU"
-    - "ARDTU"
 
     # 财神CSWEB相关
     - "财神CSWEB提供的所有资源均是在网上搜集且由用户上传"
@@ -828,7 +847,11 @@ content_filtering:
 
     # 工具签名
     - "| A | By ATU"
+    - "A | By ATU"
+    - "| By ARDTU"
+    - "By ARDTU"
     - "| ARDTU"
+    - "ARDTU"
 
     # 不规范的技术信息标记
     - ".Release.Info"

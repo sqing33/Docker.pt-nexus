@@ -10,7 +10,7 @@ form_fields:
   audio_codec: "audiocodec_sel[4]"
   resolution: "standard_sel[4]"
   team: "team_sel[4]"
-  category: "type"  # 类别字段映射到type参数
+  category: "type" # 类别字段映射到type参数
 
 # 标准化键映射 - 定义源文本到标准化键的映射规则
 # source_parsers部分：定义如何从原始数据解析出标准化参数
@@ -34,7 +34,7 @@ source_parsers:
   title_components:
     # 只覆盖需要差异化的字段，其他字段使用全局默认配置
     medium:
-      source_key: "媒体"  # cbg站点使用"媒体"而不是"媒介"
+      source_key: "媒体" # cbg站点使用"媒体"而不是"媒介"
 
   # 标准化键映射规则（从原始文本到标准化键）
   standard_keys:
@@ -93,7 +93,7 @@ source_parsers:
       "480P": "resolution.r480p"
 
     team:
-      "NONE": "team.none"
+      "NONE": "team.other"
       "CBGWT": "team.cbgwt"
       "CBGER": "team.cbger"
 
@@ -159,14 +159,13 @@ mappings:
     "default": "0"
 
   team:
-    "team.none": "1"
+    "team.other": "1"
     "team.cbgwt": "2"
     "team.cbger": "3"
     "default": "1"
 
   tag:
     "tag.合集": 20
-    "tag.官方": 19
     "tag.原声": 18
     "tag.DIY": 17
     "tag.特效": 16
@@ -174,14 +173,9 @@ mappings:
     "tag.DV": 14
     "tag.HDR": 13
     "tag.高码": 12
-    "tag.零魔": 11
-    "tag.禁转": 10
     "tag.英字": 9
     "tag.国语": 8
     "tag.中字": 7
-    "tag.驻站": 5
     "tag.分集": 4
     "tag.完结": 3
-    "tag.自购": 2
-    "tag.首发": 1
     "default": null

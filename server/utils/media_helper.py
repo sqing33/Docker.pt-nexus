@@ -699,7 +699,7 @@ def upload_data_title(title: str, torrent_filename: str = ""):
             else:
                 release_group = "N/A (无发布组)"
 
-    # 3. 季集、年份提取
+    # 3. 季集、年份、剪辑版本提取
     season_match = re.search(
         r"(?<!\w)(S\d{1,2}(?:(?:[-–~]\s*S?\d{1,2})?|(?:\s*E\d{1,3}(?:[-–~]\s*(?:S\d{1,2})?E?\d{1,3})*)?))(?!\w)",
         main_part,
@@ -716,6 +716,25 @@ def upload_data_title(title: str, torrent_filename: str = ""):
         params["year"] = year_match.group(1)
         title_part = title_part.replace(year_match.group(0), " ", 1).strip()
 
+    # 4.1 提取剪辑版本并拼接到年份
+    cut_version_pattern = re.compile(
+        r"(?<!\w)(Theatrical[\s\.]?Cut|Directors?[\s\.]?Cut|DC|Extended[\s\.]?(?:Cut|Edition)|Special[\s\.]?Edition|SE|Final[\s\.]?Cut|Anniversary[\s\.]?Edition|Restored|Remastered|Criterion[\s\.]?(?:Edition|Collection)|Ultimate[\s\.]?Cut|IMAX[\s\.]?Edition|Open[\s\.]?Matte|Unrated[\s\.]?Cut)(?!\w)",
+        re.IGNORECASE)
+    cut_version_match = cut_version_pattern.search(title_part)
+    if cut_version_match:
+        cut_version = re.sub(r'[\s\.]+', ' ',
+                             cut_version_match.group(1).strip())
+        # 将剪辑版本拼接到年份
+        if "year" in params:
+            params["year"] = f"{params['year']} {cut_version}"
+        else:
+            # 如果没有年份，单独作为年份字段
+            params["year"] = cut_version
+        # 从标题部分移除剪辑版本
+        title_part = title_part.replace(cut_version_match.group(0), " ",
+                                        1).strip()
+        print(f"检测到剪辑版本: {cut_version}，已拼接到年份")
+
     # 4. 技术标签提取（排除已识别的制作组名称）
     tech_patterns_definitions = {
         "medium":
@@ -726,7 +745,7 @@ def upload_data_title(title: str, torrent_filename: str = ""):
         r"Dolby Vision|DoVi|HDR10\+|HDRVivid|HDR10|HLG|HDR|SDR|DV|Vivid",
         "resolution": r"\d{3,4}[pi]|4K",
         "video_codec":
-        r"HEVC|AVC|x265|H\s*\.?\s*265|x264|H\s*\.?\s*264|VC-1|AV1|MPEG-2",
+        r"HEVC|AVC|x265|H\s*[\s\.]?\s*265|x264|H\s*[\s\.]?\s*264|VC-1|AV1|MPEG-2",
         "source_platform":
         r"Apple TV\+|ViuTV|MyTVSuper|AMZN|Netflix|NF|DSNP|MAX|ATVP|iTunes|friDay|USA|EUR|JPN|CEE|FRA|LINETV|EDR|PCOK|Hami|GBR|NowPlayer|CR|SEEZN|GER|CHN|MA|Viu|Baha|KKTV|IQ|HKG|ITA|ESP",
         "bit_depth": r"\b(?:8|10)bit\b",
@@ -734,11 +753,14 @@ def upload_data_title(title: str, torrent_filename: str = ""):
         "completion_status": r"Complete|COMPLETE",
         "video_format": r"3D|HSBS",
         "release_version": r"REMASTERED|REPACK|RERIP|PROPER|REPOST",
-        "quality_modifier": r"MAXPLUS|HQ|EXTENDED|REMUX|UNRATED|EE|MiniBD",
+        "cut_version":
+        r"Theatrical[\s\.]?Cut|Directors?[\s\.]?Cut|DC|Extended[\s\.]?(?:Cut|Edition)|Special[\s\.]?Edition|SE|Final[\s\.]?Cut|Anniversary[\s\.]?Edition|Restored|Remastered|Criterion[\s\.]?(?:Edition|Collection)|Ultimate[\s\.]?Cut|IMAX[\s\.]?Edition|Open[\s\.]?Matte|Unrated[\s\.]?Cut",
+        "quality_modifier": r"MAXPLUS|HQ|EXTENDED|REMUX|EE|MiniBD",
     }
     priority_order = [
         "completion_status",
         "release_version",
+        "cut_version",
         "medium",
         "resolution",
         "video_codec",

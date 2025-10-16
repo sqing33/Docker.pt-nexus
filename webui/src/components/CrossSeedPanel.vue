@@ -496,7 +496,19 @@
       <div v-if="activeStep === 2" class="step-container site-selection-container">
         <h3 class="selection-title">请选择要发布的目标站点</h3>
         <p class="selection-subtitle">只有Cookie配置正常的站点才会在此处显示。已存在的站点已被自动禁用。</p>
-        <div class="select-all-container">
+        
+        <!-- 禁止转载警告 -->
+        <el-alert v-if="isUbitsDisabled" type="error" :closable="false" style="width: 410px;margin: 0 auto;">
+          <template #title>
+            <span style="font-weight: 600;">禁止转载</span>
+          </template>
+          <div>
+            检测到制作组包含禁止转载的内容，已自动禁用 UBits 站点。<br>
+            禁止转载的制作组：CMCT、CMCTV
+          </div>
+        </el-alert>
+        
+        <div class="select-all-container" style="margin-top: 16px;">
           <el-button-group>
             <el-button type="primary" @click="selectAllTargetSites">全选</el-button>
             <el-button type="info" @click="clearAllTargetSites">清空</el-button>
@@ -507,6 +519,10 @@
             :type="selectedTargetSites.includes(site.name) ? 'success' : 'default'"
             :disabled="!isTargetSiteSelectable(site.name)" @click="toggleSiteSelection(site.name)">
             {{ site.name }}
+            <el-tooltip v-if="site.name === 'ubits' && !isTargetSiteSelectable(site.name)" 
+              content="该制作组禁止转载到 uBits 站点" placement="top">
+              <el-icon style="margin-left: 4px; color: #f56c6c;"><InfoFilled /></el-icon>
+            </el-tooltip>
           </el-button>
         </div>
       </div>
@@ -559,7 +575,7 @@
                   </div>
                   <span class="status-text"
                     :class="{ 'success': result.downloaderStatus.success, 'error': !result.downloaderStatus.success }">
-                    {{ result.downloaderStatus.success ? `种子已添加到\n'${result.downloaderStatus.downloaderName}'` : '添加失败'
+                    {{ result.downloaderStatus.success ? `种子已添加到'${result.downloaderStatus.downloaderName}'` : '添加失败'
                     }}
                   </span>
                 </div>
@@ -659,7 +675,7 @@ import { ref, onMounted, computed, nextTick, watch } from 'vue'
 import { ElNotification, ElMessageBox } from 'element-plus'
 import { ElTooltip } from 'element-plus'
 import axios from 'axios'
-import { Refresh, CircleCheckFilled, CircleCloseFilled, Close } from '@element-plus/icons-vue'
+import { Refresh, CircleCheckFilled, CircleCloseFilled, Close, InfoFilled } from '@element-plus/icons-vue'
 import { useCrossSeedStore } from '@/stores/crossSeed'
 import LogProgress from './LogProgress.vue'
 
@@ -922,6 +938,44 @@ const isTargetSiteSelectable = (siteName: string): boolean => {
   if (!torrent.value || !torrent.value.sites) {
     return true;
   }
+  
+  // 检查是否为ubits站点（不区分大小写）
+  if (siteName.toLowerCase() === 'ubits') {
+    console.log(`[禁止转载检测] 检查站点: ${siteName}`);
+    
+    // 检查制作组是否为禁止转载的组
+    const team = torrentData.value.standardized_params.team;
+    const titleComponents = torrentData.value.title_components;
+    
+    console.log(`[禁止转载检测] 标准化制作组: "${team}"`);
+    console.log(`[禁止转载检测] 标题组件:`, titleComponents);
+    
+    // 检查标准化参数中的制作组
+    if (team && ['cmct', 'cmctv'].includes(team.toLowerCase())) {
+      console.log(`[禁止转载检测] 标准化制作组匹配禁止转载: ${team}`);
+      return false;
+    }
+    
+    // 检查标题组件中的制作组
+    const teamComponent = titleComponents.find(param => param.key === '制作组');
+    if (teamComponent && teamComponent.value) {
+      const teamValue = teamComponent.value.toLowerCase();
+      const forbiddenTeams = ['cmct', 'cmctv', 'telesto', 'shadow610'];
+      
+      console.log(`[禁止转载检测] 标题组件制作组: "${teamValue}"`);
+      
+      // 检查是否包含禁止的制作组
+      for (const forbiddenTeam of forbiddenTeams) {
+        if (teamValue.includes(forbiddenTeam)) {
+          console.log(`[禁止转载检测] 标题组件制作组匹配禁止转载: ${forbiddenTeam}`);
+          return false;
+        }
+      }
+    }
+    
+    console.log(`[禁止转载检测] 未匹配禁止转载制作组，允许选择`);
+  }
+  
   return !torrent.value.sites[siteName];
 };
 
@@ -2134,6 +2188,30 @@ const handlePublish = async () => {
       if (response.data.logs && response.data.logs.includes("种子已存在")) {
         result.isExisted = true;
       }
+      
+      // 立即更新下载器状态
+      if (result.auto_add_result) {
+        // 获取实际的下载器名称
+        let downloaderName = '自动检测';
+        if (result.auto_add_result.downloader_id) {
+          const downloader = downloaderList.value.find(d => d.id === result.auto_add_result.downloader_id);
+          if (downloader) {
+            downloaderName = downloader.name;
+          }
+        }
+        
+        result.downloaderStatus = {
+          success: result.auto_add_result.success,
+          message: result.auto_add_result.message,
+          downloaderName: downloaderName
+        }
+        
+        // 立即更新下载器进度
+        if (result.auto_add_result.success) {
+          downloaderProgress.value.current++
+        }
+      }
+      
       results.push(result)
       finalResultsList.value = [...results]
 
@@ -2149,7 +2227,12 @@ const handlePublish = async () => {
         success: false,
         logs: error.response?.data?.logs || error.message,
         url: null,
-        message: `发布到 ${siteName} 时发生网络错误。`
+        message: `发布到 ${siteName} 时发生网络错误。`,
+        downloaderStatus: {
+          success: false,
+          message: '发布失败，无法添加到下载器',
+          downloaderName: '错误'
+        }
       }
       results.push(result)
       finalResultsList.value = [...results]
@@ -2426,6 +2509,33 @@ const unrecognizedValue = computed({
       }
     }
   }
+});
+
+// 计算属性：检查ubits是否被禁用
+const isUbitsDisabled = computed(() => {
+  const team = torrentData.value.standardized_params.team;
+  const titleComponents = torrentData.value.title_components;
+  
+  // 检查标准化参数中的制作组
+  if (team && ['cmct', 'cmctv'].includes(team.toLowerCase())) {
+    return true;
+  }
+  
+  // 检查标题组件中的制作组
+  const teamComponent = titleComponents.find(param => param.key === '制作组');
+  if (teamComponent && teamComponent.value) {
+    const teamValue = teamComponent.value.toLowerCase();
+    const forbiddenTeams = ['cmct', 'cmctv', 'telesto', 'shadow610'];
+    
+    // 检查是否包含禁止的制作组
+    for (const forbiddenTeam of forbiddenTeams) {
+      if (teamValue.includes(forbiddenTeam)) {
+        return true;
+      }
+    }
+  }
+  
+  return false;
 });
 
 // 计算属性：检查下一步按钮是否应该禁用
@@ -3527,7 +3637,6 @@ const filterUploadedParam = (url: string): string => {
   margin: 4px 0 8px 0;
   padding: 4px 8px;
   border-radius: 4px;
-  background-color: #f5f7fa;
   font-size: 12px;
   width: 100%;
 }

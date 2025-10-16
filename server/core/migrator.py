@@ -267,23 +267,14 @@ class TorrentMigrator:
         Returns:
             显示名称（如 "MTeam"），如果未找到则返回 None
         """
-        print(
-            f"[调试-DB] _get_team_display_name_from_db 输入: team_name={team_name}"
-        )
-
         if not team_name or not self.db_manager:
-            print(
-                f"[调试-DB] 提前返回 None: team_name={team_name}, db_manager={self.db_manager}"
-            )
             return None
 
         try:
             # 清理输入的制作组名称
             clean_team = self._clean_group_name(team_name).lower()
-            print(f"[调试-DB] 清理后的制作组名称: '{clean_team}'")
 
             if not clean_team:
-                print("[调试-DB] 清理后的名称为空，返回 None")
                 return None
 
             # 查询 sites 表
@@ -298,47 +289,31 @@ class TorrentMigrator:
                 else:
                     cursor.execute("SELECT description, `group` FROM sites")
                 results = cursor.fetchall()
-                print(f"[调试-DB] 查询到 {len(results)} 条站点记录")
 
                 # 遍历每条记录
-                for idx, row in enumerate(results):
+                for row in results:
                     row_dict = dict(row)
                     description = row_dict.get("description", "")
                     group_field = row_dict.get("group", "")
 
-                    print(
-                        f"[调试-DB] 记录 #{idx+1}: description='{description}', group='{group_field}'"
-                    )
-
                     if not group_field:
-                        print(f"[调试-DB]   跳过（group字段为空）")
                         continue
 
                     # 分割 group 字段（逗号分隔）
                     group_list = [g.strip() for g in group_field.split(',')]
-                    print(f"[调试-DB]   分割后的group列表: {group_list}")
 
                     # 清理每个 group 项并进行匹配
                     for group_item in group_list:
                         clean_group_item = self._clean_group_name(
                             group_item).lower()
-                        print(
-                            f"[调试-DB]   比较: '{clean_group_item}' vs '{clean_team}'"
-                        )
 
                         # 不区分大小写匹配
                         if clean_group_item == clean_team:
                             self.logger.debug(
-                                f"数据库匹配成功: {team_name} -> {description} "
-                                f"(匹配项: {group_item})")
-                            print(
-                                f"[调试-DB] ✓ 匹配成功！返回 description: '{description}'"
-                            )
+                                f"数据库匹配成功: {team_name} -> {description}")
                             return description
 
                 # 没有找到匹配
-                self.logger.debug(f"数据库中未找到制作组 '{team_name}' 的匹配项")
-                print(f"[调试-DB] 未找到匹配，返回 None")
                 return None
 
             finally:
@@ -347,8 +322,6 @@ class TorrentMigrator:
 
         except Exception as e:
             self.logger.warning(f"从数据库查询制作组显示名称时出错: {e}")
-            print(f"[调试-DB] ✗ 查询出错: {e}")
-            traceback.print_exc()
             return None
 
     def _get_team_display_name(
@@ -368,29 +341,19 @@ class TorrentMigrator:
         Returns:
             制作组显示名称，如果数据库中未找到匹配则返回 None
         """
-        print(
-            f"[调试-Name] _get_team_display_name 输入: standard_team_key={standard_team_key}"
-        )
-
         # 首先反向查找原始制作组名称
         original_name = self._reverse_lookup_team_name(standard_team_key)
-        print(f"[调试-Name] 反向查找结果: original_name={original_name}")
 
         # 优先级1: 从数据库查询显示名称
         display_name_from_db = self._get_team_display_name_from_db(
             original_name)
-        print(
-            f"[调试-Name] 数据库查询结果: display_name_from_db={display_name_from_db}")
 
         if display_name_from_db:
             self.logger.debug(
-                f"使用数据库的显示名称: {standard_team_key} -> {display_name_from_db}")
-            print(f"[调试-Name] ✓ 返回数据库显示名称: {display_name_from_db}")
+                f"使用数据库显示名称: {standard_team_key} -> {display_name_from_db}")
             return display_name_from_db
 
         # 如果数据库中未找到，返回 None（不添加致谢声明）
-        self.logger.debug(f"数据库中未找到制作组 '{original_name}' 的匹配，不添加致谢声明")
-        print(f"[调试-Name] 返回 None（数据库未匹配）")
         return None
 
     def _detect_official_statement(
@@ -750,7 +713,11 @@ class TorrentMigrator:
                 )
             else:
                 content.append(self._html_to_bbcode(child))
-        return "".join(content)
+        
+        # [新增] 处理BBCode中的图片链接格式和清理不需要的标签
+        from utils.formatters import process_bbcode_images_and_cleanup
+        bbcode_result = "".join(content)
+        return process_bbcode_images_and_cleanup(bbcode_result)
 
     def _extract_data_by_site_type(self, soup, torrent_id):
         """
@@ -883,6 +850,23 @@ class TorrentMigrator:
 
             # 使用统一的数据提取方法
             extracted_data = self._extract_data_by_site_type(soup, torrent_id)
+
+            if extracted_data:
+                try:
+                    import os, json
+                    from config import TEMP_DIR
+                    save_dir = os.path.join(TEMP_DIR, "extracted_data")
+                    os.makedirs(save_dir, exist_ok=True)
+                    save_path = os.path.join(
+                        save_dir, f"aa_extracted_{torrent_id}.json")
+                    with open(save_path, "w", encoding="utf-8") as f:
+                        json.dump(extracted_data,
+                                  f,
+                                  ensure_ascii=False,
+                                  indent=2)
+                    print(f"提取的数据已保存到: {save_path}")
+                except Exception as e:
+                    print(f"保存提取数据时出错: {e}")
 
             # 获取主标题
             original_main_title = extracted_data.get("title", "")
@@ -1482,33 +1466,23 @@ class TorrentMigrator:
 
             # [新增] 添加官组致谢声明
             try:
-                print("=" * 80)
-                print("[调试] 开始官组致谢声明处理")
-
                 # 初始化变量，避免在某些分支中未赋值导致的 UnboundLocalError
                 has_official_statement = False
                 display_name = None
 
                 # 1. 加载致谢配置
                 acknowledgment_config = self._load_acknowledgment_config()
-                print(
-                    f"[调试] 致谢配置加载结果: enabled={acknowledgment_config.get('enabled', False)}"
-                )
 
                 # 2. 检查是否启用致谢声明
                 if acknowledgment_config.get("enabled", False):
                     # 3. 从标准化参数中获取制作组
                     team_standard = standardized_params.get("team", "")
-                    print(f"[调试] 标准化制作组参数: {team_standard}")
 
                     # 4. 检查是否在排除列表中
                     exclude_teams = acknowledgment_config.get(
                         "exclude_teams", [])
-                    print(f"[调试] 排除列表: {exclude_teams}")
 
                     if team_standard and team_standard not in exclude_teams:
-                        print(f"[调试] 制作组 '{team_standard}' 未在排除列表中，继续处理")
-
                         # 5. 使用结构化检测判断是否已包含官组声明
                         # [修复] 优先使用已提取的statement内容，如果为空才使用原始BBCode
                         # 这样可以正确处理SSD等特殊站点
@@ -1516,41 +1490,22 @@ class TorrentMigrator:
                         detection_content = original_statement if original_statement.strip(
                         ) else full_bbcode_descr_for_check
 
-                        print(f"[调试] 用于检测的内容长度: {len(detection_content)} 字符")
-                        print(
-                            f"[调试] 用于检测的内容前100字符: {detection_content[:100] if detection_content else '(空)'}"
-                        )
-                        print(
-                            f"[调试] 检测内容来源: {'提取器的statement' if original_statement.strip() else '原始BBCode'}"
-                        )
-
                         has_official_statement = self._detect_official_statement(
                             detection_content, acknowledgment_config)
 
-                        print(f"[调试] 检测到已有官组声明: {has_official_statement}")
-
                         if has_official_statement:
                             self.logger.info("检测到声明中已包含官组相关说明，跳过添加致谢声明")
-                            print("[调试] 跳过添加致谢声明（已存在）")
                         else:
-                            print("[调试] 未检测到官组声明，开始获取显示名称")
-
                             # 6. 获取制作组显示名称（从数据库查询）
                             display_name = self._get_team_display_name(
                                 team_standard, acknowledgment_config)
-                            print(f"[调试] 从数据库获取的显示名称: {display_name}")
 
                             # 7. 如果数据库中未找到匹配，跳过添加致谢声明
                             if display_name is None:
                                 self.logger.info(
                                     f"数据库中未找到制作组 '{team_standard}' 的匹配，跳过添加致谢声明"
                                 )
-                                print(
-                                    f"[调试] 数据库未匹配，跳过添加（team_standard={team_standard}）"
-                                )
                             else:
-                                print(f"[调试] 找到显示名称: {display_name}，准备生成致谢声明")
-
                                 # 8. 生成致谢声明
                                 template = acknowledgment_config.get(
                                     "template",
@@ -1558,34 +1513,16 @@ class TorrentMigrator:
                                 )
                                 acknowledgment = template.format(
                                     team_name=display_name)
-                                print(f"[调试] 生成的致谢声明: {acknowledgment}")
 
                                 # 9. 将致谢声明插入到 intro["statement"] 的开头
                                 if original_statement:
                                     intro[
                                         "statement"] = acknowledgment + "\n\n" + original_statement
-                                    print("[调试] 致谢声明已插入到现有声明前面")
                                 else:
                                     intro["statement"] = acknowledgment
-                                    print("[调试] 致谢声明已设置为唯一声明")
 
                                 self.logger.info(
                                     f"已添加官组致谢声明: {display_name}官组作品")
-                                print(f"[调试] ✓ 成功添加官组致谢声明: {display_name}官组作品")
-                    else:
-                        if not team_standard:
-                            self.logger.debug("未找到制作组信息，跳过添加致谢声明")
-                            print("[调试] 未找到制作组信息（team_standard为空）")
-                        else:
-                            self.logger.debug(
-                                f"制作组 '{team_standard}' 在排除列表中，跳过添加致谢声明")
-                            print(f"[调试] 制作组 '{team_standard}' 在排除列表中")
-                else:
-                    self.logger.debug("官组致谢声明功能未启用")
-                    print("[调试] 官组致谢声明功能未启用")
-
-                print("[调试] 官组致谢声明处理完成")
-                print("=" * 80)
 
                 # 发送步骤6完成日志
                 if self.task_id:
@@ -1600,9 +1537,6 @@ class TorrentMigrator:
                                               "success")
             except Exception as e:
                 self.logger.warning(f"添加官组致谢声明时发生错误: {e}")
-                print(f"[调试] ✗ 添加官组致谢声明时发生错误: {e}")
-                self.logger.debug(traceback.format_exc())
-                traceback.print_exc()
                 # 即使出错也发送完成日志
                 if self.task_id:
                     log_streamer.emit_log(self.task_id, "检查声明感谢",
@@ -1624,8 +1558,6 @@ class TorrentMigrator:
                 "产地": standardized_params.get("source", ""),
                 "标签": standardized_params.get("tags", []),
             }
-
-            print(f"aaaaaaaaaaaaa标准化参数预览: {final_publish_parameters}")
 
             # 构建完整的发布参数用于预览（兼容现有BaseUploader）
             complete_publish_params = {
