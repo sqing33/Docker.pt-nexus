@@ -69,8 +69,16 @@ class QingwaptUploader(BaseUploader):
 
     def _map_parameters(self) -> dict:
         """
-        实现抽象方法，使用基类的通用映射逻辑
+        实现抽象方法，使用基类的通用映射逻辑（修复版）
         """
-        standardized_params = self._parse_source_data()
+        # ✅ 直接使用 migrator 准备好的标准化参数
+        standardized_params = self.upload_data.get("standardized_params", {})
+
+        # 降级处理：如果没有标准化参数才重新解析
+        if not standardized_params:
+            from loguru import logger
+            logger.warning("未找到标准化参数，回退到重新解析")
+            standardized_params = self._parse_source_data()
+
         mapped_params = self._map_standardized_params(standardized_params)
         return mapped_params

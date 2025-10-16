@@ -928,6 +928,8 @@ def create_uploader(site_name: str, site_info: dict,
                 class_name = "HaidanUploader"
             elif site_name == "hdkyl":
                 class_name = "HdkylUploader"
+            elif site_name == "hdarea":
+                class_name = "HdareaUploader"
 
             # 获取上传器类
             uploader_class = getattr(site_module, class_name)

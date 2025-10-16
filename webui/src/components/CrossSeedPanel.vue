@@ -2260,10 +2260,13 @@ const handlePublish = async () => {
   // 从 Python 返回的结果中提取 auto_add_result
   results.forEach(result => {
     if (result.auto_add_result) {
+      // 优先使用已经存在的 downloaderStatus 中的名称（已在上面正确设置）
+      const existingDownloaderName = result.downloaderStatus?.downloaderName || '自动检测';
+      
       downloaderStatusMap[result.siteName] = {
         success: result.auto_add_result.success,
         message: result.auto_add_result.message,
-        downloaderName: '自动检测'
+        downloaderName: existingDownloaderName
       };
       const statusIcon = result.auto_add_result.success ? '✅' : '❌';
       const statusText = result.auto_add_result.success ? '成功' : '失败';
@@ -2345,7 +2348,7 @@ const handleApiError = (error: any, defaultMessage: string) => {
   ElNotification.error({ title: '操作失败', message, duration: 0, showClose: true })
 }
 
-const triggerAddToDownloader = async (result: any) => {
+  const triggerAddToDownloader = async (result: any) => {
   if (!torrent.value.save_path || !torrent.value.downloaderId) {
     const msg = `[${result.siteName}] 警告: 未能获取到原始保存路径或下载器ID，已跳过自动添加任务。`;
     console.warn(msg);
@@ -2366,7 +2369,7 @@ const triggerAddToDownloader = async (result: any) => {
     const downloader = downloaderList.value.find(d => d.id === targetDownloaderId);
     if (downloader) targetDownloaderName = downloader.name;
 
-  } catch (error) {
+  } catch (error: unknown) {
     // Ignore error
   }
 
@@ -2386,8 +2389,13 @@ const triggerAddToDownloader = async (result: any) => {
       logContent.value += `\n[${result.siteName}] 失败: ${response.data.message}`;
       return { success: false, message: response.data.message, downloaderName: targetDownloaderName };
     }
-  } catch (error: any) {
-    const errorMessage = error.response?.data?.message || error.message;
+  } catch (error: unknown) {
+    let errorMessage = '未知错误';
+    if (error instanceof Error) {
+      errorMessage = (error as any).response?.data?.message || error.message;
+    } else if (typeof error === 'object' && error !== null && 'response' in error) {
+      errorMessage = (error as any).response?.data?.message || String(error);
+    }
     logContent.value += `\n[${result.siteName}] 错误: 调用API失败: ${errorMessage}`;
     return { success: false, message: `调用API失败: ${errorMessage}`, downloaderName: targetDownloaderName };
   }

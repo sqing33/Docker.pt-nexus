@@ -418,14 +418,17 @@ def _find_target_video_file(path: str) -> tuple[str | None, bool]:
     if parent_dir != path:  # 确保这不是根目录的情况
         try:
             for file in os.listdir(parent_dir):
-                if not file.startswith('.') and not os.path.isdir(os.path.join(parent_dir, file)):
+                if not file.startswith('.') and not os.path.isdir(
+                        os.path.join(parent_dir, file)):
                     if os.path.splitext(file)[1].lower() in VIDEO_EXTENSIONS:
                         # 检查文件名是否匹配（忽略扩展名）
                         file_name_without_ext = os.path.splitext(file)[0]
-                        if (file_name in file_name_without_ext or
-                            file_name_without_ext in file_name or
-                            file_name.replace(' ', '') in file_name_without_ext.replace(' ', '') or
-                            file_name_without_ext.replace(' ', '') in file_name.replace(' ', '')):
+                        if (file_name in file_name_without_ext
+                                or file_name_without_ext in file_name
+                                or file_name.replace(' ', '')
+                                in file_name_without_ext.replace(' ', '')
+                                or file_name_without_ext.replace(
+                                    ' ', '') in file_name.replace(' ', '')):
                             full_path = os.path.join(parent_dir, file)
                             print(f"找到匹配的视频文件: {full_path}")
                             return full_path, is_bluray_disc
@@ -1648,16 +1651,19 @@ def add_torrent_to_downloader(detail_page_url: str, save_path: str,
         details_response.raise_for_status()
 
         soup = BeautifulSoup(details_response.text, "html.parser")
-        torrent_id_match = re.search(r"id=(\d+)", detail_page_url)
-        if not torrent_id_match: raise ValueError("无法从详情页URL中提取种子ID。")
-        torrent_id = torrent_id_match.group(1)
-
+        
         # 检查是否需要使用特殊下载器
         site_base_url = ensure_scheme(site_info['base_url'])
         full_download_url = None  # 初始化full_download_url
+        
+        print(f"站点基础URL: {site_base_url}")
 
         # 检查是否为haidan站点
-        if 'haidan.video' in site_base_url:
+        if 'haidan' in site_base_url:
+            # Haidan站点需要提取torrent_id而不是id
+            torrent_id_match = re.search(r"torrent_id=(\d+)", detail_page_url)
+            if not torrent_id_match: raise ValueError("无法从详情页URL中提取种子ID（torrent_id）。")
+            torrent_id = torrent_id_match.group(1)
             # Haidan站点的特殊逻辑
             download_link_tag = soup.find(
                 'a', href=re.compile(r"download.php\?id="))
@@ -1672,7 +1678,11 @@ def add_torrent_to_downloader(detail_page_url: str, save_path: str,
 
             full_download_url = f"{site_base_url}/{download_url_part}"
         else:
-            # 其他站点的通用逻辑
+            # 其他站点的通用逻辑 - 提取id参数
+            torrent_id_match = re.search(r"id=(\d+)", detail_page_url)
+            if not torrent_id_match: raise ValueError("无法从详情页URL中提取种子ID。")
+            torrent_id = torrent_id_match.group(1)
+            
             download_link_tag = soup.select_one(
                 f'a.index[href^="download.php?id={torrent_id}"]')
             if not download_link_tag: raise RuntimeError("在详情页HTML中未能找到下载链接！")
@@ -1999,125 +2009,107 @@ def extract_tags_from_mediainfo(mediainfo_text: str) -> list:
         'HDRVivid': ['hdr vivid'],
     }
 
-    # 定义检查范围，减少不必要的扫描
-    # is_audio_section/is_text_section 用于限定语言和字幕的检查范围
-    is_audio_section = False
-    is_text_section = False
-    audio_section_lines = []
+    # 定义检查范围
+    # current_section 用于记录当前 MediaInfo 正在处理的 Section 类型 (General, Video, Audio, Text)
+    current_section = None
+    # 用于收集当前 Audio Section 的所有行，以便后续语言检测
+    current_audio_section_lines = []
+    # 用于收集当前 Video Section 的所有行，以便后续语言检测
+    current_video_section_lines = []
 
     for line in lines:
         line_stripped = line.strip()
+        line_lower = line_stripped.lower()
 
-        # 判定当前是否处于特定信息块中
-        if 'audio' in line_stripped.lower() and '#' in line_stripped:
-            is_audio_section = True
-            is_text_section = False
-            audio_section_lines = [line_stripped]  # 开始新的音频块
+        # 判定当前处于哪个信息块
+        if line_lower.startswith('general'):
+            current_section = 'general'
+            # 在 General Section 结束时处理之前的 Audio/Video Section
+            if current_audio_section_lines:
+                _process_audio_section_languages(current_audio_section_lines, found_tags)
+                current_audio_section_lines = []
+            if current_video_section_lines:
+                _process_video_section_languages(current_video_section_lines, found_tags)
+                current_video_section_lines = []
             continue
-        if 'text' in line_stripped.lower() and '#' in line_stripped:
-            is_text_section = True
-            is_audio_section = False
+        elif line_lower.startswith('video'):
+            current_section = 'video'
+            if current_audio_section_lines:
+                _process_audio_section_languages(current_audio_section_lines, found_tags)
+                current_audio_section_lines = []
+            current_video_section_lines = [line_stripped] # 开始新的 Video 块
             continue
-        if 'video' in line_stripped.lower() and '#' in line_stripped:
-            is_audio_section = False
-            is_text_section = False
-            # 处理音频块中的语言检测
-            if audio_section_lines:
-                # 检查是否包含国语
-                if _check_mandarin_in_audio_section(audio_section_lines):
-                    found_tags.add('tag.国语')
-                # 检查是否包含其他语言
-                else:
-                    language = _check_other_language_in_audio_section(
-                        audio_section_lines)
-                    if language:
-                        found_tags.add(f'tag.{language}')
-                        # 同时添加外语标签
-                        found_tags.add('tag.外语')
-                audio_section_lines = []  # 清空音频块
+        elif line_lower.startswith('audio'):
+            current_section = 'audio'
+            if current_video_section_lines:
+                _process_video_section_languages(current_video_section_lines, found_tags)
+                current_video_section_lines = []
+            current_audio_section_lines = [line_stripped] # 开始新的 Audio 块
+            continue
+        elif line_lower.startswith('text'):
+            current_section = 'text'
+            if current_audio_section_lines:
+                _process_audio_section_languages(current_audio_section_lines, found_tags)
+                current_audio_section_lines = []
+            if current_video_section_lines:
+                _process_video_section_languages(current_video_section_lines, found_tags)
+                current_video_section_lines = []
+            continue
+        # 其他 Section 暂不处理，直接跳过或者可以定义为 'other'
+        elif not line_stripped: # 空行表示一个Section的结束，可以触发处理
+            if current_audio_section_lines and current_section != 'audio': # 如果是空行且之前是音频块，则处理
+                _process_audio_section_languages(current_audio_section_lines, found_tags)
+                current_audio_section_lines = []
+            if current_video_section_lines and current_section != 'video': # 如果是空行且之前是视频块，则处理
+                _process_video_section_languages(current_video_section_lines, found_tags)
+                current_video_section_lines = []
+            current_section = None # 重置当前section
             continue
 
-        # 收集音频块的行
-        if is_audio_section:
-            audio_section_lines.append(line_stripped)
-
-        # 检查字幕标签 (仅在 Text 块中)
-        if is_text_section:
-            line_lower = line_stripped.lower()
+        # 收集当前 Section 的行
+        if current_section == 'audio':
+            current_audio_section_lines.append(line_stripped)
+        elif current_section == 'video':
+            current_video_section_lines.append(line_stripped)
+        elif current_section == 'text':
+            # 仅在 Text 块中检查字幕标签
             if '中字' in tag_keywords_map and any(
                     kw in line_lower for kw in tag_keywords_map['中字']):
-                found_tags.add('tag.中字')
+                found_tags.add('中字')
             if '英字' in tag_keywords_map and any(
                     kw in line_lower for kw in tag_keywords_map['英字']):
-                found_tags.add('tag.英字')
+                found_tags.add('英字')
 
         # 检查 HDR 格式标签 (全局检查)
-        line_lower = line_stripped.lower()
+        # 注意：这里保持全局检查是因为 HDR 格式可能出现在 General/Video 等多个地方
         if 'dolby vision' in tag_keywords_map and any(
                 kw in line_lower for kw in tag_keywords_map['Dolby Vision']):
-            found_tags.add('tag.Dolby Vision')
+            found_tags.add('Dolby Vision')
         if 'hdr10+' in tag_keywords_map and any(
                 kw in line_lower for kw in tag_keywords_map['HDR10+']):
-            found_tags.add('tag.HDR10+')
-        # HDR10 要放在 HDR 之前检查，以获得更精确匹配
+            found_tags.add('HDR10+')
         if 'hdr10' in tag_keywords_map and any(
                 kw in line_lower for kw in tag_keywords_map['HDR10']):
-            found_tags.add('tag.HDR10')
+            found_tags.add('HDR10')
         elif 'hdr' in tag_keywords_map and any(
                 kw in line_lower for kw in tag_keywords_map['HDR']):
-            # 避免重复添加，如果已有更具体的HDR格式，则不添加通用的'HDR'
             if not any(hdr_tag in found_tags for hdr_tag in
-                       ['tag.Dolby Vision', 'tag.HDR10+', 'tag.HDR10']):
-                found_tags.add('tag.HDR')
+                       ['Dolby Vision', 'HDR10+', 'HDR10']):
+                found_tags.add('HDR')
         if 'hdrvivid' in tag_keywords_map and any(
                 kw in line_lower for kw in tag_keywords_map['HDRVivid']):
-            # 注意：站点可能没有 HDRVivid 标签，但我们先提取出来
-            found_tags.add('tag.HDRVivid')
+            found_tags.add('HDRVivid')
 
-        # 全局检查语言标签（不在特定块中也检查）
-        line_lower = line_stripped.lower()
-        for tag_key, keywords in tag_keywords_map.items():
-            if tag_key in [
-                    '中字', '英字', 'Dolby Vision', 'HDR10+', 'HDR10', 'HDR',
-                    'HDRVivid'
-            ]:
-                continue  # 跳过字幕和HDR标签，这些已在特定块中处理
-            for keyword in keywords:
-                if keyword.lower() in line_lower:
-                    # 检查是否是语言标签
-                    if tag_key in [
-                            '国语', '粤语', '英语', '日语', '韩语', '法语', '德语', '俄语',
-                            '印地语', '西班牙语', '葡萄牙语', '意大利语', '泰语', '阿拉伯语'
-                    ]:
-                        # 如果不是中文相关语言，添加外语标签
-                        if tag_key not in ['国语', '粤语'
-                                           ] and '外语' not in found_tags:
-                            found_tags.add('tag.外语')
-                        # 同时添加具体语言标签
-                        if f'tag.{tag_key}' not in found_tags:
-                            found_tags.add(f'tag.{tag_key}')
-                    else:
-                        # 非语言标签直接添加
-                        if f'tag.{tag_key}' not in found_tags:
-                            found_tags.add(f'tag.{tag_key}')
-                    break  # 找到匹配后跳出内层循环
-
-    # 处理最后一个音频块（如果文件末尾没有video块）
-    if audio_section_lines:
-        # 检查是否包含国语
-        if _check_mandarin_in_audio_section(audio_section_lines):
-            found_tags.add('tag.国语')
-        # 检查是否包含其他语言
-        else:
-            language = _check_other_language_in_audio_section(
-                audio_section_lines)
-            if language:
-                found_tags.add(f'tag.{language}')
+    # 处理文件末尾可能存在的 Audio/Video Section
+    if current_audio_section_lines:
+        _process_audio_section_languages(current_audio_section_lines, found_tags)
+    if current_video_section_lines:
+        _process_video_section_languages(current_video_section_lines, found_tags)
 
     # 为所有标签添加 tag. 前缀
     prefixed_tags = set()
     for tag in found_tags:
-        if not tag.startswith('tag.'):
+        if not tag.startswith('tag.'): # 避免重复添加 tag.
             prefixed_tags.add(f'tag.{tag}')
         else:
             prefixed_tags.add(tag)
@@ -2126,67 +2118,82 @@ def extract_tags_from_mediainfo(mediainfo_text: str) -> list:
     return list(prefixed_tags)
 
 
-def _check_mandarin_in_audio_section(audio_lines):
-    """
-    检查音频块中是否包含国语相关标识。
-    
-    :param audio_lines: 音频块的所有行
-    :return: 如果检测到国语返回True，否则返回False
-    """
-    for line in audio_lines:
-        # 检查 Title: 中文 或 Language: Chinese
-        if 'title:' in line.lower() and '中文' in line:
-            return True
-        if 'language:' in line.lower() and ('chinese' in line.lower()
-                                            or 'mandarin' in line.lower()):
-            return True
-        # 检查其他可能的国语标识
-        if 'mandarin' in line.lower():
-            return True
-
-    return False
+def _process_audio_section_languages(audio_lines, found_tags):
+    """辅助函数：处理音频块中的语言检测"""
+    language = _check_language_in_section(audio_lines)
+    if language:
+        if language == '国语':
+            found_tags.add('国语')
+        elif language == '粤语':
+            found_tags.add('粤语')
+        else: # 其他语言
+            found_tags.add(language)
+            found_tags.add('外语')
+        print(f"   -> 从音频块中提取到语言: {language}")
 
 
-def _check_other_language_in_audio_section(audio_lines) -> str | None:
+def _process_video_section_languages(video_lines, found_tags):
+    """辅助函数：处理视频块中的语言检测"""
+    language = _check_language_in_section(video_lines)
+    if language:
+        if language == '国语':
+            found_tags.add('国语')
+        elif language == '粤语':
+            found_tags.add('粤语')
+        else: # 其他语言
+            found_tags.add(language)
+            found_tags.add('外语')
+        print(f"   -> 从视频块中提取到语言: {language}")
+
+
+def _check_language_in_section(section_lines) -> str | None:
     """
-    检查音频块中是否包含其他语言（非中文）相关标识。
-    
-    :param audio_lines: 音频块的所有行
-    :return: 如果检测到其他语言返回"外语"，否则返回None
+    通用函数：检查指定 Section 块中是否包含语言相关标识。
+
+    :param section_lines: Section 块的所有行
+    :return: 如果检测到语言返回具体语言名称，否则返回None
     """
-    # 定义其他语言的关键词映射
-    language_keywords = {
-        '英语': [
-            'english',
-        ],
+    language_keywords_map = {
+        '国语': ['中文', 'chinese', 'mandarin', '国语'],
+        '粤语': ['cantonese', '粤语'],
+        '英语': ['english', '英语'],
         '日语': ['japanese', '日语'],
         '韩语': ['korean', '韩语'],
         '法语': ['french', '法语'],
         '德语': ['german', '德语'],
         '俄语': ['russian', '俄语'],
         '印地语': ['hindi', '印地语'],
-        '西班牙语': ['spanish', '西班牙语'],
-        '葡萄牙语': ['portuguese', '葡萄牙语'],
+        '西班牙语': ['spanish', '西班牙语', 'latin america'], # 添加 Latin America
+        '葡萄牙语': ['portuguese', '葡萄牙语', 'br'], # 添加 BR
         '意大利语': ['italian', '意大利语'],
         '泰语': ['thai', '泰语'],
-        '阿拉伯语': ['arabic', '阿拉伯语'],
+        '阿拉伯语': ['arabic', '阿拉伯语', 'sa'], # 添加 SA
     }
 
-    for line in audio_lines:
-        if not line:  # 确保行不为空
+    for line in section_lines:
+        if not line:
             continue
         line_lower = line.lower()
-        for language, keywords in language_keywords.items():
-            for keyword in keywords:
-                if keyword in line_lower:
-                    # 确保不是中文相关的关键词
-                    if not any(chinese_kw in line for chinese_kw in
-                               ['中文', '国语', 'mandarin', 'cantonese', '粤语']):
-                        print(
-                            f"检测到其他语言: {language} (关键词: {keyword}, 行: {line})")
-                        return language  # 返回具体语言名称，而不是'外语'
-
+        if 'language:' in line_lower:
+            for lang, keywords in language_keywords_map.items():
+                for keyword in keywords:
+                    if keyword.lower() in line_lower:
+                        return lang
+        # 尝试从 Title: 中提取
+        if 'title:' in line_lower:
+            for lang, keywords in language_keywords_map.items():
+                for keyword in keywords:
+                    if keyword.lower() in line_lower:
+                        return lang
     return None
+
+
+# 删除这两个不再使用的辅助函数
+def _check_mandarin_in_audio_section(audio_lines):
+    return False # Placeholder to avoid errors during diff application
+
+def _check_other_language_in_audio_section(audio_lines) -> str | None:
+    return None # Placeholder to avoid errors during diff application
 
 
 def extract_origin_from_description(description_text: str) -> str:

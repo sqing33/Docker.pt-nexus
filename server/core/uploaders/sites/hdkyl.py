@@ -14,9 +14,13 @@ class HdkylUploader(SpecialUploader):
         实现HDKyl站点的参数映射逻辑
         继承基类的通用映射，只特殊处理年份参数
         """
-        # 首先调用BaseUploader的通用映射逻辑
+        # ✅ 直接使用 migrator 准备好的标准化参数
         standardized_params = self.upload_data.get("standardized_params", {})
+
+        # 降级处理：如果没有标准化参数才重新解析
         if not standardized_params:
+            from loguru import logger
+            logger.warning("未找到标准化参数，回退到重新解析")
             standardized_params = self._parse_source_data()
         
         mapped_params = self._map_standardized_params(standardized_params)

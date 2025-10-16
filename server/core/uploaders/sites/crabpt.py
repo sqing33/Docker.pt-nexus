@@ -7,23 +7,49 @@ class CrabptUploader(SpecialUploader):
 
     def _map_parameters(self) -> dict:
         """
-        实现CrabPT站点的参数映射逻辑，包含特殊区域的处理。
+        实现CrabPT站点的参数映射逻辑，包含特殊区域的处理（修复版）。
         """
         mapped = {}
         tags = []
 
-        # 获取数据
-        source_params = self.upload_data.get("source_params", {})
-        title_components_list = self.upload_data.get("title_components", [])
-        title_params = {
-            item["key"]: item["value"]
-            for item in title_components_list if item.get("value")
-        }
+        # ✅ 直接使用 migrator 准备好的标准化参数
+        standardized_params = self.upload_data.get("standardized_params", {})
+
+        # 降级处理：如果没有标准化参数才重新解析
+        if not standardized_params:
+            from loguru import logger
+            logger.warning("未找到标准化参数，回退到重新解析")
+            # 获取数据
+            source_params = self.upload_data.get("source_params", {})
+            title_components_list = self.upload_data.get("title_components", [])
+            title_params = {
+                item["key"]: item["value"]
+                for item in title_components_list if item.get("value")
+            }
+        else:
+            # 使用标准化参数构建title_params（用于兼容现有逻辑）
+            title_params = {
+                "类型": standardized_params.get("type", ""),
+                "媒介": standardized_params.get("medium", ""),
+                "视频编码": standardized_params.get("video_codec", ""),
+                "音频编码": standardized_params.get("audio_codec", ""),
+                "分辨率": standardized_params.get("resolution", ""),
+                "制作组": standardized_params.get("team", ""),
+                "片源平台": standardized_params.get("source", ""),
+                "格式": standardized_params.get("format", ""),
+            }
+            source_params = self.upload_data.get("source_params", {})
 
         # 1. 类型映射 - 根据源类型判断发布区域
-        source_type = source_params.get("类型") or ""
-        type_mapping = self.config.get("mappings", {}).get("type", {})
-        type_value = self._find_mapping(type_mapping, source_type)
+        # ✅ 优先使用标准化的type参数
+        if standardized_params:
+            standardized_type = standardized_params.get("type", "")
+            type_mapping = self.config.get("mappings", {}).get("type", {})
+            type_value = self._find_mapping(type_mapping, standardized_type)
+        else:
+            source_type = source_params.get("类型") or ""
+            type_mapping = self.config.get("mappings", {}).get("type", {})
+            type_value = self._find_mapping(type_mapping, source_type)
 
         # 判断是否为特别区类型（漫画、游戏、学习、有声书、电子书）
         special_area_types = {"415", "414", "412", "411", "410"}
@@ -70,15 +96,24 @@ class CrabptUploader(SpecialUploader):
             mapped[special_team_field] = self._find_mapping(
                 special_team_mapping, release_group_str)
 
-            # 特别区地区映射
-            source_str = source_params.get("产地", "") or title_params.get(
-                "片源平台", "")
-            special_processing_field = self.config.get("form_fields", {}).get(
-                "special_processing", "processing_sel[6]")
-            processing_mapping = self.config.get("mappings",
-                                                 {}).get("processing", {})
-            mapped[special_processing_field] = self._find_mapping(
-                processing_mapping, source_str)
+            # 特别区地区映射 - ✅ 优先使用标准化的source参数
+            if standardized_params:
+                standardized_source = standardized_params.get("source", "")
+                special_processing_field = self.config.get("form_fields", {}).get(
+                    "special_processing", "processing_sel[6]")
+                # 使用source映射（而不是processing映射）
+                source_mapping = self.config.get("mappings", {}).get("source", {})
+                mapped[special_processing_field] = self._find_mapping(
+                    source_mapping, standardized_source)
+            else:
+                source_str = source_params.get("产地", "") or title_params.get(
+                    "片源平台", "")
+                special_processing_field = self.config.get("form_fields", {}).get(
+                    "special_processing", "processing_sel[6]")
+                processing_mapping = self.config.get("mappings",
+                                                     {}).get("processing", {})
+                mapped[special_processing_field] = self._find_mapping(
+                    processing_mapping, source_str)
 
             # 特别区标签映射
             combined_tags = self._collect_all_tags()
@@ -148,16 +183,26 @@ class CrabptUploader(SpecialUploader):
             mapped[team_field] = self._find_mapping(team_mapping,
                                                     release_group_str)
 
-            # 地区映射
-            source_str = source_params.get("产地", "") or title_params.get(
-                "片源平台", "")
-            processing_field = self.config.get("form_fields",
-                                               {}).get("processing",
-                                                       "processing_sel[4]")
-            processing_mapping = self.config.get("mappings",
-                                                 {}).get("processing", {})
-            mapped[processing_field] = self._find_mapping(
-                processing_mapping, source_str)
+            # 地区映射 - ✅ 优先使用标准化的source参数
+            if standardized_params:
+                standardized_source = standardized_params.get("source", "")
+                processing_field = self.config.get("form_fields",
+                                                   {}).get("processing",
+                                                           "processing_sel[4]")
+                # 使用source映射（而不是processing映射）
+                source_mapping = self.config.get("mappings", {}).get("source", {})
+                mapped[processing_field] = self._find_mapping(
+                    source_mapping, standardized_source)
+            else:
+                source_str = source_params.get("产地", "") or title_params.get(
+                    "片源平台", "")
+                processing_field = self.config.get("form_fields",
+                                                   {}).get("processing",
+                                                           "processing_sel[4]")
+                processing_mapping = self.config.get("mappings",
+                                                     {}).get("processing", {})
+                mapped[processing_field] = self._find_mapping(
+                    processing_mapping, source_str)
 
             # 标签映射
             combined_tags = self._collect_all_tags()

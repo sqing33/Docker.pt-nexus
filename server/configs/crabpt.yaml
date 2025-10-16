@@ -259,6 +259,17 @@ mappings:
     "resolution.other": "1"
     "default": "1"
 
+  # source mapping (地区/产地) - 使用与processing相同的值
+  source:
+    "source.india": "7"
+    "source.korea": "6"
+    "source.japan": "5"
+    "source.western": "4"
+    "source.hktw": "3"
+    "source.china": "2"
+    "source.other": "1"
+    "default": "1"
+
   processing:
     "processing.india": "7"
     "processing.korea": "6"

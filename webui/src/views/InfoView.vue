@@ -698,12 +698,14 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   position: relative;
-  z-index: 1;
+  /* 默认z-index，让所有卡片在同一层级 */
+  z-index: 1; 
 }
 
-/* 速率图表卡片需要更高的 z-index，确保其 tooltip 不被下面的图表遮挡 */
-.chart-card:first-child {
-  z-index: 2;
+/* [核心修改] 移除 :first-child 规则，并添加 :hover 规则 */
+/* 当鼠标悬浮在任意图表卡片上时，都将其 z-index 提升到最高 */
+.chart-card:hover {
+  z-index: 10;
 }
 
 .chart-body {

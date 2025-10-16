@@ -1242,7 +1242,7 @@ watch(nameSearch, () => {
 }
 
 .name-header-container .search-input {
-  width: calc(30vw - 100px);
+  width: calc(30vw - 300px);
   margin: 0 15px;
 }
 

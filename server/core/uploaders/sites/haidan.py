@@ -25,16 +25,35 @@ class HaidanUploader(SpecialUploader):
         mapped = {}
         tags = []
 
-        # 获取标准化参数
+        # ✅ 直接使用 migrator 准备好的标准化参数
         standardized_params = self.upload_data.get("standardized_params", {})
-        
-        # 获取原始数据用于特殊字段处理
-        source_params = self.upload_data.get("source_params", {})
-        title_components_list = self.upload_data.get("title_components", [])
-        title_params = {
-            item["key"]: item["value"]
-            for item in title_components_list if item.get("value")
-        }
+
+        # 降级处理：如果没有标准化参数才重新解析
+        if not standardized_params:
+            from loguru import logger
+            logger.warning("未找到标准化参数，回退到重新解析")
+            # 获取原始数据用于特殊字段处理
+            source_params = self.upload_data.get("source_params", {})
+            title_components_list = self.upload_data.get(
+                "title_components", [])
+            title_params = {
+                item["key"]: item["value"]
+                for item in title_components_list if item.get("value")
+            }
+        else:
+            # 使用标准化参数构建title_params，但制作组要从原始title_components获取
+            title_components_list = self.upload_data.get(
+                "title_components", [])
+            title_params_temp = {
+                item["key"]: item["value"]
+                for item in title_components_list if item.get("value")
+            }
+            # 优先使用原始的制作组名称，如果没有则使用标准化参数
+            title_params = {
+                "制作组": title_params_temp.get("制作组", standardized_params.get("team", "")),
+                "季集": title_params_temp.get("季集", standardized_params.get("season_episode", "")),
+            }
+            source_params = self.upload_data.get("source_params", {})
 
         # 1. 类型映射 - 使用标准化参数
         content_type = standardized_params.get("type", "")
@@ -160,14 +179,16 @@ class HaidanUploader(SpecialUploader):
         match = re.search(r'S(\d+)(?:E(\d+))?', season_episode.upper())
         if match:
             season = match.group(1).zfill(2) if match.group(1) else ""
-            episode = match.group(2).zfill(2) if match.group(2) else "0" if match.group(1) else ""
+            episode = match.group(2).zfill(2) if match.group(
+                2) else "0" if match.group(1) else ""
             return season, episode
 
         # 匹配 第1季第2集 格式
         match = re.search(r'第(\d+)季(?:第(\d+)集)?', season_episode)
         if match:
             season = match.group(1).zfill(2) if match.group(1) else ""
-            episode = match.group(2).zfill(2) if match.group(2) else "0" if match.group(1) else ""
+            episode = match.group(2).zfill(2) if match.group(
+                2) else "0" if match.group(1) else ""
             return season, episode
 
         return "", ""

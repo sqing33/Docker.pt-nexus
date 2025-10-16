@@ -37,10 +37,17 @@ class MuxuegeUploader(SpecialUploader):
 
     def _map_parameters(self) -> dict:
         """
-        实现 慕雪阁 站点的参数映射逻辑
+        实现 慕雪阁 站点的参数映射逻辑（修复版）
         """
-        # 使用基类方法获取标准化参数
-        standardized_params = self._parse_source_data()
-        # 使用基类方法映射参数
+        # ✅ 直接使用 migrator 准备好的标准化参数
+        standardized_params = self.upload_data.get("standardized_params", {})
+
+        # 降级处理：如果没有标准化参数才重新解析
+        if not standardized_params:
+            from loguru import logger
+            logger.warning("未找到标准化参数，回退到重新解析")
+            standardized_params = self._parse_source_data()
+
+        # 使用标准化参数进行映射
         mapped_params = self._map_standardized_params(standardized_params)
         return mapped_params
