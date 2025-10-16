@@ -779,7 +779,19 @@ def upload_data_title(title: str, torrent_filename: str = ""):
                                         1).strip()
         print(f"检测到剪辑版本: {cut_version}，已拼接到年份")
 
-    # 4. 技术标签提取（排除已识别的制作组名称）
+    # 4. 预处理标题：修复音频参数格式
+    # 先处理缺少点的情况，如 FLAC 20 -> FLAC 2.0, FLAC 2 0 -> FLAC 2.0
+    title_part = re.sub(r"((?:FLAC|DDP|AV3A|AAC|LPCM|AC3|DD))\s*(\d)\s*(\d)",
+                       r"\1 \2.\3",
+                       title_part,
+                       flags=re.I)
+    # 再处理没有空格的情况，如 FLAC2.0 -> FLAC 2.0
+    title_part = re.sub(r"((?:FLAC|DDP|AV3A|AAC|LPCM|AC3|DD))(\d(?:\.\d)?)",
+                       r"\1 \2",
+                       title_part,
+                       flags=re.I)
+
+    # 技术标签提取（排除已识别的制作组名称）
     tech_patterns_definitions = {
         "medium":
         r"UHDTV|UHD\s*Blu-?ray|Blu-?ray\s+DIY|Blu-ray|BluRay\s+DIY|BluRay|WEB-DL|WEBrip|TVrip|DVDRip|HDTV",
@@ -862,6 +874,14 @@ def upload_data_title(title: str, torrent_filename: str = ""):
              for val in raw_values] if key == "audio" else raw_values)
         if key == "audio":
             processed_values = [
+                # 先处理缺少点的情况，如 FLAC 20 -> FLAC 2.0, FLAC 2 0 -> FLAC 2.0
+                re.sub(r"((?:FLAC|DDP|AV3A|AAC|LPCM|AC3|DD))\s*(\d)\s*(\d)",
+                       r"\1 \2.\3",
+                       val,
+                       flags=re.I) for val in processed_values
+            ]
+            processed_values = [
+                # 再处理没有空格的情况，如 FLAC2.0 -> FLAC 2.0
                 re.sub(r"((?:FLAC|DDP|AV3A|AAC|LPCM|AC3|DD))(\d(?:\.\d)?)",
                        r"\1 \2",
                        val,
@@ -912,11 +932,18 @@ def upload_data_title(title: str, torrent_filename: str = ""):
                 ] if key == "audio" else raw_values)
                 if key == "audio":
                     processed_values = [
-                        re.sub(
-                            r"((?:FLAC|DDP|AV3A|AAC|LPCM|AC3|DD))(\d(?:\.\d)?)",
-                            r"\1 \2",
-                            val,
-                            flags=re.I) for val in processed_values
+                        # 先处理缺少点的情况，如 FLAC 20 -> FLAC 2.0, FLAC 2 0 -> FLAC 2.0
+                        re.sub(r"((?:FLAC|DDP|AV3A|AAC|LPCM|AC3|DD))\s*(\d)\s*(\d)",
+                               r"\1 \2.\3",
+                               val,
+                               flags=re.I) for val in processed_values
+                    ]
+                    processed_values = [
+                        # 再处理没有空格的情况，如 FLAC2.0 -> FLAC 2.0
+                        re.sub(r"((?:FLAC|DDP|AV3A|AAC|LPCM|AC3|DD))(\d(?:\.\d)?)",
+                               r"\1 \2",
+                               val,
+                               flags=re.I) for val in processed_values
                     ]
 
                 # 取独一无二的值并按出现顺序排序

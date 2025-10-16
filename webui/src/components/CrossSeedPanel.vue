@@ -624,7 +624,13 @@
       <!-- 步骤 1 的按钮 -->
       <div v-if="activeStep === 1" class="button-group">
         <el-button @click="handlePreviousStep" :disabled="isLoading">上一步</el-button>
-        <el-button type="primary" @click="handleCompleteClick" v-if="props.showCompleteButton">修改完成</el-button>
+        <el-tooltip :content="isScrolledToBottom ? '' : '请先滚动到页面底部审查完种子信息再修改！'" :disabled="isScrolledToBottom"
+          placement="top">
+          <el-button type="primary" @click="handleCompleteClick" v-if="props.showCompleteButton" 
+            :disabled="isLoading || !isScrolledToBottom" :class="{ 'scrolled-to-bottom': isScrolledToBottom }">
+            修改完成
+          </el-button>
+        </el-tooltip>
         <el-tooltip :content="isScrolledToBottom ? '' : '请先滚动到页面底部审查完种子信息再发布！'" :disabled="isScrolledToBottom"
           placement="top">
           <el-button type="primary" @click="goToSelectSiteStep" :disabled="isLoading || !isScrolledToBottom"
@@ -1944,6 +1950,19 @@ const invalidStandardParams = computed(() => {
 });
 
 const goToPublishPreviewStep = async () => {
+  // 打印从store获取的已存在站点信息
+  console.log('=== 从store获取的已存在站点信息 ===');
+  console.log('torrent.value:', torrent.value);
+  console.log('torrent.value.sites:', torrent.value?.sites);
+  if (torrent.value?.sites) {
+    const existingSites = Object.keys(torrent.value.sites);
+    console.log('已存在的站点列表:', existingSites);
+    console.log('已存在站点详细信息:', torrent.value.sites);
+  } else {
+    console.log('未找到已存在站点信息');
+  }
+  console.log('=====================================');
+
   // 检查是否有不符合格式的标准化参数
   const invalidParams = invalidStandardParams.value;
   if (invalidParams.length > 0) {
@@ -2123,7 +2142,69 @@ const getTagType = (tag: string) => {
   return invalidTagsList.value.includes(tag) ? 'danger' : 'info';
 };
 
-const goToSelectSiteStep = () => {
+const goToSelectSiteStep = async () => {
+  // 检查已存在站点数量，如果少于2个则重新获取（因为默认会有源站点本身）
+  const existingSitesCount = torrent.value?.sites ? Object.keys(torrent.value.sites).length : 0;
+  
+  if (existingSitesCount < 2) {
+    console.log(`已存在站点数量不足(${existingSitesCount}个)，正在重新获取种子数据...`);
+    
+    try {
+      ElNotification.info({
+        title: '正在更新数据',
+        message: '正在重新获取种子站点信息...',
+        duration: 0,
+      });
+
+      // 调用后端接口重新获取单个种子数据
+      const params = new URLSearchParams({
+        page: '1',
+        pageSize: '1',
+        nameSearch: torrent.value.name
+      });
+
+      const response = await fetch(`/api/data?${params.toString()}`);
+
+      if (!response.ok) {
+        throw new Error(`网络错误: ${response.status}`);
+      }
+
+      const result = await response.json();
+      
+      if (result.error) {
+        throw new Error(result.error);
+      }
+
+      if (result.data && result.data.length > 0) {
+        const updatedTorrent = result.data[0];
+        console.log('重新获取到的种子数据:', updatedTorrent);
+        console.log('重新获取到的站点信息:', updatedTorrent.sites);
+        console.log(`站点数量从 ${existingSitesCount} 更新到 ${Object.keys(updatedTorrent.sites).length}`);
+        
+        // 更新 store 中的种子信息
+        crossSeedStore.setParams(updatedTorrent);
+        
+        ElNotification.success({
+          title: '数据更新成功',
+          message: `已重新获取种子站点信息，发现 ${Object.keys(updatedTorrent.sites).length} 个站点`
+        });
+      } else {
+        ElNotification.warning({
+          title: '未找到种子',
+          message: '未能找到匹配的种子数据'
+        });
+      }
+    } catch (error: any) {
+      console.error('重新获取种子数据时出错:', error);
+      ElNotification.error({
+        title: '数据更新失败',
+        message: error.message || '重新获取种子数据时发生错误'
+      });
+    }
+  } else {
+    console.log(`已存在站点数量充足(${existingSitesCount}个)，跳过重新获取`);
+  }
+  
   activeStep.value = 2;
 }
 
