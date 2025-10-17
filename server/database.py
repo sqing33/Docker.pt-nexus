@@ -395,9 +395,6 @@ class DatabaseManager:
                 "CREATE TABLE IF NOT EXISTS traffic_stats_hourly (stat_datetime DATETIME NOT NULL, downloader_id VARCHAR(36) NOT NULL, uploaded BIGINT DEFAULT 0, downloaded BIGINT DEFAULT 0, avg_upload_speed BIGINT DEFAULT 0, avg_download_speed BIGINT DEFAULT 0, samples INTEGER DEFAULT 0, cumulative_uploaded BIGINT NOT NULL DEFAULT 0, cumulative_downloaded BIGINT NOT NULL DEFAULT 0, PRIMARY KEY (stat_datetime, downloader_id)) ENGINE=InnoDB ROW_FORMAT=Dynamic"
             )
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS downloader_clients (id VARCHAR(36) PRIMARY KEY, name VARCHAR(255) NOT NULL, type VARCHAR(50) NOT NULL, last_total_dl BIGINT NOT NULL DEFAULT 0, last_total_ul BIGINT NOT NULL DEFAULT 0) ENGINE=InnoDB ROW_FORMAT=Dynamic"
-            )
-            cursor.execute(
                 "CREATE TABLE IF NOT EXISTS torrents (hash VARCHAR(40) PRIMARY KEY, name TEXT NOT NULL, save_path TEXT, size BIGINT, progress FLOAT, state VARCHAR(50), sites VARCHAR(255), `group` VARCHAR(255), details TEXT, downloader_id VARCHAR(36) NULL, last_seen DATETIME NOT NULL, iyuu_last_check DATETIME NULL) ENGINE=InnoDB ROW_FORMAT=Dynamic"
             )
             cursor.execute(
@@ -422,9 +419,6 @@ class DatabaseManager:
             # 创建小时聚合表 (PostgreSQL)
             cursor.execute(
                 "CREATE TABLE IF NOT EXISTS traffic_stats_hourly (stat_datetime TIMESTAMP NOT NULL, downloader_id VARCHAR(36) NOT NULL, uploaded BIGINT DEFAULT 0, downloaded BIGINT DEFAULT 0, avg_upload_speed BIGINT DEFAULT 0, avg_download_speed BIGINT DEFAULT 0, samples INTEGER DEFAULT 0, cumulative_uploaded BIGINT NOT NULL DEFAULT 0, cumulative_downloaded BIGINT NOT NULL DEFAULT 0, PRIMARY KEY (stat_datetime, downloader_id))"
-            )
-            cursor.execute(
-                "CREATE TABLE IF NOT EXISTS downloader_clients (id VARCHAR(36) PRIMARY KEY, name VARCHAR(255) NOT NULL, type VARCHAR(50) NOT NULL, last_total_dl BIGINT NOT NULL DEFAULT 0, last_total_ul BIGINT NOT NULL DEFAULT 0)"
             )
             cursor.execute(
                 "CREATE TABLE IF NOT EXISTS torrents (hash VARCHAR(40) PRIMARY KEY, name TEXT NOT NULL, save_path TEXT, size BIGINT, progress REAL, state VARCHAR(50), sites VARCHAR(255), \"group\" VARCHAR(255), details TEXT, downloader_id VARCHAR(36), last_seen TIMESTAMP NOT NULL, iyuu_last_check TIMESTAMP NULL)"
@@ -463,9 +457,6 @@ class DatabaseManager:
             # 创建小时聚合表 (SQLite)
             cursor.execute(
                 "CREATE TABLE IF NOT EXISTS traffic_stats_hourly (stat_datetime TEXT NOT NULL, downloader_id TEXT NOT NULL, uploaded INTEGER DEFAULT 0, downloaded INTEGER DEFAULT 0, avg_upload_speed INTEGER DEFAULT 0, avg_download_speed INTEGER DEFAULT 0, samples INTEGER DEFAULT 0, cumulative_uploaded INTEGER NOT NULL DEFAULT 0, cumulative_downloaded INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (stat_datetime, downloader_id))"
-            )
-            cursor.execute(
-                "CREATE TABLE IF NOT EXISTS downloader_clients (id TEXT PRIMARY KEY, name TEXT NOT NULL, type TEXT NOT NULL, last_total_dl INTEGER NOT NULL DEFAULT 0, last_total_ul INTEGER NOT NULL DEFAULT 0)"
             )
             cursor.execute(
                 "CREATE TABLE IF NOT EXISTS torrents (hash TEXT PRIMARY KEY, name TEXT NOT NULL, save_path TEXT, size INTEGER, progress REAL, state TEXT, sites TEXT, `group` TEXT, details TEXT, downloader_id TEXT, last_seen TEXT NOT NULL, iyuu_last_check TEXT NULL)"
@@ -830,36 +821,6 @@ class DatabaseManager:
             # 不要因为迁移失败而中断初始化
             conn.rollback()
 
-    def _sync_downloaders_from_config(self, cursor):
-        """从配置文件同步下载器列表到 downloader_clients 表。"""
-        downloaders = config_manager.get().get("downloaders", [])
-        if not downloaders:
-            return
-
-        cursor.execute("SELECT id FROM downloader_clients")
-        db_ids = {row["id"] for row in cursor.fetchall()}
-        config_ids = {d["id"] for d in downloaders}
-        ph = self.get_placeholder()
-
-        for d in downloaders:
-            if d["id"] in db_ids:
-                cursor.execute(
-                    f"UPDATE downloader_clients SET name = {ph}, type = {ph} WHERE id = {ph}",
-                    (d["name"], d["type"], d["id"]),
-                )
-            else:
-                # 修复：在插入新下载器时初始化last_total_dl和last_total_ul字段
-                cursor.execute(
-                    f"INSERT INTO downloader_clients (id, name, type, last_total_dl, last_total_ul) VALUES ({ph}, {ph}, {ph}, 0, 0)",
-                    (d["id"], d["name"], d["type"]),
-                )
-
-        ids_to_delete = db_ids - config_ids
-        if ids_to_delete:
-            cursor.execute(
-                f"DELETE FROM downloader_clients WHERE id IN ({', '.join([ph] * len(ids_to_delete))})",
-                tuple(ids_to_delete),
-            )
 
 
 def reconcile_historical_data(db_manager, config):
