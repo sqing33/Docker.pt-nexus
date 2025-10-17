@@ -22,12 +22,13 @@ def set_site_not_exist():
 
         conn = db_manager._get_connection()
         cursor = db_manager._get_cursor(conn)
+        ph = db_manager.get_placeholder()
 
         try:
             # 更新torrents表中对应记录的state为"不存在"
             # 首先查找对应的记录
             cursor.execute(
-                "SELECT hash FROM torrents WHERE name = %s AND sites = %s",
+                f"SELECT hash FROM torrents WHERE name = {ph} AND sites = {ph}",
                 (torrent_name, site_name)
             )
             result = cursor.fetchone()
@@ -39,7 +40,7 @@ def set_site_not_exist():
 
             # 更新state为"不存在"
             cursor.execute(
-                "UPDATE torrents SET state = %s WHERE hash = %s AND sites = %s",
+                f"UPDATE torrents SET state = {ph} WHERE hash = {ph} AND sites = {ph}",
                 ("不存在", torrent_hash, site_name)
             )
 

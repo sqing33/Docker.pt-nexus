@@ -2,7 +2,6 @@
 
 import logging
 import copy
-import uuid
 import cloudscraper
 import requests
 from flask import Blueprint, jsonify, request
@@ -11,6 +10,7 @@ from urllib.parse import urlparse
 # 从项目根目录导入核心模块
 from core import services
 from database import reconcile_historical_data
+from utils.downloader_id_helper import generate_downloader_id_from_host, validate_downloader_id
 
 # 导入下载器客户端 API
 from qbittorrentapi import Client, APIConnectionError
@@ -422,7 +422,31 @@ def update_settings():
         }
         for d in new_config["downloaders"]:
             if not d.get("id"):
-                d["id"] = str(uuid.uuid4())
+                # 新逻辑：基于host生成ID
+                try:
+                    d["id"] = generate_downloader_id_from_host(d.get("host", ""))
+                except ValueError as e:
+                    return jsonify({
+                        "error": f"无法为下载器 '{d.get('name')}' 生成ID: {str(e)}"
+                    }), 400
+            else:
+                # 检查现有ID是否与host匹配
+                try:
+                    is_valid, expected_id, message = validate_downloader_id(d)
+                    if not is_valid and expected_id:
+                        # 如果不匹配，说明IP被修改了，需要更新ID
+                        logging.warning(f"检测到下载器 '{d.get('name')}' 的host已变更，ID将从 {d['id']} 更新为 {expected_id}")
+                        d["id"] = expected_id
+                except Exception as e:
+                    logging.error(f"验证下载器 '{d.get('name')}' ID失败: {e}")
+                    # 如果验证失败，尝试重新生成ID
+                    try:
+                        d["id"] = generate_downloader_id_from_host(d.get("host", ""))
+                    except ValueError as ve:
+                        return jsonify({
+                            "error": f"无法为下载器 '{d.get('name')}' 生成ID: {str(ve)}"
+                        }), 400
+            
             if not d.get("password"):
                 d["password"] = current_passwords.get(d["id"], "")
         current_config["downloaders"] = new_config["downloaders"]
@@ -827,6 +851,98 @@ def get_iyuu_logs():
             "success": False,
             "message": f"获取IYUU日志失败: {str(e)}"
         }), 500
+
+# --- [新增] 下载器ID迁移接口 ---
+
+@management_bp.route("/migration/check", methods=["GET"])
+def check_migration_needed():
+    """检查是否需要迁移下载器ID"""
+    config_manager = management_bp.config_manager
+    from utils.downloader_id_helper import generate_migration_mapping
+    
+    try:
+        config = config_manager.get()
+        migration_mapping = generate_migration_mapping(config)
+        
+        return jsonify({
+            "success": True,
+            "needs_migration": len(migration_mapping) > 0,
+            "count": len(migration_mapping),
+            "mappings": migration_mapping
+        })
+    except Exception as e:
+        logging.error(f"检查迁移需求失败: {e}", exc_info=True)
+        return jsonify({
+            "success": False,
+            "message": f"检查迁移需求失败: {str(e)}"
+        }), 500
+
+
+@management_bp.route("/migration/execute", methods=["POST"])
+def execute_migration_api():
+    """执行下载器ID迁移"""
+    db_manager = management_bp.db_manager
+    config_manager = management_bp.config_manager
+    data = request.json or {}
+    backup = data.get("backup", True)
+    auto_cleanup = data.get("auto_cleanup", True)
+    
+    try:
+        from core.migrations.migrate_downloader_ids import execute_migration
+        
+        result = execute_migration(db_manager, config_manager, backup=backup, auto_cleanup=auto_cleanup)
+        
+        if result["success"]:
+            # 迁移成功后重启服务
+            logging.info("迁移完成，重启数据追踪服务...")
+            services.stop_data_tracker()
+            try:
+                from core.iyuu import stop_iyuu_thread
+                stop_iyuu_thread()
+            except Exception as e:
+                logging.error(f"停止IYUU线程失败: {e}", exc_info=True)
+            
+            db_manager.init_db()
+            reconcile_and_start_tracker()
+        
+        return jsonify(result)
+    except Exception as e:
+        logging.error(f"执行迁移失败: {e}", exc_info=True)
+        return jsonify({
+            "success": False,
+            "message": f"执行迁移失败: {str(e)}"
+        }), 500
+
+
+@management_bp.route("/migration/history", methods=["GET"])
+def get_migration_history():
+    """获取迁移历史记录"""
+    db_manager = management_bp.db_manager
+    conn = db_manager._get_connection()
+    cursor = db_manager._get_cursor(conn)
+    
+    try:
+        cursor.execute("""
+            SELECT old_id, new_id, host, name, migrated_at 
+            FROM downloader_id_migration 
+            ORDER BY migrated_at DESC
+        """)
+        records = [dict(row) for row in cursor.fetchall()]
+        
+        return jsonify({
+            "success": True,
+            "records": records
+        })
+    except Exception as e:
+        logging.error(f"获取迁移历史失败: {e}", exc_info=True)
+        return jsonify({
+            "success": False,
+            "message": f"获取迁移历史失败: {str(e)}"
+        }), 500
+    finally:
+        cursor.close()
+        conn.close()
+
 
 # --- Feedback Image Upload ---
 

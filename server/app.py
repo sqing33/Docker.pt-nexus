@@ -40,7 +40,34 @@ def create_app():
     db_manager = DatabaseManager(db_config)
     db_manager.init_db()  # 确保数据库和表结构存在
 
-    # --- 步骤 2: 与下载器同步，建立统计基线 ---
+    # --- 步骤 2: 自动执行下载器ID迁移（如果需要）---
+    logging.info("检查是否需要执行下载器ID迁移...")
+    try:
+        from utils.downloader_id_helper import generate_migration_mapping
+        from core.migrations.migrate_downloader_ids import execute_migration
+        
+        # 检查是否需要迁移
+        migration_mapping = generate_migration_mapping(config_manager.get())
+        
+        if migration_mapping:
+            logging.info(f"检测到 {len(migration_mapping)} 个下载器需要迁移ID，开始自动迁移...")
+            for mapping in migration_mapping:
+                logging.info(f"  - {mapping['name']}: {mapping['old_id']} -> {mapping['new_id']}")
+            
+            # 执行迁移
+            result = execute_migration(db_manager, config_manager, backup=True)
+            
+            if result["success"]:
+                logging.info(f"下载器ID迁移完成！成功迁移 {result['migrated_count']} 个下载器")
+            else:
+                logging.error(f"下载器ID迁移失败: {result.get('message', '未知错误')}")
+        else:
+            logging.info("所有下载器ID已是基于IP:端口的格式，无需迁移")
+    except Exception as e:
+        logging.error(f"检查或执行下载器ID迁移时出错: {e}", exc_info=True)
+        logging.warning("将继续启动应用...")
+
+    # --- 步骤 3: 与下载器同步，建立统计基线 ---
     # 这个函数现在从 database.py 导入
     reconcile_historical_data(db_manager, config_manager.get())
 
@@ -77,7 +104,7 @@ def create_app():
             logging.error(f"验证内部token时出错: {e}")
             return False
 
-    # --- 步骤 3: 导入并注册所有 API 蓝图 ---
+    # --- 步骤 4: 导入并注册所有 API 蓝图 ---
     logging.info("正在注册 API 路由...")
     from api.routes_management import management_bp
     from api.routes_stats import stats_bp
@@ -192,7 +219,7 @@ def create_app():
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
         }), 200
 
-    # --- 步骤 4: 执行初始数据聚合 ---
+    # --- 步骤 5: 执行初始数据聚合 ---
     logging.info("正在执行初始数据聚合...")
     try:
         db_manager.aggregate_hourly_traffic()
@@ -200,7 +227,7 @@ def create_app():
     except Exception as e:
         logging.error(f"初始数据聚合失败: {e}")
 
-    # --- 步骤 5: 启动后台数据追踪服务 ---
+    # --- 步骤 6: 启动后台数据追踪服务 ---
     logging.info("正在启动后台数据追踪服务...")
     # 检查是否在调试模式下运行
     if os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
@@ -213,7 +240,7 @@ def create_app():
     else:
         logging.info("检测到调试监控进程，跳过后台线程启动。")
 
-    # --- 步骤 5: 配置前端静态文件服务 ---
+    # --- 步骤 7: 配置前端静态文件服务 ---
     # 这个路由处理所有非 API 请求，将其指向前端应用
     @app.route("/", defaults={"path": ""})
     @app.route("/<path:path>")
