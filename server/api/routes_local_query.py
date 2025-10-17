@@ -258,6 +258,7 @@ def scan_local_files():
     - 支持通过查询参数 path 指定要扫描的特定路径
     - 应用路径映射，将远程路径转换为本地可访问路径
     - 判断下载器是否为远程，远程下载器跳过本地文件检查
+    - **优化：检测并扫描所有路径映射中的目录，即使数据库中没有对应种子**
     """
     from flask import request
 
@@ -372,30 +373,69 @@ def scan_local_files():
         remote_torrents_count = sum(
             len(torrents) for torrents in remote_torrents_by_path.values())
 
-        # 4. 遍历每个路径进行扫描（仅扫描本地下载器的路径）
-        for local_path, path_torrents in local_torrents_by_path.items():
+        # 3.5. 收集所有应该扫描的本地路径（包括映射中配置的但数据库中没有种子的路径）
+        all_local_paths_to_scan = set(local_torrents_by_path.keys())
+        
+        # 遍历所有下载器的路径映射，添加本地路径到扫描列表
+        for downloader_id, mappings in path_mappings_by_downloader.items():
+            # 跳过远程下载器
+            if downloader_id in remote_downloaders:
+                continue
+            
+            for mapping in mappings:
+                local_root = mapping.get("local", "").rstrip("/")
+                if local_root and os.path.exists(local_root):
+                    # 如果指定了target_path，只添加匹配的路径
+                    if target_path:
+                        # 检查target_path是否在这个映射的远程路径下
+                        remote_root = mapping.get("remote", "").rstrip("/")
+                        if target_path == remote_root or target_path.startswith(remote_root + "/"):
+                            # 将target_path映射到本地路径
+                            mapped_local = apply_path_mapping(target_path, downloader_id)
+                            if os.path.exists(mapped_local):
+                                all_local_paths_to_scan.add(mapped_local)
+                    else:
+                        # 扫描本地根目录下的所有子目录
+                        try:
+                            for item in os.listdir(local_root):
+                                subdir_path = os.path.join(local_root, item)
+                                if os.path.isdir(subdir_path):
+                                    all_local_paths_to_scan.add(subdir_path)
+                            # 也添加根目录本身
+                            all_local_paths_to_scan.add(local_root)
+                        except Exception as e:
+                            logger.warning(f"无法列出目录 {local_root}: {str(e)}")
+        
+        logger.info(f"总共需要扫描 {len(all_local_paths_to_scan)} 个本地路径")
+        
+        # 4. 遍历所有路径进行扫描（包括没有种子的路径）
+        for local_path in all_local_paths_to_scan:
+            path_torrents = local_torrents_by_path.get(local_path, [])
             print(f"[DEBUG] 扫描本地路径: {local_path} | 种子数: {len(path_torrents)}")
+            
+            # 如果路径不存在，记录缺失的种子
             if not os.path.exists(local_path):
                 print(f"[DEBUG] 路径不存在: {local_path}")
-                missing_groups_by_name = defaultdict(list)
-                for torrent in path_torrents:
-                    missing_groups_by_name[torrent['name']].append(torrent)
+                if path_torrents:  # 只有当有种子记录时才报告缺失
+                    missing_groups_by_name = defaultdict(list)
+                    for torrent in path_torrents:
+                        missing_groups_by_name[torrent['name']].append(torrent)
 
-                for name, torrent_group in missing_groups_by_name.items():
-                    # 使用第一个种子的信息
-                    first_torrent = torrent_group[0]
-                    missing_files.append({
-                        "name":
-                        name,
-                        "save_path":
-                        first_torrent['save_path'],  # 显示原始远程路径
-                        "expected_path":
-                        os.path.join(local_path, name),
-                        "size":
-                        first_torrent.get('size') or 0,
-                        "downloader_name":
-                        first_torrent.get('downloader_name', '未知')
-                    })
+                    for name, torrent_group in missing_groups_by_name.items():
+                        # 使用第一个种子的信息
+                        first_torrent = torrent_group[0]
+                        missing_files.append({
+                            "name":
+                            name,
+                            "save_path":
+                            first_torrent['save_path'],  # 显示原始远程路径
+                            "expected_path":
+                            os.path.join(local_path, name),
+                            "size":
+                            first_torrent.get('size') or 0,
+                            "downloader_name":
+                            first_torrent.get('downloader_name', '未知')
+                        })
                 continue
 
             try:
@@ -448,13 +488,27 @@ def scan_local_files():
                     except Exception as e:
                         logger.debug(f"无法获取大小 {full_path}: {str(e)}")
 
-                    # 找到原始的远程路径（从该路径下的任一种子获取）
-                    original_save_path = path_torrents[0][
-                        'save_path'] if path_torrents else local_path
+                    # 尝试找到原始的远程路径
+                    # 优先从该路径下的种子获取，否则尝试反向映射本地路径到远程路径
+                    original_save_path = local_path
+                    if path_torrents:
+                        original_save_path = path_torrents[0]['save_path']
+                    else:
+                        # 尝试反向映射：从本地路径推断远程路径
+                        for downloader_id, mappings in path_mappings_by_downloader.items():
+                            if downloader_id in remote_downloaders:
+                                continue
+                            for mapping in mappings:
+                                local_root = mapping.get("local", "").rstrip("/")
+                                remote_root = mapping.get("remote", "").rstrip("/")
+                                if local_root and remote_root:
+                                    if local_path == local_root or local_path.startswith(local_root + "/"):
+                                        original_save_path = local_path.replace(local_root, remote_root, 1)
+                                        break
 
                     orphaned_files.append({
                         "name": item_name,
-                        "path": original_save_path,  # 显示原始远程路径
+                        "path": original_save_path,  # 显示原始远程路径或推断的路径
                         "full_path": full_path,
                         "is_file": is_file,
                         "size": size
