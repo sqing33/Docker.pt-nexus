@@ -193,7 +193,7 @@ const submitFeedback = async () => {
   
   if (images.length > 0) {
     const imageUrls = Array.from(images)
-      .map(img => `img${img.src}img`)
+      .map(img => `[img]${img.src}[/img]`)
       .join('\n')
     combinedText += `\n\n${imageUrls}`
   }

@@ -121,7 +121,6 @@ source_parsers:
       "连载": "tag.连载"
       "合集": "tag.合集"
       "HLG": "tag.hlg"
-      "自购": "tag.自购"
       "菜单修改": "tag.菜单修改"
 
 mappings:
@@ -225,6 +224,5 @@ mappings:
     "tag.连载": 23
     "tag.合集": 20
     "tag.hlg": 19
-    "tag.自购": 22
     "tag.菜单修改": 14
     "default": null

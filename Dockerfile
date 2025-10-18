@@ -40,6 +40,7 @@ RUN apt-get update && \
     ffmpeg \
     mpv \
     mediainfo \
+    fonts-noto-cjk \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 

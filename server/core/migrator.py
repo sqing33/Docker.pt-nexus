@@ -463,7 +463,7 @@ class TorrentMigrator:
             torrent_response = self.scraper.get(
                 download_url,
                 headers={"Cookie": self.SOURCE_COOKIE},
-                timeout=120,
+                timeout=180,
             )
             torrent_response.raise_for_status()
 
@@ -713,7 +713,7 @@ class TorrentMigrator:
                 )
             else:
                 content.append(self._html_to_bbcode(child))
-        
+
         # [新增] 处理BBCode中的图片链接格式和清理不需要的标签
         from utils.formatters import process_bbcode_images_and_cleanup
         bbcode_result = "".join(content)
@@ -795,7 +795,7 @@ class TorrentMigrator:
                     "id": torrent_id,
                     "hit": "1"
                 },
-                timeout=120,
+                timeout=180,
             )
             response.raise_for_status()
             response.encoding = "utf-8"
@@ -821,7 +821,7 @@ class TorrentMigrator:
             torrent_response = self.scraper.get(
                 f"{self.SOURCE_BASE_URL}/{download_link_tag['href']}",
                 headers={"Cookie": self.SOURCE_COOKIE},
-                timeout=120,
+                timeout=180,
             )
             torrent_response.raise_for_status()
 
@@ -1107,6 +1107,7 @@ class TorrentMigrator:
 
                     # 验证每个截图的有效性
                     valid_count = 0
+                    invalid_count = 0
                     for i, shot_tag in enumerate(screenshot_links):
                         if shot_url_match := re.search(r'\[img\](.*?)\[/img\]',
                                                        shot_tag,
@@ -1115,14 +1116,46 @@ class TorrentMigrator:
                             if is_image_url_valid_robust(shot_url):
                                 valid_count += 1
                             else:
+                                invalid_count += 1
                                 self.logger.warning(
                                     f"检测到第 {i+1} 个截图链接失效: {shot_url}")
-                                screenshots_valid = False
+                                # 如果超过5张图片失效，直接清空全部重新获取
+                                if invalid_count > 5:
+                                    self.logger.warning(
+                                        f"失效图片数量超过5张（{invalid_count}张），直接清空全部截图重新获取"
+                                    )
+                                    print(
+                                        f"⚠️ 失效图片数量超过5张（{invalid_count}张），直接清空全部截图重新获取"
+                                    )
+                                    screenshots_valid = False
+                                    screenshots_sufficient = False
+                                    # 清空截图数据，强制重新生成
+                                    intro_data["screenshots"] = ""
+                                    screenshot_links = []
+                                    break
                         else:
                             # 如果标签格式不正确，也视为无效
+                            invalid_count += 1
                             self.logger.warning(
                                 f"第 {i+1} 个截图标签格式不正确: {shot_tag}")
-                            screenshots_valid = False
+                            # 如果超过5张图片失效，直接清空全部重新获取
+                            if invalid_count > 5:
+                                self.logger.warning(
+                                    f"失效图片数量超过5张（{invalid_count}张），直接清空全部截图重新获取"
+                                )
+                                print(
+                                    f"⚠️ 失效图片数量超过5张（{invalid_count}张），直接清空全部截图重新获取"
+                                )
+                                screenshots_valid = False
+                                screenshots_sufficient = False
+                                # 清空截图数据，强制重新生成
+                                intro_data["screenshots"] = ""
+                                screenshot_links = []
+                                break
+
+                    # 只有在没有提前退出循环的情况下才设置screenshots_valid
+                    if invalid_count <= 5 and invalid_count > 0:
+                        screenshots_valid = False
 
                     # 最终检查：即使所有链接有效，如果数量不足也需要重新生成
                     if screenshots_valid and valid_count < required_screenshot_count:
@@ -1383,6 +1416,14 @@ class TorrentMigrator:
                     s.get_text(strip=True)
                     for s in tags_td.find_next_sibling("td").find_all("span")
                 ] if tags_td and tags_td.find_next_sibling("td") else [])
+
+                # 过滤掉指定的标签
+                filtered_tags = []
+                unwanted_tags = ["官方", "官种", "首发", "自购", "应求"]
+                for tag in tags:
+                    if tag not in unwanted_tags:
+                        filtered_tags.append(tag)
+                tags = filtered_tags
 
                 type_text = basic_info_dict.get("类型", "")
                 type_match = re.search(r"[\(（](.*?)[\)）]", type_text)

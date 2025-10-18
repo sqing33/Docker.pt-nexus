@@ -103,7 +103,7 @@ def batch_check_remote_files(proxy_config, remote_paths):
         response = requests.post(
             f"{proxy_config['proxy_base_url']}/api/file/batch-check",
             json={"remote_paths": remote_paths},
-            timeout=120  # 批量检查可能需要更长时间
+            timeout=180  # 批量检查可能需要更长时间
         )
         response.raise_for_status()
         result = response.json()
@@ -375,13 +375,13 @@ def scan_local_files():
 
         # 3.5. 收集所有应该扫描的本地路径（包括映射中配置的但数据库中没有种子的路径）
         all_local_paths_to_scan = set(local_torrents_by_path.keys())
-        
+
         # 遍历所有下载器的路径映射，添加本地路径到扫描列表
         for downloader_id, mappings in path_mappings_by_downloader.items():
             # 跳过远程下载器
             if downloader_id in remote_downloaders:
                 continue
-            
+
             for mapping in mappings:
                 local_root = mapping.get("local", "").rstrip("/")
                 if local_root and os.path.exists(local_root):
@@ -389,9 +389,11 @@ def scan_local_files():
                     if target_path:
                         # 检查target_path是否在这个映射的远程路径下
                         remote_root = mapping.get("remote", "").rstrip("/")
-                        if target_path == remote_root or target_path.startswith(remote_root + "/"):
+                        if target_path == remote_root or target_path.startswith(
+                                remote_root + "/"):
                             # 将target_path映射到本地路径
-                            mapped_local = apply_path_mapping(target_path, downloader_id)
+                            mapped_local = apply_path_mapping(
+                                target_path, downloader_id)
                             if os.path.exists(mapped_local):
                                 all_local_paths_to_scan.add(mapped_local)
                     else:
@@ -405,14 +407,14 @@ def scan_local_files():
                             all_local_paths_to_scan.add(local_root)
                         except Exception as e:
                             logger.warning(f"无法列出目录 {local_root}: {str(e)}")
-        
+
         logger.info(f"总共需要扫描 {len(all_local_paths_to_scan)} 个本地路径")
-        
+
         # 4. 遍历所有路径进行扫描（包括没有种子的路径）
         for local_path in all_local_paths_to_scan:
             path_torrents = local_torrents_by_path.get(local_path, [])
             print(f"[DEBUG] 扫描本地路径: {local_path} | 种子数: {len(path_torrents)}")
-            
+
             # 如果路径不存在，记录缺失的种子
             if not os.path.exists(local_path):
                 print(f"[DEBUG] 路径不存在: {local_path}")
@@ -495,15 +497,20 @@ def scan_local_files():
                         original_save_path = path_torrents[0]['save_path']
                     else:
                         # 尝试反向映射：从本地路径推断远程路径
-                        for downloader_id, mappings in path_mappings_by_downloader.items():
+                        for downloader_id, mappings in path_mappings_by_downloader.items(
+                        ):
                             if downloader_id in remote_downloaders:
                                 continue
                             for mapping in mappings:
-                                local_root = mapping.get("local", "").rstrip("/")
-                                remote_root = mapping.get("remote", "").rstrip("/")
+                                local_root = mapping.get("local",
+                                                         "").rstrip("/")
+                                remote_root = mapping.get("remote",
+                                                          "").rstrip("/")
                                 if local_root and remote_root:
-                                    if local_path == local_root or local_path.startswith(local_root + "/"):
-                                        original_save_path = local_path.replace(local_root, remote_root, 1)
+                                    if local_path == local_root or local_path.startswith(
+                                            local_root + "/"):
+                                        original_save_path = local_path.replace(
+                                            local_root, remote_root, 1)
                                         break
 
                     orphaned_files.append({

@@ -336,10 +336,19 @@ class SSDSpecialExtractor:
         """
         tags_td = self.soup.find("td", string="标签")
         if tags_td and tags_td.find_next_sibling("td"):
-            return [
+            tags = [
                 s.get_text(strip=True)
                 for s in tags_td.find_next_sibling("td").find_all("span")
             ]
+            
+            # 过滤掉指定的标签
+            filtered_tags = []
+            unwanted_tags = ["官方", "官种", "首发", "自购", "应求"]
+            for tag in tags:
+                if tag not in unwanted_tags:
+                    filtered_tags.append(tag)
+            
+            return filtered_tags
         return []
 
     def extract_subtitle(self):

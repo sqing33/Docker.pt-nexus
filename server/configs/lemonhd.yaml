@@ -94,7 +94,6 @@ source_parsers:
       "Other 其他": "source.other"
 
     tag:
-      "官组": "tag.官组"
       "DIY": "tag.DIY"
       "禁转": "tag.禁转"
       "中字": "tag.中字"
@@ -172,7 +171,6 @@ mappings:
     "default": "10"
 
   tag:
-    "tag.官组": 1
     "tag.DIY": 1
     "tag.禁转": 1
     "tag.中字": 1

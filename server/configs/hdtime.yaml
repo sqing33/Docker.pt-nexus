@@ -9,7 +9,7 @@ form_fields:
   video_codec: "codec_sel[4]"
   audio_codec: "audiocodec_sel[4]"
   team: "team_sel[4]"
-  category: "type"  # 类别字段映射到type参数
+  category: "type" # 类别字段映射到type参数
 
 # 标准化键映射 - 定义源文本到标准化键的映射规则
 # source_parsers部分：定义如何从原始数据解析出标准化参数
@@ -25,7 +25,6 @@ source_parsers:
       source_key: "音频编码"
     team:
       source_key: "制作组"
-
 
   # 标准化键映射规则（从原始文本到标准化键）
   standard_keys:
@@ -185,8 +184,6 @@ mappings:
   tag:
     "tag.杜比视界": 8
     "tag.禁转": 1
-    "tag.首发": 2
-    "tag.官方": 3
     "tag.DIY": 4
     "tag.国语": 5
     "tag.中字": 6

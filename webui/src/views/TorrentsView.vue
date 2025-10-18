@@ -253,7 +253,7 @@
 
     <!-- 站点操作弹窗 -->
     <div v-if="siteOperationDialogVisible" class="filter-overlay" @click.self="siteOperationDialogVisible = false">
-      <el-card class="filter-card" style="max-width: 400px;">
+      <el-card class="filter-card" style="max-width: 500px;">
         <template #header>
           <div class="filter-card-header">
             <span>站点操作</span>
@@ -274,9 +274,29 @@
               {{ getLink(selectedSite.data, selectedSite.name) }}
             </el-link>
           </div>
+          <div v-else class="site-operation-input">
+            <p class="label">添加详情页链接或种子ID:</p>
+            <el-input 
+              v-model="newCommentInput" 
+              placeholder="请输入完整的详情页链接或种子ID"
+              clearable
+              @keyup.enter="updateSiteComment"
+            />
+            <p class="input-hint">支持输入完整链接（如：https://example.com/details.php?id=123）或仅输入数字ID（如：123456）</p>
+          </div>
           <div class="site-operation-buttons">
             <el-button @click="siteOperationDialogVisible = false">取消</el-button>
-            <el-button type="primary" @click="setSiteNotExist">设为不存在</el-button>
+            <el-button v-if="!hasLink(selectedSite?.data, selectedSite?.name)" 
+              type="success" 
+              @click="updateSiteComment"
+              :disabled="!newCommentInput || newCommentInput.trim() === ''">
+              添加链接
+            </el-button>
+            <el-button v-if="hasLink(selectedSite?.data, selectedSite?.name)" 
+              type="primary" 
+              @click="setSiteNotExist">
+              设为不存在
+            </el-button>
           </div>
         </div>
       </el-card>
@@ -295,7 +315,7 @@
           <p class="source-site-tip">
             <el-tag type="success" size="small" effect="dark" style="margin-right: 5px;">绿色</el-tag> 表示已配置Cookie，
             <el-tag type="primary" size="small" effect="dark" style="margin-right: 5px;">蓝色</el-tag> 表示未配置Cookie。
-            只有当前种子所在的站点才可点击。
+            只有当前种子所在且已配置Cookie的站点才可点击。
           </p>
           <div class="site-list-box glass-site-box">
             <el-tag v-for="site in allSourceSitesStatus" :key="site.name"
@@ -454,6 +474,7 @@ const selectedSourceSite = computed(() => crossSeedStore.sourceInfo?.name || '')
 const siteOperationDialogVisible = ref<boolean>(false);
 const selectedTorrentName = ref<string>('');
 const selectedSite = ref<OtherSite | null>(null);
+const newCommentInput = ref<string>('');
 
 // 用于跟踪在源站点选择弹窗中进行IYUU查询的站点
 const sourceSiteQueryLoading = ref<Record<string, boolean>>({});
@@ -783,7 +804,15 @@ const confirmSourceSiteAndProceed = async (sourceSite: any) => {
 };
 
 const isSourceSiteSelectable = (siteName: string): boolean => {
-  return !!(selectedTorrentForMigration.value && selectedTorrentForMigration.value.sites[siteName]);
+  // 首先检查站点是否存在于当前种子中
+  const existsInTorrent = !!(selectedTorrentForMigration.value && selectedTorrentForMigration.value.sites[siteName]);
+  if (!existsInTorrent) {
+    return false;
+  }
+  
+  // 然后检查站点是否已配置Cookie
+  const siteStatus = allSourceSitesStatus.value.find(s => s.name === siteName);
+  return !!(siteStatus && siteStatus.has_cookie);
 };
 
 const closeCrossSeedDialog = () => {
@@ -792,11 +821,51 @@ const closeCrossSeedDialog = () => {
 
 // 处理站点点击事件
 const handleSiteClick = (torrentName: string, site: OtherSite) => {
-  // 只有当站点状态为"未做种"时才显示操作弹窗
-  if (site.data.state === '未做种') {
-    selectedTorrentName.value = torrentName;
-    selectedSite.value = site;
-    siteOperationDialogVisible.value = true;
+  selectedTorrentName.value = torrentName;
+  selectedSite.value = site;
+  newCommentInput.value = ''; // 清空输入框
+  siteOperationDialogVisible.value = true;
+};
+
+// 更新站点详情页链接
+const updateSiteComment = async () => {
+  if (!selectedTorrentName.value || !selectedSite.value) {
+    ElMessage.error('缺少必要的参数');
+    return;
+  }
+
+  if (!newCommentInput.value || newCommentInput.value.trim() === '') {
+    ElMessage.error('请输入详情页链接或ID');
+    return;
+  }
+
+  try {
+    const response = await fetch('/api/sites/update_comment', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        torrent_name: selectedTorrentName.value,
+        site_name: selectedSite.value.name,
+        comment: newCommentInput.value.trim()
+      })
+    });
+
+    const result = await response.json();
+
+    if (response.ok && result.success) {
+      ElMessage.success('详情页链接已成功添加');
+      siteOperationDialogVisible.value = false;
+      newCommentInput.value = '';
+      // 重新加载数据以反映更改
+      await fetchData();
+    } else {
+      ElMessage.error(result.error || '添加详情页链接失败');
+    }
+  } catch (error) {
+    console.error('添加详情页链接时出错:', error);
+    ElMessage.error('添加详情页链接时发生网络错误');
   }
 };
 
@@ -1468,6 +1537,22 @@ watch(nameSearch, () => {
   word-wrap: break-word;
   word-break: break-all;
   white-space: normal;
+}
+
+.site-operation-input {
+  margin: 15px 0;
+}
+
+.site-operation-input .label {
+  font-weight: bold;
+  margin-bottom: 8px;
+}
+
+.site-operation-input .input-hint {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 5px;
+  line-height: 1.4;
 }
 
 .site-operation-buttons {

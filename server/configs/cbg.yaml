@@ -93,7 +93,6 @@ source_parsers:
       "480P": "resolution.r480p"
 
     team:
-      "NONE": "team.other"
       "CBGWT": "team.cbgwt"
       "CBGER": "team.cbger"
 

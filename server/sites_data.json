@@ -1144,7 +1144,7 @@
     "special_tracker_domain": "sunnytk",
     "group": "-Sunny",
     "description": "Sunny",
-    "migration": 0,
+    "migration": 1,
     "speed_limit": 10
   },
   {

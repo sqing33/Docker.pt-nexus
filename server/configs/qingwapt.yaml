@@ -10,7 +10,7 @@ form_fields:
   audio_codec: "audiocodec_sel[4]"
   resolution: "standard_sel[4]"
   team: "team_sel[4]"
-  category: "type"  # 类别字段映射到type参数
+  category: "type" # 类别字段映射到type参数
 
 # 标准化键映射 - 定义源文本到标准化键的映射规则
 # source_parsers部分：定义如何从原始数据解析出标准化参数
@@ -190,7 +190,7 @@ mappings:
     "tag.儿童片": 17
     "tag.LGBTQ+": 19
     "tag.中字": 6
-    "tag.特效字幕": 20
+    "tag.特效": 20
     "tag.国语": 5
     "tag.粤语": 8
     "tag.完结": 14

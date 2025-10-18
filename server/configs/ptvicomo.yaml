@@ -145,7 +145,6 @@ source_parsers:
     tag:
       "禁转": "tag.禁转"
       "DIY": "tag.DIY"
-      "首发": "tag.首发"
       "特效": "tag.特效"
       "稀缺": "tag.稀缺"
       "国语": "tag.国语"
@@ -153,7 +152,6 @@ source_parsers:
       "Dolby Vison": "tag.dolby_vision"
       "Dolby Atmos": "tag.dolby_atmos"
       "HDR": "tag.HDR"
-      "驻站": "tag.驻站"
       "合集": "tag.合集"
       "HDR 10+": "tag.hdr10plus"
       "PTP金种": "tag.ptp_golden"
@@ -276,7 +274,6 @@ mappings:
   tag:
     "tag.禁转": 1
     "tag.DIY": 4
-    "tag.首发": 2
     "tag.特效": 8
     "tag.稀缺": 12
     "tag.国语": 5
@@ -284,7 +281,6 @@ mappings:
     "tag.dolby_vision": 9
     "tag.dolby_atmos": 17
     "tag.HDR": 7
-    "tag.驻站": 14
     "tag.合集": 15
     "tag.hdr10plus": 10
     "tag.ptp_golden": 16

@@ -22,8 +22,21 @@ def batch_enhance_proxy():
             timeout=300  # 5分钟超时
         )
 
-        # 返回Go服务的响应
-        return jsonify(response.json()), response.status_code
+        # 检查响应内容是否为空
+        if not response.text.strip():
+            logging.error("Go服务返回空响应")
+            return jsonify({"success": False, "error": "Go服务返回空响应"}), 503
+
+        # 尝试解析JSON，如果失败则返回原始错误信息
+        try:
+            return jsonify(response.json()), response.status_code
+        except ValueError as json_error:
+            logging.error(f"Go服务返回非JSON响应: {response.text[:200]}")
+            return jsonify({
+                "success": False, 
+                "error": f"Go服务返回无效JSON: {str(json_error)}",
+                "raw_response": response.text[:500]  # 包含部分原始响应用于调试
+            }), 503
 
     except requests.exceptions.RequestException as e:
         logging.error(f"Go服务请求失败: {e}")
@@ -44,7 +57,21 @@ def records_proxy():
             # 清空记录
             response = requests.delete(f"{GO_SERVICE_URL}/records", timeout=30)
 
-        return jsonify(response.json()), response.status_code
+        # 检查响应内容是否为空
+        if not response.text.strip():
+            logging.error("Go服务返回空响应")
+            return jsonify({"success": False, "error": "Go服务返回空响应"}), 503
+
+        # 尝试解析JSON，如果失败则返回原始错误信息
+        try:
+            return jsonify(response.json()), response.status_code
+        except ValueError as json_error:
+            logging.error(f"Go服务返回非JSON响应: {response.text[:200]}")
+            return jsonify({
+                "success": False, 
+                "error": f"Go服务返回无效JSON: {str(json_error)}",
+                "raw_response": response.text[:500]  # 包含部分原始响应用于调试
+            }), 503
 
     except requests.exceptions.RequestException as e:
         logging.error(f"Go服务请求失败: {e}")

@@ -48,8 +48,8 @@ echo "将使用端口: $PORT_INPUT"
 echo "[1/4] 正在检查并安装依赖 (需要 sudo 权限)..."
 
 # 定义需要的依赖列表
-# [核心修改] 在依赖列表中加入了 mpv
-DEPS="ffmpeg mediainfo mpv"
+# [核心修改] 在依赖列表中加入了 mpv 和中文字体支持
+DEPS="ffmpeg mediainfo mpv fonts-noto-cjk"
 
 # 检测包管理器
 if command -v apt-get &> /dev/null; then

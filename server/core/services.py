@@ -278,7 +278,7 @@ class DataTracker(Thread):
             response = requests.post(
                 f"{proxy_base_url}/api/torrents/all",
                 json=request_data,
-                timeout=120  # 种子信息可能需要更长的时间
+                timeout=180  # 种子信息可能需要更长的时间
             )
             response.raise_for_status()
 
@@ -676,38 +676,52 @@ class DataTracker(Thread):
                 cursor.execute(
                     f"SELECT hash, name, state FROM torrents WHERE downloader_id = {placeholder}",
                     (downloader_id, ))
-                db_torrents = {row["hash"]: {"name": row["name"], "state": row["state"]} for row in cursor.fetchall()}
+                db_torrents = {
+                    row["hash"]: {
+                        "name": row["name"],
+                        "state": row["state"]
+                    }
+                    for row in cursor.fetchall()
+                }
 
                 # 找出需要删除的种子（在数据库中但不在当前下载器中）
-                hashes_to_delete = db_torrents.keys() - downloader_current_hashes
+                hashes_to_delete = db_torrents.keys(
+                ) - downloader_current_hashes
 
                 if hashes_to_delete:
                     print(
                         f"【刷新线程】发现下载器 {downloader_id} 中有 {len(hashes_to_delete)} 个种子已被删除"
                     )
-                    
+
                     # 获取当前所有正在做种的种子名称（包括当前正在处理的种子和数据库中其他下载器的种子）
                     current_seeding_names = set()
-                    
+
                     # 添加当前正在处理的种子中正在做种的名称
                     for hash_value, torrent_data in torrents_to_upsert.items():
-                        if torrent_data["state"] not in ["未做种", "已暂停", "已停止", "错误", "等待", "队列"]:
+                        if torrent_data["state"] not in [
+                                "未做种", "已暂停", "已停止", "错误", "等待", "队列"
+                        ]:
                             current_seeding_names.add(torrent_data["name"])
-                    
+
                     # 添加数据库中其他下载器的正在做种的种子名称
-                    other_downloaders_placeholders = ",".join([placeholder] * len(enabled_downloader_ids - {downloader_id}))
+                    other_downloaders_placeholders = ",".join(
+                        [placeholder] *
+                        len(enabled_downloader_ids - {downloader_id}))
                     if enabled_downloader_ids - {downloader_id}:  # 如果还有其他下载器
                         cursor.execute(
                             f"SELECT DISTINCT name FROM torrents WHERE downloader_id IN ({other_downloaders_placeholders}) AND state NOT IN ('未做种', '已暂停', '已停止', '错误', '等待', '队列')",
-                            tuple(enabled_downloader_ids - {downloader_id})
-                        )
-                        other_seeding_names = {row["name"] for row in cursor.fetchall()}
+                            tuple(enabled_downloader_ids - {downloader_id}))
+                        other_seeding_names = {
+                            row["name"]
+                            for row in cursor.fetchall()
+                        }
                         current_seeding_names.update(other_seeding_names)
-                    
+
                     # 分类要删除的种子
                     hashes_to_delete_normal = []  # 状态不是'未做种'的，直接删除
-                    hashes_to_delete_inactive_seed = []  # 状态是'未做种'但没有其他同名种子在做种的，也要删除
-                    
+                    hashes_to_delete_inactive_seed = [
+                    ]  # 状态是'未做种'但没有其他同名种子在做种的，也要删除
+
                     for hash_value in hashes_to_delete:
                         torrent_info = db_torrents[hash_value]
                         if torrent_info["state"] != "未做种":
@@ -715,33 +729,50 @@ class DataTracker(Thread):
                             hashes_to_delete_normal.append(hash_value)
                         else:
                             # 状态是'未做种'，检查是否有其他同名种子在做种
-                            if torrent_info["name"] not in current_seeding_names:
+                            if torrent_info[
+                                    "name"] not in current_seeding_names:
                                 # 没有其他同名种子在做种，删除这个'未做种'的种子
-                                hashes_to_delete_inactive_seed.append(hash_value)
-                    
+                                hashes_to_delete_inactive_seed.append(
+                                    hash_value)
+
                     # 初始化删除计数器
                     deleted_count_normal = 0
                     deleted_count_inactive = 0
-                    
+
                     # 删除状态不是'未做种'的种子
                     if hashes_to_delete_normal:
-                        delete_placeholders = ",".join([placeholder] * len(hashes_to_delete_normal))
+                        delete_placeholders = ",".join(
+                            [placeholder] * len(hashes_to_delete_normal))
                         delete_query = f"DELETE FROM torrents WHERE hash IN ({delete_placeholders}) AND downloader_id = {placeholder}"
-                        cursor.execute(delete_query, tuple(hashes_to_delete_normal) + (downloader_id, ))
+                        cursor.execute(
+                            delete_query,
+                            tuple(hashes_to_delete_normal) + (downloader_id, ))
                         deleted_count_normal = cursor.rowcount
-                        print(f"【刷新线程】已删除下载器 {downloader_id} 中的 {deleted_count_normal} 个已移除的非未做种种子")
-                    
+                        print(
+                            f"【刷新线程】已删除下载器 {downloader_id} 中的 {deleted_count_normal} 个已移除的非未做种种子"
+                        )
+
                     # 删除状态是'未做种'但没有其他同名种子在做种的种子
                     if hashes_to_delete_inactive_seed:
-                        delete_placeholders = ",".join([placeholder] * len(hashes_to_delete_inactive_seed))
+                        delete_placeholders = ",".join(
+                            [placeholder] *
+                            len(hashes_to_delete_inactive_seed))
                         delete_query = f"DELETE FROM torrents WHERE hash IN ({delete_placeholders}) AND downloader_id = {placeholder}"
-                        cursor.execute(delete_query, tuple(hashes_to_delete_inactive_seed) + (downloader_id, ))
+                        cursor.execute(
+                            delete_query,
+                            tuple(hashes_to_delete_inactive_seed) +
+                            (downloader_id, ))
                         deleted_count_inactive = cursor.rowcount
-                        print(f"【刷新线程】已删除下载器 {downloader_id} 中的 {deleted_count_inactive} 个已移除的未做种种子（没有其他同名种子在做种）")
-                    
+                        print(
+                            f"【刷新线程】已删除下载器 {downloader_id} 中的 {deleted_count_inactive} 个已移除的未做种种子（没有其他同名种子在做种）"
+                        )
+
                     total_deleted = deleted_count_normal + deleted_count_inactive
-                    print(f"【刷新线程】已删除下载器 {downloader_id} 中的 {total_deleted} 个已移除的种子记录")
-                    logging.info(f"已删除下载器 {downloader_id} 中的 {total_deleted} 个已移除的种子记录")
+                    print(
+                        f"【刷新线程】已删除下载器 {downloader_id} 中的 {total_deleted} 个已移除的种子记录"
+                    )
+                    logging.info(
+                        f"已删除下载器 {downloader_id} 中的 {total_deleted} 个已移除的种子记录")
 
             # 更新seed_parameters表中的is_deleted字段
             print("【刷新线程】开始更新seed_parameters表中的is_deleted字段...")
@@ -800,9 +831,9 @@ class DataTracker(Thread):
                 if self.db_manager.db_type == "mysql":
                     sql = """INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, `group`, downloader_id, last_seen) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE name=VALUES(name), save_path=VALUES(save_path), size=VALUES(size), progress=VALUES(progress), state=VALUES(state), sites=VALUES(sites), details=IF(VALUES(details) != '', VALUES(details), details), `group`=VALUES(`group`), downloader_id=VALUES(downloader_id), last_seen=VALUES(last_seen)"""
                 elif self.db_manager.db_type == "postgresql":
-                    sql = """INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, "group", downloader_id, last_seen) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT(hash) DO UPDATE SET name=excluded.name, save_path=excluded.save_path, size=excluded.size, progress=excluded.progress, state=excluded.state, sites=excluded.sites, details=CASE WHEN excluded.details != '' THEN excluded.details ELSE excluded.details END, "group"=excluded."group", downloader_id=excluded.downloader_id, last_seen=excluded.last_seen"""
+                    sql = """INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, "group", downloader_id, last_seen) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT(hash) DO UPDATE SET name=excluded.name, save_path=excluded.save_path, size=excluded.size, progress=excluded.progress, state=excluded.state, sites=excluded.sites, details=CASE WHEN excluded.details != '' THEN excluded.details ELSE torrents.details END, "group"=excluded."group", downloader_id=excluded.downloader_id, last_seen=excluded.last_seen"""
                 else:  # sqlite
-                    sql = """INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, "group", downloader_id, last_seen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(hash) DO UPDATE SET name=excluded.name, save_path=excluded.save_path, size=excluded.size, progress=excluded.progress, state=excluded.state, sites=excluded.sites, details=CASE WHEN excluded.details != '' THEN excluded.details ELSE excluded.details END, "group"=excluded."group", downloader_id=excluded.downloader_id, last_seen=excluded.last_seen"""
+                    sql = """INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, "group", downloader_id, last_seen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(hash) DO UPDATE SET name=excluded.name, save_path=excluded.save_path, size=excluded.size, progress=excluded.progress, state=excluded.state, sites=excluded.sites, details=CASE WHEN excluded.details != '' THEN excluded.details ELSE torrents.details END, "group"=excluded."group", downloader_id=excluded.downloader_id, last_seen=excluded.last_seen"""
                 cursor.executemany(sql, params)
                 print(f"【刷新线程】已批量处理 {len(params)} 条种子主信息。")
                 logging.info(f"已批量处理 {len(params)} 条种子主信息。")
@@ -884,7 +915,7 @@ class DataTracker(Thread):
                 elif "tracker" in t and t["tracker"]:
                     # 如果只有 tracker 字段（单数），将其转换为列表格式
                     trackers_list = [{"url": t["tracker"]}]
-                
+
                 info = {
                     "name": t.get("name", ""),
                     "hash": t.get("hash", ""),
@@ -907,13 +938,15 @@ class DataTracker(Thread):
                     # 如果 trackers 为空，尝试通过 API 获取
                     if not trackers_data and client_instance:
                         try:
-                            torrent_trackers = client_instance.torrents_trackers(t.hash)
+                            torrent_trackers = client_instance.torrents_trackers(
+                                t.hash)
                             trackers_data = torrent_trackers if torrent_trackers else []
                         except Exception as e:
-                            logging.warning(f"无法通过API获取种子 {t.hash} 的trackers: {e}")
+                            logging.warning(
+                                f"无法通过API获取种子 {t.hash} 的trackers: {e}")
                 except Exception as e:
                     logging.warning(f"获取种子 {t.hash} 的trackers时出错: {e}")
-                
+
                 info = {
                     "name": t.name,
                     "hash": t.hash,
@@ -1018,7 +1051,7 @@ class DataTracker(Thread):
                 if core_domain in core_domain_map:
                     matched_site = core_domain_map[core_domain]
                     return matched_site
-        
+
         # 如果 trackers 为空或未匹配到，尝试从 comment 中提取 URL 并匹配
         if comment:
             comment_url = _extract_url_from_comment(comment)
@@ -1028,9 +1061,11 @@ class DataTracker(Thread):
                     core_domain = _extract_core_domain(hostname)
                     if core_domain in core_domain_map:
                         matched_site = core_domain_map[core_domain]
-                        logging.info(f"通过 comment URL 匹配到站点: {matched_site} (域名: {core_domain})")
+                        logging.info(
+                            f"通过 comment URL 匹配到站点: {matched_site} (域名: {core_domain})"
+                        )
                         return matched_site
-        
+
         return None
 
     def _find_torrent_group(self, name, group_to_site_map_lower):

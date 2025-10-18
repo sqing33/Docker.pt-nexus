@@ -147,11 +147,8 @@ source_parsers:
       "Other": "team.other"
 
     tag:
-      "官种": "tag.官种"
-      "驻站": "tag.驻站"
-      "首发": "tag.首发"
       "禁转": "tag.禁转"
-      "特效字幕": "tag.特效字幕"
+      "特效字幕": "tag.特效"
       "DIY": "tag.DIY"
       "国语": "tag.国语"
       "英字": "tag.英字"
@@ -285,11 +282,8 @@ mappings:
     "default": "5"
 
   tag:
-    "tag.官种": 3
-    "tag.驻站": 15
-    "tag.首发": 2
     "tag.禁转": 1
-    "tag.特效字幕": 21
+    "tag.特效": 21
     "tag.DIY": 4
     "tag.国语": 5
     "tag.英字": 18

@@ -638,6 +638,7 @@ global_standard_keys:
     "Snow-Raws": "team.snow-raws"
     "Starfall": "team.starfall"
     "StarfallWeb": "team.starfallweb"
+    "Sunny": "team.sunny"
     "Telesto": "team.telesto"
     "TLF": "team.tlf"
     "TJUPT": "team.tjupt"
@@ -651,17 +652,12 @@ global_standard_keys:
     "ZmPT": "team.zmpt"
     "ZmWeb": "team.zmweb"
     "原创": "team.original"
-    "NONE": "team.other"
     "Other": "team.other"
     "Other/其他": "team.other"
 
   # 标签映射
   tag:
-    # 官方相关标签
-    "官种": "tag.官种"
-    "官方": "tag.官方"
-    "驻站": "tag.驻站"
-    "首发": "tag.首发"
+    # 禁转相关标签
     "禁转": "tag.禁转"
 
     # 内容相关标签
@@ -676,7 +672,7 @@ global_standard_keys:
     "自压": "tag.自压"
     "自译": "tag.自译"
     "外挂字幕": "tag.外挂字幕"
-    "特效字幕": "tag.特效字幕"
+    "特效字幕": "tag.特效"
     "特效": "tag.特效"
     "DIY": "tag.DIY"
     "Remux": "tag.Remux"
@@ -741,7 +737,6 @@ global_standard_keys:
 
     # 其他标签
     "独家": "tag.独家"
-    "应求": "tag.应求"
     "已刮削": "tag.已刮削"
     "三级": "tag.三级"
     "VCB-Studio": "tag.vcb_studio"

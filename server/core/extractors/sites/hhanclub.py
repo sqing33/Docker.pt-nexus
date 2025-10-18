@@ -276,7 +276,14 @@ class HHCLUBSpecialExtractor:
                     if tag_text:
                         tags.append(tag_text)
 
-        return tags
+        # 过滤掉指定的标签
+        filtered_tags = []
+        unwanted_tags = ["官方", "官种", "首发", "自购", "应求"]
+        for tag in tags:
+            if tag not in unwanted_tags:
+                filtered_tags.append(tag)
+
+        return filtered_tags
 
     def extract_subtitle(self):
         """

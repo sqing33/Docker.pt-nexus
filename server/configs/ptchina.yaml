@@ -8,8 +8,8 @@ form_fields:
   resolution: "standard_sel[4]"
   team: "team_sel[4]"
   source: "processing_sel[4]"
-  category: "type"  # 类别字段映射到type参数
-  tags[]: "tags[4][]"  # 标签字段映射到tags参数
+  category: "type" # 类别字段映射到type参数
+  tags[]: "tags[4][]" # 标签字段映射到tags参数
 
 # 标准化键映射 - 定义源文本到标准化键的映射规则
 # source_parsers部分：定义如何从原始数据解析出标准化参数
@@ -117,8 +117,6 @@ source_parsers:
       "Other": "team.other"
 
     tag:
-      "官方": "tag.官方"
-      "首发": "tag.首发"
       "DIY": "tag.DIY"
       "国语": "tag.国语"
       "中字": "tag.中字"
@@ -216,8 +214,6 @@ mappings:
     "default": "35"
 
   tag:
-    "tag.官方": 1
-    "tag.首发": 2
     "tag.DIY": 4
     "tag.国语": 5
     "tag.中字": 6

@@ -90,7 +90,6 @@ source_parsers:
 
     tag:
       "禁转": "tag.禁转"
-      "首发": "tag.首发"
       "DIY": "tag.DIY"
       "国语": "tag.国语"
       "中字": "tag.中字"
@@ -162,7 +161,6 @@ mappings:
 
   tag:
     "tag.禁转": 1
-    "tag.首发": 2
     "tag.DIY": 4
     "tag.国语": 5
     "tag.中字": 6

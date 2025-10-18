@@ -161,7 +161,7 @@ def _upload_to_agsv(image_path: str, token: str):
             response = requests.post(upload_url,
                                      headers=headers,
                                      files=files,
-                                     timeout=120)
+                                     timeout=180)
 
         data = response.json()
         if response.status_code == 200 and data.get("status"):
@@ -782,14 +782,14 @@ def upload_data_title(title: str, torrent_filename: str = ""):
     # 4. 预处理标题：修复音频参数格式
     # 先处理缺少点的情况，如 FLAC 20 -> FLAC 2.0, FLAC 2 0 -> FLAC 2.0
     title_part = re.sub(r"((?:FLAC|DDP|AV3A|AAC|LPCM|AC3|DD))\s*(\d)\s*(\d)",
-                       r"\1 \2.\3",
-                       title_part,
-                       flags=re.I)
+                        r"\1 \2.\3",
+                        title_part,
+                        flags=re.I)
     # 再处理没有空格的情况，如 FLAC2.0 -> FLAC 2.0
     title_part = re.sub(r"((?:FLAC|DDP|AV3A|AAC|LPCM|AC3|DD))(\d(?:\.\d)?)",
-                       r"\1 \2",
-                       title_part,
-                       flags=re.I)
+                        r"\1 \2",
+                        title_part,
+                        flags=re.I)
 
     # 技术标签提取（排除已识别的制作组名称）
     tech_patterns_definitions = {
@@ -933,17 +933,19 @@ def upload_data_title(title: str, torrent_filename: str = ""):
                 if key == "audio":
                     processed_values = [
                         # 先处理缺少点的情况，如 FLAC 20 -> FLAC 2.0, FLAC 2 0 -> FLAC 2.0
-                        re.sub(r"((?:FLAC|DDP|AV3A|AAC|LPCM|AC3|DD))\s*(\d)\s*(\d)",
-                               r"\1 \2.\3",
-                               val,
-                               flags=re.I) for val in processed_values
+                        re.sub(
+                            r"((?:FLAC|DDP|AV3A|AAC|LPCM|AC3|DD))\s*(\d)\s*(\d)",
+                            r"\1 \2.\3",
+                            val,
+                            flags=re.I) for val in processed_values
                     ]
                     processed_values = [
                         # 再处理没有空格的情况，如 FLAC2.0 -> FLAC 2.0
-                        re.sub(r"((?:FLAC|DDP|AV3A|AAC|LPCM|AC3|DD))(\d(?:\.\d)?)",
-                               r"\1 \2",
-                               val,
-                               flags=re.I) for val in processed_values
+                        re.sub(
+                            r"((?:FLAC|DDP|AV3A|AAC|LPCM|AC3|DD))(\d(?:\.\d)?)",
+                            r"\1 \2",
+                            val,
+                            flags=re.I) for val in processed_values
                     ]
 
                 # 取独一无二的值并按出现顺序排序
@@ -1265,7 +1267,7 @@ def upload_data_screenshot(source_info,
             subprocess.run(cmd_screenshot,
                            check=True,
                            capture_output=True,
-                           timeout=120)
+                           timeout=180)
 
             if not os.path.exists(intermediate_png_path):
                 print(f"❌ 错误: mpv 命令执行成功，但未找到输出文件 {intermediate_png_path}")
@@ -1664,7 +1666,7 @@ def add_torrent_to_downloader(detail_page_url: str, save_path: str,
             try:
                 details_response = scraper.get(detail_page_url,
                                                headers=common_headers,
-                                               timeout=120,
+                                               timeout=180,
                                                proxies=proxies)
                 break  # Success, exit retry loop
             except Exception as e:
@@ -1678,18 +1680,19 @@ def add_torrent_to_downloader(detail_page_url: str, save_path: str,
         details_response.raise_for_status()
 
         soup = BeautifulSoup(details_response.text, "html.parser")
-        
+
         # 检查是否需要使用特殊下载器
         site_base_url = ensure_scheme(site_info['base_url'])
         full_download_url = None  # 初始化full_download_url
-        
+
         print(f"站点基础URL: {site_base_url}")
 
         # 检查是否为haidan站点
         if 'haidan' in site_base_url:
             # Haidan站点需要提取torrent_id而不是id
             torrent_id_match = re.search(r"torrent_id=(\d+)", detail_page_url)
-            if not torrent_id_match: raise ValueError("无法从详情页URL中提取种子ID（torrent_id）。")
+            if not torrent_id_match:
+                raise ValueError("无法从详情页URL中提取种子ID（torrent_id）。")
             torrent_id = torrent_id_match.group(1)
             # Haidan站点的特殊逻辑
             download_link_tag = soup.find(
@@ -1709,7 +1712,7 @@ def add_torrent_to_downloader(detail_page_url: str, save_path: str,
             torrent_id_match = re.search(r"id=(\d+)", detail_page_url)
             if not torrent_id_match: raise ValueError("无法从详情页URL中提取种子ID。")
             torrent_id = torrent_id_match.group(1)
-            
+
             download_link_tag = soup.select_one(
                 f'a.index[href^="download.php?id={torrent_id}"]')
             if not download_link_tag: raise RuntimeError("在详情页HTML中未能找到下载链接！")
@@ -1729,7 +1732,7 @@ def add_torrent_to_downloader(detail_page_url: str, save_path: str,
             try:
                 torrent_response = scraper.get(full_download_url,
                                                headers=common_headers,
-                                               timeout=120,
+                                               timeout=180,
                                                proxies=proxies)
                 torrent_response.raise_for_status()
                 break  # Success, exit retry loop
@@ -2053,44 +2056,52 @@ def extract_tags_from_mediainfo(mediainfo_text: str) -> list:
             current_section = 'general'
             # 在 General Section 结束时处理之前的 Audio/Video Section
             if current_audio_section_lines:
-                _process_audio_section_languages(current_audio_section_lines, found_tags)
+                _process_audio_section_languages(current_audio_section_lines,
+                                                 found_tags)
                 current_audio_section_lines = []
             if current_video_section_lines:
-                _process_video_section_languages(current_video_section_lines, found_tags)
+                _process_video_section_languages(current_video_section_lines,
+                                                 found_tags)
                 current_video_section_lines = []
             continue
         elif line_lower.startswith('video'):
             current_section = 'video'
             if current_audio_section_lines:
-                _process_audio_section_languages(current_audio_section_lines, found_tags)
+                _process_audio_section_languages(current_audio_section_lines,
+                                                 found_tags)
                 current_audio_section_lines = []
-            current_video_section_lines = [line_stripped] # 开始新的 Video 块
+            current_video_section_lines = [line_stripped]  # 开始新的 Video 块
             continue
         elif line_lower.startswith('audio'):
             current_section = 'audio'
             if current_video_section_lines:
-                _process_video_section_languages(current_video_section_lines, found_tags)
+                _process_video_section_languages(current_video_section_lines,
+                                                 found_tags)
                 current_video_section_lines = []
-            current_audio_section_lines = [line_stripped] # 开始新的 Audio 块
+            current_audio_section_lines = [line_stripped]  # 开始新的 Audio 块
             continue
         elif line_lower.startswith('text'):
             current_section = 'text'
             if current_audio_section_lines:
-                _process_audio_section_languages(current_audio_section_lines, found_tags)
+                _process_audio_section_languages(current_audio_section_lines,
+                                                 found_tags)
                 current_audio_section_lines = []
             if current_video_section_lines:
-                _process_video_section_languages(current_video_section_lines, found_tags)
+                _process_video_section_languages(current_video_section_lines,
+                                                 found_tags)
                 current_video_section_lines = []
             continue
         # 其他 Section 暂不处理，直接跳过或者可以定义为 'other'
-        elif not line_stripped: # 空行表示一个Section的结束，可以触发处理
-            if current_audio_section_lines and current_section != 'audio': # 如果是空行且之前是音频块，则处理
-                _process_audio_section_languages(current_audio_section_lines, found_tags)
+        elif not line_stripped:  # 空行表示一个Section的结束，可以触发处理
+            if current_audio_section_lines and current_section != 'audio':  # 如果是空行且之前是音频块，则处理
+                _process_audio_section_languages(current_audio_section_lines,
+                                                 found_tags)
                 current_audio_section_lines = []
-            if current_video_section_lines and current_section != 'video': # 如果是空行且之前是视频块，则处理
-                _process_video_section_languages(current_video_section_lines, found_tags)
+            if current_video_section_lines and current_section != 'video':  # 如果是空行且之前是视频块，则处理
+                _process_video_section_languages(current_video_section_lines,
+                                                 found_tags)
                 current_video_section_lines = []
-            current_section = None # 重置当前section
+            current_section = None  # 重置当前section
             continue
 
         # 收集当前 Section 的行
@@ -2120,8 +2131,8 @@ def extract_tags_from_mediainfo(mediainfo_text: str) -> list:
             found_tags.add('HDR10')
         elif 'hdr' in tag_keywords_map and any(
                 kw in line_lower for kw in tag_keywords_map['HDR']):
-            if not any(hdr_tag in found_tags for hdr_tag in
-                       ['Dolby Vision', 'HDR10+', 'HDR10']):
+            if not any(hdr_tag in found_tags
+                       for hdr_tag in ['Dolby Vision', 'HDR10+', 'HDR10']):
                 found_tags.add('HDR')
         if 'hdrvivid' in tag_keywords_map and any(
                 kw in line_lower for kw in tag_keywords_map['HDRVivid']):
@@ -2129,14 +2140,16 @@ def extract_tags_from_mediainfo(mediainfo_text: str) -> list:
 
     # 处理文件末尾可能存在的 Audio/Video Section
     if current_audio_section_lines:
-        _process_audio_section_languages(current_audio_section_lines, found_tags)
+        _process_audio_section_languages(current_audio_section_lines,
+                                         found_tags)
     if current_video_section_lines:
-        _process_video_section_languages(current_video_section_lines, found_tags)
+        _process_video_section_languages(current_video_section_lines,
+                                         found_tags)
 
     # 为所有标签添加 tag. 前缀
     prefixed_tags = set()
     for tag in found_tags:
-        if not tag.startswith('tag.'): # 避免重复添加 tag.
+        if not tag.startswith('tag.'):  # 避免重复添加 tag.
             prefixed_tags.add(f'tag.{tag}')
         else:
             prefixed_tags.add(tag)
@@ -2153,7 +2166,7 @@ def _process_audio_section_languages(audio_lines, found_tags):
             found_tags.add('国语')
         elif language == '粤语':
             found_tags.add('粤语')
-        else: # 其他语言
+        else:  # 其他语言
             found_tags.add(language)
             found_tags.add('外语')
         print(f"   -> 从音频块中提取到语言: {language}")
@@ -2167,7 +2180,7 @@ def _process_video_section_languages(video_lines, found_tags):
             found_tags.add('国语')
         elif language == '粤语':
             found_tags.add('粤语')
-        else: # 其他语言
+        else:  # 其他语言
             found_tags.add(language)
             found_tags.add('外语')
         print(f"   -> 从视频块中提取到语言: {language}")
@@ -2190,11 +2203,11 @@ def _check_language_in_section(section_lines) -> str | None:
         '德语': ['german', '德语'],
         '俄语': ['russian', '俄语'],
         '印地语': ['hindi', '印地语'],
-        '西班牙语': ['spanish', '西班牙语', 'latin america'], # 添加 Latin America
-        '葡萄牙语': ['portuguese', '葡萄牙语', 'br'], # 添加 BR
+        '西班牙语': ['spanish', '西班牙语', 'latin america'],  # 添加 Latin America
+        '葡萄牙语': ['portuguese', '葡萄牙语', 'br'],  # 添加 BR
         '意大利语': ['italian', '意大利语'],
         '泰语': ['thai', '泰语'],
-        '阿拉伯语': ['arabic', '阿拉伯语', 'sa'], # 添加 SA
+        '阿拉伯语': ['arabic', '阿拉伯语', 'sa'],  # 添加 SA
     }
 
     for line in section_lines:
@@ -2217,10 +2230,11 @@ def _check_language_in_section(section_lines) -> str | None:
 
 # 删除这两个不再使用的辅助函数
 def _check_mandarin_in_audio_section(audio_lines):
-    return False # Placeholder to avoid errors during diff application
+    return False  # Placeholder to avoid errors during diff application
+
 
 def _check_other_language_in_audio_section(audio_lines) -> str | None:
-    return None # Placeholder to avoid errors during diff application
+    return None  # Placeholder to avoid errors during diff application
 
 
 def extract_origin_from_description(description_text: str) -> str:

@@ -379,7 +379,7 @@ mappings:
     "tag.分集": 9
     "tag.完结": 8
     "tag.HDR": 11
-    "tag.特效字幕": 10
+    "tag.特效": 10
     "tag.Dolby Vision": 12
     "tag.Dolby Atmos": 13
     "tag.未完结": 59
@@ -404,7 +404,6 @@ mappings:
     "tag.短剧": 25
     "tag.AGSV": 24
     "tag.Audiences": 23
-    "tag.驻站": 22
     "tag.伦理": 20
     "default": null
 

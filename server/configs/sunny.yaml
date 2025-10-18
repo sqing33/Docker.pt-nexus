@@ -1,0 +1,162 @@
+site_name: "SSD"
+
+source_parsers:
+  source_params:
+    type:
+      source_key: "类型"
+    medium:
+      source_key: "媒介"
+    video_codec:
+      source_key: "编码"
+    audio_codec:
+      source_key: "音频编码"
+    resolution:
+      source_key: "分辨率"
+    team:
+      source_key: "制作组"
+
+  standard_keys:
+    type:
+      "Movies": "category.movie"
+      "TV Series": "category.tv_series"
+      "Documentaries": "category.documentaries"
+      "Music Videos": "category.mv"
+
+    medium:
+      "Blu-ray": "medium.bluray"
+      "Remux": "medium.remux"
+      "MiniBD": "medium.minibd"
+      "BDRip": "medium.bdrip"
+      "WEB-DL": "medium.webdl"
+      "WEBRip": "medium.webrip"
+      "HDTV": "medium.hdtv"
+      "TVRip": "medium.tvrip"
+      "DVD": "medium.dvd"
+      "DVDRip": "medium.dvdrip"
+      "CD": "medium.cd"
+      "Other": "medium.other"
+
+    # 视频编码映射
+    video_codec:
+      # H.264/AVC相关
+      "H.264": "video.h264"
+      "H.264/AVC": "video.h264"
+      "AVC/H.264/x264": "video.h264"
+      "AVC/H264/x264": "video.h264"
+      "AVC": "video.h264"
+      "h264": "video.h264"
+      "x264": "video.x264"
+      "X264": "video.x264"
+
+      # H.265/HEVC相关
+      "H.265": "video.h265"
+      "H.265/HEVC": "video.h265"
+      "HEVC/H.265/x265": "video.h265"
+      "HEVC/H265/x265": "video.h265"
+      "HEVC": "video.h265"
+      "h265": "video.h265"
+      "x265": "video.x265"
+      "X265": "video.x265"
+      "H.265(HEVC)": "video.h265"
+
+      # 其他编码
+      "H.266/VVC": "video.h266"
+      "AV1": "video.av1"
+      "VP9": "video.vp9"
+      "VPB/VP9": "video.vp9"
+      "VC-1": "video.vc1"
+      "MPEG-1": "video.mpeg1"
+      "MPEG-2": "video.mpeg2"
+      "MPEG/MPEG-2": "video.mpeg2"
+      "MPEG-4": "video.mpeg4"
+      "H.261": "video.h261"
+      "Xvid": "video.xvid"
+
+      # 其他
+      "Other": "video.other"
+      "Other/其他": "video.other"
+
+    # 音频编码映射
+    audio_codec:
+      # DTS相关
+      "DTS": "audio.dts"
+      "DTS-HD/DTS": "audio.dts"
+      "DTS-HD": "audio.dts_hd"
+      "DTS-HD MA": "audio.dts_hd_ma"
+      "DTS-HD|MA": "audio.dts_hd_ma"
+      "DTS-HDMA": "audio.dts_hd_ma"
+      "DTS-HD HR": "audio.dts_hd_hr"
+      "DTS:X": "audio.dtsx"
+      "DTS-X": "audio.dtsx"
+
+      # AC3/DDP相关
+      "DDP": "audio.ddp"
+      "DDP/E-AC3": "audio.ddp"
+      "DDP/EAC3": "audio.ddp"
+      "DDP/DD+/EAC3": "audio.ddp"
+      "DDP/DD+": "audio.ddp"
+      "DDP Atmos": "audio.ddp_atmos"
+      "E-AC-3": "audio.ddp"
+      "E-AC3": "audio.ddp"
+      "DD": "audio.ac3"
+      "DD/AC3": "audio.ac3"
+      "Dolby Digital/DD": "audio.ac3"
+      "AC3": "audio.ac3"
+      "AC-3": "audio.ac3"
+      "AC3/EAC3": "audio.ac3"
+
+      # 杜比音频
+      "TrueHD": "audio.truehd"
+      "True-HD": "audio.truehd"
+      "TrueHD Atmos": "audio.truehd_atmos"
+
+      # 无损音频
+      "FLAC": "audio.flac"
+      "APE": "audio.ape"
+      "ALAC": "audio.alac"
+      "WAV": "audio.wav"
+      "LPCM": "audio.lpcm"
+      "PCM": "audio.pcm"
+      "DSD": "audio.dsd"
+      "TTA": "audio.tta"
+
+      # 有损音频
+      "AAC": "audio.aac"
+      "MP3": "audio.mp3"
+      "OGG": "audio.ogg"
+      "M4A": "audio.m4a"
+      "m4a": "audio.m4a"
+      "MPEG": "audio.mpeg"
+      "Opus": "audio.opus"
+      "OPUS": "audio.opus"
+
+      # 其他音频编码
+      "AV3V": "audio.av3v"
+      "AV3A": "audio.av3a"
+      "AVSA": "audio.avsa"
+
+      # 其他
+      "Other": "audio.other"
+      "Other/其他": "audio.other"
+
+    resolution:
+      "2160p": "resolution.r2160p"
+      "1080p": "resolution.r1080p"
+      "720p": "resolution.r720p"
+      "SD": "resolution.sd"
+      "Other": "resolution.other"
+
+    team:
+      "Sunny": "team.sunny"
+
+    tag:
+      "中字": "tag.中字"
+      "特效": "tag.特效"
+      "Dolby Vision": "tag.Dolby_Vision"
+      "HDR": "tag.HDR"
+      "完结": "tag.完结"
+      "DIY": "tag.DIY"
+      "国语": "tag.国语"
+      "粤语": "tag.粤语"
+      "动画": "tag.动画"
+      "default": null

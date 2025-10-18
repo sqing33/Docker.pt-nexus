@@ -366,8 +366,6 @@ def add_fallback_mappings(reverse_mappings):
             'tag.DIY': 'DIY',
             'tag.中字': '中字',
             'tag.HDR': 'HDR',
-            'tag.官种': '官种',
-            'tag.首发': '首发'
         })
 
 
@@ -1035,7 +1033,7 @@ def migrate_publish():
                                 "id": source_torrent_id,
                                 "hit": "1"
                             },
-                            timeout=120)
+                            timeout=180)
                         response.raise_for_status()
                         response.encoding = "utf-8"
 
@@ -1050,7 +1048,7 @@ def migrate_publish():
                             torrent_response = scraper.get(
                                 f"{SOURCE_BASE_URL}/{download_link_tag['href']}",
                                 headers={"Cookie": SOURCE_COOKIE},
-                                timeout=120,
+                                timeout=180,
                             )
                             torrent_response.raise_for_status()
 
@@ -1281,8 +1279,7 @@ def migrate_publish():
                             save_path=save_path,
                             downloader_id=downloader_id,
                             db_manager=db_manager,
-                            config_manager=config_manager
-                        )
+                            config_manager=config_manager)
 
                         result["auto_add_result"] = {
                             "success": success,

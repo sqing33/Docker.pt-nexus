@@ -124,14 +124,12 @@ source_parsers:
       "音乐": "tag.music"
       "禁转": "tag.禁转"
       "动漫": "tag.动漫"
-      "首发": "tag.首发"
       "DIY": "tag.DIY"
       "英语": "tag.英语"
       "国语": "tag.国语"
       "中字": "tag.中字"
       "HDR": "tag.HDR"
       "游戏": "tag.game"
-      "应求": "tag.应求"
       "完结": "tag.完结"
       "书籍": "tag.books"
 
@@ -233,14 +231,12 @@ mappings:
     "tag.music": 10
     "tag.禁转": 1
     "tag.动漫": 9
-    "tag.首发": 2
     "tag.DIY": 4
     "tag.英语": 8
     "tag.国语": 5
     "tag.中字": 6
     "tag.HDR": 7
     "tag.game": 14
-    "tag.应求": 13
     "tag.完结": 12
     "tag.books": 11
     "default": null

@@ -144,10 +144,6 @@ source_parsers:
       "Other": "team.other"
 
     tag:
-      "官方": "tag.官方"
-      "首发": "tag.首发"
-      "完结": "tag.完结"
-      "原创": "tag.原创"
       "禁转": "tag.禁转"
       "国语": "tag.国语"
       "粤语": "tag.粤语"
@@ -156,7 +152,6 @@ source_parsers:
       "杜比视界": "tag.杜比视界"
       "HDR": "tag.HDR"
       "DIY": "tag.DIY"
-      "应求": "tag.应求"
       "高码高帧": "tag.高码高帧"
       "月月": "tag.月月"
 
@@ -279,10 +274,6 @@ mappings:
     "default": "30"
 
   tag:
-    "tag.官方": 1
-    "tag.首发": 2
-    "tag.完结": 3
-    "tag.原创": 4
     "tag.禁转": 5
     "tag.国语": 7
     "tag.粤语": 8
@@ -291,7 +282,6 @@ mappings:
     "tag.杜比视界": 11
     "tag.HDR": 12
     "tag.DIY": 13
-    "tag.应求": 14
     "tag.高码高帧": 15
     "tag.月月": 16
     "default": null

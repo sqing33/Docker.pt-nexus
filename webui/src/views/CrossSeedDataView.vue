@@ -350,7 +350,7 @@
                     </el-tooltip>
 
                     <!-- ✨ 如果是成功状态或其他非失败状态 -->
-                    <span v-else :style="{ color: getDownloaderAddStatusColor(scope.row.downloader_add_result) }">
+                    <span v-else style="text-align: center;" :style="{ color: getDownloaderAddStatusColor(scope.row.downloader_add_result) }">
                       {{ formatDownloaderAddResult(scope.row.downloader_add_result) }}
                     </span>
                   </template>
@@ -581,7 +581,7 @@ const batchCrossSeedButtonText = computed(() => {
   const targetSite = activeFilters.value.excludeTargetSites
 
   if (!targetSite || targetSite.trim() === '') {
-    return `批量转种 (${selectedCount}) - 请先选择目标站点`
+    return `批量转种 (${selectedCount}) - 请先在筛选中选择目标站点`
   }
 
   return `批量转种到 ${targetSite} (${selectedCount})`
@@ -1228,14 +1228,14 @@ const hasRestrictedTag = (tags: string[] | string): boolean => {
 
 // 控制表格行是否可选择
 const checkSelectable = (row: SeedParameter) => {
-  // 检查是否包含禁转标签
-  if (hasRestrictedTag(row.tags)) {
-    return false
-  }
-
-  // 在删除模式下，所有行都可以被选择（包括已删除的行）
+  // 在删除模式下，所有行都可以被选择（包括已删除的行和有禁转标签的行）
   if (isDeleteMode.value) {
     return true
+  }
+
+  // 在非删除模式下，检查是否包含禁转标签
+  if (hasRestrictedTag(row.tags)) {
+    return false
   }
 
   // 如果已删除筛选处于活动状态，则允许选择已删除的行 - 便于批量操作

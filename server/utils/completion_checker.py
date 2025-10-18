@@ -14,14 +14,12 @@ import os
 from typing import Dict, Optional, Tuple
 
 
-def check_completion_status(
-    title: str = "",
-    subtitle: str = "",
-    description: str = "",
-    local_path: str = "",
-    downloader_id: str = None,
-    torrent_name: str = None
-) -> Dict[str, any]:
+def check_completion_status(title: str = "",
+                            subtitle: str = "",
+                            description: str = "",
+                            local_path: str = "",
+                            downloader_id: str = None,
+                            torrent_name: str = None) -> Dict[str, any]:
     """
     综合判断电视剧/动漫是否完结
     
@@ -40,16 +38,16 @@ def check_completion_status(
         - reason: str, 判断依据说明
         - details: Dict, 详细信息
     """
-    
+
     result = {
         "is_complete": False,
         "confidence": "low",
         "reason": "",
         "details": {}
     }
-    
+
     reasons = []
-    
+
     # 策略1: 副标题关键词检查
     subtitle_check = _check_subtitle_keywords(subtitle)
     if subtitle_check["matched"]:
@@ -57,7 +55,7 @@ def check_completion_status(
         result["confidence"] = "high"
         reasons.append(f"副标题包含完结关键词: {subtitle_check['keyword']}")
         result["details"]["subtitle_match"] = subtitle_check
-    
+
     # 策略2: 主标题Complete检查
     title_check = _check_title_complete(title)
     if title_check["matched"]:
@@ -67,15 +65,15 @@ def check_completion_status(
             result["confidence"] = "high"
         reasons.append(f"主标题包含Complete标识")
         result["details"]["title_match"] = title_check
-    
+
     # 策略3: 简介集数对比（需要本地路径）
     if description and local_path:
-        episode_check = _check_episode_count_match(
-            description, local_path, downloader_id, torrent_name
-        )
+        episode_check = _check_episode_count_match(description, local_path,
+                                                   downloader_id, torrent_name)
         result["details"]["episode_check"] = episode_check
-        
-        if episode_check["total_episodes"] is not None and episode_check["local_episodes"] is not None:
+
+        if episode_check["total_episodes"] is not None and episode_check[
+                "local_episodes"] is not None:
             if episode_check["is_match"]:
                 result["is_complete"] = True
                 # 只有在没有更高置信度时才设置
@@ -89,13 +87,13 @@ def check_completion_status(
                 reasons.append(
                     f"本地集数({episode_check['local_episodes']})少于简介总集数({episode_check['total_episodes']})"
                 )
-    
+
     # 汇总原因
     if reasons:
         result["reason"] = "; ".join(reasons)
     else:
         result["reason"] = "未检测到完结标识"
-    
+
     return result
 
 
@@ -117,7 +115,7 @@ def _check_subtitle_keywords(subtitle: str) -> Dict[str, any]:
     """
     if not subtitle:
         return {"matched": False, "keyword": None}
-    
+
     # 定义完结关键词模式
     patterns = [
         (r'全\s*(\d+)\s*集', '全{}集'),
@@ -127,7 +125,7 @@ def _check_subtitle_keywords(subtitle: str) -> Dict[str, any]:
         (r'COMPLETE', 'COMPLETE'),
         (r'Complete', 'Complete'),
     ]
-    
+
     for pattern, keyword_template in patterns:
         match = re.search(pattern, subtitle, re.IGNORECASE)
         if match:
@@ -135,14 +133,10 @@ def _check_subtitle_keywords(subtitle: str) -> Dict[str, any]:
                 keyword = keyword_template.format(match.group(1))
             else:
                 keyword = keyword_template
-            
+
             print(f"副标题完结检测: 找到关键词 '{keyword}'")
-            return {
-                "matched": True,
-                "keyword": keyword,
-                "pattern": pattern
-            }
-    
+            return {"matched": True, "keyword": keyword, "pattern": pattern}
+
     return {"matched": False, "keyword": None}
 
 
@@ -158,22 +152,20 @@ def _check_title_complete(title: str) -> Dict[str, any]:
     """
     if not title:
         return {"matched": False}
-    
+
     # 匹配Complete关键词（不区分大小写）
     pattern = r'\bCOMPLETE\b'
     match = re.search(pattern, title, re.IGNORECASE)
-    
+
     if match:
         print(f"主标题完结检测: 找到Complete标识")
-        return {
-            "matched": True,
-            "keyword": match.group(0)
-        }
-    
+        return {"matched": True, "keyword": match.group(0)}
+
     return {"matched": False}
 
 
-def _extract_total_episodes_from_description(description: str) -> Optional[int]:
+def _extract_total_episodes_from_description(
+        description: str) -> Optional[int]:
     """
     从简介中提取总集数
     
@@ -192,27 +184,29 @@ def _extract_total_episodes_from_description(description: str) -> Optional[int]:
     """
     if not description:
         return None
-    
+
     # 定义提取模式（按优先级排序）
     patterns = [
-        r'◎\s*集\s*数\s+(\d+)',      # ◎集　　数　12
+        r'◎\s*集\s*数\s+(\d+)',  # ◎集　　数　12
         r'◎\s*集\s*数\s*[:：]\s*(\d+)',  # ◎集数：12
-        r'集\s*数\s*[:：]\s*(\d+)',   # 集数：12
-        r'Episodes?\s*[:：]\s*(\d+)', # Episodes: 12
+        r'集\s*数\s*[:：]\s*(\d+)',  # 集数：12
+        r'Episodes?\s*[:：]\s*(\d+)',  # Episodes: 12
         r'Total\s+Episodes?\s*[:：]\s*(\d+)',  # Total Episodes: 12
     ]
-    
+
     for pattern in patterns:
         match = re.search(pattern, description, re.IGNORECASE)
         if match:
             episode_count = int(match.group(1))
             print(f"从简介提取到总集数: {episode_count}")
             return episode_count
-    
+
     return None
 
 
-def _count_local_episodes(local_path: str, downloader_id: str = None, torrent_name: str = None) -> Optional[int]:
+def _count_local_episodes(local_path: str,
+                          downloader_id: str = None,
+                          torrent_name: str = None) -> Optional[int]:
     """
     统计本地S01E01格式的剧集文件数量
     
@@ -233,16 +227,16 @@ def _count_local_episodes(local_path: str, downloader_id: str = None, torrent_na
     if not local_path:
         print("未提供本地路径")
         return None
-    
+
     # 步骤1: 检查是否需要使用远程代理（仿照 media_helper.py）
     proxy_config = _get_downloader_proxy_config(downloader_id)
-    
+
     # 步骤2: 构建完整路径
     remote_path = local_path
     if torrent_name:
         remote_path = os.path.join(local_path, torrent_name)
         print(f"已提供 torrent_name，将使用完整路径: '{remote_path}'")
-    
+
     # 步骤3: 如果需要使用代理，调用远程API
     if proxy_config:
         print(f"使用代理统计集数: {proxy_config['proxy_base_url']}")
@@ -251,8 +245,7 @@ def _count_local_episodes(local_path: str, downloader_id: str = None, torrent_na
             response = requests.post(
                 f"{proxy_config['proxy_base_url']}/api/media/episode-count",
                 json={"remote_path": remote_path},
-                timeout=60
-            )
+                timeout=180)
             response.raise_for_status()
             result = response.json()
             if result.get("success"):
@@ -266,7 +259,7 @@ def _count_local_episodes(local_path: str, downloader_id: str = None, torrent_na
         except Exception as e:
             print(f"通过代理统计集数失败: {e}")
             return None
-    
+
     # 步骤4: 本地统计 - 应用路径映射
     try:
         from utils.media_helper import translate_path
@@ -276,7 +269,7 @@ def _count_local_episodes(local_path: str, downloader_id: str = None, torrent_na
     except Exception as e:
         print(f"路径映射失败: {e}，使用原始路径")
         translated_path = local_path
-    
+
     # 步骤5: 如果提供了 torrent_name，拼接完整路径
     if torrent_name:
         full_path = os.path.join(translated_path, torrent_name)
@@ -284,24 +277,23 @@ def _count_local_episodes(local_path: str, downloader_id: str = None, torrent_na
     else:
         full_path = translated_path
         print(f"使用基础路径: {full_path}")
-    
+
     # 步骤6: 检查路径是否存在
     if not os.path.exists(full_path):
         print(f"本地路径不存在: {full_path}")
         return None
-    
+
     # 视频文件扩展名
-    video_extensions = {'.mkv', '.mp4', '.ts', '.avi', '.wmv', '.mov', '.flv', '.m2ts'}
-    
+    video_extensions = {
+        '.mkv', '.mp4', '.ts', '.avi', '.wmv', '.mov', '.flv', '.m2ts'
+    }
+
     # 剧集文件名模式
     # 支持: S01E01, S01E02, s01e01, S1E1等格式
-    episode_pattern = re.compile(
-        r'[Ss](\d{1,2})[Ee](\d{1,3})',
-        re.IGNORECASE
-    )
-    
+    episode_pattern = re.compile(r'[Ss](\d{1,2})[Ee](\d{1,3})', re.IGNORECASE)
+
     episode_numbers = set()
-    
+
     try:
         # 遍历目录查找视频文件
         for root, dirs, files in os.walk(full_path):
@@ -310,14 +302,14 @@ def _count_local_episodes(local_path: str, downloader_id: str = None, torrent_na
                 _, ext = os.path.splitext(filename)
                 if ext.lower() not in video_extensions:
                     continue
-                
+
                 # 匹配剧集编号
                 match = episode_pattern.search(filename)
                 if match:
                     season = int(match.group(1))
                     episode = int(match.group(2))
                     episode_numbers.add((season, episode))
-        
+
         if episode_numbers:
             # 通常只统计第一季的集数
             season_1_episodes = [ep for s, ep in episode_numbers if s == 1]
@@ -330,20 +322,18 @@ def _count_local_episodes(local_path: str, downloader_id: str = None, torrent_na
                 local_count = len(episode_numbers)
                 print(f"本地找到 {local_count} 集（多季）")
                 return local_count
-        
+
     except Exception as e:
         print(f"统计本地集数时出错: {e}")
         return None
-    
+
     return None
 
 
-def _check_episode_count_match(
-    description: str,
-    local_path: str,
-    downloader_id: str = None,
-    torrent_name: str = None
-) -> Dict[str, any]:
+def _check_episode_count_match(description: str,
+                               local_path: str,
+                               downloader_id: str = None,
+                               torrent_name: str = None) -> Dict[str, any]:
     """
     检查简介中的总集数是否与本地文件数量匹配
     
@@ -362,23 +352,24 @@ def _check_episode_count_match(
         "is_match": False,
         "reason": ""
     }
-    
+
     # 提取总集数
     total_episodes = _extract_total_episodes_from_description(description)
     result["total_episodes"] = total_episodes
-    
+
     if total_episodes is None:
         result["reason"] = "简介中未找到总集数信息"
         return result
-    
+
     # 统计本地集数
-    local_episodes = _count_local_episodes(local_path, downloader_id, torrent_name)
+    local_episodes = _count_local_episodes(local_path, downloader_id,
+                                           torrent_name)
     result["local_episodes"] = local_episodes
-    
+
     if local_episodes is None:
         result["reason"] = "无法统计本地集数"
         return result
-    
+
     # 比对
     if local_episodes >= total_episodes:
         result["is_match"] = True
@@ -386,7 +377,7 @@ def _check_episode_count_match(
     else:
         result["is_match"] = False
         result["reason"] = f"本地集数({local_episodes})少于总集数({total_episodes})"
-    
+
     return result
 
 
@@ -402,14 +393,14 @@ def _get_downloader_proxy_config(downloader_id: str = None):
     """
     if not downloader_id:
         return None
-    
+
     try:
         from config import config_manager
         from urllib.parse import urlparse
-        
+
         config = config_manager.get()
         downloaders = config.get("downloaders", [])
-        
+
         for downloader in downloaders:
             if downloader.get("id") == downloader_id:
                 use_proxy = downloader.get("use_proxy", False)
@@ -423,7 +414,8 @@ def _get_downloader_proxy_config(downloader_id: str = None):
                     proxy_ip = parsed_url.hostname
                     if not proxy_ip:
                         if '://' in host_value:
-                            proxy_ip = host_value.split('://')[1].split(':')[0].split('/')[0]
+                            proxy_ip = host_value.split('://')[1].split(
+                                ':')[0].split('/')[0]
                         else:
                             proxy_ip = host_value.split(':')[0]
                     proxy_config = {
@@ -433,14 +425,12 @@ def _get_downloader_proxy_config(downloader_id: str = None):
                 break
     except Exception as e:
         print(f"获取代理配置失败: {e}")
-    
+
     return None
 
 
-def add_completion_tag_if_needed(
-    tags: list,
-    completion_status: Dict[str, any]
-) -> list:
+def add_completion_tag_if_needed(tags: list,
+                                 completion_status: Dict[str, any]) -> list:
     """
     根据完结状态，向标签列表添加完结标签
     
@@ -453,22 +443,22 @@ def add_completion_tag_if_needed(
     """
     if not isinstance(tags, list):
         tags = []
-    
+
     # 定义完结标签的标准化键
     completion_tag = "tag.完结"
-    
+
     # 检查是否已存在完结标签
     has_completion_tag = any(
-        tag in ["完结", "tag.完结", "Complete", "tag.Complete"]
-        for tag in tags
-    )
-    
+        tag in ["完结", "tag.完结", "Complete", "tag.Complete"] for tag in tags)
+
     # 如果判断为完结且置信度不低，且没有完结标签，则添加
-    if (completion_status.get("is_complete") and
-        completion_status.get("confidence") in ["high", "medium"] and
-        not has_completion_tag):
-        
+    if (completion_status.get("is_complete")
+            and completion_status.get("confidence") in ["high", "medium"]
+            and not has_completion_tag):
+
         tags.append(completion_tag)
-        print(f"已添加完结标签: {completion_tag} (置信度: {completion_status['confidence']})")
-    
+        print(
+            f"已添加完结标签: {completion_tag} (置信度: {completion_status['confidence']})"
+        )
+
     return tags
