@@ -377,3 +377,100 @@ def iyuu_query_api():
     except Exception as e:
         logging.error(f"iyuu_query_api 出错: {e}", exc_info=True)
         return jsonify({"error": "触发IYUU查询失败", "success": False}), 500
+
+
+@torrents_bp.route("/cached_sites", methods=["GET"])
+def get_cached_sites_api():
+    """查询指定种子在seed_parameters表中的缓存站点（使用name+size精确匹配）"""
+    db_manager = torrents_bp.db_manager
+    
+    try:
+        # 获取查询参数：种子名称和大小
+        torrent_name = request.args.get("name", "").strip()
+        torrent_size = request.args.get("size", "").strip()
+        
+        if not torrent_name:
+            return jsonify({"error": "缺少必要参数：name"}), 400
+        
+        if not torrent_size:
+            return jsonify({"error": "缺少必要参数：size"}), 400
+        
+        try:
+            torrent_size = int(torrent_size)
+        except ValueError:
+            return jsonify({"error": "size参数必须是整数"}), 400
+        
+        conn = db_manager._get_connection()
+        cursor = db_manager._get_cursor(conn)
+        
+        # 1. 先从seed_parameters表中根据name查询所有相同名称的记录的hash
+        placeholder = "%s" if db_manager.db_type in ["mysql", "postgresql"] else "?"
+        cursor.execute(
+            f"SELECT DISTINCT hash FROM seed_parameters WHERE name = {placeholder}",
+            (torrent_name,)
+        )
+        
+        seed_hashes = [row["hash"] for row in cursor.fetchall()]
+        
+        if not seed_hashes:
+            cursor.close()
+            conn.close()
+            return jsonify({
+                "success": True,
+                "cached_sites": [],
+                "message": "未找到该种子的缓存信息"
+            })
+        
+        # 2. 用这些hash去torrents表中查询，找出size匹配的hash
+        if db_manager.db_type == "postgresql":
+            placeholders = ', '.join(['%s'] * len(seed_hashes))
+            cursor.execute(
+                f"SELECT DISTINCT hash FROM torrents WHERE hash = ANY(ARRAY[{placeholders}]) AND size = %s",
+                (*seed_hashes, torrent_size)
+            )
+        else:
+            placeholders = ', '.join([placeholder] * len(seed_hashes))
+            cursor.execute(
+                f"SELECT DISTINCT hash FROM torrents WHERE hash IN ({placeholders}) AND size = {placeholder}",
+                (*seed_hashes, torrent_size)
+            )
+        
+        matched_hashes = [row["hash"] for row in cursor.fetchall()]
+        
+        if not matched_hashes:
+            cursor.close()
+            conn.close()
+            return jsonify({
+                "success": True,
+                "cached_sites": [],
+                "message": "未找到匹配大小的种子缓存"
+            })
+        
+        # 3. 查询这些匹配的hash对应的所有缓存站点
+        if db_manager.db_type == "postgresql":
+            placeholders = ', '.join(['%s'] * len(matched_hashes))
+            cursor.execute(
+                f"SELECT DISTINCT nickname FROM seed_parameters WHERE hash = ANY(ARRAY[{placeholders}])",
+                tuple(matched_hashes)
+            )
+        else:
+            placeholders = ', '.join([placeholder] * len(matched_hashes))
+            cursor.execute(
+                f"SELECT DISTINCT nickname FROM seed_parameters WHERE hash IN ({placeholders})",
+                tuple(matched_hashes)
+            )
+        
+        cached_sites = [row["nickname"] for row in cursor.fetchall()]
+        
+        cursor.close()
+        conn.close()
+        
+        return jsonify({
+            "success": True,
+            "cached_sites": cached_sites,
+            "matched_hashes": matched_hashes
+        })
+        
+    except Exception as e:
+        logging.error(f"get_cached_sites_api 出错: {e}", exc_info=True)
+        return jsonify({"error": "查询缓存站点失败", "success": False}), 500

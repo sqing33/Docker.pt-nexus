@@ -34,7 +34,8 @@ try:
             GLOBAL_MAPPINGS = global_config.get("global_standard_keys", {})
             DEFAULT_TITLE_COMPONENTS = global_config.get(
                 "default_title_components", {})
-            CONTENT_FILTERING_CONFIG = global_config.get("content_filtering", {})
+            CONTENT_FILTERING_CONFIG = global_config.get(
+                "content_filtering", {})
 except Exception as e:
     print(f"警告：无法加载全局映射配置: {e}")
 from .sites.ssd import SSDSpecialExtractor
@@ -90,8 +91,9 @@ class Extractor:
         """
         if not CONTENT_FILTERING_CONFIG.get("enabled", False):
             return False
-            
-        unwanted_patterns = CONTENT_FILTERING_CONFIG.get("unwanted_patterns", [])
+
+        unwanted_patterns = CONTENT_FILTERING_CONFIG.get(
+            "unwanted_patterns", [])
         return any(pattern in text for pattern in unwanted_patterns)
 
     def _clean_subtitle(self, subtitle: str) -> str:
@@ -106,7 +108,7 @@ class Extractor:
         """
         if not subtitle:
             return subtitle
-        
+
         # 首先使用硬编码的规则（兼容性）
         subtitle = re.sub(r"\s*\|\s*[Aa][Bb]y\s+\w+.*$", "", subtitle)
         subtitle = re.sub(r"\s*\|\s*[Bb]y\s+\w+.*$", "", subtitle)
@@ -115,12 +117,13 @@ class Extractor:
         subtitle = re.sub(r"\s*\|\s*[Aa][Tt][Uu]\s*$", "", subtitle)
         subtitle = re.sub(r"\s*\|\s*[Dd][Tt][Uu]\s*$", "", subtitle)
         subtitle = re.sub(r"\s*\|\s*[Pp][Tt][Ee][Rr]\s*$", "", subtitle)
-        
+
         # 然后使用配置文件中的规则
         # 对于副标题：删除匹配到的模式及其之后的所有内容
         if CONTENT_FILTERING_CONFIG.get("enabled", False):
-            unwanted_patterns = CONTENT_FILTERING_CONFIG.get("unwanted_patterns", [])
-            
+            unwanted_patterns = CONTENT_FILTERING_CONFIG.get(
+                "unwanted_patterns", [])
+
             for pattern in unwanted_patterns:
                 if pattern in subtitle:
                     # 找到模式的位置，删除该模式及其之后的内容
@@ -130,7 +133,7 @@ class Extractor:
                         # 如果删除后没有内容了，返回空字符串
                         if not subtitle:
                             return ""
-        
+
         return subtitle.strip()
 
     def _extract_with_public_extractor(self,
@@ -146,7 +149,8 @@ class Extractor:
         """
         # [新增] 图片链接验证辅助函数
         from utils import extract_origin_from_description, check_intro_completeness, upload_data_movie_info
-        from utils.media_helper import is_image_url_valid_robust, extract_audio_codec_from_mediainfo
+        from utils.image_validator import is_image_url_valid_robust
+        from utils.media_helper import extract_audio_codec_from_mediainfo
         # Initialize default data structure
         extracted_data = {
             "title": "",
@@ -406,15 +410,17 @@ class Extractor:
 
             # Extract images - 同时处理[img]和[url]格式的图片链接
             images = re.findall(r"\[img\].*?\[/img\]", bbcode, re.IGNORECASE)
-            
+
             # [新增] 提取[url=图片链接][/url]格式的图片并转换为[img]格式
-            url_images = re.findall(r'\[url=([^\]]*\.(?:jpg|jpeg|png|gif|bmp|webp)(?:[^\]]*))\]\s*\[/url\]', bbcode, re.IGNORECASE)
+            url_images = re.findall(
+                r'\[url=([^\]]*\.(?:jpg|jpeg|png|gif|bmp|webp)(?:[^\]]*))\]\s*\[/url\]',
+                bbcode, re.IGNORECASE)
             print(f"[调试extractor] 提取到的[img]格式图片数量: {len(images)}")
             print(f"[调试extractor] 提取到的[url]格式图片数量: {len(url_images)}")
             for url_img in url_images:
                 images.append(f"[img]{url_img}[/img]")
                 print(f"[调试extractor] 添加转换后的图片: {url_img[:80]}")
-            
+
             # [新增] 应用BBCode清理函数到bbcode，移除[url]格式的图片和其他需要清理的标签
             from utils.formatters import process_bbcode_images_and_cleanup
             print(f"[调试extractor] 清理前bbcode长度: {len(bbcode)}")
@@ -587,10 +593,9 @@ class Extractor:
                 if is_mediainfo_after or is_bdinfo_after or is_release_info_after:
                     # MediaInfo/BDInfo是技术信息，不应该被过滤掉，需要提取
                     if not found_mediainfo_in_quote:
-                        mediainfo_from_quote = re.sub(r"\[/?quote\]",
-                                                      "",
-                                                      quote,
-                                                      flags=re.IGNORECASE).strip()
+                        mediainfo_from_quote = re.sub(
+                            r"\[/?quote\]", "", quote,
+                            flags=re.IGNORECASE).strip()
                         found_mediainfo_in_quote = True
                     continue
                 elif is_technical_after:
@@ -609,14 +614,10 @@ class Extractor:
                            "",
                            bbcode,
                            flags=re.DOTALL).replace("\r", "").strip())
-            
+
             # [新增] 在构建body后，应用BBCode清理函数处理残留的空标签和列表标记
             from utils.formatters import process_bbcode_images_and_cleanup
-            print(f"[调试extractor] body清理前长度: {len(body)}")
-            print(f"[调试extractor] body清理前前200字符: {body[:200]}")
             body = process_bbcode_images_and_cleanup(body)
-            print(f"[调试extractor] body清理后长度: {len(body)}")
-            print(f"[调试extractor] body清理后前200字符: {body[:200]}")
 
             # [新增] 在BBCode层面过滤对比说明（包含BBCode标签的情况）
             # 移除包含Comparison和Source/Encode的行（不管是否有[b][size]等标签包裹）
@@ -904,7 +905,7 @@ class Extractor:
         # 添加去重处理，保持顺序
         if filtered_tags:
             filtered_tags = list(dict.fromkeys(filtered_tags))
-        
+
         tags = filtered_tags
 
         type_text = basic_info_dict.get("类型", "")

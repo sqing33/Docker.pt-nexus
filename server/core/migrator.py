@@ -18,7 +18,8 @@ import urllib.parse
 from io import StringIO
 from typing import Dict, Any, Optional, List
 from config import TEMP_DIR, DATA_DIR
-from utils import ensure_scheme, upload_data_mediaInfo, upload_data_title, extract_tags_from_mediainfo, extract_origin_from_description, is_image_url_valid_robust
+from utils import ensure_scheme, upload_data_mediaInfo, upload_data_title, extract_tags_from_mediainfo, extract_origin_from_description
+from utils.image_validator import is_image_url_valid_robust
 from utils.completion_checker import check_completion_status, add_completion_tag_if_needed
 
 # 导入种子参数模型

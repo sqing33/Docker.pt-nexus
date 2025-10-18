@@ -313,19 +313,39 @@
         </template>
         <div class="source-site-selection-body">
           <p class="source-site-tip">
-            <el-tag type="success" size="small" effect="dark" style="margin-right: 5px;">绿色</el-tag> 表示已配置Cookie，
-            <el-tag type="primary" size="small" effect="dark" style="margin-right: 5px;">蓝色</el-tag> 表示未配置Cookie。
-            只有当前种子所在且已配置Cookie的站点才可点击。
+            <el-tag type="success" size="large" style="margin-right: 5px;">可获取数据</el-tag> 
+            <el-tag type="primary" size="large" style="margin-right: 5px;">可尝试iyuu获取链接</el-tag> 
+            <el-tag type="primary" size="large" style="margin-right: 5px; opacity: 0.5;">未配置Cookie</el-tag> 
           </p>
-          <div class="site-list-box glass-site-box">
-            <el-tag v-for="site in allSourceSitesStatus" :key="site.name"
-              :type="getSiteTagType(site, isSourceSiteSelectable(site.name))"
-              :class="{ 'is-selectable': isSourceSiteSelectable(site.name) }" class="site-tag"
-              @click="isSourceSiteSelectable(site.name) && confirmSourceSiteAndProceed(getSiteDetails(site.name))"
-              v-loading="sourceSiteQueryLoading[site.name]" element-loading-spinner="el-icon-loading"
-              element-loading-background="rgba(0, 0, 0, 0.5)">
-              {{ site.name }}
-            </el-tag>
+          
+          <!-- 已缓存站点区域 -->
+          <div v-if="cachedSites.length > 0" class="cached-sites-section">
+            <p class="cached-sites-label">已缓存的站点 ({{ cachedSites.length }})</p>
+            <div class="site-list-box glass-site-box cached-sites-box">
+              <el-tag v-for="site in allSourceSitesStatus.filter(s => cachedSites.includes(s.name))" :key="site.name"
+                :type="getSiteTagType(site, isSourceSiteSelectable(site.name))"
+                :class="{ 'is-selectable': isSourceSiteSelectable(site.name), 'cached-site-tag': true }" class="site-tag"
+                @click="isSourceSiteSelectable(site.name) && confirmSourceSiteAndProceed(getSiteDetails(site.name))"
+                v-loading="sourceSiteQueryLoading[site.name]" element-loading-spinner="el-icon-loading"
+                element-loading-background="rgba(0, 0, 0, 0.5)">
+                {{ site.name }} ✓
+              </el-tag>
+            </div>
+          </div>
+          
+          <!-- 未缓存站点区域 -->
+          <div v-if="allSourceSitesStatus.some(s => !cachedSites.includes(s.name))" class="uncached-sites-section">
+            <p class="uncached-sites-label">未缓存的站点</p>
+            <div class="site-list-box glass-site-box">
+              <el-tag v-for="site in allSourceSitesStatus.filter(s => !cachedSites.includes(s.name))" :key="site.name"
+                :type="getSiteTagType(site, isSourceSiteSelectable(site.name))"
+                :class="{ 'is-selectable': isSourceSiteSelectable(site.name) }" class="site-tag"
+                @click="isSourceSiteSelectable(site.name) && confirmSourceSiteAndProceed(getSiteDetails(site.name))"
+                v-loading="sourceSiteQueryLoading[site.name]" element-loading-spinner="el-icon-loading"
+                element-loading-background="rgba(0, 0, 0, 0.5)">
+                {{ site.name }}
+              </el-tag>
+            </div>
           </div>
         </div>
         <div class="filter-card-footer">
@@ -460,6 +480,8 @@ const pathTreeData = ref<PathNode[]>([])
 const sourceSelectionDialogVisible = ref<boolean>(false);
 const allSourceSitesStatus = ref<SiteStatus[]>([]);
 const iyuuQueryLoading = ref<boolean>(false);
+const cachedSites = ref<string[]>([]); // 存储已缓存的站点列表
+const cachedSitesLoading = ref<boolean>(false); // 查询缓存站点的加载状态
 
 const crossSeedStore = useCrossSeedStore();
 
@@ -724,7 +746,7 @@ const fetchData = async () => {
   }
 }
 
-const startCrossSeed = (row: Torrent) => {
+const startCrossSeed = async (row: Torrent) => {
   // 在开始转种流程前，先重置 store，防止旧数据污染
   crossSeedStore.reset();
 
@@ -741,12 +763,42 @@ const startCrossSeed = (row: Torrent) => {
   // 将当前要操作的种子信息存入 store
   crossSeedStore.setParams(row);
   
+  // 查询缓存站点
+  await queryCachedSites(row);
+  
   // 即使没有可用的源站点，也打开弹窗，让用户可以使用 IYUU 查询
   if (availableSources.length === 0) {
     ElMessage.warning('该种子暂无可用的源站点，您可以使用 IYUU 查询来发现更多站点。');
   }
   
   sourceSelectionDialogVisible.value = true;
+};
+
+// 查询缓存站点
+const queryCachedSites = async (row: Torrent) => {
+  cachedSitesLoading.value = true;
+  cachedSites.value = [];
+  
+  try {
+    const response = await fetch(`/api/cached_sites?name=${encodeURIComponent(row.name)}&size=${row.size}`);
+    const result = await response.json();
+    
+    if (result.success) {
+      cachedSites.value = result.cached_sites || [];
+      console.log('缓存站点查询结果:', cachedSites.value);
+    } else {
+      console.warn('查询缓存站点失败:', result.error);
+    }
+  } catch (error) {
+    console.error('查询缓存站点时出错:', error);
+  } finally {
+    cachedSitesLoading.value = false;
+  }
+};
+
+// 检查站点是否已缓存
+const isSiteCached = (siteName: string): boolean => {
+  return cachedSites.value.includes(siteName);
 };
 
 const confirmSourceSiteAndProceed = async (sourceSite: any) => {
@@ -1206,15 +1258,23 @@ const getDisabledDownloaderIds = () => {
 
 // 根据站点配置和可选性返回标签类型
 const getSiteTagType = (site: SiteStatus, isSelectable: boolean) => {
-  // 如果站点不可选，显示为灰色
-  if (!isSelectable) {
+  // 检查站点是否存在于当前种子中
+  const existsInTorrent = !!(selectedTorrentForMigration.value && selectedTorrentForMigration.value.sites[site.name]);
+  
+  // 如果站点不存在于当前种子中，显示为灰色
+  if (!existsInTorrent) {
     return 'info';
   }
-  // 如果站点已配置Cookie，显示为绿色
-  if (site.has_cookie) {
+  
+  // 获取站点数据以检查是否有comment
+  const siteData = selectedTorrentForMigration.value!.sites[site.name];
+  
+  // 如果站点存在于种子中且已配置Cookie且有comment，显示为绿色（可点击）
+  if (site.has_cookie && siteData.comment) {
     return 'success';
   }
-  // 如果站点未配置Cookie，显示为蓝色
+  
+  // 如果站点存在于种子中但未配置Cookie或没有comment，显示为蓝色（不可点击，可尝试IYUU）
   return 'primary';
 }
 const getStateTagType = (state: string) => {
