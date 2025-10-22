@@ -95,11 +95,20 @@ def get_data_api():
             if config.get("migration", 0) in [2, 3]
         }
 
+        # 修改后的逻辑：all_discovered_sites = 数据库中有做种记录的站点 + 配置了cookie的站点
         cursor.execute(
             "SELECT DISTINCT sites FROM torrents WHERE sites IS NOT NULL AND sites != ''"
         )
-        all_discovered_sites = sorted(
-            [row["sites"] for row in cursor.fetchall()])
+        sites_from_torrents = {row["sites"] for row in cursor.fetchall()}
+        
+        # 获取配置了cookie的站点
+        cursor.execute(
+            "SELECT nickname FROM sites WHERE cookie IS NOT NULL AND cookie != ''"
+        )
+        sites_with_cookie = {row["nickname"] for row in cursor.fetchall()}
+        
+        # 合并两个集合并排序
+        all_discovered_sites = sorted(sites_from_torrents | sites_with_cookie)
 
         # 明确指定查询列，确保包含新添加的列，并排除状态为"不存在"的记录
         placeholder = "%s" if db_manager.db_type in ["mysql", "postgresql"] else "?"

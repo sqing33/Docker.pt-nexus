@@ -165,10 +165,14 @@ def get_sites():
                 s.cookie
             """
         if filter_by_torrents == "active":
+            # 修改后的逻辑：现有站点 = 在数据库中有做种记录的站点 OR 有cookie配置的站点
             sql = f"""
                 SELECT DISTINCT {select_fields}
                 FROM sites s
-                JOIN torrents t ON LOWER(s.nickname) = LOWER(t.sites)
+                WHERE EXISTS (
+                    SELECT 1 FROM torrents t WHERE LOWER(s.nickname) = LOWER(t.sites)
+                )
+                OR (s.cookie IS NOT NULL AND s.cookie != '')
                 ORDER BY s.nickname
             """
         else:

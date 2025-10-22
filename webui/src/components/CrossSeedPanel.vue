@@ -3,11 +3,16 @@
     <!-- 1. 顶部步骤条 (固定) -->
     <header class="panel-header">
       <div class="custom-steps">
-        <div v-for="(step, index) in steps" :key="index" class="custom-step" :class="{
-          'active': index === activeStep,
-          'completed': index < activeStep,
-          'last': index === steps.length - 1
-        }">
+        <div
+          v-for="(step, index) in steps"
+          :key="index"
+          class="custom-step"
+          :class="{
+            active: index === activeStep,
+            completed: index < activeStep,
+            last: index === steps.length - 1,
+          }"
+        >
           <div class="step-icon">
             <el-icon v-if="index < activeStep">
               <CircleCheckFilled />
@@ -41,14 +46,21 @@
                     </el-form-item>
                     <div class="title-components-grid">
                       <template v-if="filteredTitleComponents.length > 0">
-                        <el-form-item v-for="param in filteredTitleComponents" :key="param.key" :label="param.key">
+                        <el-form-item
+                          v-for="param in filteredTitleComponents"
+                          :key="param.key"
+                          :label="param.key"
+                        >
                           <el-input v-model="param.value" />
                         </el-form-item>
                       </template>
                       <!-- 当没有解析出标题组件时，显示初始参数框 -->
                       <template v-else>
-                        <el-form-item v-for="(param, index) in initialTitleComponents" :key="'init-' + index"
-                          :label="param.key">
+                        <el-form-item
+                          v-for="(param, index) in initialTitleComponents"
+                          :key="'init-' + index"
+                          :label="param.key"
+                        >
                           <el-input v-model="param.value" />
                         </el-form-item>
                       </template>
@@ -58,13 +70,16 @@
                   <div class="bottom-info-section">
                     <div class="subtitle-unrecognized-grid">
                       <!-- 副标题占4列 -->
-                      <div class="subtitle-section" style="grid-column: span 4;">
+                      <div class="subtitle-section" style="grid-column: span 4">
                         <el-form-item label="副标题">
                           <el-input v-model="torrentData.subtitle" />
                         </el-form-item>
                       </div>
                       <!-- 无法识别占1列 -->
-                      <div :class="{ 'unrecognized-section': unrecognizedValue }" style="grid-column: span 1;">
+                      <div
+                        :class="{ 'unrecognized-section': unrecognizedValue }"
+                        style="grid-column: span 1"
+                      >
                         <el-form-item label="无法识别">
                           <el-input v-model="unrecognizedValue" />
                         </el-form-item>
@@ -77,44 +92,87 @@
                       <!-- 第一行：类型、媒介、视频编码、音频编码、分辨率 -->
                       <div class="standard-params-grid">
                         <el-form-item label="类型 (type)">
-                          <el-select v-model="torrentData.standardized_params.type" placeholder="请选择类型" clearable
-                            :class="{ 'is-invalid': invalidStandardParams.includes('type') }" data-tag-style>
-                            <el-option v-for="(label, value) in reverseMappings.type" :key="value" :label="label"
-                              :value="value" />
+                          <el-select
+                            v-model="torrentData.standardized_params.type"
+                            placeholder="请选择类型"
+                            clearable
+                            :class="{ 'is-invalid': invalidStandardParams.includes('type') }"
+                            data-tag-style
+                          >
+                            <el-option
+                              v-for="(label, value) in reverseMappings.type"
+                              :key="value"
+                              :label="label"
+                              :value="value"
+                            />
                           </el-select>
                         </el-form-item>
 
                         <el-form-item label="媒介 (medium)">
-                          <el-select v-model="torrentData.standardized_params.medium" placeholder="请选择媒介" clearable
-                            :class="{ 'is-invalid': invalidStandardParams.includes('medium') }" data-tag-style>
-                            <el-option v-for="(label, value) in reverseMappings.medium" :key="value" :label="label"
-                              :value="value" />
+                          <el-select
+                            v-model="torrentData.standardized_params.medium"
+                            placeholder="请选择媒介"
+                            clearable
+                            :class="{ 'is-invalid': invalidStandardParams.includes('medium') }"
+                            data-tag-style
+                          >
+                            <el-option
+                              v-for="(label, value) in reverseMappings.medium"
+                              :key="value"
+                              :label="label"
+                              :value="value"
+                            />
                           </el-select>
                         </el-form-item>
 
                         <el-form-item label="视频编码 (video_codec)">
-                          <el-select v-model="torrentData.standardized_params.video_codec" placeholder="请选择视频编码"
-                            clearable :class="{ 'is-invalid': invalidStandardParams.includes('video_codec') }"
-                            data-tag-style>
-                            <el-option v-for="(label, value) in reverseMappings.video_codec" :key="value" :label="label"
-                              :value="value" />
+                          <el-select
+                            v-model="torrentData.standardized_params.video_codec"
+                            placeholder="请选择视频编码"
+                            clearable
+                            :class="{ 'is-invalid': invalidStandardParams.includes('video_codec') }"
+                            data-tag-style
+                          >
+                            <el-option
+                              v-for="(label, value) in reverseMappings.video_codec"
+                              :key="value"
+                              :label="label"
+                              :value="value"
+                            />
                           </el-select>
                         </el-form-item>
 
                         <el-form-item label="音频编码 (audio_codec)">
-                          <el-select v-model="torrentData.standardized_params.audio_codec" placeholder="请选择音频编码"
-                            clearable :class="{ 'is-invalid': invalidStandardParams.includes('audio_codec') }"
-                            data-tag-style>
-                            <el-option v-for="(label, value) in reverseMappings.audio_codec" :key="value" :label="label"
-                              :value="value" />
+                          <el-select
+                            v-model="torrentData.standardized_params.audio_codec"
+                            placeholder="请选择音频编码"
+                            clearable
+                            :class="{ 'is-invalid': invalidStandardParams.includes('audio_codec') }"
+                            data-tag-style
+                          >
+                            <el-option
+                              v-for="(label, value) in reverseMappings.audio_codec"
+                              :key="value"
+                              :label="label"
+                              :value="value"
+                            />
                           </el-select>
                         </el-form-item>
 
                         <el-form-item label="分辨率 (resolution)">
-                          <el-select v-model="torrentData.standardized_params.resolution" placeholder="请选择分辨率" clearable
-                            :class="{ 'is-invalid': invalidStandardParams.includes('resolution') }" data-tag-style>
-                            <el-option v-for="(label, value) in reverseMappings.resolution" :key="value" :label="label"
-                              :value="value" />
+                          <el-select
+                            v-model="torrentData.standardized_params.resolution"
+                            placeholder="请选择分辨率"
+                            clearable
+                            :class="{ 'is-invalid': invalidStandardParams.includes('resolution') }"
+                            data-tag-style
+                          >
+                            <el-option
+                              v-for="(label, value) in reverseMappings.resolution"
+                              :key="value"
+                              :label="label"
+                              :value="value"
+                            />
                           </el-select>
                         </el-form-item>
                       </div>
@@ -123,35 +181,76 @@
                       <div class="standard-params-grid second-row">
                         <!-- 【代码修改处】 -->
                         <el-form-item label="制作组 (team)">
-                          <el-select v-model="torrentData.standardized_params.team" placeholder="请选择制作组" clearable
-                            filterable allow-create default-first-option class="team-select"
-                            :class="{ 'is-invalid': invalidStandardParams.includes('team') }">
-                            <el-option v-for="(label, value) in reverseMappings.team" :key="value" :label="label"
-                              :value="value" />
+                          <el-select
+                            v-model="torrentData.standardized_params.team"
+                            placeholder="请选择制作组"
+                            clearable
+                            filterable
+                            allow-create
+                            default-first-option
+                            class="team-select"
+                            :class="{ 'is-invalid': invalidStandardParams.includes('team') }"
+                          >
+                            <el-option
+                              v-for="(label, value) in reverseMappings.team"
+                              :key="value"
+                              :label="label"
+                              :value="value"
+                            />
                           </el-select>
                         </el-form-item>
 
                         <el-form-item label="产地 (source)">
-                          <el-select v-model="torrentData.standardized_params.source" placeholder="请选择产地" clearable
-                            :class="{ 'is-invalid': invalidStandardParams.includes('source') }" data-tag-style>
-                            <el-option v-for="(label, value) in reverseMappings.source" :key="value" :label="label"
-                              :value="value" />
+                          <el-select
+                            v-model="torrentData.standardized_params.source"
+                            placeholder="请选择产地"
+                            clearable
+                            :class="{ 'is-invalid': invalidStandardParams.includes('source') }"
+                            data-tag-style
+                          >
+                            <el-option
+                              v-for="(label, value) in reverseMappings.source"
+                              :key="value"
+                              :label="label"
+                              :value="value"
+                            />
                           </el-select>
                         </el-form-item>
 
                         <el-form-item label="标签 (tags)" class="tags-wide-item">
-                          <el-select v-model="torrentData.standardized_params.tags" multiple filterable allow-create
-                            default-first-option placeholder="请选择或输入标签" style="width: 100%">
+                          <el-select
+                            v-model="torrentData.standardized_params.tags"
+                            multiple
+                            filterable
+                            allow-create
+                            default-first-option
+                            placeholder="请选择或输入标签"
+                            style="width: 100%"
+                          >
                             <template #tag="{ data }">
-                              <el-tag v-for="item in data" :key="item.value" :type="getTagType(item.value)" 
+                              <el-tag
+                                v-for="item in data"
+                                :key="item.value"
+                                :type="getTagType(item.value)"
                                 :closable="!isRestrictedTag(item.value)"
-                                disable-transitions @close="handleTagClose(item.value)" style="margin: 2px;">
+                                disable-transitions
+                                @close="handleTagClose(item.value)"
+                                style="margin: 2px"
+                              >
                                 <span>{{ item.currentLabel }}</span>
                               </el-tag>
                             </template>
-                            <el-option v-for="option in allTagOptions" :key="option.value" :label="option.label"
-                              :value="option.value">
-                              <span :style="{ color: invalidTagsList.includes(option.value) ? '#F56C6C' : '' }">
+                            <el-option
+                              v-for="option in allTagOptions"
+                              :key="option.value"
+                              :label="option.label"
+                              :value="option.value"
+                            >
+                              <span
+                                :style="{
+                                  color: invalidTagsList.includes(option.value) ? '#F56C6C' : '',
+                                }"
+                              >
                                 {{ option.label }}
                               </span>
                             </el-option>
@@ -182,8 +281,13 @@
                       <template #label>
                         <div class="form-label-with-button">
                           <span>海报链接</span>
-                          <el-button :icon="Refresh" @click="refreshPosters" :loading="isRefreshingPosters" size="small"
-                            type="text">
+                          <el-button
+                            :icon="Refresh"
+                            @click="refreshPosters"
+                            :loading="isRefreshingPosters"
+                            size="small"
+                            type="text"
+                          >
                             重新获取
                           </el-button>
                         </div>
@@ -196,8 +300,14 @@
                       <div class="preview-header">海报预览</div>
                       <div class="image-preview-container">
                         <template v-if="posterImages.length">
-                          <img v-for="(url, index) in posterImages" :key="'poster-' + index" :src="url" alt="海报预览"
-                            class="preview-image" @error="handleImageError(url, 'poster', index)" />
+                          <img
+                            v-for="(url, index) in posterImages"
+                            :key="'poster-' + index"
+                            :src="url"
+                            alt="海报预览"
+                            class="preview-image"
+                            @error="handleImageError(url, 'poster', index)"
+                          />
                         </template>
                         <div v-else class="preview-placeholder">暂无海报预览</div>
                       </div>
@@ -216,8 +326,13 @@
                     <template #label>
                       <div class="form-label-with-button">
                         <span>截图</span>
-                        <el-button :icon="Refresh" @click="refreshScreenshots" :loading="isRefreshingScreenshots"
-                          size="small" type="text">
+                        <el-button
+                          :icon="Refresh"
+                          @click="refreshScreenshots"
+                          :loading="isRefreshingScreenshots"
+                          size="small"
+                          type="text"
+                        >
                           重新获取
                         </el-button>
                       </div>
@@ -230,10 +345,17 @@
                 <div class="carousel-container">
                   <template v-if="screenshotImages.length">
                     <el-carousel :interval="5000" height="500px" indicator-position="outside">
-                      <el-carousel-item v-for="(url, index) in screenshotImages" :key="'ss-' + index">
+                      <el-carousel-item
+                        v-for="(url, index) in screenshotImages"
+                        :key="'ss-' + index"
+                      >
                         <div class="carousel-image-wrapper">
-                          <img :src="url" alt="截图预览" class="carousel-image"
-                            @error="handleImageError(url, 'screenshot', index)" />
+                          <img
+                            :src="url"
+                            alt="截图预览"
+                            class="carousel-image"
+                            @error="handleImageError(url, 'screenshot', index)"
+                          />
                         </div>
                       </el-carousel-item>
                     </el-carousel>
@@ -249,8 +371,13 @@
                 <template #label>
                   <div class="form-label-with-button">
                     <span>正文</span>
-                    <el-button :icon="Refresh" @click="refreshIntro" :loading="isRefreshingIntro" size="small"
-                      type="text">
+                    <el-button
+                      :icon="Refresh"
+                      @click="refreshIntro"
+                      :loading="isRefreshingIntro"
+                      size="small"
+                      type="text"
+                    >
                       重新获取
                     </el-button>
                   </div>
@@ -271,18 +398,32 @@
                 <template #label>
                   <div class="form-label-with-button">
                     <span>Mediainfo</span>
-                    <el-button :icon="Refresh" @click="refreshMediainfo" :loading="isRefreshingMediainfo" size="small"
-                      type="text">
+                    <el-button
+                      :icon="Refresh"
+                      @click="refreshMediainfo"
+                      :loading="isRefreshingMediainfo"
+                      size="small"
+                      type="text"
+                    >
                       重新获取
                     </el-button>
                   </div>
                 </template>
-                <el-input type="textarea" class="code-font" v-model="torrentData.mediainfo" :rows="26" />
+                <el-input
+                  type="textarea"
+                  class="code-font"
+                  v-model="torrentData.mediainfo"
+                  :rows="26"
+                />
               </el-form-item>
             </el-form>
           </el-tab-pane>
 
-          <el-tab-pane label="已过滤声明" name="filtered-declarations" class="filtered-declarations-pane">
+          <el-tab-pane
+            label="已过滤声明"
+            name="filtered-declarations"
+            class="filtered-declarations-pane"
+          >
             <div class="filtered-declarations-container">
               <div class="filtered-declarations-header">
                 <h3>已自动过滤的声明内容</h3>
@@ -290,7 +431,11 @@
               </div>
               <div class="filtered-declarations-content">
                 <template v-if="filteredDeclarationsCount > 0">
-                  <div v-for="(declaration, index) in filteredDeclarationsList" :key="index" class="declaration-item">
+                  <div
+                    v-for="(declaration, index) in filteredDeclarationsList"
+                    :key="index"
+                    class="declaration-item"
+                  >
                     <div class="declaration-header">
                       <span class="declaration-number">#{{ index + 1 }}</span>
                       <el-tag type="danger" size="small">已过滤</el-tag>
@@ -314,7 +459,11 @@
           <div class="preview-row main-title-row">
             <div class="row-label">主标题：</div>
             <div class="row-content main-title-content">
-              {{ torrentData.final_publish_parameters?.['主标题 (预览)'] || torrentData.original_main_title || '暂无数据' }}
+              {{
+                torrentData.final_publish_parameters?.['主标题 (预览)'] ||
+                torrentData.original_main_title ||
+                '暂无数据'
+              }}
             </div>
           </div>
 
@@ -333,27 +482,39 @@
               <!-- IMDb链接和标签在同一行 -->
               <div class="param-row">
                 <div class="param-item imdb-item half-width">
-                  <div style="display: flex; ">
+                  <div style="display: flex">
                     <span class="param-label">IMDb链接：</span>
                     <span
-                      :class="['param-value', { 'empty': !torrentData.imdb_link || torrentData.imdb_link === 'N/A' }]">
+                      :class="[
+                        'param-value',
+                        { empty: !torrentData.imdb_link || torrentData.imdb_link === 'N/A' },
+                      ]"
+                    >
                       {{ torrentData.imdb_link || 'N/A' }}
                     </span>
                   </div>
-                  <div style="display: flex; ">
-                    <span style="letter-spacing: 2.6px;" class="param-label">豆瓣链接</span>
-                    <span style="font-size: 13px;">：</span>
+                  <div style="display: flex">
+                    <span style="letter-spacing: 2.6px" class="param-label">豆瓣链接</span>
+                    <span style="font-size: 13px">：</span>
                     <span
-                      :class="['param-value', { 'empty': !torrentData.douban_link || torrentData.douban_link === 'N/A' }]">
+                      :class="[
+                        'param-value',
+                        { empty: !torrentData.douban_link || torrentData.douban_link === 'N/A' },
+                      ]"
+                    >
                       {{ torrentData.douban_link || 'N/A' }}
                     </span>
                   </div>
-
                 </div>
                 <div class="param-item tags-item half-width">
                   <span class="param-label">标签：</span>
                   <div class="param-value-container">
-                    <span :class="['param-value', { 'empty': !getMappedTags() || getMappedTags().length === 0 }]">
+                    <span
+                      :class="[
+                        'param-value',
+                        { empty: !getMappedTags() || getMappedTags().length === 0 },
+                      ]"
+                    >
                       {{ getMappedTags().join(', ') || 'N/A' }}
                     </span>
                     <span class="param-standard-key" v-if="filteredTags && filteredTags.length > 0">
@@ -368,7 +529,7 @@
                 <div class="param-item inline-param">
                   <span class="param-label">类型：</span>
                   <div class="param-value-container">
-                    <span :class="['param-value', { 'empty': !getMappedValue('type') }]">
+                    <span :class="['param-value', { empty: !getMappedValue('type') }]">
                       {{ getMappedValue('type') || 'N/A' }}
                     </span>
                     <span class="param-standard-key" v-if="torrentData.standardized_params.type">
@@ -379,7 +540,7 @@
                 <div class="param-item inline-param">
                   <span class="param-label">媒介：</span>
                   <div class="param-value-container">
-                    <span :class="['param-value', { 'empty': !getMappedValue('medium') }]">
+                    <span :class="['param-value', { empty: !getMappedValue('medium') }]">
                       {{ getMappedValue('medium') || 'N/A' }}
                     </span>
                     <span class="param-standard-key" v-if="torrentData.standardized_params.medium">
@@ -390,10 +551,13 @@
                 <div class="param-item inline-param">
                   <span class="param-label">视频编码：</span>
                   <div class="param-value-container">
-                    <span :class="['param-value', { 'empty': !getMappedValue('video_codec') }]">
+                    <span :class="['param-value', { empty: !getMappedValue('video_codec') }]">
                       {{ getMappedValue('video_codec') || 'N/A' }}
                     </span>
-                    <span class="param-standard-key" v-if="torrentData.standardized_params.video_codec">
+                    <span
+                      class="param-standard-key"
+                      v-if="torrentData.standardized_params.video_codec"
+                    >
                       {{ torrentData.standardized_params.video_codec }}
                     </span>
                   </div>
@@ -401,10 +565,13 @@
                 <div class="param-item inline-param">
                   <span class="param-label">音频编码：</span>
                   <div class="param-value-container">
-                    <span :class="['param-value', { 'empty': !getMappedValue('audio_codec') }]">
+                    <span :class="['param-value', { empty: !getMappedValue('audio_codec') }]">
                       {{ getMappedValue('audio_codec') || 'N/A' }}
                     </span>
-                    <span class="param-standard-key" v-if="torrentData.standardized_params.audio_codec">
+                    <span
+                      class="param-standard-key"
+                      v-if="torrentData.standardized_params.audio_codec"
+                    >
                       {{ torrentData.standardized_params.audio_codec }}
                     </span>
                   </div>
@@ -412,10 +579,13 @@
                 <div class="param-item inline-param">
                   <span class="param-label">分辨率：</span>
                   <div class="param-value-container">
-                    <span :class="['param-value', { 'empty': !getMappedValue('resolution') }]">
+                    <span :class="['param-value', { empty: !getMappedValue('resolution') }]">
                       {{ getMappedValue('resolution') || 'N/A' }}
                     </span>
-                    <span class="param-standard-key" v-if="torrentData.standardized_params.resolution">
+                    <span
+                      class="param-standard-key"
+                      v-if="torrentData.standardized_params.resolution"
+                    >
                       {{ torrentData.standardized_params.resolution }}
                     </span>
                   </div>
@@ -423,7 +593,7 @@
                 <div class="param-item inline-param">
                   <span class="param-label">制作组：</span>
                   <div class="param-value-container">
-                    <span :class="['param-value', { 'empty': !getMappedValue('team') }]">
+                    <span :class="['param-value', { empty: !getMappedValue('team') }]">
                       {{ getMappedValue('team') || 'N/A' }}
                     </span>
                     <span class="param-standard-key" v-if="torrentData.standardized_params.team">
@@ -434,7 +604,7 @@
                 <div class="param-item inline-param">
                   <span class="param-label">产地/来源：</span>
                   <div class="param-value-container">
-                    <span :class="['param-value', { 'empty': !getMappedValue('source') }]">
+                    <span :class="['param-value', { empty: !getMappedValue('source') }]">
                       {{ getMappedValue('source') || 'N/A' }}
                     </span>
                     <span class="param-standard-key" v-if="torrentData.standardized_params.source">
@@ -460,68 +630,97 @@
             <div class="row-content description-content">
               <!-- 声明内容 -->
               <div class="description-section">
-                <div class="section-content" v-html="parseBBCode(torrentData.intro?.statement) || '暂无声明'"></div>
+                <div
+                  class="section-content"
+                  v-html="parseBBCode(torrentData.intro?.statement) || '暂无声明'"
+                ></div>
               </div>
 
               <!-- 海报图片 -->
               <div class="description-section" v-if="posterImages.length > 0">
                 <div class="image-gallery">
-                  <img v-for="(url, index) in posterImages" :key="'poster-preview-' + index" :src="url"
-                    :alt="'海报 ' + (index + 1)" class="preview-image-inline" style="width: 300px;"
-                    @error="handleImageError(url, 'poster', index)" />
+                  <img
+                    v-for="(url, index) in posterImages"
+                    :key="'poster-preview-' + index"
+                    :src="url"
+                    :alt="'海报 ' + (index + 1)"
+                    class="preview-image-inline"
+                    style="width: 300px"
+                    @error="handleImageError(url, 'poster', index)"
+                  />
                 </div>
               </div>
 
               <!-- 简介正文 -->
               <div class="description-section">
                 <br />
-                <div class="section-content" v-html="parseBBCode(torrentData.intro?.body) || '暂无正文'"></div>
+                <div
+                  class="section-content"
+                  v-html="parseBBCode(torrentData.intro?.body) || '暂无正文'"
+                ></div>
               </div>
 
               <!-- 视频截图 -->
               <div class="description-section" v-if="screenshotImages.length > 0">
                 <div class="image-gallery">
-                  <img v-for="(url, index) in screenshotImages" :key="'screenshot-preview-' + index" :src="url"
-                    :alt="'截图 ' + (index + 1)" class="preview-image-inline"
-                    @error="handleImageError(url, 'screenshot', index)" />
+                  <img
+                    v-for="(url, index) in screenshotImages"
+                    :key="'screenshot-preview-' + index"
+                    :src="url"
+                    :alt="'截图 ' + (index + 1)"
+                    class="preview-image-inline"
+                    @error="handleImageError(url, 'screenshot', index)"
+                  />
                 </div>
               </div>
             </div>
           </div>
-
         </div>
       </div>
 
       <!-- 步骤 2: 选择发布站点 -->
       <div v-if="activeStep === 2" class="step-container site-selection-container">
         <h3 class="selection-title">请选择要发布的目标站点</h3>
-        <p class="selection-subtitle">只有Cookie配置正常的站点才会在此处显示。已存在的站点已被自动禁用。</p>
-        
+        <p class="selection-subtitle">已存在的站点已被自动禁用。蓝色站点表示未配置Cookie。</p>
+
         <!-- 禁止转载警告 -->
-        <el-alert v-if="isUbitsDisabled" type="error" :closable="false" style="width: 410px;margin: 0 auto;">
+        <el-alert
+          v-if="isUbitsDisabled"
+          type="error"
+          :closable="false"
+          style="width: 410px; margin: 0 auto"
+        >
           <template #title>
-            <span style="font-weight: 600;">禁止转载</span>
+            <span style="font-weight: 600">禁止转载</span>
           </template>
           <div>
-            检测到制作组包含禁止转载的内容，已自动禁用 UBits 站点。<br>
+            检测到制作组包含禁止转载的内容，已自动禁用 UBits 站点。<br />
             禁止转载的制作组：CMCT、CMCTV
           </div>
         </el-alert>
-        
-        <div class="select-all-container" style="margin-top: 16px;">
+
+        <div class="select-all-container" style="margin-top: 16px">
           <el-button-group>
             <el-button type="primary" @click="selectAllTargetSites">全选</el-button>
             <el-button type="info" @click="clearAllTargetSites">清空</el-button>
           </el-button-group>
         </div>
         <div class="site-buttons-group">
-          <el-button v-for="site in allSitesStatus.filter(s => s.is_target)" :key="site.name" class="site-button"
-            :type="selectedTargetSites.includes(site.name) ? 'success' : 'default'"
-            :disabled="!isTargetSiteSelectable(site.name)" @click="toggleSiteSelection(site.name)">
+          <el-button
+            v-for="site in allSitesStatus.filter((s) => s.is_target)"
+            :key="site.name"
+            class="site-button"
+            :type="getButtonType(site)"
+            :disabled="!isTargetSiteSelectable(site.name)"
+            @click="toggleSiteSelection(site.name)"
+          >
             {{ site.name }}
-            <el-tooltip v-if="site.name === 'ubits' && !isTargetSiteSelectable(site.name)" 
-              content="该制作组禁止转载到 uBits 站点" placement="top">
-              <el-icon style="margin-left: 4px; color: #f56c6c;"><InfoFilled /></el-icon>
+            <el-tooltip
+              v-if="site.name === 'ubits' && !isTargetSiteSelectable(site.name)"
+              content="该制作组禁止转载到 uBits 站点"
+              placement="top"
+            >
+              <el-icon style="margin-left: 4px; color: #f56c6c"><InfoFilled /></el-icon>
             </el-tooltip>
           </el-button>
         </div>
@@ -530,26 +729,43 @@
       <!-- 步骤 3: 完成发布 -->
       <div v-if="activeStep === 3" class="step-container results-container">
         <!-- 进度条显示 -->
-        <div class="progress-section" v-if="publishProgress.total > 0 || downloaderProgress.total > 0">
+        <div
+          class="progress-section"
+          v-if="publishProgress.total > 0 || downloaderProgress.total > 0"
+        >
           <div class="progress-item" v-if="publishProgress.total > 0">
             <div class="progress-label">发布进度:</div>
-            <el-progress :percentage="Math.round((publishProgress.current / publishProgress.total) * 100)"
-              :show-text="true" />
-            <div class="progress-text">{{ publishProgress.current }} / {{ publishProgress.total }}</div>
+            <el-progress
+              :percentage="Math.round((publishProgress.current / publishProgress.total) * 100)"
+              :show-text="true"
+            />
+            <div class="progress-text">
+              {{ publishProgress.current }} / {{ publishProgress.total }}
+            </div>
           </div>
           <div class="progress-item" v-if="downloaderProgress.total > 0">
             <div class="progress-label">下载器添加进度:</div>
-            <el-progress :percentage="Math.round((downloaderProgress.current / downloaderProgress.total) * 100)"
-              :show-text="true" />
-            <div class="progress-text">{{ downloaderProgress.current }} / {{ downloaderProgress.total }}</div>
+            <el-progress
+              :percentage="
+                Math.round((downloaderProgress.current / downloaderProgress.total) * 100)
+              "
+              :show-text="true"
+            />
+            <div class="progress-text">
+              {{ downloaderProgress.current }} / {{ downloaderProgress.total }}
+            </div>
           </div>
         </div>
 
         <div class="results-rows-container">
           <div v-for="(row, rowIndex) in groupedResults" :key="rowIndex" class="results-row">
             <div class="row-sites">
-              <div v-for="result in row" :key="result.siteName" class="result-card"
-                :class="{ 'is-success': result.success, 'is-error': !result.success }">
+              <div
+                v-for="result in row"
+                :key="result.siteName"
+                class="result-card"
+                :class="{ 'is-success': result.success, 'is-error': !result.success }"
+              >
                 <div class="card-icon">
                   <el-icon v-if="result.success" color="#67C23A" :size="32">
                     <CircleCheckFilled />
@@ -573,30 +789,51 @@
                       <CircleCloseFilled />
                     </el-icon>
                   </div>
-                  <span class="status-text"
-                    :class="{ 'success': result.downloaderStatus.success, 'error': !result.downloaderStatus.success }">
-                    {{ result.downloaderStatus.success ? `种子已添加到'${result.downloaderStatus.downloaderName}'` : '添加失败'
+                  <span
+                    class="status-text"
+                    :class="{
+                      success: result.downloaderStatus.success,
+                      error: !result.downloaderStatus.success,
+                    }"
+                  >
+                    {{
+                      result.downloaderStatus.success
+                        ? `种子已添加到'${result.downloaderStatus.downloaderName}'`
+                        : '添加失败'
                     }}
                   </span>
                 </div>
 
                 <!-- 操作按钮 -->
                 <div class="card-extra">
-                  <el-button type="primary" size="small" @click="showSiteLog(result.siteName, result.logs)">
+                  <el-button
+                    type="primary"
+                    size="small"
+                    @click="showSiteLog(result.siteName, result.logs)"
+                  >
                     查看日志
                   </el-button>
-                  <a v-if="result.success && result.url" :href="filterUploadedParam(result.url)" target="_blank" rel="noopener noreferrer"
-                    style="transform: translateY(-3px);">
-                    <el-button type="success" size="small">
-                      查看种子
-                    </el-button>
+                  <a
+                    v-if="result.success && result.url"
+                    :href="filterUploadedParam(result.url)"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style="transform: translateY(-3px)"
+                  >
+                    <el-button type="success" size="small"> 查看种子 </el-button>
                   </a>
                 </div>
               </div>
             </div>
             <div class="row-action">
-              <el-button type="warning" :icon="Refresh" size="large" @click="openAllSitesInRow(row)"
-                :disabled="!hasValidUrlsInRow(row)" class="open-all-button">
+              <el-button
+                type="warning"
+                :icon="Refresh"
+                size="large"
+                @click="openAllSitesInRow(row)"
+                :disabled="!hasValidUrlsInRow(row)"
+                class="open-all-button"
+              >
                 <div class="button-subtitle">打开{{ getValidUrlsCount(row) }}个站点</div>
               </el-button>
             </div>
@@ -611,30 +848,51 @@
       <div v-if="activeStep === 0" class="button-group">
         <el-button @click="handleCancelClick">取消</el-button>
 
-        <el-tooltip :content="nextButtonTooltipContent" placement="top"
-          :disabled="!isNextButtonDisabled">
+        <el-tooltip
+          :content="nextButtonTooltipContent"
+          placement="top"
+          :disabled="!isNextButtonDisabled"
+        >
           <!-- 添加一个 span 作为包裹元素 -->
 
-          <el-button type="primary" @click="goToPublishPreviewStep" :disabled="isNextButtonDisabled">
+          <el-button
+            type="primary"
+            @click="goToPublishPreviewStep"
+            :disabled="isNextButtonDisabled"
+          >
             下一步：发布参数预览
           </el-button>
-
         </el-tooltip>
       </div>
       <!-- 步骤 1 的按钮 -->
       <div v-if="activeStep === 1" class="button-group">
         <el-button @click="handlePreviousStep" :disabled="isLoading">上一步</el-button>
-        <el-tooltip :content="isScrolledToBottom ? '' : '请先滚动到页面底部审查完种子信息再修改！'" :disabled="isScrolledToBottom"
-          placement="top">
-          <el-button type="primary" @click="handleCompleteClick" v-if="props.showCompleteButton" 
-            :disabled="isLoading || !isScrolledToBottom" :class="{ 'scrolled-to-bottom': isScrolledToBottom }">
+        <el-tooltip
+          :content="isScrolledToBottom ? '' : '请先滚动到页面底部审查完种子信息再修改！'"
+          :disabled="isScrolledToBottom"
+          placement="top"
+        >
+          <el-button
+            type="primary"
+            @click="handleCompleteClick"
+            v-if="props.showCompleteButton"
+            :disabled="isLoading || !isScrolledToBottom"
+            :class="{ 'scrolled-to-bottom': isScrolledToBottom }"
+          >
             修改完成
           </el-button>
         </el-tooltip>
-        <el-tooltip :content="isScrolledToBottom ? '' : '请先滚动到页面底部审查完种子信息再发布！'" :disabled="isScrolledToBottom"
-          placement="top">
-          <el-button type="primary" @click="goToSelectSiteStep" :disabled="isLoading || !isScrolledToBottom"
-            :class="{ 'scrolled-to-bottom': isScrolledToBottom }">
+        <el-tooltip
+          :content="isScrolledToBottom ? '' : '请先滚动到页面底部审查完种子信息再发布！'"
+          :disabled="isScrolledToBottom"
+          placement="top"
+        >
+          <el-button
+            type="primary"
+            @click="goToSelectSiteStep"
+            :disabled="isLoading || !isScrolledToBottom"
+            :class="{ 'scrolled-to-bottom': isScrolledToBottom }"
+          >
             下一步：选择发布站点
           </el-button>
         </el-tooltip>
@@ -642,8 +900,12 @@
       <!-- 步骤 2 的按钮 -->
       <div v-if="activeStep === 2" class="button-group">
         <el-button @click="handleCancelClick" :disabled="isLoading">取消</el-button>
-        <el-button type="primary" @click="handlePublish" :loading="isLoading"
-          :disabled="selectedTargetSites.length === 0">
+        <el-button
+          type="primary"
+          @click="handlePublish"
+          :loading="isLoading"
+          :disabled="selectedTargetSites.length === 0"
+        >
           立即发布
         </el-button>
       </div>
@@ -667,8 +929,8 @@
   </el-card>
 
   <!-- 日志进度组件 -->
-  <LogProgress 
-    :visible="showLogProgress" 
+  <LogProgress
+    :visible="showLogProgress"
     :taskId="logProgressTaskId"
     @complete="handleLogProgressComplete"
     @close="showLogProgress = false"
@@ -681,7 +943,13 @@ import { ref, onMounted, computed, nextTick, watch } from 'vue'
 import { ElNotification, ElMessageBox } from 'element-plus'
 import { ElTooltip } from 'element-plus'
 import axios from 'axios'
-import { Refresh, CircleCheckFilled, CircleCloseFilled, Close, InfoFilled } from '@element-plus/icons-vue'
+import {
+  Refresh,
+  CircleCheckFilled,
+  CircleCloseFilled,
+  Close,
+  InfoFilled,
+} from '@element-plus/icons-vue'
 import { useCrossSeedStore } from '@/stores/crossSeed'
 import LogProgress from './LogProgress.vue'
 
@@ -700,10 +968,16 @@ const filterExtraEmptyLines = (text: string): string => {
   // 处理列表项之间的多余空行
   text = text.replace(/(\d+\.[\s\S]*?)\n\s*\n(\s*\d+\.)/g, '$1\n$2')
   // 处理嵌套标签内的多余空行（例如[b][color]标签内的空行）
-  text = text.replace(/(\[(?:b|color)[^\]]*\][\s\S]*?)\n\s*\n([\s\S]*?\[\/(?:b|color)\])/gi, '$1\n$2')
+  text = text.replace(
+    /(\[(?:b|color)[^\]]*\][\s\S]*?)\n\s*\n([\s\S]*?\[\/(?:b|color)\])/gi,
+    '$1\n$2',
+  )
   // 处理多层嵌套标签
   for (let i = 0; i < 3; i++) {
-    text = text.replace(/(\[(?:quote|b|color|size)[^\]]*\][\s\S]*?)\n\s*\n([\s\S]*?\[\/(?:quote|b|color|size)\])/gi, '$1\n$2')
+    text = text.replace(
+      /(\[(?:quote|b|color|size)[^\]]*\][\s\S]*?)\n\s*\n([\s\S]*?\[\/(?:quote|b|color|size)\])/gi,
+      '$1\n$2',
+    )
   }
   // 再次处理可能仍然存在的多余空行
   text = text.replace(/(\n\s*){2,}/g, '\n\n')
@@ -724,23 +998,29 @@ const parseBBCode = (text: string): string => {
   text = text.replace(/\[b\]([\s\S]*?)\[\/b\]/gi, '<strong>$1</strong>')
 
   // 处理 [color] 标签
-  text = text.replace(/\[color=(\w+|\#[0-9a-fA-F]{3,6})\]([\s\S]*?)\[\/color\]/gi, '<span style="color: $1;">$2</span>')
+  text = text.replace(
+    /\[color=(\w+|\#[0-9a-fA-F]{3,6})\]([\s\S]*?)\[\/color\]/gi,
+    '<span style="color: $1;">$2</span>',
+  )
 
   // 处理 [size] 标签，映射到具体的像素值
-  text = text.replace(/\[size=(\d+)\]([\s\S]*?)\[\/size\]/gi, (match: string, size: string, content: string): string => {
-    // 根据 size 值映射到具体的像素值
-    const sizeMap: { [key: string]: string } = {
-      '1': '12',
-      '2': '14',
-      '3': '16',
-      '4': '18',
-      '5': '24',
-      '6': '32',
-      '7': '48'
-    }
-    const pixelSize = sizeMap[size] || (parseInt(size) * 4)
-    return `<span style="font-size: ${pixelSize}px;">${content}</span>`
-  })
+  text = text.replace(
+    /\[size=(\d+)\]([\s\S]*?)\[\/size\]/gi,
+    (match: string, size: string, content: string): string => {
+      // 根据 size 值映射到具体的像素值
+      const sizeMap: { [key: string]: string } = {
+        '1': '12',
+        '2': '14',
+        '3': '16',
+        '4': '18',
+        '5': '24',
+        '6': '32',
+        '7': '48',
+      }
+      const pixelSize = sizeMap[size] || parseInt(size) * 4
+      return `<span style="font-size: ${pixelSize}px;">${content}</span>`
+    },
+  )
 
   // 处理换行符
   text = text.replace(/\n/g, '<br>')
@@ -749,42 +1029,42 @@ const parseBBCode = (text: string): string => {
 }
 
 interface SiteStatus {
-  name: string;
-  site: string;
-  has_cookie: boolean;
-  is_source: boolean;
-  is_target: boolean;
+  name: string
+  site: string
+  has_cookie: boolean
+  is_source: boolean
+  is_target: boolean
 }
 
 interface Torrent {
-  name: string;
-  save_path: string;
-  size: number;
-  size_formatted: string;
-  progress: number;
-  state: string;
-  sites: Record<string, any>;
-  total_uploaded: number;
-  total_uploaded_formatted: string;
-  downloaderId?: string;
+  name: string
+  save_path: string
+  size: number
+  size_formatted: string
+  progress: number
+  state: string
+  sites: Record<string, any>
+  total_uploaded: number
+  total_uploaded_formatted: string
+  downloaderId?: string
 }
 
 const props = defineProps({
   showCompleteButton: {
     type: Boolean,
-    default: false
-  }
-});
+    default: false,
+  },
+})
 
-const emit = defineEmits(['complete', 'cancel', 'close-with-refresh']);
+const emit = defineEmits(['complete', 'cancel', 'close-with-refresh'])
 
-const crossSeedStore = useCrossSeedStore();
+const crossSeedStore = useCrossSeedStore()
 
-const torrent = computed(() => crossSeedStore.workingParams as Torrent);
-const sourceSite = computed(() => crossSeedStore.sourceInfo?.name || '');
+const torrent = computed(() => crossSeedStore.workingParams as Torrent)
+const sourceSite = computed(() => crossSeedStore.sourceInfo?.name || '')
 
 const getInitialTorrentData = () => ({
-  title_components: [] as { key: string, value: string }[],
+  title_components: [] as { key: string; value: string }[],
   original_main_title: '',
   subtitle: '',
   imdb_link: '',
@@ -800,11 +1080,11 @@ const getInitialTorrentData = () => ({
     resolution: '',
     team: '',
     source: '',
-    tags: [] as string[]
+    tags: [] as string[],
   },
   final_publish_parameters: {},
   complete_publish_params: {},
-  raw_params_for_preview: {}
+  raw_params_for_preview: {},
 })
 
 const parseImageUrls = (text: string) => {
@@ -862,8 +1142,8 @@ const removeScrollListener = () => {
 
 // 在组件挂载时添加监听器
 onMounted(() => {
-  fetchSitesStatus();
-  fetchTorrentInfo();
+  fetchSitesStatus()
+  fetchTorrentInfo()
 
   // 在下一个tick添加滚动监听器，确保DOM已经渲染
   nextTick(() => {
@@ -873,7 +1153,6 @@ onMounted(() => {
     }
   })
 })
-
 
 // 监听活动步骤的变化
 watch(activeStep, (newStep, oldStep) => {
@@ -892,7 +1171,7 @@ const steps = [
   { title: '核对种子详情' },
   { title: '发布参数预览' },
   { title: '选择发布站点' },
-  { title: '完成发布' }
+  { title: '完成发布' },
 ]
 const allSitesStatus = ref<SiteStatus[]>([])
 const selectedTargetSites = ref<string[]>([])
@@ -909,7 +1188,7 @@ const isHandlingScreenshotError = ref(false) // 防止重复处理截图错误
 const screenshotValid = ref(true) // 跟踪截图是否有效
 const logContent = ref('')
 const showLogCard = ref(false)
-const downloaderList = ref<{ id: string, name: string }[]>([])
+const downloaderList = ref<{ id: string; name: string }[]>([])
 const isDataFromDatabase = ref(false) // Flag to track if data was loaded from database
 
 // 日志进度组件相关
@@ -925,79 +1204,88 @@ const reverseMappings = ref({
   resolution: {},
   source: {},
   team: {},
-  tags: {}
+  tags: {},
 })
 
 const posterImages = computed(() => parseImageUrls(torrentData.value.intro.poster))
 const screenshotImages = computed(() => parseImageUrls(torrentData.value.intro.screenshots))
 
 const filteredDeclarationsList = computed(() => {
-  const removedDeclarations = torrentData.value.intro.removed_ardtudeclarations;
+  const removedDeclarations = torrentData.value.intro.removed_ardtudeclarations
   if (Array.isArray(removedDeclarations)) {
-    return removedDeclarations;
+    return removedDeclarations
   }
-  return [];
+  return []
 })
 const filteredDeclarationsCount = computed(() => filteredDeclarationsList.value.length)
 
 const isTargetSiteSelectable = (siteName: string): boolean => {
-  if (!torrent.value || !torrent.value.sites) {
-    return true;
+  // 步骤 1: 查找站点的状态信息
+  const siteStatus = allSitesStatus.value.find((s) => s.name === siteName)
+
+  // 条件 1: 如果找不到站点信息或站点没有配置Cookie，则不可选
+  if (!siteStatus || !siteStatus.has_cookie) {
+    return false
   }
-  
-  // 检查是否为ubits站点（不区分大小写）
+
+  // 条件 2: 如果种子已经存在于该站点，则不可选
+  if (torrent.value?.sites?.[siteName]) {
+    return false
+  }
+
+  // 条件 3: 检查是否为ubits站点并应用特殊禁转规则
   if (siteName.toLowerCase() === 'ubits') {
-    console.log(`[禁止转载检测] 检查站点: ${siteName}`);
-    
-    // 检查制作组是否为禁止转载的组
-    const team = torrentData.value.standardized_params.team;
-    const titleComponents = torrentData.value.title_components;
-    
-    console.log(`[禁止转载检测] 标准化制作组: "${team}"`);
-    console.log(`[禁止转载检测] 标题组件:`, titleComponents);
-    
+    const team = torrentData.value.standardized_params.team
+    const titleComponents = torrentData.value.title_components
+
     // 检查标准化参数中的制作组
     if (team && ['cmct', 'cmctv'].includes(team.toLowerCase())) {
-      console.log(`[禁止转载检测] 标准化制作组匹配禁止转载: ${team}`);
-      return false;
+      return false
     }
-    
+
     // 检查标题组件中的制作组
-    const teamComponent = titleComponents.find(param => param.key === '制作组');
+    const teamComponent = titleComponents.find((param) => param.key === '制作组')
     if (teamComponent && teamComponent.value) {
-      const teamValue = teamComponent.value.toLowerCase();
-      const forbiddenTeams = ['cmct', 'cmctv', 'telesto', 'shadow610'];
-      
-      console.log(`[禁止转载检测] 标题组件制作组: "${teamValue}"`);
-      
-      // 检查是否包含禁止的制作组
+      const teamValue = teamComponent.value.toLowerCase()
+      const forbiddenTeams = ['cmct', 'cmctv', 'telesto', 'shadow610']
       for (const forbiddenTeam of forbiddenTeams) {
         if (teamValue.includes(forbiddenTeam)) {
-          console.log(`[禁止转载检测] 标题组件制作组匹配禁止转载: ${forbiddenTeam}`);
-          return false;
+          return false
         }
       }
     }
-    
-    console.log(`[禁止转载检测] 未匹配禁止转载制作组，允许选择`);
   }
-  
-  return !torrent.value.sites[siteName];
-};
 
+  // 如果所有检查都通过，则站点可选
+  return true
+}
+
+// 新增函数：根据站点状态获取按钮类型
+const getButtonType = (site: SiteStatus) => {
+  // 如果站点已被选中，显示为绿色
+  if (selectedTargetSites.value.includes(site.name)) {
+    return 'success'
+  }
+  // 如果站点没有Cookie，显示为蓝色 (primary)
+  if (!site.has_cookie) {
+    return 'primary'
+  }
+  // 其他情况（可选但未选中），显示为默认样式
+  return 'default'
+}
 
 const refreshIntro = async () => {
   if (!torrentData.value.douban_link && !torrentData.value.imdb_link) {
-    ElNotification.warning('没有豆瓣或IMDb链接，无法重新获取简介。');
-    return;
+    ElNotification.warning('没有豆瓣或IMDb链接，无法重新获取简介。')
+    return
   }
 
-  isRefreshingIntro.value = true;
+  isRefreshingIntro.value = true
   ElNotification.info({
     title: '正在重新获取',
     message: '正在从豆瓣/IMDb重新获取简介...',
-    duration: 0
-  });
+    duration: 0,
+  })
 
   const payload = {
     type: 'intro',
@@ -1006,47 +1294,47 @@ const refreshIntro = async () => {
       source_site: sourceSite.value,
       imdb_link: torrentData.value.imdb_link,
       douban_link: torrentData.value.douban_link,
-    }
-  };
+    },
+  }
 
   try {
-    const response = await axios.post('/api/media/validate', payload);
-    ElNotification.closeAll();
+    const response = await axios.post('/api/media/validate', payload)
+    ElNotification.closeAll()
 
     if (response.data.success && response.data.intro) {
-      torrentData.value.intro.body = filterExtraEmptyLines(response.data.intro);
+      torrentData.value.intro.body = filterExtraEmptyLines(response.data.intro)
 
       // 如果返回了新的IMDb链接，也更新它
       if (response.data.extracted_imdb_link && !torrentData.value.imdb_link) {
-        torrentData.value.imdb_link = response.data.extracted_imdb_link;
+        torrentData.value.imdb_link = response.data.extracted_imdb_link
       }
 
       ElNotification.success({
         title: '重新获取成功',
         message: '已成功从豆瓣/IMDb获取并更新了简介内容。',
-      });
+      })
     } else {
       ElNotification.error({
         title: '重新获取失败',
         message: response.data.error || '无法从豆瓣/IMDb获取简介。',
-      });
+      })
     }
   } catch (error: any) {
-    ElNotification.closeAll();
-    const errorMsg = error.response?.data?.error || '重新获取简介时发生网络错误';
+    ElNotification.closeAll()
+    const errorMsg = error.response?.data?.error || '重新获取简介时发生网络错误'
     ElNotification.error({
       title: '操作失败',
       message: errorMsg,
-    });
+    })
   } finally {
-    isRefreshingIntro.value = false;
+    isRefreshingIntro.value = false
   }
-};
+}
 
 const refreshScreenshots = async () => {
   if (!torrentData.value.original_main_title) {
-    ElNotification.warning('标题为空，无法重新获取截图。');
-    return;
+    ElNotification.warning('标题为空，无法重新获取截图。')
+    return
   }
 
   // 防止重复请求
@@ -1054,16 +1342,16 @@ const refreshScreenshots = async () => {
     ElNotification.info({
       title: '正在处理中',
       message: '截图重新生成请求已在处理中，请稍候...',
-    });
-    return;
+    })
+    return
   }
 
-  isRefreshingScreenshots.value = true;
+  isRefreshingScreenshots.value = true
   ElNotification.info({
     title: '正在重新获取',
     message: '正在从视频重新生成截图...',
-    duration: 0
-  });
+    duration: 0,
+  })
 
   const payload = {
     type: 'screenshot',
@@ -1075,41 +1363,41 @@ const refreshScreenshots = async () => {
     },
     savePath: torrent.value.save_path,
     torrentName: torrent.value.name,
-    downloaderId: torrent.value.downloaderId // 添加下载器ID
-  };
+    downloaderId: torrent.value.downloaderId, // 添加下载器ID
+  }
 
   try {
-    const response = await axios.post('/api/media/validate', payload);
-    ElNotification.closeAll();
+    const response = await axios.post('/api/media/validate', payload)
+    ElNotification.closeAll()
 
     if (response.data.success && response.data.screenshots) {
-      torrentData.value.intro.screenshots = response.data.screenshots;
-      screenshotValid.value = true; // 标记截图有效
+      torrentData.value.intro.screenshots = response.data.screenshots
+      screenshotValid.value = true // 标记截图有效
       ElNotification.success({
         title: '重新获取成功',
         message: '已成功生成并加载了新的截图。',
-      });
+      })
     } else {
       // 如果重新获取截图失败，标记截图无效
-      screenshotValid.value = false;
+      screenshotValid.value = false
       ElNotification.error({
         title: '重新获取失败',
         message: response.data.error || '无法从后端获取新的截图。',
-      });
+      })
     }
   } catch (error: any) {
-    ElNotification.closeAll();
-    const errorMsg = error.response?.data?.error || '重新获取截图时发生网络错误';
+    ElNotification.closeAll()
+    const errorMsg = error.response?.data?.error || '重新获取截图时发生网络错误'
     ElNotification.error({
       title: '操作失败',
       message: errorMsg,
-    });
+    })
     // 如果重新获取截图失败，标记截图无效
-    screenshotValid.value = false;
+    screenshotValid.value = false
   } finally {
-    isRefreshingScreenshots.value = false;
+    isRefreshingScreenshots.value = false
   }
-};
+}
 
 const refreshMediainfo = async () => {
   // 移除标题检查，允许任何时候重新获取
@@ -1118,16 +1406,16 @@ const refreshMediainfo = async () => {
     ElNotification.info({
       title: '正在处理中',
       message: '媒体信息重新获取请求已在处理中，请稍候...',
-    });
-    return;
+    })
+    return
   }
 
-  isRefreshingMediainfo.value = true;
+  isRefreshingMediainfo.value = true
   ElNotification.info({
     title: '正在重新获取',
     message: '正在从视频重新生成媒体信息...',
-    duration: 0
-  });
+    duration: 0,
+  })
 
   const payload = {
     type: 'mediainfo',
@@ -1140,41 +1428,41 @@ const refreshMediainfo = async () => {
     current_mediainfo: torrentData.value.mediainfo, // 传递当前mediainfo，但后端会强制重新获取
     savePath: torrent.value.save_path,
     torrentName: torrent.value.name,
-    downloaderId: torrent.value.downloaderId // 添加下载器ID
-  };
+    downloaderId: torrent.value.downloaderId, // 添加下载器ID
+  }
 
   try {
-    const response = await axios.post('/api/media/validate', payload);
-    ElNotification.closeAll();
+    const response = await axios.post('/api/media/validate', payload)
+    ElNotification.closeAll()
 
     if (response.data.success && response.data.mediainfo) {
-      torrentData.value.mediainfo = response.data.mediainfo;
+      torrentData.value.mediainfo = response.data.mediainfo
       ElNotification.success({
         title: '重新获取成功',
         message: '已成功生成并加载了新的媒体信息。',
-      });
+      })
     } else {
       ElNotification.error({
         title: '重新获取失败',
         message: response.data.error || '无法从后端获取新的媒体信息。',
-      });
+      })
     }
   } catch (error: any) {
-    ElNotification.closeAll();
-    const errorMsg = error.response?.data?.error || '重新获取媒体信息时发生网络错误';
+    ElNotification.closeAll()
+    const errorMsg = error.response?.data?.error || '重新获取媒体信息时发生网络错误'
     ElNotification.error({
       title: '操作失败',
       message: errorMsg,
-    });
+    })
   } finally {
-    isRefreshingMediainfo.value = false;
+    isRefreshingMediainfo.value = false
   }
-};
+}
 
 const refreshPosters = async () => {
   if (!torrentData.value.original_main_title) {
-    ElNotification.warning('标题为空，无法重新获取海报。');
-    return;
+    ElNotification.warning('标题为空，无法重新获取海报。')
+    return
   }
 
   // 防止重复请求
@@ -1182,16 +1470,16 @@ const refreshPosters = async () => {
     ElNotification.info({
       title: '正在处理中',
       message: '海报重新获取请求已在处理中，请稍候...',
-    });
-    return;
+    })
+    return
   }
 
-  isRefreshingPosters.value = true;
+  isRefreshingPosters.value = true
   ElNotification.info({
     title: '正在重新获取',
     message: '正在重新生成海报...',
-    duration: 0
-  });
+    duration: 0,
+  })
 
   const payload = {
     type: 'poster',
@@ -1203,69 +1491,71 @@ const refreshPosters = async () => {
     },
     savePath: torrent.value.save_path,
     torrentName: torrent.value.name,
-    downloaderId: torrent.value.downloaderId // 添加下载器ID
-  };
+    downloaderId: torrent.value.downloaderId, // 添加下载器ID
+  }
 
   try {
-    const response = await axios.post('/api/media/validate', payload);
-    ElNotification.closeAll();
+    const response = await axios.post('/api/media/validate', payload)
+    ElNotification.closeAll()
 
     if (response.data.success && response.data.posters) {
-      torrentData.value.intro.poster = response.data.posters;
+      torrentData.value.intro.poster = response.data.posters
       ElNotification.success({
         title: '重新获取成功',
         message: '已成功生成并加载了新的海报。',
-      });
+      })
     } else {
       ElNotification.error({
         title: '重新获取失败',
         message: response.data.error || '无法从后端获取新的海报。',
-      });
+      })
     }
   } catch (error: any) {
-    ElNotification.closeAll();
-    const errorMsg = error.response?.data?.error || '重新获取海报时发生网络错误';
+    ElNotification.closeAll()
+    const errorMsg = error.response?.data?.error || '重新获取海报时发生网络错误'
     ElNotification.error({
       title: '操作失败',
       message: errorMsg,
-    });
+    })
   } finally {
-    isRefreshingPosters.value = false;
+    isRefreshingPosters.value = false
   }
-};
+}
 
 const reparseTitle = async () => {
   if (!torrentData.value.original_main_title) {
-    ElNotification.warning('标题为空，无法解析。');
-    return;
+    ElNotification.warning('标题为空，无法解析。')
+    return
   }
-  isReparsing.value = true;
+  isReparsing.value = true
   try {
-    const response = await axios.post('/api/utils/parse_title', { title: torrentData.value.original_main_title });
+    const response = await axios.post('/api/utils/parse_title', {
+      title: torrentData.value.original_main_title,
+    })
     if (response.data.success) {
-      torrentData.value.title_components = response.data.components;
-      ElNotification.success('标题已重新解析！');
+      torrentData.value.title_components = response.data.components
+      ElNotification.success('标题已重新解析！')
     } else {
-      ElNotification.error(response.data.message || '解析失败');
+      ElNotification.error(response.data.message || '解析失败')
     }
   } catch (error) {
-    handleApiError(error, '重新解析标题时发生网络错误');
+    handleApiError(error, '重新解析标题时发生网络错误')
   } finally {
-    isReparsing.value = false;
+    isReparsing.value = false
   }
-};
+}
 
 const handleImageError = async (url: string, type: 'poster' | 'screenshot', index: number) => {
   // 防止重复处理截图错误
   if (type === 'screenshot' && isHandlingScreenshotError.value) {
-    console.log(`截图错误已正在处理中，跳过重复请求: ${url}`);
-    return;
+    console.log(`截图错误已正在处理中，跳过重复请求: ${url}`)
+    return
   }
 
   console.error(`图片加载失败: 类型=${type}, URL=${url}, 索引=${index}`)
   if (type === 'screenshot') {
-    isHandlingScreenshotError.value = true;
-    screenshotValid.value = false; // 标记截图无效
+    isHandlingScreenshotError.value = true
+    screenshotValid.value = false // 标记截图无效
     ElNotification.warning({
       title: '截图失效',
       message: '检测到截图链接失效，正在尝试从视频重新生成...',
@@ -1287,47 +1577,50 @@ const handleImageError = async (url: string, type: 'poster' | 'screenshot', inde
     },
     savePath: torrent.value.save_path,
     torrentName: torrent.value.name,
-    downloaderId: torrent.value.downloaderId // 添加下载器ID
+    downloaderId: torrent.value.downloaderId, // 添加下载器ID
   }
 
   try {
     const response = await axios.post('/api/media/validate', payload)
     if (response.data.success) {
       if (type === 'screenshot' && response.data.screenshots) {
-        torrentData.value.intro.screenshots = response.data.screenshots;
-        screenshotValid.value = true; // 标记截图有效
+        torrentData.value.intro.screenshots = response.data.screenshots
+        screenshotValid.value = true // 标记截图有效
         ElNotification.success({
           title: '截图已更新',
           message: '已成功生成并加载了新的截图。',
-        });
+        })
       } else if (type === 'poster' && response.data.posters) {
-        torrentData.value.intro.poster = response.data.posters;
+        torrentData.value.intro.poster = response.data.posters
         ElNotification.success({
           title: '海报已更新',
           message: '已成功生成并加载了新的海报。',
-        });
+        })
       }
     } else {
       // 如果更新截图失败，保持screenshotValid为false
       if (type === 'screenshot') {
-        screenshotValid.value = false;
+        screenshotValid.value = false
       }
       ElNotification.error({
         title: '更新失败',
-        message: response.data.error || `无法从后端获取新的${type === 'poster' ? '海报' : '截图'}。`,
-      });
+        message:
+          response.data.error || `无法从后端获取新的${type === 'poster' ? '海报' : '截图'}。`,
+      })
     }
   } catch (error: any) {
-    const errorMsg = error.response?.data?.error || `发送失效${type === 'poster' ? '海报' : '截图'}信息请求时发生网络错误`;
+    const errorMsg =
+      error.response?.data?.error ||
+      `发送失效${type === 'poster' ? '海报' : '截图'}信息请求时发生网络错误`
     console.error('发送失效图片信息请求时发生网络错误:', error)
     ElNotification.error({
       title: '操作失败',
       message: errorMsg,
-    });
+    })
   } finally {
     // 重置截图处理状态
     if (type === 'screenshot') {
-      isHandlingScreenshotError.value = false;
+      isHandlingScreenshotError.value = false
       // 注意：不重置 screenshotValid 状态，保持当前的截图有效状态
     }
   }
@@ -1336,152 +1629,158 @@ const handleImageError = async (url: string, type: 'poster' | 'screenshot', inde
 // 通过中文站点名获取英文站点名，用于数据库查询
 const getEnglishSiteName = async (chineseSiteName: string): Promise<string> => {
   // 首先尝试从已加载的 allSitesStatus 中获取
-  const siteInfo = allSitesStatus.value.find((s: any) => s.name === chineseSiteName);
+  const siteInfo = allSitesStatus.value.find((s: any) => s.name === chineseSiteName)
   if (siteInfo?.site) {
-    return siteInfo.site;
+    return siteInfo.site
   }
 
   // 如果 allSitesStatus 还没有加载，直接调用接口获取站点信息
   try {
-    const response = await axios.get('/api/sites/status');
-    allSitesStatus.value = response.data;
+    const response = await axios.get('/api/sites/status')
+    allSitesStatus.value = response.data
 
     // 再次尝试从更新的 allSitesStatus 中获取
-    const updatedSiteInfo = allSitesStatus.value.find((s: any) => s.name === chineseSiteName);
+    const updatedSiteInfo = allSitesStatus.value.find((s: any) => s.name === chineseSiteName)
     if (updatedSiteInfo?.site) {
-      return updatedSiteInfo.site;
+      return updatedSiteInfo.site
     }
   } catch (error) {
-    console.warn('获取站点状态失败:', error);
+    console.warn('获取站点状态失败:', error)
   }
 
   // 最后后备方案：使用常见的站点映射
   const commonSiteMapping: Record<string, string> = {
-    '人人': 'audiences',
-    '不可说': 'ssd',
-    '憨憨': 'hhanclub',
-    '财神': 'cspt'
+    人人: 'audiences',
+    不可说: 'ssd',
+    憨憨: 'hhanclub',
+    财神: 'cspt',
     // 可以添加更多常见映射
-  };
+  }
 
-  return commonSiteMapping[chineseSiteName] || chineseSiteName.toLowerCase();
-};
+  return commonSiteMapping[chineseSiteName] || chineseSiteName.toLowerCase()
+}
 
 const fetchSitesStatus = async () => {
   try {
-    const response = await axios.get('/api/sites/status');
-    allSitesStatus.value = response.data;
-    const downloaderResponse = await axios.get('/api/downloaders_list');
-    downloaderList.value = downloaderResponse.data;
+    const response = await axios.get('/api/sites/status')
+    allSitesStatus.value = response.data
+    const downloaderResponse = await axios.get('/api/downloaders_list')
+    downloaderList.value = downloaderResponse.data
   } catch (error) {
-    ElNotification.error({ title: '错误', message: '无法从服务器获取站点状态列表或下载器列表' });
+    ElNotification.error({ title: '错误', message: '无法从服务器获取站点状态列表或下载器列表' })
   }
 }
 
 const fetchTorrentInfo = async () => {
-  if (!sourceSite.value || !torrent.value) return;
+  if (!sourceSite.value || !torrent.value) return
 
-  const siteDetails = torrent.value.sites[sourceSite.value];
+  const siteDetails = torrent.value.sites[sourceSite.value]
   // 首先检查是否有存储的种子ID
-  let torrentId = siteDetails.torrentId || null;
+  let torrentId = siteDetails.torrentId || null
 
   // 如果没有存储的ID，则尝试从链接中提取
   if (!torrentId) {
-    const idMatch = siteDetails.comment?.match(/id=(\d+)/);
+    const idMatch = siteDetails.comment?.match(/id=(\d+)/)
     if (!idMatch || !idMatch[1]) {
-      ElNotification.error(`无法从源站点 ${sourceSite.value} 的链接中提取种子ID。`);
-      emit('cancel');
-      return;
+      ElNotification.error(`无法从源站点 ${sourceSite.value} 的链接中提取种子ID。`)
+      emit('cancel')
+      return
     }
-    torrentId = idMatch[1];
+    torrentId = idMatch[1]
   }
 
   isLoading.value = true
-  
+
   // 生成任务ID并显示进度组件
   const tempTaskId = `fetch_${torrentId}_${Date.now()}`
   logProgressTaskId.value = tempTaskId
   showLogProgress.value = true
 
-  let dbError = null;
+  let dbError = null
 
   // 步骤1: 尝试从数据库读取种子信息
   try {
-    const englishSiteName = await getEnglishSiteName(sourceSite.value);
-    console.log(`尝试从数据库读取种子信息: ${torrentId} from ${sourceSite.value} (${englishSiteName})`);
+    const englishSiteName = await getEnglishSiteName(sourceSite.value)
+    console.log(
+      `尝试从数据库读取种子信息: ${torrentId} from ${sourceSite.value} (${englishSiteName})`,
+    )
     const dbResponse = await axios.get('/api/migrate/get_db_seed_info', {
       params: {
         torrent_id: torrentId,
         site_name: englishSiteName,
-        task_id: tempTaskId  // 传递task_id给后端
+        task_id: tempTaskId, // 传递task_id给后端
       },
-      timeout: 120000 // 120秒超时
-    });
+      timeout: 120000, // 120秒超时
+    })
 
     // 检查是否需要继续抓取（202状态码）
     if (dbResponse.status === 202 && dbResponse.data.should_fetch) {
-      console.log('数据库中没有缓存，继续使用同一日志流从源站点抓取...');
+      console.log('数据库中没有缓存，继续使用同一日志流从源站点抓取...')
       // 使用返回的task_id继续抓取（不关闭日志流）
-      const continuedTaskId = dbResponse.data.task_id || tempTaskId;
-      
+      const continuedTaskId = dbResponse.data.task_id || tempTaskId
+
       // 直接调用 fetch_and_store，传入相同的 task_id
       try {
-        const storeResponse = await axios.post('/api/migrate/fetch_and_store', {
-          sourceSite: sourceSite.value,
-          searchTerm: torrentId,
-          savePath: torrent.value.save_path,
-          torrentName: torrent.value.name,
-          downloaderId: torrent.value.downloaderId,
-          task_id: continuedTaskId  // 传递相同的task_id以继续使用同一日志流
-        }, {
-          timeout: 120000
-        });
+        const storeResponse = await axios.post(
+          '/api/migrate/fetch_and_store',
+          {
+            sourceSite: sourceSite.value,
+            searchTerm: torrentId,
+            savePath: torrent.value.save_path,
+            torrentName: torrent.value.name,
+            downloaderId: torrent.value.downloaderId,
+            task_id: continuedTaskId, // 传递相同的task_id以继续使用同一日志流
+          },
+          {
+            timeout: 120000,
+          },
+        )
 
         if (!storeResponse.data.success) {
-          ElNotification.closeAll();
+          ElNotification.closeAll()
           ElNotification.error({
             title: '抓取失败',
             message: storeResponse.data.message || '从源站点抓取失败',
             duration: 0,
             showClose: true,
-          });
-          emit('cancel');
-          isLoading.value = false;
-          return;
+          })
+          emit('cancel')
+          isLoading.value = false
+          return
         }
 
         // 抓取成功后，再次从数据库读取（使用相同逻辑）
         const finalDbResponse = await axios.get('/api/migrate/get_db_seed_info', {
           params: {
             torrent_id: torrentId,
-            site_name: englishSiteName
+            site_name: englishSiteName,
           },
-          timeout: 120000
-        });
+          timeout: 120000,
+        })
 
         if (!finalDbResponse.data.success) {
-          ElNotification.closeAll();
+          ElNotification.closeAll()
           ElNotification.error({
             title: '读取失败',
             message: '数据抓取成功但从数据库读取失败',
             duration: 0,
             showClose: true,
-          });
-          emit('cancel');
-          isLoading.value = false;
-          return;
+          })
+          emit('cancel')
+          isLoading.value = false
+          return
         }
 
         // 处理成功的数据（与下面的逻辑相同）
-        ElNotification.closeAll();
+        ElNotification.closeAll()
         ElNotification.success({
           title: '抓取成功',
-          message: '种子信息已成功抓取并存储到数据库，请核对。'
-        });
+          message: '种子信息已成功抓取并存储到数据库，请核对。',
+        })
 
-        const dbData = finalDbResponse.data.data;
+        const dbData = finalDbResponse.data.data
         if (finalDbResponse.data.reverse_mappings) {
-          reverseMappings.value = finalDbResponse.data.reverse_mappings;
+          reverseMappings.value = finalDbResponse.data.reverse_mappings
         }
 
         torrentData.value = {
@@ -1495,7 +1794,7 @@ const fetchTorrentInfo = async () => {
             poster: dbData.poster || '',
             body: filterExtraEmptyLines(dbData.body) || '',
             screenshots: dbData.screenshots || '',
-            removed_ardtudeclarations: dbData.removed_ardtudeclarations || []
+            removed_ardtudeclarations: dbData.removed_ardtudeclarations || [],
           },
           mediainfo: dbData.mediainfo || '',
           source_params: dbData.source_params || {},
@@ -1507,51 +1806,51 @@ const fetchTorrentInfo = async () => {
             resolution: dbData.resolution || '',
             team: dbData.team || '',
             source: dbData.source || '',
-            tags: dbData.tags || []
+            tags: dbData.tags || [],
           },
           final_publish_parameters: dbData.final_publish_parameters || {},
           complete_publish_params: dbData.complete_publish_params || {},
-          raw_params_for_preview: dbData.raw_params_for_preview || {}
-        };
+          raw_params_for_preview: dbData.raw_params_for_preview || {},
+        }
 
-        taskId.value = storeResponse.data.task_id;
-        isDataFromDatabase.value = true;
-        activeStep.value = 0;
-        
+        taskId.value = storeResponse.data.task_id
+        isDataFromDatabase.value = true
+        activeStep.value = 0
+
         nextTick(() => {
-          checkScreenshotValidity();
-        });
-        
-        isLoading.value = false;
-        return;
+          checkScreenshotValidity()
+        })
+
+        isLoading.value = false
+        return
       } catch (error: any) {
-        ElNotification.closeAll();
-        handleApiError(error, '从源站点抓取时发生网络错误');
-        emit('cancel');
-        isLoading.value = false;
-        return;
+        ElNotification.closeAll()
+        handleApiError(error, '从源站点抓取时发生网络错误')
+        emit('cancel')
+        isLoading.value = false
+        return
       }
     } else if (dbResponse.data.success) {
-      ElNotification.closeAll();
+      ElNotification.closeAll()
       ElNotification.success({
         title: '读取成功',
-        message: '种子信息已从数据库成功加载，请核对。'
-      });
+        message: '种子信息已从数据库成功加载，请核对。',
+      })
 
       // 验证数据库返回的数据完整性
-      const dbData = dbResponse.data.data;
+      const dbData = dbResponse.data.data
       if (!dbData || !dbData.title) {
-        throw new Error('数据库返回的种子信息不完整');
+        throw new Error('数据库返回的种子信息不完整')
       }
 
       // 从后端响应中提取反向映射表
       if (dbResponse.data.reverse_mappings) {
-        reverseMappings.value = dbResponse.data.reverse_mappings;
-        console.log('成功加载反向映射表:', reverseMappings.value);
-        console.log('type映射数量:', Object.keys(reverseMappings.value.type || {}).length);
-        console.log('当前standardized_params:', dbData.standardized_params);
+        reverseMappings.value = dbResponse.data.reverse_mappings
+        console.log('成功加载反向映射表:', reverseMappings.value)
+        console.log('type映射数量:', Object.keys(reverseMappings.value.type || {}).length)
+        console.log('当前standardized_params:', dbData.standardized_params)
       } else {
-        console.warn('后端未返回反向映射表，将使用空的默认映射');
+        console.warn('后端未返回反向映射表，将使用空的默认映射')
       }
 
       // 从数据库返回的数据中提取相关信息
@@ -1566,7 +1865,7 @@ const fetchTorrentInfo = async () => {
           poster: dbData.poster || '',
           body: filterExtraEmptyLines(dbData.body) || '',
           screenshots: dbData.screenshots || '',
-          removed_ardtudeclarations: dbData.removed_ardtudeclarations || []
+          removed_ardtudeclarations: dbData.removed_ardtudeclarations || [],
         },
         mediainfo: dbData.mediainfo || '',
         source_params: dbData.source_params || {},
@@ -1578,198 +1877,211 @@ const fetchTorrentInfo = async () => {
           resolution: dbData.resolution || '',
           team: dbData.team || '',
           source: dbData.source || '',
-          tags: dbData.tags || []
+          tags: dbData.tags || [],
         },
         final_publish_parameters: dbData.final_publish_parameters || {},
         complete_publish_params: dbData.complete_publish_params || {},
-        raw_params_for_preview: dbData.raw_params_for_preview || {}
-      };
+        raw_params_for_preview: dbData.raw_params_for_preview || {},
+      }
 
       // 如果没有解析过的标题组件，自动解析主标题
       if ((!dbData.title_components || dbData.title_components.length === 0) && dbData.title) {
         try {
-          const parseResponse = await axios.post('/api/utils/parse_title', { title: dbData.title });
+          const parseResponse = await axios.post('/api/utils/parse_title', { title: dbData.title })
           if (parseResponse.data.success) {
-            torrentData.value.title_components = parseResponse.data.components;
+            torrentData.value.title_components = parseResponse.data.components
             ElNotification.info({
               title: '标题解析',
-              message: '已自动解析主标题为组件信息。'
-            });
+              message: '已自动解析主标题为组件信息。',
+            })
           }
         } catch (error) {
-          console.warn('自动解析标题失败:', error);
+          console.warn('自动解析标题失败:', error)
         }
       }
 
-      console.log('设置torrentData.standardized_params:', torrentData.value.standardized_params);
-      console.log('检查绑定 - type:', torrentData.value.standardized_params.type);
-      console.log('检查绑定 - medium:', torrentData.value.standardized_params.medium);
+      console.log('设置torrentData.standardized_params:', torrentData.value.standardized_params)
+      console.log('检查绑定 - type:', torrentData.value.standardized_params.type)
+      console.log('检查绑定 - medium:', torrentData.value.standardized_params.medium)
 
       // 直接使用从数据库返回的 taskId，如果后端没有返回则生成标识符
       if (dbResponse.data.task_id) {
-        taskId.value = dbResponse.data.task_id; // 使用从数据库返回的 taskId
+        taskId.value = dbResponse.data.task_id // 使用从数据库返回的 taskId
         ElNotification.success({
           title: '缓存准备完成',
-          message: '发布任务已准备就绪'
-        });
+          message: '发布任务已准备就绪',
+        })
       } else {
         // 如果后端未返回task_id，回退到标识符
-        taskId.value = `db_${torrentId}_${englishSiteName}`;
-        console.warn('后端未返回taskId，使用标识符');
+        taskId.value = `db_${torrentId}_${englishSiteName}`
+        console.warn('后端未返回taskId，使用标识符')
       }
-      isDataFromDatabase.value = true; // Mark that data was loaded from database
+      isDataFromDatabase.value = true // Mark that data was loaded from database
 
       // 自动提取链接的逻辑保持不变
-      if ((!torrentData.value.imdb_link || !torrentData.value.douban_link) && torrentData.value.intro.body) {
-        let imdbExtracted = false;
-        let doubanExtracted = false;
+      if (
+        (!torrentData.value.imdb_link || !torrentData.value.douban_link) &&
+        torrentData.value.intro.body
+      ) {
+        let imdbExtracted = false
+        let doubanExtracted = false
         if (!torrentData.value.imdb_link) {
-          const imdbRegex = /(https?:\/\/www\.imdb\.com\/title\/tt\d+)/;
-          const imdbMatch = torrentData.value.intro.body.match(imdbRegex);
+          const imdbRegex = /(https?:\/\/www\.imdb\.com\/title\/tt\d+)/
+          const imdbMatch = torrentData.value.intro.body.match(imdbRegex)
           if (imdbMatch && imdbMatch[1]) {
-            torrentData.value.imdb_link = imdbMatch[1];
-            imdbExtracted = true;
+            torrentData.value.imdb_link = imdbMatch[1]
+            imdbExtracted = true
           }
         }
         if (!torrentData.value.douban_link) {
-          const doubanRegex = /(https:\/\/movie\.douban\.com\/subject\/\d+)/;
-          const doubanMatch = torrentData.value.intro.body.match(doubanRegex);
+          const doubanRegex = /(https:\/\/movie\.douban\.com\/subject\/\d+)/
+          const doubanMatch = torrentData.value.intro.body.match(doubanRegex)
           if (doubanMatch && doubanMatch[1]) {
-            torrentData.value.douban_link = doubanMatch[1];
-            doubanExtracted = true;
+            torrentData.value.douban_link = doubanMatch[1]
+            doubanExtracted = true
           }
         }
         if (imdbExtracted || doubanExtracted) {
-          const messages = [];
-          if (imdbExtracted) messages.push('IMDb链接');
-          if (doubanExtracted) messages.push('豆瓣链接');
+          const messages = []
+          if (imdbExtracted) messages.push('IMDb链接')
+          if (doubanExtracted) messages.push('豆瓣链接')
           ElNotification.info({
             title: '自动填充',
-            message: `已从简介正文中自动提取并填充 ${messages.join(' 和 ')}。`
-          });
+            message: `已从简介正文中自动提取并填充 ${messages.join(' 和 ')}。`,
+          })
         }
       }
 
-      activeStep.value = 0;
+      activeStep.value = 0
       // Check screenshot validity after loading data
       nextTick(() => {
-        checkScreenshotValidity();
-      });
+        checkScreenshotValidity()
+      })
       // Set flag to indicate data was loaded from database
-      isDataFromDatabase.value = true;
+      isDataFromDatabase.value = true
       // 【修复】在从数据库成功读取后关闭加载动画
-      isLoading.value = false;
+      isLoading.value = false
       // Skip the scraping part since we have data from database
-      return;
+      return
     } else {
       // 数据库中不存在该记录，这是正常情况，不需要记录为错误
-      console.log('数据库中没有找到种子信息，开始抓取数据...');
+      console.log('数据库中没有找到种子信息，开始抓取数据...')
     }
   } catch (error) {
     // 捕获数据库读取错误，但继续执行抓取逻辑
-    dbError = error;
-    console.log('从数据库读取失败，开始抓取数据...', error);
+    dbError = error
+    console.log('从数据库读取失败，开始抓取数据...', error)
 
     // 区分网络错误和其他错误
     if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
-      console.warn('数据库读取超时，将尝试直接抓取数据...');
+      console.warn('数据库读取超时，将尝试直接抓取数据...')
     } else if (error.response?.status >= 500) {
-      console.warn('数据库服务器错误，将尝试直接抓取数据...');
+      console.warn('数据库服务器错误，将尝试直接抓取数据...')
     } else {
-      console.warn('数据库读取发生未知错误，将尝试直接抓取数据...');
+      console.warn('数据库读取发生未知错误，将尝试直接抓取数据...')
     }
   }
 
   // 步骤2: 如果数据库中没有数据，则进行抓取和存储
   try {
-    ElNotification.closeAll();
+    ElNotification.closeAll()
     ElNotification({
       title: '正在抓取',
       message: '正在从源站点抓取种子信息并存储到数据库...',
       type: 'info',
       duration: 0,
-    });
+    })
 
     // 如果有数据库错误，显示警告信息
     if (dbError) {
-      console.warn(`由于数据库读取失败（${dbError.message}），正在直接抓取数据...`);
+      console.warn(`由于数据库读取失败（${dbError.message}），正在直接抓取数据...`)
       ElNotification.warning({
         title: '数据库读取失败',
         message: '正在尝试直接抓取数据，请稍候...',
         duration: 3000,
-      });
+      })
     }
 
-    const storeResponse = await axios.post('/api/migrate/fetch_and_store', {
-      sourceSite: sourceSite.value,
-      searchTerm: torrentId,
-      savePath: torrent.value.save_path,
-      torrentName: torrent.value.name,
-      downloaderId: torrent.value.downloaderId || (torrent.value.downloaderIds?.length > 0 ? torrent.value.downloaderIds[0] : null),
-    }, {
-      timeout: 120000 // 120秒超时，用于抓取和存储
-    });
+    const storeResponse = await axios.post(
+      '/api/migrate/fetch_and_store',
+      {
+        sourceSite: sourceSite.value,
+        searchTerm: torrentId,
+        savePath: torrent.value.save_path,
+        torrentName: torrent.value.name,
+        downloaderId:
+          torrent.value.downloaderId ||
+          (torrent.value.downloaderIds?.length > 0 ? torrent.value.downloaderIds[0] : null),
+      },
+      {
+        timeout: 120000, // 120秒超时，用于抓取和存储
+      },
+    )
 
     if (storeResponse.data.success) {
       // 抓取成功后，立即从数据库读取数据
-      console.log('数据抓取成功，立即从数据库读取...');
-      let dbReadAttempt = 0;
-      const maxDbReadAttempts = 3;
-      let dbResponseAfterStore = null;
+      console.log('数据抓取成功，立即从数据库读取...')
+      let dbReadAttempt = 0
+      const maxDbReadAttempts = 3
+      let dbResponseAfterStore = null
 
       // 重试机制：多次尝试从数据库读取
       while (dbReadAttempt < maxDbReadAttempts) {
-        dbReadAttempt++;
+        dbReadAttempt++
         try {
-          const retryEnglishSiteName = await getEnglishSiteName(sourceSite.value);
-          console.log(`重试从数据库读取种子信息: ${torrentId} from ${sourceSite.value} (${retryEnglishSiteName})`);
+          const retryEnglishSiteName = await getEnglishSiteName(sourceSite.value)
+          console.log(
+            `重试从数据库读取种子信息: ${torrentId} from ${sourceSite.value} (${retryEnglishSiteName})`,
+          )
           dbResponseAfterStore = await axios.get('/api/migrate/get_db_seed_info', {
             params: {
               torrent_id: torrentId,
-              site_name: retryEnglishSiteName
+              site_name: retryEnglishSiteName,
             },
-            timeout: 120000 // 120秒超时
-          });
+            timeout: 120000, // 120秒超时
+          })
 
           if (dbResponseAfterStore.data.success) {
-            break; // 成功读取，退出重试循环
+            break // 成功读取，退出重试循环
           } else {
-            console.warn(`数据库读取第${dbReadAttempt}次失败：${dbResponseAfterStore.data.message}`);
+            console.warn(`数据库读取第${dbReadAttempt}次失败：${dbResponseAfterStore.data.message}`)
             if (dbReadAttempt < maxDbReadAttempts) {
-              await new Promise(resolve => setTimeout(resolve, 1000)); // 等待1秒后重试
+              await new Promise((resolve) => setTimeout(resolve, 1000)) // 等待1秒后重试
             }
           }
         } catch (readError) {
-          console.warn(`数据库读取第${dbReadAttempt}次失败：`, readError);
+          console.warn(`数据库读取第${dbReadAttempt}次失败：`, readError)
           if (dbReadAttempt < maxDbReadAttempts) {
-            await new Promise(resolve => setTimeout(resolve, 1000)); // 等待1秒后重试
+            await new Promise((resolve) => setTimeout(resolve, 1000)) // 等待1秒后重试
           } else {
-            throw readError; // 重试次数用尽，抛出错误
+            throw readError // 重试次数用尽，抛出错误
           }
         }
       }
 
       if (dbResponseAfterStore && dbResponseAfterStore.data.success) {
-        ElNotification.closeAll();
+        ElNotification.closeAll()
 
         // 验证数据完整性
-        const dbData = dbResponseAfterStore.data.data;
+        const dbData = dbResponseAfterStore.data.data
         if (!dbData || !dbData.title) {
-          throw new Error('数据库返回的种子信息不完整');
+          throw new Error('数据库返回的种子信息不完整')
         }
 
         // 从后端响应中提取反向映射表
         if (dbResponseAfterStore.data.reverse_mappings) {
-          reverseMappings.value = dbResponseAfterStore.data.reverse_mappings;
-          console.log('成功加载反向映射表:', reverseMappings.value);
+          reverseMappings.value = dbResponseAfterStore.data.reverse_mappings
+          console.log('成功加载反向映射表:', reverseMappings.value)
         } else {
-          console.warn('后端未返回反向映射表，将使用空的默认映射');
+          console.warn('后端未返回反向映射表，将使用空的默认映射')
         }
 
         ElNotification.success({
           title: '抓取成功',
-          message: dbError ? '种子信息已成功抓取，请核对。由于数据库读取失败，数据未持久化存储。' : '种子信息已成功抓取并存储到数据库，请核对。'
-        });
+          message: dbError
+            ? '种子信息已成功抓取，请核对。由于数据库读取失败，数据未持久化存储。'
+            : '种子信息已成功抓取并存储到数据库，请核对。',
+        })
 
         torrentData.value = {
           original_main_title: dbData.title || '',
@@ -1782,7 +2094,7 @@ const fetchTorrentInfo = async () => {
             poster: dbData.poster || '',
             body: filterExtraEmptyLines(dbData.body) || '',
             screenshots: dbData.screenshots || '',
-            removed_ardtudeclarations: dbData.removed_ardtudeclarations || []
+            removed_ardtudeclarations: dbData.removed_ardtudeclarations || [],
           },
           mediainfo: dbData.mediainfo || '',
           source_params: dbData.source_params || {},
@@ -1794,81 +2106,86 @@ const fetchTorrentInfo = async () => {
             resolution: dbData.resolution || '',
             team: dbData.team || '',
             source: dbData.source || '',
-            tags: dbData.tags || []
+            tags: dbData.tags || [],
           },
           final_publish_parameters: dbData.final_publish_parameters || {},
           complete_publish_params: dbData.complete_publish_params || {},
-          raw_params_for_preview: dbData.raw_params_for_preview || {}
-        };
+          raw_params_for_preview: dbData.raw_params_for_preview || {},
+        }
 
         // 如果没有解析过的标题组件，自动解析主标题
         if ((!dbData.title_components || dbData.title_components.length === 0) && dbData.title) {
           try {
-            const parseResponse = await axios.post('/api/utils/parse_title', { title: dbData.title });
+            const parseResponse = await axios.post('/api/utils/parse_title', {
+              title: dbData.title,
+            })
             if (parseResponse.data.success) {
-              torrentData.value.title_components = parseResponse.data.components;
+              torrentData.value.title_components = parseResponse.data.components
               ElNotification.info({
                 title: '标题解析',
-                message: '已自动解析主标题为组件信息。'
-              });
+                message: '已自动解析主标题为组件信息。',
+              })
             }
           } catch (error) {
-            console.warn('自动解析标题失败:', error);
+            console.warn('自动解析标题失败:', error)
           }
         }
 
-        taskId.value = storeResponse.data.task_id;
-        isDataFromDatabase.value = true; // Mark that data was loaded from database
+        taskId.value = storeResponse.data.task_id
+        isDataFromDatabase.value = true // Mark that data was loaded from database
 
         // 自动提取链接的逻辑保持不变
-        if ((!torrentData.value.imdb_link || !torrentData.value.douban_link) && torrentData.value.intro.body) {
-          let imdbExtracted = false;
-          let doubanExtracted = false;
+        if (
+          (!torrentData.value.imdb_link || !torrentData.value.douban_link) &&
+          torrentData.value.intro.body
+        ) {
+          let imdbExtracted = false
+          let doubanExtracted = false
           if (!torrentData.value.imdb_link) {
-            const imdbRegex = /(https?:\/\/www\.imdb\.com\/title\/tt\d+)/;
-            const imdbMatch = torrentData.value.intro.body.match(imdbRegex);
+            const imdbRegex = /(https?:\/\/www\.imdb\.com\/title\/tt\d+)/
+            const imdbMatch = torrentData.value.intro.body.match(imdbRegex)
             if (imdbMatch && imdbMatch[1]) {
-              torrentData.value.imdb_link = imdbMatch[1];
-              imdbExtracted = true;
+              torrentData.value.imdb_link = imdbMatch[1]
+              imdbExtracted = true
             }
           }
           if (!torrentData.value.douban_link) {
-            const doubanRegex = /(https:\/\/movie\.douban\.com\/subject\/\d+)/;
-            const doubanMatch = torrentData.value.intro.body.match(doubanRegex);
+            const doubanRegex = /(https:\/\/movie\.douban\.com\/subject\/\d+)/
+            const doubanMatch = torrentData.value.intro.body.match(doubanRegex)
             if (doubanMatch && doubanMatch[1]) {
-              torrentData.value.douban_link = doubanMatch[1];
-              doubanExtracted = true;
+              torrentData.value.douban_link = doubanMatch[1]
+              doubanExtracted = true
             }
           }
           if (imdbExtracted || doubanExtracted) {
-            const messages = [];
-            if (imdbExtracted) messages.push('IMDb链接');
-            if (doubanExtracted) messages.push('豆瓣链接');
+            const messages = []
+            if (imdbExtracted) messages.push('IMDb链接')
+            if (doubanExtracted) messages.push('豆瓣链接')
             ElNotification.info({
               title: '自动填充',
-              message: `已从简介正文中自动提取并填充 ${messages.join(' 和 ')}。`
-            });
+              message: `已从简介正文中自动提取并填充 ${messages.join(' 和 ')}。`,
+            })
           }
         }
 
-        activeStep.value = 0;
+        activeStep.value = 0
         // Check screenshot validity after loading data
         nextTick(() => {
-          checkScreenshotValidity();
-        });
+          checkScreenshotValidity()
+        })
       } else {
-        ElNotification.closeAll();
+        ElNotification.closeAll()
         ElNotification.error({
           title: '读取失败',
           message: `数据抓取成功但数据库读取失败，已重试${maxDbReadAttempts}次。请检查数据库连接或稍后重试。`,
           duration: 0,
           showClose: true,
-        });
-        emit('cancel');
+        })
+        emit('cancel')
       }
     } else {
-      ElNotification.closeAll();
-      const errorMessage = storeResponse.data.message || '抓取种子信息失败';
+      ElNotification.closeAll()
+      const errorMessage = storeResponse.data.message || '抓取种子信息失败'
 
       // 如果是数据库相关的错误，提供更详细的建议
       if (errorMessage.includes('数据库') || dbError) {
@@ -1877,19 +2194,19 @@ const fetchTorrentInfo = async () => {
           message: `${errorMessage}。可能由于数据库连接问题导致，请检查数据库状态。`,
           duration: 0,
           showClose: true,
-        });
+        })
       } else {
         ElNotification.error({
           title: '抓取失败',
           message: errorMessage,
           duration: 0,
           showClose: true,
-        });
+        })
       }
-      emit('cancel');
+      emit('cancel')
     }
   } catch (error) {
-    ElNotification.closeAll();
+    ElNotification.closeAll()
 
     // 区分不同类型的错误并提供更具体的错误信息
     if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
@@ -1898,87 +2215,95 @@ const fetchTorrentInfo = async () => {
         message: '抓取种子信息超时，请检查网络连接或稍后重试。',
         duration: 0,
         showClose: true,
-      });
+      })
     } else if (error.response?.status === 404) {
       ElNotification.error({
         title: '资源未找到',
         message: '在源站点未找到指定的种子，请检查种子ID是否正确。',
         duration: 0,
         showClose: true,
-      });
+      })
     } else if (error.response?.status >= 500) {
       ElNotification.error({
         title: '服务器错误',
         message: '后端服务器发生错误，请稍后重试或联系管理员。',
         duration: 0,
         showClose: true,
-      });
+      })
     } else {
       // 使用原有的错误处理
-      handleApiError(error, '获取种子信息时发生网络错误');
+      handleApiError(error, '获取种子信息时发生网络错误')
     }
-    emit('cancel');
+    emit('cancel')
   } finally {
-    isLoading.value = false;
+    isLoading.value = false
   }
 }
 
 // 检查标准化参数是否符合格式的辅助函数
 const invalidStandardParams = computed(() => {
-  const standardizedParams = torrentData.value.standardized_params;
-  const standardParamKeys = ['type', 'medium', 'video_codec', 'audio_codec', 'resolution', 'team', 'source'];
-  const invalidParamsList = [];
+  const standardizedParams = torrentData.value.standardized_params
+  const standardParamKeys = [
+    'type',
+    'medium',
+    'video_codec',
+    'audio_codec',
+    'resolution',
+    'team',
+    'source',
+  ]
+  const invalidParamsList = []
 
   // 【修改】使用与 invalidTagsList 相同的、更强大的正则表达式
-  const flexibleRegex = new RegExp(/^[\p{L}\p{N}_-]+\.[\p{L}\p{N}_-]+$/u);
+  const flexibleRegex = new RegExp(/^[\p{L}\p{N}_-]+\.[\p{L}\p{N}_-]+$/u)
 
   for (const key of standardParamKeys) {
-    const value = standardizedParams[key];
+    const value = standardizedParams[key]
 
     // 【修改】使用新的正则表达式进行判断
     if (value && typeof value === 'string' && value.trim() !== '' && !flexibleRegex.test(value)) {
-      invalidParamsList.push(key);
+      invalidParamsList.push(key)
     }
   }
 
   // 这里逻辑保持不变
   if (invalidTagsList.value.length > 0) {
-    invalidParamsList.push('tags');
+    invalidParamsList.push('tags')
   }
 
-  return invalidParamsList;
-});
+  return invalidParamsList
+})
 
 const goToPublishPreviewStep = async () => {
   // 打印从store获取的已存在站点信息
-  console.log('=== 从store获取的已存在站点信息 ===');
-  console.log('torrent.value:', torrent.value);
-  console.log('torrent.value.sites:', torrent.value?.sites);
+  console.log('=== 从store获取的已存在站点信息 ===')
+  console.log('torrent.value:', torrent.value)
+  console.log('torrent.value.sites:', torrent.value?.sites)
   if (torrent.value?.sites) {
-    const existingSites = Object.keys(torrent.value.sites);
-    console.log('已存在的站点列表:', existingSites);
-    console.log('已存在站点详细信息:', torrent.value.sites);
+    const existingSites = Object.keys(torrent.value.sites)
+    console.log('已存在的站点列表:', existingSites)
+    console.log('已存在站点详细信息:', torrent.value.sites)
   } else {
-    console.log('未找到已存在站点信息');
+    console.log('未找到已存在站点信息')
   }
-  console.log('=====================================');
+  console.log('=====================================')
 
   // 检查是否有不符合格式的标准化参数
-  const invalidParams = invalidStandardParams.value;
+  const invalidParams = invalidStandardParams.value
   if (invalidParams.length > 0) {
     // 显示提示信息
     const paramNames = {
-      'type': '类型',
-      'medium': '媒介',
-      'video_codec': '视频编码',
-      'audio_codec': '音频编码',
-      'resolution': '分辨率',
-      'team': '制作组',
-      'source': '产地',
-      'tags': '标签'
-    };
+      type: '类型',
+      medium: '媒介',
+      video_codec: '视频编码',
+      audio_codec: '音频编码',
+      resolution: '分辨率',
+      team: '制作组',
+      source: '产地',
+      tags: '标签',
+    }
 
-    const invalidParamNames = invalidParams.map(param => paramNames[param] || param);
+    const invalidParamNames = invalidParams.map((param) => paramNames[param] || param)
 
     ElNotification({
       title: '参数格式不正确',
@@ -1986,48 +2311,48 @@ const goToPublishPreviewStep = async () => {
       type: 'warning',
       duration: 0,
       showClose: true,
-    });
-    return;
+    })
+    return
   }
 
-  isLoading.value = true;
+  isLoading.value = true
   try {
     ElNotification({
       title: '正在处理',
       message: '正在更新参数并生成预览...',
       type: 'info',
       duration: 0,
-    });
+    })
 
     // 从taskId中提取torrent_id和site_name
     // taskId可能格式: db_${torrentId}_${siteName} 或原始task_id
-    let torrentId, siteName;
+    let torrentId, siteName
 
     // 如果数据是从数据库加载的，优先使用数据库模式解析
     if (isDataFromDatabase.value && taskId.value && taskId.value.startsWith('db_')) {
       // 数据库模式: db_${torrentId}_${siteName}
-      const parts = taskId.value.split('_');
+      const parts = taskId.value.split('_')
       if (parts.length >= 3) {
-        torrentId = parts[1];
-        siteName = parts.slice(2).join('_'); // 处理站点名称中可能有下划线的情况
+        torrentId = parts[1]
+        siteName = parts.slice(2).join('_') // 处理站点名称中可能有下划线的情况
       }
     } else if (taskId.value && taskId.value.startsWith('db_')) {
       // 原有的数据库模式解析
-      const parts = taskId.value.split('_');
+      const parts = taskId.value.split('_')
       if (parts.length >= 3) {
-        torrentId = parts[1];
-        siteName = parts.slice(2).join('_'); // 处理站点名称中可能有下划线的情况
+        torrentId = parts[1]
+        siteName = parts.slice(2).join('_') // 处理站点名称中可能有下划线的情况
       }
     } else {
       // 回退模式：需要从props中获取
-      const siteDetails = torrent.value.sites[sourceSite.value];
-      torrentId = siteDetails.torrentId || null;
-      siteName = await getEnglishSiteName(sourceSite.value);
+      const siteDetails = torrent.value.sites[sourceSite.value]
+      torrentId = siteDetails.torrentId || null
+      siteName = await getEnglishSiteName(sourceSite.value)
 
       if (!torrentId) {
-        const idMatch = siteDetails.comment?.match(/id=(\d+)/);
+        const idMatch = siteDetails.comment?.match(/id=(\d+)/)
         if (idMatch && idMatch[1]) {
-          torrentId = idMatch[1];
+          torrentId = idMatch[1]
         }
       }
     }
@@ -2038,11 +2363,11 @@ const goToPublishPreviewStep = async () => {
         message: '无法获取种子ID或站点名称',
         duration: 0,
         showClose: true,
-      });
-      return;
+      })
+      return
     }
 
-    console.log(`更新种子参数: ${torrentId} from ${siteName}`);
+    console.log(`更新种子参数: ${torrentId} from ${siteName}`)
 
     // 构建更新的参数，应用空行过滤
     const updatedParameters = {
@@ -2058,31 +2383,37 @@ const goToPublishPreviewStep = async () => {
       source_params: torrentData.value.source_params,
       title_components: torrentData.value.title_components,
       // 包含用户修改的标准参数
-      standardized_params: torrentData.value.standardized_params
-    };
+      standardized_params: torrentData.value.standardized_params,
+    }
 
-    console.log('发送到后端的标准参数:', torrentData.value.standardized_params);
+    console.log('发送到后端的标准参数:', torrentData.value.standardized_params)
 
     // 调用新的更新接口，此时会将 is_reviewed 设置为 true
     const response = await axios.post('/api/migrate/update_db_seed_info', {
       torrent_id: torrentId,
       site_name: siteName,
-      updated_parameters: updatedParameters
-    });
-    
-    console.log('已调用更新接口，is_reviewed 将被设置为 true');
+      updated_parameters: updatedParameters,
+    })
 
-    ElNotification.closeAll();
+    console.log('已调用更新接口，is_reviewed 将被设置为 true')
+
+    ElNotification.closeAll()
 
     if (response.data.success) {
-      ElNotification.closeAll();
+      ElNotification.closeAll()
       // 更新成功后，获取重新标准化后的参数
-      const { standardized_params, final_publish_parameters, complete_publish_params, raw_params_for_preview, reverse_mappings: updatedReverseMappings } = response.data;
+      const {
+        standardized_params,
+        final_publish_parameters,
+        complete_publish_params,
+        raw_params_for_preview,
+        reverse_mappings: updatedReverseMappings,
+      } = response.data
 
       // 更新反向映射表（如果后端返回了更新的映射表）
       if (updatedReverseMappings) {
-        reverseMappings.value = updatedReverseMappings;
-        console.log('成功更新反向映射表:', reverseMappings.value);
+        reverseMappings.value = updatedReverseMappings
+        console.log('成功更新反向映射表:', reverseMappings.value)
       }
 
       // 更新本地数据，保留用户修改的内容
@@ -2091,121 +2422,123 @@ const goToPublishPreviewStep = async () => {
         standardized_params: standardized_params || {},
         final_publish_parameters: final_publish_parameters || {},
         complete_publish_params: complete_publish_params || {},
-        raw_params_for_preview: raw_params_for_preview || {}
-      };
+        raw_params_for_preview: raw_params_for_preview || {},
+      }
 
       ElNotification.success({
         title: '更新成功',
-        message: '参数已更新并重新标准化，请核对预览内容。'
-      });
+        message: '参数已更新并重新标准化，请核对预览内容。',
+      })
 
-      activeStep.value = 1;
+      activeStep.value = 1
     } else {
       ElNotification.error({
         title: '更新失败',
         message: response.data.message || '更新参数失败',
         duration: 0,
         showClose: true,
-      });
+      })
     }
   } catch (error) {
-    ElNotification.closeAll();
-    handleApiError(error, '更新预览数据时发生网络错误');
+    ElNotification.closeAll()
+    handleApiError(error, '更新预览数据时发生网络错误')
   } finally {
-    isLoading.value = false;
+    isLoading.value = false
   }
-};
+}
 
 // 【新增】计算属性：整合预设标签和当前已选标签，用于渲染下拉列表
 const allTagOptions = computed(() => {
-  const predefinedTags = Object.keys(reverseMappings.value.tags || {});
-  const currentTags = torrentData.value.standardized_params.tags || [];
-  const combined = [...new Set([...predefinedTags, ...currentTags])];
+  const predefinedTags = Object.keys(reverseMappings.value.tags || {})
+  const currentTags = torrentData.value.standardized_params.tags || []
+  const combined = [...new Set([...predefinedTags, ...currentTags])]
 
-  return combined.map(tagValue => ({
+  return combined.map((tagValue) => ({
     value: tagValue,
-    label: reverseMappings.value.tags[tagValue] || tagValue
-  }));
-});
+    label: reverseMappings.value.tags[tagValue] || tagValue,
+  }))
+})
 
 // 【修改并添加调试代码】方法：根据标签是否有效，返回不同的类型
 const getTagType = (tag: string) => {
   // 优先检查是否为禁转标签
   if (tag === '禁转' || tag === 'tag.禁转') {
-    return 'danger'; // 红色
+    return 'danger' // 红色
   }
 
   // 在浏览器开发者工具的控制台(Console)中打印日志，方便调试
-  console.log(`[getTagType] 检查标签: "${tag}", 是否无效: ${invalidTagsList.value.includes(tag)}`);
+  console.log(`[getTagType] 检查标签: "${tag}", 是否无效: ${invalidTagsList.value.includes(tag)}`)
 
   // 核心逻辑不变
-  return invalidTagsList.value.includes(tag) ? 'danger' : 'info';
-};
+  return invalidTagsList.value.includes(tag) ? 'danger' : 'info'
+}
 
 const goToSelectSiteStep = async () => {
   // 检查已存在站点数量，如果少于2个则重新获取（因为默认会有源站点本身）
-  const existingSitesCount = torrent.value?.sites ? Object.keys(torrent.value.sites).length : 0;
-  
+  const existingSitesCount = torrent.value?.sites ? Object.keys(torrent.value.sites).length : 0
+
   if (existingSitesCount < 2) {
-    console.log(`已存在站点数量不足(${existingSitesCount}个)，正在重新获取种子数据...`);
-    
+    console.log(`已存在站点数量不足(${existingSitesCount}个)，正在重新获取种子数据...`)
+
     try {
       ElNotification.info({
         title: '正在更新数据',
         message: '正在重新获取种子站点信息...',
         duration: 0,
-      });
+      })
 
       // 调用后端接口重新获取单个种子数据
       const params = new URLSearchParams({
         page: '1',
         pageSize: '1',
-        nameSearch: torrent.value.name
-      });
+        nameSearch: torrent.value.name,
+      })
 
-      const response = await fetch(`/api/data?${params.toString()}`);
+      const response = await fetch(`/api/data?${params.toString()}`)
 
       if (!response.ok) {
-        throw new Error(`网络错误: ${response.status}`);
+        throw new Error(`网络错误: ${response.status}`)
       }
 
-      const result = await response.json();
-      
+      const result = await response.json()
+
       if (result.error) {
-        throw new Error(result.error);
+        throw new Error(result.error)
       }
 
       if (result.data && result.data.length > 0) {
-        const updatedTorrent = result.data[0];
-        console.log('重新获取到的种子数据:', updatedTorrent);
-        console.log('重新获取到的站点信息:', updatedTorrent.sites);
-        console.log(`站点数量从 ${existingSitesCount} 更新到 ${Object.keys(updatedTorrent.sites).length}`);
-        
+        const updatedTorrent = result.data[0]
+        console.log('重新获取到的种子数据:', updatedTorrent)
+        console.log('重新获取到的站点信息:', updatedTorrent.sites)
+        console.log(
+          `站点数量从 ${existingSitesCount} 更新到 ${Object.keys(updatedTorrent.sites).length}`,
+        )
+
         // 更新 store 中的种子信息
-        crossSeedStore.setParams(updatedTorrent);
-        
+        crossSeedStore.setParams(updatedTorrent)
+
         ElNotification.success({
           title: '数据更新成功',
-          message: `已重新获取种子站点信息，发现 ${Object.keys(updatedTorrent.sites).length} 个站点`
-        });
+          message: `已重新获取种子站点信息，发现 ${Object.keys(updatedTorrent.sites).length} 个站点`,
+        })
       } else {
         ElNotification.warning({
           title: '未找到种子',
-          message: '未能找到匹配的种子数据'
-        });
+          message: '未能找到匹配的种子数据',
+        })
       }
     } catch (error: any) {
-      console.error('重新获取种子数据时出错:', error);
+      console.error('重新获取种子数据时出错:', error)
       ElNotification.error({
         title: '数据更新失败',
-        message: error.message || '重新获取种子数据时发生错误'
-      });
+        message: error.message || '重新获取种子数据时发生错误',
+      })
     }
   } else {
-    console.log(`已存在站点数量充足(${existingSitesCount}个)，跳过重新获取`);
+    console.log(`已存在站点数量充足(${existingSitesCount}个)，跳过重新获取`)
   }
-  
-  activeStep.value = 2;
+
+  activeStep.value = 2
 }
 
 const toggleSiteSelection = (siteName: string) => {
@@ -2219,13 +2552,13 @@ const toggleSiteSelection = (siteName: string) => {
 
 const selectAllTargetSites = () => {
   const selectableSites = allSitesStatus.value
-    .filter(s => s.is_target && isTargetSiteSelectable(s.name))
-    .map(s => s.name);
-  selectedTargetSites.value = selectableSites;
+    .filter((s) => s.is_target && isTargetSiteSelectable(s.name))
+    .map((s) => s.name)
+  selectedTargetSites.value = selectableSites
 }
 
 const clearAllTargetSites = () => {
-  selectedTargetSites.value = [];
+  selectedTargetSites.value = []
 }
 
 const handlePublish = async () => {
@@ -2252,54 +2585,56 @@ const handlePublish = async () => {
         task_id: taskId.value,
         upload_data: {
           ...torrentData.value,
-          save_path: torrent.value.save_path  // 添加 save_path
+          save_path: torrent.value.save_path, // 添加 save_path
         },
         targetSite: siteName,
         sourceSite: sourceSite.value,
-        downloaderId: torrent.value.downloaderId,  // 新增：传递下载器ID
-        auto_add_to_downloader: true  // 新增：启用自动添加
+        downloaderId: torrent.value.downloaderId, // 新增：传递下载器ID
+        auto_add_to_downloader: true, // 新增：启用自动添加
       })
 
       const result = {
         siteName,
         message: getCleanMessage(response.data.logs || '发布成功'),
-        ...response.data
+        ...response.data,
       }
 
-      if (response.data.logs && response.data.logs.includes("种子已存在")) {
-        result.isExisted = true;
+      if (response.data.logs && response.data.logs.includes('种子已存在')) {
+        result.isExisted = true
       }
-      
+
       // 立即更新下载器状态
       if (result.auto_add_result) {
         // 获取实际的下载器名称
-        let downloaderName = '自动检测';
+        let downloaderName = '自动检测'
         if (result.auto_add_result.downloader_id) {
-          const downloader = downloaderList.value.find(d => d.id === result.auto_add_result.downloader_id);
+          const downloader = downloaderList.value.find(
+            (d) => d.id === result.auto_add_result.downloader_id,
+          )
           if (downloader) {
-            downloaderName = downloader.name;
+            downloaderName = downloader.name
           }
         }
-        
+
         result.downloaderStatus = {
           success: result.auto_add_result.success,
           message: result.auto_add_result.message,
-          downloaderName: downloaderName
+          downloaderName: downloaderName,
         }
-        
+
         // 立即更新下载器进度
         if (result.auto_add_result.success) {
           downloaderProgress.value.current++
         }
       }
-      
+
       results.push(result)
       finalResultsList.value = [...results]
 
       if (result.success) {
         ElNotification.success({
           title: `发布成功 - ${siteName}`,
-          message: '种子已成功发布到该站点'
+          message: '种子已成功发布到该站点',
         })
       }
     } catch (error) {
@@ -2312,54 +2647,57 @@ const handlePublish = async () => {
         downloaderStatus: {
           success: false,
           message: '发布失败，无法添加到下载器',
-          downloaderName: '错误'
-        }
+          downloaderName: '错误',
+        },
       }
       results.push(result)
       finalResultsList.value = [...results]
       ElNotification.error({
         title: `发布失败 - ${siteName}`,
-        message: result.message
+        message: result.message,
       })
     }
     // Update publish progress
     publishProgress.value.current++
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    await new Promise((resolve) => setTimeout(resolve, 1000))
   }
 
   ElNotification.closeAll()
-  const successCount = results.filter(r => r.success).length
+  const successCount = results.filter((r) => r.success).length
   ElNotification.success({
     title: '发布完成',
-    message: `成功发布到 ${successCount} / ${selectedTargetSites.value.length} 个站点。`
+    message: `成功发布到 ${successCount} / ${selectedTargetSites.value.length} 个站点。`,
   })
 
   // 处理自动添加到下载器的结果
-  logContent.value += '\n\n--- [自动添加任务结果] ---';
-  const downloaderStatusMap: Record<string, { success: boolean, message: string, downloaderName: string }> = {};
+  logContent.value += '\n\n--- [自动添加任务结果] ---'
+  const downloaderStatusMap: Record<
+    string,
+    { success: boolean; message: string; downloaderName: string }
+  > = {}
 
   // 从 Python 返回的结果中提取 auto_add_result
-  results.forEach(result => {
+  results.forEach((result) => {
     if (result.auto_add_result) {
       // 优先使用已经存在的 downloaderStatus 中的名称（已在上面正确设置）
-      const existingDownloaderName = result.downloaderStatus?.downloaderName || '自动检测';
-      
+      const existingDownloaderName = result.downloaderStatus?.downloaderName || '自动检测'
+
       downloaderStatusMap[result.siteName] = {
         success: result.auto_add_result.success,
         message: result.auto_add_result.message,
-        downloaderName: existingDownloaderName
-      };
-      const statusIcon = result.auto_add_result.success ? '✅' : '❌';
-      const statusText = result.auto_add_result.success ? '成功' : '失败';
-      logContent.value += `\n[${result.siteName}] ${statusIcon} ${statusText}: ${result.auto_add_result.message}`;
+        downloaderName: existingDownloaderName,
+      }
+      const statusIcon = result.auto_add_result.success ? '✅' : '❌'
+      const statusText = result.auto_add_result.success ? '成功' : '失败'
+      logContent.value += `\n[${result.siteName}] ${statusIcon} ${statusText}: ${result.auto_add_result.message}`
     } else if (result.success && result.url) {
       // 如果没有 auto_add_result，说明可能跳过了自动添加
-      logContent.value += `\n[${result.siteName}] ⚠️  未执行自动添加`;
+      logContent.value += `\n[${result.siteName}] ⚠️  未执行自动添加`
     }
-  });
-  logContent.value += '\n--- [自动添加任务结束] ---';
+  })
+  logContent.value += '\n--- [自动添加任务结束] ---'
 
-  const siteLogs = results.map(r => {
+  const siteLogs = results.map((r) => {
     let logEntry = `--- Log for ${r.siteName} ---\n${r.logs || 'No logs available.'}`
     if (downloaderStatusMap[r.siteName]) {
       const status = downloaderStatusMap[r.siteName]
@@ -2374,20 +2712,20 @@ const handlePublish = async () => {
   })
   logContent.value = siteLogs.join('\n\n')
 
-  finalResultsList.value = results.map(result => ({
+  finalResultsList.value = results.map((result) => ({
     ...result,
-    downloaderStatus: downloaderStatusMap[result.siteName]
-  }));
+    downloaderStatus: downloaderStatusMap[result.siteName],
+  }))
 
   // 触发种子数据刷新
   try {
-    await axios.post('/api/refresh_data');
+    await axios.post('/api/refresh_data')
     ElNotification.success({
       title: '数据刷新',
-      message: '种子数据已刷新'
-    });
+      message: '种子数据已刷新',
+    })
   } catch (error) {
-    console.warn('刷新种子数据失败:', error);
+    console.warn('刷新种子数据失败:', error)
   }
 
   isLoading.value = false
@@ -2403,24 +2741,26 @@ const handlePreviousStep = () => {
 const handleCancelClick = () => {
   // 如果在步骤3（完成发布），触发带刷新的关闭
   if (activeStep.value === 3) {
-    emit('close-with-refresh');
+    emit('close-with-refresh')
   } else {
-    emit('cancel');
+    emit('cancel')
   }
 }
 
 // 处理完成按钮点击
 const handleCompleteClick = () => {
-  emit('complete');
+  emit('complete')
 }
 
 const getCleanMessage = (logs: string): string => {
   if (!logs || logs === '发布成功') return '发布成功'
-  if (logs.includes("种子已存在")) {
+  if (logs.includes('种子已存在')) {
     return '种子已存在，发布成功'
   }
-  const lines = logs.split('\n').filter(line => line && !line.includes('--- [步骤') && !line.includes('INFO - ---'))
-  const cleanLines = lines.map(line => line.replace(/^\d{2}:\d{2}:\d{2} - \w+ - /, ''))
+  const lines = logs
+    .split('\n')
+    .filter((line) => line && !line.includes('--- [步骤') && !line.includes('INFO - ---'))
+  const cleanLines = lines.map((line) => line.replace(/^\d{2}:\d{2}:\d{2} - \w+ - /, ''))
   return cleanLines.filter(Boolean).pop() || '发布成功'
 }
 
@@ -2429,92 +2769,99 @@ const handleApiError = (error: any, defaultMessage: string) => {
   ElNotification.error({ title: '操作失败', message, duration: 0, showClose: true })
 }
 
-  const triggerAddToDownloader = async (result: any) => {
+const triggerAddToDownloader = async (result: any) => {
   if (!torrent.value.save_path || !torrent.value.downloaderId) {
-    const msg = `[${result.siteName}] 警告: 未能获取到原始保存路径或下载器ID，已跳过自动添加任务。`;
-    console.warn(msg);
-    logContent.value += `\n${msg}`;
-    return { success: false, message: "未能获取到原始保存路径或下载器ID", downloaderName: "" };
+    const msg = `[${result.siteName}] 警告: 未能获取到原始保存路径或下载器ID，已跳过自动添加任务。`
+    console.warn(msg)
+    logContent.value += `\n${msg}`
+    return { success: false, message: '未能获取到原始保存路径或下载器ID', downloaderName: '' }
   }
 
-  let targetDownloaderId = torrent.value.downloaderId;
-  let targetDownloaderName = "未知下载器";
+  let targetDownloaderId = torrent.value.downloaderId
+  let targetDownloaderName = '未知下载器'
 
   try {
-    const configResponse = await axios.get('/api/settings');
-    const config = configResponse.data;
-    const defaultDownloaderId = config.cross_seed?.default_downloader;
+    const configResponse = await axios.get('/api/settings')
+    const config = configResponse.data
+    const defaultDownloaderId = config.cross_seed?.default_downloader
     if (defaultDownloaderId) {
-      targetDownloaderId = defaultDownloaderId;
+      targetDownloaderId = defaultDownloaderId
     }
-    const downloader = downloaderList.value.find(d => d.id === targetDownloaderId);
-    if (downloader) targetDownloaderName = downloader.name;
-
+    const downloader = downloaderList.value.find((d) => d.id === targetDownloaderId)
+    if (downloader) targetDownloaderName = downloader.name
   } catch (error: unknown) {
     // Ignore error
   }
 
-  logContent.value += `\n[${result.siteName}] 正在尝试将新种子添加到下载器 '${targetDownloaderName}'...`;
+  logContent.value += `\n[${result.siteName}] 正在尝试将新种子添加到下载器 '${targetDownloaderName}'...`
 
   try {
     const response = await axios.post('/api/migrate/add_to_downloader', {
       url: result.url,
       savePath: torrent.value.save_path,
       downloaderId: targetDownloaderId,
-    });
+    })
 
     if (response.data.success) {
-      logContent.value += `\n[${result.siteName}] 成功: ${response.data.message}`;
-      return { success: true, message: response.data.message, downloaderName: targetDownloaderName };
+      logContent.value += `\n[${result.siteName}] 成功: ${response.data.message}`
+      return { success: true, message: response.data.message, downloaderName: targetDownloaderName }
     } else {
-      logContent.value += `\n[${result.siteName}] 失败: ${response.data.message}`;
-      return { success: false, message: response.data.message, downloaderName: targetDownloaderName };
+      logContent.value += `\n[${result.siteName}] 失败: ${response.data.message}`
+      return {
+        success: false,
+        message: response.data.message,
+        downloaderName: targetDownloaderName,
+      }
     }
   } catch (error: unknown) {
-    let errorMessage = '未知错误';
+    let errorMessage = '未知错误'
     if (error instanceof Error) {
-      errorMessage = (error as any).response?.data?.message || error.message;
+      errorMessage = (error as any).response?.data?.message || error.message
     } else if (typeof error === 'object' && error !== null && 'response' in error) {
-      errorMessage = (error as any).response?.data?.message || String(error);
+      errorMessage = (error as any).response?.data?.message || String(error)
     }
-    logContent.value += `\n[${result.siteName}] 错误: 调用API失败: ${errorMessage}`;
-    return { success: false, message: `调用API失败: ${errorMessage}`, downloaderName: targetDownloaderName };
+    logContent.value += `\n[${result.siteName}] 错误: 调用API失败: ${errorMessage}`
+    return {
+      success: false,
+      message: `调用API失败: ${errorMessage}`,
+      downloaderName: targetDownloaderName,
+    }
   }
 }
 
 // 辅助函数：获取映射后的中文值
 const getMappedValue = (category: string) => {
-  const standardizedParams = torrentData.value.standardized_params;
-  if (!standardizedParams || !reverseMappings.value) return 'N/A';
+  const standardizedParams = torrentData.value.standardized_params
+  if (!standardizedParams || !reverseMappings.value) return 'N/A'
 
-  const standardValue = standardizedParams[category];
-  if (!standardValue) return 'N/A';
+  const standardValue = standardizedParams[category]
+  if (!standardValue) return 'N/A'
 
-  const mappings = reverseMappings.value[category];
-  if (!mappings) return standardValue;
+  const mappings = reverseMappings.value[category]
+  if (!mappings) return standardValue
 
-  return mappings[standardValue] || standardValue;
-};
+  return mappings[standardValue] || standardValue
+}
 
 // 辅助函数：获取映射后的标签列表
 const getMappedTags = () => {
   // 使用 filteredTags 计算属性来过滤掉空标签
-  if (!filteredTags.value || !reverseMappings.value.tags) return [];
+  if (!filteredTags.value || !reverseMappings.value.tags) return []
 
   return filteredTags.value.map((tag: string) => {
-    return reverseMappings.value.tags[tag] || tag;
-  });
-};
+    return reverseMappings.value.tags[tag] || tag
+  })
+}
 
 // Computed properties for filtered title components
 const filteredTitleComponents = computed(() => {
-  return torrentData.value.title_components.filter(param => param.key !== '无法识别');
-});
+  return torrentData.value.title_components.filter((param) => param.key !== '无法识别')
+})
 // 计算属性：过滤掉空标签
 const filteredTags = computed(() => {
-  const tags = torrentData.value.standardized_params.tags;
-  return tags?.filter(tag => tag && typeof tag === 'string' && tag.trim() !== '') || [];
-});
+  const tags = torrentData.value.standardized_params.tags
+  return tags?.filter((tag) => tag && typeof tag === 'string' && tag.trim() !== '') || []
+})
 
 // 【新增】计算属性：专门用于找出并返回所有格式不正确的标签列表
 const invalidTagsList = computed(() => {
@@ -2523,32 +2870,48 @@ const invalidTagsList = computed(() => {
   // \p{N} -> 匹配任何语言的数字
   // _-  -> 匹配下划线和连字符
   // u 标志 -> 启用 Unicode 支持
-  const flexibleRegex = new RegExp(/^[\p{L}\p{N}_-]+\.[\p{L}\p{N}_-]+$/u);
+  const flexibleRegex = new RegExp(/^[\p{L}\p{N}_-]+\.[\p{L}\p{N}_-]+$/u)
 
   // 从已过滤的标签中，再次过滤出不符合新正则的标签
-  return filteredTags.value.filter(tag => !flexibleRegex.test(tag));
-});
+  return filteredTags.value.filter((tag) => !flexibleRegex.test(tag))
+})
 // 计算属性：为未解析的标题提供初始参数框
 const initialTitleComponents = computed(() => {
   // 定义常见的标题参数键
-  const commonKeys = ['主标题', '季集', '年份', '剧集状态', '发布版本', '分辨率', '片源平台', '媒介', '视频编码', '视频格式', 'HDR格式', '色深', '帧率', '音频编码', '制作组'];
+  const commonKeys = [
+    '主标题',
+    '季集',
+    '年份',
+    '剧集状态',
+    '发布版本',
+    '分辨率',
+    '片源平台',
+    '媒介',
+    '视频编码',
+    '视频格式',
+    'HDR格式',
+    '色深',
+    '帧率',
+    '音频编码',
+    '制作组',
+  ]
   // 创建带有空值的初始参数数组
-  return commonKeys.map(key => ({
+  return commonKeys.map((key) => ({
     key: key,
-    value: ''
-  }));
-});
+    value: '',
+  }))
+})
 
 // 检查是否为受限标签（禁转或tag.禁转）
 const isRestrictedTag = (tag: string): boolean => {
-  return tag === '禁转' || tag === 'tag.禁转';
-};
+  return tag === '禁转' || tag === 'tag.禁转'
+}
 
 // 检查是否包含受限标签
 const hasRestrictedTag = computed(() => {
-  const tags = torrentData.value.standardized_params.tags || [];
-  return tags.some(tag => isRestrictedTag(tag));
-});
+  const tags = torrentData.value.standardized_params.tags || []
+  return tags.some((tag) => isRestrictedTag(tag))
+})
 
 const handleTagClose = (tagToRemove: string) => {
   // 如果是受限标签，不允许删除
@@ -2556,208 +2919,212 @@ const handleTagClose = (tagToRemove: string) => {
     ElNotification.warning({
       title: '无法删除',
       message: '禁转标签不允许删除',
-      duration: 2000
-    });
-    return;
+      duration: 2000,
+    })
+    return
   }
 
   // 找到要删除的标签在数组中的索引
-  const index = torrentData.value.standardized_params.tags.indexOf(tagToRemove);
+  const index = torrentData.value.standardized_params.tags.indexOf(tagToRemove)
 
   // 如果找到了，就从数组中移除它
   if (index > -1) {
-    torrentData.value.standardized_params.tags.splice(index, 1);
+    torrentData.value.standardized_params.tags.splice(index, 1)
   }
-};
+}
 
 const unrecognizedValue = computed({
   // Getter: 当模板需要读取值时调用
   get() {
-    const unrecognized = torrentData.value.title_components.find(param => param.key === '无法识别');
-    return unrecognized ? unrecognized.value : ''; // 返回找到的值，或者空字符串
+    const unrecognized = torrentData.value.title_components.find(
+      (param) => param.key === '无法识别',
+    )
+    return unrecognized ? unrecognized.value : '' // 返回找到的值，或者空字符串
   },
   // Setter: 当 v-model 试图修改值时调用
   set(newValue) {
-    const index = torrentData.value.title_components.findIndex(param => param.key === '无法识别');
+    const index = torrentData.value.title_components.findIndex((param) => param.key === '无法识别')
 
     // 如果新输入的值是空的，就从数组里删除这个项目
     if (newValue === '' || newValue === null) {
       if (index !== -1) {
-        torrentData.value.title_components.splice(index, 1);
+        torrentData.value.title_components.splice(index, 1)
       }
     } else {
       // 如果项目已存在，就更新它的值
       if (index !== -1) {
-        torrentData.value.title_components[index].value = newValue;
+        torrentData.value.title_components[index].value = newValue
       } else {
         // 如果项目不存在，就创建一个新的推进数组
         torrentData.value.title_components.push({
           key: '无法识别',
-          value: newValue
-        });
+          value: newValue,
+        })
       }
     }
-  }
-});
+  },
+})
 
 // 计算属性：检查ubits是否被禁用
 const isUbitsDisabled = computed(() => {
-  const team = torrentData.value.standardized_params.team;
-  const titleComponents = torrentData.value.title_components;
-  
+  const team = torrentData.value.standardized_params.team
+  const titleComponents = torrentData.value.title_components
+
   // 检查标准化参数中的制作组
   if (team && ['cmct', 'cmctv'].includes(team.toLowerCase())) {
-    return true;
+    return true
   }
-  
+
   // 检查标题组件中的制作组
-  const teamComponent = titleComponents.find(param => param.key === '制作组');
+  const teamComponent = titleComponents.find((param) => param.key === '制作组')
   if (teamComponent && teamComponent.value) {
-    const teamValue = teamComponent.value.toLowerCase();
-    const forbiddenTeams = ['cmct', 'cmctv', 'telesto', 'shadow610'];
-    
+    const teamValue = teamComponent.value.toLowerCase()
+    const forbiddenTeams = ['cmct', 'cmctv', 'telesto', 'shadow610']
+
     // 检查是否包含禁止的制作组
     for (const forbiddenTeam of forbiddenTeams) {
       if (teamValue.includes(forbiddenTeam)) {
-        return true;
+        return true
       }
     }
   }
-  
-  return false;
-});
+
+  return false
+})
 
 // 计算属性：检查下一步按钮是否应该禁用
 // 只有当"无法识别"的参数为空字符串，截图有效，标准化参数符合格式，且mediainfo/bdinfo内容有效时才允许点击按钮
 // mediainfo/bdinfo有效性的检查：非空、长度足够、包含各自格式的关键字段
 const isNextButtonDisabled = computed(() => {
-  const unrecognized = torrentData.value.title_components.find(param => param.key === '无法识别');
-  const hasUnrecognized = unrecognized && unrecognized.value !== '';
-  const hasInvalidScreenshots = !screenshotValid.value;
+  const unrecognized = torrentData.value.title_components.find((param) => param.key === '无法识别')
+  const hasUnrecognized = unrecognized && unrecognized.value !== ''
+  const hasInvalidScreenshots = !screenshotValid.value
 
   // 检查是否包含受限标签
   if (hasRestrictedTag.value) {
-    return true;
+    return true
   }
 
   // 检查 mediainfo/bdinfo 的有效性
-  const mediaInfoText = torrentData.value.mediainfo || '';
-  const hasInvalidMediaInfo = !mediaInfoText || mediaInfoText.trim() === '';
+  const mediaInfoText = torrentData.value.mediainfo || ''
+  const hasInvalidMediaInfo = !mediaInfoText || mediaInfoText.trim() === ''
 
   // 如果有内容，进一步检查格式有效性
   if (!hasInvalidMediaInfo) {
     // 检查是否为有效的 MediaInfo 或 BDInfo 格式
-    const isStandardMediainfo = _isValidMediainfo(mediaInfoText);
-    const isBDInfo = _isValidBDInfo(mediaInfoText);
+    const isStandardMediainfo = _isValidMediainfo(mediaInfoText)
+    const isBDInfo = _isValidBDInfo(mediaInfoText)
 
     // 如果既不是有效的 MediaInfo 也不是有效的 BDInfo，则认为无效
     if (!isStandardMediainfo && !isBDInfo) {
-      return true;
+      return true
     }
   }
 
   // 将 getInvalidStandardParams() 修改为 invalidStandardParams.value
-  const hasInvalidStandardParams = invalidStandardParams.value.length > 0;
+  const hasInvalidStandardParams = invalidStandardParams.value.length > 0
 
   if (hasUnrecognized) {
-    return true;
+    return true
   }
   if (hasInvalidScreenshots) {
-    return true;
+    return true
   }
   if (hasInvalidStandardParams) {
-    return true;
+    return true
   }
   if (hasInvalidMediaInfo) {
-    return true;
+    return true
   }
 
-  return false;
-});
+  return false
+})
 
 // 计算属性：获取下一步按钮的提示文本
 const nextButtonTooltipContent = computed(() => {
   if (hasRestrictedTag.value) {
-    return '检测到禁转标签，不允许继续发布';
+    return '检测到禁转标签，不允许继续发布'
   }
-  return '存在待修改的参数 (请确保mediainfo或bdinfo内容有效且包含必要的媒体信息)';
-});
+  return '存在待修改的参数 (请确保mediainfo或bdinfo内容有效且包含必要的媒体信息)'
+})
 
 // 辅助函数：检查是否为有效的 MediaInfo 格式
 const _isValidMediainfo = (text: string): boolean => {
   const standardMediainfoKeywords = [
-    "General",
-    "Video",
-    "Audio",
-    "Complete name",
-    "File size",
-    "Duration",
-    "Width",
-    "Height"
-  ];
+    'General',
+    'Video',
+    'Audio',
+    'Complete name',
+    'File size',
+    'Duration',
+    'Width',
+    'Height',
+  ]
 
-  const matches = standardMediainfoKeywords.filter(keyword => text.includes(keyword));
-  return matches.length >= 3; // 至少匹配3个关键字才认为是有效的MediaInfo
-};
+  const matches = standardMediainfoKeywords.filter((keyword) => text.includes(keyword))
+  return matches.length >= 3 // 至少匹配3个关键字才认为是有效的MediaInfo
+}
 
 // 辅助函数：检查是否为有效的 BDInfo 格式
 const _isValidBDInfo = (text: string): boolean => {
-  const bdInfoRequiredKeywords = ["DISC INFO", "PLAYLIST REPORT"];
+  const bdInfoRequiredKeywords = ['DISC INFO', 'PLAYLIST REPORT']
   const bdInfoOptionalKeywords = [
-    "VIDEO:",
-    "AUDIO:",
-    "SUBTITLES:",
-    "FILES:",
-    "Disc Label",
-    "Disc Size",
-    "BDInfo:",
-    "Protection:",
-    "Codec",
-    "Bitrate",
-    "Language",
-    "Description"
-  ];
+    'VIDEO:',
+    'AUDIO:',
+    'SUBTITLES:',
+    'FILES:',
+    'Disc Label',
+    'Disc Size',
+    'BDInfo:',
+    'Protection:',
+    'Codec',
+    'Bitrate',
+    'Language',
+    'Description',
+  ]
 
-  const requiredMatches = bdInfoRequiredKeywords.filter(keyword => text.includes(keyword)).length;
-  const optionalMatches = bdInfoOptionalKeywords.filter(keyword => text.includes(keyword)).length;
+  const requiredMatches = bdInfoRequiredKeywords.filter((keyword) => text.includes(keyword)).length
+  const optionalMatches = bdInfoOptionalKeywords.filter((keyword) => text.includes(keyword)).length
 
   // 必须所有必要关键字都存在，或者至少有1个必要关键字且2个以上可选关键字
-  return (requiredMatches === bdInfoRequiredKeywords.length) ||
-    (requiredMatches >= 1 && optionalMatches >= 2);
-};
+  return (
+    requiredMatches === bdInfoRequiredKeywords.length ||
+    (requiredMatches >= 1 && optionalMatches >= 2)
+  )
+}
 
 // 检查截图有效性
 const checkScreenshotValidity = async () => {
   // 检查当前截图的有效性
-  const screenshots = screenshotImages.value;
+  const screenshots = screenshotImages.value
   if (screenshots.length === 0) {
     // 如果没有截图，认为是有效的
-    screenshotValid.value = true;
-    return;
+    screenshotValid.value = true
+    return
   }
 
   // 对于每个截图，创建一个图片对象来检查是否可以加载
-  let allValid = true;
+  let allValid = true
   for (const url of screenshots) {
     try {
       await new Promise((resolve, reject) => {
-        const img = new Image();
+        const img = new Image()
         img.onload = () => {
-          resolve(true);
-        };
+          resolve(true)
+        }
         img.onerror = () => {
-          reject(new Error('Image load failed'));
-        };
-        img.src = url;
-      });
+          reject(new Error('Image load failed'))
+        }
+        img.src = url
+      })
     } catch (error) {
-      allValid = false;
-      break;
+      allValid = false
+      break
     }
   }
 
-  screenshotValid.value = allValid;
-};
+  screenshotValid.value = allValid
+}
 
 const showLogs = async () => {
   if (!taskId.value) {
@@ -2770,7 +3137,7 @@ const showLogs = async () => {
       title: '转种日志',
       message: response.data.logs,
       duration: 0,
-      showClose: true
+      showClose: true,
     })
   } catch (error) {
     handleApiError(error, '获取日志时发生错误')
@@ -2782,88 +3149,87 @@ const hideLog = () => {
 }
 
 const showSiteLog = (siteName: string, logs: string) => {
-  let siteLogContent = `--- Log for ${siteName} ---\n${logs || 'No logs available.'}`;
-  const siteResult = finalResultsList.value.find((result: any) => result.siteName === siteName);
+  let siteLogContent = `--- Log for ${siteName} ---\n${logs || 'No logs available.'}`
+  const siteResult = finalResultsList.value.find((result: any) => result.siteName === siteName)
   if (siteResult && siteResult.downloaderStatus) {
-    const status = siteResult.downloaderStatus;
-    siteLogContent += `\n\n--- Downloader Status for ${siteName} ---`;
+    const status = siteResult.downloaderStatus
+    siteLogContent += `\n\n--- Downloader Status for ${siteName} ---`
     if (status.success) {
-      siteLogContent += `\n✅ 成功: ${status.message}`;
+      siteLogContent += `\n✅ 成功: ${status.message}`
     } else {
-      siteLogContent += `\n❌ 失败: ${status.message}`;
+      siteLogContent += `\n❌ 失败: ${status.message}`
     }
   }
-  logContent.value = siteLogContent;
-  showLogCard.value = true;
+  logContent.value = siteLogContent
+  showLogCard.value = true
 }
 
 // 分组结果，每行5个
 const groupedResults = computed(() => {
-  const results = finalResultsList.value;
-  const grouped = [];
+  const results = finalResultsList.value
+  const grouped = []
   for (let i = 0; i < results.length; i += 5) {
-    grouped.push(results.slice(i, i + 5));
+    grouped.push(results.slice(i, i + 5))
   }
-  return grouped;
-});
+  return grouped
+})
 
 // 检查行中是否有有效的URL
 const hasValidUrlsInRow = (row: any[]) => {
-  return row.some(result => result.success && result.url);
-};
+  return row.some((result) => result.success && result.url)
+}
 
 // 获取行中有效URL的数量
 const getValidUrlsCount = (row: any[]) => {
-  return row.filter(result => result.success && result.url).length;
-};
+  return row.filter((result) => result.success && result.url).length
+}
 
 // 打开一行中所有有效的种子链接
 const openAllSitesInRow = (row: any[]) => {
-  const validResults = row.filter(result => result.success && result.url);
+  const validResults = row.filter((result) => result.success && result.url)
 
   if (validResults.length === 0) {
     ElNotification.warning({
       title: '无法打开',
-      message: '该行没有可用的种子链接'
-    });
-    return;
+      message: '该行没有可用的种子链接',
+    })
+    return
   }
 
   // 批量打开所有链接
-  validResults.forEach(result => {
-    window.open(result.url, '_blank', 'noopener,noreferrer');
-  });
+  validResults.forEach((result) => {
+    window.open(result.url, '_blank', 'noopener,noreferrer')
+  })
 
   ElNotification.success({
     title: '批量打开成功',
-    message: `已打开 ${validResults.length} 个种子页面`
-  });
-};
+    message: `已打开 ${validResults.length} 个种子页面`,
+  })
+}
 
 // 处理日志进度完成
 const handleLogProgressComplete = () => {
-  console.log('日志进度处理完成');
+  console.log('日志进度处理完成')
   // 进度完成后自动关闭进度窗口
   setTimeout(() => {
-    showLogProgress.value = false;
-  }, 1000);
-};
+    showLogProgress.value = false
+  }, 1000)
+}
 
 // 过滤URL中的uploaded参数
 const filterUploadedParam = (url: string): string => {
-  if (!url) return url;
-  
+  if (!url) return url
+
   try {
-    const urlObj = new URL(url);
-    urlObj.searchParams.delete('uploaded');
-    return urlObj.toString();
+    const urlObj = new URL(url)
+    urlObj.searchParams.delete('uploaded')
+    return urlObj.toString()
   } catch (error) {
     // 如果URL格式不正确，返回原始URL
-    console.warn('Invalid URL format:', url, error);
-    return url;
+    console.warn('Invalid URL format:', url, error)
+    return url
   }
-};
-
+}
 </script>
 
 <style scoped>
@@ -2927,8 +3293,6 @@ const filterUploadedParam = (url: string): string => {
 .button-group :deep(.el-button.is-disabled:hover) {
   transform: none;
 }
-
-
 
 /* ======================================= */
 /*           [组件内部细节样式]            */
@@ -3004,7 +3368,7 @@ const filterUploadedParam = (url: string): string => {
   min-width: 40px;
 }
 
-.custom-step.completed+.custom-step .step-connector {
+.custom-step.completed + .custom-step .step-connector {
   background-color: #67c23a;
 }
 
@@ -3032,7 +3396,7 @@ const filterUploadedParam = (url: string): string => {
   scrollbar-width: thin;
   scrollbar-color: rgba(0, 0, 0, 0.2) rgba(0, 0, 0, 0.05);
 }
- 
+
 /* Webkit浏览器滚动条美化 */
 :deep(.el-tabs__content::-webkit-scrollbar) {
   width: 6px;
@@ -3309,7 +3673,7 @@ const filterUploadedParam = (url: string): string => {
 }
 
 .row-label::before {
-  content: "";
+  content: '';
   display: inline-block;
   width: 12px;
   height: 12px;
@@ -3462,7 +3826,7 @@ const filterUploadedParam = (url: string): string => {
 }
 
 .param-label::before {
-  content: "";
+  content: '';
   display: inline-block;
   width: 8px;
   height: 8px;
@@ -3476,7 +3840,9 @@ const filterUploadedParam = (url: string): string => {
   font-size: 14px;
   word-break: break-word;
   line-height: 1.5;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans',
+    'Helvetica Neue', sans-serif;
 }
 
 .param-value.empty {
@@ -3677,7 +4043,9 @@ const filterUploadedParam = (url: string): string => {
   flex-direction: column;
   align-items: center;
   text-align: center;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
   background: #fff;
   flex-shrink: 0;
 }
@@ -3688,11 +4056,11 @@ const filterUploadedParam = (url: string): string => {
 }
 
 .result-card.is-success {
-  border-top: 4px solid #67C23A;
+  border-top: 4px solid #67c23a;
 }
 
 .result-card.is-error {
-  border-top: 4px solid #F56C6C;
+  border-top: 4px solid #f56c6c;
 }
 
 /* .card-icon {
@@ -3742,11 +4110,11 @@ const filterUploadedParam = (url: string): string => {
 }
 
 .status-text.success {
-  color: #67C23A;
+  color: #67c23a;
 }
 
 .status-text.error {
-  color: #F56C6C;
+  color: #f56c6c;
 }
 
 /* --- 进度条样式 --- */
@@ -3890,7 +4258,6 @@ const filterUploadedParam = (url: string): string => {
   margin-right: 5px;
 }
 
-
 /* ==================================================================== */
 /*          [最终方案] 参数验证失败的统一视觉反馈样式                 */
 /* ==================================================================== */
@@ -3941,7 +4308,7 @@ const filterUploadedParam = (url: string): string => {
 
 .el-select.is-invalid :deep(.el-select__selected-item) {
   z-index: -999;
-  color: #F56C6C;
+  color: #f56c6c;
   background-color: var(--el-color-danger-light-9);
   border-color: var(--el-color-danger-light-8);
   border: 1px solid var(--el-color-danger-light-8);
@@ -3951,7 +4318,7 @@ const filterUploadedParam = (url: string): string => {
 
 .unrecognized-section :deep(.el-input__inner) {
   z-index: -999;
-  color: #F56C6C;
+  color: #f56c6c;
   background-color: var(--el-color-danger-light-9);
   border-color: var(--el-color-danger-light-8);
   border: 1px solid var(--el-color-danger-light-8);

@@ -100,7 +100,9 @@ class ConfigManager:
                 "paths": [],
                 "states": [],
                 "downloaderIds": []
-            }
+            },
+            # --- [新增] 已删除的站点列表 ---
+            "deleted_sites": []
         }
 
     def load(self):
@@ -190,6 +192,10 @@ class ConfigManager:
                         "states": [],
                         "downloaderIds": []
                     }
+
+                # --- [新增] 已删除站点列表配置兼容 ---
+                if "deleted_sites" not in self._config:
+                    self._config["deleted_sites"] = []
 
             except (json.JSONDecodeError, IOError) as e:
                 logging.error(f"无法读取或解析 {CONFIG_FILE}: {e}。将加载一个安全的默认配置。")

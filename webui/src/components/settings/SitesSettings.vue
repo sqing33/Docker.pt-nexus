@@ -5,30 +5,55 @@
       <!-- CookieCloud 表单 -->
       <el-form :model="cookieCloudForm" inline class="cookie-cloud-form">
         <el-form-item label="CookieCloud">
-          <el-input v-model="cookieCloudForm.url" placeholder="http://127.0.0.1:8088" clearable
-            style="width: 200px"></el-input>
+          <el-input
+            v-model="cookieCloudForm.url"
+            placeholder="http://127.0.0.1:8088"
+            clearable
+            style="width: 200px"
+          ></el-input>
         </el-form-item>
         <el-form-item label="KEY">
-          <el-input v-model="cookieCloudForm.key" placeholder="KEY (UUID)" clearable style="width: 100px"></el-input>
+          <el-input
+            v-model="cookieCloudForm.key"
+            placeholder="KEY (UUID)"
+            clearable
+            style="width: 100px"
+          ></el-input>
         </el-form-item>
         <el-form-item label="端对端密码">
-          <el-input v-model="cookieCloudForm.e2e_password" type="password" show-password placeholder="端对端加密密码" clearable
-            style="width: 125px"></el-input>
+          <el-input
+            v-model="cookieCloudForm.e2e_password"
+            type="password"
+            show-password
+            placeholder="端对端加密密码"
+            clearable
+            style="width: 125px"
+          ></el-input>
         </el-form-item>
         <el-form-item>
           <!-- [修改] 合并后的按钮 -->
-          <el-button type="primary" size="large" @click="handleSaveAndSync" :loading="isCookieActionLoading">
+          <el-button
+            type="primary"
+            size="large"
+            @click="handleSaveAndSync"
+            :loading="isCookieActionLoading"
+          >
             <el-icon>
               <Refresh />
             </el-icon>
             <span>同步Cookie</span>
           </el-button>
-                  </el-form-item>
+        </el-form-item>
       </el-form>
 
       <div class="right-action-group">
-        <el-input v-model="searchQuery" placeholder="搜索站点昵称/标识/官组" clearable :prefix-icon="Search"
-          class="search-input" />
+        <el-input
+          v-model="searchQuery"
+          placeholder="搜索站点昵称/标识/官组"
+          clearable
+          :prefix-icon="Search"
+          class="search-input"
+        />
       </div>
     </div>
 
@@ -39,15 +64,24 @@
         <el-table-column prop="site" label="站点标识" width="200" show-overflow-tooltip />
         <el-table-column prop="base_url" label="基础URL" width="225" show-overflow-tooltip />
         <el-table-column prop="group" label="官组" show-overflow-tooltip />
-        <el-table-column label="限速" width="100" align="center">
+        <el-table-column label="限速" width="200" align="center">
           <template #default="scope">
-            <div style="display: flex; justify-content: center; align-items: center; width: 100%; height: 100%;">
-              <el-tag v-if="scope.row.speed_limit > 0" type="error" size="small">
-                {{ scope.row.speed_limit }} MB/s
+            <div
+              style="
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                width: 100%;
+                height: 100%;
+              "
+            >
+              <el-tag v-if="scope.row.speed_limit == 0" type="error" size="small">
+                当前不限速，重启恢复默认限速
               </el-tag>
-              <el-tag v-else type="success" size="small">
+              <el-tag v-else-if="scope.row.speed_limit > 999" type="success" size="small">
                 不限速
               </el-tag>
+              <el-tag v-else type="primary" size="small"> {{ scope.row.speed_limit }} MB/s </el-tag>
             </div>
           </template>
         </el-table-column>
@@ -58,7 +92,7 @@
             </el-tag>
           </template>
         </el-table-column>
-                <el-table-column label="操作" width="180" align="center" fixed="right">
+        <el-table-column label="操作" width="180" align="center" fixed="right">
           <template #default="scope">
             <el-button type="primary" :icon="Edit" link @click="handleOpenDialog(scope.row)">
               编辑
@@ -79,14 +113,18 @@
       </el-radio-group>
       <div class="pagination-container">
         <div class="page-size-text">{{ pagination.pageSize }} 条/页</div>
-        <el-pagination v-model:current-page="pagination.currentPage" v-model:page-size="pagination.pageSize"
-          :total="pagination.total" layout="total, prev, pager, next, jumper" background />
+        <el-pagination
+          v-model:current-page="pagination.currentPage"
+          v-model:page-size="pagination.pageSize"
+          :total="pagination.total"
+          layout="total, prev, pager, next, jumper"
+          background
+        />
       </div>
     </div>
 
     <!-- 编辑站点对话框 -->
-    <el-dialog v-model="dialogVisible" title="编辑站点" width="700px"
-      :close-on-click-modal="false">
+    <el-dialog v-model="dialogVisible" title="编辑站点" width="700px" :close-on-click-modal="false">
       <el-form :model="siteForm" ref="siteFormRef" label-width="140px" label-position="left">
         <el-form-item label="站点标识" prop="site" required>
           <el-input v-model="siteForm.site" placeholder="例如：pt" disabled></el-input>
@@ -100,7 +138,10 @@
           <div class="form-tip">用于拼接种子详情页链接。</div>
         </el-form-item>
         <el-form-item label="Tracker域名" prop="special_tracker_domain">
-          <el-input v-model="siteForm.special_tracker_domain" placeholder="例如：pt-tracker.com"></el-input>
+          <el-input
+            v-model="siteForm.special_tracker_domain"
+            placeholder="例如：pt-tracker.com"
+          ></el-input>
           <div class="form-tip">
             如果站点的Tracker域名与主域名的二级域名（则域名去掉前缀后缀部分）不同，请在此填写。
           </div>
@@ -110,12 +151,25 @@
           <div class="form-tip">用于识别种子所属发布组，多个组用英文逗号(,)分隔。</div>
         </el-form-item>
         <el-form-item label="Cookie" prop="cookie">
-          <el-input v-model="siteForm.cookie" type="textarea" :rows="3" placeholder="从浏览器获取的Cookie字符串"></el-input>
+          <el-input
+            v-model="siteForm.cookie"
+            type="textarea"
+            :rows="3"
+            placeholder="从浏览器获取的Cookie字符串"
+          ></el-input>
         </el-form-item>
-                <el-form-item label="上传限速 (MB/s)" prop="speed_limit">
-          <el-input-number v-model="siteForm.speed_limit" :min="0" :max="1000" placeholder="0 表示不限速"
-            style="width: 100%" />
-          <div class="form-tip">单位为 MB/s，0 表示不限速</div>
+        <el-form-item label="上传限速 (MB/s)" prop="speed_limit">
+          <el-input-number
+            v-model="siteForm.speed_limit"
+            :min="0"
+            :max="1000"
+            placeholder="为防止失误操作导致超速，当设置为 0 时重启会自动设置为默认限速"
+            style="width: 100%"
+          />
+          <div class="form-tip" style="color: red; font-size: 14px">
+            单位为 MB/s，为防止误操作导致超速，当设置为 0 时重启会恢复默认限速<br />
+            如缺点设置不限速可输入一个极大的数值，超过 999 会显示不限速
+          </div>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -257,17 +311,14 @@ const handleSaveAndSync = async () => {
     })
 
     // 3. 第二步：配置保存成功后，立即执行同步
-    const syncResponse = await axios.post(
-      `${API_BASE_URL}/cookiecloud/sync`,
-      cookieCloudForm.value
-    )
+    const syncResponse = await axios.post(`${API_BASE_URL}/cookiecloud/sync`, cookieCloudForm.value)
 
     // 4. 处理同步结果
     if (syncResponse.data.success) {
       // 移除消息中"在 CookieCloud 中另有 X 个未匹配的 Cookie。"部分
-      let message = syncResponse.data.message;
+      let message = syncResponse.data.message
       if (message) {
-        message = message.replace(/在 CookieCloud 中另有 \d+ 个未匹配的 Cookie。?/, '');
+        message = message.replace(/在 CookieCloud 中另有 \d+ 个未匹配的 Cookie。?/, '')
       }
       ElMessage.success(`配置已保存. ${message || '同步完成！'}`)
       await fetchSites() // 同步成功后刷新站点列表
@@ -318,10 +369,12 @@ const handleSave = async () => {
 }
 
 const handleDelete = (site) => {
-  ElMessageBox.confirm(`您确定要删除站点【${site.nickname}】吗？此操作不可撤销。`, '警告', {
+  ElMessageBox.confirm('', '警告', {
     confirmButtonText: '确定删除',
     cancelButtonText: '取消',
     type: 'warning',
+    dangerouslyUseHTMLString: true,
+    message: `您确定要删除站点【${site.nickname}】吗？<br/>可以通过修改 config.json 然后重启恢复。`,
   })
     .then(async () => {
       try {

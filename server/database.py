@@ -168,14 +168,40 @@ class DatabaseManager:
             conn.close()
 
     def delete_site(self, site_id):
-        """根据站点 ID 从数据库中删除一个站点。"""
+        """根据站点 ID 从数据库中删除一个站点，并将其记录到配置文件的已删除列表中。"""
         conn = self._get_connection()
         cursor = self._get_cursor(conn)
         try:
+            # 先查询站点的 site 标识符
+            cursor.execute(
+                f"SELECT site FROM sites WHERE id = {self.get_placeholder()}",
+                (site_id, ))
+            site_row = cursor.fetchone()
+            
+            if not site_row:
+                return False
+            
+            site_identifier = site_row["site"] if isinstance(site_row, dict) else site_row[0]
+            
+            # 删除站点
             cursor.execute(
                 f"DELETE FROM sites WHERE id = {self.get_placeholder()}",
                 (site_id, ))
             conn.commit()
+            
+            if cursor.rowcount > 0 and site_identifier:
+                # 将站点标识符添加到配置文件的 deleted_sites 列表中
+                current_config = config_manager.get()
+                deleted_sites = current_config.get("deleted_sites", [])
+                
+                if site_identifier not in deleted_sites:
+                    deleted_sites.append(site_identifier)
+                    current_config["deleted_sites"] = deleted_sites
+                    config_manager.save(current_config)
+                    logging.info(f"已将站点 '{site_identifier}' 添加到已删除列表")
+                
+                return True
+            
             return cursor.rowcount > 0
         except Exception as e:
             logging.error(f"删除站点ID '{site_id}' 失败: {e}", exc_info=True)
@@ -208,13 +234,21 @@ class DatabaseManager:
             conn.close()
 
     def sync_sites_from_json(self):
-        """从 sites_data.json 同步站点数据到数据库"""
+        """从 sites_data.json 同步站点数据到数据库，过滤已删除的站点。"""
         try:
             # 读取 JSON 文件
             with open(SITES_DATA_FILE, 'r', encoding='utf-8') as f:
                 sites_data = json.load(f)
 
             logging.info(f"从 {SITES_DATA_FILE} 加载了 {len(sites_data)} 个站点")
+            
+            # 获取已删除的站点列表
+            deleted_sites = config_manager.get().get("deleted_sites", [])
+            if deleted_sites:
+                logging.info(f"过滤 {len(deleted_sites)} 个已删除的站点: {deleted_sites}")
+                # 过滤掉已删除的站点
+                sites_data = [site for site in sites_data if site.get('site') not in deleted_sites]
+                logging.info(f"过滤后剩余 {len(sites_data)} 个站点")
 
             # 获取数据库连接
             conn = self._get_connection()
