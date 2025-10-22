@@ -392,6 +392,7 @@ def update_settings():
         # 检查是否只是修改了 path_mappings，而没有修改其他关键配置
         current_downloaders = current_config.get("downloaders", [])
         need_restart = False
+        id_changes = []  # 记录ID变更信息
 
         # 如果下载器数量变化，需要重启
         if len(new_config["downloaders"]) != len(current_downloaders):
@@ -425,6 +426,8 @@ def update_settings():
             for d in current_config.get("downloaders", [])
         }
         for d in new_config["downloaders"]:
+            old_id = d.get("id")  # 保存旧ID
+            
             if not d.get("id"):
                 # 新逻辑：基于host生成ID
                 try:
@@ -438,8 +441,15 @@ def update_settings():
                 try:
                     is_valid, expected_id, message = validate_downloader_id(d)
                     if not is_valid and expected_id:
-                        # 如果不匹配，说明IP被修改了，需要更新ID
+                        # 如果不匹配，说明IP被修改了，需要更新ID和迁移数据
                         logging.warning(f"检测到下载器 '{d.get('name')}' 的host已变更，ID将从 {d['id']} 更新为 {expected_id}")
+                        # 记录ID变更信息，用于后续迁移
+                        id_changes.append({
+                            "old_id": d["id"],
+                            "new_id": expected_id,
+                            "host": d.get("host"),
+                            "name": d.get("name")
+                        })
                         d["id"] = expected_id
                 except Exception as e:
                     logging.error(f"验证下载器 '{d.get('name')}' ID失败: {e}")
@@ -453,6 +463,55 @@ def update_settings():
             
             if not d.get("password"):
                 d["password"] = current_passwords.get(d["id"], "")
+                # 如果ID发生了变化，也要尝试从旧ID获取密码
+                if old_id and old_id != d["id"] and not d["password"]:
+                    d["password"] = current_passwords.get(old_id, "")
+        
+        # 如果检测到ID变更，执行数据库迁移
+        if id_changes:
+            logging.info(f"检测到 {len(id_changes)} 个下载器ID变更，开始执行数据库迁移...")
+            try:
+                from core.migrations.migrate_downloader_ids import (
+                    create_migration_table,
+                    save_migration_mapping,
+                    migrate_table_ids,
+                    migrate_batch_enhance_records
+                )
+                
+                # 创建迁移表
+                if not create_migration_table(management_bp.db_manager):
+                    logging.error("创建迁移表失败，但将继续保存配置")
+                else:
+                    # 保存迁移映射
+                    if save_migration_mapping(management_bp.db_manager, id_changes):
+                        # 迁移各个表
+                        tables_to_migrate = [
+                            ("traffic_stats", "downloader_id"),
+                            ("torrents", "downloader_id"),
+                            ("torrent_upload_stats", "downloader_id"),
+                            ("seed_parameters", "downloader_id")
+                        ]
+                        
+                        migration_success = True
+                        for table_name, id_column in tables_to_migrate:
+                            if not migrate_table_ids(management_bp.db_manager, table_name, id_column):
+                                logging.error(f"迁移表 {table_name} 失败")
+                                migration_success = False
+                                break
+                        
+                        if migration_success:
+                            # 迁移 batch_enhance_records 中的JSON数据
+                            if not migrate_batch_enhance_records(management_bp.db_manager):
+                                logging.error("迁移 batch_enhance_records 失败")
+                            else:
+                                logging.info("数据库迁移成功完成！")
+                        else:
+                            logging.error("数据库迁移部分失败，但配置将被保存")
+                    else:
+                        logging.error("保存迁移映射失败，但将继续保存配置")
+            except Exception as e:
+                logging.error(f"执行数据库迁移时出错: {e}", exc_info=True)
+        
         current_config["downloaders"] = new_config["downloaders"]
 
     if "realtime_speed_enabled" in new_config and current_config.get(
