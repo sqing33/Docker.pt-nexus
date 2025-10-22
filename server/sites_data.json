@@ -201,7 +201,7 @@
     "special_tracker_domain": null,
     "group": "-HDArea,-EPiC,-HDATV,-HDApad",
     "description": "HDArea",
-    "migration": 3,
+    "migration": 2,
     "speed_limit": 10
   },
   {
@@ -1226,6 +1226,24 @@
     "base_url": "dubhe.site",
     "special_tracker_domain": null,
     "group": null,
+    "migration": 0,
+    "speed_limit": 10
+  },
+  {
+    "site": "zrpt",
+    "nickname": "自然",
+    "base_url": "zrpt.cc",
+    "special_tracker_domain": null,
+    "group": "-Nature,-NatureWeb",
+    "migration": 0,
+    "speed_limit": 10
+  },
+  {
+    "site": "momentpt",
+    "nickname": "瞬间",
+    "base_url": "momentpt.top",
+    "special_tracker_domain": null,
+    "group": "-Moment",
     "migration": 0,
     "speed_limit": 10
   }

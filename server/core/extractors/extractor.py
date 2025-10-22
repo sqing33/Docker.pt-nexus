@@ -939,42 +939,7 @@ class Extractor:
         full_description_text = f"{extracted_data['intro']['statement']}\n{extracted_data['intro']['body']}"
         origin_info = extract_origin_from_description(full_description_text)
 
-        # Apply global mapping for origin information
-        if origin_info and GLOBAL_MAPPINGS and "source" in GLOBAL_MAPPINGS:
-            source_mappings = GLOBAL_MAPPINGS["source"]
-            mapped_origin = None
-
-            # 优先精确匹配
-            for source_text, standardized_key in source_mappings.items():
-                if str(source_text).strip().lower() == str(
-                        origin_info).strip().lower():
-                    mapped_origin = standardized_key
-                    break
-
-            # 如果精确匹配失败，再尝试部分匹配（但要小心，避免"中国"匹配"中国香港"）
-            if not mapped_origin:
-                for source_text, standardized_key in source_mappings.items():
-                    source_lower = str(source_text).strip().lower()
-                    origin_lower = str(origin_info).strip().lower()
-                    # 只有当source_text完全包含在origin_info中时才匹配
-                    # 例如："香港" in "中国香港" ✓，但 "中国" in "中国香港" 需要额外判断
-                    if source_lower in origin_lower and source_lower != origin_lower:
-                        # 确保不是前缀匹配导致的误判
-                        # 例如："中国" 不应该匹配 "中国香港"
-                        if origin_lower.startswith(source_lower) and len(
-                                origin_lower) > len(source_lower):
-                            # 这种情况跳过，可能有更精确的匹配
-                            continue
-                        mapped_origin = standardized_key
-                        break
-
-            # If we found a mapping, use it; otherwise keep the original
-            if mapped_origin:
-                extracted_data["source_params"]["产地"] = mapped_origin
-            else:
-                extracted_data["source_params"]["产地"] = origin_info
-        else:
-            extracted_data["source_params"]["产地"] = origin_info
+        extracted_data["source_params"]["产地"] = origin_info
 
         return extracted_data
 

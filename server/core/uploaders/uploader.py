@@ -476,7 +476,12 @@ class BaseUploader(ABC):
             item["key"]: item["value"]
             for item in title_components_list if item.get("value")
         }
-        hdr_str = title_params.get("HDR格式", "").upper()
+        hdr_value = title_params.get("HDR格式", "")
+        # 处理HDR格式可能是列表的情况
+        if isinstance(hdr_value, list):
+            hdr_str = " ".join(str(item) for item in hdr_value).upper()
+        else:
+            hdr_str = str(hdr_value).upper()
         if "VISION" in hdr_str or "DV" in hdr_str:
             combined_tags.add("Dolby Vision")
         if "HDR10+" in hdr_str:
