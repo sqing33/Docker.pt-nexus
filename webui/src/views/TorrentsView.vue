@@ -228,7 +228,7 @@
           </div>
           <div class="path-tree-container">
             <el-tree ref="pathTreeRef" :data="pathTreeData" show-checkbox node-key="path" default-expand-all
-              check-on-click-node :props="{ class: 'path-tree-node' }" />
+              check-on-click-node :check-strictly="true" :props="{ class: 'path-tree-node' }" />
           </div>
           <el-divider content-position="left">状态</el-divider>
           <div style="margin-bottom: 10px;">
@@ -811,7 +811,13 @@ const confirmSourceSiteAndProceed = async (sourceSite: any) => {
   const siteDetails = row.sites[sourceSite.siteName];
   const siteName = sourceSite.siteName;
 
-  // 1. 检查站点是否有有效链接
+  // 1. 检查站点数据是否存在
+  if (!siteDetails) {
+    ElMessage.error(`未找到站点 [${siteName}] 的数据。`);
+    return;
+  }
+
+  // 2. 检查站点是否有有效链接
   if (!hasLink(siteDetails, siteName)) {
     // 2. 如果没有链接，触发IYUU查询
     ElMessage.info(`站点 [${siteName}] 缺少详情链接，正在触发 IYUU 查询...`);
@@ -1052,7 +1058,9 @@ const openFilterDialog = () => {
 }
 const applyFilters = async () => {
   if (pathTreeRef.value) {
-    const selectedPaths = pathTreeRef.value.getCheckedKeys(true)
+    // 获取所有选中的节点，包括父节点和叶子节点
+    // getCheckedKeys(false) 会返回所有选中的节点，包括半选状态的父节点
+    const selectedPaths = pathTreeRef.value.getCheckedKeys(false)
     tempFilters.paths = selectedPaths as string[]
   }
 

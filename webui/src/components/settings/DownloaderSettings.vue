@@ -8,47 +8,84 @@
       保存所有设置
     </el-button>
     <div class="realtime-switch-container">
-      <el-tooltip content="开启后，图表页将每秒获取一次数据以显示“近1分钟”实时速率。关闭后将每分钟获取一次，以降低系统负载。" placement="bottom" :hide-after="0">
+      <el-tooltip
+        content="开启后，图表页将每秒获取一次数据以显示“近1分钟”实时速率。关闭后将每分钟获取一次，以降低系统负载。"
+        placement="bottom"
+        :hide-after="0"
+      >
         <el-form-item label="开启实时速率" class="switch-form-item">
-          <el-switch v-model="settings.realtime_speed_enabled" size="large" inline-prompt active-text="是"
-            inactive-text="否" />
+          <el-switch
+            v-model="settings.realtime_speed_enabled"
+            size="large"
+            inline-prompt
+            active-text="是"
+            inactive-text="否"
+          />
         </el-form-item>
       </el-tooltip>
     </div>
   </div>
   <div class="settings-view" v-loading="isLoading">
     <div class="downloader-grid">
-      <el-card v-for="downloader in settings.downloaders" :key="downloader.id" class="downloader-card glass-card glass-rounded glass-transparent-header glass-transparent-body">
+      <el-card
+        v-for="downloader in settings.downloaders"
+        :key="downloader.id"
+        class="downloader-card glass-card glass-rounded glass-transparent-header glass-transparent-body"
+      >
         <template #header>
           <div class="card-header">
             <span>{{ downloader.name || '新下载器' }}</span>
             <div class="header-controls">
-              <el-button :type="connectionTestResults[downloader.id] === 'success'
-                ? 'success'
-                : connectionTestResults[downloader.id] === 'error'
-                  ? 'danger'
-                  : 'info'
-                " :plain="!connectionTestResults[downloader.id]" style="width: 90px"
-                @click="testConnection(downloader)" :loading="testingConnectionId === downloader.id" :icon="Link">
+              <el-button
+                :type="
+                  connectionTestResults[downloader.id] === 'success'
+                    ? 'success'
+                    : connectionTestResults[downloader.id] === 'error'
+                      ? 'danger'
+                      : 'info'
+                "
+                :plain="!connectionTestResults[downloader.id]"
+                style="width: 90px"
+                @click="testConnection(downloader)"
+                :loading="testingConnectionId === downloader.id"
+                :icon="Link"
+              >
                 测试连接
               </el-button>
-              <el-button type="warning" :icon="FolderOpened" style="width: 90px"
-                @click="openPathMappingDialog(downloader)" :disabled="downloader.use_proxy">
+              <el-button
+                type="warning"
+                :icon="FolderOpened"
+                style="width: 90px"
+                @click="openPathMappingDialog(downloader)"
+              >
                 路径映射
               </el-button>
               <el-switch v-model="downloader.enabled" style="margin: 0 10px" />
 
-              <el-button type="danger" :icon="Delete" circle @click="confirmDeleteDownloader(downloader.id)" />
+              <el-button
+                type="danger"
+                :icon="Delete"
+                circle
+                @click="confirmDeleteDownloader(downloader.id)"
+              />
             </div>
           </div>
         </template>
         <el-form :model="downloader" label-position="left" label-width="auto">
           <el-form-item label="名称">
             <div class="name-and-client-row">
-              <el-input v-model="downloader.name" placeholder="例如：家庭服务器 qB" class="name-input"
-                @input="resetConnectionStatus(downloader.id)"></el-input>
-              <el-select v-model="downloader.type" placeholder="请选择类型" class="client-type-select"
-                @change="resetConnectionStatus(downloader.id)">
+              <el-input
+                v-model="downloader.name"
+                placeholder="例如：家庭服务器 qB"
+                class="name-input"
+                @input="resetConnectionStatus(downloader.id)"
+              ></el-input>
+              <el-select
+                v-model="downloader.type"
+                placeholder="请选择类型"
+                class="client-type-select"
+                @change="resetConnectionStatus(downloader.id)"
+              >
                 <el-option label="qBittorrent" value="qbittorrent"></el-option>
                 <el-option label="Transmission" value="transmission"></el-option>
               </el-select>
@@ -56,31 +93,65 @@
           </el-form-item>
           <el-form-item label="代理设置">
             <div class="proxy-settings-row">
-              <el-input v-model="downloader.proxy_port" type="number" placeholder="9090" class="proxy-port-input"
-                :min="1" :max="65535" :disabled="downloader.type === 'transmission'"
-                @input="resetConnectionStatus(downloader.id)">
+              <el-input
+                v-model="downloader.proxy_port"
+                type="number"
+                placeholder="9090"
+                class="proxy-port-input"
+                :min="1"
+                :max="65535"
+                :disabled="downloader.type === 'transmission'"
+                @input="resetConnectionStatus(downloader.id)"
+              >
                 <template #prepend>端口</template>
               </el-input>
               <el-tooltip
-                :content="downloader.type === 'transmission' ? 'Transmission 暂不支持代理功能' : '通过Go语言编写的专用代理连接，可解决网络延迟、获取数据不准等问题。'"
-                placement="top" :hide-after="0">
-                <el-switch v-model="downloader.use_proxy" size="large" inline-prompt active-text="远程" inactive-text="本地"
-                  :disabled="downloader.type === 'transmission'" @change="resetConnectionStatus(downloader.id)" />
+                :content="
+                  downloader.type === 'transmission'
+                    ? 'Transmission 暂不支持代理功能'
+                    : '通过Go语言编写的专用代理连接，可解决网络延迟、获取数据不准等问题。'
+                "
+                placement="top"
+                :hide-after="0"
+              >
+                <el-switch
+                  v-model="downloader.use_proxy"
+                  size="large"
+                  inline-prompt
+                  active-text="远程"
+                  inactive-text="本地"
+                  :disabled="downloader.type === 'transmission'"
+                  @change="resetConnectionStatus(downloader.id)"
+                />
               </el-tooltip>
             </div>
           </el-form-item>
           <el-form-item label="主机地址">
-            <el-input v-model="downloader.host"
-              :placeholder="downloader.type === 'transmission' ? '例如：192.168.1.10:9091 或 http://192.168.1.10:9091' : '例如：192.168.1.10:8080'"
-              @input="resetConnectionStatus(downloader.id)"></el-input>
+            <el-input
+              v-model="downloader.host"
+              :placeholder="
+                downloader.type === 'transmission'
+                  ? '例如：192.168.1.10:9091 或 http://192.168.1.10:9091'
+                  : '例如：192.168.1.10:8080'
+              "
+              @input="resetConnectionStatus(downloader.id)"
+            ></el-input>
           </el-form-item>
           <el-form-item label="用户名">
-            <el-input v-model="downloader.username" placeholder="登录用户名"
-              @input="resetConnectionStatus(downloader.id)"></el-input>
+            <el-input
+              v-model="downloader.username"
+              placeholder="登录用户名"
+              @input="resetConnectionStatus(downloader.id)"
+            ></el-input>
           </el-form-item>
           <el-form-item label="密码">
-            <el-input v-model="downloader.password" type="password" show-password placeholder="登录密码（未修改则留空）"
-              @input="resetConnectionStatus(downloader.id)"></el-input>
+            <el-input
+              v-model="downloader.password"
+              type="password"
+              show-password
+              placeholder="登录密码（未修改则留空）"
+              @input="resetConnectionStatus(downloader.id)"
+            ></el-input>
           </el-form-item>
         </el-form>
       </el-card>
@@ -88,28 +159,37 @@
   </div>
 
   <!-- 路径映射对话框 -->
-  <el-dialog v-model="pathMappingDialogVisible" :title="`路径映射配置 - ${currentDownloader?.name || ''}`" width="700px"
-    :close-on-click-modal="false">
+  <el-dialog
+    v-model="pathMappingDialogVisible"
+    :title="`路径映射配置 - ${currentDownloader?.name || ''}`"
+    width="700px"
+    :close-on-click-modal="false"
+  >
     <div class="path-mapping-container">
       <el-alert title="路径映射说明" type="info" :closable="false" style="margin-bottom: 16px">
         <p>配置下载器路径到 PT Nexus 容器内路径的映射关系。</p>
-        <p><strong>远程路径：</strong>下载器中显示的种子保存路径</p>
-        <p><strong>本地路径：</strong>PT Nexus 容器内可以访问该文件的路径</p>
+        <p><strong>下载器路径：</strong>下载器中显示的种子保存路径</p>
+        <p><strong>视频文件路径：</strong>挂载到 PT Nexus 容器内的路径或者盒子本地路径的路径</p>
       </el-alert>
 
       <div class="mapping-list">
         <div v-for="(mapping, index) in currentPathMappings" :key="index" class="mapping-item">
           <el-input v-model="mapping.remote" placeholder="例如：/downloads" class="mapping-input">
-            <template #prepend>远程路径</template>
+            <template #prepend>下载器路径</template>
           </el-input>
           <el-input v-model="mapping.local" placeholder="例如：/app/data/qb1" class="mapping-input">
-            <template #prepend>本地路径</template>
+            <template #prepend>视频文件路径</template>
           </el-input>
           <el-button type="danger" :icon="Delete" circle @click="deletePathMapping(index)" />
         </div>
       </div>
 
-      <el-button type="primary" :icon="Plus" style="width: 100%; margin-top: 16px" @click="addPathMapping">
+      <el-button
+        type="primary"
+        :icon="Plus"
+        style="width: 100%; margin-top: 16px"
+        @click="addPathMapping"
+      >
         添加映射规则
       </el-button>
     </div>
@@ -215,7 +295,7 @@ const confirmDeleteDownloader = (downloaderId) => {
         message: '下载器已删除（尚未保存）。',
       })
     })
-    .catch(() => { })
+    .catch(() => {})
 }
 
 const deleteDownloader = (downloaderId) => {
@@ -276,7 +356,7 @@ const deletePathMapping = (index) => {
 const savePathMappings = async () => {
   // 过滤掉空的映射规则
   const validMappings = currentPathMappings.value.filter(
-    (mapping) => mapping.remote.trim() !== '' && mapping.local.trim() !== ''
+    (mapping) => mapping.remote.trim() !== '' && mapping.local.trim() !== '',
   )
   // 更新当前下载器的路径映射
   currentDownloader.value.path_mappings = validMappings

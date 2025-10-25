@@ -213,7 +213,11 @@ def get_data_api():
             ]
         if path_filters:
             filtered_list = [
-                t for t in filtered_list if t.get("save_path") in path_filters
+                t for t in filtered_list 
+                if any(
+                    t.get("save_path", "").startswith(path) 
+                    for path in path_filters
+                )
             ]
         if state_filters:
             filtered_list = [
