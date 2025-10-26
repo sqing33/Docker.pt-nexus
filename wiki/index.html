@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>PT Nexus Wiki</title>
+    <link rel="icon" href="_media/icon.svg" sizes="any">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+    <meta name="description" content="Description" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, minimum-scale=1.0"
+    />
+    <link
+      rel="stylesheet"
+      href="//cdn.jsdelivr.net/npm/docsify@4/lib/themes/vue.css"
+    />
+    <!-- 右侧标题栏 -->
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/docsify-plugin-toc@1.3.1/dist/light.css"
+    />
+    <style>
+      .sidebar {
+        padding: 20px 0 0;
+        width: 250px;
+      }
+      .content {
+        padding-top: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script>
+      window.$docsify = {
+        name: "PT Nexus Wiki",
+        logo: "_media/icon.svg",
+        repo: "",
+        loadSidebar: true,
+        auto2top: true,
+        subMaxLevel: 0,
+        homepage: 'docs/index.md',
+        alias: {
+          '/guide/_sidebar.md': '/_sidebar.md',
+          '/docs/guide/_sidebar.md': '/_sidebar.md',
+          '/docs/_sidebar.md': '/_sidebar.md',
+          '/.*/_sidebar.md': '/_sidebar.md',
+          '/docs/index.md': '/docs/index.md',
+        },
+        toc: {
+          tocMaxLevel: 6,
+          target: "h1, h2, h3, h4, h5, h6",
+          ignoreHeaders: [
+            "<!-- {docsify-ignore} -->",
+            "<!-- {docsify-ignore-all} -->",
+          ],
+        },
+        count: {
+          countable: true,
+          fontsize: "0.9em",
+          color: "rgb(90,90,90)",
+          language: "chinese",
+        },
+        copyCode: {
+          buttonText: "复制",
+          errorText: "复制错误",
+          successText: "复制成功",
+        },
+      };
+      function wrapLogoAndTitle() {
+        return function (hook, vm) {
+          hook.doneEach(function () {
+            const appName = document.querySelector(".sidebar .app-name");
+            if (appName) {
+              const logoImg = appName.querySelector("img");
+              const titleLink = appName.querySelector("a");
+              const titleText = vm.config.name;
+
+              if (logoImg && titleLink) {
+                // 创建包含logo和标题的新链接
+                const newLink = document.createElement("a");
+                newLink.href = titleLink.href;
+                newLink.className = "app-name-link";
+
+                // 复制原始链接的事件监听器
+                newLink.onclick = titleLink.onclick;
+
+                // 添加logo到新链接，并设置尺寸
+                const logoClone = logoImg.cloneNode(true);
+                logoClone.style.width = "100px";
+                logoClone.style.height = "100px";
+                logoClone.style.objectFit = "contain"; // 保持图片比例
+                logoClone.style.verticalAlign = "middle";
+
+                // 添加标题到新链接
+                const titleSpan = document.createElement("span");
+                titleSpan.textContent = titleText;
+                titleSpan.style.display = "inline-block";
+                titleSpan.style.verticalAlign = "middle";
+                titleSpan.style.marginLeft = "10px";
+                titleSpan.style.fontWeight = "bold";
+                titleSpan.style.fontSize = "1.2em";
+                titleSpan.style.lineHeight = "35px"; // 关键：使行高等于logo高度
+
+                newLink.appendChild(logoClone);
+                newLink.appendChild(titleSpan);
+
+                // 替换原始链接
+                appName.innerHTML = "";
+                appName.appendChild(newLink);
+
+                document.head.appendChild(style);
+              }
+            }
+          });
+        };
+      }
+
+      // 注册插件时可以传入自定义配置
+      window.$docsify.plugins = [].concat(
+        wrapLogoAndTitle(),
+        window.$docsify.plugins || []
+      );
+    </script>
+    <!-- Docsify v4 -->
+    <script src="//cdn.jsdelivr.net/npm/docsify@4"></script>
+    <!-- 右侧标题栏 -->
+    <script src="https://unpkg.com/docsify-plugin-toc@1.3.1/dist/docsify-plugin-toc.min.js"></script>
+    <!-- 字数统计 -->
+    <script src="//unpkg.com/docsify-count/dist/countable.js"></script>
+    <!-- emoji 解析 -->
+    <script src="//cdn.jsdelivr.net/npm/docsify/lib/plugins/emoji.min.js"></script>
+    <!-- 图片缩放 -->
+    <script src="//cdn.jsdelivr.net/npm/docsify/lib/plugins/zoom-image.min.js"></script>
+    <!-- 复制 -->
+    <script src="//cdn.jsdelivr.net/npm/docsify-copy-code/dist/docsify-copy-code.min.js"></script>
+  </body>
+</html>

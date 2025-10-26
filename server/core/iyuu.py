@@ -219,7 +219,9 @@ class IYUUThread(Thread):
             logging.error(f"获取数据库站点信息时出错: {e}", exc_info=True)
             return {}
 
-    def _get_priority_hash_for_torrent_group(self, torrent_name, all_torrents_for_name, configured_sites):
+    def _get_priority_hash_for_torrent_group(self, torrent_name,
+                                             all_torrents_for_name,
+                                             configured_sites):
         """为种子组获取优先使用的hash，优先选择IYUU支持站点的hash
         
         Args:
@@ -238,38 +240,43 @@ class IYUUThread(Thread):
                 return [], []
 
             # 获取IYUU支持的站点信息
-            sid_sha1, all_sites = get_filtered_sid_sha1_and_sites(iyuu_token, self.db_manager)
-            
+            sid_sha1, all_sites = get_filtered_sid_sha1_and_sites(
+                iyuu_token, self.db_manager)
+
             # 创建IYUU站点映射
             iyuu_supported_sites = set()
             for site in all_sites:
                 iyuu_nickname = site.get('nickname')
                 if iyuu_nickname:
                     iyuu_supported_sites.add(iyuu_nickname)
-            
+
             # 过滤出IYUU支持的站点种子，并按优先级排序
             iyuu_supported_torrents = []
             other_torrents = []
-            
+
             for torrent in all_torrents_for_name:
                 site_name = torrent.get('sites')
-                if (site_name and site_name in configured_sites and 
-                    site_name in iyuu_supported_sites and 
-                    site_name not in ['青蛙', '柠檬不甜']):
+                if (site_name and site_name in configured_sites
+                        and site_name in iyuu_supported_sites
+                        and site_name not in ['青蛙', '柠檬不甜']):
                     iyuu_supported_torrents.append(torrent)
-                elif site_name and site_name in configured_sites and site_name not in ['青蛙', '柠檬不甜']:
+                elif site_name and site_name in configured_sites and site_name not in [
+                        '青蛙', '柠檬不甜'
+                ]:
                     other_torrents.append(torrent)
-            
+
             # 合并列表，IYUU支持的站点在前
             priority_torrents = iyuu_supported_torrents + other_torrents
-            
+
             # 提取hash列表
             priority_hashes = [t['hash'] for t in priority_torrents]
-            
-            log_iyuu_message(f"种子组 '{torrent_name}': 找到 {len(iyuu_supported_torrents)} 个IYUU支持站点，{len(other_torrents)} 个其他支持站点", "INFO")
-            
+
+            log_iyuu_message(
+                f"种子组 '{torrent_name}': 找到 {len(iyuu_supported_torrents)} 个IYUU支持站点，{len(other_torrents)} 个其他支持站点",
+                "INFO")
+
             return priority_hashes, priority_torrents
-            
+
         except Exception as e:
             logging.error(f"获取优先hash时出错: {e}", exc_info=True)
             # 出错时返回所有支持站点的hash
@@ -397,9 +404,10 @@ class IYUUThread(Thread):
 
                     selected_hash = priority_hashes[attempt]
                     # 找到对应的种子信息用于日志记录
-                    torrent_info = next((t for t in filtered_torrents if t['hash'] == selected_hash), None)
+                    torrent_info = next((t for t in filtered_torrents
+                                         if t['hash'] == selected_hash), None)
                     site_name = torrent_info['sites'] if torrent_info else '未知'
-                    
+
                     log_iyuu_message(
                         f"使用的hash [{attempt+1}/{min(max_attempts, len(priority_hashes))}]: {selected_hash} (站点: {site_name})",
                         "INFO")
@@ -771,7 +779,7 @@ class IYUUThread(Thread):
                         (
                             new_hash,  # 使用新生成的唯一hash
                             torrent_name,
-                            existing_torrent.get('save_path', ''),
+                            '',  # 路径留空
                             existing_torrent.get('size', 0),
                             0.0,  # 进度设为0，表示未下载
                             '未做种',  # 状态设为未做种，表示未在客户端中

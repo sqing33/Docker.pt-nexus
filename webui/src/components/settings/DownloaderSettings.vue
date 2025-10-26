@@ -100,7 +100,6 @@
                 class="proxy-port-input"
                 :min="1"
                 :max="65535"
-                :disabled="downloader.type === 'transmission'"
                 @input="resetConnectionStatus(downloader.id)"
               >
                 <template #prepend>端口</template>
@@ -108,7 +107,7 @@
               <el-tooltip
                 :content="
                   downloader.type === 'transmission'
-                    ? 'Transmission 暂不支持代理功能'
+                    ? '通过代理获取截图、MediaInfo等媒体信息。注意：TR代理不包括统计数据获取。'
                     : '通过Go语言编写的专用代理连接，可解决网络延迟、获取数据不准等问题。'
                 "
                 placement="top"
@@ -120,7 +119,6 @@
                   inline-prompt
                   active-text="远程"
                   inactive-text="本地"
-                  :disabled="downloader.type === 'transmission'"
                   @change="resetConnectionStatus(downloader.id)"
                 />
               </el-tooltip>

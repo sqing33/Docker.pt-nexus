@@ -1,18 +1,21 @@
 <template>
   <div class="home-container">
-
     <div class="warning-banner">
       <div class="warning-content">
-        <img src="/favicon.ico" alt="PT Nexus Logo" class="warning-icon">
+        <img src="/favicon.ico" alt="PT Nexus Logo" class="warning-icon" />
         <div class="text-container">
           <div class="marquee-container">
             <div class="marquee-content">
-              <span class="warning-text">重要提示：PT Nexus 仅作为转种辅助工具，无法保证 100%
+              <span class="warning-text"
+                >重要提示：PT Nexus 仅作为转种辅助工具，无法保证 100%
                 准确性。转种前请务必仔细检查预览信息，确认参数正确无误。转种后请及时核实种子信息，如有错误请立即修改并反馈
-                bug。因使用本工具产生的种子错误问题，需由使用者自行修改，如不修改则本工具不承担任何责任。</span>
-              <span class="warning-text">重要提示：PT Nexus 仅作为转种辅助工具，无法保证 100%
+                bug。因使用本工具产生的种子错误问题，需由使用者自行修改，如不修改则本工具不承担任何责任。</span
+              >
+              <span class="warning-text"
+                >重要提示：PT Nexus 仅作为转种辅助工具，无法保证 100%
                 准确性。转种前请务必仔细检查预览信息，确认参数正确无误。转种后请及时核实种子信息，如有错误请立即修改并反馈
-                bug。因使用本工具产生的种子错误问题，需由使用者自行修改，如不修改则本工具不承担任何责任。</span>
+                bug。因使用本工具产生的种子错误问题，需由使用者自行修改，如不修改则本工具不承担任何责任。</span
+              >
             </div>
           </div>
         </div>
@@ -50,7 +53,12 @@
         </span>
       </div>
       <div class="site-grid">
-        <div v-for="site in combinedSitesList" :key="site.name" class="site-item" :class="getSiteClass(site)">
+        <div
+          v-for="site in combinedSitesList"
+          :key="site.name"
+          class="site-item"
+          :class="getSiteClass(site)"
+        >
           <div class="site-content">
             <div class="site-name-container">
               <span class="site-name">{{ site.name }}</span>
@@ -67,15 +75,19 @@
     </el-card>
 
     <!-- 下载器信息展示 -->
-    <el-row :gutter="24" style="margin-top: 24px;">
+    <el-row :gutter="24" style="margin-top: 24px">
       <el-col :span="24">
         <div class="downloader-grid">
-          <el-card v-for="downloader in downloaderInfo" :key="downloader.name" class="downloader-card glass-card glass-rounded"
-            :class="{ 'disabled': !downloader.enabled }">
+          <el-card
+            v-for="downloader in downloaderInfo"
+            :key="downloader.name"
+            class="downloader-card glass-card glass-rounded"
+            :class="{ disabled: !downloader.enabled }"
+          >
             <div class="downloader-header">
               <div class="downloader-name">
                 <el-tag :type="downloader.enabled ? 'success' : 'info'" effect="dark" size="small">
-                  {{ downloader.type === 'qbittorrent' ? 'qB' : 'TR' }}
+                  {{ downloader.type === 'qbittorrent' ? 'QB' : 'TR' }}
                 </el-tag>
                 {{ downloader.name }}
               </div>
@@ -107,9 +119,7 @@
               </div>
             </div>
 
-            <div class="downloader-disabled" v-else>
-              下载器已禁用
-            </div>
+            <div class="downloader-disabled" v-else>下载器已禁用</div>
           </el-card>
 
           <div v-if="!downloaderInfo.length" class="empty-downloader-placeholder">
@@ -127,158 +137,158 @@ import { ElNotification } from 'element-plus'
 import axios from 'axios'
 
 interface SiteStatus {
-  name: string;
-  has_cookie: boolean;
-  is_source: boolean;
-  is_target: boolean;
+  name: string
+  has_cookie: boolean
+  is_source: boolean
+  is_target: boolean
 }
 
 interface DownloaderInfo {
-  name: string;
-  type: string;
-  enabled: boolean;
-  status: string;
+  name: string
+  type: string
+  enabled: boolean
+  status: string
   details: {
-    [key: string]: string;
-  } | null;
+    [key: string]: string
+  } | null
 }
 
 const allSitesStatus = ref<SiteStatus[]>([])
 const downloaderInfo = ref<DownloaderInfo[]>([])
 
-const sourceSitesList = computed(() => allSitesStatus.value.filter(s => s.is_source));
-const targetSitesList = computed(() => allSitesStatus.value.filter(s => s.is_target));
+const sourceSitesList = computed(() => allSitesStatus.value.filter((s) => s.is_source))
+const targetSitesList = computed(() => allSitesStatus.value.filter((s) => s.is_target))
 
 // 合并站点列表，去除重复项
 const combinedSitesList = computed(() => {
-  const uniqueSites = new Map();
+  const uniqueSites = new Map()
 
   // 添加源站点
-  sourceSitesList.value.forEach(site => {
+  sourceSitesList.value.forEach((site) => {
     uniqueSites.set(site.name, {
       ...site,
       is_source: true,
-      is_target: false
-    });
-  });
+      is_target: false,
+    })
+  })
 
   // 添加目标站点，如果已存在则更新属性
-  targetSitesList.value.forEach(site => {
+  targetSitesList.value.forEach((site) => {
     if (uniqueSites.has(site.name)) {
       // 站点同时是源和目标，合并属性
-      const existingSite = uniqueSites.get(site.name);
+      const existingSite = uniqueSites.get(site.name)
       uniqueSites.set(site.name, {
         ...existingSite,
         ...site,
         is_source: true,
         is_target: true,
         // 确保保留源站点的Cookie状态
-        has_cookie: existingSite.has_cookie || site.has_cookie
-      });
+        has_cookie: existingSite.has_cookie || site.has_cookie,
+      })
     } else {
       // 站点仅是目标
       uniqueSites.set(site.name, {
         ...site,
         is_source: false,
-        is_target: true
-      });
+        is_target: true,
+      })
     }
-  });
+  })
 
   // 转换为数组并排序（源站点在前，目标站点在后，同时支持的站点在最前）
   return Array.from(uniqueSites.values()).sort((a, b) => {
     // 同时支持源和目标的站点排在最前面
-    if (a.is_source && a.is_target) return -1;
-    if (b.is_source && b.is_target) return 1;
+    if (a.is_source && a.is_target) return -1
+    if (b.is_source && b.is_target) return 1
 
     // 源站点排在前面
-    if (a.is_source && !b.is_source) return -1;
-    if (!a.is_source && b.is_source) return 1;
+    if (a.is_source && !b.is_source) return -1
+    if (!a.is_source && b.is_source) return 1
 
     // 目标站点
-    return 0;
-  });
-});
+    return 0
+  })
+})
 
 // 获取站点的CSS类
 const getSiteClass = (site: SiteStatus) => {
   // 检查配置状态
-  let isConfigured = false;
+  let isConfigured = false
   if (site.is_source && !site.is_target) {
     // 仅源站点，检查Cookie
-    isConfigured = site.has_cookie;
+    isConfigured = site.has_cookie
   } else if (!site.is_source && site.is_target) {
     // 仅目标站点，检查Cookie
-    isConfigured = site.has_cookie;
+    isConfigured = site.has_cookie
   } else if (site.is_source && site.is_target) {
     // 同时是源和目标，需要Cookie
-    isConfigured = site.has_cookie;
+    isConfigured = site.has_cookie
   }
 
   return {
     'site-configured': isConfigured,
-    'site-unconfigured': !isConfigured
-  };
-};
+    'site-unconfigured': !isConfigured,
+  }
+}
 
 // 获取站点的提示信息
 const getSiteTooltip = (site: SiteStatus) => {
-  let configStatus = '';
+  let configStatus = ''
   if (site.is_source && !site.is_target) {
     // 仅源站点
-    configStatus = site.has_cookie ? '已配置Cookie' : '未配置Cookie';
+    configStatus = site.has_cookie ? '已配置Cookie' : '未配置Cookie'
   } else if (!site.is_source && site.is_target) {
     // 仅目标站点
-    configStatus = site.has_cookie ? '已配置Cookie' : '未配置Cookie';
+    configStatus = site.has_cookie ? '已配置Cookie' : '未配置Cookie'
   } else if (site.is_source && site.is_target) {
     // 同时是源和目标
     if (site.has_cookie) {
-      configStatus = '已配置Cookie';
+      configStatus = '已配置Cookie'
     } else {
-      configStatus = '未配置Cookie';
+      configStatus = '未配置Cookie'
     }
   }
 
-  let roleStatus = '';
+  let roleStatus = ''
   if (site.is_source && site.is_target) {
-    roleStatus = '（源/目标）';
+    roleStatus = '（源/目标）'
   } else if (site.is_source) {
-    roleStatus = '（源）';
+    roleStatus = '（源）'
   } else if (site.is_target) {
-    roleStatus = '（目标）';
+    roleStatus = '（目标）'
   }
 
-  return `${configStatus}${roleStatus}`;
-};
+  return `${configStatus}${roleStatus}`
+}
 
 const fetchSitesStatus = async () => {
   try {
-    const response = await axios.get('/api/sites/status');
-    allSitesStatus.value = response.data;
+    const response = await axios.get('/api/sites/status')
+    allSitesStatus.value = response.data
   } catch (error) {
-    ElNotification.error({ title: '错误', message: '无法从服务器获取站点状态列表' });
+    ElNotification.error({ title: '错误', message: '无法从服务器获取站点状态列表' })
   }
 }
 
 const fetchDownloaderInfo = async () => {
   try {
-    const response = await axios.get('/api/downloader_info');
-    downloaderInfo.value = response.data;
+    const response = await axios.get('/api/downloader_info')
+    downloaderInfo.value = response.data
   } catch (error) {
-    console.error('获取下载器信息失败:', error);
-    ElNotification.error({ title: '错误', message: '无法从服务器获取下载器信息' });
+    console.error('获取下载器信息失败:', error)
+    ElNotification.error({ title: '错误', message: '无法从服务器获取下载器信息' })
   }
 }
 
 onMounted(() => {
-  fetchSitesStatus();
-  fetchDownloaderInfo();
+  fetchSitesStatus()
+  fetchDownloaderInfo()
 
   // 每30秒自动刷新一次下载器信息
   setInterval(() => {
-    fetchDownloaderInfo();
-  }, 30000);
-});
+    fetchDownloaderInfo()
+  }, 30000)
+})
 </script>
 
 <style scoped>
@@ -297,8 +307,8 @@ onMounted(() => {
 }
 
 .home-container {
-  -ms-overflow-style: none;  /* IE and Edge */
-  scrollbar-width: none;  /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
 }
 
 .warning-banner {
@@ -399,11 +409,10 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-
 }
 
 .site-card :deep(.el-card__body) {
-  padding: 0 10px 10px
+  padding: 0 10px 10px;
 }
 
 .site-card-title {
@@ -498,7 +507,7 @@ onMounted(() => {
 }
 
 .site-item::before {
-  content: "";
+  content: '';
   display: inline-block;
   width: 8px;
   height: 8px;

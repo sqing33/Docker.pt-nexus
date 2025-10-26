@@ -576,7 +576,7 @@ def test_connection():
     try:
         if client_config.get("type") == "qbittorrent":
             if use_proxy:
-                # 使用代理测试连接
+                # QB 使用代理测试连接
                 logging.info(f"通过代理测试 '{name}' 的连接...")
                 proxy_stats = _get_proxy_downloader_info(client_config, config_manager)
                 if proxy_stats:
@@ -584,17 +584,15 @@ def test_connection():
                 else:
                     return jsonify({"success": False, "message": f"'{name}' 代理连接测试失败，请检查代理服务器和下载器配置。"}), 200
             else:
-                # 使用直连测试
+                # QB 使用直连测试
                 api_config = services._prepare_api_config(client_config)
                 client = Client(**api_config)
                 client.auth_log_in()
         elif client_config.get("type") == "transmission":
-            if use_proxy:
-                return jsonify({"success": False, "message": "Transmission 暂不支持代理连接测试。"}), 200
-            else:
-                api_config = services._prepare_api_config(client_config)
-                client = TrClient(**api_config)
-                client.get_session()
+            # TR 始终使用直连测试（代理仅用于媒体信息获取）
+            api_config = services._prepare_api_config(client_config)
+            client = TrClient(**api_config)
+            client.get_session()
         else:
             return jsonify({"success": False, "message": "无效的客户端类型。"}), 400
 
