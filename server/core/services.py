@@ -493,21 +493,82 @@ class DataTracker(Thread):
         try:
             conn = self.db_manager._get_connection()
             cursor = self.db_manager._get_cursor(conn)
-            params_to_insert = []
-
+            
+            # 根据数据库类型设置占位符
+            placeholder = "%s" if self.db_manager.db_type in ["mysql", "postgresql"] else "?"
+            
+            # 第一步：获取每个下载器的最后一条记录
+            downloader_ids = set()
             for entry in buffer:
-                timestamp_str = entry["timestamp"].strftime(
-                    "%Y-%m-%d %H:%M:%S")
+                for data_point in entry["points"]:
+                    downloader_ids.add(data_point["downloader_id"])
+            
+            last_records = {}
+            if downloader_ids:
+                # 查询每个下载器的最后一条有效记录
+                placeholders = ",".join([placeholder] * len(downloader_ids))
+                query = f"""
+                    SELECT downloader_id, cumulative_uploaded, cumulative_downloaded, stat_datetime
+                    FROM traffic_stats
+                    WHERE downloader_id IN ({placeholders})
+                    AND cumulative_uploaded > 0 OR cumulative_downloaded > 0
+                    ORDER BY stat_datetime DESC
+                """
+                cursor.execute(query, tuple(downloader_ids))
+                rows = cursor.fetchall()
+                
+                # 为每个下载器保存最新的记录
+                for row in rows:
+                    downloader_id = row["downloader_id"]
+                    if downloader_id not in last_records:
+                        last_records[downloader_id] = {
+                            "cumulative_uploaded": row["cumulative_uploaded"],
+                            "cumulative_downloaded": row["cumulative_downloaded"],
+                            "stat_datetime": row["stat_datetime"]
+                        }
+            
+            # 第二步：验证并准备插入数据
+            params_to_insert = []
+            
+            for entry in buffer:
+                timestamp_str = entry["timestamp"].strftime("%Y-%m-%d %H:%M:%S")
                 for data_point in entry["points"]:
                     client_id = data_point["downloader_id"]
                     current_dl = data_point["total_dl"]
                     current_ul = data_point["total_ul"]
-
-                    # 直接存储累计值
-                    params_to_insert.append(
-                        (timestamp_str, client_id, 0, 0,
-                         data_point["ul_speed"], data_point["dl_speed"],
-                         current_ul, current_dl))
+                    
+                    # 数据验证逻辑
+                    should_insert = True
+                    
+                    if client_id in last_records:
+                        last_ul = last_records[client_id]["cumulative_uploaded"]
+                        last_dl = last_records[client_id]["cumulative_downloaded"]
+                        
+                        # 检测异常情况：累计值降低或变为0
+                        if (current_ul > 0 and current_ul < last_ul) or \
+                           (current_dl > 0 and current_dl < last_dl) or \
+                           (current_ul == 0 and last_ul > 0) or \
+                           (current_dl == 0 and last_dl > 0):
+                            should_insert = False
+                            logging.warning(
+                                f"检测到下载器 {client_id} 的累计流量降低或归零，"
+                                f"跳过插入。当前: 上传={format_bytes(current_ul)}, 下载={format_bytes(current_dl)}; "
+                                f"上次: 上传={format_bytes(last_ul)}, 下载={format_bytes(last_dl)}"
+                            )
+                    
+                    if should_insert:
+                        params_to_insert.append(
+                            (timestamp_str, client_id, 0, 0,
+                             data_point["ul_speed"], data_point["dl_speed"],
+                             current_ul, current_dl)
+                        )
+                        
+                        # 更新本地缓存的最后记录，用于批次内的后续数据验证
+                        last_records[client_id] = {
+                            "cumulative_uploaded": current_ul,
+                            "cumulative_downloaded": current_dl,
+                            "stat_datetime": timestamp_str
+                        }
 
             if params_to_insert:
                 # 根据数据库类型使用正确的占位符和冲突处理语法
@@ -518,6 +579,7 @@ class DataTracker(Thread):
                 else:  # sqlite
                     sql_insert = """INSERT INTO traffic_stats (stat_datetime, downloader_id, uploaded, downloaded, upload_speed, download_speed, cumulative_uploaded, cumulative_downloaded) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(stat_datetime, downloader_id) DO UPDATE SET uploaded = excluded.uploaded, downloaded = excluded.downloaded, upload_speed = excluded.upload_speed, download_speed = excluded.download_speed, cumulative_uploaded = excluded.cumulative_uploaded, cumulative_downloaded = excluded.cumulative_downloaded"""
                 cursor.executemany(sql_insert, params_to_insert)
+                logging.info(f"成功插入 {len(params_to_insert)} 条流量记录（已过滤异常数据）")
 
             conn.commit()
         except Exception as e:

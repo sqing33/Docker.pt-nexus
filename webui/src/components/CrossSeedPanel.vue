@@ -681,7 +681,7 @@
       <!-- 步骤 2: 选择发布站点 -->
       <div v-if="activeStep === 2" class="step-container site-selection-container">
         <h3 class="selection-title">请选择要发布的目标站点</h3>
-        <p class="selection-subtitle">已存在的站点已被自动禁用。蓝色站点表示未配置Cookie。</p>
+        <p class="selection-subtitle">已存在的站点已被自动禁用。红色站点表示未配置Cookie。</p>
 
         <!-- 禁止转载警告 -->
         <el-alert
@@ -711,6 +711,7 @@
             :key="site.name"
             class="site-button"
             :type="getButtonType(site)"
+            :plain="!site.has_cookie"
             :disabled="!isTargetSiteSelectable(site.name)"
             @click="toggleSiteSelection(site.name)"
           >
@@ -1266,9 +1267,9 @@ const getButtonType = (site: SiteStatus) => {
   if (selectedTargetSites.value.includes(site.name)) {
     return 'success'
   }
-  // 如果站点没有Cookie，显示为蓝色 (primary)
+  // 如果站点没有Cookie，显示为红色 (danger)
   if (!site.has_cookie) {
-    return 'primary'
+    return 'danger'
   }
   // 其他情况（可选但未选中），显示为默认样式
   return 'default'
@@ -3045,7 +3046,7 @@ const nextButtonTooltipContent = computed(() => {
   if (hasRestrictedTag.value) {
     return '检测到禁转标签，不允许继续发布'
   }
-  return '存在待修改的参数 (请确保mediainfo或bdinfo内容有效且包含必要的媒体信息)'
+  return '存在待修改的参数'
 })
 
 // 辅助函数：检查是否为有效的 MediaInfo 格式

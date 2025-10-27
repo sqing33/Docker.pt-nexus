@@ -1,13 +1,32 @@
 <template>
   <div class="torrents-view">
-    <el-alert v-if="error" :title="error" type="error" show-icon :closable="false" center
-      style="margin-bottom: 15px"></el-alert>
+    <el-alert
+      v-if="error"
+      :title="error"
+      type="error"
+      show-icon
+      :closable="false"
+      center
+      style="margin-bottom: 15px"
+    ></el-alert>
 
     <!-- [修改] 使用 v-if 确保在加载设置后再渲染表格 -->
-    <el-table v-if="settingsLoaded" :data="allData" v-loading="loading" border height="100%" ref="tableRef"
-      row-key="unique_id" :row-class-name="tableRowClassName" @row-click="handleRowClick" @expand-change="handleExpandChange"
-      @sort-change="handleSortChange" :default-sort="currentSort" empty-text="无数据或当前筛选条件下无结果"
-      class="glass-table">
+    <el-table
+      v-if="settingsLoaded"
+      :data="allData"
+      v-loading="loading"
+      border
+      height="100%"
+      ref="tableRef"
+      row-key="unique_id"
+      :row-class-name="tableRowClassName"
+      @row-click="handleRowClick"
+      @expand-change="handleExpandChange"
+      @sort-change="handleSortChange"
+      :default-sort="currentSort"
+      empty-text="无数据或当前筛选条件下无结果"
+      class="glass-table"
+    >
       <!-- ... (其他列保持不变) ... -->
       <el-table-column type="expand" width="1">
         <template #default="props">
@@ -15,28 +34,59 @@
             <template v-for="siteName in sorted_all_sites" :key="siteName">
               <template v-if="props.row.sites[siteName]">
                 <!-- 对于未做种状态的站点，使用可点击的div而不是链接 -->
-                <div v-if="props.row.sites[siteName].state === '未做种'"
-                  style="cursor: pointer; display: inline-block; width: 100%; text-align: center;"
-                  @click.stop="handleSiteClick(props.row.name, { name: siteName, data: props.row.sites[siteName] })">
-                  <el-tag effect="dark" :type="getTagType(props.row.sites[siteName])"
-                    style="text-align: center; width: 100%;">
+                <div
+                  v-if="props.row.sites[siteName].state === '未做种'"
+                  style="cursor: pointer; display: inline-block; width: 100%; text-align: center"
+                  @click.stop="
+                    handleSiteClick(props.row.name, {
+                      name: siteName,
+                      data: props.row.sites[siteName],
+                    })
+                  "
+                >
+                  <el-tag
+                    effect="dark"
+                    :type="getTagType(props.row.sites[siteName])"
+                    style="text-align: center; width: 100%"
+                  >
                     {{ siteName }}
                     <div>({{ formatBytes(props.row.sites[siteName].uploaded) }})</div>
                   </el-tag>
                 </div>
                 <!-- 对于有链接的站点，使用链接 -->
-                <a v-else-if="props.row.sites[siteName] && hasLink(props.row.sites[siteName], siteName)"
-                  :href="getLink(props.row.sites[siteName], siteName)!" target="_blank" style="text-decoration: none">
-                  <el-tag effect="dark" :type="getTagType(props.row.sites[siteName])" style="text-align: center">
+                <a
+                  v-else-if="
+                    props.row.sites[siteName] && hasLink(props.row.sites[siteName], siteName)
+                  "
+                  :href="getLink(props.row.sites[siteName], siteName)!"
+                  target="_blank"
+                  style="text-decoration: none"
+                >
+                  <el-tag
+                    effect="dark"
+                    :type="getTagType(props.row.sites[siteName])"
+                    style="text-align: center"
+                  >
                     {{ siteName }}
                     <div>({{ formatBytes(props.row.sites[siteName].uploaded) }})</div>
                   </el-tag>
                 </a>
                 <!-- 对于其他站点，使用可点击的div -->
-                <div v-else style="cursor: pointer; display: inline-block; width: 100%; text-align: center;"
-                  @click.stop="handleSiteClick(props.row.name, { name: siteName, data: props.row.sites[siteName] })">
-                  <el-tag effect="dark" :type="getTagType(props.row.sites[siteName])"
-                    style="text-align: center; width: 100%;">
+                <div
+                  v-else
+                  style="cursor: pointer; display: inline-block; width: 100%; text-align: center"
+                  @click.stop="
+                    handleSiteClick(props.row.name, {
+                      name: siteName,
+                      data: props.row.sites[siteName],
+                    })
+                  "
+                >
+                  <el-tag
+                    effect="dark"
+                    :type="getTagType(props.row.sites[siteName])"
+                    style="text-align: center; width: 100%"
+                  >
                     {{ siteName }}
                     <div>({{ formatBytes(props.row.sites[siteName].uploaded) }})</div>
                   </el-tag>
@@ -54,11 +104,27 @@
         <template #header>
           <div class="name-header-container">
             <div>种子名称</div>
-            <el-input v-model="nameSearch" placeholder="搜索名称..." clearable class="search-input" @click.stop />
-            <span @click.stop style="display: flex; align-items: center;">
-              <div v-if="hasActiveFilters" class="current-filters" style="margin-right: 15px; display: flex; align-items: center;">
+            <el-input
+              v-model="nameSearch"
+              placeholder="搜索名称..."
+              clearable
+              class="search-input"
+              @click.stop
+            />
+            <span @click.stop style="display: flex; align-items: center">
+              <div
+                v-if="hasActiveFilters"
+                class="current-filters"
+                style="margin-right: 15px; display: flex; align-items: center"
+              >
                 <el-tag type="info" size="default" effect="plain">{{ currentFilterText }}</el-tag>
-                <el-button type="danger" link style="padding: 0; margin-left: 8px;" @click="clearAllFilters">清除</el-button>
+                <el-button
+                  type="danger"
+                  link
+                  style="padding: 0; margin-left: 8px"
+                  @click="clearAllFilters"
+                  >清除</el-button
+                >
               </div>
               <el-button type="primary" @click="openFilterDialog" plain>筛选</el-button>
             </span>
@@ -69,7 +135,14 @@
         </template>
       </el-table-column>
 
-      <el-table-column prop="site_count" label="做种数" sortable="custom" width="95" align="center" header-align="center">
+      <el-table-column
+        prop="site_count"
+        label="做种数"
+        sortable="custom"
+        width="95"
+        align="center"
+        header-align="center"
+      >
         <template #default="scope">
           <span style="display: inline-block; width: 100%; text-align: center">
             {{ scope.row.site_count }} / {{ scope.row.total_site_count }}
@@ -79,36 +152,66 @@
 
       <el-table-column prop="save_path" label="保存路径" width="220" header-align="center">
         <template #default="scope">
-          <div :title="scope.row.save_path"
-            style="width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+          <div
+            :title="scope.row.save_path"
+            style="width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"
+          >
             {{ shortenPath(scope.row.save_path, 30) }}
           </div>
         </template>
       </el-table-column>
       <el-table-column label="下载器" width="120" align="center" header-align="center">
         <template #default="scope">
-          <div style="display: flex; justify-content: center; align-items: center; width: 100%; height: 100%;">
+          <div
+            style="
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              width: 100%;
+              height: 100%;
+            "
+          >
             <div v-if="scope.row.downloaderIds && scope.row.downloaderIds.length > 0">
-              <el-tag v-for="downloaderId in sortedDownloaderIds(scope.row.downloaderIds)" :key="downloaderId"
-                size="small" :type="getDownloaderTagType(downloaderId)" style="margin: 2px;">
+              <el-tag
+                v-for="downloaderId in sortedDownloaderIds(scope.row.downloaderIds)"
+                :key="downloaderId"
+                size="small"
+                :type="getDownloaderTagType(downloaderId)"
+                style="margin: 2px"
+              >
                 {{ getDownloaderName(downloaderId) }}
               </el-tag>
             </div>
-            <el-tag v-else type="info" size="small">
-              未知下载器
-            </el-tag>
+            <el-tag v-else type="info" size="small"> 未知下载器 </el-tag>
           </div>
         </template>
       </el-table-column>
-      <el-table-column label="大小" prop="size_formatted" width="100" align="center" sortable="custom" />
+      <el-table-column
+        label="大小"
+        prop="size_formatted"
+        width="100"
+        align="center"
+        sortable="custom"
+      />
 
-      <el-table-column label="总上传量" prop="total_uploaded_formatted" width="110" align="center" sortable="custom" />
+      <el-table-column
+        label="总上传量"
+        prop="total_uploaded_formatted"
+        width="110"
+        align="center"
+        sortable="custom"
+      />
       <el-table-column label="进度" prop="progress" width="120" align="center" sortable="custom">
         <template #default="scope">
-          <div style="padding: 1px 0; width: 100%;">
-            <el-progress :percentage="scope.row.progress" :stroke-width="10" :color="progressColors" :show-text="false"
-              style="width: 100%;" />
-            <div style="text-align: center; font-size: 12px; margin-top: 5px; line-height: 1;">
+          <div style="padding: 1px 0; width: 100%">
+            <el-progress
+              :percentage="scope.row.progress"
+              :stroke-width="10"
+              :color="progressColors"
+              :show-text="false"
+              style="width: 100%"
+            />
+            <div style="text-align: center; font-size: 12px; margin-top: 5px; line-height: 1">
               {{ scope.row.progress }}%
             </div>
           </div>
@@ -116,19 +219,43 @@
       </el-table-column>
       <el-table-column label="状态" prop="state" width="120" align="center" header-align="center">
         <template #default="scope">
-          <div style="display: flex; justify-content: center; align-items: center; width: 100%; height: 100%;">
+          <div
+            style="
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              width: 100%;
+              height: 100%;
+            "
+          >
             <el-tag :type="getStateTagType(scope.row.state)" size="large">{{
               scope.row.state
-              }}</el-tag>
+            }}</el-tag>
           </div>
         </template>
       </el-table-column>
 
-      <el-table-column label="可转种" width="100" align="center" header-align="center" prop="target_sites_count"
-        sortable="custom">
+      <el-table-column
+        label="可转种"
+        width="100"
+        align="center"
+        header-align="center"
+        prop="target_sites_count"
+        sortable="custom"
+      >
         <template #default="scope">
-          <div style="display: flex; justify-content: center; align-items: center; width: 100%; height: 100%;">
-            <span v-if="scope.row.target_sites_count !== undefined">{{ scope.row.target_sites_count }}</span>
+          <div
+            style="
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              width: 100%;
+              height: 100%;
+            "
+          >
+            <span v-if="scope.row.target_sites_count !== undefined">{{
+              scope.row.target_sites_count
+            }}</span>
             <span v-else>-</span>
           </div>
         </template>
@@ -136,7 +263,15 @@
 
       <el-table-column label="操作" width="100" align="center" header-align="center">
         <template #default="scope">
-          <div style="display: flex; justify-content: center; align-items: center; width: 100%; height: 100%;">
+          <div
+            style="
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              width: 100%;
+              height: 100%;
+            "
+          >
             <el-button type="primary" size="small" @click.stop="startCrossSeed(scope.row)">
               转种
             </el-button>
@@ -145,10 +280,19 @@
       </el-table-column>
     </el-table>
 
-    <el-pagination v-if="totalTorrents > 0"  class="glass-pagination" style="justify-content: flex-end"
-      v-model:current-page="currentPage" v-model:page-size="pageSize" :page-sizes="[20, 50, 100]"
-      :total="totalTorrents" layout="total, sizes, prev, pager, next, jumper" @size-change="handleSizeChange"
-      @current-change="handleCurrentChange" background />
+    <el-pagination
+      v-if="totalTorrents > 0"
+      class="glass-pagination"
+      style="justify-content: flex-end"
+      v-model:current-page="currentPage"
+      v-model:page-size="pageSize"
+      :page-sizes="[20, 50, 100]"
+      :total="totalTorrents"
+      layout="total, sizes, prev, pager, next, jumper"
+      @size-change="handleSizeChange"
+      @current-change="handleCurrentChange"
+      background
+    />
 
     <!-- 转种弹窗 -->
     <div v-if="crossSeedDialogVisible" class="modal-overlay">
@@ -161,15 +305,20 @@
         </template>
         <div class="cross-seed-content" v-if="selectedTorrentForMigration">
           <CrossSeedPanel
-            @complete="handleCrossSeedComplete" 
+            @complete="handleCrossSeedComplete"
             @cancel="closeCrossSeedDialog"
-            @close-with-refresh="handleCloseWithRefresh" />
+            @close-with-refresh="handleCloseWithRefresh"
+          />
         </div>
       </el-card>
     </div>
 
     <!-- 筛选器弹窗 (无改动) -->
-    <div v-if="filterDialogVisible" class="filter-overlay" @click.self="filterDialogVisible = false">
+    <div
+      v-if="filterDialogVisible"
+      class="filter-overlay"
+      @click.self="filterDialogVisible = false"
+    >
       <el-card class="filter-card">
         <template #header>
           <div class="filter-card-header">
@@ -180,67 +329,139 @@
         <div class="filter-card-body">
           <el-divider content-position="left">站点筛选</el-divider>
           <div class="site-filter-container">
-            <div style="display:flex; align-items:center; gap:15px; margin-bottom:5px;">
+            <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 5px">
               <el-radio-group v-model="siteFilterMode" size="default">
                 <el-radio-button label="exist" class="compact-radio-button">存在于</el-radio-button>
-                <el-radio-button label="not-exist" class="compact-radio-button">不存在于</el-radio-button>
+                <el-radio-button label="not-exist" class="compact-radio-button"
+                  >不存在于</el-radio-button
+                >
               </el-radio-group>
-              <el-input v-model="siteSearch" placeholder="搜索站点" clearable style="width:280px; font-size: 14px;"
-                size="default" />
-              <div style="display: flex; align-items: center; gap: 10px;">
-                <div v-if="tempFilters.existSiteNames.length > 0" style="display: flex; align-items: center;">
-                  <el-tag type="info" size="default" effect="plain">存在于: {{ tempFilters.existSiteNames.length }}</el-tag>
-                  <el-button type="danger" link style="padding: 0; margin-left: 5px;" @click="clearExistSiteFilter">清除</el-button>
+              <el-input
+                v-model="siteSearch"
+                placeholder="搜索站点"
+                clearable
+                style="width: 280px; font-size: 14px"
+                size="default"
+              />
+              <div style="display: flex; align-items: center; gap: 10px">
+                <div
+                  v-if="tempFilters.existSiteNames.length > 0"
+                  style="display: flex; align-items: center"
+                >
+                  <el-tag type="info" size="default" effect="plain"
+                    >存在于: {{ tempFilters.existSiteNames.length }}</el-tag
+                  >
+                  <el-button
+                    type="danger"
+                    link
+                    style="padding: 0; margin-left: 5px"
+                    @click="clearExistSiteFilter"
+                    >清除</el-button
+                  >
                 </div>
-                <div v-if="tempFilters.notExistSiteNames.length > 0" style="display: flex; align-items: center;">
-                  <el-tag type="info" size="default" effect="plain">不存在于: {{ tempFilters.notExistSiteNames.length }}</el-tag>
-                  <el-button type="danger" link style="padding: 0; margin-left: 5px;" @click="clearNotExistSiteFilter">清除</el-button>
+                <div
+                  v-if="tempFilters.notExistSiteNames.length > 0"
+                  style="display: flex; align-items: center"
+                >
+                  <el-tag type="info" size="default" effect="plain"
+                    >不存在于: {{ tempFilters.notExistSiteNames.length }}</el-tag
+                  >
+                  <el-button
+                    type="danger"
+                    link
+                    style="padding: 0; margin-left: 5px"
+                    @click="clearNotExistSiteFilter"
+                    >清除</el-button
+                  >
                 </div>
               </div>
             </div>
             <div class="site-checkbox-container">
               <el-checkbox-group v-model="currentSiteNames">
-                <el-checkbox v-for="site in filteredSiteOptions" :key="site" :label="site"
-                  :disabled="!isSiteAvailable(site)" :class="{ 'disabled-site': !isSiteAvailable(site) }">{{
-                    site
-                  }}</el-checkbox>
+                <el-checkbox
+                  v-for="site in filteredSiteOptions"
+                  :key="site"
+                  :label="site"
+                  :disabled="!isSiteAvailable(site)"
+                  :class="{ 'disabled-site': !isSiteAvailable(site) }"
+                  >{{ site }}</el-checkbox
+                >
               </el-checkbox-group>
             </div>
           </div>
           <el-divider content-position="left">下载器</el-divider>
-          <div style="margin-bottom: 10px;">
-            <div v-if="tempFilters.downloaderIds.length > 0" style="display: flex; align-items: center;">
-              <el-tag type="info" size="default" effect="plain">下载器: {{ tempFilters.downloaderIds.length }}</el-tag>
-              <el-button type="danger" link style="padding: 0; margin-left: 5px;" @click="clearDownloaderFilter">清除</el-button>
+          <div style="margin-bottom: 10px">
+            <div
+              v-if="tempFilters.downloaderIds.length > 0"
+              style="display: flex; align-items: center"
+            >
+              <el-tag type="info" size="default" effect="plain"
+                >下载器: {{ tempFilters.downloaderIds.length }}</el-tag
+              >
+              <el-button
+                type="danger"
+                link
+                style="padding: 0; margin-left: 5px"
+                @click="clearDownloaderFilter"
+                >清除</el-button
+              >
             </div>
           </div>
           <el-checkbox-group v-model="tempFilters.downloaderIds">
-            <el-checkbox v-for="downloader in downloadersList" :key="downloader.id" :label="downloader.id">
+            <el-checkbox
+              v-for="downloader in downloadersList"
+              :key="downloader.id"
+              :label="downloader.id"
+            >
               {{ downloader.name }}
             </el-checkbox>
           </el-checkbox-group>
           <el-divider content-position="left">保存路径</el-divider>
-          <div style="margin-bottom: 10px;">
-            <div v-if="tempFilters.paths.length > 0" style="display: flex; align-items: center;">
-              <el-tag type="info" size="default" effect="plain">路径: {{ tempFilters.paths.length }}</el-tag>
-              <el-button type="danger" link style="padding: 0; margin-left: 5px;" @click="clearPathFilter">清除</el-button>
+          <div style="margin-bottom: 10px">
+            <div v-if="tempFilters.paths.length > 0" style="display: flex; align-items: center">
+              <el-tag type="info" size="default" effect="plain"
+                >路径: {{ tempFilters.paths.length }}</el-tag
+              >
+              <el-button
+                type="danger"
+                link
+                style="padding: 0; margin-left: 5px"
+                @click="clearPathFilter"
+                >清除</el-button
+              >
             </div>
           </div>
           <div class="path-tree-container">
-            <el-tree ref="pathTreeRef" :data="pathTreeData" show-checkbox node-key="path" default-expand-all
-              check-on-click-node :check-strictly="true" :props="{ class: 'path-tree-node' }" />
+            <el-tree
+              ref="pathTreeRef"
+              :data="pathTreeData"
+              show-checkbox
+              node-key="path"
+              default-expand-all
+              check-on-click-node
+              :check-strictly="true"
+              :props="{ class: 'path-tree-node' }"
+            />
           </div>
           <el-divider content-position="left">状态</el-divider>
-          <div style="margin-bottom: 10px;">
-            <div v-if="tempFilters.states.length > 0" style="display: flex; align-items: center;">
-              <el-tag type="info" size="default" effect="plain">状态: {{ tempFilters.states.length }}</el-tag>
-              <el-button type="danger" link style="padding: 0; margin-left: 5px;" @click="clearStateFilter">清除</el-button>
+          <div style="margin-bottom: 10px">
+            <div v-if="tempFilters.states.length > 0" style="display: flex; align-items: center">
+              <el-tag type="info" size="default" effect="plain"
+                >状态: {{ tempFilters.states.length }}</el-tag
+              >
+              <el-button
+                type="danger"
+                link
+                style="padding: 0; margin-left: 5px"
+                @click="clearStateFilter"
+                >清除</el-button
+              >
             </div>
           </div>
           <el-checkbox-group v-model="tempFilters.states">
             <el-checkbox v-for="state in unique_states" :key="state" :label="state">{{
               state
-              }}</el-checkbox>
+            }}</el-checkbox>
           </el-checkbox-group>
         </div>
         <div class="filter-card-footer">
@@ -252,12 +473,18 @@
     </div>
 
     <!-- 站点操作弹窗 -->
-    <div v-if="siteOperationDialogVisible" class="filter-overlay" @click.self="siteOperationDialogVisible = false">
-      <el-card class="filter-card" style="max-width: 500px;">
+    <div
+      v-if="siteOperationDialogVisible"
+      class="filter-overlay"
+      @click.self="siteOperationDialogVisible = false"
+    >
+      <el-card class="filter-card" style="max-width: 500px">
         <template #header>
           <div class="filter-card-header">
             <span>站点操作</span>
-            <el-button type="danger" circle @click="siteOperationDialogVisible = false" plain>X</el-button>
+            <el-button type="danger" circle @click="siteOperationDialogVisible = false" plain
+              >X</el-button
+            >
           </div>
         </template>
         <div class="site-operation-body">
@@ -267,34 +494,49 @@
           </div>
           <p>站点名称: {{ selectedSite?.name }}</p>
           <p>当前状态: {{ selectedSite?.data.state }}</p>
-          <div v-if="selectedSite && selectedSite.data && hasLink(selectedSite.data, selectedSite.name)" class="site-operation-link">
+          <div
+            v-if="
+              selectedSite && selectedSite.data && hasLink(selectedSite.data, selectedSite.name)
+            "
+            class="site-operation-link"
+          >
             <p class="label">详情页链接:</p>
-            <el-link :href="getLink(selectedSite.data, selectedSite.name)!" target="_blank" type="primary"
-              :underline="false">
+            <el-link
+              :href="getLink(selectedSite.data, selectedSite.name)!"
+              target="_blank"
+              type="primary"
+              :underline="false"
+            >
               {{ getLink(selectedSite.data, selectedSite.name) }}
             </el-link>
           </div>
           <div v-else class="site-operation-input">
             <p class="label">添加详情页链接或种子ID:</p>
-            <el-input 
-              v-model="newCommentInput" 
+            <el-input
+              v-model="newCommentInput"
               placeholder="请输入完整的详情页链接或种子ID"
               clearable
               @keyup.enter="updateSiteComment"
             />
-            <p class="input-hint">支持输入完整链接（如：https://example.com/details.php?id=123）或仅输入数字ID（如：123456）</p>
+            <p class="input-hint">
+              支持输入完整链接（如：https://example.com/details.php?id=123）或仅输入数字ID（如：123456）
+            </p>
           </div>
           <div class="site-operation-buttons">
             <el-button @click="siteOperationDialogVisible = false">取消</el-button>
-            <el-button v-if="!hasLink(selectedSite?.data, selectedSite?.name)" 
-              type="success" 
+            <el-button
+              v-if="!hasLink(selectedSite?.data, selectedSite?.name)"
+              type="success"
               @click="updateSiteComment"
-              :disabled="!newCommentInput || newCommentInput.trim() === ''">
+              :disabled="!newCommentInput || newCommentInput.trim() === ''"
+            >
               添加链接
             </el-button>
-            <el-button v-if="hasLink(selectedSite?.data, selectedSite?.name)" 
-              type="primary" 
-              @click="setSiteNotExist">
+            <el-button
+              v-if="hasLink(selectedSite?.data, selectedSite?.name)"
+              type="primary"
+              @click="setSiteNotExist"
+            >
               设为不存在
             </el-button>
           </div>
@@ -304,52 +546,84 @@
 
     <!-- 源站点选择弹窗 -->
     <div v-if="sourceSelectionDialogVisible" class="filter-overlay">
-      <el-card class="filter-card" style="max-width: 600px;">
+      <el-card class="filter-card" style="max-width: 600px">
         <template #header>
           <div class="filter-card-header">
             <span>请选择转种的源站点</span>
-            <el-button type="danger" circle @click="sourceSelectionDialogVisible = false" plain>X</el-button>
+            <el-button type="danger" circle @click="sourceSelectionDialogVisible = false" plain
+              >X</el-button
+            >
           </div>
         </template>
         <div class="source-site-selection-body">
           <p class="source-site-tip">
-            <el-tag type="success" size="large" style="margin-right: 5px;">可获取数据</el-tag> 
-            <el-tag type="primary" size="large" style="margin-right: 5px;">可尝试iyuu获取链接</el-tag> 
-            <el-tag type="primary" size="large" style="margin-right: 5px; opacity: 0.5;">未配置Cookie</el-tag> 
+            <el-tag type="success" size="large" style="margin-right: 5px">可获取数据</el-tag>
+            <el-tag type="primary" size="large" style="margin-right: 5px"
+              >可尝试iyuu获取链接</el-tag
+            >
+            <el-tag type="error" size="large" style="margin-right: 5px; opacity: 0.5"
+              >未配置Cookie</el-tag
+            >
           </p>
-          
+
           <!-- 已缓存站点区域 -->
           <div v-if="cachedSites.length > 0" class="cached-sites-section">
             <p class="cached-sites-label">已缓存的站点 ({{ cachedSites.length }})</p>
             <div class="site-list-box glass-site-box cached-sites-box">
-              <el-tag v-for="site in allSourceSitesStatus.filter(s => cachedSites.includes(s.name))" :key="site.name"
+              <el-tag
+                v-for="site in allSourceSitesStatus.filter((s) => cachedSites.includes(s.name))"
+                :key="site.name"
                 :type="getSiteTagType(site, isSourceSiteSelectable(site.name))"
-                :class="{ 'is-selectable': isSourceSiteSelectable(site.name), 'cached-site-tag': true }" class="site-tag"
-                @click="isSourceSiteSelectable(site.name) && confirmSourceSiteAndProceed(getSiteDetails(site.name))"
-                v-loading="sourceSiteQueryLoading[site.name]" element-loading-spinner="el-icon-loading"
-                element-loading-background="rgba(0, 0, 0, 0.5)">
+                :class="{
+                  'is-selectable': isSourceSiteSelectable(site.name),
+                  'cached-site-tag': true,
+                }"
+                class="site-tag"
+                @click="
+                  isSourceSiteSelectable(site.name) &&
+                  confirmSourceSiteAndProceed(getSiteDetails(site.name))
+                "
+                v-loading="sourceSiteQueryLoading[site.name]"
+                element-loading-spinner="el-icon-loading"
+                element-loading-background="rgba(0, 0, 0, 0.5)"
+              >
                 {{ site.name }} ✓
               </el-tag>
             </div>
           </div>
-          
+
           <!-- 未缓存站点区域 -->
-          <div v-if="allSourceSitesStatus.some(s => !cachedSites.includes(s.name))" class="uncached-sites-section">
+          <div
+            v-if="allSourceSitesStatus.some((s) => !cachedSites.includes(s.name))"
+            class="uncached-sites-section"
+          >
             <p class="uncached-sites-label">未缓存的站点</p>
             <div class="site-list-box glass-site-box">
-              <el-tag v-for="site in allSourceSitesStatus.filter(s => !cachedSites.includes(s.name))" :key="site.name"
+              <el-tag
+                v-for="site in allSourceSitesStatus.filter((s) => !cachedSites.includes(s.name))"
+                :key="site.name"
                 :type="getSiteTagType(site, isSourceSiteSelectable(site.name))"
-                :class="{ 'is-selectable': isSourceSiteSelectable(site.name) }" class="site-tag"
-                @click="isSourceSiteSelectable(site.name) && confirmSourceSiteAndProceed(getSiteDetails(site.name))"
-                v-loading="sourceSiteQueryLoading[site.name]" element-loading-spinner="el-icon-loading"
-                element-loading-background="rgba(0, 0, 0, 0.5)">
+                :class="{ 'is-selectable': isSourceSiteSelectable(site.name) }"
+                :style="!site.has_cookie ? 'opacity: 0.5' : ''"
+                class="site-tag"
+                size="large"
+                @click="
+                  isSourceSiteSelectable(site.name) &&
+                  confirmSourceSiteAndProceed(getSiteDetails(site.name))
+                "
+                v-loading="sourceSiteQueryLoading[site.name]"
+                element-loading-spinner="el-icon-loading"
+                element-loading-background="rgba(0, 0, 0, 0.5)"
+              >
                 {{ site.name }}
               </el-tag>
             </div>
           </div>
         </div>
         <div class="filter-card-footer">
-          <el-button type="warning" @click="triggerIYUUQuery" :loading="iyuuQueryLoading" plain>IYUU查询</el-button>
+          <el-button type="warning" @click="triggerIYUUQuery" :loading="iyuuQueryLoading" plain
+            >IYUU查询</el-button
+          >
           <el-button @click="sourceSelectionDialogVisible = false">取消</el-button>
         </div>
       </el-card>
@@ -359,7 +633,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, reactive, watch, defineEmits, nextTick, computed } from 'vue'
-import { ElMessage } from 'element-plus';
+import { ElMessage } from 'element-plus'
 import type { TableInstance, Sort } from 'element-plus'
 import type { ElTree } from 'element-plus'
 import CrossSeedPanel from '../components/CrossSeedPanel.vue'
@@ -396,11 +670,11 @@ interface Torrent {
   target_sites_count?: number
 }
 interface SiteStatus {
-  name: string;
-  site: string; // IYUU中的站点标识符，例如 'tjupt'
-  has_cookie: boolean;
-  is_source: boolean;
-  is_target: boolean;
+  name: string
+  site: string // IYUU中的站点标识符，例如 'tjupt'
+  has_cookie: boolean
+  is_source: boolean
+  is_target: boolean
 }
 interface ActiveFilters {
   paths: string[]
@@ -415,9 +689,9 @@ interface PathNode {
   children?: PathNode[]
 }
 interface Downloader {
-  id: string;
-  name: string;
-  enabled?: boolean;
+  id: string
+  name: string
+  enabled?: boolean
 }
 
 // const router = useRouter();
@@ -458,7 +732,7 @@ const currentSiteNames = computed({
     } else {
       tempFilters.notExistSiteNames = val
     }
-  }
+  },
 })
 const filterDialogVisible = ref<boolean>(false)
 
@@ -471,35 +745,35 @@ const unique_states = ref<string[]>([])
 const all_sites = ref<string[]>([])
 const site_link_rules = ref<Record<string, { base_url: string }>>({})
 const expandedRows = ref<string[]>([])
-const downloadersList = ref<Downloader[]>([]);
-const allDownloadersList = ref<Downloader[]>([]);
+const downloadersList = ref<Downloader[]>([])
+const allDownloadersList = ref<Downloader[]>([])
 
 const pathTreeRef = ref<InstanceType<typeof ElTree> | null>(null)
 const pathTreeData = ref<PathNode[]>([])
 
-const sourceSelectionDialogVisible = ref<boolean>(false);
-const allSourceSitesStatus = ref<SiteStatus[]>([]);
-const iyuuQueryLoading = ref<boolean>(false);
-const cachedSites = ref<string[]>([]); // 存储已缓存的站点列表
-const cachedSitesLoading = ref<boolean>(false); // 查询缓存站点的加载状态
+const sourceSelectionDialogVisible = ref<boolean>(false)
+const allSourceSitesStatus = ref<SiteStatus[]>([])
+const iyuuQueryLoading = ref<boolean>(false)
+const cachedSites = ref<string[]>([]) // 存储已缓存的站点列表
+const cachedSitesLoading = ref<boolean>(false) // 查询缓存站点的加载状态
 
-const crossSeedStore = useCrossSeedStore();
+const crossSeedStore = useCrossSeedStore()
 
 // 控制转种弹窗的显示，当 taskId 存在时显示
-const crossSeedDialogVisible = computed(() => !!crossSeedStore.taskId);
+const crossSeedDialogVisible = computed(() => !!crossSeedStore.taskId)
 // 从 store 获取选中的种子信息
-const selectedTorrentForMigration = computed(() => crossSeedStore.workingParams as Torrent | null);
+const selectedTorrentForMigration = computed(() => crossSeedStore.workingParams as Torrent | null)
 // 从 store 获取源站点名称
-const selectedSourceSite = computed(() => crossSeedStore.sourceInfo?.name || '');
+const selectedSourceSite = computed(() => crossSeedStore.sourceInfo?.name || '')
 
 // 站点操作弹窗相关
-const siteOperationDialogVisible = ref<boolean>(false);
-const selectedTorrentName = ref<string>('');
-const selectedSite = ref<OtherSite | null>(null);
-const newCommentInput = ref<string>('');
+const siteOperationDialogVisible = ref<boolean>(false)
+const selectedTorrentName = ref<string>('')
+const selectedSite = ref<OtherSite | null>(null)
+const newCommentInput = ref<string>('')
 
 // 用于跟踪在源站点选择弹窗中进行IYUU查询的站点
-const sourceSiteQueryLoading = ref<Record<string, boolean>>({});
+const sourceSiteQueryLoading = ref<Record<string, boolean>>({})
 
 const sorted_all_sites = computed(() => {
   const collator = new Intl.Collator('zh-CN', { numeric: true })
@@ -561,10 +835,10 @@ const availableSiteOptions = computed(() => {
   const allSites = filteredSiteOptions.value
   if (siteFilterMode.value === 'exist') {
     // 在"存在于"模式下，排除已在"不存在于"中选择的站点
-    return allSites.filter(site => !tempFilters.notExistSiteNames.includes(site))
+    return allSites.filter((site) => !tempFilters.notExistSiteNames.includes(site))
   } else {
     // 在"不存在于"模式下，排除已在"存在于"中选择的站点
-    return allSites.filter(site => !tempFilters.existSiteNames.includes(site))
+    return allSites.filter((site) => !tempFilters.existSiteNames.includes(site))
   }
 })
 
@@ -593,62 +867,61 @@ const saveUiSettings = async () => {
       sort_order: currentSort.value.order,
       name_search: nameSearch.value,
       active_filters: activeFilters,
-    };
+    }
     await fetch('/api/ui_settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(settingsToSave)
-    });
+      body: JSON.stringify(settingsToSave),
+    })
   } catch (e: any) {
-    console.error('无法保存UI设置:', e.message);
+    console.error('无法保存UI设置:', e.message)
   }
-};
+}
 
 const loadUiSettings = async () => {
   try {
-    const response = await fetch('/api/ui_settings');
+    const response = await fetch('/api/ui_settings')
     if (!response.ok) {
-      console.warn('无法加载UI设置，将使用默认值。');
-      return;
+      console.warn('无法加载UI设置，将使用默认值。')
+      return
     }
-    const settings = await response.json();
-    pageSize.value = settings.page_size ?? 50;
+    const settings = await response.json()
+    pageSize.value = settings.page_size ?? 50
     currentSort.value = {
       prop: settings.sort_prop || 'name',
       // --- [修改] 正确处理 null (取消排序) 状态 ---
-      order: 'sort_order' in settings ? settings.sort_order : 'ascending'
-    };
-    nameSearch.value = settings.name_search ?? '';
+      order: 'sort_order' in settings ? settings.sort_order : 'ascending',
+    }
+    nameSearch.value = settings.name_search ?? ''
     if (settings.active_filters) {
-      Object.assign(activeFilters, settings.active_filters);
+      Object.assign(activeFilters, settings.active_filters)
       // 确保新的站点筛选字段存在
       if (!activeFilters.existSiteNames) {
-        activeFilters.existSiteNames = [];
+        activeFilters.existSiteNames = []
       }
       if (!activeFilters.notExistSiteNames) {
-        activeFilters.notExistSiteNames = [];
+        activeFilters.notExistSiteNames = []
       }
       // 兼容旧的数据结构
       // 注意：TypeScript类型检查会报错，因为这些属性已不存在于接口定义中
       // 但在运行时可能仍然存在旧数据，所以需要处理
-      const filters: any = activeFilters;
+      const filters: any = activeFilters
       if (filters.siteExistence) {
         // 旧的siteExistence字段不再使用
-        delete filters.siteExistence;
+        delete filters.siteExistence
       }
       if (filters.siteNames) {
         // 旧的siteNames字段不再使用
-        delete filters.siteNames;
+        delete filters.siteNames
       }
     }
   } catch (e) {
-    console.error('加载UI设置时出错:', e);
+    console.error('加载UI设置时出错:', e)
   } finally {
     // --- [修改] 无论加载成功与否，都设置此值为 true，以渲染表格 ---
-    settingsLoaded.value = true;
+    settingsLoaded.value = true
   }
 }
-
 
 const buildPathTree = (paths: string[]): PathNode[] => {
   const root: PathNode[] = []
@@ -682,29 +955,28 @@ const buildPathTree = (paths: string[]): PathNode[] => {
 
 const fetchDownloadersList = async () => {
   try {
-    const response = await fetch('/api/all_downloaders');
-    if (!response.ok) throw new Error('无法获取下载器列表');
-    const allDownloaders = await response.json();
+    const response = await fetch('/api/all_downloaders')
+    if (!response.ok) throw new Error('无法获取下载器列表')
+    const allDownloaders = await response.json()
     // 只显示启用的下载器在筛选器中
-    downloadersList.value = allDownloaders.filter((d: any) => d.enabled);
+    downloadersList.value = allDownloaders.filter((d: any) => d.enabled)
     // 保存所有下载器信息用于显示
-    allDownloadersList.value = allDownloaders;
+    allDownloadersList.value = allDownloaders
   } catch (e: any) {
-    error.value = e.message;
+    error.value = e.message
   }
 }
 
 const fetchAllSitesStatus = async () => {
   try {
-    const response = await fetch('/api/sites/status');
-    if (!response.ok) throw new Error('无法获取站点状态列表');
-    const allSites = await response.json();
-    allSourceSitesStatus.value = allSites.filter((s: SiteStatus) => s.is_source);
+    const response = await fetch('/api/sites/status')
+    if (!response.ok) throw new Error('无法获取站点状态列表')
+    const allSites = await response.json()
+    allSourceSitesStatus.value = allSites.filter((s: SiteStatus) => s.is_source)
   } catch (e: any) {
-    error.value = (e as Error).message;
+    error.value = (e as Error).message
   }
-};
-
+}
 
 const fetchData = async () => {
   loading.value = true
@@ -748,287 +1020,292 @@ const fetchData = async () => {
 
 const startCrossSeed = async (row: Torrent) => {
   // 在开始转种流程前，先重置 store，防止旧数据污染
-  crossSeedStore.reset();
+  crossSeedStore.reset()
 
   const availableSources = Object.entries(row.sites)
     .map(([siteName, siteDetails]) => ({ siteName, ...siteDetails }))
-    .filter(site => {
-      const isSourceSite = site.migration === 1 || site.migration === 3;
-      if (!isSourceSite) return false;
-      const hasDetailsLink = site.comment && site.comment.includes('details.php?id=');
-      const hasTorrentId = site.comment && /^\d+$/.test(site.comment.trim());
-      return hasDetailsLink || hasTorrentId;
-    });
+    .filter((site) => {
+      const isSourceSite = site.migration === 1 || site.migration === 3
+      if (!isSourceSite) return false
+      const hasDetailsLink = site.comment && site.comment.includes('details.php?id=')
+      const hasTorrentId = site.comment && /^\d+$/.test(site.comment.trim())
+      return hasDetailsLink || hasTorrentId
+    })
 
   // 将当前要操作的种子信息存入 store
-  crossSeedStore.setParams(row);
-  
+  crossSeedStore.setParams(row)
+
   // 查询缓存站点
-  await queryCachedSites(row);
-  
+  await queryCachedSites(row)
+
   // 即使没有可用的源站点，也打开弹窗，让用户可以使用 IYUU 查询
   if (availableSources.length === 0) {
-    ElMessage.warning('该种子暂无可用的源站点，您可以使用 IYUU 查询来发现更多站点。');
+    ElMessage.warning('该种子暂无可用的源站点，您可以使用 IYUU 查询来发现更多站点。')
   }
-  
-  sourceSelectionDialogVisible.value = true;
-};
+
+  sourceSelectionDialogVisible.value = true
+}
 
 // 查询缓存站点
 const queryCachedSites = async (row: Torrent) => {
-  cachedSitesLoading.value = true;
-  cachedSites.value = [];
-  
+  cachedSitesLoading.value = true
+  cachedSites.value = []
+
   try {
-    const response = await fetch(`/api/cached_sites?name=${encodeURIComponent(row.name)}&size=${row.size}`);
-    const result = await response.json();
-    
+    const response = await fetch(
+      `/api/cached_sites?name=${encodeURIComponent(row.name)}&size=${row.size}`,
+    )
+    const result = await response.json()
+
     if (result.success) {
-      cachedSites.value = result.cached_sites || [];
-      console.log('缓存站点查询结果:', cachedSites.value);
+      cachedSites.value = result.cached_sites || []
+      console.log('缓存站点查询结果:', cachedSites.value)
     } else {
-      console.warn('查询缓存站点失败:', result.error);
+      console.warn('查询缓存站点失败:', result.error)
     }
   } catch (error) {
-    console.error('查询缓存站点时出错:', error);
+    console.error('查询缓存站点时出错:', error)
   } finally {
-    cachedSitesLoading.value = false;
+    cachedSitesLoading.value = false
   }
-};
+}
 
 // 检查站点是否已缓存
 const isSiteCached = (siteName: string): boolean => {
-  return cachedSites.value.includes(siteName);
-};
+  return cachedSites.value.includes(siteName)
+}
 
 const confirmSourceSiteAndProceed = async (sourceSite: any) => {
-  const row = selectedTorrentForMigration.value;
+  const row = selectedTorrentForMigration.value
   if (!row || !sourceSite) {
-    ElMessage.error('发生内部错误：未找到选中的种子或站点信息。');
-    return;
+    ElMessage.error('发生内部错误：未找到选中的种子或站点信息。')
+    return
   }
 
-  const siteDetails = row.sites[sourceSite.siteName];
-  const siteName = sourceSite.siteName;
+  const siteDetails = row.sites[sourceSite.siteName]
+  const siteName = sourceSite.siteName
 
   // 1. 检查站点数据是否存在
   if (!siteDetails) {
-    ElMessage.error(`未找到站点 [${siteName}] 的数据。`);
-    return;
+    ElMessage.error(`未找到站点 [${siteName}] 的数据。`)
+    return
   }
 
   // 2. 检查站点是否有有效链接
   if (!hasLink(siteDetails, siteName)) {
     // 2. 如果没有链接，触发IYUU查询
-    ElMessage.info(`站点 [${siteName}] 缺少详情链接，正在触发 IYUU 查询...`);
-    sourceSiteQueryLoading.value[siteName] = true;
+    ElMessage.info(`站点 [${siteName}] 缺少详情链接，正在触发 IYUU 查询...`)
+    sourceSiteQueryLoading.value[siteName] = true
     // 调用全局的IYUU查询函数
-    await triggerIYUUQuery();
+    await triggerIYUUQuery()
     // 查询完成后，无论成功与否，都结束加载状态
-    sourceSiteQueryLoading.value[siteName] = false;
+    sourceSiteQueryLoading.value[siteName] = false
     // 停止执行，让用户在弹窗刷新后再次点击
-    return;
+    return
   }
 
   // 3. 如果有链接，执行原有的获取ID和转种的逻辑
-  let torrentId = null;
-  const idMatch = siteDetails?.comment?.match(/id=(\d+)/);
+  let torrentId = null
+  const idMatch = siteDetails?.comment?.match(/id=(\d+)/)
   if (idMatch && idMatch[1]) {
-    torrentId = idMatch[1];
+    torrentId = idMatch[1]
   } else if (siteDetails?.comment && /^\d+$/.test(siteDetails.comment.trim())) {
-    torrentId = siteDetails.comment.trim();
+    torrentId = siteDetails.comment.trim()
   } else {
-    ElMessage.error(`无法从源站点 ${siteName} 的详情页链接中提取种子ID。请尝试使用IYUU查询更新链接。`);
-    return; // 留在弹窗中，让用户重试或使用IYUU
+    ElMessage.error(
+      `无法从源站点 ${siteName} 的详情页链接中提取种子ID。请尝试使用IYUU查询更新链接。`,
+    )
+    return // 留在弹窗中，让用户重试或使用IYUU
   }
 
   // 后续逻辑保持不变
   if (siteDetails) {
     // @ts-ignore
-    siteDetails.torrentId = torrentId;
+    siteDetails.torrentId = torrentId
   }
 
-  const sourceSiteIdentifier = allSourceSitesStatus.value.find(s => s.name === siteName)?.site || siteName.toLowerCase();
-  ElMessage.success(`准备从站点 [${siteName}] 开始迁移种子...`);
+  const sourceSiteIdentifier =
+    allSourceSitesStatus.value.find((s) => s.name === siteName)?.site || siteName.toLowerCase()
+  ElMessage.success(`准备从站点 [${siteName}] 开始迁移种子...`)
   const sourceInfo: ISourceInfo = {
     name: siteName,
     site: sourceSiteIdentifier,
     torrentId,
-  };
-  crossSeedStore.setSourceInfo(sourceInfo);
-  crossSeedStore.setTaskId(row.name + '_' + Date.now());
+  }
+  crossSeedStore.setSourceInfo(sourceInfo)
+  crossSeedStore.setTaskId(row.name + '_' + Date.now())
 
-  sourceSelectionDialogVisible.value = false;
-};
+  sourceSelectionDialogVisible.value = false
+}
 
 const isSourceSiteSelectable = (siteName: string): boolean => {
   // 首先检查站点是否存在于当前种子中
-  const existsInTorrent = !!(selectedTorrentForMigration.value && selectedTorrentForMigration.value.sites[siteName]);
+  const existsInTorrent = !!(
+    selectedTorrentForMigration.value && selectedTorrentForMigration.value.sites[siteName]
+  )
   if (!existsInTorrent) {
-    return false;
+    return false
   }
-  
+
   // 然后检查站点是否已配置Cookie
-  const siteStatus = allSourceSitesStatus.value.find(s => s.name === siteName);
-  return !!(siteStatus && siteStatus.has_cookie);
-};
+  const siteStatus = allSourceSitesStatus.value.find((s) => s.name === siteName)
+  return !!(siteStatus && siteStatus.has_cookie)
+}
 
 const closeCrossSeedDialog = () => {
-  crossSeedStore.reset();
-};
+  crossSeedStore.reset()
+}
 
 // 处理站点点击事件
 const handleSiteClick = (torrentName: string, site: OtherSite) => {
-  selectedTorrentName.value = torrentName;
-  selectedSite.value = site;
-  newCommentInput.value = ''; // 清空输入框
-  siteOperationDialogVisible.value = true;
-};
+  selectedTorrentName.value = torrentName
+  selectedSite.value = site
+  newCommentInput.value = '' // 清空输入框
+  siteOperationDialogVisible.value = true
+}
 
 // 更新站点详情页链接
 const updateSiteComment = async () => {
   if (!selectedTorrentName.value || !selectedSite.value) {
-    ElMessage.error('缺少必要的参数');
-    return;
+    ElMessage.error('缺少必要的参数')
+    return
   }
 
   if (!newCommentInput.value || newCommentInput.value.trim() === '') {
-    ElMessage.error('请输入详情页链接或ID');
-    return;
+    ElMessage.error('请输入详情页链接或ID')
+    return
   }
 
   try {
     const response = await fetch('/api/sites/update_comment', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         torrent_name: selectedTorrentName.value,
         site_name: selectedSite.value.name,
-        comment: newCommentInput.value.trim()
-      })
-    });
+        comment: newCommentInput.value.trim(),
+      }),
+    })
 
-    const result = await response.json();
+    const result = await response.json()
 
     if (response.ok && result.success) {
-      ElMessage.success('详情页链接已成功添加');
-      siteOperationDialogVisible.value = false;
-      newCommentInput.value = '';
+      ElMessage.success('详情页链接已成功添加')
+      siteOperationDialogVisible.value = false
+      newCommentInput.value = ''
       // 重新加载数据以反映更改
-      await fetchData();
+      await fetchData()
     } else {
-      ElMessage.error(result.error || '添加详情页链接失败');
+      ElMessage.error(result.error || '添加详情页链接失败')
     }
   } catch (error) {
-    console.error('添加详情页链接时出错:', error);
-    ElMessage.error('添加详情页链接时发生网络错误');
+    console.error('添加详情页链接时出错:', error)
+    ElMessage.error('添加详情页链接时发生网络错误')
   }
-};
-
+}
 
 // 设置站点为不存在
 const setSiteNotExist = async () => {
   if (!selectedTorrentName.value || !selectedSite.value) {
-    ElMessage.error('缺少必要的参数');
-    return;
+    ElMessage.error('缺少必要的参数')
+    return
   }
 
   try {
     const response = await fetch('/api/sites/set_not_exist', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         torrent_name: selectedTorrentName.value,
-        site_name: selectedSite.value.name
-      })
-    });
+        site_name: selectedSite.value.name,
+      }),
+    })
 
     if (response.ok) {
-      ElMessage.success('站点状态已成功设置为不存在');
-      siteOperationDialogVisible.value = false;
+      ElMessage.success('站点状态已成功设置为不存在')
+      siteOperationDialogVisible.value = false
       // 重新加载数据以反映更改
-      fetchData();
+      fetchData()
     } else {
-      const result = await response.json();
-      ElMessage.error(result.error || '设置站点状态失败');
+      const result = await response.json()
+      ElMessage.error(result.error || '设置站点状态失败')
     }
   } catch (error) {
-    console.error('设置站点状态时出错:', error);
-    ElMessage.error('设置站点状态时发生错误');
+    console.error('设置站点状态时出错:', error)
+    ElMessage.error('设置站点状态时发生错误')
   }
-};
+}
 
 const handleCrossSeedComplete = () => {
-  ElMessage.success('转种操作已完成！');
-  crossSeedStore.reset();
+  ElMessage.success('转种操作已完成！')
+  crossSeedStore.reset()
   // 可选：刷新数据以显示最新状态
-  fetchData();
-};
+  fetchData()
+}
 
 // 处理带刷新的关闭事件（在步骤3点击关闭按钮时触发）
 const handleCloseWithRefresh = () => {
-  ElMessage.success('转种操作已完成！');
-  crossSeedStore.reset();
+  ElMessage.success('转种操作已完成！')
+  crossSeedStore.reset()
   // 刷新数据以显示最新状态
-  fetchData();
-};
+  fetchData()
+}
 
 const getSiteDetails = (siteName: string) => {
-  if (!selectedTorrentForMigration.value) return null;
-  const siteData = selectedTorrentForMigration.value.sites[siteName];
-  if (!siteData) return null;
-  return { siteName, ...siteData };
-};
+  if (!selectedTorrentForMigration.value) return null
+  const siteData = selectedTorrentForMigration.value.sites[siteName]
+  if (!siteData) return null
+  return { siteName, ...siteData }
+}
 
 // IYUU 查询功能
 const triggerIYUUQuery = async () => {
-  const row = selectedTorrentForMigration.value;
+  const row = selectedTorrentForMigration.value
   if (!row) {
-    ElMessage.error('未找到选中的种子信息');
-    return;
+    ElMessage.error('未找到选中的种子信息')
+    return
   }
 
-  iyuuQueryLoading.value = true;
+  iyuuQueryLoading.value = true
 
   try {
     const response = await fetch('/api/iyuu_query', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         name: row.name,
-        size: row.size
-      })
-    });
+        size: row.size,
+      }),
+    })
 
-    const result = await response.json();
+    const result = await response.json()
 
     if (response.ok && result.success) {
-      ElMessage.success(result.message || 'IYUU查询已完成');
+      ElMessage.success(result.message || 'IYUU查询已完成')
       // 刷新数据
-      await fetchData();
-      
+      await fetchData()
+
       // 更新 store 中的种子信息为最新数据
-      const updatedRow = allData.value.find(t => t.name === row.name && t.size === row.size);
+      const updatedRow = allData.value.find((t) => t.name === row.name && t.size === row.size)
       if (updatedRow) {
-        crossSeedStore.setParams(updatedRow);
+        crossSeedStore.setParams(updatedRow)
       }
     } else {
-      ElMessage.error(result.error || 'IYUU查询失败');
+      ElMessage.error(result.error || 'IYUU查询失败')
     }
   } catch (error: any) {
-    console.error('触发IYUU查询时出错:', error);
-    ElMessage.error('触发IYUU查询时发生网络错误');
+    console.error('触发IYUU查询时出错:', error)
+    ElMessage.error('触发IYUU查询时发生网络错误')
   } finally {
-    iyuuQueryLoading.value = false;
+    iyuuQueryLoading.value = false
   }
-};
-
+}
 
 const handleSizeChange = (val: number) => {
   pageSize.value = val
@@ -1185,30 +1462,26 @@ const getLink = (siteData: SiteData, siteName: string): string | null => {
 }
 const getTagType = (siteData: SiteData) => {
   if (siteData.state === '未做种') {
-    return 'danger';
-  }
-  else if (siteData.state === '不存在') {
-    return 'info';
-  }
-  else if (siteData.comment) {
-    return 'success';
-  }
-  else if (siteData.state === '做种中') {
-    return 'primary';
-  }
-  else return 'info';
+    return 'danger'
+  } else if (siteData.state === '不存在') {
+    return 'info'
+  } else if (siteData.comment) {
+    return 'success'
+  } else if (siteData.state === '做种中') {
+    return 'primary'
+  } else return 'info'
 }
 
 const getDownloaderName = (downloaderId: string | null) => {
   if (!downloaderId) return '未知下载器'
-  const downloader = allDownloadersList.value.find(d => d.id === downloaderId)
+  const downloader = allDownloadersList.value.find((d) => d.id === downloaderId)
   return downloader ? downloader.name : '未知下载器'
 }
 
 const getDownloaderTagType = (downloaderId: string | null) => {
   if (!downloaderId) return 'info'
   // Generate a consistent color based on the downloader ID
-  const downloader = allDownloadersList.value.find(d => d.id === downloaderId)
+  const downloader = allDownloadersList.value.find((d) => d.id === downloaderId)
   if (!downloader) return 'info'
 
   // Simple hash function to generate a consistent color index
@@ -1259,31 +1532,36 @@ const shortenPath = (path: string, maxLength: number = 50) => {
 }
 
 const getDisabledDownloaderIds = () => {
-  return allDownloadersList.value
-    .filter(d => d.enabled === false)
-    .map(d => d.id);
+  return allDownloadersList.value.filter((d) => d.enabled === false).map((d) => d.id)
 }
 
 // 根据站点配置和可选性返回标签类型
 const getSiteTagType = (site: SiteStatus, isSelectable: boolean) => {
   // 检查站点是否存在于当前种子中
-  const existsInTorrent = !!(selectedTorrentForMigration.value && selectedTorrentForMigration.value.sites[site.name]);
-  
+  const existsInTorrent = !!(
+    selectedTorrentForMigration.value && selectedTorrentForMigration.value.sites[site.name]
+  )
+
   // 如果站点不存在于当前种子中，显示为灰色
   if (!existsInTorrent) {
-    return 'info';
+    return 'info'
   }
-  
+
   // 获取站点数据以检查是否有comment
-  const siteData = selectedTorrentForMigration.value!.sites[site.name];
-  
+  const siteData = selectedTorrentForMigration.value!.sites[site.name]
+
   // 如果站点存在于种子中且已配置Cookie且有comment，显示为绿色（可点击）
   if (site.has_cookie && siteData.comment) {
-    return 'success';
+    return 'success'
   }
-  
-  // 如果站点存在于种子中但未配置Cookie或没有comment，显示为蓝色（不可点击，可尝试IYUU）
-  return 'primary';
+
+  // 如果站点未配置Cookie，显示为红色错误样式
+  if (!site.has_cookie) {
+    return 'error'
+  }
+
+  // 如果站点存在于种子中但没有comment，显示为蓝色（不可点击，可尝试IYUU）
+  return 'primary'
 }
 const getStateTagType = (state: string) => {
   if (state.includes('下载')) return 'primary'
@@ -1304,14 +1582,14 @@ const tableRowClassName = ({ row }: { row: Torrent }) => {
 // --- [修改] onMounted 启动逻辑 ---
 onMounted(async () => {
   // 1. 先加载保存的UI设置
-  await loadUiSettings();
+  await loadUiSettings()
   // 2. loadUiSettings 会设置 settingsLoaded=true，此时表格才会被渲染
   // 3. 使用加载好的设置去获取数据
-  fetchData();
+  fetchData()
   // 4. 执行其他初始化
-  fetchDownloadersList();
-  fetchAllSitesStatus();
-  emits('ready', fetchData);
+  fetchDownloadersList()
+  fetchAllSitesStatus()
+  emits('ready', fetchData)
 })
 
 watch(nameSearch, () => {
@@ -1412,7 +1690,7 @@ watch(nameSearch, () => {
   display: none;
 }
 
-:deep(.expanded-row>td) {
+:deep(.expanded-row > td) {
   background-color: #ecf5ff !important;
 }
 

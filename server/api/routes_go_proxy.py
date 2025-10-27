@@ -33,7 +33,7 @@ def batch_enhance_proxy():
         except ValueError as json_error:
             logging.error(f"Go服务返回非JSON响应: {response.text[:200]}")
             return jsonify({
-                "success": False, 
+                "success": False,
                 "error": f"Go服务返回无效JSON: {str(json_error)}",
                 "raw_response": response.text[:500]  # 包含部分原始响应用于调试
             }), 503
@@ -68,7 +68,7 @@ def records_proxy():
         except ValueError as json_error:
             logging.error(f"Go服务返回非JSON响应: {response.text[:200]}")
             return jsonify({
-                "success": False, 
+                "success": False,
                 "error": f"Go服务返回无效JSON: {str(json_error)}",
                 "raw_response": response.text[:500]  # 包含部分原始响应用于调试
             }), 503

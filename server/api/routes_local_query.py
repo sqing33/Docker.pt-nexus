@@ -410,6 +410,30 @@ def scan_local_files():
 
         logger.info(f"总共需要扫描 {len(all_local_paths_to_scan)} 个本地路径")
 
+        # 辅助函数：递归查找种子文件的位置
+        def find_torrent_in_tree(root_path, torrent_name):
+            """递归查找种子文件在目录树中的位置"""
+            try:
+                for dirpath, dirnames, filenames in os.walk(root_path):
+                    # 检查文件名和文件夹名
+                    if torrent_name in filenames or torrent_name in dirnames:
+                        return os.path.join(dirpath, torrent_name)
+            except Exception as e:
+                logger.debug(f"搜索 {root_path} 时出错: {str(e)}")
+            return None
+
+        # 辅助函数：收集目录树中所有文件和文件夹的名称
+        def collect_all_items_in_tree(root_path):
+            """递归收集目录树中所有文件和文件夹的名称"""
+            all_items = set()
+            try:
+                for dirpath, dirnames, filenames in os.walk(root_path):
+                    all_items.update(dirnames)
+                    all_items.update(filenames)
+            except Exception as e:
+                logger.debug(f"收集 {root_path} 时出错: {str(e)}")
+            return all_items
+
         # 4. 遍历所有路径进行扫描（包括没有种子的路径）
         for local_path in all_local_paths_to_scan:
             path_torrents = local_torrents_by_path.get(local_path, [])
@@ -441,10 +465,12 @@ def scan_local_files():
                 continue
 
             try:
-                local_items = set(os.listdir(local_path))
+                # 收集当前目录及其子目录中的所有项目
+                all_items_in_tree = collect_all_items_in_tree(local_path)
+                local_items = set(os.listdir(local_path))  # 只用于孤立文件检测
                 total_local_items += len(local_items)
                 print(
-                    f"[DEBUG] 路径存在，找到 {len(local_items)} 个项目: {list(local_items)[:3]}..."
+                    f"[DEBUG] 路径存在，当前层级 {len(local_items)} 个项目，整个目录树 {len(all_items_in_tree)} 个项目"
                 )
 
                 torrents_by_name_in_path = defaultdict(list)
@@ -454,8 +480,23 @@ def scan_local_files():
                 torrent_names_in_path = set(torrents_by_name_in_path.keys())
                 print(f"[DEBUG] 期望的种子名称: {list(torrent_names_in_path)[:3]}...")
 
-                # 找出缺失的文件组
-                missing_names = torrent_names_in_path - local_items
+                # 找出缺失的文件组 - 在整个目录树中查找
+                missing_names = set()
+                synced_names_with_location = {}
+                
+                for name in torrent_names_in_path:
+                    # 先在当前目录查找
+                    if name in local_items:
+                        synced_names_with_location[name] = os.path.join(local_path, name)
+                    else:
+                        # 在整个目录树中查找
+                        found_path = find_torrent_in_tree(local_path, name)
+                        if found_path:
+                            synced_names_with_location[name] = found_path
+                            print(f"[DEBUG] 在子目录中找到种子: {name} -> {found_path}")
+                        else:
+                            missing_names.add(name)
+                
                 print(f"[DEBUG] 缺失的文件: {len(missing_names)} 个")
                 for name in missing_names:
                     torrent_group = torrents_by_name_in_path[name]
@@ -475,18 +516,21 @@ def scan_local_files():
                     })
 
                 # 找出孤立的文件 (名字在本地有，但数据库没有)
+                # 只检查文件，跳过所有文件夹
                 orphaned_names = local_items - torrent_names_in_path
+                
                 for item_name in orphaned_names:
                     full_path = os.path.join(local_path, item_name)
                     is_file = os.path.isfile(full_path)
+                    
+                    # 跳过所有文件夹，只检测孤立文件
+                    if not is_file:
+                        print(f"[DEBUG] 跳过文件夹 {item_name}")
+                        continue
+                    
                     size = None
                     try:
-                        if is_file:
-                            size = os.path.getsize(full_path)
-                        else:  # 文件夹大小计算
-                            size = sum(f.stat().st_size
-                                       for f in Path(full_path).glob('**/*')
-                                       if f.is_file())
+                        size = os.path.getsize(full_path)
                     except Exception as e:
                         logger.debug(f"无法获取大小 {full_path}: {str(e)}")
 
@@ -517,13 +561,12 @@ def scan_local_files():
                         "name": item_name,
                         "path": original_save_path,  # 显示原始远程路径或推断的路径
                         "full_path": full_path,
-                        "is_file": is_file,
+                        "is_file": True,  # 现在只有文件，所以总是 True
                         "size": size
                     })
 
                 # 找出正常同步的文件组 (两边都有)
-                synced_names = local_items & torrent_names_in_path
-                for name in synced_names:
+                for name, found_location in synced_names_with_location.items():
                     torrent_group = torrents_by_name_in_path[name]
                     # 找到原始的远程路径
                     original_save_path = torrent_group[0][
