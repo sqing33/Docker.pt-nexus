@@ -1,0 +1,13 @@
+# Cloudflare Pages configuration
+name = "pt-nexus-wiki"
+compatibility_date = "2024-01-01"
+
+# Build configuration for Pages
+[build]
+command = "echo 'Static site - no build needed'"
+cwd = "."
+watch_dir = "."
+
+# Environment variables
+[env.production.vars]
+NODE_ENV = "production"

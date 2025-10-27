@@ -4,6 +4,6 @@
   - [登录](docs/功能介绍/登录.md)
   - [首页与统计](docs/功能介绍/首页与统计.md)
   - [设置](docs/功能介绍/设置.md)
-  - [种子查询与转种](docs/功能介绍/种子查询与转种.md)
-- [更新日志](docs/更新日志.md)
+  - [转种](docs/功能介绍/转种.md)
+  - [API](docs/API.md)
 - [GitHub](https://github.com/sqing33/pt-nexus)

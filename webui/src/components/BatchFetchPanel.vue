@@ -278,6 +278,7 @@ import type { ElTree } from 'element-plus'
 
 const emit = defineEmits<{
   (e: 'cancel'): void
+  (e: 'fetch-completed'): void  // 新增：批量获取完成事件
 }>()
 
 interface PathNode {
@@ -824,7 +825,13 @@ const refreshProgress = async () => {
     if (response.ok) {
       const result = await response.json()
       if (result.success) {
+        const wasRunning = progress.value.isRunning
         progress.value = result.progress
+        
+        // 如果任务从运行中变为已完成，触发完成事件
+        if (wasRunning && !progress.value.isRunning) {
+          emit('fetch-completed')
+        }
       } else {
         ElMessage.error(result.message || '获取进度失败')
       }

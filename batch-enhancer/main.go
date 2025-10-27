@@ -1658,13 +1658,13 @@ func main() {
 	}
 
 	// 检测核心API连接
-	logInfo("🔗 检测核心API连接...")
-	if err := testCoreAPIConnection(); err != nil {
-		logWarning("⚠️  警告: 核心API连接失败: %v", err)
-		logInfo("   服务将继续启动，但功能可能受限")
-	} else {
-		logSuccess("✅ 核心API连接正常")
-	}
+	// logInfo("🔗 检测核心API连接...")
+	// if err := testCoreAPIConnection(); err != nil {
+	// 	logWarning("⚠️  警告: 核心API连接失败: %v", err)
+	// 	logInfo("   服务将继续启动，但功能可能受限")
+	// } else {
+	// 	logSuccess("✅ 核心API连接正常")
+	// }
 
 	// 路由设置
 	logInfo("🛠️  设置API路由...")

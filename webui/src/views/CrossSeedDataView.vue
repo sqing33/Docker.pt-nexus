@@ -392,7 +392,7 @@
           </div>
         </template>
         <div class="batch-fetch-main-content">
-          <BatchFetchPanel @cancel="closeBatchFetchDialog" />
+          <BatchFetchPanel @cancel="closeBatchFetchDialog" @fetch-completed="handleFetchCompleted" />
         </div>
       </el-card>
     </div>
@@ -1434,6 +1434,13 @@ const openBatchFetchDialog = () => {
 // 关闭批量获取数据对话框
 const closeBatchFetchDialog = () => {
   batchFetchDialogVisible.value = false
+}
+
+// 处理批量获取完成事件
+const handleFetchCompleted = () => {
+  ElMessage.success('批量获取种子数据已完成，正在刷新列表...')
+  // 刷新种子列表
+  fetchData()
 }
 
 /**

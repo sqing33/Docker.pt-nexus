@@ -1,0 +1,17 @@
+{
+  "name": "pt-nexus-wiki",
+  "version": "1.0.0",
+  "description": "PT Nexus Wiki - Docsify based documentation",
+  "main": "index.html",
+  "scripts": {
+    "dev": "npx serve .",
+    "build": "echo 'Static site - no build needed'",
+    "preview": "npx serve ."
+  },
+  "keywords": ["docsify", "wiki", "documentation"],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "serve": "^14.2.0"
+  }
+}

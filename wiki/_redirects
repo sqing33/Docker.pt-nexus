@@ -1,0 +1,7 @@
+# Cloudflare Pages redirects file
+# Handle static resources directly
+/_media/* /_media/:splat 200
+/docs/* /docs/:splat 200
+
+# Handle all other routes with index.html (SPA routing)
+/* /index.html 200
