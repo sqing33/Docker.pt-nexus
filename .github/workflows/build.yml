@@ -126,7 +126,7 @@ jobs:
           mkdir -p releases
 
           # 定义要构建的平台
-          PLATFORMS=("linux/amd64")
+          PLATFORMS=("linux/amd64" "linux/arm64")
 
           # 为每个平台构建
           for platform in "${PLATFORMS[@]}"; do
