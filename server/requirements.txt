@@ -16,3 +16,4 @@ Flask-Bcrypt
 psycopg2-binary
 Pillow
 lxml
+dotenv
