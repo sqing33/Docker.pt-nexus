@@ -1,0 +1,169 @@
+site_name: "LongPT"
+
+form_fields:
+  medium: "medium_sel[4]"
+  video_codec: "codec_sel[4]"
+  audio_codec: "audiocodec_sel[4]"
+  resolution: "standard_sel[4]"
+  team: "team_sel[4]"
+  category: "type"
+  tags[4][]: "tags[]"
+
+source_parsers:
+  source_params:
+    type:
+      source_key: "类型"
+    medium:
+      source_key: "媒介"
+    video_codec:
+      source_key: "视频编码"
+    audio_codec:
+      source_key: "音频编码"
+    resolution:
+      source_key: "分辨率"
+    team:
+      source_key: "制作组"
+
+  standard_keys:
+    type:
+      "电影": "category.movie"
+      "剧集": "category.tv_series"
+      "综艺": "category.tv_shows"
+      "动画": "category.animation"
+      "纪录片": "category.documentaries"
+      "音乐视频": "category.mv"
+      "音频": "category.music"
+      "有声书": "category.audiobook"
+      "其他": "category.other"
+
+    medium:
+      "Track": "medium.track"
+      "CD": "medium.cd"
+      "DVD": "medium.dvd"
+      "HDTV": "medium.hdtv"
+      "WEB-DL": "medium.webdl"
+      "Encode": "medium.encode"
+      "Remux": "medium.remux"
+      "UHD Blu-ray": "medium.uhd_bluray"
+      "Blu-ray": "medium.bluray"
+      "Other": "medium.other"
+
+    video_codec:
+      "H.264/AVC": "video.h264"
+      "H.265/HEVC": "video.h265"
+      "VC-1": "video.vc1"
+      "MPEG-2": "video.mpeg2"
+      "AV1": "video.av1"
+      "Other": "video.other"
+
+    audio_codec:
+      "FLAC": "audio.flac"
+      "APE": "audio.ape"
+      "DTS": "audio.dts"
+      "MP3": "audio.mp3"
+      "OGG": "audio.ogg"
+      "AAC": "audio.aac"
+      "Other": "audio.other"
+      "M4A": "audio.m4a"
+      "TrueHD Atmos": "audio.truehd_atmos"
+      "DDP": "audio.ddp"
+
+    resolution:
+      "2K/1440p/1440i": "resolution.r1440p"
+      "1080p/1080i": "resolution.r1080p"
+      "720p/720i": "resolution.r720p"
+      "480p/480i": "resolution.r480p"
+      "4K/2160p/2160i": "resolution.r2160p"
+      "8K/4320p/4320i": "resolution.r4320p"
+      "Other": "resolution.other"
+
+    team:
+      "LongA": "team.longa"
+      "LongWeb": "team.longweb"
+      "LongPT": "team.longpt"
+      "WiKi": "team.wiki"
+      "Other": "team.other"
+      "RL": "team.rl"
+      "CMCT": "team.cmct"
+      "HHWEB": "team.hhweb"
+
+mappings:
+  type:
+    "category.movie": "401"
+    "category.tv_series": "402"
+    "category.tv_shows": "403"
+    "category.animation": "405"
+    "category.documentaries": "404"
+    "category.mv": "406"
+    "category.music": "408"
+    "category.audiobook": "410"
+    "category.other": "409"
+    "default": "401"
+
+  medium:
+    "medium.track": "9"
+    "medium.cd": "8"
+    "medium.dvd": "6"
+    "medium.hdtv": "5"
+    "medium.webdl": "4"
+    "medium.encode": "7"
+    "medium.remux": "3"
+    "medium.uhd_bluray": "2"
+    "medium.bluray": "1"
+    "medium.other": "10"
+    "default": "10"
+
+  video_codec:
+    "video.h264": "1"
+    "video.h265": "2"
+    "video.vc1": "3"
+    "video.mpeg2": "4"
+    "video.av1": "5"
+    "video.other": "6"
+    "default": "6"
+
+  audio_codec:
+    "audio.flac": "1"
+    "audio.ape": "2"
+    "audio.dts": "3"
+    "audio.mp3": "4"
+    "audio.ogg": "5"
+    "audio.aac": "6"
+    "audio.other": "7"
+    "audio.m4a": "8"
+    "audio.truehd_atmos": "9"
+    "audio.ddp": "10"
+    "default": "7"
+
+  resolution:
+    "resolution.r1440p": "1"
+    "resolution.r1080p": "2"
+    "resolution.r720p": "3"
+    "resolution.r480p": "4"
+    "resolution.r2160p": "5"
+    "resolution.r4320p": "6"
+    "resolution.other": "7"
+    "default": "7"
+
+  team:
+    "team.longa": "1"
+    "team.longweb": "2"
+    "team.longpt": "3"
+    "team.wiki": "4"
+    "team.other": "5"
+    "team.rl": "6"
+    "team.cmct": "7"
+    "team.hhweb": "8"
+    "default": "5"
+
+  tag:
+    "tag.英字": 9
+    "tag.DIY": 4
+    "tag.国语": 5
+    "tag.中字": 6
+    "tag.HDR": 7
+    "tag.分集": 12
+    "tag.特效": 11
+    "tag.杜比": 10
+    "tag.完结": 8
+    "default": null

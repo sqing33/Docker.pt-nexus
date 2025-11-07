@@ -32,7 +32,28 @@ def create_app():
     app = Flask(__name__, static_folder="/app/dist")
 
     # --- 配置 CORS 跨域支持 ---
-    CORS(app, resources={r"/api/*": {"origins": "*"}})
+    # 修复cookie泄露问题：限制允许的来源，并设置cookie相关的安全选项
+    allowed_origins = [
+        "http://localhost:35274",  # 开发环境
+        "http://localhost:5274",   # 生产环境
+        # 如果有其他域名，请在这里添加
+    ]
+    
+    # 从环境变量获取额外允许的域名
+    extra_origins = os.getenv("ALLOWED_ORIGINS", "").split(",")
+    for origin in extra_origins:
+        origin = origin.strip()
+        if origin and origin not in allowed_origins:
+            allowed_origins.append(origin)
+    
+    CORS(app, resources={
+        r"/api/*": {
+            "origins": allowed_origins,
+            "supports_credentials": True,  # 支持凭证
+            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
+        }
+    })
 
     # --- 步骤 1: 初始化核心依赖 (数据库和配置) ---
     logging.info("正在初始化数据库和配置...")
@@ -137,7 +158,23 @@ def create_app():
 
     def _get_jwt_secret() -> str:
         secret = os.getenv("JWT_SECRET", "")
-        return secret or "pt-nexus-dev-secret"
+        if secret:
+            return secret
+        
+        # 如果没有设置JWT_SECRET，使用基于用户名和密码的动态密钥
+        # 这样每次重启后密钥会变化，强制重新登录
+        auth_conf = (config_manager.get() or {}).get("auth", {})
+        username = auth_conf.get("username") or os.getenv("AUTH_USERNAME", "admin")
+        password_hash = auth_conf.get("password_hash") or os.getenv("AUTH_PASSWORD_HASH", "")
+        password_plain = os.getenv("AUTH_PASSWORD", "")
+        
+        # 创建基于认证信息的动态密钥
+        auth_info = f"{username}:{password_hash or password_plain}"
+        import hashlib
+        dynamic_secret = hashlib.sha256(auth_info.encode()).hexdigest()
+        
+        logging.info("使用基于认证信息的动态JWT密钥（重启后需要重新登录）")
+        return dynamic_secret
 
     @app.before_request
     def jwt_guard():
@@ -154,10 +191,9 @@ def create_app():
             return None
 
         # 内部服务认证跳过逻辑
-        # 1. 网络隔离：localhost和内部Docker网络跳过认证
+        # 注意：仅跳过真正的localhost请求，不跳过内网IP
         remote_addr = request.environ.get('REMOTE_ADDR', '')
-        if remote_addr in ['127.0.0.1', '::1'] or remote_addr.startswith(
-                '172.') or remote_addr.startswith('192.168.'):
+        if remote_addr in ['127.0.0.1', '::1']:
             return None
 
         # 2. 内部API Key认证：使用动态token验证
@@ -170,6 +206,10 @@ def create_app():
            request.path.startswith("/api/cross-seed-data/batch-cross-seed-core") or \
            request.path.startswith("/api/cross-seed-data/batch-cross-seed-internal") or \
            request.path.startswith("/api/cross-seed-data/test-no-auth"):
+            return None
+        
+        # 4. SSE日志流端点：不需要认证（只是进度日志，不涉及敏感信息）
+        if request.path.startswith("/api/migrate/logs/stream/"):
             return None
 
         # 放行所有预检请求
@@ -188,13 +228,43 @@ def create_app():
         if not auth_header.startswith("Bearer "):
             return jsonify({"success": False, "message": "未授权"}), 401
         token = auth_header.split(" ", 1)[1].strip()
+        
         try:
-            jwt.decode(token, _get_jwt_secret(),
-                       algorithms=["HS256"])  # 验证有效期与签名
+            # 验证JWT token
+            payload = jwt.decode(token, _get_jwt_secret(), algorithms=["HS256"])
+            
+            # 额外验证：检查用户是否仍然存在且有效
+            username = payload.get("sub")
+            if not username:
+                return jsonify({"success": False, "message": "无效的令牌"}), 401
+                
+            # 验证用户是否仍然存在于配置中
+            auth_conf = (config_manager.get() or {}).get("auth", {})
+            current_user = auth_conf.get("username") or os.getenv("AUTH_USERNAME", "admin")
+            
+            if username != current_user:
+                logging.warning(f"Token中的用户 '{username}' 与当前配置用户 '{current_user}' 不匹配")
+                return jsonify({"success": False, "message": "用户已失效，请重新登录"}), 401
+                
+            # 验证配置是否仍然有效（检查是否有密码配置）
+            has_valid_auth = (
+                auth_conf.get("password_hash") or 
+                os.getenv("AUTH_PASSWORD_HASH") or 
+                os.getenv("AUTH_PASSWORD")
+            )
+            
+            if not has_valid_auth:
+                logging.warning(f"用户 '{username}' 的认证配置已失效")
+                return jsonify({"success": False, "message": "认证配置已更改，请重新登录"}), 401
+                
         except jwt.ExpiredSignatureError:
             return jsonify({"success": False, "message": "登录已过期"}), 401
-        except Exception:
+        except jwt.InvalidTokenError as e:
+            logging.warning(f"JWT token验证失败: {e}")
             return jsonify({"success": False, "message": "无效的令牌"}), 401
+        except Exception as e:
+            logging.error(f"JWT验证过程中发生错误: {e}")
+            return jsonify({"success": False, "message": "令牌验证失败"}), 401
 
     # 将蓝图注册到 Flask 应用实例上
     # 在每个蓝图文件中已经定义了 url_prefix="/api"

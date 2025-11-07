@@ -24,6 +24,16 @@ export default defineConfig({
       '/api': {
         target: proxyTarget, // <--- 根据 DEV_ENV 环境变量动态设置
         changeOrigin: true, // <--- 必须设置为 true
+        // 修复cookie泄露问题：不传递cookie和凭证
+        cookieDomainRewrite: {
+          "*": ""
+        },
+        // 确保不发送cookie到目标服务器
+        onProxyReq: (proxyReq, req, res) => {
+          // 移除cookie相关的请求头，防止泄露
+          proxyReq.removeHeader('cookie')
+          proxyReq.removeHeader('Cookie')
+        },
         // rewrite: (path) => path.replace(/^\/api/, '') // 如果后端路由本身不带 /api, 则需要重写
       },
     },

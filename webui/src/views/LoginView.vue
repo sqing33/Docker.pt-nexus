@@ -20,7 +20,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, nextTick } from 'vue'
 import axios from 'axios'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -39,8 +39,22 @@ const onSubmit = async () => {
     if (res.data?.success && res.data?.token) {
       localStorage.setItem('token', res.data.token)
       ElMessage.success('登录成功')
+      
+      // 修复登录跳转问题：确保正确处理重定向
       const redirect = (route.query.redirect as string) || '/'
-      router.replace(redirect)
+      console.log('登录成功，准备跳转到:', redirect)
+      
+      // 使用 nextTick 确保 DOM 更新后再跳转
+      await nextTick()
+      await router.replace(redirect)
+      
+      // 额外确保跳转成功
+      setTimeout(() => {
+        if (router.currentRoute.value.path === '/login') {
+          console.warn('仍在登录页，强制跳转到首页')
+          router.replace('/')
+        }
+      }, 100)
     } else {
       ElMessage.error(res.data?.message || '登录失败')
     }
@@ -64,5 +78,3 @@ const onSubmit = async () => {
 .title { margin: 0 0 16px; text-align: center; }
 .tip { color: #999; font-size: 12px; margin-top: 12px; text-align: center; }
 </style>
-
-

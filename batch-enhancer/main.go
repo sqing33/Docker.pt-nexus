@@ -159,6 +159,10 @@ func init() {
 		coreAPIURL = getEnv("CORE_API_URL", "http://localhost:5274")
 		tempDir = getEnv("TEMP_DIR", "/app/data/tmp")
 	}
+	// 在初始化日志系统之前确保临时目录存在
+	if err := os.MkdirAll(tempDir, 0755); err != nil {
+		log.Fatalf("无法创建临时目录 %s: %v", tempDir, err)
+	}
 }
 
 func getEnv(key, defaultValue string) string {
@@ -1648,11 +1652,7 @@ func main() {
 
 	// 检查临时目录
 	if _, err := os.Stat(tempDir); os.IsNotExist(err) {
-		logWarning("⚠️  警告: 临时目录不存在，尝试创建: %s", tempDir)
-		if err := os.MkdirAll(tempDir, 0755); err != nil {
-			log.Fatalf("❌ 致命错误: 无法创建临时目录 %s: %v", tempDir, err)
-		}
-		logSuccess("✅ 临时目录创建成功: %s", tempDir)
+		logWarning("⚠️  警告: 临时目录 %s 不存在，这不应该发生。", tempDir)
 	} else {
 		logSuccess("✅ 临时目录检查通过: %s", tempDir)
 	}

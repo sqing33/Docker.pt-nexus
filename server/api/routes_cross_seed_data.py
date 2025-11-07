@@ -179,7 +179,7 @@ def get_cross_seed_data():
                     f"%{search_query}%"
                 ])
 
-        # 保存路径筛选条件 - 支持多个路径筛选
+        # 保存路径筛选条件 - 支持多个路径筛选（精确匹配）
         if save_path_filter:
             # 将逗号分隔的路径转换为列表
             paths = [
@@ -188,13 +188,13 @@ def get_cross_seed_data():
             ]
             if paths:
                 if db_manager.db_type == "postgresql":
-                    # PostgreSQL 使用 ANY 操作符
+                    # PostgreSQL 使用 ANY 操作符进行精确匹配
                     placeholders = ', '.join(['%s'] * len(paths))
                     where_conditions.append(
                         f"save_path = ANY(ARRAY[{placeholders}])")
                     params.extend(paths)
                 else:
-                    # MySQL 和 SQLite 使用 IN 操作符
+                    # MySQL 和 SQLite 使用 IN 操作符进行精确匹配
                     placeholders = ', '.join(
                         ['%s' if db_manager.db_type == "mysql" else '?'] *
                         len(paths))

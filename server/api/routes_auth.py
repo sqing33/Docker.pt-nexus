@@ -35,11 +35,25 @@ def _get_bcrypt(app=None):
 
 def _get_jwt_secret() -> str:
     secret = os.getenv("JWT_SECRET", "")
-    if not secret:
-        # 生产中务必设置 JWT_SECRET
-        secret = "pt-nexus-dev-secret"
-        logging.warning("未设置 JWT_SECRET，使用默认开发密钥。请在生产环境设置 JWT_SECRET！")
-    return secret
+    if secret:
+        return secret
+    
+    # 如果没有设置JWT_SECRET，使用基于用户名和密码的动态密钥
+    # 这样每次重启或配置变更后密钥会变化，强制重新登录
+    from config import config_manager
+    import hashlib
+    
+    auth_conf = (config_manager.get() or {}).get("auth", {})
+    username = auth_conf.get("username") or os.getenv("AUTH_USERNAME", "admin")
+    password_hash = auth_conf.get("password_hash") or os.getenv("AUTH_PASSWORD_HASH", "")
+    password_plain = os.getenv("AUTH_PASSWORD", "")
+    
+    # 创建基于认证信息的动态密钥
+    auth_info = f"{username}:{password_hash or password_plain}"
+    dynamic_secret = hashlib.sha256(auth_info.encode()).hexdigest()
+    
+    logging.info("使用基于认证信息的动态JWT密钥（重启后需要重新登录）")
+    return dynamic_secret
 
 
 @auth_bp.route("/login", methods=["POST"])

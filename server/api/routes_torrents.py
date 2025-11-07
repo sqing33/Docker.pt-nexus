@@ -215,7 +215,7 @@ def get_data_api():
             filtered_list = [
                 t for t in filtered_list 
                 if any(
-                    t.get("save_path", "").startswith(path) 
+                    t.get("save_path", "") == path
                     for path in path_filters
                 )
             ]

@@ -91,7 +91,7 @@ class ConfigManager:
             "iyuu_settings": {
                 "query_interval_hours": 72,
                 "auto_query_enabled": True,
-                "tmp_dir": ""  # 默认为空，表示使用系统默认临时目录
+                "tmp_dir": TEMP_DIR
             },
             # --- [新增] 源站点优先级设置 ---
             "source_priority": [],
@@ -152,11 +152,7 @@ class ConfigManager:
 
                 # --- [新增] IYUU 功能设置兼容 ---
                 if "iyuu_settings" not in self._config:
-                    self._config["iyuu_settings"] = {
-                        "query_interval_hours": 72,
-                        "auto_query_enabled": True,
-                        "tmp_dir": ""  # 默认为空，表示使用系统默认临时目录
-                    }
+                    self._config["iyuu_settings"] = default_conf["iyuu_settings"]
                 else:
                     # 如果已有 iyuu_settings，检查是否缺少新字段
                     if "query_interval_hours" not in self._config[
@@ -167,8 +163,8 @@ class ConfigManager:
                             "iyuu_settings"]:
                         self._config["iyuu_settings"][
                             "auto_query_enabled"] = True
-                    if "tmp_dir" not in self._config["iyuu_settings"]:
-                        self._config["iyuu_settings"]["tmp_dir"] = ""
+                    if "tmp_dir" not in self._config["iyuu_settings"] or not self._config["iyuu_settings"]["tmp_dir"]:
+                        self._config["iyuu_settings"]["tmp_dir"] = TEMP_DIR
 
                 # --- [新增] 认证配置兼容 ---
                 if "auth" not in self._config:
