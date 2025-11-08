@@ -3,14 +3,20 @@
 
     <div class="settings-grid">
       <!-- 用户信息设置卡片 -->
-      <div class="settings-card glass-card glass-rounded glass-transparent-header glass-transparent-body">
+      <div class="settings-card glass-card glass-rounded glass-transparent-header glass-transparent-body" 
+           :class="{ 'temp-password-highlight': mustChange }">
         <div class="card-header">
           <div class="header-content">
             <el-icon class="header-icon">
               <User />
             </el-icon>
             <h3>账户信息</h3>
-            <el-tag type="warning" v-if="mustChange" size="small">首次登录需修改</el-tag>
+            <el-tag type="danger" v-if="mustChange" size="small" effect="dark">
+              <el-icon style="vertical-align: middle; margin-right: 4px;">
+                <Warning />
+              </el-icon>
+              临时密码-请立即修改
+            </el-tag>
           </div>
           <el-button type="primary" :loading="loading" @click="onSubmit" size="small">
             保存
@@ -770,6 +776,48 @@ onMounted(() => {
 .slide-leave-to {
   opacity: 0;
   transform: translateY(10px);
+}
+
+/* 临时密码高亮样式 */
+.temp-password-highlight {
+  position: relative;
+  animation: pulse-border 2s ease-in-out infinite;
+}
+
+.temp-password-highlight::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  background: linear-gradient(45deg, #ff6b6b, #ff8787, #ff6b6b);
+  border-radius: 12px;
+  z-index: -1;
+  opacity: 0.6;
+  animation: gradient-shift 3s ease infinite;
+}
+
+@keyframes pulse-border {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.01);
+  }
+}
+
+@keyframes gradient-shift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.temp-password-highlight .card-header {
+  background: linear-gradient(135deg, rgba(255, 107, 107, 0.1), rgba(255, 135, 135, 0.05));
 }
 
 :deep(.el-input__inner),

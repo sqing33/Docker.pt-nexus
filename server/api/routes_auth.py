@@ -94,7 +94,15 @@ def login():
     }
     token = jwt.encode(payload, _get_jwt_secret(), algorithm="HS256")
 
-    return jsonify({"success": True, "token": token})
+    # 判断是否使用临时密码（没有配置文件中的密码哈希，只有环境变量密码）
+    is_temp_password = not conf_hash and bool(conf_plain)
+    
+    return jsonify({
+        "success": True, 
+        "token": token,
+        "is_temp_password": is_temp_password,
+        "must_change_password": is_temp_password or auth_conf.get("must_change_password", False)
+    })
 
 
 @auth_bp.route("/status", methods=["GET"])

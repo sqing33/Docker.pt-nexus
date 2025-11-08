@@ -1058,9 +1058,9 @@
     "nickname": "龙PT",
     "base_url": "longpt.org",
     "special_tracker_domain": null,
-    "group": "-LongWeb",
+    "group": "-LongPT,-LongWeb",
     "description": "LongPT",
-    "migration": 0,
+    "migration": 2,
     "speed_limit": 10
   },
   {
@@ -1225,8 +1225,8 @@
     "nickname": "天枢",
     "base_url": "dubhe.site",
     "special_tracker_domain": null,
-    "group": null,
-    "migration": 0,
+    "group": "-Dubhe,-DubheWeb",
+    "migration": 2,
     "speed_limit": 10
   },
   {
