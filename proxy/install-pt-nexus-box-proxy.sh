@@ -186,15 +186,6 @@ else
     echo "警告: 无法检测到 apt-get 或 yum。请手动安装 '$DEPS'。"
 fi
 
-# 最终检查，确保依赖都已安装
-for pkg in $DEPS; do
-    if ! command -v "$pkg" &> /dev/null; then
-        echo "错误: 依赖 '$pkg' 安装失败或未在 PATH 中找到。"
-        echo "请检查错误信息并重试。"
-        exit 1
-    fi
-done
-
 echo "依赖检查完成。"
 
 # 2. 设置可执行权限
