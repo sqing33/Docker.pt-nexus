@@ -669,12 +669,18 @@ def upload_data_title(title: str, torrent_filename: str = ""):
     params = {}
     unrecognized_parts = []
 
-    chinese_junk_match = re.search(r"([\u4e00-\u9fa5].*)$", original_title_str)
-    if chinese_junk_match:
-        unrecognized_parts.append(chinese_junk_match.group(1).strip())
-        title = original_title_str[:chinese_junk_match.start()].strip()
-    else:
-        title = original_title_str
+    # 注释掉原有的粗暴截断逻辑，因为它会错误地移除制作组名称中的中文部分
+    # 例如 "-FFans@ws林小凡" 会被错误截断
+    # 现在只在标题中存在独立的中文片段（不与制作组相连）时才标记为无法识别
+    # chinese_junk_match = re.search(r"([\u4e00-\u9fa5].*)$", original_title_str)
+    # if chinese_junk_match:
+    #     unrecognized_parts.append(chinese_junk_match.group(1).strip())
+    #     title = original_title_str[:chinese_junk_match.start()].strip()
+    # else:
+    #     title = original_title_str
+
+    # 保持原始标题，让后续的制作组提取逻辑来处理
+    title = original_title_str
 
     title = re.sub(r"[￡€]", "", title)
     title = re.sub(r"\s*剩餘時間.*$", "", title)
@@ -715,26 +721,21 @@ def upload_data_title(title: str, torrent_filename: str = ""):
 
     # 如果还不是特殊制作组，使用通用模式匹配
     if not found_special_group:
-        # 支持 - 和 @ 两种前缀
+        # 修复：改用贪婪匹配，直接提取最后一个 - 或 @ 之后的所有内容作为制作组
+        # 这样可以正确处理包含中文、@、- 等复杂字符的制作组名称
         general_regex = re.compile(
-            r"^(?P<main_part>.+?)(?:[-@](?P<internal_tag>[A-Za-z0-9@²³⁴⁵⁶⁷⁸⁹]+))?[-@](?P<release_group>[A-Za-z0-9@²³⁴⁵⁶⁷⁸⁹]+)$",
-            re.VERBOSE | re.IGNORECASE,
+            r"^(?P<main_part>.+?)[-@](?P<release_group>[^\s]+)$",
+            re.IGNORECASE,
         )
+        print(f"[调试] 尝试匹配制作组，标题: {title}")
         match = general_regex.match(title)
         if match:
             main_part = match.group("main_part").strip()
-            release_group_name = match.group("release_group")
-            internal_tag = match.group("internal_tag")
-            # 修复：保持原始格式，使用@连接而不是括号格式
-            if internal_tag:
-                # 如果internal_tag中已经包含@，说明这是一个完整的组名片段
-                if "@" in internal_tag:
-                    release_group = f"{internal_tag}-{release_group_name}"
-                else:
-                    # 使用@连接，保持 DIY@Audies 的格式
-                    release_group = f"{internal_tag}@{release_group_name}"
-            else:
-                release_group = release_group_name
+            release_group = match.group("release_group").strip()
+            print(f"[调试] 正则匹配成功!")
+            print(f"[调试]   - main_part: {main_part}")
+            print(f"[调试]   - release_group: {release_group}")
+            print(f"[调试] 最终制作组: {release_group}")
         else:
             # 检查是否以-NOGROUP结尾
             if title.upper().endswith("-NOGROUP"):
@@ -794,7 +795,7 @@ def upload_data_title(title: str, torrent_filename: str = ""):
     # 技术标签提取（排除已识别的制作组名称）
     tech_patterns_definitions = {
         "medium":
-        r"UHDTV|UHD\s*Blu-?ray|Blu-?ray\s+DIY|Blu-ray|BluRay\s+DIY|BluRay|WEB-DL|WEBrip|TVrip|DVDRip|HDTV",
+        r"UHDTV|UHD\s*Blu-?ray|Blu-?ray\s+DIY|Blu-ray|BluRay\s+DIY|BluRay|BDrip|BD-?rip|WEB-DL|WEBrip|TVrip|DVDRip|HDTV",
         "audio":
         r"DTS-HD(?:\s*MA)?(?:\s*\d\.\d)?|(?:Dolby\s*)?TrueHD(?:\s*Atmos)?(?:\s*\d\.\d)?|Atmos(?:\s*TrueHD)?(?:\s*\d\.\d)?|DTS(?:\s*\d\.\d)?|DDP(?:\s*\d\.\d)?|DD\+(?:\s*\d\.\d)?|DD(?:\s*\d\.\d)?|AC3(?:\s*\d\.\d)?|FLAC(?:\s*\d\.\d)?|AAC(?:\s*\d\.\d)?|LPCM(?:\s*\d\.\d)?|AV3A\s*\d\.\d|\d+\s*Audios?|MP2|DUAL",
         "hdr_format":
@@ -842,6 +843,7 @@ def upload_data_title(title: str, torrent_filename: str = ""):
         release_group_keywords = [
             kw.strip() for kw in release_group_keywords if kw.strip()
         ]
+        print(f"[调试] 制作组关键词列表: {release_group_keywords}")
 
     for key in priority_order:
         pattern = tech_patterns_definitions[key]
@@ -864,10 +866,14 @@ def upload_data_title(title: str, torrent_filename: str = ""):
             # 检查这个值是否是制作组关键词之一
             is_release_group_part = any(val.upper() == kw.upper()
                                         for kw in release_group_keywords)
+            if is_release_group_part:
+                print(f"[调试] 过滤掉制作组关键词: {val} (属于 {key})")
             if not is_release_group_part:
                 filtered_values.append(val)
 
         all_found_tags.extend(filtered_values)
+        if filtered_values:
+            print(f"[调试] '{key}' 字段提取到技术标签: {filtered_values}")
         raw_values = filtered_values
         processed_values = (
             [re.sub(r"(DD)\+", r"\1+", val, flags=re.I)
@@ -979,16 +985,35 @@ def upload_data_title(title: str, torrent_filename: str = ""):
     tech_zone = title_part[first_tech_tag_pos:].strip()
     params["title"] = re.sub(r"[\s\.]+", " ", title_zone).strip()
 
+    print(f"[调试] 开始清理技术区域，原始技术区: '{tech_zone}'")
+    print(f"[调试] 所有已识别标签: {all_found_tags}")
+
     cleaned_tech_zone = tech_zone
     for tag in sorted(all_found_tags, key=len, reverse=True):
-        pattern_to_remove = r"\b" + re.escape(tag) + r"(?!\w)"
+        # 对于包含中文的标签，不使用 \b 词边界
+        # 使用更通用的模式：(?<!\w) 和 (?!\w) 来匹配非字母数字边界
+        # 但中文字符不被 \w 匹配，所以需要特殊处理
+        if re.search(r'[\u4e00-\u9fa5]', tag):
+            # 包含中文，直接使用字面匹配
+            pattern_to_remove = re.escape(tag)
+            print(f"[调试] 清理中文标签: '{tag}' (使用字面匹配)")
+        else:
+            # 纯英文/数字，使用词边界
+            pattern_to_remove = r"\b" + re.escape(tag) + r"(?!\w)"
+            print(f"[调试] 清理英文标签: '{tag}' (使用词边界)")
+
+        before = cleaned_tech_zone
         cleaned_tech_zone = re.sub(pattern_to_remove,
                                    " ",
                                    cleaned_tech_zone,
                                    flags=re.IGNORECASE)
+        if before != cleaned_tech_zone:
+            print(f"[调试]   已从技术区移除: '{tag}'")
 
+    print(f"[调试] 清理后的技术区: '{cleaned_tech_zone}'")
     remains = re.split(r"[\s\.]+", cleaned_tech_zone)
     unrecognized_parts.extend([part for part in remains if part])
+    print(f"[调试] 最终无法识别部分: {unrecognized_parts}")
     if unrecognized_parts:
         params["unrecognized"] = " ".join(sorted(list(
             set(unrecognized_parts))))
@@ -1567,6 +1592,7 @@ def _call_iyuu_format_api(api_config: dict, douban_link: str, imdb_link: str):
 def _parse_format_content(format_data: str, provided_imdb_link: str = ""):
     """
     解析格式化内容，提取海报、简介和IMDb链接
+    新增：智能海报验证和转存到pixhost
     """
     try:
         # 提取信息
@@ -1585,7 +1611,35 @@ def _parse_format_content(format_data: str, provided_imdb_link: str = ""):
         # 提取海报图片
         img_match = re.search(r'(\[img\].*?\[/img\])', format_data)
         if img_match:
-            poster = re.sub(r'img1', 'img9', img_match.group(1))
+            # 提取原始海报URL
+            original_poster_bbcode = img_match.group(1)
+            original_poster_url = re.search(r'\[img\](.*?)\[/img\]',
+                                            original_poster_bbcode)
+
+            if original_poster_url:
+                poster_url = original_poster_url.group(1)
+                print(f"从ptgen提取到原始海报URL: {poster_url}")
+
+                # 智能海报获取和验证
+                valid_poster_url = _get_smart_poster_url(poster_url)
+
+                if valid_poster_url:
+                    print(f"海报验证成功，使用: {valid_poster_url}")
+
+                    # 尝试转存到pixhost
+                    pixhost_url = _transfer_poster_to_pixhost(valid_poster_url)
+
+                    if pixhost_url:
+                        print(f"海报已成功转存到pixhost: {pixhost_url}")
+                        poster = f"[img]{pixhost_url}[/img]"
+                    else:
+                        print("海报转存pixhost失败，使用验证后的原始URL")
+                        poster = f"[img]{valid_poster_url}[/img]"
+                else:
+                    print("海报验证失败，使用原始URL（可能无效）")
+                    poster = re.sub(r'img1', 'img9', original_poster_bbcode)
+            else:
+                poster = re.sub(r'img1', 'img9', original_poster_bbcode)
 
         # 提取简介内容（去除海报部分）
         description = re.sub(r'\[img\].*?\[/img\]', '', format_data).strip()
@@ -1908,6 +1962,31 @@ def extract_tags_from_title(title_components: list) -> list:
         print("从标题参数中未提取到任何标签")
 
     return result_tags
+
+
+def extract_tags_from_subtitle(subtitle: str) -> list:
+    """
+    从副标题中提取标签，目前主要检测"特效"关键词。
+    
+    :param subtitle: 副标题文本
+    :return: 标签列表，例如 ['特效']
+    """
+    if not subtitle:
+        return []
+
+    found_tags = []
+
+    # 检查副标题中是否包含"特效"关键词
+    if "特效" in subtitle:
+        found_tags.append("tag.特效")
+        print(f"从副标题中提取到标签: 特效")
+
+    if found_tags:
+        print(f"从副标题中提取到的标签: {found_tags}")
+    else:
+        print("从副标题中未提取到任何标签")
+
+    return found_tags
 
 
 def extract_tags_from_description(description_text: str) -> list:
@@ -2601,3 +2680,288 @@ def extract_audio_codec_from_mediainfo(mediainfo_text: str) -> str:
 
     logging.warning("在MediaInfo的'Audio'部分未找到 'Format' 信息。")
     return ""
+
+
+def _get_smart_poster_url(original_url: str) -> str:
+    """
+    智能海报URL获取和验证
+    参考油猴插件逻辑：
+    1. 优先尝试豆瓣官方高清图（多域名轮询 img1-img9）
+    2. 尝试两种清晰度路径（l_ratio_poster 高清，m_ratio_poster 中清）
+    3. 如果豆瓣全失败，尝试第三方托管（dou.img.lithub.cc）
+    
+    :param original_url: 原始海报URL
+    :return: 验证有效的海报URL，失败返回空字符串
+    """
+    if not original_url:
+        return ""
+
+    print(f"开始智能海报URL验证: {original_url}")
+
+    # 检查是否为豆瓣图片
+    douban_match = re.search(r'https?://img(\d+)\.doubanio\.com.*?/(p\d+)',
+                             original_url)
+
+    if douban_match:
+        original_domain_num = douban_match.group(1)
+        image_id = douban_match.group(2)
+
+        print(f"检测到豆瓣图片: 域名img{original_domain_num}, 图片ID={image_id}")
+
+        # 生成候选URL列表
+        candidates = []
+
+        # 优先原始域名
+        domain_numbers = [original_domain_num]
+        # 添加其他域名1-9
+        for i in range(1, 10):
+            if str(i) != original_domain_num:
+                domain_numbers.append(str(i))
+
+        # 路径优先级：先高清，后中清
+        paths = [
+            'view/photo/l_ratio_poster/public',  # 高清
+            'view/photo/m_ratio_poster/public'  # 中清
+        ]
+
+        # 生成候选URL矩阵
+        for domain_num in domain_numbers:
+            for path in paths:
+                candidate_url = f"https://img{domain_num}.doubanio.com/{path}/{image_id}.jpg"
+                candidates.append(candidate_url)
+
+        print(f"生成 {len(candidates)} 个候选URL")
+
+        # 依次验证候选URL
+        for i, candidate_url in enumerate(candidates):
+            domain_info = re.search(r'img(\d+)\.doubanio\.com', candidate_url)
+            path_info = '高清' if 'l_ratio_poster' in candidate_url else '中清'
+            domain_num = domain_info.group(1) if domain_info else '?'
+
+            print(
+                f"测试 [{i+1}/{len(candidates)}] img{domain_num} ({path_info}): {candidate_url}"
+            )
+
+            if _validate_image_url(candidate_url):
+                print(f"✓ 验证成功！使用 img{domain_num} 域名")
+                return candidate_url
+            else:
+                print(f"✗ img{domain_num} 验证失败")
+
+        # 豆瓣全部失败，尝试第三方托管
+        print("豆瓣官方图片全部失败，尝试第三方托管...")
+
+        # 从原始URL中提取豆瓣ID
+        douban_id_match = re.search(r'/subject/(\d+)', original_url)
+        if not douban_id_match:
+            # 尝试从图片ID推测（这通常不可行，但作为备选）
+            print("无法提取豆瓣ID，跳过第三方托管")
+        else:
+            douban_id = douban_id_match.group(1)
+            third_party_url = f"https://dou.img.lithub.cc/movie/{douban_id}.jpg"
+            print(f"测试第三方URL: {third_party_url}")
+
+            if _validate_image_url(third_party_url):
+                print("✓ 第三方URL验证成功")
+                return third_party_url
+            else:
+                print("✗ 第三方URL验证失败")
+
+    else:
+        # 非豆瓣图片，直接验证原始URL
+        print("非豆瓣图片，直接验证原始URL")
+        if _validate_image_url(original_url):
+            print("✓ 原始URL验证成功")
+            return original_url
+        else:
+            print("✗ 原始URL验证失败")
+
+    print("所有URL验证都失败")
+    return ""
+
+
+def _validate_image_url(url: str) -> bool:
+    """
+    验证图片URL是否有效
+    使用HEAD请求验证URL是否可访问且返回有效图片
+    
+    :param url: 图片URL
+    :return: URL有效返回True，否则返回False
+    """
+    if not url:
+        return False
+
+    try:
+        headers = {
+            'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Referer': 'https://movie.douban.com/'
+        }
+
+        response = requests.head(url,
+                                 headers=headers,
+                                 timeout=10,
+                                 allow_redirects=True)
+
+        if response.status_code == 200:
+            # 检查Content-Type
+            content_type = response.headers.get('Content-Type', '').lower()
+            if 'image/' in content_type:
+                # 检查Content-Length（至少大于1KB）
+                content_length = response.headers.get('Content-Length')
+                if content_length:
+                    file_size = int(content_length)
+                    if file_size > 1024:
+                        return True
+                    else:
+                        print(f"   文件太小: {file_size} bytes")
+                        return False
+                else:
+                    # 如果没有Content-Length，认为有效
+                    return True
+            else:
+                print(f"   无效的Content-Type: {content_type}")
+                return False
+        else:
+            print(f"   HTTP状态码: {response.status_code}")
+            return False
+
+    except Exception as e:
+        print(f"   验证异常: {type(e).__name__}")
+        return False
+
+
+def _transfer_poster_to_pixhost(poster_url: str) -> str:
+    """
+    将海报图片转存到pixhost
+    
+    :param poster_url: 海报图片URL
+    :return: pixhost直链URL，失败返回空字符串
+    """
+    if not poster_url:
+        return ""
+
+    print(f"开始转存海报到pixhost: {poster_url}")
+
+    try:
+        # 1. 下载图片到临时文件
+        headers = {
+            'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Referer': 'https://movie.douban.com/'
+        }
+
+        response = requests.get(poster_url, headers=headers, timeout=30)
+        response.raise_for_status()
+
+        # 检查文件大小
+        if len(response.content) == 0:
+            print("   下载的图片文件为空")
+            return ""
+
+        if len(response.content) > 10 * 1024 * 1024:
+            print("   图片文件过大 (>10MB)")
+            return ""
+
+        print(f"   图片下载成功，大小: {len(response.content)} bytes")
+
+        # 2. 保存到临时文件
+        temp_file = None
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as f:
+                f.write(response.content)
+                temp_file = f.name
+
+            print(f"   临时文件已保存: {temp_file}")
+
+            # 3. 上传到pixhost
+            api_url = 'https://api.pixhost.to/images'
+            params = {'content_type': 0, 'max_th_size': 420}
+            upload_headers = {
+                'User-Agent':
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': 'application/json'
+            }
+
+            with open(temp_file, 'rb') as f:
+                files = {'img': ('poster.jpg', f, 'image/jpeg')}
+                upload_response = requests.post(api_url,
+                                                data=params,
+                                                files=files,
+                                                headers=upload_headers,
+                                                timeout=30)
+
+            if upload_response.status_code == 200:
+                data = upload_response.json()
+                show_url = data.get('show_url')
+
+                if not show_url:
+                    print("   API未返回有效URL")
+                    return ""
+
+                # 转换为直链URL
+                direct_url = _convert_pixhost_url_to_direct(show_url)
+
+                if direct_url:
+                    print(f"   上传成功！直链: {direct_url}")
+                    return direct_url
+                else:
+                    print("   URL转换失败")
+                    return ""
+            else:
+                print(f"   上传失败，状态码: {upload_response.status_code}")
+                return ""
+
+        finally:
+            # 清理临时文件
+            if temp_file and os.path.exists(temp_file):
+                try:
+                    os.remove(temp_file)
+                    print(f"   临时文件已清理: {temp_file}")
+                except:
+                    pass
+
+    except Exception as e:
+        print(f"   转存失败: {type(e).__name__} - {e}")
+        return ""
+
+
+def _convert_pixhost_url_to_direct(show_url: str) -> str:
+    """
+    将pixhost的show URL转换为直链URL
+    参考油猴插件的convertToDirectUrl函数
+    
+    :param show_url: pixhost show URL
+    :return: 直链URL，失败返回空字符串
+    """
+    if not show_url:
+        return ""
+
+    try:
+        # 方案1: 直接替换域名和路径
+        direct_url = show_url.replace(
+            'https://pixhost.to/show/',
+            'https://img1.pixhost.to/images/').replace(
+                'https://pixhost.to/th/', 'https://img1.pixhost.to/images/')
+
+        # 移除缩略图后缀（如 _cover.jpg -> .jpg）
+        direct_url = re.sub(r'_..\.jpg$', '.jpg', direct_url)
+
+        # 方案2: 如果方案1失败，使用正则提取重建URL
+        if not direct_url.startswith('https://img1.pixhost.to/images/'):
+            match = re.search(r'(\d+)/([^/]+\.(jpg|png|gif))', show_url)
+            if match:
+                direct_url = f"https://img1.pixhost.to/images/{match.group(1)}/{match.group(2)}"
+
+        # 最终验证
+        if re.match(
+                r'^https://img1\.pixhost\.to/images/\d+/[^/]+\.(jpg|png|gif)$',
+                direct_url):
+            return direct_url
+        else:
+            print(f"   URL格式验证失败: {direct_url}")
+            return ""
+
+    except Exception as e:
+        print(f"   URL转换异常: {e}")
+        return ""

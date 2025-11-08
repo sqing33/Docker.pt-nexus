@@ -30,12 +30,91 @@ class DatabaseManager:
         if self.db_type == "mysql":
             self.mysql_config = config.get("mysql", {})
             logging.info("数据库后端设置为 MySQL。")
+            # 自动创建数据库（如果不存在）
+            self._ensure_database_exists()
         elif self.db_type == "postgresql":
             self.postgresql_config = config.get("postgresql", {})
             logging.info("数据库后端设置为 PostgreSQL。")
+            # 自动创建数据库（如果不存在）
+            self._ensure_database_exists()
         else:
             self.sqlite_path = config.get("path", "data/pt_stats.db")
             logging.info(f"数据库后端设置为 SQLite。路径: {self.sqlite_path}")
+            # SQLite 会自动创建文件，无需额外处理
+
+    def _ensure_database_exists(self):
+        """确保数据库存在，如果不存在则自动创建。"""
+        if self.db_type == "mysql":
+            database_name = self.mysql_config.get("database")
+            if not database_name:
+                logging.error("MySQL 配置中缺少 database 参数")
+                return
+            
+            try:
+                # 连接到 MySQL 服务器（不指定数据库）
+                conn_config = self.mysql_config.copy()
+                target_db = conn_config.pop("database")
+                
+                conn = mysql.connector.connect(**conn_config, autocommit=True)
+                cursor = conn.cursor()
+                
+                # 检查数据库是否存在
+                cursor.execute(
+                    "SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = %s",
+                    (target_db,)
+                )
+                
+                if cursor.fetchone() is None:
+                    # 数据库不存在，创建它
+                    logging.info(f"数据库 '{target_db}' 不存在，正在创建...")
+                    cursor.execute(f"CREATE DATABASE `{target_db}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
+                    logging.info(f"✓ 成功创建数据库 '{target_db}'")
+                else:
+                    logging.info(f"数据库 '{target_db}' 已存在")
+                
+                cursor.close()
+                conn.close()
+                
+            except Exception as e:
+                logging.error(f"创建 MySQL 数据库时出错: {e}", exc_info=True)
+                raise
+                
+        elif self.db_type == "postgresql":
+            database_name = self.postgresql_config.get("database")
+            if not database_name:
+                logging.error("PostgreSQL 配置中缺少 database 参数")
+                return
+            
+            try:
+                # 连接到 PostgreSQL 服务器的 postgres 默认数据库
+                conn_config = self.postgresql_config.copy()
+                target_db = conn_config.pop("database")
+                conn_config["database"] = "postgres"
+                
+                conn = psycopg2.connect(**conn_config)
+                conn.autocommit = True
+                cursor = conn.cursor()
+                
+                # 检查数据库是否存在
+                cursor.execute(
+                    "SELECT 1 FROM pg_database WHERE datname = %s",
+                    (target_db,)
+                )
+                
+                if cursor.fetchone() is None:
+                    # 数据库不存在，创建它
+                    logging.info(f"数据库 '{target_db}' 不存在，正在创建...")
+                    cursor.execute(f'CREATE DATABASE "{target_db}" ENCODING \'UTF8\'')
+                    logging.info(f"✓ 成功创建数据库 '{target_db}'")
+                else:
+                    logging.info(f"数据库 '{target_db}' 已存在")
+                
+                cursor.close()
+                conn.close()
+                
+            except Exception as e:
+                logging.error(f"创建 PostgreSQL 数据库时出错: {e}", exc_info=True)
+                raise
 
     def _get_connection(self):
         """返回一个新的数据库连接。"""

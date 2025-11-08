@@ -1223,15 +1223,25 @@ class ParameterMapper:
         final_standardized_params["tags"] = self._map_tags(
             source_params.get("标签", []), site_name)
 
-        # [新增] 从简介中提取标签和进行类型修正
-        from utils.media_helper import extract_tags_from_description, check_animation_type_from_description
+        # [新增] 从简介和副标题中提取标签和进行类型修正
+        from utils.media_helper import extract_tags_from_description, check_animation_type_from_description, extract_tags_from_subtitle
 
         intro_statement = extracted_params.get("intro",
                                                {}).get("statement", "")
         intro_body = extracted_params.get("intro", {}).get("body", "")
         full_description_text = f"{intro_statement}\n{intro_body}"
 
-        # 1. 从简介类别中提取标签（如喜剧、动画等）
+        # 1. 从副标题中提取标签（如特效）
+        subtitle = extracted_params.get("subtitle", "")
+        subtitle_tags = extract_tags_from_subtitle(subtitle)
+        if subtitle_tags:
+            # 将提取到的标签添加到现有标签列表中
+            existing_tags = set(final_standardized_params.get("tags", []))
+            existing_tags.update(subtitle_tags)
+            final_standardized_params["tags"] = list(existing_tags)
+            logging.info(f"从副标题中补充标签: {subtitle_tags}")
+
+        # 2. 从简介类别中提取标签（如喜剧、动画等）
         description_tags = extract_tags_from_description(full_description_text)
         if description_tags:
             # 将提取到的标签添加到现有标签列表中，使用集合去重
@@ -1240,7 +1250,7 @@ class ParameterMapper:
             final_standardized_params["tags"] = list(existing_tags)
             logging.info(f"从简介中补充标签: {description_tags}")
 
-        # 2. 检查是否需要修正类型为动漫
+        # 3. 检查是否需要修正类型为动漫
         if check_animation_type_from_description(full_description_text):
             current_type = final_standardized_params.get("type", "")
             logging.info(f"检测到类别中包含'动画'，当前标准类型: {current_type}")

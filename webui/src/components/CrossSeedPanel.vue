@@ -1547,6 +1547,12 @@ const reparseTitle = async () => {
 }
 
 const handleImageError = async (url: string, type: 'poster' | 'screenshot', index: number) => {
+  // 如果是 pixhost.to 的图片，跳过检测
+  if (url && url.includes('pixhost.to')) {
+    console.log(`检测到 pixhost.to 图片，跳过有效性检测: ${url}`)
+    return
+  }
+
   // 防止重复处理截图错误
   if (type === 'screenshot' && isHandlingScreenshotError.value) {
     console.log(`截图错误已正在处理中，跳过重复请求: ${url}`)
@@ -3125,24 +3131,6 @@ const checkScreenshotValidity = async () => {
   }
 
   screenshotValid.value = allValid
-}
-
-const showLogs = async () => {
-  if (!taskId.value) {
-    ElNotification.warning('没有可用的任务日志')
-    return
-  }
-  try {
-    const response = await axios.get(`/api/migrate/logs/${taskId.value}`)
-    ElNotification.info({
-      title: '转种日志',
-      message: response.data.logs,
-      duration: 0,
-      showClose: true,
-    })
-  } catch (error) {
-    handleApiError(error, '获取日志时发生错误')
-  }
 }
 
 const hideLog = () => {

@@ -16,6 +16,11 @@ def is_image_url_valid_robust(url: str) -> bool:
     """
     if not url:
         return False
+    
+    # 如果是 pixhost.to 的图片，直接返回 True，跳过检测
+    if 'pixhost.to' in url.lower():
+        logging.info(f"检测到 pixhost.to 图片，跳过有效性检测: {url}")
+        return True
 
     # 标准浏览器User-Agent
     headers = {
