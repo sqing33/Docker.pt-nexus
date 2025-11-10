@@ -429,24 +429,41 @@ class Extractor:
             print(f"[调试extractor] 清理后bbcode长度: {len(bbcode)}")
             print(f"[调试extractor] 清理后bbcode前200字符: {bbcode[:200]}")
 
-            # [新增] 只验证海报（第一张图片）的有效性
+            # [新增] 验证并优化海报链接
             # 视频截图的验证将在 migrator.py 的 prepare_review_data 中单独进行
+            poster_valid = True  # 标记海报是否有效
             if images:
                 poster_img = images[0]
                 if match := re.search(r'\[img\](.*?)\[/img\]', poster_img,
                                       re.IGNORECASE):
                     poster_url = match.group(1)
-                    logging.info(f"开始验证海报链接的有效性: {poster_url}")
-                    print(f"[*] 开始验证海报链接的有效性...")
+                    logging.info(f"开始验证海报链接: {poster_url}")
+                    print(f"[*] 开始验证海报链接...")
 
-                    if is_image_url_valid_robust(poster_url):
-                        logging.info("海报链接验证通过。")
-                        print(f"[*] 海报链接验证通过。")
+                    # 检查是否为 pixhost 图片
+                    is_pixhost = 'pixhost.to' in poster_url.lower()
+                    
+                    if is_pixhost:
+                        # 是 pixhost 图片，直接跳过验证
+                        logging.info("检测到pixhost图片，跳过验证直接使用。")
+                        print(f"[*] 检测到pixhost图片，跳过验证直接使用。")
                     else:
-                        logging.warning(f"检测到无效的海报链接: {poster_url}")
-                        print(f"  [!] 检测到无效的海报链接: {poster_url}")
-                        # 海报无效时，将第一张图片置空，后续会从豆瓣/IMDb重新获取
-                        images[0] = ""
+                        # 不是 pixhost 图片，强制使用智能海报获取
+                        logging.info("检测到非pixhost图片，执行智能海报获取...")
+                        print(f"[*] 检测到非pixhost图片，执行智能海报获取...")
+                        
+                        from utils.media_helper import _get_smart_poster_url
+                        smart_poster_url = _get_smart_poster_url(poster_url)
+                        
+                        if smart_poster_url:
+                            # 更新海报链接
+                            images[0] = f"[img]{smart_poster_url}[/img]"
+                            logging.info(f"智能海报获取成功: {smart_poster_url}")
+                            print(f"[*] 智能海报获取成功: {smart_poster_url}")
+                        else:
+                            logging.warning(f"智能海报获取失败，海报标记为无效")
+                            print(f"  [!] 智能海报获取失败，海报标记为无效")
+                            poster_valid = False
 
             # 注意：视频截图（images[1:]）不在此处验证，将在 migrator.py 中统一验证和重新生成
 
@@ -854,7 +871,8 @@ class Extractor:
                                           statement_string).strip()
 
             extracted_data["intro"]["statement"] = statement_string
-            extracted_data["intro"]["poster"] = images[0] if images else ""
+            # [修复] 如果海报无效，设置为空字符串而不是使用images[0]
+            extracted_data["intro"]["poster"] = images[0] if (images and poster_valid) else ""
             extracted_data["intro"]["body"] = re.sub(r"\n{2,}", "\n", body)
             extracted_data["intro"]["screenshots"] = "\n".join(
                 images[1:]) if len(images) > 1 else ""

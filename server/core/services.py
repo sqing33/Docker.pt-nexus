@@ -1131,14 +1131,79 @@ class DataTracker(Thread):
         return None
 
     def _find_torrent_group(self, name, group_to_site_map_lower):
+        """查找种子的发布组名称，支持@符号前后匹配。
+        
+        对于包含@符号的种子名称，会分别检查@前后的部分是否匹配官组名称。
+        支持多种格式：
+        - FFans@leon -> 检查"FFans"和"leon"
+        - AnimeF@ADE -> 优先精确匹配"ADE"，避免匹配到"ADEbook"
+        - 7³ACG@OurBits -> 检查"7³acg"和"ourbits"
+        - [xxx]@OurBits -> 先去除[]后检查"ourbits"
+        """
         name_lower = name.lower()
-        found_matches = [
-            group_info["original_case"]
-            for group_lower, group_info in group_to_site_map_lower.items()
-            if group_lower in name_lower
-        ]
+        exact_matches = []  # 精确匹配结果
+        partial_matches = []  # 部分匹配结果
+        
+        # 检查是否包含@符号
+        if '@' in name_lower:
+            # 分割@符号前后的部分
+            parts = name_lower.split('@')
+            logging.debug(f"种子名称包含@符号，分割为: {parts}")
+            
+            for part in parts:
+                # 清理每个部分：
+                # 1. 去除首尾空格
+                # 2. 去除前导的-符号
+                # 3. 去除方括号[]内的内容（处理[BDrip]这种格式）
+                clean_part = part.strip().lstrip('-').strip()
+                
+                # 处理方括号：去除[xxx]格式，保留括号外的内容
+                import re
+                clean_part = re.sub(r'\[.*?\]', '', clean_part).strip()
+                
+                if clean_part:
+                    logging.debug(f"检查部分: '{clean_part}'")
+                    
+                    # 先检查精确匹配
+                    for group_lower, group_info in group_to_site_map_lower.items():
+                        # 去除官组名称前面的-（如果有）
+                        group_lower_clean = group_lower.lstrip('-')
+                        
+                        # 精确匹配（优先级最高）
+                        if group_lower_clean == clean_part:
+                            if group_info["original_case"] not in exact_matches:
+                                exact_matches.append(group_info["original_case"])
+                                logging.debug(f"精确匹配到官组: '{group_info['original_case']}'")
+                        # 包含匹配（次优先级）
+                        elif group_lower_clean in clean_part or clean_part in group_lower_clean:
+                            if group_info["original_case"] not in partial_matches and group_info["original_case"] not in exact_matches:
+                                partial_matches.append(group_info["original_case"])
+                                logging.debug(f"部分匹配到官组: '{group_info['original_case']}'")
+        
+        # 合并结果：精确匹配优先
+        found_matches = exact_matches + partial_matches
+        
+        # 如果@符号匹配没有结果，或者名称中没有@符号，使用原来的全名匹配逻辑
+        if not found_matches:
+            logging.debug(f"@符号匹配无结果，尝试全名匹配: '{name_lower}'")
+            for group_lower, group_info in group_to_site_map_lower.items():
+                if group_lower in name_lower:
+                    if group_info["original_case"] not in found_matches:
+                        found_matches.append(group_info["original_case"])
+                        logging.debug(f"匹配到官组: '{group_info['original_case']}' (通过全名匹配)")
+        
         if found_matches:
-            return sorted(found_matches, key=len, reverse=True)[0]
+            # 如果有精确匹配，优先返回最短的精确匹配（最准确）
+            # 如果没有精确匹配，返回最长的部分匹配（避免匹配到子串）
+            if exact_matches:
+                result = sorted(exact_matches, key=len)[0]  # 最短的精确匹配
+                logging.info(f"种子 '{name[:50]}...' 精确匹配到官组: {result}")
+            else:
+                result = sorted(found_matches, key=len, reverse=True)[0]  # 最长的匹配
+                logging.info(f"种子 '{name[:50]}...' 匹配到官组: {result}")
+            return result
+        
+        logging.debug(f"种子 '{name[:50]}...' 未识别到官组")
         return None
 
     def stop(self):

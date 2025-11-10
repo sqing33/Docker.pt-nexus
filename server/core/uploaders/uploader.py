@@ -524,14 +524,21 @@ class BaseUploader(ABC):
             final_main_title = self._build_title(standardized_params)
             logger.info("参数适配完成。")
 
-            # 3. 准备通用的 form_data
+            # 3. 从配置读取匿名上传设置
+            from config import config_manager
+            config = config_manager.get()
+            upload_settings = config.get("upload_settings", {})
+            anonymous_upload = upload_settings.get("anonymous_upload", True)
+            uplver_value = "yes" if anonymous_upload else "no"
+
+            # 准备通用的 form_data
             form_data = {
                 "name": final_main_title,
                 "small_descr": self.upload_data.get("subtitle", ""),
                 "url": self.upload_data.get("imdb_link", "") or "",
                 "descr": description,
                 "technical_info": self.upload_data.get("mediainfo", ""),
-                "uplver": "no",  # 默认匿名上传
+                "uplver": uplver_value,  # 根据配置设置匿名上传
                 **mapped_params,  # 合并映射后的特殊参数
             }
 
@@ -781,6 +788,13 @@ class BaseUploader(ABC):
             description = uploader._build_description()
             final_main_title = uploader._build_title(standardized_params)
 
+            # 从配置读取匿名上传设置
+            from config import config_manager
+            config = config_manager.get()
+            upload_settings = config.get("upload_settings", {})
+            anonymous_upload = upload_settings.get("anonymous_upload", True)
+            uplver_value = "yes" if anonymous_upload else "no"
+
             # 准备通用的 form_data（与execute_upload中一致）
             form_data = {
                 "name": final_main_title,
@@ -788,7 +802,7 @@ class BaseUploader(ABC):
                 "url": upload_payload.get("imdb_link", "") or "",
                 "descr": description,
                 "technical_info": upload_payload.get("mediainfo", ""),
-                "uplver": "no",  # 默认匿名上传
+                "uplver": uplver_value,  # 根据配置设置匿名上传
                 **mapped_params,  # 合并子类映射的特殊参数
             }
 

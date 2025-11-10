@@ -57,6 +57,10 @@ class ConfigManager:
                 # [新增] 默认下载器设置
                 "default_downloader": ""
             },
+            # --- [新增] 上传设置 ---
+            "upload_settings": {
+                "anonymous_upload": True  # 默认启用匿名上传
+            },
             # --- [新增] 下载器队列设置 ---
             "downloader_queue": {
                 "enabled": True,
@@ -192,6 +196,14 @@ class ConfigManager:
                 # --- [新增] 已删除站点列表配置兼容 ---
                 if "deleted_sites" not in self._config:
                     self._config["deleted_sites"] = []
+
+                # --- [新增] 上传设置配置兼容 ---
+                if "upload_settings" not in self._config:
+                    self._config["upload_settings"] = default_conf["upload_settings"]
+                else:
+                    # 如果已有 upload_settings，检查是否缺少新字段
+                    if "anonymous_upload" not in self._config["upload_settings"]:
+                        self._config["upload_settings"]["anonymous_upload"] = True
 
             except (json.JSONDecodeError, IOError) as e:
                 logging.error(f"无法读取或解析 {CONFIG_FILE}: {e}。将加载一个安全的默认配置。")

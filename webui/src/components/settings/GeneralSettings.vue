@@ -295,6 +295,45 @@
         </div>
       </div>
 
+      <!-- 上传设置卡片 -->
+      <div class="settings-card glass-card glass-rounded glass-transparent-header glass-transparent-body">
+        <div class="card-header">
+          <div class="header-content">
+            <el-icon class="header-icon">
+              <Setting />
+            </el-icon>
+            <h3>上传设置</h3>
+          </div>
+          <el-button type="primary" @click="saveUploadSettings" :loading="savingUpload" size="small">
+            保存
+          </el-button>
+        </div>
+
+        <div class="card-content">
+          <el-form :model="uploadForm" label-position="top" class="settings-form">
+            <el-form-item label="匿名上传" class="form-item">
+              <div style="display: flex; align-items: center; gap: 20px; padding: 15px 0;">
+                <el-switch 
+                  v-model="uploadForm.anonymous_upload" 
+                  active-text="启用匿名" 
+                  inactive-text="禁用匿名"
+                  size="large"
+                />
+              </div>
+            </el-form-item>
+
+            <div class="form-spacer"></div>
+
+            <el-text type="info" size="small" class="proxy-hint">
+              <el-icon size="12">
+                <InfoFilled />
+              </el-icon>
+              启用后，发布种子时将使用匿名模式，不显示上传者信息
+            </el-text>
+          </el-form>
+        </div>
+      </div>
+
       <!-- 功能扩展卡片 -->
       <div class="settings-card glass-card glass-rounded glass-transparent-header glass-transparent-body">
         <div class="card-header">
@@ -384,6 +423,12 @@ const backgroundForm = reactive({
   background_url: ''
 })
 
+// 上传设置相关
+const savingUpload = ref(false)
+const uploadForm = reactive({
+  anonymous_upload: true  // 默认启用匿名上传
+})
+
 // 获取所有设置
 const fetchSettings = async () => {
   try {
@@ -421,6 +466,11 @@ const fetchSettings = async () => {
     // 获取背景设置
     if (config.ui_settings && config.ui_settings.background_url) {
       backgroundForm.background_url = config.ui_settings.background_url;
+    }
+
+    // 获取上传设置
+    if (config.upload_settings) {
+      uploadForm.anonymous_upload = config.upload_settings.anonymous_upload !== false; // 默认为true
     }
 
     // 获取下载器列表
@@ -596,6 +646,23 @@ const saveBackgroundSettings = async () => {
     ElMessage.error(errorMessage);
   } finally {
     savingBackground.value = false;
+  }
+};
+
+// 保存上传设置
+const saveUploadSettings = async () => {
+  savingUpload.value = true;
+  try {
+    const uploadSettings = {
+      anonymous_upload: uploadForm.anonymous_upload
+    };
+    await axios.post('/api/upload_settings', uploadSettings);
+    ElMessage.success('上传设置已保存！');
+  } catch (error: any) {
+    const errorMessage = error.response?.data?.error || '保存失败。';
+    ElMessage.error(errorMessage);
+  } finally {
+    savingUpload.value = false;
   }
 };
 

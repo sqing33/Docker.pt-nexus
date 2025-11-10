@@ -283,13 +283,20 @@ class HaidanUploader(SpecialUploader):
             final_main_title = self._build_title(standardized_params)
             logger.info("参数适配完成。")
 
-            # 3. 准备form_data，包含haidan站点需要的所有参数
+            # 3. 从配置读取匿名上传设置
+            from config import config_manager
+            config = config_manager.get()
+            upload_settings = config.get("upload_settings", {})
+            anonymous_upload = upload_settings.get("anonymous_upload", True)
+            uplver_value = "yes" if anonymous_upload else "no"
+            
+            # 准备form_data，包含haidan站点需要的所有参数
             form_data = {
                 "name": final_main_title,
                 "small_descr": self.upload_data.get("subtitle", ""),
                 "url": self.upload_data.get("imdb_link", "") or "",
                 "descr": description,
-                "uplver": "yes",  # 默认匿名上传
+                "uplver": uplver_value,  # 根据配置设置匿名上传
                 **mapped_params,  # 合并映射的特殊参数
             }
 

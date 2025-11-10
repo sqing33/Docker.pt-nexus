@@ -517,7 +517,14 @@ def scan_local_files():
 
                 # 找出孤立的文件 (名字在本地有，但数据库没有)
                 # 只检查文件，跳过所有文件夹
+                # 同时需要排除那些在种子文件夹内的文件
                 orphaned_names = local_items - torrent_names_in_path
+                
+                # 收集所有被种子引用的文件夹路径
+                referenced_folders = set()
+                for name, location in synced_names_with_location.items():
+                    if os.path.isdir(location):
+                        referenced_folders.add(location)
                 
                 for item_name in orphaned_names:
                     full_path = os.path.join(local_path, item_name)
@@ -526,6 +533,22 @@ def scan_local_files():
                     # 跳过所有文件夹，只检测孤立文件
                     if not is_file:
                         print(f"[DEBUG] 跳过文件夹 {item_name}")
+                        continue
+                    
+                    # 检查这个文件是否在某个被种子引用的文件夹内
+                    is_inside_torrent_folder = False
+                    for ref_folder in referenced_folders:
+                        try:
+                            # 检查文件是否在种子文件夹内
+                            if full_path.startswith(ref_folder + os.sep):
+                                is_inside_torrent_folder = True
+                                print(f"[DEBUG] 文件 {item_name} 在种子文件夹 {ref_folder} 内，跳过")
+                                break
+                        except Exception as e:
+                            logger.debug(f"检查文件路径时出错: {str(e)}")
+                    
+                    # 如果文件在种子文件夹内，不算孤立文件
+                    if is_inside_torrent_folder:
                         continue
                     
                     size = None

@@ -168,7 +168,8 @@
                 :default-sort="{ prop: 'size', order: 'descending' }">
                 <el-table-column prop="name" label="文件/文件夹名称" show-overflow-tooltip align="left"
                   header-align="center" />
-                <el-table-column prop="path" label="所在路径" width="250" align="center" show-overflow-tooltip 
+                <el-table-column prop="path" label="所在路径" width="250" align="center" 
+                  :show-overflow-tooltip="{ placement: 'left' }"
                   header-align="center" />
                 <el-table-column prop="size" label="大小" width="120" sortable align="center">
                   <template #default="{ row }">

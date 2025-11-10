@@ -226,6 +226,7 @@
                             default-first-option
                             placeholder="请选择或输入标签"
                             style="width: 100%"
+                            @remove-tag="handleTagRemove"
                           >
                             <template #tag="{ data }">
                               <el-tag
@@ -237,7 +238,7 @@
                                 @close="handleTagClose(item.value)"
                                 style="margin: 2px"
                               >
-                                <span>{{ item.currentLabel }}</span>
+                                <span>{{ reverseMappings.tags[item.value] || item.currentLabel }}</span>
                               </el-tag>
                             </template>
                             <el-option
@@ -2455,12 +2456,16 @@ const goToPublishPreviewStep = async () => {
 }
 
 // 【新增】计算属性：整合预设标签和当前已选标签，用于渲染下拉列表
+// 过滤掉禁转标签，防止用户从下拉框选择或取消选择
 const allTagOptions = computed(() => {
   const predefinedTags = Object.keys(reverseMappings.value.tags || {})
   const currentTags = torrentData.value.standardized_params.tags || []
   const combined = [...new Set([...predefinedTags, ...currentTags])]
 
-  return combined.map((tagValue) => ({
+  // 过滤掉禁转标签
+  const filtered = combined.filter(tag => !isRestrictedTag(tag))
+
+  return filtered.map((tagValue) => ({
     value: tagValue,
     label: reverseMappings.value.tags[tagValue] || tagValue,
   }))

@@ -840,6 +840,35 @@ def save_cross_seed_ui_settings():
         return jsonify({"success": False, "message": "无法保存 Cross Seed UI 设置。"}), 500
 
 
+# --- [新增] 上传设置接口 ---
+@management_bp.route("/upload_settings", methods=["GET"])
+def get_upload_settings():
+    """获取上传相关设置。"""
+    config_manager = management_bp.config_manager
+    # 提供一个安全的默认值
+    default_settings = {"anonymous_upload": True}
+    # 从配置中获取上传设置，如果不存在则使用默认值
+    settings = config_manager.get().get("upload_settings", default_settings)
+    return jsonify(settings)
+
+
+@management_bp.route("/upload_settings", methods=["POST"])
+def save_upload_settings():
+    """保存上传相关设置。"""
+    config_manager = management_bp.config_manager
+    new_settings = request.json
+
+    current_config = config_manager.get()
+
+    # 更新上传设置
+    current_config["upload_settings"] = new_settings
+
+    if config_manager.save(current_config):
+        return jsonify({"success": True, "message": "上传设置已成功保存。"})
+    else:
+        return jsonify({"success": False, "message": "无法保存上传设置。"}), 500
+
+
 # --- [新增] IYUU 设置接口 ---
 @management_bp.route("/iyuu/settings", methods=["GET"])
 def get_iyuu_settings():

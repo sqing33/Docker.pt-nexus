@@ -1,7 +1,7 @@
 [
   {
     "site": "keepfrds",
-    "nickname": "朋友",
+    "nickname": "月月",
     "base_url": "pt.keepfrds.com",
     "special_tracker_domain": null,
     "group": "-FRDS",
@@ -34,7 +34,7 @@
     "nickname": "天空",
     "base_url": "hdsky.me",
     "special_tracker_domain": null,
-    "group": "-HDSky,-HDSWEB,-HDS",
+    "group": "-HDSky,-HDSWEB,-HDS,-HDSTV,-HDSPad",
     "description": "HDSky",
     "migration": 0,
     "speed_limit": 10
@@ -54,7 +54,7 @@
     "nickname": "猫站",
     "base_url": "pterclub.com",
     "special_tracker_domain": null,
-    "group": "-PTerWEB,-PTer",
+    "group": "-PTerWEB,-PTer,-PTerDIY,-PTerTV,-PTerGame,-PTerMV",
     "description": "PTer",
     "migration": 0,
     "speed_limit": 10

@@ -804,7 +804,7 @@ def upload_data_title(title: str, torrent_filename: str = ""):
         "video_codec":
         r"HEVC|AVC|x265|H\s*[\s\.]?\s*265|x264|H\s*[\s\.]?\s*264|VC-1|AV1|MPEG-2",
         "source_platform":
-        r"Apple TV\+|ViuTV|MyTVSuper|AMZN|Netflix|NF|DSNP|MAX|ATVP|iTunes|friDay|USA|EUR|JPN|CEE|FRA|LINETV|EDR|PCOK|Hami|GBR|NowPlayer|CR|SEEZN|GER|CHN|MA|Viu|Baha|KKTV|IQ|HKG|ITA|ESP",
+        r"Apple TV\+|ViuTV|MyTVSuper|MyVideo|AMZN|Netflix|NF|DSNP|MAX|ATVP|iTunes|friDay|USA|EUR|JPN|CEE|FRA|LINETV|EDR|PCOK|Hami|GBR|NowPlayer|CR|SEEZN|GER|CHN|MA|Viu|Baha|KKTV|IQ|HKG|ITA|ESP",
         "bit_depth": r"\b(?:8|10)bit\b",
         "framerate": r"\d{2,3}fps",
         "completion_status": r"Complete|COMPLETE",
@@ -2684,18 +2684,21 @@ def extract_audio_codec_from_mediainfo(mediainfo_text: str) -> str:
 
 def _get_smart_poster_url(original_url: str) -> str:
     """
-    智能海报URL获取和验证
+    智能海报URL获取和验证，并自动转存到pixhost
     参考油猴插件逻辑：
     1. 优先尝试豆瓣官方高清图（多域名轮询 img1-img9）
     2. 尝试两种清晰度路径（l_ratio_poster 高清，m_ratio_poster 中清）
     3. 如果豆瓣全失败，尝试第三方托管（dou.img.lithub.cc）
+    4. 验证成功后自动转存到pixhost
     
     :param original_url: 原始海报URL
-    :return: 验证有效的海报URL，失败返回空字符串
+    :return: pixhost直链URL，失败返回空字符串
     """
     if not original_url:
         return ""
 
+    print(f"[*] 开始验证海报链接...")
+    print(f"[*] 检测到非pixhost图片，执行智能海报获取...")
     print(f"开始智能海报URL验证: {original_url}")
 
     # 检查是否为豆瓣图片
@@ -2744,7 +2747,15 @@ def _get_smart_poster_url(original_url: str) -> str:
 
             if _validate_image_url(candidate_url):
                 print(f"✓ 验证成功！使用 img{domain_num} 域名")
-                return candidate_url
+                print(f"[*] 智能海报获取成功: {candidate_url}")
+                
+                # 转存到pixhost
+                pixhost_url = _transfer_poster_to_pixhost(candidate_url)
+                if pixhost_url:
+                    return pixhost_url
+                else:
+                    print("[!] pixhost转存失败，使用原始验证URL")
+                    return candidate_url
             else:
                 print(f"✗ img{domain_num} 验证失败")
 
@@ -2763,7 +2774,15 @@ def _get_smart_poster_url(original_url: str) -> str:
 
             if _validate_image_url(third_party_url):
                 print("✓ 第三方URL验证成功")
-                return third_party_url
+                print(f"[*] 智能海报获取成功: {third_party_url}")
+                
+                # 转存到pixhost
+                pixhost_url = _transfer_poster_to_pixhost(third_party_url)
+                if pixhost_url:
+                    return pixhost_url
+                else:
+                    print("[!] pixhost转存失败，使用原始验证URL")
+                    return third_party_url
             else:
                 print("✗ 第三方URL验证失败")
 
@@ -2772,7 +2791,15 @@ def _get_smart_poster_url(original_url: str) -> str:
         print("非豆瓣图片，直接验证原始URL")
         if _validate_image_url(original_url):
             print("✓ 原始URL验证成功")
-            return original_url
+            print(f"[*] 智能海报获取成功: {original_url}")
+            
+            # 转存到pixhost
+            pixhost_url = _transfer_poster_to_pixhost(original_url)
+            if pixhost_url:
+                return pixhost_url
+            else:
+                print("[!] pixhost转存失败，使用原始验证URL")
+                return original_url
         else:
             print("✗ 原始URL验证失败")
 

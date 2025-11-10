@@ -335,7 +335,14 @@ class CrabptUploader(SpecialUploader):
             final_main_title = self._build_title(standardized_params)
             logger.info("参数适配完成。")
 
-            # 2. 准备完整的 form_data，包含 CrabPT 站点需要的所有参数
+            # 2. 从配置读取匿名上传设置
+            from config import config_manager
+            config = config_manager.get()
+            upload_settings = config.get("upload_settings", {})
+            anonymous_upload = upload_settings.get("anonymous_upload", True)
+            uplver_value = "yes" if anonymous_upload else "no"
+            
+            # 准备完整的 form_data，包含 CrabPT 站点需要的所有参数
             form_data = {
                 "name":
                 final_main_title,
@@ -348,7 +355,7 @@ class CrabptUploader(SpecialUploader):
                 "technical_info":
                 self.upload_data.get("mediainfo", ""),
                 "uplver":
-                "yes",  # 默认匿名上传
+                uplver_value,  # 根据配置设置匿名上传
                 # 添加 CrabPT 站点可能需要的额外参数
                 "douban_link":
                 self.upload_data.get("douban_link", ""),
