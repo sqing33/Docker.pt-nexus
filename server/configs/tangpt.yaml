@@ -1,0 +1,133 @@
+site_name: "TangPT"
+
+form_fields:
+  medium: "medium_sel[4]"
+  video_codec: "codec_sel[4]"
+  resolution: "standard_sel[4]"
+  team: "team_sel[4]"
+  category: "type"
+  tags[4][]: "tags[]"
+
+source_parsers:
+  source_params:
+    type:
+      source_key: "类型"
+    medium:
+      source_key: "媒介"
+    video_codec:
+      source_key: "视频编码"
+    resolution:
+      source_key: "分辨率"
+    team:
+      source_key: "制作组"
+
+  standard_keys:
+    type:
+      "电影/Movies": "category.movie"
+      "连续剧/TV Series": "category.tv_series"
+      "综艺/TV Shows": "category.tv_shows"
+      "纪录片/Documentaries": "category.documentaries"
+      "动漫/Animations": "category.animation"
+      "音乐视频/Music Videos": "category.mv"
+      "体育/Sports": "category.sports"
+      "高品质音频/HQ Audio": "category.music"
+      "其他/Misc": "category.other"
+
+    medium:
+      "Track": "medium.track"
+      "CD": "medium.cd"
+      "DVDR": "medium.dvdr"
+      "HDTV": "medium.hdtv"
+      "MiniBD": "medium.minibd"
+      "Encode": "medium.encode"
+      "Remux": "medium.remux"
+      "HD DVD": "medium.hddvd"
+      "Blu-ray": "medium.bluray"
+      "WEB-DL": "medium.webdl"
+      "BluRay": "medium.bluray"
+      "WEBRip": "medium.webrip"
+      "Other": "medium.other"
+
+    video_codec:
+      "H.264/AVC/x264": "video.h264"
+      "VC-1": "video.vc1"
+      "Xvid": "video.xvid"
+      "MPEG-2": "video.mpeg2"
+      "HEVC/H.265/x265": "video.h265"
+      "Other": "video.other"
+
+    resolution:
+      "1080p": "resolution.r1080p"
+      "1080i": "resolution.r1080i"
+      "720p": "resolution.r720p"
+      "SD": "resolution.sd"
+      "4K": "resolution.r2160p"
+      "Other": "resolution.other"
+
+    team:
+      "HDS": "team.hds"
+      "CHD": "team.chd"
+      "MySiLU": "team.mysilu"
+      "WiKi": "team.wiki"
+      "Other": "team.other"
+
+mappings:
+  type:
+    "category.movie": "401"
+    "category.tv_series": "402"
+    "category.tv_shows": "403"
+    "category.documentaries": "404"
+    "category.animation": "405"
+    "category.mv": "406"
+    "category.sports": "407"
+    "category.music": "408"
+    "category.other": "409"
+    "default": "409"
+
+  medium:
+    "medium.track": "9"
+    "medium.cd": "8"
+    "medium.dvdr": "6"
+    "medium.hdtv": "5"
+    "medium.minibd": "4"
+    "medium.encode": "7"
+    "medium.remux": "3"
+    "medium.hddvd": "2"
+    "medium.bluray": "1"
+    "medium.webdl": "10"
+    "medium.webrip": "12"
+    "medium.other": "13"
+    "default": "13"
+
+  video_codec:
+    "video.h264": "1"
+    "video.vc1": "2"
+    "video.xvid": "3"
+    "video.mpeg2": "4"
+    "video.h265": "5"
+    "video.other": "5"
+    "default": "5"
+
+  resolution:
+    "resolution.r1080p": "1"
+    "resolution.r1080i": "2"
+    "resolution.r720p": "3"
+    "resolution.sd": "4"
+    "resolution.r2160p": "1"
+    "resolution.other": "4"
+    "default": "4"
+
+  team:
+    "team.hds": "1"
+    "team.chd": "2"
+    "team.mysilu": "3"
+    "team.wiki": "4"
+    "team.other": "5"
+    "default": "5"
+
+  tag:
+    "tag.DIY": 4
+    "tag.国语": 5
+    "tag.中字": 6
+    "tag.HDR": 7
+    "default": null

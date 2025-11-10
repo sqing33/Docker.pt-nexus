@@ -1246,5 +1246,14 @@
     "group": "-Moment",
     "migration": 0,
     "speed_limit": 10
+  },
+  {
+    "site": "tangpt",
+    "nickname": "躺平",
+    "base_url": "www.tangpt.top",
+    "special_tracker_domain": null,
+    "group": null,
+    "migration": 2,
+    "speed_limit": 10
   }
 ]

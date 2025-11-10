@@ -153,7 +153,7 @@ func init() {
 	if os.Getenv("DEV_ENV") == "true" {
 		// 开发环境
 		coreAPIURL = getEnv("CORE_API_URL", "http://localhost:35274")
-		tempDir = getEnv("TEMP_DIR", "/root/Code/Dockerfile/Docker.pt-nexus/server/data/tmp")
+		tempDir = getEnv("TEMP_DIR", "/root/Code/Docker.pt-nexus-dev/server/data/tmp")
 	} else {
 		// 生产环境
 		coreAPIURL = getEnv("CORE_API_URL", "http://localhost:5274")
