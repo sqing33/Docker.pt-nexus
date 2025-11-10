@@ -437,33 +437,57 @@ class Extractor:
                 if match := re.search(r'\[img\](.*?)\[/img\]', poster_img,
                                       re.IGNORECASE):
                     poster_url = match.group(1)
-                    logging.info(f"开始验证海报链接: {poster_url}")
-                    print(f"[*] 开始验证海报链接...")
+                    logging.info(f"开始处理海报链接: {poster_url}")
+                    print(f"[*] 开始处理海报链接...")
 
                     # 检查是否为 pixhost 图片
-                    is_pixhost = 'pixhost.to' in poster_url.lower()
+                    is_pixhost = 'pixhost.to' in poster_url.lower() or 'pixhost.org' in poster_url.lower()
                     
                     if is_pixhost:
-                        # 是 pixhost 图片，直接跳过验证
-                        logging.info("检测到pixhost图片，跳过验证直接使用。")
-                        print(f"[*] 检测到pixhost图片，跳过验证直接使用。")
+                        # 是 pixhost 图片，直接跳过验证和转存
+                        logging.info("检测到pixhost图片，直接使用。")
+                        print(f"[*] 检测到pixhost图片，直接使用。")
                     else:
-                        # 不是 pixhost 图片，强制使用智能海报获取
-                        logging.info("检测到非pixhost图片，执行智能海报获取...")
-                        print(f"[*] 检测到非pixhost图片，执行智能海报获取...")
+                        # 不是 pixhost 图片，需要验证并转存
+                        logging.info("检测到非pixhost图片，执行验证和转存...")
+                        print(f"[*] 检测到非pixhost图片，执行验证和转存...")
                         
-                        from utils.media_helper import _get_smart_poster_url
-                        smart_poster_url = _get_smart_poster_url(poster_url)
-                        
-                        if smart_poster_url:
-                            # 更新海报链接
-                            images[0] = f"[img]{smart_poster_url}[/img]"
-                            logging.info(f"智能海报获取成功: {smart_poster_url}")
-                            print(f"[*] 智能海报获取成功: {smart_poster_url}")
+                        # 先验证海报是否有效
+                        from utils.image_validator import is_image_url_valid_robust
+                        if is_image_url_valid_robust(poster_url):
+                            logging.info(f"海报验证成功: {poster_url}")
+                            print(f"[*] 海报验证成功，开始转存到pixhost...")
+                            
+                            # 转存到pixhost
+                            from utils.media_helper import _transfer_poster_to_pixhost
+                            pixhost_url = _transfer_poster_to_pixhost(poster_url)
+                            
+                            if pixhost_url:
+                                # 转存成功，更新海报链接
+                                images[0] = f"[img]{pixhost_url}[/img]"
+                                logging.info(f"海报转存成功，更新images[0]为: {images[0]}")
+                                print(f"[*] 海报转存成功，更新images[0]为: {images[0]}")
+                            else:
+                                # 转存失败，使用原始有效链接
+                                logging.warning(f"海报转存失败，使用原始链接")
+                                print(f"  [!] 海报转存失败，使用原始链接")
                         else:
-                            logging.warning(f"智能海报获取失败，海报标记为无效")
-                            print(f"  [!] 智能海报获取失败，海报标记为无效")
-                            poster_valid = False
+                            # 验证失败，尝试智能获取
+                            logging.warning(f"海报验证失败，尝试智能获取...")
+                            print(f"  [!] 海报验证失败，尝试智能获取...")
+                            
+                            from utils.media_helper import _get_smart_poster_url
+                            smart_poster_url = _get_smart_poster_url(poster_url)
+                            
+                            if smart_poster_url:
+                                # 智能获取成功（已经转存到pixhost）
+                                images[0] = f"[img]{smart_poster_url}[/img]"
+                                logging.info(f"智能海报获取成功，更新images[0]为: {images[0]}")
+                                print(f"[*] 智能海报获取成功，更新images[0]为: {images[0]}")
+                            else:
+                                logging.warning(f"智能海报获取失败，海报标记为无效")
+                                print(f"  [!] 智能海报获取失败，海报标记为无效")
+                                poster_valid = False
 
             # 注意：视频截图（images[1:]）不在此处验证，将在 migrator.py 中统一验证和重新生成
 

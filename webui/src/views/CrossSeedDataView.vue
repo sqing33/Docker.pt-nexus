@@ -1,58 +1,92 @@
 <template>
   <div class="cross-seed-data-view">
-    <el-alert v-if="error" :title="error" type="error" show-icon :closable="false"
-      style="margin: 0; border-radius: 0;"></el-alert>
+    <el-alert
+      v-if="error"
+      :title="error"
+      type="error"
+      show-icon
+      :closable="false"
+      style="margin: 0; border-radius: 0"
+    ></el-alert>
 
     <!-- 搜索和控制栏 -->
     <div class="search-and-controls glass-table">
-      <el-input v-model="searchQuery" placeholder="搜索标题或种子ID..." clearable class="search-input"
-        style="width: 300px; margin-right: 15px;" />
+      <el-input
+        v-model="searchQuery"
+        placeholder="搜索标题或种子ID..."
+        clearable
+        class="search-input"
+        style="width: 300px; margin-right: 15px"
+      />
 
       <!-- 批量转种按钮 -->
-      <el-button type="success" @click="openBatchCrossSeedDialog" plain style="margin-right: 15px;"
-        :disabled="!canBatchCrossSeed || isDeleteMode">
+      <el-button
+        type="success"
+        @click="openBatchCrossSeedDialog"
+        plain
+        style="margin-right: 15px"
+        :disabled="!canBatchCrossSeed || isDeleteMode"
+      >
         {{ batchCrossSeedButtonText }}
       </el-button>
 
       <!-- 查看记录按钮 -->
-      <el-button type="info" @click="openRecordViewDialog" plain style="margin-right: 15px;">
+      <el-button type="info" @click="openRecordViewDialog" plain style="margin-right: 15px">
         查看处理记录
       </el-button>
 
       <!-- 批量获取数据按钮 -->
-      <el-button type="warning" @click="openBatchFetchDialog" plain style="margin-right: 15px;">
+      <el-button type="warning" @click="openBatchFetchDialog" plain style="margin-right: 15px">
         批量获取数据
       </el-button>
 
       <!-- 批量删除模式切换按钮 -->
-      <el-button type="danger"
-        @click="isDeleteMode && selectedRows.length > 0 ? executeBatchDelete() : toggleDeleteMode()" plain
-        style="margin-right: 15px;">
+      <el-button
+        type="danger"
+        @click="isDeleteMode && selectedRows.length > 0 ? executeBatchDelete() : toggleDeleteMode()"
+        plain
+        style="margin-right: 15px"
+      >
         {{ getDeleteButtonText() }}
       </el-button>
 
       <!-- 筛选按钮 -->
-      <el-button type="primary" @click="openFilterDialog" plain style="margin-right: 15px;">
+      <el-button type="primary" @click="openFilterDialog" plain style="margin-right: 15px">
         筛选
       </el-button>
 
-
-      <div v-if="hasActiveFilters" class="current-filters"
-        style="margin-right: 15px; display: flex; align-items: center;">
+      <div
+        v-if="hasActiveFilters"
+        class="current-filters"
+        style="margin-right: 15px; display: flex; align-items: center"
+      >
         <el-tag type="info" size="default" effect="plain">{{ currentFilterText }}</el-tag>
-        <el-button type="danger" link style="padding: 0; margin-left: 8px;" @click="clearFilters">清除</el-button>
+        <el-button type="danger" link style="padding: 0; margin-left: 8px" @click="clearFilters"
+          >清除</el-button
+        >
       </div>
 
       <div class="pagination-controls" v-if="tableData.length > 0">
-        <el-pagination v-model:current-page="currentPage" v-model:page-size="pageSize" :page-sizes="[20, 50, 100]"
-          :total="total" layout="total, sizes, prev, pager, next, jumper" @size-change="handleSizeChange"
-          @current-change="handleCurrentChange" background>
+        <el-pagination
+          v-model:current-page="currentPage"
+          v-model:page-size="pageSize"
+          :page-sizes="[20, 50, 100]"
+          :total="total"
+          layout="total, sizes, prev, pager, next, jumper"
+          @size-change="handleSizeChange"
+          @current-change="handleCurrentChange"
+          background
+        >
         </el-pagination>
       </div>
     </div>
 
     <!-- 筛选器弹窗 -->
-    <div v-if="filterDialogVisible" class="filter-overlay" @click.self="filterDialogVisible = false">
+    <div
+      v-if="filterDialogVisible"
+      class="filter-overlay"
+      @click.self="filterDialogVisible = false"
+    >
       <el-card class="filter-card">
         <template #header>
           <div class="filter-card-header">
@@ -63,12 +97,19 @@
         <div class="filter-card-body">
           <el-divider content-position="left">保存路径</el-divider>
           <div class="path-tree-container">
-            <el-tree ref="pathTreeRef" :data="pathTreeData" show-checkbox node-key="path" default-expand-all
-              check-on-click-node :props="{ class: 'path-tree-node' }" />
+            <el-tree
+              ref="pathTreeRef"
+              :data="pathTreeData"
+              show-checkbox
+              node-key="path"
+              default-expand-all
+              check-on-click-node
+              :props="{ class: 'path-tree-node' }"
+            />
           </div>
 
           <el-divider content-position="left">删除状态</el-divider>
-          <el-radio-group v-model="tempFilters.isDeleted" style="width: 100%;">
+          <el-radio-group v-model="tempFilters.isDeleted" style="width: 100%">
             <el-radio :label="''">全部</el-radio>
             <el-radio :label="'0'">未删除</el-radio>
             <el-radio :label="'1'">已删除</el-radio>
@@ -78,9 +119,16 @@
           <div class="target-sites-container">
             <div class="selected-site-display">
               <div v-if="selectedTargetSite" class="selected-site-info">
-                <el-tag type="info" size="default" effect="plain">已选择: {{ selectedTargetSite }}</el-tag>
-                <el-button type="danger" link style="padding: 0; margin-left: 8px;"
-                  @click="clearSelectedTargetSite">清除</el-button>
+                <el-tag type="info" size="default" effect="plain"
+                  >已选择: {{ selectedTargetSite }}</el-tag
+                >
+                <el-button
+                  type="danger"
+                  link
+                  style="padding: 0; margin-left: 8px"
+                  @click="clearSelectedTargetSite"
+                  >清除</el-button
+                >
               </div>
               <div v-else class="selected-site-info">
                 <el-tag type="info" size="default" effect="plain">未选择</el-tag>
@@ -88,7 +136,12 @@
             </div>
             <div class="target-sites-radio-container">
               <el-radio-group v-model="selectedTargetSite" class="target-sites-radio-group">
-                <el-radio v-for="site in targetSitesList" :key="site" :label="site" class="target-site-radio">
+                <el-radio
+                  v-for="site in targetSitesList"
+                  :key="site"
+                  :label="site"
+                  class="target-site-radio"
+                >
                   {{ site }}
                 </el-radio>
               </el-radio-group>
@@ -103,12 +156,31 @@
     </div>
 
     <div class="table-container">
-      <el-table :data="tableData" v-loading="loading" border style="width: 100%" empty-text="暂无转种数据"
-        :max-height="tableMaxHeight" height="100%" :row-class-name="tableRowClassName"
-        @selection-change="handleSelectionChange" class="glass-table" >
-        <el-table-column type="selection" width="55" align="center" :selectable="checkSelectable"></el-table-column>
-        <el-table-column prop="torrent_id" label="种子ID" align="center" width="80"
-          show-overflow-tooltip></el-table-column>
+      <el-table
+        :data="tableData"
+        v-loading="loading"
+        border
+        style="width: 100%"
+        empty-text="暂无转种数据"
+        :max-height="tableMaxHeight"
+        height="100%"
+        :row-class-name="tableRowClassName"
+        @selection-change="handleSelectionChange"
+        class="glass-table"
+      >
+        <el-table-column
+          type="selection"
+          width="55"
+          align="center"
+          :selectable="checkSelectable"
+        ></el-table-column>
+        <el-table-column
+          prop="torrent_id"
+          label="种子ID"
+          align="center"
+          width="80"
+          show-overflow-tooltip
+        ></el-table-column>
 
         <el-table-column prop="nickname" label="站点名称" width="100" align="center">
           <template #default="scope">
@@ -129,56 +201,94 @@
         </el-table-column>
         <el-table-column prop="type" label="类型" width="100" align="center">
           <template #default="scope">
-            <div class="mapped-cell"
-              :class="{ 'invalid-value': !isValidFormat(scope.row.type) || !isMapped('type', scope.row.type) }">
+            <div
+              class="mapped-cell"
+              :class="{
+                'invalid-value':
+                  !isValidFormat(scope.row.type) || !isMapped('type', scope.row.type),
+              }"
+            >
               {{ getMappedValue('type', scope.row.type) }}
             </div>
           </template>
         </el-table-column>
         <el-table-column prop="medium" label="媒介" width="100" align="center">
           <template #default="scope">
-            <div class="mapped-cell"
-              :class="{ 'invalid-value': !isValidFormat(scope.row.medium) || !isMapped('medium', scope.row.medium) }">
+            <div
+              class="mapped-cell"
+              :class="{
+                'invalid-value':
+                  !isValidFormat(scope.row.medium) || !isMapped('medium', scope.row.medium),
+              }"
+            >
               {{ getMappedValue('medium', scope.row.medium) }}
             </div>
           </template>
         </el-table-column>
         <el-table-column prop="video_codec" label="视频编码" width="120" align="center">
           <template #default="scope">
-            <div class="mapped-cell"
-              :class="{ 'invalid-value': !isValidFormat(scope.row.video_codec) || !isMapped('video_codec', scope.row.video_codec) }">
+            <div
+              class="mapped-cell"
+              :class="{
+                'invalid-value':
+                  !isValidFormat(scope.row.video_codec) ||
+                  !isMapped('video_codec', scope.row.video_codec),
+              }"
+            >
               {{ getMappedValue('video_codec', scope.row.video_codec) }}
             </div>
           </template>
         </el-table-column>
         <el-table-column prop="audio_codec" label="音频编码" width="90" align="center">
           <template #default="scope">
-            <div class="mapped-cell"
-              :class="{ 'invalid-value': !isValidFormat(scope.row.audio_codec) || !isMapped('audio_codec', scope.row.audio_codec) }">
+            <div
+              class="mapped-cell"
+              :class="{
+                'invalid-value':
+                  !isValidFormat(scope.row.audio_codec) ||
+                  !isMapped('audio_codec', scope.row.audio_codec),
+              }"
+            >
               {{ getMappedValue('audio_codec', scope.row.audio_codec) }}
             </div>
           </template>
         </el-table-column>
         <el-table-column prop="resolution" label="分辨率" width="90" align="center">
           <template #default="scope">
-            <div class="mapped-cell"
-              :class="{ 'invalid-value': !isValidFormat(scope.row.resolution) || !isMapped('resolution', scope.row.resolution) }">
+            <div
+              class="mapped-cell"
+              :class="{
+                'invalid-value':
+                  !isValidFormat(scope.row.resolution) ||
+                  !isMapped('resolution', scope.row.resolution),
+              }"
+            >
               {{ getMappedValue('resolution', scope.row.resolution) }}
             </div>
           </template>
         </el-table-column>
         <el-table-column prop="team" label="制作组" width="120" align="center">
           <template #default="scope">
-            <div class="mapped-cell"
-              :class="{ 'invalid-value': !isValidFormat(scope.row.team) || !isMapped('team', scope.row.team) }">
+            <div
+              class="mapped-cell"
+              :class="{
+                'invalid-value':
+                  !isValidFormat(scope.row.team) || !isMapped('team', scope.row.team),
+              }"
+            >
               {{ getMappedValue('team', scope.row.team) }}
             </div>
           </template>
         </el-table-column>
         <el-table-column prop="source" label="产地" width="100" align="center">
           <template #default="scope">
-            <div class="mapped-cell"
-              :class="{ 'invalid-value': !isValidFormat(scope.row.source) || !isMapped('source', scope.row.source) }">
+            <div
+              class="mapped-cell"
+              :class="{
+                'invalid-value':
+                  !isValidFormat(scope.row.source) || !isMapped('source', scope.row.source),
+              }"
+            >
               {{ getMappedValue('source', scope.row.source) }}
             </div>
           </template>
@@ -186,9 +296,14 @@
         <el-table-column prop="tags" label="标签" align="center" width="170">
           <template #default="scope">
             <div class="tags-cell">
-              <el-tag v-for="(tag, index) in getMappedTags(scope.row.tags)" :key="tag" size="small"
-                :type="getTagType(scope.row.tags, index)" :class="getTagClass(scope.row.tags, index)"
-                style="margin: 2px;">
+              <el-tag
+                v-for="(tag, index) in getMappedTags(scope.row.tags)"
+                :key="tag"
+                size="small"
+                :type="getTagType(scope.row.tags, index)"
+                :class="getTagClass(scope.row.tags, index)"
+                style="margin: 2px"
+              >
                 {{ tag }}
               </el-tag>
             </div>
@@ -204,15 +319,24 @@
         <el-table-column prop="updated_at" label="更新时间" width="140" align="center" sortable>
           <template #default="scope">
             <div class="mapped-cell datetime-cell">
-              {{ scope.row.is_deleted || hasRestrictedTag(scope.row.tags) ? '已删除/禁转' : formatDateTime(scope.row.updated_at) }}
+              {{
+                scope.row.is_deleted || hasRestrictedTag(scope.row.tags)
+                  ? '已删除/禁转'
+                  : formatDateTime(scope.row.updated_at)
+              }}
             </div>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="130" align="center" fixed="right">
           <template #default="scope">
             <el-button size="small" type="primary" @click="handleEdit(scope.row)">编辑</el-button>
-            <el-button size="small" type="danger" @click="handleDelete(scope.row)"
-              style="margin-left: 5px;">删除</el-button>
+            <el-button
+              size="small"
+              type="danger"
+              @click="handleDelete(scope.row)"
+              style="margin-left: 5px"
+              >删除</el-button
+            >
           </template>
         </el-table-column>
       </el-table>
@@ -228,8 +352,11 @@
           </div>
         </template>
         <div class="cross-seed-content">
-          <CrossSeedPanel :show-complete-button="true" @complete="handleCrossSeedComplete"
-            @cancel="closeCrossSeedDialog" />
+          <CrossSeedPanel
+            :show-complete-button="true"
+            @complete="handleCrossSeedComplete"
+            @cancel="closeCrossSeedDialog"
+          />
         </div>
       </el-card>
     </div>
@@ -248,7 +375,7 @@
             <div class="batch-info">
               <p><strong>目标站点：</strong>{{ activeFilters.excludeTargetSites }}</p>
               <p><strong>选中种子数量：</strong>{{ selectedRows.length }} 个</p>
-              <p style="color: #909399; font-size: 13px; margin-top: 10px;">
+              <p style="color: #909399; font-size: 13px; margin-top: 10px">
                 将把选中的种子转种到上述目标站点，请确认无误后点击确定。
               </p>
             </div>
@@ -267,15 +394,26 @@
         <template #header>
           <div class="modal-header">
             <span>批量转种记录 {{ refreshTimer ? '(自动刷新中...)' : '' }}</span>
+            <div class="record-warning-text">批量转种需要等待种子文件验证，每个种子大概3s</div>
             <div class="record-header-controls">
-              <el-button type="primary" size="small" @click="refreshRecords" :loading="recordsLoading">
+              <el-button
+                type="primary"
+                size="small"
+                @click="refreshRecords"
+                :loading="recordsLoading"
+              >
                 刷新
               </el-button>
               <el-button v-if="refreshTimer" type="warning" size="small" @click="stopAutoRefresh">
                 停止自动刷新
               </el-button>
               <!-- ✨ CHANGE START: Modified button logic -->
-              <el-button v-else-if="isBatchRunning" type="success" size="small" @click="startAutoRefresh">
+              <el-button
+                v-else-if="isBatchRunning"
+                type="success"
+                size="small"
+                @click="startAutoRefresh"
+              >
                 开启自动刷新
               </el-button>
               <!-- ✨ CHANGE END -->
@@ -286,17 +424,39 @@
         <div class="record-view-content">
           <!-- 种子处理记录表格 -->
           <div class="records-table-container" v-if="records.length > 0">
-            <el-table :data="records" style="width: 100%" size="small" v-loading="recordsLoading"
-              element-loading-text="加载记录中..." stripe>
+            <el-table
+              :data="records"
+              style="width: 100%"
+              size="small"
+              v-loading="recordsLoading"
+              element-loading-text="加载记录中..."
+              stripe
+            >
               <el-table-column prop="batch_id" label="批次ID" width="80" align="center">
                 <template #default="scope">
-                  <el-tag size="small" :type="getBatchTagType(getBatchNumber(scope.row.batch_id))" effect="dark">
+                  <el-tag
+                    size="small"
+                    :type="getBatchTagType(getBatchNumber(scope.row.batch_id))"
+                    effect="dark"
+                  >
                     {{ getBatchNumber(scope.row.batch_id) }}
                   </el-tag>
                 </template>
               </el-table-column>
-              <el-table-column prop="torrent_id" label="种子ID" width="65" align="center" show-overflow-tooltip />
-              <el-table-column prop="title" label="种子标题" min-width="250" align="center" show-overflow-tooltip>
+              <!-- <el-table-column
+                prop="torrent_id"
+                label="种子ID"
+                width="65"
+                align="center"
+                show-overflow-tooltip
+              /> -->
+              <el-table-column
+                prop="title"
+                label="种子标题"
+                min-width="250"
+                align="center"
+                show-overflow-tooltip
+              >
               </el-table-column>
               <el-table-column prop="source_site" label="源站点" width="80" align="center" />
               <el-table-column prop="target_site" label="目标站点" width="80" align="center" />
@@ -316,41 +476,69 @@
               <el-table-column prop="progress" label="进度" width="100" align="center">
                 <template #default="scope">
                   <div v-if="scope.row.progress" class="progress-cell">
-                    <el-progress :percentage="calculateProgress(scope.row.progress)"
-                      :color="getProgressColor(calculateProgress(scope.row.progress))" :stroke-width="8"
-                      :show-text="false" class="progress-bar" />
+                    <el-progress
+                      :percentage="calculateProgress(scope.row.progress)"
+                      :color="getProgressColor(calculateProgress(scope.row.progress))"
+                      :stroke-width="8"
+                      :show-text="false"
+                      class="progress-bar"
+                    />
                     <span class="progress-text">{{ scope.row.progress }}</span>
                   </div>
                   <span v-else>-</span>
                 </template>
               </el-table-column>
-              <el-table-column prop="error_detail" label="详情" width="110" align="center" show-overflow-tooltip>
+              <el-table-column
+                prop="error_detail"
+                label="详情"
+                width="110"
+                align="center"
+                show-overflow-tooltip
+              >
                 <template #default="scope">
                   <span v-if="scope.row.status === 'success' && scope.row.success_url">
-                    <el-link type="primary" :href="scope.row.success_url" target="_blank">查看详情页</el-link>
+                    <el-link type="primary" :href="scope.row.success_url" target="_blank"
+                      >查看详情页</el-link
+                    >
                   </span>
                   <span v-else-if="scope.row.error_detail">{{ scope.row.error_detail }}</span>
                   <span v-else>-</span>
                 </template>
               </el-table-column>
-              <el-table-column prop="downloader_add_result" label="下载器状态" width="150" align="center">
+              <el-table-column
+                prop="downloader_add_result"
+                label="下载器状态"
+                width="150"
+                align="center"
+              >
                 <template #default="scope">
                   <!-- 检查是否有下载器结果 -->
                   <template v-if="scope.row.downloader_add_result">
                     <!-- ✨ 如果是失败状态 (以'失败'开头) -->
-                    <el-tooltip v-if="getDownloaderAddStatusType(scope.row.downloader_add_result) === 'danger'"
-                      effect="dark" placement="top">
+                    <el-tooltip
+                      v-if="
+                        getDownloaderAddStatusType(scope.row.downloader_add_result) === 'danger'
+                      "
+                      effect="dark"
+                      placement="top"
+                    >
                       <!-- Tooltip 的内容：显示格式化后的完整错误信息 -->
                       <template #content>
                         {{ formatDownloaderAddResult(scope.row.downloader_add_result) }}
                       </template>
 
                       <!-- 表格中可见的内容：直接显示文本，不使用tag -->
-                      <span style="color: #f56c6c;">错误</span>
+                      <span style="color: #f56c6c">错误</span>
                     </el-tooltip>
 
                     <!-- ✨ 如果是成功状态或其他非失败状态 -->
-                    <span v-else style="text-align: center;" :style="{ color: getDownloaderAddStatusColor(scope.row.downloader_add_result) }">
+                    <span
+                      v-else
+                      style="text-align: center"
+                      :style="{
+                        color: getDownloaderAddStatusColor(scope.row.downloader_add_result),
+                      }"
+                    >
                       {{ formatDownloaderAddResult(scope.row.downloader_add_result) }}
                     </span>
                   </template>
@@ -392,7 +580,10 @@
           </div>
         </template>
         <div class="batch-fetch-main-content">
-          <BatchFetchPanel @cancel="closeBatchFetchDialog" @fetch-completed="handleFetchCompleted" />
+          <BatchFetchPanel
+            @cancel="closeBatchFetchDialog"
+            @fetch-completed="handleFetchCompleted"
+          />
         </div>
       </el-card>
     </div>
@@ -418,7 +609,6 @@ const emit = defineEmits<{
 onMounted(() => {
   emit('ready', fetchData)
 })
-
 
 interface SeedParameter {
   id: number
@@ -448,7 +638,7 @@ interface SeedParameter {
   created_at: string
   updated_at: string
   is_deleted: boolean
-  is_reviewed: boolean  // 新增：是否已审查
+  is_reviewed: boolean // 新增：是否已审查
 }
 
 interface PathNode {
@@ -479,7 +669,7 @@ const reverseMappings = ref<ReverseMappings>({
   source: {},
   team: {},
   tags: {},
-  site_name: {}
+  site_name: {},
 })
 
 const tableData = ref<SeedParameter[]>([])
@@ -547,7 +737,7 @@ const currentFilterText = computed(() => {
 
   // 处理保存路径筛选
   if (filters.savePath) {
-    const paths = filters.savePath.split(',').filter(path => path.trim() !== '')
+    const paths = filters.savePath.split(',').filter((path) => path.trim() !== '')
     if (paths.length > 0) {
       filterTexts.push(`路径: ${paths.length}个`)
     }
@@ -570,9 +760,11 @@ const currentFilterText = computed(() => {
 
 // 检查是否可以进行批量转种
 const canBatchCrossSeed = computed(() => {
-  return selectedRows.value.length > 0 &&
+  return (
+    selectedRows.value.length > 0 &&
     activeFilters.value.excludeTargetSites &&
     activeFilters.value.excludeTargetSites.trim() !== ''
+  )
 })
 
 // 批量转种按钮的文字
@@ -591,7 +783,8 @@ const batchCrossSeedButtonText = computed(() => {
 const hasActiveFilters = computed(() => {
   const filters = activeFilters.value
   return (
-    (filters.savePath && filters.savePath.split(',').filter(path => path.trim() !== '').length > 0) ||
+    (filters.savePath &&
+      filters.savePath.split(',').filter((path) => path.trim() !== '').length > 0) ||
     filters.isDeleted !== '' ||
     (filters.excludeTargetSites && filters.excludeTargetSites.trim() !== '')
   )
@@ -602,10 +795,10 @@ const filterDialogVisible = ref<boolean>(false)
 const activeFilters = ref({
   savePath: '',
   isDeleted: '',
-  excludeTargetSites: ''  // 新增：排除目标站点筛选
+  excludeTargetSites: '', // 新增：排除目标站点筛选
 })
 const tempFilters = ref({ ...activeFilters.value })
-const targetSitesList = ref<string[]>([])  // 新增：目标站点列表
+const targetSitesList = ref<string[]>([]) // 新增：目标站点列表
 
 // 计算属性：选中的目标站点（单选）
 const selectedTargetSite = computed({
@@ -614,7 +807,7 @@ const selectedTargetSite = computed({
   },
   set: (site) => {
     tempFilters.value.excludeTargetSites = site
-  }
+  },
 })
 
 // 清除选中的目标站点
@@ -659,7 +852,10 @@ const getMappedTags = (tags: string[] | string) => {
       tagList = JSON.parse(tags)
     } catch {
       // 如果解析失败，按逗号分割
-      tagList = tags.split(',').map(tag => tag.trim()).filter(tag => tag)
+      tagList = tags
+        .split(',')
+        .map((tag) => tag.trim())
+        .filter((tag) => tag)
     }
   } else if (Array.isArray(tags)) {
     tagList = tags
@@ -681,7 +877,10 @@ const getTagType = (tags: string[] | string, index: number) => {
     try {
       tagList = JSON.parse(tags)
     } catch {
-      tagList = tags.split(',').map(tag => tag.trim()).filter(tag => tag)
+      tagList = tags
+        .split(',')
+        .map((tag) => tag.trim())
+        .filter((tag) => tag)
     }
   } else if (Array.isArray(tags)) {
     tagList = tags
@@ -712,7 +911,10 @@ const getTagClass = (tags: string[] | string, index: number) => {
     try {
       tagList = JSON.parse(tags)
     } catch {
-      tagList = tags.split(',').map(tag => tag.trim()).filter(tag => tag)
+      tagList = tags
+        .split(',')
+        .map((tag) => tag.trim())
+        .filter((tag) => tag)
     }
   } else if (Array.isArray(tags)) {
     tagList = tags
@@ -757,12 +959,20 @@ const formatDateTime = (dateString: string) => {
 
 // 检查行是否有无效参数
 const hasInvalidParams = (row: SeedParameter): boolean => {
-  const categories: (keyof Omit<ReverseMappings, 'tags' | 'site_name'>)[] = ['type', 'medium', 'video_codec', 'audio_codec', 'resolution', 'team', 'source'];
+  const categories: (keyof Omit<ReverseMappings, 'tags' | 'site_name'>)[] = [
+    'type',
+    'medium',
+    'video_codec',
+    'audio_codec',
+    'resolution',
+    'team',
+    'source',
+  ]
 
   for (const category of categories) {
-    const value = row[category as keyof SeedParameter] as string;
+    const value = row[category as keyof SeedParameter] as string
     if (value && (!isValidFormat(value) || !isMapped(category, value))) {
-      return true;
+      return true
     }
   }
 
@@ -771,7 +981,10 @@ const hasInvalidParams = (row: SeedParameter): boolean => {
     try {
       tagList = JSON.parse(row.tags)
     } catch {
-      tagList = row.tags.split(',').map(tag => tag.trim()).filter(tag => tag)
+      tagList = row.tags
+        .split(',')
+        .map((tag) => tag.trim())
+        .filter((tag) => tag)
     }
   } else if (Array.isArray(row.tags)) {
     tagList = row.tags
@@ -830,7 +1043,7 @@ const fetchData = async () => {
       search: searchQuery.value,
       save_path: activeFilters.value.savePath,
       is_deleted: activeFilters.value.isDeleted,
-      exclude_target_sites: activeFilters.value.excludeTargetSites  // 新增：目标站点排除参数
+      exclude_target_sites: activeFilters.value.excludeTargetSites, // 新增：目标站点排除参数
     })
 
     // 调试日志：检查筛选参数
@@ -842,14 +1055,14 @@ const fetchData = async () => {
 
     // 检查响应状态
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      throw new Error(`HTTP error! status: ${response.status}`)
     }
 
-    const responseText = await response.text();
+    const responseText = await response.text()
 
     // 检查响应是否为JSON格式
     if (!responseText.startsWith('{') && !responseText.startsWith('[')) {
-      throw new Error('服务器响应不是有效的JSON格式');
+      throw new Error('服务器响应不是有效的JSON格式')
     }
 
     const result = JSON.parse(responseText)
@@ -891,34 +1104,34 @@ const saveUiSettings = async () => {
       page_size: pageSize.value,
       search_query: searchQuery.value,
       active_filters: activeFilters.value,
-    };
+    }
     await fetch('/api/ui_settings/cross_seed', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(settingsToSave)
-    });
+      body: JSON.stringify(settingsToSave),
+    })
   } catch (e: any) {
-    console.error('无法保存UI设置:', e.message);
+    console.error('无法保存UI设置:', e.message)
   }
-};
+}
 
 const loadUiSettings = async () => {
   try {
-    const response = await fetch('/api/ui_settings/cross_seed');
+    const response = await fetch('/api/ui_settings/cross_seed')
     if (!response.ok) {
-      console.warn('无法加载UI设置，将使用默认值。');
-      return;
+      console.warn('无法加载UI设置，将使用默认值。')
+      return
     }
-    const settings = await response.json();
-    pageSize.value = settings.page_size ?? 20;
-    searchQuery.value = settings.search_query ?? '';
+    const settings = await response.json()
+    pageSize.value = settings.page_size ?? 20
+    searchQuery.value = settings.search_query ?? ''
     if (settings.active_filters) {
-      Object.assign(activeFilters.value, settings.active_filters);
+      Object.assign(activeFilters.value, settings.active_filters)
     }
   } catch (e) {
-    console.error('加载UI设置时出错:', e);
+    console.error('加载UI设置时出错:', e)
   }
-};
+}
 
 const handleSizeChange = (val: number) => {
   pageSize.value = val
@@ -937,7 +1150,7 @@ const clearFilters = () => {
   activeFilters.value = {
     savePath: '',
     isDeleted: '',
-    excludeTargetSites: ''  // 新增：清除目标站点排除筛选
+    excludeTargetSites: '', // 新增：清除目标站点排除筛选
   }
   currentPage.value = 1
   fetchData()
@@ -953,7 +1166,9 @@ const openFilterDialog = () => {
     // 如果已有选中的路径，设置树的选中状态
     if (pathTreeRef.value && activeFilters.value.savePath) {
       // 将逗号分隔的路径字符串转换为数组
-      const selectedPaths = activeFilters.value.savePath.split(',').filter(path => path.trim() !== '')
+      const selectedPaths = activeFilters.value.savePath
+        .split(',')
+        .filter((path) => path.trim() !== '')
       // 设置树的选中状态，只设置叶子节点
       pathTreeRef.value.setCheckedKeys(selectedPaths, true)
     }
@@ -978,7 +1193,7 @@ const applyFilters = () => {
   saveUiSettings()
 }
 
-const crossSeedStore = useCrossSeedStore();
+const crossSeedStore = useCrossSeedStore()
 
 // 监听搜索查询的变化，自动触发搜索
 watch(searchQuery, () => {
@@ -988,31 +1203,33 @@ watch(searchQuery, () => {
 })
 
 // 控制转种弹窗的显示
-const crossSeedDialogVisible = computed(() => !!crossSeedStore.taskId);
-const selectedTorrentName = computed(() => crossSeedStore.workingParams?.title || '');
+const crossSeedDialogVisible = computed(() => !!crossSeedStore.taskId)
+const selectedTorrentName = computed(() => crossSeedStore.workingParams?.title || '')
 
 // 处理编辑按钮点击
 const handleEdit = async (row: SeedParameter) => {
   try {
     // 重置 store
-    crossSeedStore.reset();
+    crossSeedStore.reset()
 
     // 从后端API获取详细的种子参数
-    const response = await fetch(`/api/migrate/get_db_seed_info?torrent_id=${row.torrent_id}&site_name=${row.site_name}`);
+    const response = await fetch(
+      `/api/migrate/get_db_seed_info?torrent_id=${row.torrent_id}&site_name=${row.site_name}`,
+    )
 
     // 检查响应状态
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      throw new Error(`HTTP error! status: ${response.status}`)
     }
 
-    const responseText = await response.text();
+    const responseText = await response.text()
 
     // 检查响应是否为JSON格式
     if (!responseText.startsWith('{') && !responseText.startsWith('[')) {
-      throw new Error('服务器响应不是有效的JSON格式');
+      throw new Error('服务器响应不是有效的JSON格式')
     }
 
-    const result = JSON.parse(responseText);
+    const result = JSON.parse(responseText)
 
     if (result.success) {
       // 将获取到的数据设置到 store 中
@@ -1034,30 +1251,30 @@ const handleEdit = async (row: SeedParameter) => {
         sites: {
           [result.data.site_name]: {
             torrentId: result.data.torrent_id,
-            comment: `id=${result.data.torrent_id}` // 为了向后兼容，也提供comment格式
-          }
-        }
-      };
+            comment: `id=${result.data.torrent_id}`, // 为了向后兼容，也提供comment格式
+          },
+        },
+      }
 
-      crossSeedStore.setParams(torrentData);
+      crossSeedStore.setParams(torrentData)
 
       // 设置源站点信息
       const sourceInfo: ISourceInfo = {
         name: result.data.site_name,
         site: result.data.site_name.toLowerCase(), // 假设站点标识符是站点名称的小写形式
-        torrentId: result.data.torrent_id
-      };
-      crossSeedStore.setSourceInfo(sourceInfo);
+        torrentId: result.data.torrent_id,
+      }
+      crossSeedStore.setSourceInfo(sourceInfo)
 
       // 设置一个任务ID以显示弹窗
-      crossSeedStore.setTaskId(`cross_seed_${row.id}_${Date.now()}`);
+      crossSeedStore.setTaskId(`cross_seed_${row.id}_${Date.now()}`)
     } else {
-      ElMessage.error(result.error || '获取种子参数失败');
+      ElMessage.error(result.error || '获取种子参数失败')
     }
   } catch (error: any) {
-    ElMessage.error(error.message || '网络错误');
+    ElMessage.error(error.message || '网络错误')
   }
-};
+}
 
 // 处理删除按钮点击
 const handleDelete = async (row: SeedParameter) => {
@@ -1069,49 +1286,49 @@ const handleDelete = async (row: SeedParameter) => {
       {
         confirmButtonText: '确定',
         cancelButtonText: '取消',
-        type: 'warning'
-      }
-    );
+        type: 'warning',
+      },
+    )
 
     // 向后端发送删除请求 - 使用统一的 delete API
     const deleteData = {
       torrent_id: row.torrent_id,
-      site_name: row.site_name
-    };
+      site_name: row.site_name,
+    }
     const response = await fetch('/api/cross-seed-data/delete', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
       },
-      body: JSON.stringify(deleteData)
-    });
+      body: JSON.stringify(deleteData),
+    })
 
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      throw new Error(`HTTP error! status: ${response.status}`)
     }
 
-    const result = await response.json();
+    const result = await response.json()
 
     if (result.success) {
-      ElMessage.success(result.message || `删除成功`);
+      ElMessage.success(result.message || `删除成功`)
       // 重新获取数据，以更新表格
-      fetchData();
+      fetchData()
     } else {
-      ElMessage.error(result.error || '删除失败');
+      ElMessage.error(result.error || '删除失败')
     }
   } catch (error: any) {
     if (error !== 'cancel') {
       // 只有在不是用户取消的情况下才显示错误
-      ElMessage.error(error.message || '网络错误');
+      ElMessage.error(error.message || '网络错误')
     }
   }
-};
+}
 
 // 处理选中项目的批量删除
 const handleBulkDelete = async () => {
   if (selectedRows.value.length === 0) {
-    ElMessage.warning('请先选择要删除的行');
-    return;
+    ElMessage.warning('请先选择要删除的行')
+    return
   }
 
   try {
@@ -1122,63 +1339,62 @@ const handleBulkDelete = async () => {
       {
         confirmButtonText: '确定',
         cancelButtonText: '取消',
-        type: 'warning'
-      }
-    );
+        type: 'warning',
+      },
+    )
 
     // 构造请求体
     const deleteData = {
-      items: selectedRows.value.map(row => ({
+      items: selectedRows.value.map((row) => ({
         torrent_id: row.torrent_id,
-        site_name: row.site_name
-      }))
-    };
+        site_name: row.site_name,
+      })),
+    }
 
     // 调用批量删除API - 使用统一的 delete API
     const response = await fetch('/api/cross-seed-data/delete', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
       },
-      body: JSON.stringify(deleteData)
-    });
+      body: JSON.stringify(deleteData),
+    })
 
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      throw new Error(`HTTP error! status: ${response.status}`)
     }
 
-    const result = await response.json();
+    const result = await response.json()
 
     if (result.success) {
-      ElMessage.success(result.message || `成功删除 ${result.deleted_count} 条数据`);
+      ElMessage.success(result.message || `成功删除 ${result.deleted_count} 条数据`)
       // 清空已选行
-      selectedRows.value = [];
+      selectedRows.value = []
       // 重新获取数据，以更新表格
-      fetchData();
+      fetchData()
     } else {
-      ElMessage.error(result.error || '批量删除失败');
+      ElMessage.error(result.error || '批量删除失败')
     }
   } catch (error: any) {
     if (error !== 'cancel') {
       // 只有在不是用户取消的情况下才显示错误
-      ElMessage.error(error.message || '网络错误');
+      ElMessage.error(error.message || '网络错误')
     }
   }
-};
-
+}
 
 // 关闭转种弹窗
 const closeCrossSeedDialog = () => {
-  crossSeedStore.reset();
-};
+  crossSeedStore.reset()
+}
 
 // 处理转种完成
 const handleCrossSeedComplete = () => {
-  ElMessage.success('转种操作已完成！');
-  crossSeedStore.reset();
+  ElMessage.success('转种操作已完成！')
+  crossSeedStore.reset()
   // 可选：刷新数据以显示最新状态
-  fetchData();
-};
+  fetchData()
+}
 
 // 处理窗口大小变化
 const handleResize = () => {
@@ -1187,7 +1403,7 @@ const handleResize = () => {
 
 onMounted(async () => {
   // 加载UI设置
-  await loadUiSettings();
+  await loadUiSettings()
   // 获取数据
   fetchData()
   window.addEventListener('resize', handleResize)
@@ -1216,14 +1432,17 @@ const hasRestrictedTag = (tags: string[] | string): boolean => {
     try {
       tagList = JSON.parse(tags)
     } catch {
-      tagList = tags.split(',').map(tag => tag.trim()).filter(tag => tag)
+      tagList = tags
+        .split(',')
+        .map((tag) => tag.trim())
+        .filter((tag) => tag)
     }
   } else if (Array.isArray(tags)) {
     tagList = tags
   }
 
   // 检查是否包含"禁转"或"tag.禁转"
-  return tagList.some(tag => tag === '禁转' || tag === 'tag.禁转')
+  return tagList.some((tag) => tag === '禁转' || tag === 'tag.禁转')
 }
 
 // 控制表格行是否可选择
@@ -1278,64 +1497,66 @@ const openBatchCrossSeedDialog = () => {
 // 处理批量转种 (启动任务并开启自动刷新)
 const handleBatchCrossSeed = async () => {
   // 直接使用筛选中的站点
-  const targetSiteName = activeFilters.value.excludeTargetSites;
+  const targetSiteName = activeFilters.value.excludeTargetSites
 
   if (!targetSiteName || targetSiteName.trim() === '') {
-    ElMessage.warning('请先在筛选中选择目标站点');
-    return;
+    ElMessage.warning('请先在筛选中选择目标站点')
+    return
   }
 
   try {
     // 1. 关闭批量转种的确认弹窗
-    closeBatchCrossSeedDialog();
+    closeBatchCrossSeedDialog()
 
     // 2. 构造要传递给后端的数据
     const batchData = {
       target_site_name: targetSiteName,
-      seeds: selectedRows.value.map(row => ({
+      seeds: selectedRows.value.map((row) => ({
         hash: row.hash,
         torrent_id: row.torrent_id,
         site_name: row.site_name,
-        nickname: row.nickname
-      }))
-    };
+        nickname: row.nickname,
+      })),
+    }
 
-    console.log('批量转种数据:', batchData);
+    console.log('批量转种数据:', batchData)
 
     // 3. 立即打开记录窗口并显式地启动自动刷新
-    recordDialogVisible.value = true;
-    startAutoRefresh(); // 关键改动：在这里启动定时器
+    recordDialogVisible.value = true
+    startAutoRefresh() // 关键改动：在这里启动定时器
 
     // 4. 通过Python代理调用Go服务的API来开始任务
     const response = await fetch('/api/go-api/batch-enhance', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
       },
-      body: JSON.stringify(batchData)
-    });
+      body: JSON.stringify(batchData),
+    })
 
     if (!response.ok) {
       // 如果API请求本身失败（如500错误），停止刷新并抛出错误
-      stopAutoRefresh();
-      throw new Error(`HTTP error! status: ${response.status}`);
+      stopAutoRefresh()
+      throw new Error(`HTTP error! status: ${response.status}`)
     }
 
-    const result = await response.json();
+    const result = await response.json()
     if (result.success) {
-      ElMessage.success(`批量转种请求已发送，成功 ${result.data.seeds_processed} 个，失败 ${result.data.seeds_failed} 个`);
+      ElMessage.success(
+        `批量转种请求已发送，成功 ${result.data.seeds_processed} 个，失败 ${result.data.seeds_failed} 个`,
+      )
       // 请求成功，让自动刷新继续运行
     } else {
       // 如果后端返回业务错误，也停止刷新
-      stopAutoRefresh();
-      ElMessage.error(result.error || '批量转种失败');
+      stopAutoRefresh()
+      ElMessage.error(result.error || '批量转种失败')
     }
   } catch (error: any) {
     // 捕获到任何JS或网络层面的错误时，都确保停止刷新
-    stopAutoRefresh();
-    ElMessage.error(error.message || '网络错误');
+    stopAutoRefresh()
+    ElMessage.error(error.message || '网络错误')
   }
-};
+}
 
 // 关闭批量转种对话框
 const closeBatchCrossSeedDialog = () => {
@@ -1384,44 +1605,44 @@ const executeBatchDelete = async () => {
       {
         confirmButtonText: '确定',
         cancelButtonText: '取消',
-        type: 'warning'
-      }
-    );
+        type: 'warning',
+      },
+    )
 
     const deleteData = {
-      items: selectedRows.value.map(row => ({
+      items: selectedRows.value.map((row) => ({
         torrent_id: row.torrent_id,
-        site_name: row.site_name
-      }))
-    };
+        site_name: row.site_name,
+      })),
+    }
 
     const response = await fetch('/api/cross-seed-data/delete', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
       },
-      body: JSON.stringify(deleteData)
-    });
+      body: JSON.stringify(deleteData),
+    })
 
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      throw new Error(`HTTP error! status: ${response.status}`)
     }
 
-    const result = await response.json();
+    const result = await response.json()
 
     if (result.success) {
-      ElMessage.success(result.message || `成功删除 ${result.deleted_count} 条数据`);
+      ElMessage.success(result.message || `成功删除 ${result.deleted_count} 条数据`)
       // 清空选中行并退出删除模式
       selectedRows.value = []
       isDeleteMode.value = false
       // 重新获取数据
-      fetchData();
+      fetchData()
     } else {
-      ElMessage.error(result.error || '批量删除失败');
+      ElMessage.error(result.error || '批量删除失败')
     }
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(error.message || '网络错误');
+      ElMessage.error(error.message || '网络错误')
     }
   }
 }
@@ -1448,10 +1669,10 @@ const handleFetchCompleted = () => {
  * @param downloaderResult 下载器添加结果字符串
  */
 const hasDownloaderFinalStatus = (downloaderResult: string | undefined): boolean => {
-  if (!downloaderResult) return false;
+  if (!downloaderResult) return false
   // 检查字符串中是否包含"成功"或"失败"
-  return downloaderResult.includes('成功') || downloaderResult.includes('失败');
-};
+  return downloaderResult.includes('成功') || downloaderResult.includes('失败')
+}
 
 /**
  * 计算属性：判断是否有任务正在进行中
@@ -1460,52 +1681,27 @@ const hasDownloaderFinalStatus = (downloaderResult: string | undefined): boolean
  */
 const isBatchRunning = computed(() => {
   // 如果没有记录，则认为没有任务在运行
-  if (records.value.length === 0) return false;
+  if (records.value.length === 0) return false
 
   // 获取最新一条记录（通常是第一条）
-  const latestRecord = records.value[0];
+  const latestRecord = records.value[0]
 
   // 如果最新记录的下载器状态没有最终状态（成功或失败），则任务仍在进行中
-  return !hasDownloaderFinalStatus(latestRecord.downloader_add_result);
-});
+  return !hasDownloaderFinalStatus(latestRecord.downloader_add_result)
+})
 
 // 启动定时刷新
 const startAutoRefresh = () => {
   // 先清除任何现有的定时器
   stopAutoRefresh()
 
-  // 重置额外刷新计数器
-  additionalRefreshCount.value = 0
-
   // 立即刷新一次
   refreshRecords()
 
-  // 启动定时器
+  // 启动定时器 - 只要窗口打开就持续刷新，没有其他停止条件
   refreshTimer.value = setInterval(async () => {
     if (recordDialogVisible.value) {
       await refreshRecords()
-
-      // 双重检测机制：同时检测进度和下载器状态
-      if (records.value.length > 0) {
-        const latestRecord = records.value[0]
-        
-        // 检测1：进度是否完成（100%）
-        const progressComplete = latestRecord.progress && calculateProgress(latestRecord.progress) === 100
-        
-        // 检测2：下载器状态是否包含"成功"或"失败"
-        const downloaderHasFinalStatus = hasDownloaderFinalStatus(latestRecord.downloader_add_result)
-        
-        // 只有当两个条件都满足时才进入额外刷新逻辑
-        if (progressComplete && downloaderHasFinalStatus) {
-          // 增加额外刷新计数
-          additionalRefreshCount.value++
-          
-          // 如果额外刷新次数达到限制，则停止刷新
-          if (additionalRefreshCount.value >= ADDITIONAL_REFRESH_LIMIT) {
-            stopAutoRefresh()
-          }
-        }
-      }
     } else {
       // 如果记录窗口已关闭，停止定时器
       stopAutoRefresh()
@@ -1525,9 +1721,10 @@ const stopAutoRefresh = () => {
 
 // 打开记录查看对话框
 const openRecordViewDialog = () => {
-  recordDialogVisible.value = true;
-  refreshRecords(); // 打开时加载一次记录
-};
+  recordDialogVisible.value = true
+  refreshRecords() // 打开时加载一次记录
+  startAutoRefresh() // 打开时启动自动刷新
+}
 
 // 关闭记录查看对话框
 const closeRecordViewDialog = () => {
@@ -1546,21 +1743,15 @@ const refreshRecords = async () => {
     const response = await fetch('/api/go-api/records', {
       method: 'GET',
       headers: {
-        'Content-Type': 'application/json'
-      }
+        'Content-Type': 'application/json',
+      },
     })
 
     if (response.ok) {
       const result = await response.json()
       if (result.success) {
         records.value = result.records || []
-
-        // 自动滚动到表格顶部（显示最新记录）
-        await nextTick()
-        const tableContainer = document.querySelector('.records-table-container .el-table__body-wrapper')
-        if (tableContainer) {
-          tableContainer.scrollTop = 0
-        }
+        // 移除了自动滚动到顶部的代码，以允许用户手动滚动
       } else {
         ElMessage.error(result.error || '获取记录失败')
       }
@@ -1586,8 +1777,8 @@ const clearRecordsLocal = async () => {
     const response = await fetch('/api/go-api/records', {
       method: 'DELETE',
       headers: {
-        'Content-Type': 'application/json'
-      }
+        'Content-Type': 'application/json',
+      },
     })
 
     if (response.ok) {
@@ -1611,24 +1802,36 @@ const clearRecordsLocal = async () => {
 // 获取记录状态对应的Element Plus标签类型
 const getRecordStatusTypeLocal = (status: string) => {
   switch (status) {
-    case 'success': return 'success'
-    case 'failed': return 'danger'
-    case 'filtered': return 'warning'
-    case 'processing': return 'primary'
-    case 'pending': return 'info'
-    default: return 'info'
+    case 'success':
+      return 'success'
+    case 'failed':
+      return 'danger'
+    case 'filtered':
+      return 'warning'
+    case 'processing':
+      return 'primary'
+    case 'pending':
+      return 'info'
+    default:
+      return 'info'
   }
 }
 
 // 获取记录状态文本
 const getRecordStatusTextLocal = (status: string) => {
   switch (status) {
-    case 'success': return '成功'
-    case 'failed': return '失败'
-    case 'filtered': return '已过滤'
-    case 'processing': return '处理中'
-    case 'pending': return '等待中'
-    default: return '未知'
+    case 'success':
+      return '成功'
+    case 'failed':
+      return '失败'
+    case 'filtered':
+      return '已过滤'
+    case 'processing':
+      return '处理中'
+    case 'pending':
+      return '等待中'
+    default:
+      return '未知'
   }
 }
 
@@ -1646,11 +1849,11 @@ const getBatchNumber = (batchId: string) => {
 
 // 根据批次序号获取标签类型（颜色）
 const getBatchTagType = (batchNumber: number | string | undefined) => {
-  if (typeof batchNumber !== 'number') return 'info';
+  if (typeof batchNumber !== 'number') return 'info'
   // 定义一个颜色循环列表，不包含 'danger'
   const colors = ['success', 'primary', 'warning', 'info']
   // 使用取模运算来循环选择颜色
-  return colors[(batchNumber - 1) % colors.length] as 'success' | 'primary' | 'warning' | 'info';
+  return colors[(batchNumber - 1) % colors.length] as 'success' | 'primary' | 'warning' | 'info'
 }
 
 // 在刷新记录时重置批次映射
@@ -1667,9 +1870,9 @@ const getDownloaderAddStatusType = (result: string) => {
 
 // 获取下载器添加状态的颜色
 const getDownloaderAddStatusColor = (result: string) => {
-  if (result.startsWith('成功')) return '#67c23a'  // 绿色
-  if (result.startsWith('失败')) return '#f56c6c'  // 红色
-  return '#909399'  // 灰色
+  if (result.startsWith('成功')) return '#67c23a' // 绿色
+  if (result.startsWith('失败')) return '#f56c6c' // 红色
+  return '#909399' // 灰色
 }
 
 // 格式化下载器添加结果显示
@@ -1721,9 +1924,9 @@ const calculateProgress = (progressStr: string) => {
 
 // 根据进度百分比获取进度条颜色
 const getProgressColor = (percentage: number) => {
-  if (percentage < 30) return '#e6a23c'  // 橙色
-  if (percentage < 70) return '#409eff'  // 蓝色
-  return '#67c23a'  // 绿色
+  if (percentage < 30) return '#e6a23c' // 橙色
+  if (percentage < 70) return '#409eff' // 蓝色
+  return '#67c23a' // 绿色
 }
 
 onUnmounted(() => {
@@ -1930,8 +2133,6 @@ onUnmounted(() => {
   box-sizing: border-box;
 }
 
-
-
 .search-and-controls {
   display: flex;
   align-items: center;
@@ -2072,12 +2273,26 @@ onUnmounted(() => {
 }
 
 /* 不可选择行的复选框变红 */
-:deep(.el-table__body tr.selected-row-disabled td.el-table-column--selection .cell .el-checkbox__input.is-disabled .el-checkbox__inner) {
+:deep(
+  .el-table__body
+    tr.selected-row-disabled
+    td.el-table-column--selection
+    .cell
+    .el-checkbox__input.is-disabled
+    .el-checkbox__inner
+) {
   border-color: #f56c6c !important;
   background-color: #fef0f0 !important;
 }
 
-:deep(.el-table__body tr.selected-row-disabled td.el-table-column--selection .cell .el-checkbox__input.is-disabled .el-checkbox__inner::after) {
+:deep(
+  .el-table__body
+    tr.selected-row-disabled
+    td.el-table-column--selection
+    .cell
+    .el-checkbox__input.is-disabled
+    .el-checkbox__inner::after
+) {
   border-color: #f56c6c !important;
 }
 
@@ -2133,9 +2348,11 @@ onUnmounted(() => {
 .record-view-card {
   width: 90vw;
   max-width: 1200px;
-  height: 80vh;
+  height: 800px; /* 固定高度 */
+  max-height: 800px;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 :deep(.record-view-card .el-card__body) {
@@ -2143,6 +2360,8 @@ onUnmounted(() => {
   flex: 1;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
 }
 
 .record-header-controls {
@@ -2151,18 +2370,54 @@ onUnmounted(() => {
   gap: 10px;
 }
 
+.record-warning-text {
+  color: #f56c6c;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: center;
+  flex: 1;
+}
+
 .record-view-content {
   flex: 1;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  overflow-x: hidden; /* 禁止横向滚动 */
 }
 
 /* 记录表格样式 */
 .records-table-container {
   flex: 1;
-  overflow: hidden;
+  overflow-y: auto;
   padding: 10px;
+  overflow-x: hidden; /* 禁止横向滚动 */
+  width: calc(100% - 5px);
+}
+
+/* 自定义滚动条样式 */
+.records-table-container::-webkit-scrollbar {
+  width: 8px;
+}
+
+.records-table-container::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.records-table-container::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+.records-table-container::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* 确保表格不会超出容器宽度 */
+.records-table-container :deep(.el-table) {
+  table-layout: fixed;
+  width: 100%;
 }
 
 .records-table-container :deep(.el-table_2_column_24) {

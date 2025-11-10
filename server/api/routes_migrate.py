@@ -645,23 +645,38 @@ def update_db_seed_info():
                 for item in title_components if item.get("value")
             }
 
-            # 2. 使用您提供的逻辑来拼接标题
+            # 2. 从 global_mappings.yaml 读取拼接顺序
+            import yaml
+            import os
+            
+            global_mappings_path = os.path.join(
+                os.path.dirname(os.path.dirname(__file__)),
+                'configs', 'global_mappings.yaml'
+            )
+            
+            # 默认顺序（如果读取配置失败时使用）
             order = [
-                "主标题",
-                "季集",
-                "年份",
-                "剧集状态",
-                "发布版本",
-                "分辨率",
-                "片源平台",
-                "媒介",
-                "视频编码",
-                "视频格式",
-                "HDR格式",
-                "色深",
-                "帧率",
-                "音频编码",
+                "主标题", "季集", "年份", "剧集状态", "发布版本",
+                "分辨率", "片源平台", "媒介", "视频编码", "视频格式",
+                "HDR格式", "色深", "帧率", "音频编码",
             ]
+            
+            try:
+                if os.path.exists(global_mappings_path):
+                    with open(global_mappings_path, 'r', encoding='utf-8') as f:
+                        global_config = yaml.safe_load(f)
+                        default_title_components = global_config.get('default_title_components', {})
+                        
+                        if default_title_components:
+                            # 按照配置文件中的顺序构建 order 列表
+                            order = []
+                            for key, config in default_title_components.items():
+                                if isinstance(config, dict) and 'source_key' in config:
+                                    order.append(config['source_key'])
+                            
+                            logging.info(f"从配置文件读取到标题拼接顺序: {order}")
+            except Exception as e:
+                logging.warning(f"读取 global_mappings.yaml 失败，使用默认顺序: {e}")
             title_parts = []
             for key in order:
                 value = title_params.get(key)

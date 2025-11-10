@@ -951,24 +951,53 @@ class TorrentMigrator:
             ardtu_declarations = intro_data.get("removed_ardtudeclarations",
                                                 [])
 
-            # 如果海报失效，尝试从豆瓣或IMDb获取新海报
+            # [统一海报处理] 所有提取器返回海报后，在此统一验证和转存
             from utils import upload_data_movie_info
+            from utils.media_helper import _get_smart_poster_url
 
             # 检查媒体链接（不发送日志，内部处理）
-
-            # [新] 检查当前海报是否有效（使用新的稳健验证函数）
-            current_poster_valid = False
+            self.logger.info("[*] 开始统一验证海报链接...")
+            
+            # 提取海报URL
+            poster_url = None
             if images and images[0]:
                 # 从BBCode [img]...[/img] 中提取URL
                 if poster_url_match := re.search(r'\[img\](.*?)\[/img\]',
                                                  images[0], re.IGNORECASE):
                     poster_url = poster_url_match.group(1)
-                    self.logger.info(f"正在验证海报链接的有效性: {poster_url}")
-                    current_poster_valid = is_image_url_valid_robust(
-                        poster_url)
+                    self.logger.info(f"从ptgen提取到原始海报URL: {poster_url}")
+            
+            # 检查是否已经是pixhost图床
+            is_pixhost = poster_url and 'pixhost.to' in poster_url
+            
+            if is_pixhost:
+                self.logger.info("海报已是pixhost图床，跳过校验和转存")
+                # 海报已经是pixhost，直接使用
+                current_poster_valid = True
+            elif poster_url:
+                # 非pixhost图床，执行智能获取和转存
+                self.logger.info("[*] 检测到非pixhost图片，执行智能海报获取...")
+                
+                # 调用智能海报获取函数（内部会验证和转存）
+                valid_poster_url = _get_smart_poster_url(poster_url)
+                
+                if valid_poster_url:
+                    # 智能获取成功，更新海报
+                    images[0] = f"[img]{valid_poster_url}[/img]"
+                    self.logger.success(f"海报已成功处理: {valid_poster_url}")
+                    current_poster_valid = True
+                else:
+                    # 智能获取失败，标记需要重新获取
+                    self.logger.warning("智能海报获取失败，将尝试从豆瓣/IMDb重新获取")
+                    current_poster_valid = False
+            else:
+                # 没有海报URL
+                self.logger.info("未找到海报URL，将尝试从豆瓣/IMDb获取")
+                current_poster_valid = False
 
+            # 如果海报处理失败，尝试从豆瓣或IMDb获取新海报
             if not current_poster_valid:
-                self.logger.info("当前海报失效，尝试从豆瓣或IMDb获取新海报...")
+                self.logger.info("尝试从豆瓣或IMDb获取新海报...")
 
                 # 优先级1：如果有豆瓣链接，优先从豆瓣获取
                 if douban_link:
@@ -977,7 +1006,7 @@ class TorrentMigrator:
                         douban_link, "")
 
                     if poster_status and poster_content:
-                        # 成功获取到海报，更新images列表
+                        # 成功获取到海报（已经过智能处理和转存）
                         if not images:
                             images = [poster_content]
                         else:
@@ -1013,7 +1042,7 @@ class TorrentMigrator:
                         "", imdb_link)
 
                     if poster_status and poster_content:
-                        # 成功获取到海报，更新images列表
+                        # 成功获取到海报（已经过智能处理和转存）
                         if not images:
                             images = [poster_content]
                         else:
@@ -1026,9 +1055,7 @@ class TorrentMigrator:
                 if not images or not images[0] or "[img]" not in images[0]:
                     self.logger.warning("无法从豆瓣或IMDb获取到有效的海报")
             else:
-                self.logger.info("当前海报有效，无需重新获取")
-
-                # 即使海报有效，如果有豆瓣链接也可以尝试获取IMDb链接
+                # 海报已处理成功，尝试获取IMDb链接（如果需要）
                 if douban_link and not imdb_link:
                     poster_status, poster_content, description_content, extracted_imdb = upload_data_movie_info(
                         douban_link, "")

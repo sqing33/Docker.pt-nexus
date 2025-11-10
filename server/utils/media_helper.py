@@ -782,12 +782,12 @@ def upload_data_title(title: str, torrent_filename: str = ""):
 
     # 4. 预处理标题：修复音频参数格式
     # 先处理缺少点的情况，如 FLAC 20 -> FLAC 2.0, FLAC 2 0 -> FLAC 2.0
-    title_part = re.sub(r"((?:FLAC|DDP|AV3A|AAC|LPCM|AC3|DD))\s*(\d)\s*(\d)",
+    title_part = re.sub(r"((?:DTS|FLAC|DDP|AV3A|AAC|LPCM|AC3|DD))\s*(\d)\s*(\d)",
                         r"\1 \2.\3",
                         title_part,
                         flags=re.I)
-    # 再处理没有空格的情况，如 FLAC2.0 -> FLAC 2.0
-    title_part = re.sub(r"((?:FLAC|DDP|AV3A|AAC|LPCM|AC3|DD))(\d(?:\.\d)?)",
+    # 再处理没有空格的情况，如 FLAC2.0 -> FLAC 2.0, DTS5.1 -> DTS 5.1
+    title_part = re.sub(r"((?:DTS|FLAC|DDP|AV3A|AAC|LPCM|AC3|DD))(\d(?:\.\d)?)",
                         r"\1 \2",
                         title_part,
                         flags=re.I)
@@ -809,7 +809,7 @@ def upload_data_title(title: str, torrent_filename: str = ""):
         "framerate": r"\d{2,3}fps",
         "completion_status": r"Complete|COMPLETE",
         "video_format": r"3D|HSBS",
-        "release_version": r"REMASTERED|REPACK|RERIP|PROPER|REPOST",
+        "release_version": r"REMASTERED|REPACK|RERIP|PROPER|REPOST|V\d+",
         "cut_version":
         r"Theatrical[\s\.]?Cut|Directors?[\s\.]?Cut|DC|Extended[\s\.]?(?:Cut|Edition)|Special[\s\.]?Edition|SE|Final[\s\.]?Cut|Anniversary[\s\.]?Edition|Restored|Remastered|Criterion[\s\.]?(?:Edition|Collection)|Ultimate[\s\.]?Cut|IMAX[\s\.]?Edition|Open[\s\.]?Matte|Unrated[\s\.]?Cut",
         "quality_modifier": r"MAXPLUS|HQ|EXTENDED|REMUX|EE|MiniBD",
@@ -880,15 +880,15 @@ def upload_data_title(title: str, torrent_filename: str = ""):
              for val in raw_values] if key == "audio" else raw_values)
         if key == "audio":
             processed_values = [
-                # 先处理缺少点的情况，如 FLAC 20 -> FLAC 2.0, FLAC 2 0 -> FLAC 2.0
-                re.sub(r"((?:FLAC|DDP|AV3A|AAC|LPCM|AC3|DD))\s*(\d)\s*(\d)",
+                # 先处理缺少点的情况，如 FLAC 20 -> FLAC 2.0, FLAC 2 0 -> FLAC 2.0, DTS 51 -> DTS 5.1
+                re.sub(r"((?:DTS|FLAC|DDP|AV3A|AAC|LPCM|AC3|DD))\s*(\d)\s*(\d)",
                        r"\1 \2.\3",
                        val,
                        flags=re.I) for val in processed_values
             ]
             processed_values = [
-                # 再处理没有空格的情况，如 FLAC2.0 -> FLAC 2.0
-                re.sub(r"((?:FLAC|DDP|AV3A|AAC|LPCM|AC3|DD))(\d(?:\.\d)?)",
+                # 再处理没有空格的情况，如 FLAC2.0 -> FLAC 2.0, DTS5.1 -> DTS 5.1
+                re.sub(r"((?:DTS|FLAC|DDP|AV3A|AAC|LPCM|AC3|DD))(\d(?:\.\d)?)",
                        r"\1 \2",
                        val,
                        flags=re.I) for val in processed_values
@@ -1040,9 +1040,32 @@ def upload_data_title(title: str, torrent_filename: str = ""):
     for key in key_order:
         if key in params and params[key]:
             if key == "audio" and isinstance(params[key], list):
-                sorted_audio = sorted(params[key],
+                # 处理音频编码列表，将 "数字Audio" 格式移到编码格式后面
+                processed_audio = []
+                for audio_item in params[key]:
+                    # 检查是否包含 "数字Audio" 模式（如 "3Audio DTS" 或 "DTS 3Audio"）
+                    # 匹配模式：(\d+)\s*(Audio[s]?)\s+(.+) 或 (.+)\s+(\d+)\s*(Audio[s]?)
+                    match = re.match(r'^(\d+)\s*(Audio[s]?)\s+(.+)$', audio_item, re.IGNORECASE)
+                    if match:
+                        # 如果是 "3Audio DTS" 格式，重排为 "DTS 3Audio"
+                        number = match.group(1)
+                        audio_word = match.group(2)
+                        codec = match.group(3)
+                        processed_audio.append(f"{codec} {number}{audio_word}")
+                    else:
+                        # 检查是否已经是正确格式 "DTS 3Audio"
+                        match_correct = re.match(r'^(.+?)\s+(\d+)\s*(Audio[s]?)$', audio_item, re.IGNORECASE)
+                        if match_correct:
+                            # 已经是正确格式，直接使用
+                            processed_audio.append(audio_item)
+                        else:
+                            # 其他格式不变
+                            processed_audio.append(audio_item)
+                
+                # 排序：先按是否以数字Audio结尾，再按长度
+                sorted_audio = sorted(processed_audio,
                                       key=lambda s:
-                                      (s.upper().endswith("AUDIOS"), -len(s)))
+                                      (bool(re.search(r'\d+\s*Audio[s]?$', s, re.IGNORECASE)), -len(s)))
                 english_params[key] = " ".join(sorted_audio)
             else:
                 english_params[key] = params[key]
@@ -1592,7 +1615,7 @@ def _call_iyuu_format_api(api_config: dict, douban_link: str, imdb_link: str):
 def _parse_format_content(format_data: str, provided_imdb_link: str = ""):
     """
     解析格式化内容，提取海报、简介和IMDb链接
-    新增：智能海报验证和转存到pixhost
+    注意：不再在此处转存海报，只提取原始URL，转存工作统一在migrator中进行
     """
     try:
         # 提取信息
@@ -1608,38 +1631,10 @@ def _parse_format_content(format_data: str, provided_imdb_link: str = ""):
             if imdb_match:
                 extracted_imdb_link = imdb_match.group(1)
 
-        # 提取海报图片
+        # 提取海报图片 - 只提取URL，不进行验证和转存
         img_match = re.search(r'(\[img\].*?\[/img\])', format_data)
         if img_match:
-            # 提取原始海报URL
-            original_poster_bbcode = img_match.group(1)
-            original_poster_url = re.search(r'\[img\](.*?)\[/img\]',
-                                            original_poster_bbcode)
-
-            if original_poster_url:
-                poster_url = original_poster_url.group(1)
-                print(f"从ptgen提取到原始海报URL: {poster_url}")
-
-                # 智能海报获取和验证
-                valid_poster_url = _get_smart_poster_url(poster_url)
-
-                if valid_poster_url:
-                    print(f"海报验证成功，使用: {valid_poster_url}")
-
-                    # 尝试转存到pixhost
-                    pixhost_url = _transfer_poster_to_pixhost(valid_poster_url)
-
-                    if pixhost_url:
-                        print(f"海报已成功转存到pixhost: {pixhost_url}")
-                        poster = f"[img]{pixhost_url}[/img]"
-                    else:
-                        print("海报转存pixhost失败，使用验证后的原始URL")
-                        poster = f"[img]{valid_poster_url}[/img]"
-                else:
-                    print("海报验证失败，使用原始URL（可能无效）")
-                    poster = re.sub(r'img1', 'img9', original_poster_bbcode)
-            else:
-                poster = re.sub(r'img1', 'img9', original_poster_bbcode)
+            poster = re.sub(r'img1', 'img9', img_match.group(1))
 
         # 提取简介内容（去除海报部分）
         description = re.sub(r'\[img\].*?\[/img\]', '', format_data).strip()

@@ -779,8 +779,6 @@ default_title_components:
     source_key: "帧率"
   audio_codec:
     source_key: "音频编码"
-  team:
-    source_key: "制作组"
 
 # 官组致谢声明配置
 team_acknowledgment:
@@ -967,22 +965,22 @@ fallback_chains:
   video_codec:
     "video.x265":
       - "video.h265"
-      - "video.h264"
       - "video.other"
-    "video.h265":
+    "video.x264":
       - "video.h264"
       - "video.other"
 
   medium:
     "medium.remux":
-      - "medium.bluray"
       - "medium.encode"
       - "medium.other"
     "medium.uhd_bluray":
       - "medium.bluray"
-      - "medium.encode"
       - "medium.other"
     "medium.bdrip":
+      - "medium.encode"
+      - "medium.other"
+    "medium.webrip":
       - "medium.encode"
       - "medium.other"
 

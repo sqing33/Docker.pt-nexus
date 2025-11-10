@@ -380,24 +380,22 @@ class BaseUploader(ABC):
 
         logger.debug(f"用于构建标题的原始值查找表: {original_values}")
 
-        # 2. 定义标题各部分的拼接顺序和对应的原始值键
+        # 2. 从 DEFAULT_TITLE_COMPONENTS 或配置中读取拼接顺序
         # 键是标准参数名，值是原始值查找表中的键
-        order_map = {
-            "title": "主标题",
-            "season_episode": "季集",
-            "year": "年份",
-            "status": "剧集状态",
-            "edition": "发布版本",
-            "resolution": "分辨率",
-            "platform": "片源平台",
-            "medium": "媒介",
-            "video_codec": "视频编码",
-            "video_format": "视频格式",
-            "hdr_format": "HDR格式",
-            "bit_depth": "色深",
-            "frame_rate": "帧率",
-            "audio_codec": "音频编码",
-        }
+        order_map = {}
+        
+        # 获取站点特定的 title_components 配置（如果有）
+        site_title_components = self.config.get("title_components", {})
+        
+        # 使用站点配置或全局配置
+        title_components_config = site_title_components if site_title_components else DEFAULT_TITLE_COMPONENTS
+        
+        # 按照配置中的顺序构建 order_map
+        for key, config in title_components_config.items():
+            if isinstance(config, dict) and "source_key" in config:
+                order_map[key] = config["source_key"]
+        
+        logger.debug(f"标题拼接顺序: {list(order_map.keys())}")
 
         title_parts = []
         for key in order_map:
