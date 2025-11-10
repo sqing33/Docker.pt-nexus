@@ -89,9 +89,9 @@ services:
       - TZ=Asia/Shanghai
       - http_proxy=http://192.168.1.100:7890
       - https_proxy=http://192.168.1.100:7890
-      - DB_TYPE=postgre
+      - DB_TYPE=postgresql
       - POSTGRES_HOST=192.168.1.100
-      - POSTGRES_PORT=5433
+      - POSTGRES_PORT=5432
       - POSTGRES_DATABASE=pt-nexus
       - POSTGRES_USER=root
       - POSTGRES_PASSWORD=your_password
