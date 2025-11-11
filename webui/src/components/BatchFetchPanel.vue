@@ -98,7 +98,7 @@
           <el-divider content-position="left">保存路径</el-divider>
           <div class="path-tree-container">
             <el-tree ref="pathTreeRef" :data="pathTreeData" show-checkbox node-key="path" default-expand-all
-              check-on-click-node :props="{ class: 'path-tree-node' }" />
+              check-on-click-node :check-strictly="true" :props="{ class: 'path-tree-node' }" />
           </div>
 
           <el-divider content-position="left">状态</el-divider>
@@ -570,7 +570,7 @@ const openFilterDialog = () => {
   tempFilters.value = { ...activeFilters.value }
   filterDialogVisible.value = true
   nextTick(() => {
-    if (pathTreeRef.value && activeFilters.value.paths) {
+    if (pathTreeRef.value && activeFilters.value.paths.length > 0) {
       pathTreeRef.value.setCheckedKeys(activeFilters.value.paths, false)
     }
   })
@@ -578,7 +578,7 @@ const openFilterDialog = () => {
 
 const applyFilters = () => {
   if (pathTreeRef.value) {
-    const selectedPaths = pathTreeRef.value.getCheckedKeys(true) as string[]
+    const selectedPaths = pathTreeRef.value.getCheckedKeys(false) as string[]
     tempFilters.value.paths = selectedPaths
   }
 

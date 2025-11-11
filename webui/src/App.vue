@@ -1,8 +1,19 @@
 <!-- src/App.vue -->
 <template>
-  <el-menu v-if="!isLoginPage" :default-active="activeRoute" class="main-nav glass-nav" mode="horizontal" router>
-    <div style="padding: 5px 15px;line-height: 32px;">
-      <img src="/favicon.ico" alt="Logo" height="32" style="margin-right: 8px; vertical-align: middle;" />
+  <el-menu
+    v-if="!isLoginPage"
+    :default-active="activeRoute"
+    class="main-nav glass-nav"
+    mode="horizontal"
+    router
+  >
+    <div style="padding: 5px 15px; line-height: 32px">
+      <img
+        src="/favicon.ico"
+        alt="Logo"
+        height="32"
+        style="margin-right: 8px; vertical-align: middle"
+      />
       PT Nexus
     </div>
     <el-menu-item index="/">首页</el-menu-item>
@@ -13,27 +24,40 @@
     <el-menu-item index="/settings">设置</el-menu-item>
     <div class="page-hint-container">
       <span v-if="activeRoute === '/torrents'" class="page-hint">
-        <span class="hint-green">做种且可跳转种子详情页</span> - <span class="hint-blue">做种但无详情页</span> - <span class="hint-red">可铺种但未做种</span>
+        <span class="hint-green">做种且可跳转种子详情页</span> -
+        <span class="hint-blue">做种但无详情页</span> - <span class="hint-red">可铺种但未做种</span>
       </span>
       <span v-else-if="activeRoute === '/data'" class="page-hint">
-        <span class="hint-red">种子有误/不存在/禁转</span> - <span class="hint-yellow">未审查种子信息</span>
+        <span class="hint-red">种子有误/不存在/禁转</span> -
+        <span class="hint-yellow">待检查信息的种子</span>
       </span>
     </div>
     <div class="refresh-button-container">
       <el-button type="primary" @click="feedbackDialogVisible = true" plain>反馈</el-button>
-      <el-button type="success" @click="handleGlobalRefresh" :loading="isRefreshing" :disabled="isRefreshing" plain>
+      <el-button
+        type="success"
+        @click="handleGlobalRefresh"
+        :loading="isRefreshing"
+        :disabled="isRefreshing"
+        plain
+      >
         刷新
       </el-button>
     </div>
   </el-menu>
   <main :class="['main-content', isLoginPage ? 'no-nav' : '']">
-  <router-view v-slot="{ Component }">
-    <component :is="Component" @ready="handleComponentReady" />
-  </router-view>
-</main>
+    <router-view v-slot="{ Component }">
+      <component :is="Component" @ready="handleComponentReady" />
+    </router-view>
+  </main>
 
   <!-- Feedback Dialog -->
-  <el-dialog v-model="feedbackDialogVisible" title="意见反馈" width="700px" @close="resetFeedbackForm">
+  <el-dialog
+    v-model="feedbackDialogVisible"
+    title="意见反馈"
+    width="700px"
+    @close="resetFeedbackForm"
+  >
     <el-form :model="feedbackForm" label-position="top">
       <el-form-item label="反馈内容（支持富文本编辑，可直接粘贴图片）">
         <div class="editor-wrapper">
@@ -47,7 +71,7 @@
           />
         </div>
       </el-form-item>
-      <el-form-item label="联系方式 (可选)" style="margin-top: 50px;">
+      <el-form-item label="联系方式 (可选)" style="margin-top: 50px">
         <el-input v-model="feedbackForm.contact" placeholder="如 QQ, Telegram, Email 等" />
       </el-form-item>
     </el-form>
@@ -92,7 +116,7 @@ const isSubmittingFeedback = ref(false)
 const quillEditor = ref<InstanceType<typeof QuillEditor> | null>(null)
 const feedbackForm = reactive({
   html: '',
-  contact: ''
+  contact: '',
 })
 
 // Quill 编辑器配置
@@ -101,14 +125,14 @@ const editorOptions = {
     toolbar: [
       ['bold', 'italic', 'underline', 'strike'],
       ['blockquote', 'code-block'],
-      [{ 'list': 'ordered' }, { 'list': 'bullet' }],
-      [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
-      [{ 'color': [] }, { 'background': [] }],
+      [{ list: 'ordered' }, { list: 'bullet' }],
+      [{ header: [1, 2, 3, 4, 5, 6, false] }],
+      [{ color: [] }, { background: [] }],
       ['link', 'image'],
-      ['clean']
-    ]
+      ['clean'],
+    ],
   },
-  placeholder: '请输入您的宝贵意见或建议，支持粘贴图片...'
+  placeholder: '请输入您的宝贵意见或建议，支持粘贴图片...',
 }
 
 // 处理图片粘贴事件
@@ -118,11 +142,11 @@ const handlePaste = async (event: ClipboardEvent) => {
 
   for (let i = 0; i < items.length; i++) {
     const item = items[i]
-    
+
     // 检查是否为图片
     if (item.type.indexOf('image') !== -1) {
       event.preventDefault()
-      
+
       const file = item.getAsFile()
       if (!file) continue
 
@@ -136,7 +160,7 @@ const handlePaste = async (event: ClipboardEvent) => {
 
         const response = await fetch('/api/upload_image', {
           method: 'POST',
-          body: formData
+          body: formData,
         })
 
         if (!response.ok) {
@@ -167,7 +191,7 @@ const handlePaste = async (event: ClipboardEvent) => {
 const resetFeedbackForm = () => {
   feedbackForm.html = ''
   feedbackForm.contact = ''
-  
+
   // 清空 Quill 编辑器的内容
   const quill = quillEditor.value?.getQuill()
   if (quill) {
@@ -179,10 +203,10 @@ const submitFeedback = async () => {
   // 从 HTML 中提取纯文本和图片链接
   const tempDiv = document.createElement('div')
   tempDiv.innerHTML = feedbackForm.html
-  
+
   const textContent = tempDiv.textContent || tempDiv.innerText || ''
   const images = tempDiv.querySelectorAll('img')
-  
+
   if (!textContent.trim() && images.length === 0) {
     ElMessage.warning('反馈内容不能为空！')
     return
@@ -190,10 +214,10 @@ const submitFeedback = async () => {
 
   // 构建提交内容：包含文本和图片链接
   let combinedText = textContent.trim()
-  
+
   if (images.length > 0) {
     const imageUrls = Array.from(images)
-      .map(img => `[img]${img.src}[/img]`)
+      .map((img) => `[img]${img.src}[/img]`)
       .join('\n')
     combinedText += `\n\n${imageUrls}`
   }
@@ -203,12 +227,12 @@ const submitFeedback = async () => {
     const response = await fetch('https://ptn-feedback.sqing33.dpdns.org/', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         text: combinedText,
-        contact: feedbackForm.contact
-      })
+        contact: feedbackForm.contact,
+      }),
     })
 
     if (!response.ok) {
@@ -225,7 +249,6 @@ const submitFeedback = async () => {
   }
 }
 
-
 const activeComponentRefresher = ref<(() => Promise<void>) | null>(null)
 
 const handleComponentReady = (refreshMethod: () => Promise<void>) => {
@@ -237,7 +260,12 @@ const handleGlobalRefresh = async () => {
 
   const topLevelPath = route.matched.length > 0 ? route.matched[0].path : ''
 
-  if (topLevelPath === '/torrents' || topLevelPath === '/sites' || topLevelPath === '/data' || topLevelPath === '/batch-fetch') {
+  if (
+    topLevelPath === '/torrents' ||
+    topLevelPath === '/sites' ||
+    topLevelPath === '/data' ||
+    topLevelPath === '/batch-fetch'
+  ) {
     isRefreshing.value = true
     ElMessage.info('后台正在刷新缓存...')
 
@@ -405,7 +433,7 @@ body {
 }
 
 .hint-yellow {
-  color: #e6a23c;
+  color: #00aaff;
   font-weight: bold;
 }
 

@@ -141,10 +141,11 @@ def get_cross_seed_data():
         search_query = request.args.get('search', '').strip()
 
         # 获取筛选参数
-        save_path_filter = request.args.get('save_path', '').strip()
+        path_filters_str = request.args.get('path_filters', '').strip()
         is_deleted_filter = request.args.get('is_deleted', '').strip()
         exclude_target_sites_filter = request.args.get('exclude_target_sites',
                                                        '').strip()
+        review_status_filter = request.args.get('review_status', '').strip()
 
         # 限制页面大小
         page_size = min(page_size, 100)
@@ -173,7 +174,8 @@ def get_cross_seed_data():
                 ])
             elif db_manager.db_type == "mysql":
                 where_conditions.append(
-                    "(title LIKE %s OR torrent_id LIKE %s OR subtitle LIKE %s)")
+                    "(title LIKE %s OR torrent_id LIKE %s OR subtitle LIKE %s)"
+                )
                 params.extend([
                     f"%{search_query}%", f"%{search_query}%",
                     f"%{search_query}%"
@@ -187,26 +189,27 @@ def get_cross_seed_data():
                 ])
 
         # 保存路径筛选条件 - 支持多个路径筛选（精确匹配）
-        if save_path_filter:
-            # 将逗号分隔的路径转换为列表
-            paths = [
-                path.strip() for path in save_path_filter.split(',')
-                if path.strip()
-            ]
-            if paths:
-                if db_manager.db_type == "postgresql":
-                    # PostgreSQL 使用 ANY 操作符进行精确匹配
-                    placeholders = ', '.join(['%s'] * len(paths))
-                    where_conditions.append(
-                        f"save_path = ANY(ARRAY[{placeholders}])")
-                    params.extend(paths)
-                else:
-                    # MySQL 和 SQLite 使用 IN 操作符进行精确匹配
-                    placeholders = ', '.join(
-                        ['%s' if db_manager.db_type == "mysql" else '?'] *
-                        len(paths))
-                    where_conditions.append(f"save_path IN ({placeholders})")
-                    params.extend(paths)
+        if path_filters_str:
+            try:
+                # 解析JSON数组
+                import json as json_module
+                paths = json_module.loads(path_filters_str)
+                if isinstance(paths, list) and paths:
+                    if db_manager.db_type == "postgresql":
+                        # PostgreSQL 使用 ANY 操作符进行精确匹配
+                        placeholders = ', '.join(['%s'] * len(paths))
+                        where_conditions.append(
+                            f"save_path = ANY(ARRAY[{placeholders}])")
+                        params.extend(paths)
+                    else:
+                        # MySQL 和 SQLite 使用 IN 操作符进行精确匹配
+                        placeholders = ', '.join(
+                            ['%s' if db_manager.db_type == "mysql" else '?'] *
+                            len(paths))
+                        where_conditions.append(f"save_path IN ({placeholders})")
+                        params.extend(paths)
+            except (json_module.JSONDecodeError, ValueError) as e:
+                logging.warning(f"解析路径筛选参数失败: {e}")
 
         # 删除状态筛选条件
         if is_deleted_filter in ['0', '1']:
@@ -218,6 +221,70 @@ def get_cross_seed_data():
             else:
                 where_conditions.append("is_deleted = ?")
                 params.append(int(is_deleted_filter))
+
+        # 检查状态筛选条件
+        if review_status_filter:
+            if review_status_filter == 'reviewed':
+                # 已检查：is_reviewed = true（且不是已删除或禁转或无法识别）
+                if db_manager.db_type == "postgresql":
+                    where_conditions.append(
+                        "is_reviewed = true AND is_deleted = false AND (tags IS NULL OR tags::text NOT LIKE %s) AND (title_components IS NULL OR title_components::text !~ %s)"
+                    )
+                    params.extend(['%禁转%', r'"无法识别"[^}]*"value":\s*".+"'])
+                elif db_manager.db_type == "mysql":
+                    where_conditions.append(
+                        "is_reviewed = 1 AND is_deleted = 0 AND (tags IS NULL OR tags NOT LIKE %s) AND (title_components IS NULL OR title_components NOT REGEXP %s)"
+                    )
+                    params.extend(['%禁转%', r'"无法识别"[^}]*"value":\s*".+"'])
+                else:  # sqlite
+                    where_conditions.append(
+                        "is_reviewed = 1 AND is_deleted = 0 AND (tags IS NULL OR tags NOT LIKE ?) AND (title_components IS NULL OR NOT (title_components LIKE ? AND title_components NOT LIKE ?))"
+                    )
+                    params.extend(['%禁转%', '%"无法识别"%', '%"value": ""%'])
+            elif review_status_filter == 'unreviewed':
+                # 待检查：is_reviewed = false 且不是已删除，且不包含禁转标签，且无法识别字段为空
+                if db_manager.db_type == "postgresql":
+                    where_conditions.append(
+                        "is_reviewed = false AND is_deleted = false AND (tags IS NULL OR tags::text NOT LIKE %s) AND (title_components IS NULL OR title_components::text !~ %s)"
+                    )
+                    params.extend(['%禁转%', r'"无法识别"[^}]*"value":\s*".+"'])
+                elif db_manager.db_type == "mysql":
+                    where_conditions.append(
+                        "is_reviewed = 0 AND is_deleted = 0 AND (tags IS NULL OR tags NOT LIKE %s) AND (title_components IS NULL OR title_components NOT REGEXP %s)"
+                    )
+                    params.extend(['%禁转%', r'"无法识别"[^}]*"value":\s*".+"'])
+                else:  # sqlite
+                    where_conditions.append(
+                        "is_reviewed = 0 AND is_deleted = 0 AND (tags IS NULL OR tags NOT LIKE ?) AND (title_components IS NULL OR NOT (title_components LIKE ? AND title_components NOT LIKE ?))"
+                    )
+                    params.extend(['%禁转%', '%"无法识别"%', '%"value": ""%'])
+            elif review_status_filter == 'error':
+                # 错误：包含以下任一条件的记录
+                # 1. is_deleted = true（已删除）
+                # 2. tags中包含"禁转"
+                # 3. title_components中"无法识别"字段的value不为空
+                #    匹配模式: "key": "无法识别", "value": "非空内容"
+                #    使用正则: "无法识别"[^}]*"value":\s*"[^"]+" 来匹配value不为空的情况
+                if db_manager.db_type == "postgresql":
+                    # PostgreSQL支持正则表达式
+                    error_condition = "(is_deleted = true OR tags::text LIKE %s OR title_components::text ~ %s)"
+                    where_conditions.append(error_condition)
+                    # 正则模式：匹配 "无法识别" 后面跟着非空的 value
+                    params.extend(['%禁转%', r'"无法识别"[^}]*"value":\s*".+"'])
+                else:
+                    # MySQL和SQLite使用REGEXP（MySQL 8.0+支持）
+                    placeholder = '?' if db_manager.db_type == 'sqlite' else '%s'
+                    if db_manager.db_type == 'mysql':
+                        # MySQL使用REGEXP
+                        error_condition = f"(is_deleted = 1 OR tags LIKE {placeholder} OR title_components REGEXP {placeholder})"
+                        where_conditions.append(error_condition)
+                        params.extend(['%禁转%', r'"无法识别"[^}]*"value":\s*".+"'])
+                    else:
+                        # SQLite可能不支持REGEXP，使用LIKE作为后备
+                        # 这不完美，但至少能过滤掉value为空字符串的情况
+                        error_condition = f"(is_deleted = 1 OR tags LIKE {placeholder} OR (title_components LIKE {placeholder} AND title_components NOT LIKE {placeholder}))"
+                        where_conditions.append(error_condition)
+                        params.extend(['%禁转%', '%"无法识别"%', '%"value": ""%'])
 
         # 目标站点排除筛选条件
         if exclude_target_sites_filter:
@@ -351,6 +418,7 @@ def get_cross_seed_data():
             # Extract "无法识别" field from title_components
             title_components = item.get('title_components', [])
             unrecognized_value = ''
+
             if isinstance(title_components, str):
                 try:
                     # Try to parse as JSON list

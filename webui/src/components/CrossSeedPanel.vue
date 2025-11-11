@@ -238,7 +238,9 @@
                                 @close="handleTagClose(item.value)"
                                 style="margin: 2px"
                               >
-                                <span>{{ reverseMappings.tags[item.value] || item.currentLabel }}</span>
+                                <span>{{
+                                  reverseMappings.tags[item.value] || item.currentLabel
+                                }}</span>
                               </el-tag>
                             </template>
                             <el-option
@@ -870,7 +872,7 @@
       <div v-if="activeStep === 1" class="button-group">
         <el-button @click="handlePreviousStep" :disabled="isLoading">上一步</el-button>
         <el-tooltip
-          :content="isScrolledToBottom ? '' : '请先滚动到页面底部审查完种子信息再修改！'"
+          :content="isScrolledToBottom ? '' : '请先滚动到页面底部检查完种子信息再修改！'"
           :disabled="isScrolledToBottom"
           placement="top"
         >
@@ -885,7 +887,7 @@
           </el-button>
         </el-tooltip>
         <el-tooltip
-          :content="isScrolledToBottom ? '' : '请先滚动到页面底部审查完种子信息再发布！'"
+          :content="isScrolledToBottom ? '' : '请先滚动到页面底部检查完种子信息再发布！'"
           :disabled="isScrolledToBottom"
           placement="top"
         >
@@ -2463,7 +2465,7 @@ const allTagOptions = computed(() => {
   const combined = [...new Set([...predefinedTags, ...currentTags])]
 
   // 过滤掉禁转标签
-  const filtered = combined.filter(tag => !isRestrictedTag(tag))
+  const filtered = combined.filter((tag) => !isRestrictedTag(tag))
 
   return filtered.map((tagValue) => ({
     value: tagValue,

@@ -32,12 +32,12 @@
 
       <!-- 查看记录按钮 -->
       <el-button type="info" @click="openRecordViewDialog" plain style="margin-right: 15px">
-        查看处理记录
+        转种记录
       </el-button>
 
       <!-- 批量获取数据按钮 -->
       <el-button type="warning" @click="openBatchFetchDialog" plain style="margin-right: 15px">
-        批量获取数据
+        获取数据
       </el-button>
 
       <!-- 批量删除模式切换按钮 -->
@@ -54,6 +54,18 @@
       <el-button type="primary" @click="openFilterDialog" plain style="margin-right: 15px">
         筛选
       </el-button>
+
+      <!-- 检查状态筛选单选组 -->
+      <el-radio-group
+        v-model="reviewStatusFilter"
+        @change="handleReviewStatusChange"
+        style="margin-right: 15px"
+      >
+        <el-radio-button label="">全部</el-radio-button>
+        <el-radio-button label="reviewed">已检查</el-radio-button>
+        <el-radio-button label="unreviewed">待检查</el-radio-button>
+        <el-radio-button label="error">错误</el-radio-button>
+      </el-radio-group>
 
       <div
         v-if="hasActiveFilters"
@@ -72,7 +84,7 @@
           v-model:page-size="pageSize"
           :page-sizes="[20, 50, 100]"
           :total="total"
-          layout="total, sizes, prev, pager, next, jumper"
+          layout="total, sizes, prev, pager, next"
           @size-change="handleSizeChange"
           @current-change="handleCurrentChange"
           background
@@ -104,6 +116,7 @@
               node-key="path"
               default-expand-all
               check-on-click-node
+              :check-strictly="true"
               :props="{ class: 'path-tree-node' }"
             />
           </div>
@@ -638,7 +651,7 @@ interface SeedParameter {
   created_at: string
   updated_at: string
   is_deleted: boolean
-  is_reviewed: boolean // 新增：是否已审查
+  is_reviewed: boolean // 新增：是否已检查
 }
 
 interface PathNode {
@@ -730,17 +743,34 @@ const total = ref<number>(0)
 // 搜索相关
 const searchQuery = ref<string>('')
 
+// 检查状态筛选
+const reviewStatusFilter = ref<string>('')
+
+// 处理检查状态筛选变化
+const handleReviewStatusChange = async (value: string) => {
+  reviewStatusFilter.value = value
+  currentPage.value = 1
+  // 调用后端API保存筛选状态到配置文件
+  try {
+    await fetch('/api/config/cross_seed_review_filter', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ review_filter: value }),
+    })
+  } catch (e) {
+    console.error('保存检查状态筛选失败:', e)
+  }
+  fetchData()
+}
+
 // 计算当前筛选条件的显示文本
 const currentFilterText = computed(() => {
   const filters = activeFilters.value
   const filterTexts = []
 
   // 处理保存路径筛选
-  if (filters.savePath) {
-    const paths = filters.savePath.split(',').filter((path) => path.trim() !== '')
-    if (paths.length > 0) {
-      filterTexts.push(`路径: ${paths.length}个`)
-    }
+  if (filters.paths && filters.paths.length > 0) {
+    filterTexts.push(`路径: ${filters.paths.length}`)
   }
 
   // 处理删除状态筛选
@@ -783,8 +813,7 @@ const batchCrossSeedButtonText = computed(() => {
 const hasActiveFilters = computed(() => {
   const filters = activeFilters.value
   return (
-    (filters.savePath &&
-      filters.savePath.split(',').filter((path) => path.trim() !== '').length > 0) ||
+    (filters.paths && filters.paths.length > 0) ||
     filters.isDeleted !== '' ||
     (filters.excludeTargetSites && filters.excludeTargetSites.trim() !== '')
   )
@@ -793,7 +822,7 @@ const hasActiveFilters = computed(() => {
 // 筛选相关
 const filterDialogVisible = ref<boolean>(false)
 const activeFilters = ref({
-  savePath: '',
+  paths: [] as string[], // 修改：改为数组类型
   isDeleted: '',
   excludeTargetSites: '', // 新增：排除目标站点筛选
 })
@@ -1041,9 +1070,10 @@ const fetchData = async () => {
       page: currentPage.value.toString(),
       page_size: pageSize.value.toString(),
       search: searchQuery.value,
-      save_path: activeFilters.value.savePath,
+      path_filters: JSON.stringify(activeFilters.value.paths || []),
       is_deleted: activeFilters.value.isDeleted,
-      exclude_target_sites: activeFilters.value.excludeTargetSites, // 新增：目标站点排除参数
+      exclude_target_sites: activeFilters.value.excludeTargetSites,
+      review_status: reviewStatusFilter.value, // 新增：检查状态筛选参数
     })
 
     // 调试日志：检查筛选参数
@@ -1148,7 +1178,7 @@ const handleCurrentChange = (val: number) => {
 // 清除筛选条件
 const clearFilters = () => {
   activeFilters.value = {
-    savePath: '',
+    paths: [],
     isDeleted: '',
     excludeTargetSites: '', // 新增：清除目标站点排除筛选
   }
@@ -1164,13 +1194,9 @@ const openFilterDialog = () => {
   filterDialogVisible.value = true
   nextTick(() => {
     // 如果已有选中的路径，设置树的选中状态
-    if (pathTreeRef.value && activeFilters.value.savePath) {
-      // 将逗号分隔的路径字符串转换为数组
-      const selectedPaths = activeFilters.value.savePath
-        .split(',')
-        .filter((path) => path.trim() !== '')
-      // 设置树的选中状态，只设置叶子节点
-      pathTreeRef.value.setCheckedKeys(selectedPaths, true)
+    if (pathTreeRef.value && activeFilters.value.paths.length > 0) {
+      // 设置树的选中状态
+      pathTreeRef.value.setCheckedKeys(activeFilters.value.paths, false)
     }
   })
 }
@@ -1179,9 +1205,8 @@ const openFilterDialog = () => {
 const applyFilters = () => {
   // 从路径树中获取选中的路径
   if (pathTreeRef.value) {
-    const selectedPaths = pathTreeRef.value.getCheckedKeys(true) as string[]
-    // 将选中的路径以逗号分隔的形式保存到筛选条件中
-    tempFilters.value.savePath = selectedPaths.join(',')
+    const selectedPaths = pathTreeRef.value.getCheckedKeys(false) as string[]
+    tempFilters.value.paths = selectedPaths
   }
 
   // 将临时筛选条件应用为活动筛选条件
@@ -1404,17 +1429,35 @@ const handleResize = () => {
 onMounted(async () => {
   // 加载UI设置
   await loadUiSettings()
+  // 加载检查状态筛选配置
+  await loadReviewStatusFilter()
   // 获取数据
   fetchData()
   window.addEventListener('resize', handleResize)
 })
 
+// 加载检查状态筛选配置
+const loadReviewStatusFilter = async () => {
+  try {
+    const response = await fetch('/api/config/cross_seed_review_filter')
+    if (response.ok) {
+      const result = await response.json()
+      if (result.success) {
+        reviewStatusFilter.value = result.data || ''
+      }
+    }
+  } catch (e) {
+    console.error('加载检查状态筛选配置失败:', e)
+  }
+}
+
 // 为表格行设置CSS类名
 const tableRowClassName = ({ row }: { row: SeedParameter }) => {
-  if (row.is_deleted || hasRestrictedTag(row.tags)) {
+  // 红色背景：已删除、包含禁转标签、或有无法识别的内容
+  if (row.is_deleted || hasRestrictedTag(row.tags) || row.unrecognized) {
     return 'deleted-row'
   }
-  // 如果未审查，添加unreviewed-row类（灰色背景）
+  // 如果未检查，添加unreviewed-row类（蓝色背景）
   if (!row.is_reviewed) {
     return 'unreviewed-row'
   }
@@ -1470,7 +1513,7 @@ const checkSelectable = (row: SeedParameter) => {
     if (hasInvalidParams(row)) {
       return false
     }
-    // 如果未审查（is_reviewed 为 false 或 0），则不可选择
+    // 如果未检查（is_reviewed 为 false 或 0），则不可选择
     if (!row.is_reviewed) {
       return false
     }
@@ -2226,13 +2269,9 @@ onUnmounted(() => {
   background-color: #fde2e2 !important;
 }
 
-/* 未审查行的样式（黄色背景） */
+/* 未检查行的样式（黄色背景） */
 :deep(.unreviewed-row) {
-  background-color: #fef9e7 !important;
-}
-
-:deep(.unreviewed-row:hover) {
-  background-color: #fdedb3 !important;
+  background-color: #aadbf3 !important;
 }
 
 .title-cell {
