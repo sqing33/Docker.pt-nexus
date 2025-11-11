@@ -1615,7 +1615,7 @@ def _call_iyuu_format_api(api_config: dict, douban_link: str, imdb_link: str):
 def _parse_format_content(format_data: str, provided_imdb_link: str = ""):
     """
     解析格式化内容，提取海报、简介和IMDb链接
-    注意：不再在此处转存海报，只提取原始URL，转存工作统一在migrator中进行
+    自动对海报进行智能验证和转存到pixhost
     """
     try:
         # 提取信息
@@ -1631,10 +1631,28 @@ def _parse_format_content(format_data: str, provided_imdb_link: str = ""):
             if imdb_match:
                 extracted_imdb_link = imdb_match.group(1)
 
-        # 提取海报图片 - 只提取URL，不进行验证和转存
-        img_match = re.search(r'(\[img\].*?\[/img\])', format_data)
+        # 提取海报图片并进行智能验证和转存
+        img_match = re.search(r'\[img\](.*?)\[/img\]', format_data)
         if img_match:
-            poster = re.sub(r'img1', 'img9', img_match.group(1))
+            original_poster_url = img_match.group(1)
+            
+            # 检查是否已经是pixhost图床
+            if 'pixhost.to' in original_poster_url or 'img1.pixhost.to' in original_poster_url:
+                # 已经是pixhost，直接使用
+                print(f"[*] 海报已是pixhost图床，直接使用: {original_poster_url}")
+                poster = f"[img]{original_poster_url}[/img]"
+            else:
+                # 非pixhost，进行智能验证和转存
+                print(f"[*] 海报非pixhost图床，执行智能验证和转存...")
+                smart_poster_url = _get_smart_poster_url(original_poster_url)
+                
+                if smart_poster_url:
+                    poster = f"[img]{smart_poster_url}[/img]"
+                    print(f"[*] 智能验证和转存成功: {smart_poster_url}")
+                else:
+                    # 智能获取失败，保留原URL
+                    print(f"[*] 智能验证失败，使用原始URL")
+                    poster = f"[img]{original_poster_url}[/img]"
 
         # 提取简介内容（去除海报部分）
         description = re.sub(r'\[img\].*?\[/img\]', '', format_data).strip()

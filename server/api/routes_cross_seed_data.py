@@ -171,7 +171,14 @@ def get_cross_seed_data():
                     f"%{search_query}%", f"%{search_query}%",
                     f"%{search_query}%"
                 ])
-            else:
+            elif db_manager.db_type == "mysql":
+                where_conditions.append(
+                    "(title LIKE %s OR torrent_id LIKE %s OR subtitle LIKE %s)")
+                params.extend([
+                    f"%{search_query}%", f"%{search_query}%",
+                    f"%{search_query}%"
+                ])
+            else:  # sqlite
                 where_conditions.append(
                     "(title LIKE ? OR torrent_id LIKE ? OR subtitle LIKE ?)")
                 params.extend([
@@ -214,17 +221,14 @@ def get_cross_seed_data():
 
         # 目标站点排除筛选条件
         if exclude_target_sites_filter:
-            # 现在是单选，不需要分割逗号
+            # 现在是单选,不需要分割逗号
             exclude_site = exclude_target_sites_filter.strip()
             if exclude_site:
                 logging.info(f"排除目标站点筛选: {exclude_site}")
 
-                # 构建子查询：
-                # 1. 从torrents表中找到在指定站点存在的种子名称
-                # 2. 然后找到这些种子名称对应的hash
-                # 3. 最后排除seed_parameters表中具有这些hash的记录
+                # 简化子查询逻辑,避免参数不匹配问题
                 if db_manager.db_type == "postgresql":
-                    subquery = f"""
+                    subquery = """
                         SELECT DISTINCT sp.hash
                         FROM seed_parameters sp
                         WHERE sp.hash IN (
@@ -241,26 +245,25 @@ def get_cross_seed_data():
                         f"seed_parameters.hash NOT IN ({subquery})")
                     params.append(exclude_site)
                 else:
-                    # MySQL 和 SQLite
+                    # MySQL 和 SQLite - 直接在WHERE子句中嵌入子查询
                     placeholder = '%s' if db_manager.db_type == "mysql" else '?'
-                    subquery = f"""
-                        SELECT DISTINCT sp.hash
-                        FROM seed_parameters sp
-                        WHERE sp.hash IN (
-                            SELECT DISTINCT t1.hash
-                            FROM torrents t1
-                            WHERE t1.name IN (
-                                SELECT DISTINCT t2.name
-                                FROM torrents t2
-                                WHERE t2.sites = {placeholder}
+                    where_conditions.append(f"""
+                        seed_parameters.hash NOT IN (
+                            SELECT DISTINCT sp.hash
+                            FROM seed_parameters sp
+                            WHERE sp.hash IN (
+                                SELECT DISTINCT t1.hash
+                                FROM torrents t1
+                                WHERE t1.name IN (
+                                    SELECT DISTINCT t2.name
+                                    FROM torrents t2
+                                    WHERE t2.sites = {placeholder}
+                                )
                             )
                         )
-                    """
-                    where_conditions.append(
-                        f"seed_parameters.hash NOT IN ({subquery})")
+                    """)
                     params.append(exclude_site)
 
-                logging.info(f"排除子查询SQL: {subquery}")
                 logging.info(f"排除站点参数: {exclude_site}")
 
         # 组合WHERE子句

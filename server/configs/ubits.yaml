@@ -119,7 +119,7 @@ source_parsers:
       "菁彩HDR": "tag.菁彩HDR"
       "HDR10": "tag.hdr10"
       "连载": "tag.连载"
-      "合集": "tag.合集"
+      "合集": "tag.完结"
       "HLG": "tag.hlg"
       "菜单修改": "tag.菜单修改"
 
@@ -222,7 +222,7 @@ mappings:
     "tag.菁彩HDR": 18
     "tag.hdr10": 9
     "tag.连载": 23
-    "tag.合集": 20
+    "tag.完结": 20
     "tag.hlg": 19
     "tag.菜单修改": 14
     "default": null

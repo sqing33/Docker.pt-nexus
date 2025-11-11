@@ -151,9 +151,6 @@ class TorrentMigrator:
                 with open(config_path, 'r', encoding='utf-8') as f:
                     return yaml.safe_load(f) or {}
             else:
-                self.logger.warning(
-                    f"未找到源站点 {self.SOURCE_NAME} ({self.SOURCE_SITE_CODE}) 的配置文件 {config_path}"
-                )
                 return {}
         except Exception as e:
             self.logger.warning(f"加载源站点配置文件时出错: {e}")
@@ -930,6 +927,41 @@ class TorrentMigrator:
             mediainfo_text = extracted_data.get("mediainfo", "")
             source_params = extracted_data.get("source_params", {})
 
+            # [调试] 打印提取器返回的原始制作组信息
+            self.logger.info(f"[调试] extractor返回的source_params['制作组']: {source_params.get('制作组')}")
+            print(f"[调试] extractor返回的source_params['制作组']: {source_params.get('制作组')}")
+
+            # [调试] 打印标题组件中的制作组信息
+            team_from_title = None
+            if title_components:
+                for component in title_components:
+                    if component.get("key") == "制作组":
+                        team_from_title = component.get("value")
+                        break
+            self.logger.info(f"[调试] 标题解析得到的制作组: {team_from_title}")
+            print(f"[调试] 标题解析得到的制作组: {team_from_title}")
+
+            # [修复] 将 title_components 中的制作组信息补充到 source_params 中
+            if title_components:
+                for component in title_components:
+                    if component.get("key") == "制作组":
+                        team_value = component.get("value")
+                        if team_value:
+                            current_team = source_params.get("制作组")
+                            # 如果制作组为空、为None、或为默认值"Other"，则使用标题中的制作组
+                            if not current_team or current_team.lower() == "other":
+                                source_params["制作组"] = team_value
+                                self.logger.info(f"✓ 从标题组件中补充制作组信息: {team_value} (原值: {current_team})")
+                                print(f"✓ 从标题组件中补充制作组信息: {team_value} (原值: {current_team})")
+                            else:
+                                self.logger.info(f"✓ source_params中已有有效制作组信息，保持: {current_team}")
+                                print(f"✓ source_params中已有有效制作组信息，保持: {current_team}")
+                            break
+
+            # [调试] 打印补充后的制作组信息
+            self.logger.info(f"[调试] 补充后的source_params['制作组']: {source_params.get('制作组')}")
+            print(f"[调试] 补充后的source_params['制作组']: {source_params.get('制作组')}")
+
             # 提取IMDb和豆瓣链接
             imdb_link = intro.get("imdb_link", "")
             douban_link = intro.get("douban_link", "")
@@ -1490,9 +1522,17 @@ class TorrentMigrator:
             # 此处已提前下载种子文件，无需重复下载
 
             # --- [三层解耦模型核心实现] 开始: 构建标准化参数 ---
+            # [调试] 打印标准化前的数据
+            self.logger.info(f"[调试] 标准化前 - extracted_data['source_params']['制作组']: {extracted_data.get('source_params', {}).get('制作组')}")
+            print(f"[调试] 标准化前 - extracted_data['source_params']['制作组']: {extracted_data.get('source_params', {}).get('制作组')}")
+            
             # 使用三层解耦模型标准化参数
             standardized_params = self._standardize_parameters(
                 extracted_data, title_components)
+            
+            # [调试] 打印标准化后的制作组信息
+            self.logger.info(f"[调试] 标准化后 - standardized_params['team']: {standardized_params.get('team')}")
+            print(f"[调试] 标准化后 - standardized_params['team']: {standardized_params.get('team')}")
 
             # [新增] 音频编码择优逻辑
             try:

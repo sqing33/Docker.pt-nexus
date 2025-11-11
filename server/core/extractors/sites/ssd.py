@@ -332,7 +332,7 @@ class SSDSpecialExtractor:
 
     def extract_tags(self):
         """
-        提取标签，针对"不可说"站点的特殊结构
+        提取标签,针对"不可说"站点的特殊结构
         """
         tags_td = self.soup.find("td", string="标签")
         if tags_td and tags_td.find_next_sibling("td"):
@@ -346,7 +346,11 @@ class SSDSpecialExtractor:
             unwanted_tags = ["官方", "官种", "首发", "自购", "应求"]
             for tag in tags:
                 if tag not in unwanted_tags:
-                    filtered_tags.append(tag)
+                    # 将"合集"替换成"完结"
+                    if tag == "合集":
+                        filtered_tags.append("完结")
+                    else:
+                        filtered_tags.append(tag)
             
             return filtered_tags
         return []

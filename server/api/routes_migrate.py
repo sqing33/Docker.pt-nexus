@@ -1562,6 +1562,7 @@ def validate_media():
                                              torrent_name, downloader_id)
         return jsonify({"success": True, "screenshots": screenshots}), 200
     elif media_type == "poster":
+        # 海报验证和转存已经在 upload_data_movie_info -> _parse_format_content 中自动完成
         status, posters, description, extracted_imdb_link = upload_data_movie_info(
             douban_link, imdb_link)
         if status:

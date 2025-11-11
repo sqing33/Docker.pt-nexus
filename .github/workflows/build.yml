@@ -6,11 +6,7 @@ on:
       tags:
         description: "Tags to push (comma-separated, e.g., latest,v1.0.0)"
         required: true
-        default: "latest"
-      platforms:
-        description: "Docker image platforms to build (comma-separated, e.g., linux/amd64,linux/arm64)"
-        required: true
-        default: "linux/amd64,linux/arm64"
+        default: "latest,v3.0.0"
 
 env:
   IMAGE_NAME: pt-nexus
@@ -77,37 +73,66 @@ jobs:
       - name: 6. 准备 Docker 标签
         id: prepare-tags
         run: |
-          # 读取用户输入的标签（逗号分隔）
-          INPUT_TAGS="${{ github.event.inputs.tags }}"
-
-          # 准备两个仓库的完整标签列表
+          # 准备两个仓库的基础路径
           GHCR_REPO="ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}"
           DOCKERHUB_REPO="${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}"
 
-          # 将逗号分隔的标签转换为完整的镜像标签
-          TAGS=""
-          IFS=',' read -ra TAG_ARRAY <<< "$INPUT_TAGS"
-          for tag in "${TAG_ARRAY[@]}"; do
-            # 去除首尾空格
-            tag=$(echo "$tag" | xargs)
-            # 添加两个仓库的标签
-            TAGS="${TAGS}${GHCR_REPO}:${tag},"
-            TAGS="${TAGS}${DOCKERHUB_REPO}:${tag},"
-          done
+          # 固定的临时标签
+          AMD64_TAGS="${GHCR_REPO}:latest-amd64,${DOCKERHUB_REPO}:latest-amd64"
+          ARM64_TAGS="${GHCR_REPO}:latest-arm64,${DOCKERHUB_REPO}:latest-arm64"
+          
+          echo "AMD64 标签: $AMD64_TAGS"
+          echo "ARM64 标签: $ARM64_TAGS"
+          
+          echo "amd64_tags=$AMD64_TAGS" >> $GITHUB_OUTPUT
+          echo "arm64_tags=$ARM64_TAGS" >> $GITHUB_OUTPUT
 
-          # 移除最后的逗号
-          TAGS="${TAGS%,}"
-
-          echo "生成的标签: $TAGS"
-          echo "tags=$TAGS" >> $GITHUB_OUTPUT
-
-      - name: 7. 构建并推送到多个镜像仓库
+      - name: 7. 构建并推送 AMD64 架构镜像
         uses: docker/build-push-action@v6
         with:
           context: .
-          platforms: ${{ github.event.inputs.platforms }}
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.prepare-tags.outputs.tags }}
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.prepare-tags.outputs.amd64_tags }}
+          cache-from: type=gha,scope=amd64
+          cache-to: type=gha,mode=max,scope=amd64
+
+      - name: 8. 构建并推送 ARM64 架构镜像
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/arm64
+          push: true
+          tags: ${{ steps.prepare-tags.outputs.arm64_tags }}
+          cache-from: type=gha,scope=arm64
+          cache-to: type=gha,mode=max,scope=arm64
+
+      - name: 9. 合并多架构清单
+        run: |
+          # 读取用户输入的标签
+          INPUT_TAGS="${{ github.event.inputs.tags }}"
+          
+          GHCR_REPO="ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}"
+          DOCKERHUB_REPO="${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}"
+          
+          IFS=',' read -ra TAG_ARRAY <<< "$INPUT_TAGS"
+          for tag in "${TAG_ARRAY[@]}"; do
+            tag=$(echo "$tag" | xargs)
+            
+            echo "创建多架构清单: $tag"
+            
+            # 为 GHCR 创建清单
+            docker buildx imagetools create -t ${GHCR_REPO}:${tag} \
+              ${GHCR_REPO}:latest-amd64 \
+              ${GHCR_REPO}:latest-arm64
+            
+            # 为 Docker Hub 创建清单
+            docker buildx imagetools create -t ${DOCKERHUB_REPO}:${tag} \
+              ${DOCKERHUB_REPO}:latest-amd64 \
+              ${DOCKERHUB_REPO}:latest-arm64
+              
+            echo "✅ 成功创建多架构清单: $tag"
+          done
 
   build-pt-nexus-box-proxy:
     runs-on: ubuntu-latest

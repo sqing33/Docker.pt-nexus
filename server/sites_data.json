@@ -181,7 +181,7 @@
     "special_tracker_domain": null,
     "group": "-CHDBits,-CHDWEB,-CHD",
     "description": "CHDBits",
-    "migration": 1,
+    "migration": 0,
     "speed_limit": 50
   },
   {
@@ -584,7 +584,7 @@
     "special_tracker_domain": null,
     "group": "-Eleph,-ElephWeb",
     "description": "象岛",
-    "migration": 3,
+    "migration": 0,
     "speed_limit": 80
   },
   {

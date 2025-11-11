@@ -587,6 +587,9 @@ global_standard_keys:
     "FraMeSToR": "team.framestor"
     "FRDS": "team.frds"
     "FFansDIY": "team.ffansdiy"
+    "FROG": "team.frog"
+    "FROGE": "team.froge"
+    "FROGWeb": "team.frogweb"
     "GGN": "team.ggn"
     "GodDramas": "team.goddramas"
     "Hares": "team.hares"
@@ -837,6 +840,7 @@ content_filtering:
     - "用户自行搜集"
     - "禁止任何涉及商业盈利目的使用"
     - "请在下载后24小时内尽快删除"
+    - "自动发布"
 
     # 财神CSWEB相关
     - "财神CSWEB提供的所有资源均是在网上搜集且由用户上传"

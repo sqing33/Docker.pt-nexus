@@ -408,89 +408,31 @@ class Extractor:
                     break
                 original_bbcode = bbcode
 
-            # Extract images - 同时处理[img]和[url]格式的图片链接
-            images = re.findall(r"\[img\].*?\[/img\]", bbcode, re.IGNORECASE)
+        # Extract images - 同时处理[img]和[url]格式的图片链接
+        images = re.findall(r"\[img\].*?\[/img\]", bbcode, re.IGNORECASE)
 
-            # [新增] 提取[url=图片链接][/url]格式的图片并转换为[img]格式
-            url_images = re.findall(
-                r'\[url=([^\]]*\.(?:jpg|jpeg|png|gif|bmp|webp)(?:[^\]]*))\]\s*\[/url\]',
-                bbcode, re.IGNORECASE)
-            print(f"[调试extractor] 提取到的[img]格式图片数量: {len(images)}")
-            print(f"[调试extractor] 提取到的[url]格式图片数量: {len(url_images)}")
-            for url_img in url_images:
-                images.append(f"[img]{url_img}[/img]")
-                print(f"[调试extractor] 添加转换后的图片: {url_img[:80]}")
+        # [新增] 提取[url=图片链接][/url]格式的图片并转换为[img]格式
+        url_images = re.findall(
+            r'\[url=([^\]]*\.(?:jpg|jpeg|png|gif|bmp|webp)(?:[^\]]*))\]\s*\[/url\]',
+            bbcode, re.IGNORECASE)
+        print(f"[调试extractor] 提取到的[img]格式图片数量: {len(images)}")
+        print(f"[调试extractor] 提取到的[url]格式图片数量: {len(url_images)}")
+        for url_img in url_images:
+            images.append(f"[img]{url_img}[/img]")
+            print(f"[调试extractor] 添加转换后的图片: {url_img[:80]}")
 
-            # [新增] 应用BBCode清理函数到bbcode，移除[url]格式的图片和其他需要清理的标签
-            from utils.formatters import process_bbcode_images_and_cleanup
-            print(f"[调试extractor] 清理前bbcode长度: {len(bbcode)}")
-            print(f"[调试extractor] 清理前bbcode前200字符: {bbcode[:200]}")
-            bbcode = process_bbcode_images_and_cleanup(bbcode)
-            print(f"[调试extractor] 清理后bbcode长度: {len(bbcode)}")
-            print(f"[调试extractor] 清理后bbcode前200字符: {bbcode[:200]}")
+        # [新增] 应用BBCode清理函数到bbcode，移除[url]格式的图片和其他需要清理的标签
+        from utils.formatters import process_bbcode_images_and_cleanup
+        print(f"[调试extractor] 清理前bbcode长度: {len(bbcode)}")
+        print(f"[调试extractor] 清理前bbcode前200字符: {bbcode[:200]}")
+        bbcode = process_bbcode_images_and_cleanup(bbcode)
+        print(f"[调试extractor] 清理后bbcode长度: {len(bbcode)}")
+        print(f"[调试extractor] 清理后bbcode前200字符: {bbcode[:200]}")
 
-            # [新增] 验证并优化海报链接
-            # 视频截图的验证将在 migrator.py 的 prepare_review_data 中单独进行
-            poster_valid = True  # 标记海报是否有效
-            if images:
-                poster_img = images[0]
-                if match := re.search(r'\[img\](.*?)\[/img\]', poster_img,
-                                      re.IGNORECASE):
-                    poster_url = match.group(1)
-                    logging.info(f"开始处理海报链接: {poster_url}")
-                    print(f"[*] 开始处理海报链接...")
+        # 注意：海报验证和转存逻辑已移至 _parse_format_content 函数中统一处理
+        # 视频截图的验证将在 migrator.py 的 prepare_review_data 中单独进行
 
-                    # 检查是否为 pixhost 图片
-                    is_pixhost = 'pixhost.to' in poster_url.lower() or 'pixhost.org' in poster_url.lower()
-                    
-                    if is_pixhost:
-                        # 是 pixhost 图片，直接跳过验证和转存
-                        logging.info("检测到pixhost图片，直接使用。")
-                        print(f"[*] 检测到pixhost图片，直接使用。")
-                    else:
-                        # 不是 pixhost 图片，需要验证并转存
-                        logging.info("检测到非pixhost图片，执行验证和转存...")
-                        print(f"[*] 检测到非pixhost图片，执行验证和转存...")
-                        
-                        # 先验证海报是否有效
-                        from utils.image_validator import is_image_url_valid_robust
-                        if is_image_url_valid_robust(poster_url):
-                            logging.info(f"海报验证成功: {poster_url}")
-                            print(f"[*] 海报验证成功，开始转存到pixhost...")
-                            
-                            # 转存到pixhost
-                            from utils.media_helper import _transfer_poster_to_pixhost
-                            pixhost_url = _transfer_poster_to_pixhost(poster_url)
-                            
-                            if pixhost_url:
-                                # 转存成功，更新海报链接
-                                images[0] = f"[img]{pixhost_url}[/img]"
-                                logging.info(f"海报转存成功，更新images[0]为: {images[0]}")
-                                print(f"[*] 海报转存成功，更新images[0]为: {images[0]}")
-                            else:
-                                # 转存失败，使用原始有效链接
-                                logging.warning(f"海报转存失败，使用原始链接")
-                                print(f"  [!] 海报转存失败，使用原始链接")
-                        else:
-                            # 验证失败，尝试智能获取
-                            logging.warning(f"海报验证失败，尝试智能获取...")
-                            print(f"  [!] 海报验证失败，尝试智能获取...")
-                            
-                            from utils.media_helper import _get_smart_poster_url
-                            smart_poster_url = _get_smart_poster_url(poster_url)
-                            
-                            if smart_poster_url:
-                                # 智能获取成功（已经转存到pixhost）
-                                images[0] = f"[img]{smart_poster_url}[/img]"
-                                logging.info(f"智能海报获取成功，更新images[0]为: {images[0]}")
-                                print(f"[*] 智能海报获取成功，更新images[0]为: {images[0]}")
-                            else:
-                                logging.warning(f"智能海报获取失败，海报标记为无效")
-                                print(f"  [!] 智能海报获取失败，海报标记为无效")
-                                poster_valid = False
-
-            # 注意：视频截图（images[1:]）不在此处验证，将在 migrator.py 中统一验证和重新生成
-
+        if descr_container:
             # Extract quotes before and after poster
             # [修复] 改进判断逻辑：即使没有海报，也要正确区分感谢声明和正文内容
             poster_index = bbcode.find(images[0]) if (images
@@ -895,8 +837,8 @@ class Extractor:
                                           statement_string).strip()
 
             extracted_data["intro"]["statement"] = statement_string
-            # [修复] 如果海报无效，设置为空字符串而不是使用images[0]
-            extracted_data["intro"]["poster"] = images[0] if (images and poster_valid) else ""
+            # 直接使用提取到的第一张图片作为海报（验证和转存在 _parse_format_content 中处理）
+            extracted_data["intro"]["poster"] = images[0] if images else ""
             extracted_data["intro"]["body"] = re.sub(r"\n{2,}", "\n", body)
             extracted_data["intro"]["screenshots"] = "\n".join(
                 images[1:]) if len(images) > 1 else ""

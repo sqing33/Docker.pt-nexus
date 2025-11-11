@@ -1,6 +1,6 @@
 # PT Nexus - PT 种子聚合管理平台
 
-**PT Nexus** 是一款 PT 种子聚合管理平台，集 `下载器流量统计`、`铺种做种查询`、`多站点转种`、`本地做种文件检索` 于一体，大幅简化转种流程，提升 PT 站点管理效率。
+**PT Nexus** 是一款 PT 种子聚合管理平台，集 `下载器流量统计`、`铺种做种查询`、`多站点转种`、`本地做种文件检索` 于一体，大幅简化转种流程，提升 PT 站点管理效率。（经过一些站点的管理人员提议，批量发布应限制种子大小，所以批量转种部分代码使用 go 编写不开源，避免有人修改代码后批量转一些小种子倒垃圾到各各站点，目前限制为 1G，在一种多站功能中不做限制）
 
 - Wiki：https://ptn-wiki.sqing33.dpdns.org
 - Github：https://github.com/sqing33/Docker.pt-nexus
@@ -37,7 +37,7 @@
 # 使用 sqlite
 services:
   pt-nexus:
-    image: ghcr.io/sqing33/pt-nexus:latest
+    image: ghcr.nju.edu.cn/sqing33/pt-nexus:latest
     container_name: pt-nexus
     ports:
       - 5274:5274
@@ -55,7 +55,7 @@ services:
 # 使用 MySQL
 services:
   pt-nexus:
-    image: ghcr.io/sqing33/pt-nexus:latest
+    image: ghcr.nju.edu.cn/sqing33/pt-nexus:latest
     container_name: pt-nexus
     ports:
       - 5274:5274
@@ -78,7 +78,7 @@ services:
 # 使用 PostgreSQL
 services:
   pt-nexus:
-    image: ghcr.io/sqing33/pt-nexus:latest
+    image: ghcr.nju.edu.cn/sqing33/pt-nexus:latest
     container_name: pt-nexus
     ports:
       - 5274:5274
