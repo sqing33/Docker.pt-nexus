@@ -1,3 +1,4 @@
+import os
 from ..uploader import SpecialUploader
 import traceback
 from loguru import logger
@@ -50,8 +51,12 @@ class HaidanUploader(SpecialUploader):
             }
             # 优先使用原始的制作组名称，如果没有则使用标准化参数
             title_params = {
-                "制作组": title_params_temp.get("制作组", standardized_params.get("team", "")),
-                "季集": title_params_temp.get("季集", standardized_params.get("season_episode", "")),
+                "制作组":
+                title_params_temp.get("制作组",
+                                      standardized_params.get("team", "")),
+                "季集":
+                title_params_temp.get(
+                    "季集", standardized_params.get("season_episode", "")),
             }
             source_params = self.upload_data.get("source_params", {})
 
@@ -289,7 +294,7 @@ class HaidanUploader(SpecialUploader):
             upload_settings = config.get("upload_settings", {})
             anonymous_upload = upload_settings.get("anonymous_upload", True)
             uplver_value = "yes" if anonymous_upload else "no"
-            
+
             # 准备form_data，包含haidan站点需要的所有参数
             form_data = {
                 "name": final_main_title,
@@ -301,8 +306,9 @@ class HaidanUploader(SpecialUploader):
             }
 
             # 4. 保存参数用于调试
-            self._save_upload_parameters(form_data, mapped_params,
-                                         final_main_title, description)
+            if os.getenv("UPLOAD_TEST_MODE") == "true":
+                self._save_upload_parameters(form_data, mapped_params,
+                                             final_main_title, description)
 
             # 5. 调用父类的execute_upload方法继续执行上传
             return super().execute_upload()

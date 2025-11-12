@@ -24,6 +24,84 @@ logging.basicConfig(
 logging.info("=== Flask 应用日志系统已初始化 ===")
 
 
+def cleanup_old_tmp_structure():
+    """
+    清理旧的 tmp 目录结构，只保留：
+    - server/data/tmp/torrents/ 目录（并清理其中的 JSON 文件）
+    - server/data/tmp/batch-enhancer.log 文件
+    删除其他所有文件和目录（包括 extracted_data）
+    
+    注意：开发环境下不执行清理
+    """
+    # 检查是否为开发环境
+    if os.getenv("DEV_ENV") == "true":
+        print("开发环境检测：跳过 tmp 目录清理")
+        return
+    
+    from config import TEMP_DIR
+    import shutil
+    
+    print("开始清理旧的 tmp 目录结构...")
+    
+    # 要保留的项目
+    keep_items = {"torrents", "batch-enhancer.log"}
+    
+    try:
+        if not os.path.exists(TEMP_DIR):
+            print(f"tmp 目录不存在: {TEMP_DIR}")
+            return
+        
+        # 确保 torrents 目录存在
+        torrents_dir = os.path.join(TEMP_DIR, "torrents")
+        os.makedirs(torrents_dir, exist_ok=True)
+        
+        # 遍历 tmp 目录下的所有项目
+        items_to_remove = []
+        for item in os.listdir(TEMP_DIR):
+            if item not in keep_items:
+                items_to_remove.append(item)
+        
+        if not items_to_remove:
+            print("tmp 目录已是最新结构，无需清理")
+        else:
+            # 删除不需要的项目
+            removed_count = 0
+            for item in items_to_remove:
+                item_path = os.path.join(TEMP_DIR, item)
+                try:
+                    if os.path.isdir(item_path):
+                        shutil.rmtree(item_path)
+                        print(f"  已删除目录: {item}")
+                    else:
+                        os.remove(item_path)
+                        print(f"  已删除文件: {item}")
+                    removed_count += 1
+                except Exception as e:
+                    print(f"  删除 {item} 时出错: {e}")
+            
+            print(f"清理完成，共删除 {removed_count} 个项目")
+        
+        # 清理 torrents 目录中的 JSON 文件
+        print("开始清理 torrents 目录中的 JSON 文件...")
+        json_removed = 0
+        for filename in os.listdir(torrents_dir):
+            if filename.endswith('.json'):
+                json_path = os.path.join(torrents_dir, filename)
+                try:
+                    os.remove(json_path)
+                    json_removed += 1
+                except Exception as e:
+                    print(f"  删除 JSON 文件 {filename} 时出错: {e}")
+        
+        if json_removed > 0:
+            print(f"已清理 {json_removed} 个 JSON 文件")
+        else:
+            print("torrents 目录中没有 JSON 文件需要清理")
+        
+    except Exception as e:
+        print(f"清理 tmp 目录时发生错误: {e}")
+
+
 def create_app():
     """
     应用工厂函数：创建并配置 Flask 应用实例。
@@ -54,6 +132,9 @@ def create_app():
             "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
         }
     })
+
+    # --- 步骤 0: 清理旧的 tmp 目录结构 ---
+    cleanup_old_tmp_structure()
 
     # --- 步骤 1: 初始化核心依赖 (数据库和配置) ---
     logging.info("正在初始化数据库和配置...")

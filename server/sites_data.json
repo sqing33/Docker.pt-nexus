@@ -1255,5 +1255,14 @@
     "group": null,
     "migration": 2,
     "speed_limit": 10
+  },
+  {
+    "site": "hdvideo",
+    "nickname": "HDvideo",
+    "base_url": "hdvideo.top",
+    "special_tracker_domain": null,
+    "group": null,
+    "migration": 0,
+    "speed_limit": 10
   }
 ]

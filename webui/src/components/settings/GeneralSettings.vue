@@ -150,14 +150,24 @@
           <el-form :model="iyuuForm" label-position="top" class="settings-form">
             <el-form-item label="IYUU Token" class="form-item">
               <el-input
-                v-model="iyuuForm.token"
-                type="password"
+                v-model="displayIyuuToken"
+                :type="showIyuuToken ? 'text' : 'password'"
                 placeholder="请输入IYUU Token"
-                show-password
+                @input="onIyuuTokenInput"
               >
                 <template #prefix>
                   <el-icon>
                     <Key />
+                  </el-icon>
+                </template>
+                <template #suffix>
+                  <el-icon
+                    @click="toggleShowIyuuToken"
+                    style="cursor: pointer"
+                    :class="{ 'is-active': showIyuuToken }"
+                  >
+                    <View v-if="!showIyuuToken" />
+                    <Hide v-else />
                   </el-icon>
                 </template>
               </el-input>
@@ -540,6 +550,8 @@ import {
   InfoFilled,
   Picture,
   Link,
+  View,
+  Hide,
 } from '@element-plus/icons-vue'
 
 // 用户设置相关
@@ -592,6 +604,33 @@ const downloaderOptions = ref<{ id: string; name: string }[]>([])
 // 实际的 token 值，用于在保存时判断是否需要更新
 const actualIyuuToken = ref('')
 
+// IYUU Token 显示相关
+const showIyuuToken = ref(false)
+const displayIyuuToken = ref('')
+
+// 切换 token 显示/隐藏
+const toggleShowIyuuToken = () => {
+  showIyuuToken.value = !showIyuuToken.value
+  if (showIyuuToken.value) {
+    // 显示真实token
+    displayIyuuToken.value = actualIyuuToken.value
+  } else {
+    // 显示星号，长度与真实token一致
+    displayIyuuToken.value = actualIyuuToken.value ? '*'.repeat(actualIyuuToken.value.length) : ''
+  }
+}
+
+// 当输入框内容改变时
+const onIyuuTokenInput = (value: string) => {
+  // 如果用户修改了内容，更新实际的token值
+  // 检查是否全是星号（不管多少个）
+  const isAllStars = value.length > 0 && value.split('').every(char => char === '*')
+  if (!isAllStars) {
+    actualIyuuToken.value = value
+    iyuuForm.token = value
+  }
+}
+
 // IYUU日志相关
 const iyuuLogsDialogVisible = ref(false)
 const iyuuLogs = ref<IYUULog[]>([])
@@ -634,8 +673,14 @@ const fetchSettings = async () => {
     if (config.iyuu_token) {
       // 保存实际的 token 值
       actualIyuuToken.value = config.iyuu_token
-      // 显示为隐藏状态（用星号代替）
-      iyuuForm.token = config.iyuu_token ? '********' : ''
+      // 显示为隐藏状态（用星号代替，长度与真实token一致）
+      const maskedToken = '*'.repeat(config.iyuu_token.length)
+      iyuuForm.token = maskedToken
+      displayIyuuToken.value = maskedToken
+    } else {
+      actualIyuuToken.value = ''
+      iyuuForm.token = ''
+      displayIyuuToken.value = ''
     }
 
     // 获取IYUU设置
@@ -682,20 +727,26 @@ const saveIyuuSettings = async () => {
   savingIyuu.value = true
   try {
     // 保存 iyuu token 设置
-    // 如果显示的是星号，表示没有更改，不需要更新token
-    if (iyuuForm.token !== '********') {
+    // 如果实际token值有变化，则保存
+    if (actualIyuuToken.value && iyuuForm.token !== '********') {
+      const tokenSettings = {
+        iyuu_token: actualIyuuToken.value,
+      }
+      await axios.post('/api/settings', tokenSettings)
+    } else if (!actualIyuuToken.value && iyuuForm.token) {
+      // 如果之前没有token，现在添加了
       const tokenSettings = {
         iyuu_token: iyuuForm.token,
       }
       await axios.post('/api/settings', tokenSettings)
-      // 保存成功后，显示星号而不是明文
-      if (iyuuForm.token) {
-        iyuuForm.token = '********'
-      } else {
-        iyuuForm.token = ''
-      }
       actualIyuuToken.value = iyuuForm.token
     }
+    
+    // 保存成功后，重置显示状态
+    showIyuuToken.value = false
+    const maskedToken = actualIyuuToken.value ? '*'.repeat(actualIyuuToken.value.length) : ''
+    displayIyuuToken.value = maskedToken
+    iyuuForm.token = maskedToken
 
     // 保存IYUU其他设置
     // 将天数转换为小时保存到后端

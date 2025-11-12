@@ -421,13 +421,34 @@ class Extractor:
             images.append(f"[img]{url_img}[/img]")
             print(f"[调试extractor] 添加转换后的图片: {url_img[:80]}")
 
+        # [新增] 从配置文件读取并过滤掉指定的不需要的图片URL
+        unwanted_image_urls = CONTENT_FILTERING_CONFIG.get("unwanted_image_urls", [])
+        
+        if unwanted_image_urls:
+            filtered_images = []
+            for img_tag in images:
+                # 从[img]标签中提取URL
+                url_match = re.search(r'\[img\](.*?)\[/img\]', img_tag, re.IGNORECASE)
+                if url_match:
+                    img_url = url_match.group(1)
+                    # 检查是否在过滤列表中
+                    if img_url not in unwanted_image_urls:
+                        filtered_images.append(img_tag)
+                    else:
+                        logging.info(f"过滤掉不需要的图片: {img_url}")
+                        print(f"[过滤] 移除图片: {img_url}")
+                else:
+                    # 如果无法提取URL，保留原图片标签
+                    filtered_images.append(img_tag)
+            
+            images = filtered_images
+            print(f"[调试extractor] 过滤后剩余图片数量: {len(images)}")
+        else:
+            print(f"[调试extractor] 未配置图片过滤列表，跳过过滤")
+
         # [新增] 应用BBCode清理函数到bbcode，移除[url]格式的图片和其他需要清理的标签
         from utils.formatters import process_bbcode_images_and_cleanup
-        print(f"[调试extractor] 清理前bbcode长度: {len(bbcode)}")
-        print(f"[调试extractor] 清理前bbcode前200字符: {bbcode[:200]}")
         bbcode = process_bbcode_images_and_cleanup(bbcode)
-        print(f"[调试extractor] 清理后bbcode长度: {len(bbcode)}")
-        print(f"[调试extractor] 清理后bbcode前200字符: {bbcode[:200]}")
 
         # 注意：海报验证和转存逻辑已移至 _parse_format_content 函数中统一处理
         # 视频截图的验证将在 migrator.py 的 prepare_review_data 中单独进行
@@ -470,42 +491,44 @@ class Extractor:
 
             # 辅助函数：检查是否为包含技术参数的quote（这些既不是mediainfo也不应该出现在正文中）
             def is_technical_params_quote(quote_text):
+                """
+                使用配置文件中的 technical_params_detection 规则检查是否为技术参数 quote
+                """
+                if not CONTENT_FILTERING_CONFIG.get("enabled", False):
+                    return False
+                
                 # 转换为大写进行不区分大小写的匹配
                 quote_upper = quote_text.upper()
-
-                return (
-                    # 匹配 .Release.Info 格式
-                    (".Release.Info" in quote_text and "ENCODER" in quote_upper
-                     ) or ("ENCODER" in quote_upper
-                           and "RELEASE NAME" in quote_upper)
-                    or (".Release.Info" in quote_text
-                        and ".Media.Info" in quote_text)
-                    or ("ViDEO CODEC" in quote_upper
-                        and "AUDiO CODEC" in quote_upper)
-                    or (".x265.Info" in quote_text and "x265" in quote_text) or
-                    # [新增] 匹配常见的 Release Info 格式（包含多个技术参数关键词）
-                    (("RELEASE.NAME" in quote_upper
-                      or "RELEASE NAME" in quote_upper) and
-                     ("VIDEO.CODEC" in quote_upper or "VIDEO CODEC"
-                      in quote_upper or "FRAME.RATE" in quote_upper
-                      or "FRAME RATE" in quote_upper)) or
-                    # [新增] 匹配包含 RELEASE、VIDEO、AUDIO 等多个技术关键词的组合
-                    (quote_upper.count("RELEASE") >= 2 and
-                     ("VIDEO" in quote_upper or "AUDIO" in quote_upper)) or
-                    # [新增] 匹配包含 SUBTITLES 和其他技术参数的格式
-                    ("SUBTITLES" in quote_upper and
-                     ("RELEASE" in quote_upper or "VIDEO" in quote_upper
-                      or "AUDIO" in quote_upper)
-                     and quote_upper.count(".") >= 5)  # 技术参数通常有很多点号分隔
-                    or
-                    # [新增] 匹配 General Information 样式的发布信息
-                    ("GENERAL INFORMATION" in quote_upper and
-                     ("RELEASE" in quote_upper or "VIDEO" in quote_upper)) or
-                    # [新增] 匹配对比截图说明格式：Comparison ... Source___Encode
-                    ("COMPARISON" in quote_upper and "SOURCE" in quote_upper
-                     and "ENCODE" in quote_upper and
-                     ("___" in quote_text or "____" in quote_text))  # 包含下划线分隔符
-                )
+                
+                # 从配置文件读取技术参数检测规则
+                tech_params_config = CONTENT_FILTERING_CONFIG.get(
+                    "technical_params_detection", {})
+                patterns = tech_params_config.get("patterns", [])
+                
+                for pattern in patterns:
+                    keywords = pattern.get("keywords", [])
+                    min_dots = pattern.get("min_dots", 0)
+                    has_underscores = pattern.get("has_underscores", False)
+                    
+                    # 检查是否所有关键词都存在（不区分大小写）
+                    if keywords:
+                        all_keywords_present = all(
+                            keyword in quote_text or keyword.upper() in quote_upper
+                            for keyword in keywords
+                        )
+                        
+                        if all_keywords_present:
+                            # 检查额外条件
+                            if min_dots > 0 and quote_text.count(".") < min_dots:
+                                continue
+                            if has_underscores and ("___" not in quote_text and "____" not in quote_text):
+                                continue
+                            
+                            # 所有条件都满足
+                            logging.info(f"根据配置规则 '{pattern.get('description', '')}' 识别为技术参数quote")
+                            return True
+                
+                return False
 
             # Process quotes
             final_statement_quotes = []
@@ -530,6 +553,17 @@ class Extractor:
                                                   flags=re.IGNORECASE).strip()
                     found_mediainfo_in_quote = True
                     # MediaInfo/BDInfo是技术信息，不应该被过滤掉，直接跳过处理
+                    continue
+
+                # [修复] 使用配置文件中的 unwanted_patterns 检查 quote 是否包含不需要的内容
+                quote_text_without_tags = re.sub(r"\[/?quote\]",
+                                                 "",
+                                                 quote,
+                                                 flags=re.IGNORECASE).strip()
+                if self._is_unwanted_content(quote_text_without_tags):
+                    logging.info(
+                        f"根据配置文件过滤掉不需要的声明: {quote_text_without_tags[:50]}...")
+                    ardtu_declarations.append(quote_text_without_tags)
                     continue
 
                 is_ardtutool_auto_publish = ("ARDTU工具自动发布" in quote)
@@ -1112,6 +1146,7 @@ class ParameterMapper:
                 return None
 
             value_str = str(raw_value).strip()
+            original_value_str = value_str  # 保存原始值，用于后续处理
 
             # 处理合作制作组：如果包含@符号，优先使用@后面的制作组名称
             if "@" in value_str:
@@ -1143,7 +1178,15 @@ class ParameterMapper:
 
             # 如果都找不到，返回一个默认值或处理过的原始值
             if param_key == "team":
-                return "team.other"  # 制作组找不到映射时，明确返回 team.other
+                # [修复] 只有当原始值是明确的无效值时才返回 team.other
+                # 否则保留原始完整的制作组名称（包括合作制作组）
+                if original_value_str.lower() in [
+                        "other", "未知", "unknown", ""
+                ]:
+                    return "team.other"
+                else:
+                    # 保留原始完整制作组名称（如 "Nest@ADE"）
+                    return original_value_str
             return value_str  # 其他参数返回原始值
 
         # 1. 分别从 source_params 和 title_components 提取并标准化

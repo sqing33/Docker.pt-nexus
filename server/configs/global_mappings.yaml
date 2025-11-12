@@ -817,6 +817,7 @@ team_acknowledgment:
     - "官方作品"
     - "官种"
     - "Official Release"
+    - "高清杜比"
 
   # 关键词检测范围（字符数，只检查声明开头的部分）
   keyword_check_length: 300
@@ -841,10 +842,10 @@ content_filtering:
     - "禁止任何涉及商业盈利目的使用"
     - "请在下载后24小时内尽快删除"
     - "自动发布"
-
-    # 财神CSWEB相关
     - "财神CSWEB提供的所有资源均是在网上搜集且由用户上传"
     - "不可用于任何形式的商业盈利活动"
+    - "网上搜集"
+    - "宽带测试"
 
     # 工具签名
     - "| A | By ATU"
@@ -914,6 +915,9 @@ content_filtering:
         has_underscores: true
         description: "对比截图说明（Source___Encode格式）"
 
+      - keywords: ["文件名称", "文件体积"]
+        description: "杜比的媒体信息"
+
   # 对比说明过滤规则
   comparison_filtering:
     enabled: true
@@ -928,6 +932,22 @@ content_filtering:
     - "screenshot"
     - "source"
     - "encode"
+
+  # 需要过滤的图片URL列表（这些图片会在提取时被自动过滤掉）
+  unwanted_image_urls:
+    - "https://www.hddolby.com/pic/Mediainfo.png"
+    - "https://www.hddolby.com/pic/MoreScreenshot.png"
+    - "https://wawawa.me/team/frogteam.svg"
+    - "https://img93.pixhost.to/images/86/435614074_c5134549f13c2c087d67c9fa4089c49e-removebg-preview.png"
+    - "https://pic.imgdb.cn/item/6170004c2ab3f51d91c7782a.png"
+    - "https://pterclub.net/pic/CS.png"
+    - "https://pterclub.net/pic/GDJT.png"
+    - "https://pterclub.net/pic/PTerWEB.png"
+    - "https://pterclub.net/pic/PTer.png"
+    - "https://pterclub.net/pic/PTerDIY.png"
+    - "https://pterclub.net/pic/PTerMV.png"
+    - "https://pterclub.net/pic/PTerTV.png"
+    - "https://pterclub.net/pic/PTerGame.png"
 
 # ==============================================================================
 # Fallback Strategy Configuration (降级策略配置)

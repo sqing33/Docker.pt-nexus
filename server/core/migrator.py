@@ -849,14 +849,15 @@ class TorrentMigrator:
             # 使用统一的数据提取方法
             extracted_data = self._extract_data_by_site_type(soup, torrent_id)
 
-            if extracted_data:
+            if os.getenv("DEV_ENV") == "true":
                 try:
-                    import os, json
-                    from config import TEMP_DIR
+                    import json
+                    # TEMP_DIR 已在文件开头从 config 导入，这里无需重复导入
                     save_dir = os.path.join(TEMP_DIR, "extracted_data")
                     os.makedirs(save_dir, exist_ok=True)
-                    save_path = os.path.join(
-                        save_dir, f"aa_extracted_{torrent_id}.json")
+                    # 使用与种子文件相同的命名格式: 站点代码-种子ID-原文件名
+                    extracted_filename = f"{self.SOURCE_SITE_CODE}-{torrent_id}-{torrent_filename.replace('.torrent', '.json')}"
+                    save_path = os.path.join(save_dir, extracted_filename)
                     with open(save_path, "w", encoding="utf-8") as f:
                         json.dump(extracted_data,
                                   f,
@@ -881,15 +882,16 @@ class TorrentMigrator:
 
             self.logger.info(f"获取到原始主标题: {original_main_title}")
 
-            # 创建以种子名称命名的子目录来保存种子文件和参数
-            safe_filename_base = re.sub(r'[\\/*?:"<>|]', "_",
-                                        original_main_title)[:150]
-            torrent_dir = os.path.join(TEMP_DIR, safe_filename_base)
+            # 使用统一的种子目录，不再为每个种子创建单独文件夹
+            torrent_dir = os.path.join(TEMP_DIR, "torrents")
             os.makedirs(torrent_dir, exist_ok=True)
 
-            # 保存原始种子文件到指定文件夹
+            # [核心修改] 在文件名前添加站点标识符和种子ID，格式: 站点-ID-原文件名.torrent
+            # 例如: ssd-12345-abc.torrent
+            prefixed_torrent_filename = f"{self.SOURCE_SITE_CODE}-{torrent_id}-{torrent_filename}"
             original_torrent_path = os.path.join(torrent_dir,
-                                                 f"{torrent_filename}")
+                                                 prefixed_torrent_filename)
+
             with open(original_torrent_path, "wb") as f:
                 f.write(torrent_response.content)
             self.temp_files.append(original_torrent_path)
@@ -928,8 +930,12 @@ class TorrentMigrator:
             source_params = extracted_data.get("source_params", {})
 
             # [调试] 打印提取器返回的原始制作组信息
-            self.logger.info(f"[调试] extractor返回的source_params['制作组']: {source_params.get('制作组')}")
-            print(f"[调试] extractor返回的source_params['制作组']: {source_params.get('制作组')}")
+            self.logger.info(
+                f"[调试] extractor返回的source_params['制作组']: {source_params.get('制作组')}"
+            )
+            print(
+                f"[调试] extractor返回的source_params['制作组']: {source_params.get('制作组')}"
+            )
 
             # [调试] 打印标题组件中的制作组信息
             team_from_title = None
@@ -949,17 +955,27 @@ class TorrentMigrator:
                         if team_value:
                             current_team = source_params.get("制作组")
                             # 如果制作组为空、为None、或为默认值"Other"，则使用标题中的制作组
-                            if not current_team or current_team.lower() == "other":
+                            if not current_team or current_team.lower(
+                            ) == "other":
                                 source_params["制作组"] = team_value
-                                self.logger.info(f"✓ 从标题组件中补充制作组信息: {team_value} (原值: {current_team})")
-                                print(f"✓ 从标题组件中补充制作组信息: {team_value} (原值: {current_team})")
+                                self.logger.info(
+                                    f"✓ 从标题组件中补充制作组信息: {team_value} (原值: {current_team})"
+                                )
+                                print(
+                                    f"✓ 从标题组件中补充制作组信息: {team_value} (原值: {current_team})"
+                                )
                             else:
-                                self.logger.info(f"✓ source_params中已有有效制作组信息，保持: {current_team}")
-                                print(f"✓ source_params中已有有效制作组信息，保持: {current_team}")
+                                self.logger.info(
+                                    f"✓ source_params中已有有效制作组信息，保持: {current_team}"
+                                )
+                                print(
+                                    f"✓ source_params中已有有效制作组信息，保持: {current_team}"
+                                )
                             break
 
             # [调试] 打印补充后的制作组信息
-            self.logger.info(f"[调试] 补充后的source_params['制作组']: {source_params.get('制作组')}")
+            self.logger.info(
+                f"[调试] 补充后的source_params['制作组']: {source_params.get('制作组')}")
             print(f"[调试] 补充后的source_params['制作组']: {source_params.get('制作组')}")
 
             # 提取IMDb和豆瓣链接
@@ -989,7 +1005,7 @@ class TorrentMigrator:
 
             # 检查媒体链接（不发送日志，内部处理）
             self.logger.info("[*] 开始统一验证海报链接...")
-            
+
             # 提取海报URL
             poster_url = None
             if images and images[0]:
@@ -998,10 +1014,10 @@ class TorrentMigrator:
                                                  images[0], re.IGNORECASE):
                     poster_url = poster_url_match.group(1)
                     self.logger.info(f"从ptgen提取到原始海报URL: {poster_url}")
-            
+
             # 检查是否已经是pixhost图床
             is_pixhost = poster_url and 'pixhost.to' in poster_url
-            
+
             if is_pixhost:
                 self.logger.info("海报已是pixhost图床，跳过校验和转存")
                 # 海报已经是pixhost，直接使用
@@ -1009,10 +1025,10 @@ class TorrentMigrator:
             elif poster_url:
                 # 非pixhost图床，执行智能获取和转存
                 self.logger.info("[*] 检测到非pixhost图片，执行智能海报获取...")
-                
+
                 # 调用智能海报获取函数（内部会验证和转存）
                 valid_poster_url = _get_smart_poster_url(poster_url)
-                
+
                 if valid_poster_url:
                     # 智能获取成功，更新海报
                     images[0] = f"[img]{valid_poster_url}[/img]"
@@ -1523,16 +1539,24 @@ class TorrentMigrator:
 
             # --- [三层解耦模型核心实现] 开始: 构建标准化参数 ---
             # [调试] 打印标准化前的数据
-            self.logger.info(f"[调试] 标准化前 - extracted_data['source_params']['制作组']: {extracted_data.get('source_params', {}).get('制作组')}")
-            print(f"[调试] 标准化前 - extracted_data['source_params']['制作组']: {extracted_data.get('source_params', {}).get('制作组')}")
-            
+            self.logger.info(
+                f"[调试] 标准化前 - extracted_data['source_params']['制作组']: {extracted_data.get('source_params', {}).get('制作组')}"
+            )
+            print(
+                f"[调试] 标准化前 - extracted_data['source_params']['制作组']: {extracted_data.get('source_params', {}).get('制作组')}"
+            )
+
             # 使用三层解耦模型标准化参数
             standardized_params = self._standardize_parameters(
                 extracted_data, title_components)
-            
+
             # [调试] 打印标准化后的制作组信息
-            self.logger.info(f"[调试] 标准化后 - standardized_params['team']: {standardized_params.get('team')}")
-            print(f"[调试] 标准化后 - standardized_params['team']: {standardized_params.get('team')}")
+            self.logger.info(
+                f"[调试] 标准化后 - standardized_params['team']: {standardized_params.get('team')}"
+            )
+            print(
+                f"[调试] 标准化后 - standardized_params['team']: {standardized_params.get('team')}"
+            )
 
             # [新增] 音频编码择优逻辑
             try:
@@ -1776,9 +1800,11 @@ class TorrentMigrator:
             # [新增] 过滤豆瓣链接，只保留ID部分
             filtered_douban_link = douban_link
             if douban_link:
-                douban_match = re.match(r'(https?://movie\.douban\.com/subject/\d+)', douban_link)
-                filtered_douban_link = douban_match.group(1) if douban_match else douban_link
-            
+                douban_match = re.match(
+                    r'(https?://movie\.douban\.com/subject/\d+)', douban_link)
+                filtered_douban_link = douban_match.group(
+                    1) if douban_match else douban_link
+
             seed_parameters = {
                 "name":
                 torrent_name_without_ext,  # 添加去除后缀的种子名称

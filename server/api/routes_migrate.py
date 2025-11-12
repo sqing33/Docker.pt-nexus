@@ -393,23 +393,16 @@ def download_torrent_only():
                 "message": f"错误：源站点 '{site_name}' 配置不完整。"
             }), 404
 
-        # 从数据库获取种子标题以确定目录名
-        from models.seed_parameter import SeedParameter
-        seed_param_model = SeedParameter(db_manager)
-        parameters = seed_param_model.get_parameters(torrent_id, site_name)
+        # 获取英文站点名（用于文件名前缀）
+        site_code = source_info.get("site", site_name.lower())
 
-        if not parameters or not parameters.get("title"):
-            return jsonify({"success": False, "message": "无法从数据库获取种子标题"}), 404
-
-        # 创建种子目录
+        # 使用统一的种子目录
         from config import TEMP_DIR
-        import re
         import os
+        import urllib.parse
+        import re
 
-        original_main_title = parameters.get("title", "")
-        safe_filename_base = re.sub(r'[\\/*?:"<>|]', "_",
-                                    original_main_title)[:150]
-        torrent_dir = os.path.join(TEMP_DIR, safe_filename_base)
+        torrent_dir = os.path.join(TEMP_DIR, "torrents")
         os.makedirs(torrent_dir, exist_ok=True)
 
         # 创建TorrentMigrator实例仅用于下载种子文件
@@ -419,16 +412,37 @@ def download_torrent_only():
                                    config_manager=config_manager,
                                    db_manager=db_manager)
 
-        # 下载种子文件
+        # 下载种子文件（返回的是原始文件名）
         torrent_path = migrator._download_torrent_file(torrent_id, torrent_dir)
 
         if torrent_path and os.path.exists(torrent_path):
-            return jsonify({
-                "success": True,
-                "torrent_path": torrent_path,
-                "torrent_dir": torrent_dir,
-                "message": "种子文件下载成功"
-            })
+            # 获取原始文件名
+            original_filename = os.path.basename(torrent_path)
+            
+            # 添加站点-ID-前缀，与prepare_review_data保持一致
+            prefixed_filename = f"{site_code}-{torrent_id}-{original_filename}"
+            prefixed_torrent_path = os.path.join(torrent_dir, prefixed_filename)
+            
+            # 重命名文件
+            try:
+                os.rename(torrent_path, prefixed_torrent_path)
+                logging.info(f"种子文件已重命名: {original_filename} -> {prefixed_filename}")
+                
+                return jsonify({
+                    "success": True,
+                    "torrent_path": prefixed_torrent_path,
+                    "torrent_dir": torrent_dir,
+                    "message": "种子文件下载成功"
+                })
+            except Exception as rename_error:
+                logging.error(f"重命名种子文件失败: {rename_error}")
+                # 如果重命名失败，仍然返回原始路径
+                return jsonify({
+                    "success": True,
+                    "torrent_path": torrent_path,
+                    "torrent_dir": torrent_dir,
+                    "message": "种子文件下载成功（未添加前缀）"
+                })
         else:
             return jsonify({"success": False, "message": "种子文件下载失败"}), 500
 
@@ -892,15 +906,33 @@ def migrate_publish():
                                    db_manager=db_manager)
 
         # 检查种子文件是否存在，如果不存在则重新下载
-        # 首先检查原始路径
-        if original_torrent_path is None or not os.path.exists(
-                original_torrent_path):
-            logging.info("原始种子文件路径不存在，检查临时目录")
-            # 如果原始路径不存在，检查临时目录中是否已有种子文件
-            # 首先检查以种子ID命名的目录（旧格式）
-            source_torrent_id = context.get("source_torrent_id", "")
-            if source_torrent_id:
-                from config import TEMP_DIR
+        # [核心修改] 优先在统一的 torrents 目录中查找
+        source_torrent_id = context.get("source_torrent_id", "")
+        source_site_code = source_info.get("site", source_site_name.lower())
+        
+        if original_torrent_path is None or not os.path.exists(original_torrent_path):
+            logging.info("原始种子文件路径不存在，开始在统一目录中查找")
+            
+            from config import TEMP_DIR
+            torrents_dir = os.path.join(TEMP_DIR, "torrents")
+            
+            # [新增] 首先在统一的 torrents 目录中查找以"站点-ID-"开头的种子文件
+            if os.path.exists(torrents_dir) and source_torrent_id:
+                prefix = f"{source_site_code}-{source_torrent_id}-"
+                logging.info(f"在统一目录中查找种子文件，前缀: {prefix}")
+                
+                try:
+                    for file in os.listdir(torrents_dir):
+                        if file.startswith(prefix) and file.endswith('.torrent'):
+                            original_torrent_path = os.path.join(torrents_dir, file)
+                            logging.info(f"✅ 在统一目录中找到种子文件: {file}")
+                            break
+                except Exception as e:
+                    logging.warning(f"遍历统一目录时出错: {e}")
+            
+            # 如果在统一目录中没找到，再检查旧格式目录
+            if (original_torrent_path is None or not os.path.exists(original_torrent_path)) and source_torrent_id:
+                logging.info("统一目录中未找到，检查旧格式目录")
                 # 检查旧格式目录
                 old_torrent_dir = os.path.join(TEMP_DIR,
                                                f"torrent_{source_torrent_id}")
@@ -1107,47 +1139,15 @@ def migrate_publish():
                                         torrent_filename = urllib.parse.unquote(
                                             torrent_filename)
 
-                            # 如果 torrent_dir 还没有确定，尝试从数据库获取种子标题来创建目录
-                            if not torrent_dir:
-                                try:
-                                    # 从数据库获取种子参数来确定目录名
-                                    from models.seed_parameter import SeedParameter
-                                    from flask import current_app
-                                    db_manager = current_app.config[
-                                        'DB_MANAGER']
-                                    seed_param_model = SeedParameter(
-                                        db_manager)
+                            # 使用统一的种子目录
+                            from config import TEMP_DIR
+                            torrent_dir = os.path.join(TEMP_DIR, "torrents")
+                            os.makedirs(torrent_dir, exist_ok=True)
 
-                                    if source_torrent_id and source_site_name:
-                                        # 从数据库获取种子参数
-                                        parameters = seed_param_model.get_parameters(
-                                            source_torrent_id,
-                                            source_site_name)
-                                        if parameters and parameters.get(
-                                                "title"):
-                                            # 重建种子目录路径
-                                            from config import TEMP_DIR
-                                            import re
-                                            original_main_title = parameters.get(
-                                                "title", "")
-                                            safe_filename_base = re.sub(
-                                                r'[\\/*?:"<>|]', "_",
-                                                original_main_title)[:150]
-                                            torrent_dir = os.path.join(
-                                                TEMP_DIR, safe_filename_base)
-                                            os.makedirs(torrent_dir,
-                                                        exist_ok=True)
-                                except Exception as e:
-                                    logging.warning(f"尝试从数据库获取标题创建目录时出错: {e}")
+                            # 获取站点代码用于文件名前缀
+                            source_site_code = source_info.get("site", source_site_name.lower())
 
-                            # 如果 still 没有 torrent_dir，则回退到原来的以ID命名的目录
-                            if not torrent_dir:
-                                torrent_dir = os.path.join(
-                                    TEMP_DIR, f"torrent_{source_torrent_id}")
-                                os.makedirs(torrent_dir, exist_ok=True)
-
-                            # 保存种子文件
-                            # 确保文件名在文件系统中是有效的，并正确处理中文字符
+                            # 保存种子文件，添加站点-ID-前缀
                             try:
                                 # 对文件名进行文件系统安全的处理
                                 safe_filename = torrent_filename
@@ -1163,15 +1163,19 @@ def migrate_publish():
                                         'utf-8')[:max_len].decode(
                                             'utf-8', 'ignore') + ext
 
+                                # 添加站点-ID-前缀
+                                prefixed_filename = f"{source_site_code}-{source_torrent_id}-{safe_filename}"
                                 original_torrent_path = os.path.join(
-                                    torrent_dir, safe_filename)
+                                    torrent_dir, prefixed_filename)
                                 with open(original_torrent_path, "wb") as f:
                                     f.write(torrent_response.content)
+                                logging.info(f"种子文件已保存: {prefixed_filename}")
                             except OSError as e:
                                 # 如果文件名有问题，使用默认名称
                                 logging.warning(f"使用原始文件名保存失败: {e}, 使用默认名称")
+                                prefixed_filename = f"{source_site_code}-{source_torrent_id}-torrent.torrent"
                                 original_torrent_path = os.path.join(
-                                    torrent_dir, "torrent.torrent")
+                                    torrent_dir, prefixed_filename)
                                 with open(original_torrent_path, "wb") as f:
                                     f.write(torrent_response.content)
 
@@ -1363,6 +1367,21 @@ def migrate_publish():
                 )
 
                 if source_torrent_id and source_site_name and target_site_name:
+                    # [修复] 从数据库获取种子标题
+                    seed_title = "未知标题"
+                    try:
+                        from models.seed_parameter import SeedParameter
+                        seed_param_model = SeedParameter(db_manager)
+                        seed_parameters = seed_param_model.get_parameters(
+                            source_torrent_id, source_site_name)
+                        if seed_parameters and seed_parameters.get("title"):
+                            seed_title = seed_parameters.get("title")
+                            print(f"[批量转种记录] 从数据库获取到种子标题: {seed_title}")
+                        else:
+                            print(f"[批量转种记录] ⚠️ 数据库中未找到种子标题，使用默认值")
+                    except Exception as e:
+                        print(f"[批量转种记录] ⚠️ 查询种子标题失败: {e}")
+                    
                     conn = db_manager._get_connection()
                     cursor = db_manager._get_cursor(conn)
 
@@ -1411,11 +1430,11 @@ def migrate_publish():
                                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
 
                     print(
-                        f"[批量转种记录] 执行SQL插入: batch_id={batch_id}, torrent_id={source_torrent_id}"
+                        f"[批量转种记录] 执行SQL插入: batch_id={batch_id}, torrent_id={source_torrent_id}, title={seed_title}"
                     )
                     cursor.execute(
                         insert_sql,
-                        (batch_id, parameters.get("title"), source_torrent_id,
+                        (batch_id, seed_title, source_torrent_id,
                          data.get("nickname",
                                   source_site_name), target_site_name,
                          data.get("batch_progress"), video_size_gb, status,

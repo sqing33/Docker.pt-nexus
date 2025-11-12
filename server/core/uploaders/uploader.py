@@ -383,18 +383,18 @@ class BaseUploader(ABC):
         # 2. 从 DEFAULT_TITLE_COMPONENTS 或配置中读取拼接顺序
         # 键是标准参数名，值是原始值查找表中的键
         order_map = {}
-        
+
         # 获取站点特定的 title_components 配置（如果有）
         site_title_components = self.config.get("title_components", {})
-        
+
         # 使用站点配置或全局配置
         title_components_config = site_title_components if site_title_components else DEFAULT_TITLE_COMPONENTS
-        
+
         # 按照配置中的顺序构建 order_map
         for key, config in title_components_config.items():
             if isinstance(config, dict) and "source_key" in config:
                 order_map[key] = config["source_key"]
-        
+
         logger.debug(f"标题拼接顺序: {list(order_map.keys())}")
 
         title_parts = []
@@ -540,82 +540,65 @@ class BaseUploader(ABC):
                 **mapped_params,  # 合并映射后的特殊参数
             }
 
-            # 保存所有参数到文件用于测试
-            import json
-            import time
-            import re
-            from config import DATA_DIR
+            if os.getenv("DEV_ENV") == "true":
+                # 保存所有参数到文件用于测试
+                import json
+                from datetime import datetime
+                import re
+                from config import DATA_DIR
 
-            # 优先使用 torrent_dir (从 prepare_review_data 传递的种子目录路径)
-            torrent_dir = self.upload_data.get("torrent_dir", "")
-
-            # 如果 torrent_dir 不存在或无效，则回退到使用title创建目录
-            if not torrent_dir or not os.path.exists(torrent_dir):
-                # 创建 tmp 目录如果不存在
-                tmp_dir = os.path.join(DATA_DIR, "tmp")
-                os.makedirs(tmp_dir, exist_ok=True)
-                print(f"DEBUG: 临时目录路径: {tmp_dir}")
-
-                # 使用种子标题作为文件夹名（与Go端和download_torrent_only保持一致）
-                title = self.upload_data.get(
-                    "original_main_title") or self.upload_data.get(
-                        "title", "")
-                if title:
-                    # 清理文件名中的非法字符，限制长度为150
-                    safe_title = re.sub(r'[\\/:*?"<>|]', '_', title)[:150]
-                    torrent_dir = os.path.join(tmp_dir, safe_title)
-                else:
-                    # 如果没有title，使用torrent文件名作为备选
-                    torrent_path = self.upload_data.get(
-                        "modified_torrent_path", "")
-                    if torrent_path:
-                        torrent_name = os.path.basename(torrent_path)
-                        if torrent_name.endswith('.torrent'):
-                            torrent_name = torrent_name[:-8]  # 移除 .torrent 扩展名
-                        # 移除 .modified.时间戳 后缀
-                        if '.modified.' in torrent_name:
-                            torrent_name = torrent_name.split('.modified.')[0]
-                        # 清理文件名中的非法字符
-                        torrent_name = re.sub(r'[\\/:*?"<>|]', '_',
-                                              torrent_name)
-                        torrent_dir = os.path.join(tmp_dir, torrent_name)
-                    else:
-                        torrent_dir = os.path.join(tmp_dir, "unknown_torrent")
-
+                # 使用统一的 torrents 目录
+                torrent_dir = os.path.join(DATA_DIR, "tmp", "torrents")
                 os.makedirs(torrent_dir, exist_ok=True)
 
-            # 生成唯一文件名
-            timestamp = int(time.time())
-            filename = f"upload_params_{self.site_name}_{timestamp}.json"
-            filepath = os.path.join(torrent_dir, filename)
+                # 从 upload_data 中获取种子ID和源站点代码
+                # 种子ID可能在 modified_torrent_path 文件名中（格式: 站点代码-种子ID-原文件名.torrent）
+                torrent_id = "unknown"
+                source_site_code = "unknown"
+                
+                modified_torrent_path = self.upload_data.get("modified_torrent_path", "")
+                if modified_torrent_path:
+                    torrent_filename = os.path.basename(modified_torrent_path)
+                    # 尝试从文件名中提取站点代码和种子ID（格式: 站点代码-种子ID-xxx.torrent）
+                    match = re.match(r"^([^-]+)-(\d+)-", torrent_filename)
+                    if match:
+                        source_site_code = match.group(1)
+                        torrent_id = match.group(2)
+                
+                # 生成可读的时间戳格式: YYYY-MM-DD-HH:MM:SS
+                timestamp = datetime.now().strftime("%Y-%m-%d-%H:%M:%S")
+                
+                # 格式: {站点代码}-{种子ID}-{目标站点self.site_name}-{时间戳}
+                filename = f"{source_site_code}-{torrent_id}-{self.site_name}-{timestamp}.json"
+                filepath = os.path.join(torrent_dir, filename)
 
-            # 准备要保存的数据
-            save_data = {
-                "site_name": self.site_name,
-                "timestamp": timestamp,
-                "form_data": form_data,
-                "standardized_params": standardized_params,
-                "final_main_title": final_main_title,
-                "description": description,
-                "upload_data_summary": {
-                    "subtitle":
-                    self.upload_data.get("subtitle", ""),
-                    "imdb_link":
-                    self.upload_data.get("imdb_link", ""),
-                    "mediainfo_length":
-                    len(self.upload_data.get("mediainfo", "")),
-                    "modified_torrent_path":
-                    self.upload_data.get("modified_torrent_path", ""),
+                # 准备要保存的数据
+                save_data = {
+                    "site_name": self.site_name,
+                    "timestamp": timestamp,
+                    "form_data": form_data,
+                    "standardized_params": standardized_params,
+                    "final_main_title": final_main_title,
+                    "description": description,
+                    "upload_data_summary": {
+                        "subtitle":
+                        self.upload_data.get("subtitle", ""),
+                        "imdb_link":
+                        self.upload_data.get("imdb_link", ""),
+                        "mediainfo_length":
+                        len(self.upload_data.get("mediainfo", "")),
+                        "modified_torrent_path":
+                        self.upload_data.get("modified_torrent_path", ""),
+                    }
                 }
-            }
 
-            # 保存到文件
-            try:
-                with open(filepath, 'w', encoding='utf-8') as f:
-                    json.dump(save_data, f, ensure_ascii=False, indent=2)
-                logger.info(f"上传参数已保存到: {filepath}")
-            except Exception as save_error:
-                logger.error(f"保存参数到文件失败: {save_error}")
+                # 保存到文件
+                try:
+                    with open(filepath, 'w', encoding='utf-8') as f:
+                        json.dump(save_data, f, ensure_ascii=False, indent=2)
+                    logger.info(f"上传参数已保存到: {filepath}")
+                except Exception as save_error:
+                    logger.error(f"保存参数到文件失败: {save_error}")
 
             # 如果环境变量 UPLOAD_TEST_MODE=true 为测试模式，则跳过实际发布
             if os.getenv("UPLOAD_TEST_MODE") == "true":

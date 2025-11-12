@@ -157,28 +157,6 @@ class IYUUThread(Thread):
             output_lines.append("=" * 50 + "\n")
             output_lines.append("=== IYUU种子聚合任务执行完成 ===\n")
 
-            # 从配置获取tmp目录，如果未设置则使用系统默认临时目录
-            config = self.config_manager.get()
-            iyuu_settings = config.get("iyuu_settings", {})
-            tmp_dir = iyuu_settings.get("tmp_dir", "")
-
-            # 如果配置中未指定tmp_dir，则使用系统默认临时目录
-            if not tmp_dir:
-                from config import TEMP_DIR
-                tmp_dir = TEMP_DIR
-
-            if not os.path.exists(tmp_dir):
-                os.makedirs(tmp_dir)
-
-            # 写入文件
-            timestamp = int(time.time())
-            output_file = os.path.join(tmp_dir,
-                                       f"iyuu_aggregation_{timestamp}.txt")
-            with open(output_file, 'w', encoding='utf-8') as f:
-                f.writelines(output_lines)
-
-            log_iyuu_message(f"IYUU种子聚合结果已保存到: {output_file}", "INFO")
-
             # 获取已配置的站点列表
             configured_sites = self._get_configured_sites()
             log_iyuu_message(f"数据库中存在 {len(configured_sites)} 个配置站点", "INFO")

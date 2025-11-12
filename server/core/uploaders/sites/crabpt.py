@@ -1,3 +1,4 @@
+import os
 from ..uploader import SpecialUploader
 import traceback
 from loguru import logger
@@ -21,7 +22,8 @@ class CrabptUploader(SpecialUploader):
             logger.warning("未找到标准化参数，回退到重新解析")
             # 获取数据
             source_params = self.upload_data.get("source_params", {})
-            title_components_list = self.upload_data.get("title_components", [])
+            title_components_list = self.upload_data.get(
+                "title_components", [])
             title_params = {
                 item["key"]: item["value"]
                 for item in title_components_list if item.get("value")
@@ -99,17 +101,20 @@ class CrabptUploader(SpecialUploader):
             # 特别区地区映射 - ✅ 优先使用标准化的source参数
             if standardized_params:
                 standardized_source = standardized_params.get("source", "")
-                special_processing_field = self.config.get("form_fields", {}).get(
-                    "special_processing", "processing_sel[6]")
+                special_processing_field = self.config.get(
+                    "form_fields", {}).get("special_processing",
+                                           "processing_sel[6]")
                 # 使用source映射（而不是processing映射）
-                source_mapping = self.config.get("mappings", {}).get("source", {})
+                source_mapping = self.config.get("mappings",
+                                                 {}).get("source", {})
                 mapped[special_processing_field] = self._find_mapping(
                     source_mapping, standardized_source)
             else:
                 source_str = source_params.get("产地", "") or title_params.get(
                     "片源平台", "")
-                special_processing_field = self.config.get("form_fields", {}).get(
-                    "special_processing", "processing_sel[6]")
+                special_processing_field = self.config.get(
+                    "form_fields", {}).get("special_processing",
+                                           "processing_sel[6]")
                 processing_mapping = self.config.get("mappings",
                                                      {}).get("processing", {})
                 mapped[special_processing_field] = self._find_mapping(
@@ -186,19 +191,18 @@ class CrabptUploader(SpecialUploader):
             # 地区映射 - ✅ 优先使用标准化的source参数
             if standardized_params:
                 standardized_source = standardized_params.get("source", "")
-                processing_field = self.config.get("form_fields",
-                                                   {}).get("processing",
-                                                           "processing_sel[4]")
+                processing_field = self.config.get("form_fields", {}).get(
+                    "processing", "processing_sel[4]")
                 # 使用source映射（而不是processing映射）
-                source_mapping = self.config.get("mappings", {}).get("source", {})
+                source_mapping = self.config.get("mappings",
+                                                 {}).get("source", {})
                 mapped[processing_field] = self._find_mapping(
                     source_mapping, standardized_source)
             else:
                 source_str = source_params.get("产地", "") or title_params.get(
                     "片源平台", "")
-                processing_field = self.config.get("form_fields",
-                                                   {}).get("processing",
-                                                           "processing_sel[4]")
+                processing_field = self.config.get("form_fields", {}).get(
+                    "processing", "processing_sel[4]")
                 processing_mapping = self.config.get("mappings",
                                                      {}).get("processing", {})
                 mapped[processing_field] = self._find_mapping(
@@ -341,7 +345,7 @@ class CrabptUploader(SpecialUploader):
             upload_settings = config.get("upload_settings", {})
             anonymous_upload = upload_settings.get("anonymous_upload", True)
             uplver_value = "yes" if anonymous_upload else "no"
-            
+
             # 准备完整的 form_data，包含 CrabPT 站点需要的所有参数
             form_data = {
                 "name":
@@ -365,8 +369,9 @@ class CrabptUploader(SpecialUploader):
             }
 
             # 保存所有参数到文件用于调试和测试
-            self._save_upload_parameters(form_data, mapped_params,
-                                         final_main_title, description)
+            if os.getenv("UPLOAD_TEST_MODE") == "true":
+                self._save_upload_parameters(form_data, mapped_params,
+                                             final_main_title, description)
 
             # 调用父类的execute_upload方法继续执行上传
             return super().execute_upload()

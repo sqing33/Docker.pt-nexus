@@ -693,6 +693,7 @@ func sanitizeFilename(title string) string {
 }
 
 // 检查视频文件大小（通过解析torrent文件）
+// 优先在统一的 torrents 目录中查找种子文件
 func checkVideoSize(torrentID, siteName string) (float64, string, string, error) {
 	logInfo("     🔍 检查种子大小: %s@%s", torrentID, siteName)
 
@@ -703,47 +704,112 @@ func checkVideoSize(torrentID, siteName string) (float64, string, string, error)
 		return 0, "", "", fmt.Errorf("获取种子标题失败: %v", err)
 	}
 
-	// 构造种子目录路径
-	safeName := sanitizeFilename(title)
-	seedDir := filepath.Join(tempDir, safeName)
-
-	// 检查目录是否存在，如果不存在则下载种子文件
-	if _, err := os.Stat(seedDir); os.IsNotExist(err) {
-		err := downloadTorrentFile(torrentID, siteName)
-		if err != nil {
-			return 0, "", title, fmt.Errorf("下载种子文件失败: %v", err) // ✨ 返回 title
+	// 使用统一的 torrents 目录
+	torrentsDir := filepath.Join(tempDir, "torrents")
+	
+	// 在统一目录中查找种子文件
+	// 注意：Python端下载的种子文件格式可能是：
+	// 1. 站点标识符-种子ID-原文件名.torrent (有前缀)
+	// 2. [站点标签]种子名称.torrent (无前缀，直接是原始文件名)
+	var torrentPath string
+	files, err := os.ReadDir(torrentsDir)
+	if err == nil {
+		// 先尝试查找带站点前缀的文件
+		prefix := fmt.Sprintf("%s-%s-", siteName, torrentID)
+		for _, file := range files {
+			fileName := file.Name()
+			if !file.IsDir() && strings.HasSuffix(strings.ToLower(fileName), ".torrent") {
+				if strings.HasPrefix(fileName, prefix) {
+					torrentPath = filepath.Join(torrentsDir, fileName)
+					logInfo("     ✅ 找到种子文件(带前缀): %s", fileName)
+					break
+				}
+			}
+		}
+		
+		// 如果没找到带前缀的，尝试查找包含站点标签的种子文件
+		if torrentPath == "" {
+			siteTag := fmt.Sprintf("[%s]", siteName)
+			for _, file := range files {
+				fileName := file.Name()
+				if !file.IsDir() && strings.HasSuffix(strings.ToLower(fileName), ".torrent") {
+					if strings.Contains(fileName, siteTag) || strings.Contains(fileName, strings.ToUpper(siteName)) {
+						torrentPath = filepath.Join(torrentsDir, fileName)
+						logInfo("     ✅ 找到种子文件(含站点标签): %s", fileName)
+						break
+					}
+				}
+			}
+		}
+		
+		// 如果还是没找到，记录简单的错误信息
+		if torrentPath == "" {
+			logInfo("     🔍 未找到匹配的种子文件")
 		}
 	}
 
-	// 查找torrent文件
-	torrentPath, err := findTorrentFile(seedDir)
-	if err != nil {
-		// 如果找不到torrent文件，尝试下载
-		downloadErr := downloadTorrentFile(torrentID, siteName)
-		if downloadErr != nil {
-			return 0, "", title, fmt.Errorf("下载torrent文件失败: %v", downloadErr) // ✨ 返回 title
+	// 如果没找到，尝试下载
+	if torrentPath == "" {
+		logInfo("     📥 种子文件不存在，开始下载...")
+		err := downloadTorrentFile(torrentID, siteName)
+		if err != nil {
+			return 0, "", title, fmt.Errorf("下载种子文件失败: %v", err)
 		}
 
 		// 下载成功后重新查找
-		torrentPath, err = findTorrentFile(seedDir)
+		files, err := os.ReadDir(torrentsDir)
 		if err != nil {
-			return 0, "", title, fmt.Errorf("下载后仍无法找到torrent文件: %v", err) // ✨ 返回 title
+			return 0, "", title, fmt.Errorf("读取torrents目录失败: %v", err)
+		}
+
+		// 先尝试带前缀的
+		prefix := fmt.Sprintf("%s-%s-", siteName, torrentID)
+		for _, file := range files {
+			fileName := file.Name()
+			if !file.IsDir() && strings.HasSuffix(strings.ToLower(fileName), ".torrent") {
+				if strings.HasPrefix(fileName, prefix) {
+					torrentPath = filepath.Join(torrentsDir, fileName)
+					logInfo("     ✅ 下载后找到种子文件(带前缀): %s", fileName)
+					break
+				}
+			}
+		}
+		
+		// 再尝试含站点标签的
+		if torrentPath == "" {
+			siteTag := fmt.Sprintf("[%s]", siteName)
+			for _, file := range files {
+				fileName := file.Name()
+				if !file.IsDir() && strings.HasSuffix(strings.ToLower(fileName), ".torrent") {
+					if strings.Contains(fileName, siteTag) || strings.Contains(fileName, strings.ToUpper(siteName)) {
+						torrentPath = filepath.Join(torrentsDir, fileName)
+						logInfo("     ✅ 下载后找到种子文件(含站点标签): %s", fileName)
+						break
+					}
+				}
+			}
+		}
+
+		if torrentPath == "" {
+			logInfo("     ❌ 下载后仍无法找到torrent文件")
+			return 0, "", title, fmt.Errorf("下载后仍无法找到torrent文件")
 		}
 	}
 
 	// 解析torrent文件获取大小信息
 	sizeGB, largestFile, err := extractVideoSizeFromTorrent(torrentPath)
 	if err != nil {
-		return 0, "", title, fmt.Errorf("解析torrent文件失败: %v", err) // ✨ 返回 title
+		return 0, "", title, fmt.Errorf("解析torrent文件失败: %v", err)
 	}
 
 	logInfo("     ✅ 解析完成: %.2fGB (%s)", sizeGB, largestFile)
 
-	// ✨ 返回解析出的大小、最大文件名和获取到的标题
+	// 返回解析出的大小、最大文件名和获取到的标题
 	return sizeGB, largestFile, title, nil
 }
 
 // 下载种子文件（不进行数据解析或存储）
+// 种子文件将以"站点标识符-种子ID-原文件名.torrent"格式保存到统一的 torrents 目录
 func downloadTorrentFile(torrentID, siteName string) error {
 	// 站点请求频率控制
 	waitForSiteRequest(siteName)
