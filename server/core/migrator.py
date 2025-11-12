@@ -1773,6 +1773,12 @@ class TorrentMigrator:
             # 从title_components中提取标题拆解的各项参数（title_components已在方法开头定义）
 
             # 1. 先构建包含非标准化信息的字典
+            # [新增] 过滤豆瓣链接，只保留ID部分
+            filtered_douban_link = douban_link
+            if douban_link:
+                douban_match = re.match(r'(https?://movie\.douban\.com/subject/\d+)', douban_link)
+                filtered_douban_link = douban_match.group(1) if douban_match else douban_link
+            
             seed_parameters = {
                 "name":
                 torrent_name_without_ext,  # 添加去除后缀的种子名称
@@ -1783,7 +1789,7 @@ class TorrentMigrator:
                 "imdb_link":
                 imdb_link,
                 "douban_link":
-                douban_link,
+                filtered_douban_link,  # 使用过滤后的豆瓣链接
                 "poster":
                 intro.get("poster"),
                 "screenshots":

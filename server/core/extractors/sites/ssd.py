@@ -308,10 +308,10 @@ class SSDSpecialExtractor:
                                              original_main_title).strip()
 
         # 从标题中提取制作组的正则表达式
-        # 匹配常见的制作组格式，例如: [ABC] 或 -ABC 或 [ABC-RIP] 等
+        # 修正：优先匹配 -制作组 或 @制作组 格式，这样可以正确识别包含特殊字符的制作组
         group_patterns = [
             r'^\[(\w+(?:-\w+)*)\]',  # 开头的 [制作组] 格式
-            r'-([A-Z]+(?:-[A-Z]+)*)$',  # 结尾的 -制作组 格式
+            r'[-@]([^\s]+)$',  # 结尾的 -制作组 或 @制作组 格式（匹配任意非空白字符）
             r'\[([A-Z]+(?:-[A-Z]+)*)\]$',  # 结尾的 [制作组] 格式
         ]
 
@@ -319,14 +319,6 @@ class SSDSpecialExtractor:
             match = re.search(pattern, original_main_title)
             if match:
                 return match.group(1)
-
-        # 如果以上模式都不匹配，尝试查找标题中的制作组标识
-        # 匹配常见的制作组缩写（大写字母组合）
-        general_group_pattern = r'\b([A-Z]{2,}(?:-[A-Z]+)*)\b'
-        matches = re.findall(general_group_pattern, original_main_title)
-        if matches:
-            # 返回第一个匹配的制作组（通常在标题开头的更可能是制作组）
-            return matches[0]
 
         return None
 
@@ -519,7 +511,12 @@ class SSDSpecialExtractor:
         }
 
         # 更新intro中的豆瓣和IMDb链接信息
-        intro["douban_link"] = douban_info
+        # 过滤豆瓣链接，只保留ID部分
+        if douban_info:
+            douban_match = re.match(r'(https?://movie\.douban\.com/subject/\d+)', douban_info)
+            intro["douban_link"] = douban_match.group(1) if douban_match else douban_info
+        else:
+            intro["douban_link"] = douban_info
         intro["imdb_link"] = imdb_info
 
         extracted_data = {

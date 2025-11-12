@@ -3192,9 +3192,10 @@ const openAllSitesInRow = (row: any[]) => {
     return
   }
 
-  // 批量打开所有链接
+  // 批量打开所有链接，并过滤掉URL中的uploaded参数
   validResults.forEach((result) => {
-    window.open(result.url, '_blank', 'noopener,noreferrer')
+    const filteredUrl = filterUploadedParam(result.url)
+    window.open(filteredUrl, '_blank', 'noopener,noreferrer')
   })
 
   ElNotification.success({
@@ -3955,30 +3956,27 @@ const filterUploadedParam = (url: string): string => {
 }
 
 .results-row {
-  display: flex;
-  align-items: stretch;
+  display: grid;
+  grid-template-columns: 1fr 100px;
   gap: 16px;
   padding: 16px;
+  align-items: start;
 }
 
 .row-sites {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
   gap: 16px;
-  flex: 1;
-  justify-content: flex-start;
-  position: relative;
+  width: 100%;
+  min-width: 0;
 }
 
 .row-action {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 120px;
+  width: 100px;
   flex-shrink: 0;
-  position: absolute;
-  right: 0;
-  margin-top: 50px;
 }
 
 .open-all-button {

@@ -782,15 +782,17 @@ def upload_data_title(title: str, torrent_filename: str = ""):
 
     # 4. 预处理标题：修复音频参数格式
     # 先处理缺少点的情况，如 FLAC 20 -> FLAC 2.0, FLAC 2 0 -> FLAC 2.0
-    title_part = re.sub(r"((?:DTS|FLAC|DDP|AV3A|AAC|LPCM|AC3|DD))\s*(\d)\s*(\d)",
-                        r"\1 \2.\3",
-                        title_part,
-                        flags=re.I)
+    title_part = re.sub(
+        r"((?:DTS|FLAC|DDP|AV3A|AAC|LPCM|AC3|DD))\s*(\d)\s*(\d)",
+        r"\1 \2.\3",
+        title_part,
+        flags=re.I)
     # 再处理没有空格的情况，如 FLAC2.0 -> FLAC 2.0, DTS5.1 -> DTS 5.1
-    title_part = re.sub(r"((?:DTS|FLAC|DDP|AV3A|AAC|LPCM|AC3|DD))(\d(?:\.\d)?)",
-                        r"\1 \2",
-                        title_part,
-                        flags=re.I)
+    title_part = re.sub(
+        r"((?:DTS|FLAC|DDP|AV3A|AAC|LPCM|AC3|DD))(\d(?:\.\d)?)",
+        r"\1 \2",
+        title_part,
+        flags=re.I)
 
     # 技术标签提取（排除已识别的制作组名称）
     tech_patterns_definitions = {
@@ -881,10 +883,11 @@ def upload_data_title(title: str, torrent_filename: str = ""):
         if key == "audio":
             processed_values = [
                 # 先处理缺少点的情况，如 FLAC 20 -> FLAC 2.0, FLAC 2 0 -> FLAC 2.0, DTS 51 -> DTS 5.1
-                re.sub(r"((?:DTS|FLAC|DDP|AV3A|AAC|LPCM|AC3|DD))\s*(\d)\s*(\d)",
-                       r"\1 \2.\3",
-                       val,
-                       flags=re.I) for val in processed_values
+                re.sub(
+                    r"((?:DTS|FLAC|DDP|AV3A|AAC|LPCM|AC3|DD))\s*(\d)\s*(\d)",
+                    r"\1 \2.\3",
+                    val,
+                    flags=re.I) for val in processed_values
             ]
             processed_values = [
                 # 再处理没有空格的情况，如 FLAC2.0 -> FLAC 2.0, DTS5.1 -> DTS 5.1
@@ -1045,7 +1048,8 @@ def upload_data_title(title: str, torrent_filename: str = ""):
                 for audio_item in params[key]:
                     # 检查是否包含 "数字Audio" 模式（如 "3Audio DTS" 或 "DTS 3Audio"）
                     # 匹配模式：(\d+)\s*(Audio[s]?)\s+(.+) 或 (.+)\s+(\d+)\s*(Audio[s]?)
-                    match = re.match(r'^(\d+)\s*(Audio[s]?)\s+(.+)$', audio_item, re.IGNORECASE)
+                    match = re.match(r'^(\d+)\s*(Audio[s]?)\s+(.+)$',
+                                     audio_item, re.IGNORECASE)
                     if match:
                         # 如果是 "3Audio DTS" 格式，重排为 "DTS 3Audio"
                         number = match.group(1)
@@ -1054,18 +1058,22 @@ def upload_data_title(title: str, torrent_filename: str = ""):
                         processed_audio.append(f"{codec} {number}{audio_word}")
                     else:
                         # 检查是否已经是正确格式 "DTS 3Audio"
-                        match_correct = re.match(r'^(.+?)\s+(\d+)\s*(Audio[s]?)$', audio_item, re.IGNORECASE)
+                        match_correct = re.match(
+                            r'^(.+?)\s+(\d+)\s*(Audio[s]?)$', audio_item,
+                            re.IGNORECASE)
                         if match_correct:
                             # 已经是正确格式，直接使用
                             processed_audio.append(audio_item)
                         else:
                             # 其他格式不变
                             processed_audio.append(audio_item)
-                
+
                 # 排序：先按是否以数字Audio结尾，再按长度
-                sorted_audio = sorted(processed_audio,
-                                      key=lambda s:
-                                      (bool(re.search(r'\d+\s*Audio[s]?$', s, re.IGNORECASE)), -len(s)))
+                sorted_audio = sorted(
+                    processed_audio,
+                    key=lambda s:
+                    (bool(re.search(r'\d+\s*Audio[s]?$', s, re.IGNORECASE)),
+                     -len(s)))
                 english_params[key] = " ".join(sorted_audio)
             else:
                 english_params[key] = params[key]
@@ -1416,6 +1424,16 @@ def upload_data_movie_info(douban_link: str, imdb_link: str):
     支持从豆瓣链接或IMDb链接获取信息，失败时自动切换API。
     返回: (状态, 海报, 简介, IMDb链接)
     """
+    # [新增] 过滤豆瓣链接，只保留ID部分
+    if douban_link:
+        douban_match = re.match(r'(https?://movie\.douban\.com/subject/\d+)', douban_link)
+        douban_link = douban_match.group(1) if douban_match else douban_link
+        print(f"过滤后的豆瓣链接: {douban_link}")
+    
+    # 从配置文件获取财神ptgen的token
+    config = config_manager.get()
+    cspt_token = config.get("cross_seed", {}).get("cspt_ptgen_token", "")
+
     # API配置列表，按优先级排序
     api_configs = [
         {
@@ -1441,6 +1459,16 @@ def upload_data_movie_info(douban_link: str, imdb_link: str):
         }
     ]
 
+    # 如果配置了财神ptgen的token，则将其添加到API配置列表的最前面
+    if cspt_token:
+        api_configs.insert(
+            0, {
+                'name': 'cspt.top',
+                'base_url': 'https://cspt.top/api/ptgen/query',
+                'type': 'cspt_format',
+                'token': cspt_token
+            })
+
     # 确定要使用的资源URL（豆瓣优先）
     if not douban_link and not imdb_link:
         return False, "", "", "未提供豆瓣或IMDb链接。"
@@ -1451,7 +1479,11 @@ def upload_data_movie_info(douban_link: str, imdb_link: str):
         try:
             print(f"尝试使用API: {api_config['name']}")
 
-            if api_config['type'] == 'tju_format':
+            if api_config['type'] == 'cspt_format':
+                # CSPT格式API (cspt.top)
+                success, poster, description, imdb_link_result = _call_cspt_format_api(
+                    api_config, douban_link, imdb_link)
+            elif api_config['type'] == 'tju_format':
                 # TJU格式API (ptgen.tju.pt) - 强制使用豆瓣模式
                 success, poster, description, imdb_link_result = _call_tju_format_api(
                     api_config, douban_link, imdb_link)
@@ -1480,6 +1512,59 @@ def upload_data_movie_info(douban_link: str, imdb_link: str):
 
     # 所有API都失败
     return False, "", "", f"所有PT-Gen API都失败。最后错误: {last_error}"
+
+
+def _call_cspt_format_api(api_config: dict, douban_link: str, imdb_link: str):
+    """
+    调用CSPT格式API (cspt.top)
+    API格式: https://cspt.top/api/ptgen/query/{token}?url=https://movie.douban.com/subject/2254648/
+    """
+    try:
+        resource_url = douban_link or imdb_link
+        if not resource_url:
+            return False, "", "未提供豆瓣或IMDb链接", ""
+
+        token = api_config.get('token', '')
+        if not token:
+            return False, "", "未配置财神ptgen token", ""
+
+        url = f"{api_config['base_url']}/{token}?url={resource_url}"
+
+        response = requests.get(url, timeout=30)
+        response.raise_for_status()
+
+        # 尝试解析为JSON
+        try:
+            data = response.json()
+        except:
+            # 如果不是JSON，可能是直接返回的文本格式
+            text_content = response.text.strip()
+            if text_content and ('[img]' in text_content
+                                 or '◎' in text_content):
+                # 直接返回文本内容作为format
+                return _parse_format_content(text_content)
+            else:
+                return False, "", "API返回了无效的内容格式", ""
+
+        # JSON格式处理
+        if isinstance(data, dict):
+            # 检查是否有错误
+            if data.get('success') is False:
+                error_msg = data.get('message', data.get('error', '未知错误'))
+                return False, "", f"API返回失败: {error_msg}", ""
+
+            # 获取格式化内容
+            format_data = data.get('format', data.get('content', ''))
+            if format_data:
+                return _parse_format_content(format_data,
+                                             data.get('imdb_link', ''))
+            else:
+                return False, "", "API未返回有效的格式化内容", ""
+        else:
+            return False, "", "API返回了无效的数据格式", ""
+
+    except Exception as e:
+        return False, "", f"CSPT格式API调用失败: {e}", ""
 
 
 def _call_tju_format_api(api_config: dict, douban_link: str, imdb_link: str):
@@ -1635,7 +1720,7 @@ def _parse_format_content(format_data: str, provided_imdb_link: str = ""):
         img_match = re.search(r'\[img\](.*?)\[/img\]', format_data)
         if img_match:
             original_poster_url = img_match.group(1)
-            
+
             # 检查是否已经是pixhost图床
             if 'pixhost.to' in original_poster_url or 'img1.pixhost.to' in original_poster_url:
                 # 已经是pixhost，直接使用
@@ -1645,7 +1730,7 @@ def _parse_format_content(format_data: str, provided_imdb_link: str = ""):
                 # 非pixhost，进行智能验证和转存
                 print(f"[*] 海报非pixhost图床，执行智能验证和转存...")
                 smart_poster_url = _get_smart_poster_url(original_poster_url)
-                
+
                 if smart_poster_url:
                     poster = f"[img]{smart_poster_url}[/img]"
                     print(f"[*] 智能验证和转存成功: {smart_poster_url}")
@@ -2761,7 +2846,7 @@ def _get_smart_poster_url(original_url: str) -> str:
             if _validate_image_url(candidate_url):
                 print(f"✓ 验证成功！使用 img{domain_num} 域名")
                 print(f"[*] 智能海报获取成功: {candidate_url}")
-                
+
                 # 转存到pixhost
                 pixhost_url = _transfer_poster_to_pixhost(candidate_url)
                 if pixhost_url:
@@ -2788,7 +2873,7 @@ def _get_smart_poster_url(original_url: str) -> str:
             if _validate_image_url(third_party_url):
                 print("✓ 第三方URL验证成功")
                 print(f"[*] 智能海报获取成功: {third_party_url}")
-                
+
                 # 转存到pixhost
                 pixhost_url = _transfer_poster_to_pixhost(third_party_url)
                 if pixhost_url:
@@ -2805,7 +2890,7 @@ def _get_smart_poster_url(original_url: str) -> str:
         if _validate_image_url(original_url):
             print("✓ 原始URL验证成功")
             print(f"[*] 智能海报获取成功: {original_url}")
-            
+
             # 转存到pixhost
             pixhost_url = _transfer_poster_to_pixhost(original_url)
             if pixhost_url:
