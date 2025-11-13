@@ -690,6 +690,7 @@ global_standard_keys:
     # 语言相关标签
     "国语": "tag.国语"
     "粤语": "tag.粤语"
+    "台配": "tag.台配"
     "中字": "tag.中字"
     "英字": "tag.英字"
     "CC": "tag.cc"

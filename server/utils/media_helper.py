@@ -1426,10 +1426,11 @@ def upload_data_movie_info(douban_link: str, imdb_link: str):
     """
     # [新增] 过滤豆瓣链接，只保留ID部分
     if douban_link:
-        douban_match = re.match(r'(https?://movie\.douban\.com/subject/\d+)', douban_link)
+        douban_match = re.match(r'(https?://movie\.douban\.com/subject/\d+)',
+                                douban_link)
         douban_link = douban_match.group(1) if douban_match else douban_link
         print(f"过滤后的豆瓣链接: {douban_link}")
-    
+
     # 从配置文件获取财神ptgen的token
     config = config_manager.get()
     cspt_token = config.get("cross_seed", {}).get("cspt_ptgen_token", "")
@@ -2250,12 +2251,18 @@ def extract_tags_from_mediainfo(mediainfo_text: str) -> list:
             current_video_section_lines = [line_stripped]  # 开始新的 Video 块
             continue
         elif line_lower.startswith('audio'):
-            current_section = 'audio'
+            # 先处理之前的 Audio 块
+            if current_audio_section_lines:
+                _process_audio_section_languages(current_audio_section_lines,
+                                                 found_tags)
+            # 处理之前的 Video 块
             if current_video_section_lines:
                 _process_video_section_languages(current_video_section_lines,
                                                  found_tags)
                 current_video_section_lines = []
-            current_audio_section_lines = [line_stripped]  # 开始新的 Audio 块
+            # 开始新的 Audio 块
+            current_section = 'audio'
+            current_audio_section_lines = [line_stripped]
             continue
         elif line_lower.startswith('text'):
             current_section = 'text'
@@ -2338,6 +2345,7 @@ def extract_tags_from_mediainfo(mediainfo_text: str) -> list:
 def _process_audio_section_languages(audio_lines, found_tags):
     """辅助函数：处理音频块中的语言检测"""
     language = _check_language_in_section(audio_lines)
+
     if language:
         if language == '国语':
             found_tags.add('国语')
@@ -2365,14 +2373,19 @@ def _process_video_section_languages(video_lines, found_tags):
 
 def _check_language_in_section(section_lines) -> str | None:
     """
-    通用函数：检查指定 Section 块中是否包含语言相关标识。
+    通用函数:检查指定 Section 块中是否包含语言相关标识。
 
     :param section_lines: Section 块的所有行
-    :return: 如果检测到语言返回具体语言名称，否则返回None
+    :return: 如果检测到语言返回具体语言名称,否则返回None
     """
     language_keywords_map = {
-        '国语': ['中文', 'chinese', 'mandarin', '国语'],
-        '粤语': ['cantonese', '粤语'],
+        '国语': ['中文', 'chinese', 'mandarin', '国语', '普通话', 'mandrin', 'cmn', 'mainland'],
+        '粤语':
+        ['cantonese', '粤语', '广东话', '香港话', 'canton', 'hk', 'hongkong'],
+        '台配': [
+            '台配国语', '台配', 'tw', 'taiwan', 'twi', '台湾', '台语', '闽南语',
+            'taiwanese', 'taiwan mandarin'
+        ],
         '英语': ['english', '英语'],
         '日语': ['japanese', '日语'],
         '韩语': ['korean', '韩语'],
@@ -2380,38 +2393,54 @@ def _check_language_in_section(section_lines) -> str | None:
         '德语': ['german', '德语'],
         '俄语': ['russian', '俄语'],
         '印地语': ['hindi', '印地语'],
-        '西班牙语': ['spanish', '西班牙语', 'latin america'],  # 添加 Latin America
-        '葡萄牙语': ['portuguese', '葡萄牙语', 'br'],  # 添加 BR
+        '西班牙语': ['spanish', '西班牙语', 'latin america'],
+        '葡萄牙语': ['portuguese', '葡萄牙语', 'br'],
         '意大利语': ['italian', '意大利语'],
         '泰语': ['thai', '泰语'],
-        '阿拉伯语': ['arabic', '阿拉伯语', 'sa'],  # 添加 SA
+        '阿拉伯语': ['arabic', '阿拉伯语', 'sa'],
     }
 
     for line in section_lines:
         if not line:
             continue
         line_lower = line.lower()
-        if 'language:' in line_lower:
-            for lang, keywords in language_keywords_map.items():
-                for keyword in keywords:
-                    if keyword.lower() in line_lower:
-                        return lang
-        # 尝试从 Title: 中提取
-        if 'title:' in line_lower:
-            for lang, keywords in language_keywords_map.items():
-                for keyword in keywords:
-                    if keyword.lower() in line_lower:
-                        return lang
+
+        # 优先检查 Title: 字段（因为中文音轨常在这里标注）
+        if 'title' in line_lower and ':' in line_lower:
+            # 提取 Title 字段的值
+            title_match = re.search(r'title\s*:\s*(.+)', line_lower,
+                                    re.IGNORECASE)
+            if title_match:
+                title_value = title_match.group(1).strip()
+                print(f"      [调试] 检测到 Title 字段，值: '{title_value}'")
+                # 检查 Title 值中是否包含语言关键词
+                for lang, keywords in language_keywords_map.items():
+                    for keyword in keywords:
+                        keyword_lower = keyword.lower()
+                        if keyword_lower in title_value:
+                            print(
+                                f"      [调试] ✓ 在 Title 字段中检测到语言: {lang} (匹配关键词: {keyword})"
+                            )
+                            return lang
+
+        # 其次检查 Language: 字段
+        if 'language' in line_lower and ':' in line_lower:
+            # 提取 Language 字段的值
+            lang_match = re.search(r'language\s*:\s*(.+)', line_lower,
+                                   re.IGNORECASE)
+            if lang_match:
+                lang_value = lang_match.group(1).strip()
+                # 检查 Language 值中是否包含语言关键词
+                for lang, keywords in language_keywords_map.items():
+                    for keyword in keywords:
+                        keyword_lower = keyword.lower()
+                        if keyword_lower in lang_value:
+                            print(
+                                f"      [调试] 在 Language 字段中检测到语言: {lang} (匹配关键词: {keyword})"
+                            )
+                            return lang
+
     return None
-
-
-# 删除这两个不再使用的辅助函数
-def _check_mandarin_in_audio_section(audio_lines):
-    return False  # Placeholder to avoid errors during diff application
-
-
-def _check_other_language_in_audio_section(audio_lines) -> str | None:
-    return None  # Placeholder to avoid errors during diff application
 
 
 def extract_origin_from_description(description_text: str) -> str:
