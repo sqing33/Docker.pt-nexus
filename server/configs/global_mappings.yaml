@@ -688,6 +688,7 @@ global_standard_keys:
     "补帧": "tag.补帧"
 
     # 语言相关标签
+    "国配": "tag.国语"
     "国语": "tag.国语"
     "粤语": "tag.粤语"
     "台配": "tag.台配"
@@ -855,6 +856,7 @@ content_filtering:
     - "By ARDTU"
     - "| ARDTU"
     - "ARDTU"
+    - "| A"
 
     # 不规范的技术信息标记
     - ".Release.Info"

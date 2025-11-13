@@ -46,6 +46,40 @@ def batch_enhance_proxy():
         return jsonify({"success": False, "error": f"代理服务错误: {str(e)}"}), 500
 
 
+@go_proxy_bp.route('/batch-enhance/stop', methods=['POST'])
+def stop_batch_enhance_proxy():
+    """转发停止批量转种请求到Go服务"""
+    try:
+        # 转发到Go服务
+        response = requests.post(
+            f"{GO_SERVICE_URL}/batch-enhance/stop",
+            timeout=10
+        )
+
+        # 检查响应内容是否为空
+        if not response.text.strip():
+            logging.error("Go服务返回空响应")
+            return jsonify({"success": False, "error": "Go服务返回空响应"}), 503
+
+        # 尝试解析JSON
+        try:
+            return jsonify(response.json()), response.status_code
+        except ValueError as json_error:
+            logging.error(f"Go服务返回非JSON响应: {response.text[:200]}")
+            return jsonify({
+                "success": False,
+                "error": f"Go服务返回无效JSON: {str(json_error)}",
+                "raw_response": response.text[:500]
+            }), 503
+
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Go服务请求失败: {e}")
+        return jsonify({"success": False, "error": f"Go服务不可用: {str(e)}"}), 503
+    except Exception as e:
+        logging.error(f"代理请求处理失败: {e}")
+        return jsonify({"success": False, "error": f"代理服务错误: {str(e)}"}), 500
+
+
 @go_proxy_bp.route('/records', methods=['GET', 'DELETE'])
 def records_proxy():
     """转发记录相关请求到Go服务"""

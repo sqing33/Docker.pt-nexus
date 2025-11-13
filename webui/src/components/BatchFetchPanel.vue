@@ -98,7 +98,7 @@
           <el-divider content-position="left">保存路径</el-divider>
           <div class="path-tree-container">
             <el-tree ref="pathTreeRef" :data="pathTreeData" show-checkbox node-key="path" default-expand-all
-              check-on-click-node :check-strictly="true" :props="{ class: 'path-tree-node' }" />
+              :expand-on-click-node="false" check-on-click-node :check-strictly="true" :props="{ class: 'path-tree-node' }" />
           </div>
 
           <el-divider content-position="left">状态</el-divider>

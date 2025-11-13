@@ -2065,27 +2065,107 @@ def extract_tags_from_title(title_components: list) -> list:
 
 def extract_tags_from_subtitle(subtitle: str) -> list:
     """
-    从副标题中提取标签，目前主要检测"特效"关键词。
+    从副标题中提取语言、字幕和特效标签。
+    支持的标签：中字、粤语、国语、台配、特效
     
     :param subtitle: 副标题文本
-    :return: 标签列表，例如 ['特效']
+    :return: 标签列表，例如 ['tag.中字', 'tag.粤语', 'tag.特效']
     """
     if not subtitle:
         return []
 
-    found_tags = []
+    found_tags = set()
 
-    # 检查副标题中是否包含"特效"关键词
+    # 首先检查"特效"关键词（优先级最高，独立检测）
     if "特效" in subtitle:
-        found_tags.append("tag.特效")
+        found_tags.add("特效")
         print(f"从副标题中提取到标签: 特效")
 
-    if found_tags:
-        print(f"从副标题中提取到的标签: {found_tags}")
+    # 定义分隔符，用于拆分副标题
+    # 支持：[]、【】、|、*、/等符号
+    # 注意：对于"| 内封官译简繁"这种只有左边有|的情况，需要特殊处理
+    delimiter_pattern = r'[\[\]【】\|\*\/]'
+
+    # 首先处理特殊的"|"分隔符情况
+    # 例如："| 内封官译简繁+简英繁英双语字幕" 或 "| 汉语普通话"
+    special_pipe_parts = []
+    if '|' in subtitle:
+        # 按|分割，保留左边|的内容作为独立部分
+        pipe_parts = subtitle.split('|')
+        for part in pipe_parts:
+            if part.strip():
+                special_pipe_parts.append(part.strip())
+
+    # 使用正则表达式分割副标题
+    parts = re.split(delimiter_pattern, subtitle)
+
+    # 合并两种分割方式的结果
+    all_parts = list(set(parts + special_pipe_parts))
+
+    # 定义关键词到标签的映射
+    tag_patterns = {
+        '中字': [
+            r'中[字幕]', r'简[体中繁]', r'繁[体中简]', r'中英', r'简英', r'繁英', r'简繁', r'中日',
+            r'简日', r'繁日', r'官译', r'内封.*[简繁]', r'[简繁].*字幕', r'双语字幕', r'多国.*字幕',
+            r'软字幕'
+        ],
+        '粤语': [
+            r'粤[语配]',
+            r'粤音',
+            r'粤.*配音',
+            r'港版',
+            r'港.*配音',
+            r'\b粤\b'  # 匹配独立的"粤"字，如"陆/日/台/粤/闽五语"中的"粤"
+        ],
+        '国语': [
+            r'国[语配]',
+            r'国.*配音',
+            r'汉语',
+            r'普通话',
+            r'中文配音',
+            r'华语',
+            r'台配国语',  # 特殊处理：台配国语会匹配国语，但后续会被台配覆盖
+            r'\b陆\b',
+            r'\b国\b'  # 匹配独立的"陆"或"国"字，如"陆/日/台/粤/闽五语"中的"陆"
+        ],
+        '台配': [
+            r'台[配音]',
+            r'台.*配音',
+            r'东森',
+            r'纬来',
+            r'台配国语',
+            r'台配.*国语',
+            r'\b台\b'  # 匹配独立的"台"字，如"陆/日/台/粤/闽五语"中的"台"
+        ]
+    }
+
+    # 遍历每个分割后的部分进行关键词匹配
+    for part in all_parts:
+        if not part.strip():
+            continue
+
+        part_clean = part.strip()
+
+        # 检查每个标签的模式
+        for tag_name, patterns in tag_patterns.items():
+            for pattern in patterns:
+                if re.search(pattern, part_clean, re.IGNORECASE):
+                    found_tags.add(tag_name)
+                    print(
+                        f"从副标题段落 '{part_clean}' 中提取到标签: {tag_name} (匹配: {pattern})"
+                    )
+                    # 找到匹配后跳出当前标签的模式循环
+                    break
+
+    # 为所有标签添加 tag. 前缀
+    prefixed_tags = [f'tag.{tag}' for tag in found_tags]
+
+    if prefixed_tags:
+        print(f"从副标题中提取到的标签: {prefixed_tags}")
     else:
         print("从副标题中未提取到任何标签")
 
-    return found_tags
+    return prefixed_tags
 
 
 def extract_tags_from_description(description_text: str) -> list:
@@ -2379,9 +2459,11 @@ def _check_language_in_section(section_lines) -> str | None:
     :return: 如果检测到语言返回具体语言名称,否则返回None
     """
     language_keywords_map = {
-        '国语': ['中文', 'chinese', 'mandarin', '国语', '普通话', 'mandrin', 'cmn', 'mainland'],
-        '粤语':
-        ['cantonese', '粤语', '广东话', '香港话', 'canton', 'hk', 'hongkong'],
+        '国语': [
+            '中文', 'chinese', 'mandarin', '国语', '普通话', 'mandrin', 'cmn',
+            'mainland'
+        ],
+        '粤语': ['cantonese', '粤语', '广东话', '香港话', 'canton', 'hk', 'hongkong'],
         '台配': [
             '台配国语', '台配', 'tw', 'taiwan', 'twi', '台湾', '台语', '闽南语',
             'taiwanese', 'taiwan mandarin'
@@ -2412,15 +2494,11 @@ def _check_language_in_section(section_lines) -> str | None:
                                     re.IGNORECASE)
             if title_match:
                 title_value = title_match.group(1).strip()
-                print(f"      [调试] 检测到 Title 字段，值: '{title_value}'")
                 # 检查 Title 值中是否包含语言关键词
                 for lang, keywords in language_keywords_map.items():
                     for keyword in keywords:
                         keyword_lower = keyword.lower()
                         if keyword_lower in title_value:
-                            print(
-                                f"      [调试] ✓ 在 Title 字段中检测到语言: {lang} (匹配关键词: {keyword})"
-                            )
                             return lang
 
         # 其次检查 Language: 字段
@@ -2435,9 +2513,6 @@ def _check_language_in_section(section_lines) -> str | None:
                     for keyword in keywords:
                         keyword_lower = keyword.lower()
                         if keyword_lower in lang_value:
-                            print(
-                                f"      [调试] 在 Language 字段中检测到语言: {lang} (匹配关键词: {keyword})"
-                            )
                             return lang
 
     return None

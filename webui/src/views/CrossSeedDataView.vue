@@ -115,6 +115,7 @@
               show-checkbox
               node-key="path"
               default-expand-all
+              :expand-on-click-node="false"
               check-on-click-node
               :check-strictly="true"
               :props="{ class: 'path-tree-node' }"
@@ -410,6 +411,14 @@
             <div class="record-warning-text">批量转种需要等待种子文件验证，每个种子大概3s</div>
             <div class="record-header-controls">
               <el-button
+                type="danger"
+                size="small"
+                @click="stopBatchProcess"
+                :disabled="isStoppingBatch"
+              >
+                {{ isStoppingBatch ? '停止中...' : '停止转种' }}
+              </el-button>
+              <el-button
                 type="primary"
                 size="small"
                 @click="refreshRecords"
@@ -510,7 +519,7 @@
               >
                 <template #default="scope">
                   <span v-if="scope.row.status === 'success' && scope.row.success_url">
-                    <el-link type="primary" :href="scope.row.success_url" target="_blank"
+                    <el-link type="primary" :href="cleanUrl(scope.row.success_url)" target="_blank"
                       >查看详情页</el-link
                     >
                   </span>
@@ -710,6 +719,9 @@ const refreshTimer = ref<ReturnType<typeof setInterval> | null>(null)
 const REFRESH_INTERVAL = 5000 // 5秒刷新一次
 const additionalRefreshCount = ref<number>(0) // 额外刷新次数计数器
 const ADDITIONAL_REFRESH_LIMIT = 3 // 完成后额外刷新3次
+
+// 停止批量转种相关
+const isStoppingBatch = ref<boolean>(false)
 
 interface SeedRecord {
   id: number
@@ -1773,11 +1785,13 @@ const openRecordViewDialog = () => {
 const closeRecordViewDialog = () => {
   recordDialogVisible.value = false
   stopAutoRefresh()
+  // 关闭时刷新主表格数据
+  fetchData()
 }
 
 // 刷新记录
 const refreshRecords = async () => {
-  recordsLoading.value = true
+  // ✨ CHANGE: 移除了 recordsLoading.value = true，不再显示加载动画
   try {
     // 清空批次映射，确保每次刷新从1开始
     resetBatchNumberMap()
@@ -1808,9 +1822,8 @@ const refreshRecords = async () => {
   } catch (error: any) {
     console.error('获取记录时出错:', error)
     ElMessage.error('获取记录失败: ' + (error.message || '网络错误'))
-  } finally {
-    recordsLoading.value = false
   }
+  // ✨ CHANGE: 移除了 finally 块中的 recordsLoading.value = false
 }
 
 // 清空记录
@@ -1929,6 +1942,16 @@ const formatDownloaderAddResult = (result: string) => {
   return result
 }
 
+// 清理URL，移除&uploaded参数及其后面的内容
+const cleanUrl = (url: string) => {
+  if (!url) return url
+  const uploadedIndex = url.indexOf('&uploaded')
+  if (uploadedIndex !== -1) {
+    return url.substring(0, uploadedIndex)
+  }
+  return url
+}
+
 // 格式化记录时间
 const formatRecordTimeLocal = (timestamp: string) => {
   try {
@@ -1944,7 +1967,7 @@ const formatRecordTimeLocal = (timestamp: string) => {
 
     // ✨ 改动点：在日期和时间之间添加换行符 '\n'
     return `${year}-${month}-${day}\n${hours}:${minutes}:${seconds}`
-  } catch (error) {
+  } catch {
     return timestamp
   }
 }
@@ -1970,6 +1993,38 @@ const getProgressColor = (percentage: number) => {
   if (percentage < 30) return '#e6a23c' // 橙色
   if (percentage < 70) return '#409eff' // 蓝色
   return '#67c23a' // 绿色
+}
+
+// 停止批量转种任务
+const stopBatchProcess = async () => {
+  isStoppingBatch.value = true
+  try {
+    const response = await fetch('/api/go-api/batch-enhance/stop', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+
+    const result = await response.json()
+    if (result.success) {
+      ElMessage.success('批量转种已停止')
+      // 停止自动刷新
+      stopAutoRefresh()
+      // 最后刷新一次记录
+      await refreshRecords()
+    } else {
+      ElMessage.error(result.error || '停止批量转种失败')
+    }
+  } catch (error: any) {
+    ElMessage.error(error.message || '停止批量转种失败')
+  } finally {
+    isStoppingBatch.value = false
+  }
 }
 
 onUnmounted(() => {

@@ -438,6 +438,7 @@
               show-checkbox
               node-key="path"
               default-expand-all
+              :expand-on-click-node="false"
               check-on-click-node
               :check-strictly="true"
               :props="{ class: 'path-tree-node' }"

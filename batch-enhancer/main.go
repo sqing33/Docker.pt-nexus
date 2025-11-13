@@ -54,6 +54,8 @@ var (
 	logEntries     []LogEntry
 	maxLogLines    = 1000 // 最大保存的日志行数
 	currentBatchID string // 当前批次ID
+	stopRequested  bool   // 停止请求标志
+	stopMutex      sync.RWMutex
 )
 
 // 简单的请求和响应结构
@@ -924,6 +926,39 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// 停止批量转种处理
+func stopBatchEnhanceHandler(w http.ResponseWriter, r *http.Request) {
+	// 设置CORS头
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	w.Header().Set("Content-Type", "application/json")
+
+	// 处理预检请求
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if r.Method != "POST" {
+		http.Error(w, `{"success":false,"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	// 设置停止标志
+	stopMutex.Lock()
+	stopRequested = true
+	stopMutex.Unlock()
+
+	logWarning("🛑 收到停止批量转种请求")
+
+	// 返回成功响应
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "已发送停止信号，批量转种将在当前种子处理完成后停止",
+	})
+}
+
 // 批量转种增强处理
 func batchEnhanceHandler(w http.ResponseWriter, r *http.Request) {
 	// 设置CORS头，允许前端跨域访问
@@ -1159,11 +1194,34 @@ func processBatchSeeds(req BatchRequest) BatchResponse {
 		}
 	}
 
+	// 重置停止标志
+	stopMutex.Lock()
+	stopRequested = false
+	stopMutex.Unlock()
+
 	// 串行处理有效种子(站点请求频率由全局控制)
 	logInfo("🔄 开始串行处理 %d 个有效种子...", len(validSeeds))
 	processStart := time.Now()
 
 	for i, seed := range validSeeds {
+		// 检查是否收到停止请求
+		stopMutex.RLock()
+		shouldStop := stopRequested
+		stopMutex.RUnlock()
+
+		if shouldStop {
+			logWarning("⚠️  收到停止请求，批量转种已中止")
+			// 将剩余未处理的种子标记为失败
+			for j := i; j < len(validSeeds); j++ {
+				failedSeeds = append(failedSeeds, SeedResult{
+					TorrentID: validSeeds[j].TorrentID,
+					Status:    "failed",
+					Error:     "批量转种已被用户停止",
+				})
+			}
+			break
+		}
+
 		logInfo("🔄 [%d/%d] 开始处理种子: %s -> %s",
 			i+1, len(validSeeds), seed.TorrentID, req.TargetSiteName)
 
@@ -1736,9 +1794,11 @@ func main() {
 	logInfo("🛠️  设置API路由...")
 	http.HandleFunc("/health", healthHandler)
 	http.HandleFunc("/batch-enhance", batchEnhanceHandler)
+	http.HandleFunc("/batch-enhance/stop", stopBatchEnhanceHandler)
 	http.HandleFunc("/records", recordsHandler)
 	logInfo("   - GET  /health         健康检查")
 	logInfo("   - POST /batch-enhance  批量转种增强")
+	logInfo("   - POST /batch-enhance/stop  停止批量转种")
 	logInfo("   - GET  /records        查看处理记录")
 	logInfo("   - DELETE /records      清空处理记录")
 
