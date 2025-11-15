@@ -12,4 +12,8 @@ python app.py &
 echo "正在启动 batch-enhancer 服务，端口：5275..."
 ./batch-enhancer &
 
+# 启动 updater (Go 更新服务)
+echo "正在启动 updater 服务，端口：5276..."
+./pt-nexus-updater &
+
 wait -n

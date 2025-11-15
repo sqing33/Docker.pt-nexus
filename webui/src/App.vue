@@ -44,6 +44,20 @@
         刷新
       </el-button>
     </div>
+    <div class="version-info-container">
+      <el-link
+        href="https://github.com/sqing33/Docker.pt-nexus"
+        target="_blank"
+        :underline="false"
+        style="margin-right: 8px"
+      >
+        <el-icon><Link /></el-icon>
+        GitHub
+      </el-link>
+      <el-tag size="small" style="cursor: pointer" @click="showUpdateDialog">{{
+        currentVersion
+      }}</el-tag>
+    </div>
   </el-menu>
   <main :class="['main-content', isLoginPage ? 'no-nav' : '']">
     <router-view v-slot="{ Component }">
@@ -89,7 +103,8 @@
 <script setup lang="ts">
 import { computed, ref, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Link } from '@element-plus/icons-vue'
 import { QuillEditor } from '@vueup/vue-quill'
 import '@vueup/vue-quill/dist/vue-quill.snow.css'
 import axios from 'axios'
@@ -98,6 +113,9 @@ const route = useRoute()
 
 // 背景图片URL
 const backgroundUrl = ref('https://pic.pting.club/i/2025/10/07/68e4fbfe9be93.jpg')
+
+// 版本信息
+const currentVersion = ref('加载中...')
 
 const isLoginPage = computed(() => route.path === '/login')
 
@@ -326,8 +344,118 @@ const handleBackgroundUpdate = (event: any) => {
   updateBackground(newUrl)
 }
 
+// 加载版本信息
+const loadVersionInfo = async () => {
+  try {
+    const response = await fetch('http://localhost:5276/api/update/check')
+    const data = await response.json()
+    if (data.success) {
+      currentVersion.value = data.local_version
+
+      // 如果有更新，弹出提示
+      if (data.has_update) {
+        ElMessage.info(`发现新版本: ${data.remote_version}`)
+        setTimeout(() => {
+          showUpdateDialog()
+        }, 1000)
+      }
+    }
+  } catch (error) {
+    console.error('加载版本信息失败:', error)
+    currentVersion.value = 'v3.0.2'
+  }
+}
+
+// 显示更新对话框
+const showUpdateDialog = async () => {
+  try {
+    // 获取更新日志
+    const changelogResponse = await fetch('http://localhost:5276/api/update/changelog')
+    const changelogData = await changelogResponse.json()
+
+    // 获取版本信息
+    const versionResponse = await fetch('http://localhost:5276/api/update/check')
+    const versionData = await versionResponse.json()
+
+    const hasUpdate = versionData.has_update
+    const remoteVersion = versionData.remote_version
+    const changelog = changelogData.changelog || '暂无更新日志'
+
+    let message = `<div style="max-height: 400px; overflow-y: auto; text-align: left;">
+      <p><strong>当前版本:</strong> ${currentVersion.value}</p>`
+
+    if (hasUpdate) {
+      message += `<p><strong>最新版本:</strong> <span style="color: #67c23a;">${remoteVersion}</span></p>
+      <p style="color: #409eff; font-weight: bold;">发现新版本！</p>`
+    } else {
+      message += `<p style="color: #67c23a;">✓ 已是最新版本</p>`
+    }
+
+    message += `<div style="margin-top: 15px; padding: 10px; background: #f5f7fa; border-radius: 4px;">
+      <strong>更新日志:</strong><br/>
+      <pre style="white-space: pre-wrap; margin-top: 10px; font-size: 13px;">${changelog}</pre>
+    </div></div>`
+
+    if (hasUpdate) {
+      ElMessageBox.confirm(message, '版本更新', {
+        confirmButtonText: '立即更新',
+        cancelButtonText: '稍后更新',
+        type: 'info',
+        dangerouslyUseHTMLString: true,
+        distinguishCancelAndClose: true,
+      })
+        .then(async () => {
+          ElMessage.info('正在拉取更新代码...')
+
+          // 拉取更新
+          const pullResponse = await fetch('http://localhost:5276/api/update/pull', {
+            method: 'POST',
+          })
+          const pullData = await pullResponse.json()
+
+          if (!pullData.success) {
+            ElMessage.error('拉取更新失败: ' + pullData.error)
+            return
+          }
+
+          ElMessage.success('代码拉取成功，正在安装更新...')
+
+          // 安装更新
+          const installResponse = await fetch('http://localhost:5276/api/update/install', {
+            method: 'POST',
+          })
+          const installData = await installResponse.json()
+
+          if (installData.success) {
+            ElMessage.success('更新成功！页面将在3秒后刷新...')
+            setTimeout(() => {
+              window.location.reload()
+            }, 3000)
+          } else {
+            ElMessage.error('安装更新失败: ' + installData.error)
+          }
+        })
+        .catch((action) => {
+          if (action === 'cancel') {
+            ElMessage.info('已取消更新')
+          }
+        })
+    } else {
+      ElMessageBox.alert(message, '版本信息', {
+        confirmButtonText: '确定',
+        type: 'info',
+        dangerouslyUseHTMLString: true,
+      })
+    }
+  } catch (error) {
+    console.error('检查更新失败:', error)
+    ElMessage.error('检查更新失败，请稍后重试')
+  }
+}
+
 onMounted(() => {
   loadBackgroundSettings()
+  loadVersionInfo()
   window.addEventListener('background-updated', handleBackgroundUpdate)
 })
 </script>
