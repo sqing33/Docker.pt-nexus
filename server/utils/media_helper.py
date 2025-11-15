@@ -13,6 +13,7 @@ import json
 import time
 import random
 import cloudscraper
+import yaml
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
 from pymediainfo import MediaInfo
@@ -2520,10 +2521,11 @@ def _check_language_in_section(section_lines) -> str | None:
 
 def extract_origin_from_description(description_text: str) -> str:
     """
-    从简介详情中提取产地信息。
+    从简介详情中提取产地信息，并检查是否能在 global_mappings.yaml 的 source 映射中找到对应的标准键。
+    如果找不到映射，则设置为'其他'。
 
     :param description_text: 简介详情文本
-    :return: 产地信息，例如 "日本"、"中国" 等
+    :return: 产地信息，例如 "日本"、"中国" 等，如果无法映射则返回 "其他"
     """
     if not description_text:
         return ""
@@ -2556,9 +2558,44 @@ def extract_origin_from_description(description_text: str) -> str:
                               origin)[0].strip()
             print("提取到产地信息:", origin)
 
-            return origin
+            # 检查产地是否能在 global_mappings.yaml 的 source 映射中找到对应的标准键
+            if _check_origin_mapping(origin):
+                return origin
+            else:
+                print(f"产地 '{origin}' 无法在 source 映射中找到对应的标准键，设置为'其他'")
+                return "其他"
 
     return ""
+
+
+def _check_origin_mapping(origin: str) -> bool:
+    """
+    检查产地是否能在 global_mappings.yaml 的 source 映射中找到对应的标准键。
+
+    :param origin: 产地字符串
+    :return: 如果能找到映射返回 True，否则返回 False
+    """
+    try:
+        # 读取 global_mappings.yaml 文件
+        config_path = os.path.join(os.path.dirname(__file__), '..', 'configs', 'global_mappings.yaml')
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+
+        # 获取 source 映射
+        source_mappings = config.get('global_standard_keys', {}).get('source', {})
+        
+        # 检查产地是否在映射中
+        if origin in source_mappings:
+            print(f"产地 '{origin}' 在 source 映射中找到对应的标准键: {source_mappings[origin]}")
+            return True
+        else:
+            print(f"产地 '{origin}' 在 source 映射中未找到对应的标准键")
+            return False
+
+    except Exception as e:
+        print(f"检查产地映射时出错: {e}")
+        # 如果检查失败，为了安全起见，返回 True（保持原产地）
+        return True
 
 
 def extract_resolution_from_mediainfo(mediainfo_text: str) -> str:
