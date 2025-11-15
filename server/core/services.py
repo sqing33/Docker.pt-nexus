@@ -4,7 +4,7 @@ import collections
 import logging
 import time
 from datetime import datetime
-from threading import Thread, Lock
+from threading import Thread, Lock, Event
 from urllib.parse import urlparse
 
 # 外部库导入
@@ -137,8 +137,10 @@ class DataTracker(Thread):
         self.recent_speeds_buffer = collections.deque(
             maxlen=self.TRAFFIC_BATCH_WRITE_SIZE)
         self.torrent_update_counter = 0
-        self.TORRENT_UPDATE_INTERVAL = 900
+        self.TORRENT_UPDATE_INTERVAL = 3600
         self.clients = {}
+        # 用于优雅停止的event
+        self.shutdown_event = Event()
 
         # 数据聚合任务相关变量
         self.aggregation_counter = 0  # 用于计时的计数器
@@ -328,7 +330,13 @@ class DataTracker(Thread):
             except Exception as e:
                 logging.error(f"DataTracker 循环出错: {e}", exc_info=True)
             elapsed = time.monotonic() - start_time
-            time.sleep(max(0, self.interval - elapsed))
+            # 等待下次执行，可以被shutdown_event中断
+            remaining_time = max(0, self.interval - elapsed)
+            if remaining_time > 0:
+                # 使用Event.wait来等待，可以被中断
+                if self.shutdown_event.wait(timeout=remaining_time):
+                    # 如果被事件唤醒，说明要停止
+                    break
 
     def _fetch_and_buffer_stats(self):
         config = self.config_manager.get()
@@ -493,16 +501,18 @@ class DataTracker(Thread):
         try:
             conn = self.db_manager._get_connection()
             cursor = self.db_manager._get_cursor(conn)
-            
+
             # 根据数据库类型设置占位符
-            placeholder = "%s" if self.db_manager.db_type in ["mysql", "postgresql"] else "?"
-            
+            placeholder = "%s" if self.db_manager.db_type in [
+                "mysql", "postgresql"
+            ] else "?"
+
             # 第一步：获取每个下载器的最后一条记录
             downloader_ids = set()
             for entry in buffer:
                 for data_point in entry["points"]:
                     downloader_ids.add(data_point["downloader_id"])
-            
+
             last_records = {}
             if downloader_ids:
                 # 查询每个下载器的最后一条有效记录
@@ -516,34 +526,38 @@ class DataTracker(Thread):
                 """
                 cursor.execute(query, tuple(downloader_ids))
                 rows = cursor.fetchall()
-                
+
                 # 为每个下载器保存最新的记录
                 for row in rows:
                     downloader_id = row["downloader_id"]
                     if downloader_id not in last_records:
                         last_records[downloader_id] = {
                             "cumulative_uploaded": row["cumulative_uploaded"],
-                            "cumulative_downloaded": row["cumulative_downloaded"],
+                            "cumulative_downloaded":
+                            row["cumulative_downloaded"],
                             "stat_datetime": row["stat_datetime"]
                         }
-            
+
             # 第二步：验证并准备插入数据
             params_to_insert = []
-            
+
             for entry in buffer:
-                timestamp_str = entry["timestamp"].strftime("%Y-%m-%d %H:%M:%S")
+                timestamp_str = entry["timestamp"].strftime(
+                    "%Y-%m-%d %H:%M:%S")
                 for data_point in entry["points"]:
                     client_id = data_point["downloader_id"]
                     current_dl = data_point["total_dl"]
                     current_ul = data_point["total_ul"]
-                    
+
                     # 数据验证逻辑
                     should_insert = True
-                    
+
                     if client_id in last_records:
-                        last_ul = last_records[client_id]["cumulative_uploaded"]
-                        last_dl = last_records[client_id]["cumulative_downloaded"]
-                        
+                        last_ul = last_records[client_id][
+                            "cumulative_uploaded"]
+                        last_dl = last_records[client_id][
+                            "cumulative_downloaded"]
+
                         # 检测异常情况：累计值降低或变为0
                         if (current_ul > 0 and current_ul < last_ul) or \
                            (current_dl > 0 and current_dl < last_dl) or \
@@ -555,14 +569,13 @@ class DataTracker(Thread):
                                 f"跳过插入。当前: 上传={format_bytes(current_ul)}, 下载={format_bytes(current_dl)}; "
                                 f"上次: 上传={format_bytes(last_ul)}, 下载={format_bytes(last_dl)}"
                             )
-                    
+
                     if should_insert:
                         params_to_insert.append(
                             (timestamp_str, client_id, 0, 0,
                              data_point["ul_speed"], data_point["dl_speed"],
-                             current_ul, current_dl)
-                        )
-                        
+                             current_ul, current_dl))
+
                         # 更新本地缓存的最后记录，用于批次内的后续数据验证
                         last_records[client_id] = {
                             "cumulative_uploaded": current_ul,
@@ -1144,46 +1157,56 @@ class DataTracker(Thread):
         name_lower = name.lower()
         exact_matches = []  # 精确匹配结果
         partial_matches = []  # 部分匹配结果
-        
+
         # 检查是否包含@符号
         if '@' in name_lower:
             # 分割@符号前后的部分
             parts = name_lower.split('@')
             logging.debug(f"种子名称包含@符号，分割为: {parts}")
-            
+
             for part in parts:
                 # 清理每个部分：
                 # 1. 去除首尾空格
                 # 2. 去除前导的-符号
                 # 3. 去除方括号[]内的内容（处理[BDrip]这种格式）
                 clean_part = part.strip().lstrip('-').strip()
-                
+
                 # 处理方括号：去除[xxx]格式，保留括号外的内容
                 import re
                 clean_part = re.sub(r'\[.*?\]', '', clean_part).strip()
-                
+
                 if clean_part:
                     logging.debug(f"检查部分: '{clean_part}'")
-                    
+
                     # 先检查精确匹配
-                    for group_lower, group_info in group_to_site_map_lower.items():
+                    for group_lower, group_info in group_to_site_map_lower.items(
+                    ):
                         # 去除官组名称前面的-（如果有）
                         group_lower_clean = group_lower.lstrip('-')
-                        
+
                         # 精确匹配（优先级最高）
                         if group_lower_clean == clean_part:
-                            if group_info["original_case"] not in exact_matches:
-                                exact_matches.append(group_info["original_case"])
-                                logging.debug(f"精确匹配到官组: '{group_info['original_case']}'")
+                            if group_info[
+                                    "original_case"] not in exact_matches:
+                                exact_matches.append(
+                                    group_info["original_case"])
+                                logging.debug(
+                                    f"精确匹配到官组: '{group_info['original_case']}'"
+                                )
                         # 包含匹配（次优先级）
                         elif group_lower_clean in clean_part or clean_part in group_lower_clean:
-                            if group_info["original_case"] not in partial_matches and group_info["original_case"] not in exact_matches:
-                                partial_matches.append(group_info["original_case"])
-                                logging.debug(f"部分匹配到官组: '{group_info['original_case']}'")
-        
+                            if group_info[
+                                    "original_case"] not in partial_matches and group_info[
+                                        "original_case"] not in exact_matches:
+                                partial_matches.append(
+                                    group_info["original_case"])
+                                logging.debug(
+                                    f"部分匹配到官组: '{group_info['original_case']}'"
+                                )
+
         # 合并结果：精确匹配优先
         found_matches = exact_matches + partial_matches
-        
+
         # 如果@符号匹配没有结果，或者名称中没有@符号，使用原来的全名匹配逻辑
         if not found_matches:
             logging.debug(f"@符号匹配无结果，尝试全名匹配: '{name_lower}'")
@@ -1191,8 +1214,9 @@ class DataTracker(Thread):
                 if group_lower in name_lower:
                     if group_info["original_case"] not in found_matches:
                         found_matches.append(group_info["original_case"])
-                        logging.debug(f"匹配到官组: '{group_info['original_case']}' (通过全名匹配)")
-        
+                        logging.debug(
+                            f"匹配到官组: '{group_info['original_case']}' (通过全名匹配)")
+
         if found_matches:
             # 如果有精确匹配，优先返回最短的精确匹配（最准确）
             # 如果没有精确匹配，返回最长的部分匹配（避免匹配到子串）
@@ -1200,16 +1224,18 @@ class DataTracker(Thread):
                 result = sorted(exact_matches, key=len)[0]  # 最短的精确匹配
                 logging.info(f"种子 '{name[:50]}...' 精确匹配到官组: {result}")
             else:
-                result = sorted(found_matches, key=len, reverse=True)[0]  # 最长的匹配
+                result = sorted(found_matches, key=len,
+                                reverse=True)[0]  # 最长的匹配
                 logging.info(f"种子 '{name[:50]}...' 匹配到官组: {result}")
             return result
-        
+
         logging.debug(f"种子 '{name[:50]}...' 未识别到官组")
         return None
 
     def stop(self):
         logging.info("正在停止 DataTracker 线程...")
         self._is_running = False
+        self.shutdown_event.set()
         with self.traffic_buffer_lock:
             if self.traffic_buffer:
                 self._flush_traffic_buffer_to_db(self.traffic_buffer)
@@ -1238,6 +1264,11 @@ def stop_data_tracker():
     global data_tracker_thread
     if data_tracker_thread and data_tracker_thread.is_alive():
         data_tracker_thread.stop()
-        data_tracker_thread.join(timeout=10)
+        # 使用更短的超时时间，因为现在有event驱动的优雅停止
+        data_tracker_thread.join(timeout=2)  # 从10秒减少到2秒
+        if data_tracker_thread.is_alive():
+            print("DataTracker 线程仍在运行，但将强制清理引用")
+        else:
+            print("DataTracker 线程已优雅停止。")
         logging.info("DataTracker 线程已停止。")
     data_tracker_thread = None

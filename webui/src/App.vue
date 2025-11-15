@@ -32,7 +32,19 @@
         <span class="hint-yellow">待检查信息的种子</span>
       </span>
     </div>
-    <div class="refresh-button-container">
+    <div class="right-buttons-container">
+      <el-link
+        href="https://github.com/sqing33/Docker.pt-nexus"
+        target="_blank"
+        :underline="false"
+        style="margin-right: 8px"
+      >
+        <el-icon><Link /></el-icon>
+        GitHub
+      </el-link>
+      <el-tag size="small" style="cursor: pointer; margin-right: 15px" @click="showUpdateDialog">{{
+        currentVersion
+      }}</el-tag>
       <el-button type="primary" @click="feedbackDialogVisible = true" plain>反馈</el-button>
       <el-button
         type="success"
@@ -51,7 +63,6 @@
     </router-view>
   </main>
 
-  <!-- Feedback Dialog -->
   <el-dialog
     v-model="feedbackDialogVisible"
     title="意见反馈"
@@ -84,20 +95,76 @@
       </span>
     </template>
   </el-dialog>
+
+  <!-- Update Dialog -->
+  <el-dialog
+    v-model="updateDialogVisible"
+    title="版本更新"
+    width="650px"
+    :close-on-click-modal="false"
+  >
+    <el-card shadow="never" class="update-card">
+      <div class="update-content">
+        <!-- Version Info -->
+        <div class="version-info-box">
+          <div class="version-item">
+            <div class="version-label">当前版本</div>
+            <div class="version-value">{{ updateInfo.currentVersion }}</div>
+          </div>
+          <div v-if="updateInfo.hasUpdate" class="version-arrow">→</div>
+          <div v-if="updateInfo.hasUpdate" class="version-item">
+            <div class="version-label">最新版本</div>
+            <div class="version-value new-version">{{ updateInfo.remoteVersion }}</div>
+          </div>
+          <div v-if="!updateInfo.hasUpdate" class="version-status">
+            <el-icon color="#67c23a" size="20"><SuccessFilled /></el-icon>
+            <span>已是最新版本</span>
+          </div>
+        </div>
+
+        <!-- Changelog -->
+        <div class="changelog-section">
+          <div class="changelog-title">更新内容</div>
+          <div class="changelog-list">
+            <div v-if="updateInfo.changelog.length === 0" class="no-changelog">暂无更新内容</div>
+            <div v-for="(item, index) in updateInfo.changelog" :key="index" class="changelog-item">
+              <div class="changelog-number">{{ index + 1 }}</div>
+              <div class="changelog-text">{{ item }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </el-card>
+
+    <template #footer>
+      <span class="dialog-footer">
+        <el-button @click="updateDialogVisible = false">
+          {{ updateInfo.hasUpdate ? '稍后更新' : '确定' }}
+        </el-button>
+        <el-button v-if="updateInfo.hasUpdate" type="primary" @click="performUpdate">
+          立即更新
+        </el-button>
+      </span>
+    </template>
+  </el-dialog>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Link, SuccessFilled } from '@element-plus/icons-vue'
 import { QuillEditor } from '@vueup/vue-quill'
 import '@vueup/vue-quill/dist/vue-quill.snow.css'
 import axios from 'axios'
 
 const route = useRoute()
 
-// 背景图片URL
+// 背景图片
 const backgroundUrl = ref('https://pic.pting.club/i/2025/10/07/68e4fbfe9be93.jpg')
+
+// 版本信息
+const currentVersion = ref('加载中...')
 
 const isLoginPage = computed(() => route.path === '/login')
 
@@ -158,16 +225,13 @@ const handlePaste = async (event: ClipboardEvent) => {
         const formData = new FormData()
         formData.append('file', file)
 
-        const response = await fetch('/api/upload_image', {
-          method: 'POST',
-          body: formData,
+        const response = await axios.post('/api/upload_image', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
         })
 
-        if (!response.ok) {
-          throw new Error('上传失败')
-        }
-
-        const data = await response.json()
+        const data = response.data
         const imageUrl = data.url
 
         // 将图片插入到编辑器
@@ -224,20 +288,10 @@ const submitFeedback = async () => {
 
   isSubmittingFeedback.value = true
   try {
-    const response = await fetch('https://ptn-feedback.sqing33.dpdns.org/', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        text: combinedText,
-        contact: feedbackForm.contact,
-      }),
+    await axios.post('https://ptn-feedback.sqing33.dpdns.org/', {
+      text: combinedText,
+      contact: feedbackForm.contact,
     })
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
-    }
 
     ElMessage.success('反馈已提交，感谢您的支持！')
     feedbackDialogVisible.value = false
@@ -270,10 +324,7 @@ const handleGlobalRefresh = async () => {
     ElMessage.info('后台正在刷新缓存...')
 
     try {
-      const response = await fetch('/api/refresh_data', { method: 'POST' })
-      if (!response.ok) {
-        throw new Error('触发刷新失败')
-      }
+      await axios.post('/api/refresh_data')
 
       try {
         if (activeComponentRefresher.value) {
@@ -326,8 +377,95 @@ const handleBackgroundUpdate = (event: any) => {
   updateBackground(newUrl)
 }
 
+// 加载版本信息并自动检测更新
+const loadVersionInfo = async () => {
+  try {
+    const response = await axios.get('/update/check')
+    const data = response.data
+    if (data.success) {
+      currentVersion.value = data.local_version
+
+      // 如果有更新，自动弹出提示
+      if (data.has_update) {
+        setTimeout(() => {
+          showUpdateDialog()
+        }, 1000)
+      }
+    }
+  } catch (error) {
+    console.error('加载版本信息失败:', error)
+    currentVersion.value = 'unknown'
+  }
+}
+
+// 更新对话框状态
+const updateDialogVisible = ref(false)
+const updateInfo = reactive({
+  hasUpdate: false,
+  currentVersion: '',
+  remoteVersion: '',
+  changelog: [] as string[],
+})
+
+// 显示更新对话框
+const showUpdateDialog = async () => {
+  try {
+    const changelogResponse = await axios.get('/update/changelog')
+    const changelogData = changelogResponse.data
+
+    const versionResponse = await axios.get('/update/check')
+    const versionData = versionResponse.data
+
+    updateInfo.hasUpdate = versionData.has_update
+    updateInfo.currentVersion = currentVersion.value
+    updateInfo.remoteVersion = versionData.remote_version
+    updateInfo.changelog = changelogData.changelog || []
+
+    updateDialogVisible.value = true
+  } catch (error) {
+    console.error('检查更新失败:', error)
+    ElMessage.error('检查更新失败，请稍后重试')
+  }
+}
+
+// 执行更新
+const performUpdate = async () => {
+  try {
+    ElMessage.info('正在拉取更新代码...')
+
+    // 拉取更新
+    const pullResponse = await axios.post('/update/pull')
+    const pullData = pullResponse.data
+
+    if (!pullData.success) {
+      ElMessage.error('拉取更新失败: ' + pullData.error)
+      return
+    }
+
+    ElMessage.success('代码拉取成功，正在安装更新...')
+
+    // 安装更新
+    const installResponse = await axios.post('/update/install')
+    const installData = installResponse.data
+
+    if (installData.success) {
+      ElMessage.success('更新成功！页面将在3秒后刷新...')
+      updateDialogVisible.value = false
+      setTimeout(() => {
+        window.location.reload()
+      }, 3000)
+    } else {
+      ElMessage.error('安装更新失败: ' + installData.error)
+    }
+  } catch (error) {
+    console.error('更新失败:', error)
+    ElMessage.error('更新失败，请稍后重试')
+  }
+}
+
 onMounted(() => {
   loadBackgroundSettings()
+  loadVersionInfo()
   window.addEventListener('background-updated', handleBackgroundUpdate)
 })
 </script>
@@ -336,14 +474,12 @@ onMounted(() => {
 #app {
   height: 100vh;
   position: relative;
-  /* 背景图片设置 */
-  background-image: url('https://pic.pting.club/i/2025/10/07/68e4fbfe9be93.jpg'); /* 替换为您的图片URL */
+  background-image: url('https://pic.pting.club/i/2025/10/07/68e4fbfe9be93.jpg');
   background-size: cover;
   background-position: center;
   background-attachment: fixed;
 }
 
-/* 透明蒙层 */
 #app::before {
   content: '';
   position: absolute;
@@ -351,8 +487,8 @@ onMounted(() => {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(255, 255, 255, 0.5); /* 白色半透明蒙层，可调整透明度 */
-  pointer-events: none; /* 允许点击穿透 */
+  background-color: rgba(255, 255, 255, 0.5);
+  pointer-events: none;
   z-index: 0;
 }
 
@@ -363,7 +499,6 @@ body {
 </style>
 
 <style>
-/* Quill 编辑器样式优化 */
 .ql-container {
   font-size: 14px;
   font-family: inherit;
@@ -447,11 +582,12 @@ body {
   font-weight: bold;
 }
 
-.refresh-button-container {
+.right-buttons-container {
   position: absolute;
   right: 20px;
   top: 3px;
   display: flex;
+  align-items: center;
   gap: 10px;
 }
 
@@ -476,5 +612,117 @@ body {
   border: 1px solid #dcdfe6;
   border-radius: 0 0 4px 4px;
   height: 300px;
+}
+
+/* Update Dialog Styles */
+.update-card {
+  border: none;
+}
+
+.update-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.version-info-box {
+  display: inline-flex;
+  align-items: center;
+  gap: 15px;
+  padding: 20px 30px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+  margin-bottom: 25px;
+}
+
+.version-item {
+  text-align: center;
+}
+
+.version-label {
+  font-size: 13px;
+  color: #666;
+  margin-bottom: 6px;
+}
+
+.version-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.version-value.new-version {
+  color: #67c23a;
+}
+
+.version-arrow {
+  font-size: 20px;
+  color: #999;
+}
+
+.version-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: #67c23a;
+  font-weight: 500;
+}
+
+.changelog-section {
+  width: 100%;
+  max-width: 600px;
+}
+
+.changelog-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 15px;
+  text-align: center;
+}
+
+.changelog-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.no-changelog {
+  text-align: center;
+  padding: 20px;
+  color: #909399;
+}
+
+.changelog-item {
+  display: flex;
+  align-items: flex-start;
+  padding: 12px 15px;
+  margin-bottom: 10px;
+  background: #fafafa;
+  border-radius: 6px;
+  border: 1px solid #e8e8e8;
+}
+
+.changelog-number {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  background: #409eff;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 12px;
+  margin-right: 12px;
+}
+
+.changelog-text {
+  flex: 1;
+  line-height: 24px;
+  font-size: 14px;
+  color: #303133;
 }
 </style>

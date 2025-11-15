@@ -5,7 +5,7 @@ import logging
 go_proxy_bp = Blueprint('go_proxy', __name__)
 
 # Go服务配置
-GO_SERVICE_URL = "http://localhost:5275"
+GO_SERVICE_URL = "http://localhost:5276"
 
 
 @go_proxy_bp.route('/batch-enhance', methods=['POST'])
@@ -51,10 +51,8 @@ def stop_batch_enhance_proxy():
     """转发停止批量转种请求到Go服务"""
     try:
         # 转发到Go服务
-        response = requests.post(
-            f"{GO_SERVICE_URL}/batch-enhance/stop",
-            timeout=10
-        )
+        response = requests.post(f"{GO_SERVICE_URL}/batch-enhance/stop",
+                                 timeout=10)
 
         # 检查响应内容是否为空
         if not response.text.strip():

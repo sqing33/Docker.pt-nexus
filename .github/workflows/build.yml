@@ -1,4 +1,4 @@
-name: 构建并推送 Docker 镜像及代理程序
+name: 构建 latest 镜像
 
 on:
   workflow_dispatch:
@@ -6,13 +6,13 @@ on:
       tags:
         description: "Tags to push (comma-separated, e.g., latest,v1.0.0)"
         required: true
-        default: "latest,v3.0.0"
+        default: "latest,v3.1.0"
 
 env:
   IMAGE_NAME: pt-nexus
 
 jobs:
-  build-and-push:
+  build:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -30,20 +30,20 @@ jobs:
           if [ -n "$PRIVATE_REPO_TOKEN" ] && [ -n "$PRIVATE_REPO_URL" ]; then
             echo "📥 下载 批量转种 程序"
             
-            # 创建 batch-enhancer 目录
-            mkdir -p batch-enhancer
+            # 创建 batch 目录
+            mkdir -p batch
             
-            # 下载 main.go 文件
+            # 下载 batch.go 文件
             curl -H "Authorization: token $PRIVATE_REPO_TOKEN" \
                  -H "Accept: application/vnd.github.v3.raw" \
-                 -L "$PRIVATE_REPO_URL/refs/heads/main/batch-enhancer/main.go" \
-                 -o batch-enhancer/main.go
+                 -L "$PRIVATE_REPO_URL/refs/heads/main/batch/batch.go" \
+                 -o batch/batch.go
             
-            if [ -f batch-enhancer/main.go ]; then
-              echo "✅ 成功下载 batch-enhancer/main.go"
-              echo "文件大小: $(wc -l < batch-enhancer/main.go) 行"
+            if [ -f batch/batch.go ]; then
+              echo "✅ 成功下载 batch/batch.go"
+              echo "文件大小: $(wc -l < batch/batch.go) 行"
             else
-              echo "❌ 下载 batch-enhancer/main.go 失败"
+              echo "❌ 下载 batch/batch.go 失败"
               exit 1
             fi
           else
@@ -73,70 +73,44 @@ jobs:
       - name: 6. 准备 Docker 标签
         id: prepare-tags
         run: |
+          # 读取用户输入的标签
+          INPUT_TAGS="${{ github.event.inputs.tags }}"
+
           # 准备两个仓库的基础路径
           GHCR_REPO="ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}"
           DOCKERHUB_REPO="${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}"
 
-          # 固定的临时标签
-          AMD64_TAGS="${GHCR_REPO}:latest-amd64,${DOCKERHUB_REPO}:latest-amd64"
-          ARM64_TAGS="${GHCR_REPO}:latest-arm64,${DOCKERHUB_REPO}:latest-arm64"
-          
-          echo "AMD64 标签: $AMD64_TAGS"
-          echo "ARM64 标签: $ARM64_TAGS"
-          
-          echo "amd64_tags=$AMD64_TAGS" >> $GITHUB_OUTPUT
-          echo "arm64_tags=$ARM64_TAGS" >> $GITHUB_OUTPUT
-
-      - name: 7. 构建并推送 AMD64 架构镜像
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          platforms: linux/amd64
-          push: true
-          tags: ${{ steps.prepare-tags.outputs.amd64_tags }}
-          cache-from: type=gha,scope=amd64
-          cache-to: type=gha,mode=max,scope=amd64
-
-      - name: 8. 构建并推送 ARM64 架构镜像
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          platforms: linux/arm64
-          push: true
-          tags: ${{ steps.prepare-tags.outputs.arm64_tags }}
-          cache-from: type=gha,scope=arm64
-          cache-to: type=gha,mode=max,scope=arm64
-
-      - name: 9. 合并多架构清单
-        run: |
-          # 读取用户输入的标签
-          INPUT_TAGS="${{ github.event.inputs.tags }}"
-          
-          GHCR_REPO="ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}"
-          DOCKERHUB_REPO="${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}"
-          
+          # 为每个输入标签准备 GHCR 和 Docker Hub 的标签
+          ALL_TAGS=""
           IFS=',' read -ra TAG_ARRAY <<< "$INPUT_TAGS"
           for tag in "${TAG_ARRAY[@]}"; do
             tag=$(echo "$tag" | xargs)
-            
-            echo "创建多架构清单: $tag"
-            
-            # 为 GHCR 创建清单
-            docker buildx imagetools create -t ${GHCR_REPO}:${tag} \
-              ${GHCR_REPO}:latest-amd64 \
-              ${GHCR_REPO}:latest-arm64
-            
-            # 为 Docker Hub 创建清单
-            docker buildx imagetools create -t ${DOCKERHUB_REPO}:${tag} \
-              ${DOCKERHUB_REPO}:latest-amd64 \
-              ${DOCKERHUB_REPO}:latest-arm64
-              
-            echo "✅ 成功创建多架构清单: $tag"
+            GHCR_TAG="${GHCR_REPO}:${tag}"
+            DOCKERHUB_TAG="${DOCKERHUB_REPO}:${tag}"
+
+            if [ -z "$ALL_TAGS" ]; then
+              ALL_TAGS="${GHCR_TAG},${DOCKERHUB_TAG}"
+            else
+              ALL_TAGS="${ALL_TAGS},${GHCR_TAG},${DOCKERHUB_TAG}"
+            fi
           done
+
+          echo "多架构标签: $ALL_TAGS"
+          echo "tags=$ALL_TAGS" >> $GITHUB_OUTPUT
+
+      - name: 7. 构建并推送多架构镜像
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.prepare-tags.outputs.tags }}
+          cache-from: type=gha,scope=multi-arch
+          cache-to: type=gha,mode=max,scope=multi-arch
 
   build-pt-nexus-box-proxy:
     runs-on: ubuntu-latest
-    needs: build-and-push
+    needs: build
     permissions:
       contents: write
 

@@ -2508,13 +2508,8 @@ const goToSelectSiteStep = async () => {
         nameSearch: torrent.value.name,
       })
 
-      const response = await fetch(`/api/data?${params.toString()}`)
-
-      if (!response.ok) {
-        throw new Error(`网络错误: ${response.status}`)
-      }
-
-      const result = await response.json()
+      const response = await axios.get(`/api/data?${params.toString()}`)
+      const result = response.data
 
       if (result.error) {
         throw new Error(result.error)

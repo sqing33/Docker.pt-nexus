@@ -28,7 +28,7 @@ def cleanup_old_tmp_structure():
     """
     清理旧的 tmp 目录结构，只保留：
     - server/data/tmp/torrents/ 目录（并清理其中的 JSON 文件）
-    - server/data/tmp/batch-enhancer.log 文件
+    - server/data/tmp/batch.log 文件
     删除其他所有文件和目录（包括 extracted_data）
     
     注意：开发环境下不执行清理
@@ -37,30 +37,30 @@ def cleanup_old_tmp_structure():
     if os.getenv("DEV_ENV") == "true":
         print("开发环境检测：跳过 tmp 目录清理")
         return
-    
+
     from config import TEMP_DIR
     import shutil
-    
+
     print("开始清理旧的 tmp 目录结构...")
-    
+
     # 要保留的项目
-    keep_items = {"torrents", "batch-enhancer.log"}
-    
+    keep_items = {"torrents", "batch.log"}
+
     try:
         if not os.path.exists(TEMP_DIR):
             print(f"tmp 目录不存在: {TEMP_DIR}")
             return
-        
+
         # 确保 torrents 目录存在
         torrents_dir = os.path.join(TEMP_DIR, "torrents")
         os.makedirs(torrents_dir, exist_ok=True)
-        
+
         # 遍历 tmp 目录下的所有项目
         items_to_remove = []
         for item in os.listdir(TEMP_DIR):
             if item not in keep_items:
                 items_to_remove.append(item)
-        
+
         if not items_to_remove:
             print("tmp 目录已是最新结构，无需清理")
         else:
@@ -78,9 +78,9 @@ def cleanup_old_tmp_structure():
                     removed_count += 1
                 except Exception as e:
                     print(f"  删除 {item} 时出错: {e}")
-            
+
             print(f"清理完成，共删除 {removed_count} 个项目")
-        
+
         # 清理 torrents 目录中的 JSON 文件
         print("开始清理 torrents 目录中的 JSON 文件...")
         json_removed = 0
@@ -92,12 +92,12 @@ def cleanup_old_tmp_structure():
                     json_removed += 1
                 except Exception as e:
                     print(f"  删除 JSON 文件 {filename} 时出错: {e}")
-        
+
         if json_removed > 0:
             print(f"已清理 {json_removed} 个 JSON 文件")
         else:
             print("torrents 目录中没有 JSON 文件需要清理")
-        
+
     except Exception as e:
         print(f"清理 tmp 目录时发生错误: {e}")
 
@@ -112,26 +112,31 @@ def create_app():
     # --- 配置 CORS 跨域支持 ---
     # 修复cookie泄露问题：限制允许的来源，并设置cookie相关的安全选项
     allowed_origins = [
-        "http://localhost:35274",  # 开发环境
-        "http://localhost:5274",   # 生产环境
+        "http://localhost:35275",  # 开发环境
+        "http://localhost:5275",  # 生产环境
         # 如果有其他域名，请在这里添加
     ]
-    
+
     # 从环境变量获取额外允许的域名
     extra_origins = os.getenv("ALLOWED_ORIGINS", "").split(",")
     for origin in extra_origins:
         origin = origin.strip()
         if origin and origin not in allowed_origins:
             allowed_origins.append(origin)
-    
-    CORS(app, resources={
-        r"/api/*": {
-            "origins": allowed_origins,
-            "supports_credentials": True,  # 支持凭证
-            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-            "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
-        }
-    })
+
+    CORS(
+        app,
+        resources={
+            r"/api/*": {
+                "origins":
+                allowed_origins,
+                "supports_credentials":
+                True,  # 支持凭证
+                "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+                "allow_headers":
+                ["Content-Type", "Authorization", "X-Requested-With"],
+            }
+        })
 
     # --- 步骤 0: 清理旧的 tmp 目录结构 ---
     cleanup_old_tmp_structure()
@@ -147,18 +152,20 @@ def create_app():
     try:
         from utils.downloader_id_helper import generate_migration_mapping
         from core.migrations.migrate_downloader_ids import execute_migration
-        
+
         # 检查是否需要迁移
         migration_mapping = generate_migration_mapping(config_manager.get())
-        
+
         if migration_mapping:
             logging.info(f"检测到 {len(migration_mapping)} 个下载器需要迁移ID，开始自动迁移...")
             for mapping in migration_mapping:
-                logging.info(f"  - {mapping['name']}: {mapping['old_id']} -> {mapping['new_id']}")
-            
+                logging.info(
+                    f"  - {mapping['name']}: {mapping['old_id']} -> {mapping['new_id']}"
+                )
+
             # 执行迁移
             result = execute_migration(db_manager, config_manager, backup=True)
-            
+
             if result["success"]:
                 logging.info(f"下载器ID迁移完成！成功迁移 {result['migrated_count']} 个下载器")
             else:
@@ -241,19 +248,21 @@ def create_app():
         secret = os.getenv("JWT_SECRET", "")
         if secret:
             return secret
-        
+
         # 如果没有设置JWT_SECRET，使用基于用户名和密码的动态密钥
         # 这样每次重启后密钥会变化，强制重新登录
         auth_conf = (config_manager.get() or {}).get("auth", {})
-        username = auth_conf.get("username") or os.getenv("AUTH_USERNAME", "admin")
-        password_hash = auth_conf.get("password_hash") or os.getenv("AUTH_PASSWORD_HASH", "")
+        username = auth_conf.get("username") or os.getenv(
+            "AUTH_USERNAME", "admin")
+        password_hash = auth_conf.get("password_hash") or os.getenv(
+            "AUTH_PASSWORD_HASH", "")
         password_plain = os.getenv("AUTH_PASSWORD", "")
-        
+
         # 创建基于认证信息的动态密钥
         auth_info = f"{username}:{password_hash or password_plain}"
         import hashlib
         dynamic_secret = hashlib.sha256(auth_info.encode()).hexdigest()
-        
+
         logging.info("使用基于认证信息的动态JWT密钥（重启后需要重新登录）")
         return dynamic_secret
 
@@ -288,7 +297,7 @@ def create_app():
            request.path.startswith("/api/cross-seed-data/batch-cross-seed-internal") or \
            request.path.startswith("/api/cross-seed-data/test-no-auth"):
             return None
-        
+
         # 4. SSE日志流端点：不需要认证（只是进度日志，不涉及敏感信息）
         if request.path.startswith("/api/migrate/logs/stream/"):
             return None
@@ -309,35 +318,43 @@ def create_app():
         if not auth_header.startswith("Bearer "):
             return jsonify({"success": False, "message": "未授权"}), 401
         token = auth_header.split(" ", 1)[1].strip()
-        
+
         try:
             # 验证JWT token
-            payload = jwt.decode(token, _get_jwt_secret(), algorithms=["HS256"])
-            
+            payload = jwt.decode(token,
+                                 _get_jwt_secret(),
+                                 algorithms=["HS256"])
+
             # 额外验证：检查用户是否仍然存在且有效
             username = payload.get("sub")
             if not username:
                 return jsonify({"success": False, "message": "无效的令牌"}), 401
-                
+
             # 验证用户是否仍然存在于配置中
             auth_conf = (config_manager.get() or {}).get("auth", {})
-            current_user = auth_conf.get("username") or os.getenv("AUTH_USERNAME", "admin")
-            
+            current_user = auth_conf.get("username") or os.getenv(
+                "AUTH_USERNAME", "admin")
+
             if username != current_user:
-                logging.warning(f"Token中的用户 '{username}' 与当前配置用户 '{current_user}' 不匹配")
-                return jsonify({"success": False, "message": "用户已失效，请重新登录"}), 401
-                
+                logging.warning(
+                    f"Token中的用户 '{username}' 与当前配置用户 '{current_user}' 不匹配")
+                return jsonify({
+                    "success": False,
+                    "message": "用户已失效，请重新登录"
+                }), 401
+
             # 验证配置是否仍然有效（检查是否有密码配置）
-            has_valid_auth = (
-                auth_conf.get("password_hash") or 
-                os.getenv("AUTH_PASSWORD_HASH") or 
-                os.getenv("AUTH_PASSWORD")
-            )
-            
+            has_valid_auth = (auth_conf.get("password_hash")
+                              or os.getenv("AUTH_PASSWORD_HASH")
+                              or os.getenv("AUTH_PASSWORD"))
+
             if not has_valid_auth:
                 logging.warning(f"用户 '{username}' 的认证配置已失效")
-                return jsonify({"success": False, "message": "认证配置已更改，请重新登录"}), 401
-                
+                return jsonify({
+                    "success": False,
+                    "message": "认证配置已更改，请重新登录"
+                }), 401
+
         except jwt.ExpiredSignatureError:
             return jsonify({"success": False, "message": "登录已过期"}), 401
         except jwt.InvalidTokenError as e:
@@ -432,16 +449,8 @@ if __name__ == "__main__":
 
     atexit.register(cleanup)
 
-    # 根据 DEV_ENV 环境变量设置端口
-    if os.getenv("DEV_ENV") == "true":
-        # 开发环境
-        port = 35274
-    else:
-        # 生产环境
-        port = 5274
-
-    logging.info(f"以开发模式启动 Flask 服务器，监听端口 http://0.0.0.0:{port} ...")
+    logging.info(f"以开发模式启动 Flask 服务器，监听端口 http://0.0.0.0:5275 ...")
 
     # 运行 Flask 应用
     # debug=False 是生产环境推荐的设置
-    flask_app.run(host="0.0.0.0", port=port, debug=True)
+    flask_app.run(host="0.0.0.0", port=5275, debug=True)

@@ -370,9 +370,8 @@ const formatBytes = (bytes: number, decimals = 2): string => {
 const fetchSiteStats = async () => {
   siteStatsLoading.value = true
   try {
-    const response = await fetch('/api/site_stats')
-    if (!response.ok) throw new Error(`网络响应错误: ${response.status}`)
-    const data = await response.json()
+    const response = await axios.get('/api/site_stats')
+    const data = response.data
     siteStatsData.value = Array.isArray(data) ? data : []
   } catch (error) {
     console.error('获取站点统计数据失败:', error)
@@ -387,9 +386,8 @@ const fetchGroupStats = async () => {
   groupStatsLoading.value = true
   try {
     const url = selectedSite.value ? `/api/group_stats?site=${encodeURIComponent(selectedSite.value)}` : '/api/group_stats'
-    const response = await fetch(url)
-    if (!response.ok) throw new Error(`网络响应错误: ${response.status}`)
-    const data = await response.json()
+    const response = await axios.get(url)
+    const data = response.data
     groupStatsData.value = Array.isArray(data) ? data : []
   } catch (error) {
     console.error('获取官组统计数据失败:', error)

@@ -633,10 +633,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, reactive, watch, defineEmits, nextTick, computed } from 'vue'
+import { ref, onMounted, reactive, watch, nextTick, defineEmits, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { TableInstance, Sort } from 'element-plus'
 import type { ElTree } from 'element-plus'
+import axios from 'axios'
 import CrossSeedPanel from '../components/CrossSeedPanel.vue'
 import { useCrossSeedStore } from '@/stores/crossSeed'
 import type { ISourceInfo } from '@/types'
@@ -869,11 +870,7 @@ const saveUiSettings = async () => {
       name_search: nameSearch.value,
       active_filters: activeFilters,
     }
-    await fetch('/api/ui_settings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(settingsToSave),
-    })
+    await axios.post('/api/ui_settings', settingsToSave)
   } catch (e: any) {
     console.error('无法保存UI设置:', e.message)
   }
@@ -881,12 +878,8 @@ const saveUiSettings = async () => {
 
 const loadUiSettings = async () => {
   try {
-    const response = await fetch('/api/ui_settings')
-    if (!response.ok) {
-      console.warn('无法加载UI设置，将使用默认值。')
-      return
-    }
-    const settings = await response.json()
+    const response = await axios.get('/api/ui_settings')
+    const settings = response.data
     pageSize.value = settings.page_size ?? 50
     currentSort.value = {
       prop: settings.sort_prop || 'name',
@@ -956,9 +949,8 @@ const buildPathTree = (paths: string[]): PathNode[] => {
 
 const fetchDownloadersList = async () => {
   try {
-    const response = await fetch('/api/all_downloaders')
-    if (!response.ok) throw new Error('无法获取下载器列表')
-    const allDownloaders = await response.json()
+    const response = await axios.get('/api/all_downloaders')
+    const allDownloaders = response.data
     // 只显示启用的下载器在筛选器中
     downloadersList.value = allDownloaders.filter((d: any) => d.enabled)
     // 保存所有下载器信息用于显示
@@ -970,9 +962,8 @@ const fetchDownloadersList = async () => {
 
 const fetchAllSitesStatus = async () => {
   try {
-    const response = await fetch('/api/sites/status')
-    if (!response.ok) throw new Error('无法获取站点状态列表')
-    const allSites = await response.json()
+    const response = await axios.get('/api/sites/status')
+    const allSites = response.data
     allSourceSitesStatus.value = allSites.filter((s: SiteStatus) => s.is_source)
   } catch (e: any) {
     error.value = (e as Error).message
@@ -996,9 +987,8 @@ const fetchData = async () => {
       downloader_filters: JSON.stringify(activeFilters.downloaderIds),
     })
 
-    const response = await fetch(`/api/data?${params.toString()}`)
-    if (!response.ok) throw new Error(`网络错误: ${response.status}`)
-    const result = await response.json()
+    const response = await axios.get(`/api/data?${params.toString()}`)
+    const result = response.data
     if (result.error) throw new Error(result.error)
 
     allData.value = result.data
@@ -1053,10 +1043,10 @@ const queryCachedSites = async (row: Torrent) => {
   cachedSites.value = []
 
   try {
-    const response = await fetch(
+    const response = await axios.get(
       `/api/cached_sites?name=${encodeURIComponent(row.name)}&size=${row.size}`,
     )
-    const result = await response.json()
+    const result = response.data
 
     if (result.success) {
       cachedSites.value = result.cached_sites || []
@@ -1178,21 +1168,15 @@ const updateSiteComment = async () => {
   }
 
   try {
-    const response = await fetch('/api/sites/update_comment', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        torrent_name: selectedTorrentName.value,
-        site_name: selectedSite.value.name,
-        comment: newCommentInput.value.trim(),
-      }),
+    const response = await axios.post('/api/sites/update_comment', {
+      torrent_name: selectedTorrentName.value,
+      site_name: selectedSite.value.name,
+      comment: newCommentInput.value.trim(),
     })
 
-    const result = await response.json()
+    const result = response.data
 
-    if (response.ok && result.success) {
+    if (result.success) {
       ElMessage.success('详情页链接已成功添加')
       siteOperationDialogVisible.value = false
       newCommentInput.value = ''
@@ -1215,29 +1199,18 @@ const setSiteNotExist = async () => {
   }
 
   try {
-    const response = await fetch('/api/sites/set_not_exist', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        torrent_name: selectedTorrentName.value,
-        site_name: selectedSite.value.name,
-      }),
+    const response = await axios.post('/api/sites/set_not_exist', {
+      torrent_name: selectedTorrentName.value,
+      site_name: selectedSite.value.name,
     })
 
-    if (response.ok) {
-      ElMessage.success('站点状态已成功设置为不存在')
-      siteOperationDialogVisible.value = false
-      // 重新加载数据以反映更改
-      fetchData()
-    } else {
-      const result = await response.json()
-      ElMessage.error(result.error || '设置站点状态失败')
-    }
+    ElMessage.success('站点状态已成功设置为不存在')
+    siteOperationDialogVisible.value = false
+    // 重新加载数据以反映更改
+    fetchData()
   } catch (error) {
     console.error('设置站点状态时出错:', error)
-    ElMessage.error('设置站点状态时发生错误')
+    ElMessage.error(error.response?.data?.error || '设置站点状态时发生错误')
   }
 }
 
@@ -1274,20 +1247,14 @@ const triggerIYUUQuery = async () => {
   iyuuQueryLoading.value = true
 
   try {
-    const response = await fetch('/api/iyuu_query', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        name: row.name,
-        size: row.size,
-      }),
+    const response = await axios.post('/api/iyuu_query', {
+      name: row.name,
+      size: row.size,
     })
 
-    const result = await response.json()
+    const result = response.data
 
-    if (response.ok && result.success) {
+    if (result.success) {
       ElMessage.success(result.message || 'IYUU查询已完成')
       // 刷新数据
       await fetchData()
@@ -1302,7 +1269,7 @@ const triggerIYUUQuery = async () => {
     }
   } catch (error: any) {
     console.error('触发IYUU查询时出错:', error)
-    ElMessage.error('触发IYUU查询时发生网络错误')
+    ElMessage.error(error.response?.data?.error || '触发IYUU查询时发生网络错误')
   } finally {
     iyuuQueryLoading.value = false
   }

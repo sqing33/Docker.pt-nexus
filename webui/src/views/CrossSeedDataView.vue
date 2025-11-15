@@ -616,11 +616,33 @@
 import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { ElTree } from 'element-plus'
+import axios from 'axios'
 import CrossSeedPanel from '../components/CrossSeedPanel.vue'
 import BatchFetchPanel from '../components/BatchFetchPanel.vue'
 import { useCrossSeedStore } from '@/stores/crossSeed'
-import type { ISourceInfo } from '@/types'
 import '@/assets/styles/glass-morphism.scss'
+
+/**
+ * Interface for the source site information used during cross-seeding.
+ */
+interface ISourceInfo {
+  /**
+   * The site's nickname, e.g., 'MTeam'.
+   * This is used for display purposes.
+   */
+  name: string;
+
+  /**
+   * The site's internal identifier, e.g., 'mteam'.
+   * This is used for API calls.
+   */
+  site: string;
+
+  /**
+   * The torrent ID on the source site.
+   */
+  torrentId: string;
+}
 
 // 定义emit事件
 const emit = defineEmits<{
@@ -764,11 +786,7 @@ const handleReviewStatusChange = async (value: string) => {
   currentPage.value = 1
   // 调用后端API保存筛选状态到配置文件
   try {
-    await fetch('/api/config/cross_seed_review_filter', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ review_filter: value }),
-    })
+    await axios.post('/api/config/cross_seed_review_filter', { review_filter: value })
   } catch (e) {
     console.error('保存检查状态筛选失败:', e)
   }
@@ -1093,21 +1111,8 @@ const fetchData = async () => {
       console.log('发送目标站点排除参数:', activeFilters.value.excludeTargetSites)
     }
 
-    const response = await fetch(`/api/cross-seed-data?${params.toString()}`)
-
-    // 检查响应状态
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
-    }
-
-    const responseText = await response.text()
-
-    // 检查响应是否为JSON格式
-    if (!responseText.startsWith('{') && !responseText.startsWith('[')) {
-      throw new Error('服务器响应不是有效的JSON格式')
-    }
-
-    const result = JSON.parse(responseText)
+    const response = await axios.get(`/api/cross-seed-data?${params.toString()}`)
+    const result = response.data
 
     if (result.success) {
       tableData.value = result.data
@@ -1147,11 +1152,7 @@ const saveUiSettings = async () => {
       search_query: searchQuery.value,
       active_filters: activeFilters.value,
     }
-    await fetch('/api/ui_settings/cross_seed', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(settingsToSave),
-    })
+    await axios.post('/api/ui_settings/cross_seed', settingsToSave)
   } catch (e: any) {
     console.error('无法保存UI设置:', e.message)
   }
@@ -1159,12 +1160,8 @@ const saveUiSettings = async () => {
 
 const loadUiSettings = async () => {
   try {
-    const response = await fetch('/api/ui_settings/cross_seed')
-    if (!response.ok) {
-      console.warn('无法加载UI设置，将使用默认值。')
-      return
-    }
-    const settings = await response.json()
+    const response = await axios.get('/api/ui_settings/cross_seed')
+    const settings = response.data
     pageSize.value = settings.page_size ?? 20
     searchQuery.value = settings.search_query ?? ''
     if (settings.active_filters) {
@@ -1250,23 +1247,10 @@ const handleEdit = async (row: SeedParameter) => {
     crossSeedStore.reset()
 
     // 从后端API获取详细的种子参数
-    const response = await fetch(
+    const response = await axios.get(
       `/api/migrate/get_db_seed_info?torrent_id=${row.torrent_id}&site_name=${row.site_name}`,
     )
-
-    // 检查响应状态
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
-    }
-
-    const responseText = await response.text()
-
-    // 检查响应是否为JSON格式
-    if (!responseText.startsWith('{') && !responseText.startsWith('[')) {
-      throw new Error('服务器响应不是有效的JSON格式')
-    }
-
-    const result = JSON.parse(responseText)
+    const result = response.data
 
     if (result.success) {
       // 将获取到的数据设置到 store 中
@@ -1332,19 +1316,9 @@ const handleDelete = async (row: SeedParameter) => {
       torrent_id: row.torrent_id,
       site_name: row.site_name,
     }
-    const response = await fetch('/api/cross-seed-data/delete', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(deleteData),
-    })
+    const response = await axios.post('/api/cross-seed-data/delete', deleteData)
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
-    }
-
-    const result = await response.json()
+    const result = response.data
 
     if (result.success) {
       ElMessage.success(result.message || `删除成功`)
@@ -1389,19 +1363,9 @@ const handleBulkDelete = async () => {
     }
 
     // 调用批量删除API - 使用统一的 delete API
-    const response = await fetch('/api/cross-seed-data/delete', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(deleteData),
-    })
+    const response = await axios.post('/api/cross-seed-data/delete', deleteData)
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
-    }
-
-    const result = await response.json()
+    const result = response.data
 
     if (result.success) {
       ElMessage.success(result.message || `成功删除 ${result.deleted_count} 条数据`)
@@ -1451,12 +1415,10 @@ onMounted(async () => {
 // 加载检查状态筛选配置
 const loadReviewStatusFilter = async () => {
   try {
-    const response = await fetch('/api/config/cross_seed_review_filter')
-    if (response.ok) {
-      const result = await response.json()
-      if (result.success) {
-        reviewStatusFilter.value = result.data || ''
-      }
+    const response = await axios.get('/api/config/cross_seed_review_filter')
+    const result = response.data
+    if (result.success) {
+      reviewStatusFilter.value = result.data || ''
     }
   } catch (e) {
     console.error('加载检查状态筛选配置失败:', e)
@@ -1581,21 +1543,9 @@ const handleBatchCrossSeed = async () => {
     startAutoRefresh() // 关键改动：在这里启动定时器
 
     // 4. 通过Python代理调用Go服务的API来开始任务
-    const response = await fetch('/api/go-api/batch-enhance', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(batchData),
-    })
+    const response = await axios.post('/api/go-api/batch-enhance', batchData)
 
-    if (!response.ok) {
-      // 如果API请求本身失败（如500错误），停止刷新并抛出错误
-      stopAutoRefresh()
-      throw new Error(`HTTP error! status: ${response.status}`)
-    }
-
-    const result = await response.json()
+    const result = response.data
     if (result.success) {
       ElMessage.success(
         `批量转种请求已发送，成功 ${result.data.seeds_processed} 个，失败 ${result.data.seeds_failed} 个`,
@@ -1671,19 +1621,9 @@ const executeBatchDelete = async () => {
       })),
     }
 
-    const response = await fetch('/api/cross-seed-data/delete', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(deleteData),
-    })
+    const response = await axios.post('/api/cross-seed-data/delete', deleteData)
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
-    }
-
-    const result = await response.json()
+    const result = response.data
 
     if (result.success) {
       ElMessage.success(result.message || `成功删除 ${result.deleted_count} 条数据`)
@@ -1797,28 +1737,11 @@ const refreshRecords = async () => {
     resetBatchNumberMap()
 
     // 通过Python代理调用Go服务的记录API
-    const response = await fetch('/api/go-api/records', {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    })
+    const response = await axios.get('/api/go-api/records')
 
-    if (response.ok) {
-      const result = await response.json()
-      if (result.success) {
-        records.value = result.records || []
-        // 移除了自动滚动到顶部的代码，以允许用户手动滚动
-      } else {
-        ElMessage.error(result.error || '获取记录失败')
-      }
-    } else if (response.status === 404) {
-      // 如果接口不存在，显示提示信息
-      records.value = []
-      ElMessage.warning('记录接口暂未实现，请等待后续更新')
-    } else {
-      ElMessage.error('获取记录失败')
-    }
+    const result = response.data
+    records.value = result.records || []
+    // 移除了自动滚动到顶部的代码，以允许用户手动滚动
   } catch (error: any) {
     console.error('获取记录时出错:', error)
     ElMessage.error('获取记录失败: ' + (error.message || '网络错误'))
@@ -1830,23 +1753,11 @@ const refreshRecords = async () => {
 const clearRecordsLocal = async () => {
   try {
     // 调用清空记录的API
-    const response = await fetch('/api/go-api/records', {
-      method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    })
+    const response = await axios.delete('/api/go-api/records')
 
-    if (response.ok) {
-      records.value = []
-      resetBatchNumberMap() // 清空批次映射
-      ElMessage.success('记录已清空')
-    } else {
-      // 如果API不存在，只是清空本地显示
-      records.value = []
-      resetBatchNumberMap() // 清空批次映射
-      ElMessage.success('本地记录已清空')
-    }
+    records.value = []
+    resetBatchNumberMap() // 清空批次映射
+    ElMessage.success('记录已清空')
   } catch (error) {
     // 如果请求失败，只是清空本地显示
     records.value = []
@@ -1999,18 +1910,9 @@ const getProgressColor = (percentage: number) => {
 const stopBatchProcess = async () => {
   isStoppingBatch.value = true
   try {
-    const response = await fetch('/api/go-api/batch-enhance/stop', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    })
+    const response = await axios.post('/api/go-api/batch-enhance/stop')
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
-    }
-
-    const result = await response.json()
+    const result = response.data
     if (result.success) {
       ElMessage.success('批量转种已停止')
       // 停止自动刷新

@@ -4,10 +4,6 @@ import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
-// 根据 DEV_ENV 环境变量设置代理目标
-const isDevEnv = process.env.DEV_ENV == 'true'
-const proxyTarget = isDevEnv ? 'http://localhost:35274' : 'http://localhost:5274'
-
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [vue()],
@@ -18,23 +14,13 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      // 字符串简写写法
-      // '/foo': 'http://localhost:4567',
-      // 选项写法
       '/api': {
-        target: proxyTarget, // <--- 根据 DEV_ENV 环境变量动态设置
-        changeOrigin: true, // <--- 必须设置为 true
-        // 修复cookie泄露问题：不传递cookie和凭证
-        cookieDomainRewrite: {
-          "*": ""
-        },
-        // 确保不发送cookie到目标服务器
-        onProxyReq: (proxyReq, req, res) => {
-          // 移除cookie相关的请求头，防止泄露
-          proxyReq.removeHeader('cookie')
-          proxyReq.removeHeader('Cookie')
-        },
-        // rewrite: (path) => path.replace(/^\/api/, '') // 如果后端路由本身不带 /api, 则需要重写
+        target: 'http://localhost:5274',
+        changeOrigin: true,
+      },
+      '/update': {
+        target: 'http://localhost:5274',
+        changeOrigin: true,
       },
     },
   },

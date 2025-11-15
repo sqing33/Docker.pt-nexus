@@ -274,6 +274,7 @@
 import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Setting } from '@element-plus/icons-vue'
+import axios from 'axios'
 import type { ElTree } from 'element-plus'
 
 const emit = defineEmits<{
@@ -471,10 +472,8 @@ const fetchData = async () => {
       exclude_existing: 'true'  // 排除已存在于 seed_parameters 表的种子
     })
 
-    const response = await fetch(`/api/data?${params.toString()}`)
-
-    if (!response.ok) throw new Error(`网络错误: ${response.status}`)
-    const result = await response.json()
+    const response = await axios.get(`/api/data?${params.toString()}`)
+    const result = response.data
 
     if (!result.error) {
       // 转换数据格式以匹配现有的 Torrent 接口
@@ -507,9 +506,8 @@ const fetchData = async () => {
 
 const fetchDownloadersList = async () => {
   try {
-    const response = await fetch('/api/all_downloaders');
-    if (!response.ok) throw new Error('无法获取下载器列表');
-    const allDownloaders = await response.json();
+    const response = await axios.get('/api/all_downloaders')
+    const allDownloaders = response.data
     downloadersList.value = allDownloaders.filter((d: any) => d.enabled);
   } catch (e: any) {
     error.value = e.message;
@@ -526,10 +524,8 @@ const fetchAllPaths = async () => {
       downloader_filters: JSON.stringify([]) // 清空下载器筛选
     });
 
-    const response = await fetch(`/api/data?${params.toString()}`);
-
-    if (!response.ok) throw new Error('无法获取路径列表');
-    const result = await response.json();
+    const response = await axios.get(`/api/data?${params.toString()}`)
+    const result = response.data
 
     if (result.unique_paths) {
       uniquePaths.value = result.unique_paths;
@@ -594,13 +590,9 @@ const applyFilters = () => {
 
 const saveFiltersToConfig = async () => {
   try {
-    await fetch('/api/config/batch_fetch_filters', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        batch_fetch_filters: activeFilters.value,
-        batch_fetch_name_search: nameSearch.value
-      })
+    await axios.post('/api/config/batch_fetch_filters', {
+      batch_fetch_filters: activeFilters.value,
+      batch_fetch_name_search: nameSearch.value
     })
   } catch (e: any) {
     console.error('保存筛选条件失败:', e)
@@ -609,16 +601,14 @@ const saveFiltersToConfig = async () => {
 
 const loadFiltersFromConfig = async () => {
   try {
-    const response = await fetch('/api/config/batch_fetch_filters')
-    if (response.ok) {
-      const result = await response.json()
-      if (result.success && result.data) {
-        activeFilters.value = result.data
-      }
-      // 加载搜索内容
-      if (result.success && result.name_search !== undefined) {
-        nameSearch.value = result.name_search
-      }
+    const response = await axios.get('/api/config/batch_fetch_filters')
+    const result = response.data
+    if (result.success && result.data) {
+      activeFilters.value = result.data
+    }
+    // 加载搜索内容
+    if (result.success && result.name_search !== undefined) {
+      nameSearch.value = result.name_search
     }
   } catch (e: any) {
     console.error('加载筛选条件失败:', e)
@@ -664,14 +654,12 @@ const loadPrioritySettings = async () => {
   priorityLoading.value = true
   try {
     // 加载所有源站点
-    const sitesResponse = await fetch('/api/sites/status')
-    if (!sitesResponse.ok) throw new Error('无法获取站点状态列表')
-    allSourceSites.value = await sitesResponse.json()
+    const sitesResponse = await axios.get('/api/sites/status')
+    allSourceSites.value = sitesResponse.data
 
     // 加载已保存的优先级配置
-    const configResponse = await fetch('/api/config/source_priority')
-    if (!configResponse.ok) throw new Error('无法获取配置')
-    const configResult = await configResponse.json()
+    const configResponse = await axios.get('/api/config/source_priority')
+    const configResult = configResponse.data
     if (configResult.success) {
       sourceSitesPriority.value = configResult.data || []
     }
@@ -685,21 +673,15 @@ const loadPrioritySettings = async () => {
 const savePrioritySettings = async () => {
   prioritySaving.value = true
   try {
-    const response = await fetch('/api/config/source_priority', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        source_priority: sourceSitesPriority.value
-      })
+    const response = await axios.post('/api/config/source_priority', {
+      source_priority: sourceSitesPriority.value
     })
 
-    if (!response.ok) throw new Error('保存失败')
-    const result = await response.json()
-    if (result.success) {
+    if (response.data.success) {
       ElMessage.success('源站点优先级配置已保存')
       closePrioritySettingsDialog()
     } else {
-      throw new Error(result.message || '保存失败')
+      throw new Error(response.data.message || '保存失败')
     }
   } catch (e: any) {
     ElMessage.error(e.message || '保存配置失败')
@@ -746,22 +728,11 @@ const startBatchFetch = async () => {
   try {
     const torrentNames = selectedRows.value.map(row => row.name)
 
-    const response = await fetch('/api/migrate/batch_fetch_seed_data', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        torrentNames
-      })
+    const response = await axios.post('/api/migrate/batch_fetch_seed_data', {
+      torrentNames
     })
 
-    const result = await response.json()
-    
-    if (!response.ok) {
-      // 处理HTTP错误状态码，显示服务器返回的错误信息
-      const errorMessage = result.message || `HTTP error! status: ${response.status}`
-      ElMessage.error(errorMessage)
-      return
-    }
+    const result = response.data
 
     if (result.success) {
       currentTaskId.value = result.task_id
@@ -773,8 +744,9 @@ const startBatchFetch = async () => {
       ElMessage.error(result.message || '批量获取任务启动失败')
     }
   } catch (error: any) {
-    // 处理网络错误或其他异常
-    ElMessage.error(error.message || '网络错误')
+    // 处理网络错误或其他异常，axios错误可能包含响应信息
+    const errorMessage = error.response?.data?.message || error.message || '网络错误'
+    ElMessage.error(errorMessage)
   }
 }
 
@@ -820,21 +792,18 @@ const refreshProgress = async () => {
   if (!currentTaskId.value) return
 
   try {
-    const response = await fetch(`/api/migrate/batch_fetch_progress?task_id=${currentTaskId.value}`)
+    const response = await axios.get(`/api/migrate/batch_fetch_progress?task_id=${currentTaskId.value}`)
+    const result = response.data
+    if (result.success) {
+      const wasRunning = progress.value.isRunning
+      progress.value = result.progress
 
-    if (response.ok) {
-      const result = await response.json()
-      if (result.success) {
-        const wasRunning = progress.value.isRunning
-        progress.value = result.progress
-        
-        // 如果任务从运行中变为已完成，触发完成事件
-        if (wasRunning && !progress.value.isRunning) {
-          emit('fetch-completed')
-        }
-      } else {
-        ElMessage.error(result.message || '获取进度失败')
+      // 如果任务从运行中变为已完成，触发完成事件
+      if (wasRunning && !progress.value.isRunning) {
+        emit('fetch-completed')
       }
+    } else {
+      ElMessage.error(result.message || '获取进度失败')
     }
   } catch (error: any) {
     console.error('获取进度时出错:', error)

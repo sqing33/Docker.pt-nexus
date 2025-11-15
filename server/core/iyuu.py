@@ -5,7 +5,7 @@ import os
 import requests
 import json
 import hashlib
-from threading import Thread
+from threading import Thread, Event
 from collections import defaultdict
 from datetime import datetime, timedelta
 
@@ -20,6 +20,8 @@ class IYUUThread(Thread):
         self._is_running = True
         # 设置为6小时运行一次
         self.interval = 21600  # 6小时
+        # 用于优雅停止的event
+        self.shutdown_event = Event()
 
     def run(self):
         print("IYUUThread 线程已启动，每6小时执行一次查询任务。")
@@ -33,9 +35,14 @@ class IYUUThread(Thread):
             except Exception as e:
                 logging.error(f"IYUUThread 执行出错: {e}", exc_info=True)
 
-            # 等待下次执行
+            # 等待下次执行，可以被shutdown_event中断
             elapsed = time.monotonic() - start_time
-            time.sleep(max(0, self.interval - elapsed))
+            remaining_time = max(0, self.interval - elapsed)
+            if remaining_time > 0:
+                # 使用Event.wait来等待，可以被中断
+                if self.shutdown_event.wait(timeout=remaining_time):
+                    # 如果被事件唤醒，说明要停止
+                    break
 
     def _get_configured_sites(self):
         """获取torrents表中已存在的站点列表"""
@@ -919,6 +926,7 @@ class IYUUThread(Thread):
         """停止线程"""
         print("正在停止 IYUUThread 线程...")
         self._is_running = False
+        self.shutdown_event.set()
 
 
 # --- IYUU API 配置 ---
@@ -1475,6 +1483,10 @@ def stop_iyuu_thread():
     global iyuu_thread
     if iyuu_thread and iyuu_thread.is_alive():
         iyuu_thread.stop()
-        iyuu_thread.join(timeout=10)
-        print("IYUUThread 线程已停止。")
+        # 使用更短的超时时间，因为现在有event驱动的优雅停止
+        iyuu_thread.join(timeout=2)  # 从10秒减少到2秒
+        if iyuu_thread.is_alive():
+            print("IYUUThread 线程仍在运行，但将强制清理引用")
+        else:
+            print("IYUUThread 线程已优雅停止。")
     iyuu_thread = None

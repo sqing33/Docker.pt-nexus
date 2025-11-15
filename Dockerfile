@@ -21,21 +21,38 @@ RUN pnpm build
 # 阶段 2: 构建 Go 批量增强服务
 FROM golang:1.21-alpine AS go-builder
 
-WORKDIR /app/batch-enhancer
+WORKDIR /app/batch
 
 # 复制 Go 模块文件
-COPY ./batch-enhancer/go.mod ./
+COPY ./batch/go.mod ./
 
 # 下载依赖
 RUN go mod download
 
 # 复制 Go 源代码
-COPY ./batch-enhancer/main.go ./
+COPY ./batch/batch.go ./
 
 # 编译 Go 应用为静态二进制文件
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o batch-enhancer main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o batch batch.go
 
-# 阶段 3: 最终运行环境
+# 阶段 3: 构建 Go 更新服务
+FROM golang:1.21-alpine AS updater-builder
+
+WORKDIR /app/updater
+
+# 复制 Go 模块文件
+COPY ./updater/go.mod ./
+
+# 下载依赖
+RUN go mod download
+
+# 复制 Go 源代码
+COPY ./updater/updater.go ./
+
+# 编译更新服务为静态二进制文件
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o updater updater.go
+
+# 阶段 4: 最终运行环境
 FROM python:3.12-slim
 
 WORKDIR /app
@@ -50,13 +67,14 @@ ENV PYTHONUNBUFFERED=1
 ENV no_proxy="localhost,127.0.0.1,::1"
 ENV NO_PROXY="localhost,127.0.0.1,::1"
 
-# 首先安装系统依赖
+# 首先安装系统依赖（添加git工具）
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     ffmpeg \
     mpv \
     mediainfo \
     fonts-noto-cjk \
+    git \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -71,13 +89,18 @@ COPY ./server ./
 COPY --from=builder /app/webui/dist ./dist
 
 # 从 go-builder 阶段复制已构建的 Go 批量增强服务
-COPY --from=go-builder /app/batch-enhancer/batch-enhancer ./batch-enhancer
-# 赋予其执行权限
-RUN chmod +x ./batch-enhancer
+COPY --from=go-builder /app/batch/batch ./batch
+RUN chmod +x ./batch
+
+# 从 updater-builder 阶段复制已构建的 Go 更新服务
+COPY --from=updater-builder /app/updater/updater ./updater
+RUN chmod +x ./updater
+
+# 复制版本文件
+COPY ./update_mapping.json ./update_mapping.json
 
 # 复制启动脚本
 COPY ./start-services.sh ./start-services.sh
-# 赋予其执行权限
 RUN chmod +x ./start-services.sh
 
 # 创建数据目录，用于持久化存储
@@ -87,7 +110,7 @@ RUN mkdir -p /app/data
 VOLUME /app/data
 
 # 声明容器将使用的端口
-EXPOSE 35274
+EXPOSE 5274
 
 # 容器启动时执行的默认命令
 CMD ["./start-services.sh"]

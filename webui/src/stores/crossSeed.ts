@@ -1,54 +1,63 @@
-// src/stores/crossSeed.ts
-import { defineStore } from 'pinia'
-import type { ISourceInfo } from '@/types'
+// src/types/crossSeed.ts
 
+import { defineStore } from 'pinia'
+
+/**
+ * Interface for the source site information used during cross-seeding.
+ */
+interface ISourceInfo {
+  /**
+   * The site's nickname, e.g., 'MTeam'.
+   * This is used for display purposes.
+   */
+  name: string;
+
+  /**
+   * The site's internal identifier, e.g., 'mteam'.
+   * This is used for API calls.
+   */
+  site: string;
+
+  /**
+   * The torrent ID on the source site.
+   */
+  torrentId: string;
+}
+
+// Pinia 存储
 export const useCrossSeedStore = defineStore('crossSeed', {
   state: () => ({
-    // 工作中的参数，在修改和预览间保持同步
-    workingParams: null as any | null,
-    currentStep: 'edit', // 'edit' | 'preview' | 'publish'
     taskId: null as string | null,
     sourceInfo: null as ISourceInfo | null,
   }),
-
   actions: {
-    // 批量更新
-    setParams(params: any) {
-      this.workingParams = { ...this.workingParams, ...params }
+    /**
+     * 设置任务 ID。
+     *
+     * @param {string} id - The task ID to set.
+     */
+    setTaskId(id: string) {
+      this.taskId = id
     },
 
-    // 更新参数
-    updateParam(key: string, value: any) {
-      if (this.workingParams) {
-        this.workingParams[key] = value
-      }
+    /**
+     * 清除任务 ID。
+     */
+    clearTaskId() {
+      this.taskId = null
     },
 
-    // 设置任务ID
-    setTaskId(taskId: string) {
-      this.taskId = taskId
-    },
-
-    // 设置源信息
+    /**
+     * 设置源信息。
+     */
     setSourceInfo(info: ISourceInfo) {
       this.sourceInfo = info
     },
 
-    // 切换到预览
-    goToPreview() {
-      this.currentStep = 'preview'
-    },
-
-    // 返回编辑
-    backToEdit() {
-      this.currentStep = 'edit'
-    },
-
-    // 重置状态
-    reset() {
-      this.workingParams = null
-      this.currentStep = 'edit'
-      this.taskId = null
+    /**
+     * 清除源信息。
+     */
+    clearSourceInfo() {
       this.sourceInfo = null
     },
   },

@@ -1,0 +1,35 @@
+{
+  "version": "v3.1.0",
+  "changelog": [
+    "新增：在线热更新功能",
+    "新增：财神 PTGen API",
+    "新增：从副标题提取音轨、字幕，批量转种停止按钮"
+  ],
+  "mappings": [
+    {
+      "source": "server",
+      "target": "/app",
+      "exclude": [
+        "*.pyc",
+        "__pycache__",
+        "*.backup",
+        ".env"
+      ]
+    },
+    {
+      "source": "webui/dist",
+      "target": "/app/dist",
+      "exclude": []
+    },
+    {
+      "source": "batch/batch",
+      "target": "/app/batch",
+      "executable": true
+    }
+  ],
+  "preserve": [
+    "/app/data/config.json",
+    "/app/data/pt_stats.db",
+    "/app/data/tmp"
+  ]
+}
