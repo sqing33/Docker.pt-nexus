@@ -6,8 +6,8 @@ export NO_PROXY="localhost,127.0.0.1,::1"
 
 # 自动应用容器内更新（如果repo有新版本）
 auto_apply_update() {
-    local REPO_CONFIG="/app/data/updates/repo/update_mapping.json"
-    local LOCAL_CONFIG="/app/update_mapping.json"
+    local REPO_CONFIG="/app/data/updates/repo/CHANGELOG.json"
+    local LOCAL_CONFIG="/app/CHANGELOG.json"
 
     # 检查repo配置文件是否存在
     if [ ! -f "$REPO_CONFIG" ]; then

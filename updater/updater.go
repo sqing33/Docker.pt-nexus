@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -19,9 +20,11 @@ const (
 	PORT                = "5274"
 	SERVER_PORT         = "5275"
 	BATCH_ENHANCER_PORT = "5276"
-	REPO_URL            = "https://github.com/sqing33/Docker.pt-nexus.git"
+	GITEE_REPO_URL      = "https://gitee.com/sqing33/Docker.pt-nexus.git"
+	GITHUB_REPO_URL     = "https://github.com/sqing33/Docker.pt-nexus.git"
 	UPDATE_DIR          = "/app/data/updates"
 	REPO_DIR            = "/app/data/updates/repo"
+	REPO_TIMEOUT        = 60 * time.Second // 仓库克隆/拉取超时时间
 )
 
 var (
@@ -31,10 +34,10 @@ var (
 func init() {
 	if os.Getenv("DEV_ENV") == "true" {
 		// 开发环境
-		localConfigFile = getEnv("LOCAL_CONFIG_FILE", "/root/Code/Docker.pt-nexus-dev/update_mapping.json")
+		localConfigFile = getEnv("LOCAL_CONFIG_FILE", "/root/Code/Docker.pt-nexus-dev/CHANGELOG.json")
 	} else {
 		// 生产环境
-		localConfigFile = getEnv("LOCAL_CONFIG_FILE", "/app/update_mapping.json")
+		localConfigFile = getEnv("LOCAL_CONFIG_FILE", "/app/CHANGELOG.json")
 	}
 }
 
@@ -46,10 +49,16 @@ func getEnv(key, defaultValue string) string {
 }
 
 type UpdateConfig struct {
-	Version   string       `json:"version"`
-	Changelog []string     `json:"changelog"`
-	Mappings  []DirMapping `json:"mappings"`
-	Preserve  []string     `json:"preserve"`
+	History  []VersionInfo `json:"history"`
+	Mappings []DirMapping  `json:"mappings"`
+	Preserve []string      `json:"preserve"`
+}
+
+type VersionInfo struct {
+	Version string   `json:"version"`
+	Date    string   `json:"date"`
+	Changes []string `json:"changes"`
+	Note    string   `json:"note,omitempty"`
 }
 
 type DirMapping struct {
@@ -104,34 +113,26 @@ func pullUpdateHandler(w http.ResponseWriter, r *http.Request) {
 	// 确保更新目录存在
 	os.MkdirAll(UPDATE_DIR, 0755)
 
-	var cmd *exec.Cmd
 	if _, err := os.Stat(REPO_DIR); os.IsNotExist(err) {
-		// 首次克隆
-		log.Println("克隆仓库...")
-		cmd = exec.Command("git", "clone", "--depth=1", REPO_URL, REPO_DIR)
-	} else {
-		// 拉取更新
-		log.Println("拉取更新...")
-		fetchCmd := exec.Command("git", "-C", REPO_DIR, "fetch", "origin", "main")
-		if output, err := fetchCmd.CombinedOutput(); err != nil {
-			log.Printf("Git fetch失败: %v, 输出: %s", err, output)
+		// 首次克隆 - 先尝试 Gitee，超时则切换到 GitHub
+		log.Println("首次克隆仓库...")
+		if err := cloneRepoWithFallback(); err != nil {
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"success": false,
-				"error":   fmt.Sprintf("Git fetch失败: %v", err),
+				"error":   fmt.Sprintf("克隆仓库失败: %v", err),
 			})
 			return
 		}
-		cmd = exec.Command("git", "-C", REPO_DIR, "reset", "--hard", "origin/main")
-	}
-
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		log.Printf("Git操作失败: %v, 输出: %s", err, output)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": false,
-			"error":   fmt.Sprintf("Git操作失败: %v", err),
-		})
-		return
+	} else {
+		// 拉取更新
+		log.Println("拉取更新...")
+		if err := pullRepoWithFallback(); err != nil {
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": false,
+				"error":   fmt.Sprintf("拉取更新失败: %v", err),
+			})
+			return
+		}
 	}
 
 	log.Println("代码拉取成功")
@@ -139,6 +140,138 @@ func pullUpdateHandler(w http.ResponseWriter, r *http.Request) {
 		"success": true,
 		"message": "代码拉取成功",
 	})
+}
+
+// 带超时的 git 命令执行
+func execGitWithTimeout(timeout time.Duration, args ...string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "git", args...)
+	output, err := cmd.CombinedOutput()
+	
+	if ctx.Err() == context.DeadlineExceeded {
+		return fmt.Errorf("操作超时")
+	}
+	
+	if err != nil {
+		return fmt.Errorf("%v, 输出: %s", err, output)
+	}
+	
+	return nil
+}
+
+// 克隆仓库，带超时和自动切换
+func cloneRepoWithFallback() error {
+	log.Printf("尝试从 Gitee 克隆仓库 (超时时间: %v)...", REPO_TIMEOUT)
+	err := execGitWithTimeout(REPO_TIMEOUT, "clone", "--depth=1", GITEE_REPO_URL, REPO_DIR)
+	
+	if err != nil {
+		log.Printf("Gitee 克隆失败: %v", err)
+		log.Printf("切换到 GitHub 仓库...")
+		
+		// 清理可能创建的不完整目录
+		os.RemoveAll(REPO_DIR)
+		
+		// 尝试从 GitHub 克隆
+		err = execGitWithTimeout(REPO_TIMEOUT, "clone", "--depth=1", GITHUB_REPO_URL, REPO_DIR)
+		if err != nil {
+			return fmt.Errorf("GitHub 克隆也失败: %v", err)
+		}
+		
+		log.Println("已成功从 GitHub 克隆仓库")
+		return nil
+	}
+	
+	log.Println("已成功从 Gitee 克隆仓库")
+	return nil
+}
+
+// 拉取更新，带超时和自动切换
+func pullRepoWithFallback() error {
+	// 获取当前远程 URL 以显示来源
+	cmd := exec.Command("git", "-C", REPO_DIR, "remote", "get-url", "origin")
+	output, err := cmd.Output()
+	currentURL := strings.TrimSpace(string(output))
+	var repoSource string
+	if strings.Contains(currentURL, "gitee.com") {
+		repoSource = "Gitee"
+	} else if strings.Contains(currentURL, "github.com") {
+		repoSource = "GitHub"
+	} else {
+		repoSource = "未知源"
+	}
+	
+	// 先尝试当前远程仓库
+	log.Printf("正在从 %s 仓库拉取更新 (超时时间: %v)...", repoSource, REPO_TIMEOUT)
+	
+	// Fetch
+	err = execGitWithTimeout(REPO_TIMEOUT, "-C", REPO_DIR, "fetch", "origin", "main")
+	if err != nil {
+		log.Printf("%s 仓库 fetch 失败: %v", repoSource, err)
+		
+		// 尝试切换远程仓库
+		if err := switchRemoteRepo(); err != nil {
+			return fmt.Errorf("切换远程仓库失败: %v", err)
+		}
+		
+		// 获取切换后的仓库源
+		cmd = exec.Command("git", "-C", REPO_DIR, "remote", "get-url", "origin")
+		output, _ = cmd.Output()
+		currentURL = strings.TrimSpace(string(output))
+		if strings.Contains(currentURL, "gitee.com") {
+			repoSource = "Gitee"
+		} else {
+			repoSource = "GitHub"
+		}
+		
+		log.Printf("正在从 %s 仓库重新拉取更新...", repoSource)
+		
+		// 重新尝试 fetch
+		err = execGitWithTimeout(REPO_TIMEOUT, "-C", REPO_DIR, "fetch", "origin", "main")
+		if err != nil {
+			return fmt.Errorf("%s 仓库 fetch 仍然失败: %v", repoSource, err)
+		}
+	}
+	
+	// Reset
+	err = execGitWithTimeout(REPO_TIMEOUT, "-C", REPO_DIR, "reset", "--hard", "origin/main")
+	if err != nil {
+		return fmt.Errorf("reset 失败: %v", err)
+	}
+	
+	log.Printf("已成功从 %s 仓库拉取更新", repoSource)
+	return nil
+}
+
+// 切换远程仓库地址
+func switchRemoteRepo() error {
+	// 获取当前远程 URL
+	cmd := exec.Command("git", "-C", REPO_DIR, "remote", "get-url", "origin")
+	output, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("获取远程 URL 失败: %v", err)
+	}
+	
+	currentURL := strings.TrimSpace(string(output))
+	var newURL string
+	
+	if strings.Contains(currentURL, "gitee.com") {
+		log.Println("当前使用 Gitee，切换到 GitHub...")
+		newURL = GITHUB_REPO_URL
+	} else {
+		log.Println("当前使用 GitHub，切换到 Gitee...")
+		newURL = GITEE_REPO_URL
+	}
+	
+	// 设置新的远程 URL
+	cmd = exec.Command("git", "-C", REPO_DIR, "remote", "set-url", "origin", newURL)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("设置远程 URL 失败: %v", err)
+	}
+	
+	log.Printf("已切换到新的远程仓库: %s", newURL)
+	return nil
 }
 
 // 安装更新
@@ -154,7 +287,7 @@ func installUpdateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 读取更新配置
-	configFile := filepath.Join(REPO_DIR, "update_mapping.json")
+	configFile := filepath.Join(REPO_DIR, "CHANGELOG.json")
 	data, err := os.ReadFile(configFile)
 	if err != nil {
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -173,8 +306,54 @@ func installUpdateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("开始安装更新: %s", config.Version)
+	log.Printf("开始安装更新: %s", config.History[0].Version)
 
+	// 检查是否为开发环境
+	if os.Getenv("DEV_ENV") == "true" {
+		log.Println("【开发环境】执行真实更新流程但不保存文件...")
+
+		// 停止主服务（开发环境也停止以模拟真实情况）
+		log.Println("【开发环境】停止服务...")
+		stopServices()
+
+		// 创建临时目录用于"下载"文件（但最终会被丢弃）
+		tempBackupDir := filepath.Join("/tmp", "pt-nexus-dev-test")
+		os.RemoveAll(tempBackupDir)
+		os.MkdirAll(tempBackupDir, 0755)
+
+		// 根据映射"同步"文件到临时目录（模拟真实下载过程）
+		log.Println("【开发环境】同步文件到临时目录...")
+		for _, mapping := range config.Mappings {
+			source := filepath.Join(REPO_DIR, mapping.Source)
+			// 将目标路径改为临时目录
+			tempTarget := filepath.Join(tempBackupDir, mapping.Target)
+
+			if err := syncPathToDev(source, tempTarget, mapping.Exclude); err != nil {
+				log.Printf("【开发环境】同步失败: %v", err)
+				restartServices()
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"success": false,
+					"error":   fmt.Sprintf("【开发环境】测试失败: %v", err),
+				})
+				return
+			}
+		}
+
+		log.Println("【开发环境】清理临时文件...")
+		os.RemoveAll(tempBackupDir)
+
+		log.Println("【开发环境】重启服务...")
+		restartServices()
+
+		log.Printf("【开发环境】测试完成: %s (文件已丢弃，未实际修改生产文件)", config.History[0].Version)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"message": fmt.Sprintf("【开发环境测试】成功完成更新流程测试（文件未保存）版本: %s", config.History[0].Version),
+		})
+		return
+	}
+
+	// 生产环境：执行实际更新
 	// 停止主服务
 	log.Println("停止服务...")
 	stopServices()
@@ -209,16 +388,16 @@ func installUpdateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 更新本地配置文件
-	srcConfig := filepath.Join(REPO_DIR, "update_mapping.json")
+	srcConfig := filepath.Join(REPO_DIR, "CHANGELOG.json")
 	copyFile(srcConfig, localConfigFile)
 
 	log.Println("重启服务...")
 	restartServices()
 
-	log.Printf("更新完成: %s", config.Version)
+	log.Printf("更新完成: %s", config.History[0].Version)
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
-		"message": fmt.Sprintf("成功更新到 %s", config.Version),
+		"message": fmt.Sprintf("成功更新到 %s", config.History[0].Version),
 	})
 }
 
@@ -233,6 +412,64 @@ func syncPath(source, target string, exclude []string, backupDir string) error {
 		return syncDirectory(source, target, exclude, backupDir)
 	}
 	return syncFile(source, target, backupDir)
+}
+
+// 开发环境：同步文件到临时目录（用于测试）
+func syncPathToDev(source, target string, exclude []string) error {
+	info, err := os.Stat(source)
+	if err != nil {
+		return err
+	}
+
+	if info.IsDir() {
+		return syncDirectoryToDev(source, target, exclude)
+	}
+	return copyFileToDev(source, target)
+}
+
+// 开发环境：同步目录到临时位置
+func syncDirectoryToDev(source, target string, exclude []string) error {
+	return filepath.Walk(source, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// 计算相对路径
+		relPath, _ := filepath.Rel(source, path)
+		targetPath := filepath.Join(target, relPath)
+
+		if info.IsDir() {
+			return os.MkdirAll(targetPath, 0755)
+		}
+
+		// 检查是否排除
+		if shouldExclude(info.Name(), exclude) {
+			return nil
+		}
+
+		// 直接复制到临时目录
+		return copyFileToDev(path, targetPath)
+	})
+}
+
+// 开发环境：复制文件到临时位置
+func copyFileToDev(src, dst string) error {
+	os.MkdirAll(filepath.Dir(dst), 0755)
+
+	sourceFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer sourceFile.Close()
+
+	destFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer destFile.Close()
+
+	_, err = io.Copy(destFile, sourceFile)
+	return err
 }
 
 // 同步目录
@@ -325,6 +562,13 @@ func shouldExclude(name string, patterns []string) bool {
 
 // 停止服务
 func stopServices() {
+	if os.Getenv("DEV_ENV") == "true" {
+		log.Println("【开发环境】模拟停止服务...")
+		time.Sleep(500 * time.Millisecond) // 短暂延迟模拟操作
+		log.Println("【开发环境】服务停止完成（模拟）")
+		return
+	}
+
 	log.Println("正在停止Python服务...")
 	exec.Command("pkill", "-TERM", "-f", "python.*app.py").Run()
 	time.Sleep(2 * time.Second)
@@ -342,6 +586,13 @@ func stopServices() {
 
 // 重启服务
 func restartServices() {
+	if os.Getenv("DEV_ENV") == "true" {
+		log.Println("【开发环境】模拟重启服务...")
+		time.Sleep(500 * time.Millisecond) // 短暂延迟模拟操作
+		log.Println("【开发环境】服务重启完成（模拟）")
+		return
+	}
+
 	cmd := exec.Command("/app/start-services.sh")
 	cmd.Start()
 }
@@ -374,12 +625,12 @@ func getLocalVersion() string {
 		return "unknown"
 	}
 
-	return config.Version
+	return config.History[0].Version
 }
 
 // 获取远程版本
 func getRemoteVersion() string {
-	url := "https://raw.githubusercontent.com/sqing33/Docker.pt-nexus/main/update_mapping.json"
+	url := "https://gitee.com/sqing33/Docker.pt-nexus/raw/main/CHANGELOG.json"
 	resp, err := http.Get(url)
 	if err != nil {
 		log.Printf("获取远程配置失败: %v", err)
@@ -399,7 +650,7 @@ func getRemoteVersion() string {
 		return ""
 	}
 
-	return config.Version
+	return config.History[0].Version
 }
 
 // 健康检查
@@ -424,8 +675,10 @@ func getChangelogHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 从远程 update_mapping.json 获取 changelog
-	url := "https://raw.githubusercontent.com/sqing33/Docker.pt-nexus/main/update_mapping.json"
+	// 从远程 CHANGELOG.json 获取 changelog
+	url := "https://gitee.com/sqing33/Docker.pt-nexus/raw/main/CHANGELOG.json"
+	log.Printf("正在获取更新日志: %s", url)
+
 	resp, err := http.Get(url)
 	if err != nil {
 		log.Printf("获取远程配置失败: %v", err)
@@ -450,6 +703,25 @@ func getChangelogHandler(w http.ResponseWriter, r *http.Request) {
 	var config UpdateConfig
 	if err := json.Unmarshal(data, &config); err != nil {
 		log.Printf("解析远程配置失败: %v", err)
+		log.Printf("尝试解析的数据: %s", string(data))
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success":   false,
+			"changelog": []string{},
+		})
+		return
+	}
+
+	log.Printf("解析成功，history 长度: %d", len(config.History))
+	if len(config.History) > 0 {
+		log.Printf("最新版本: %s, 更新内容数量: %d", config.History[0].Version, len(config.History[0].Changes))
+		for i, change := range config.History[0].Changes {
+			log.Printf("更新内容 %d: %s", i+1, change)
+		}
+	}
+
+	// 检查 history 是否为空
+	if len(config.History) == 0 {
+		log.Printf("远程 CHANGELOG.json 中 history 数组为空")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success":   false,
 			"changelog": []string{},
@@ -459,7 +731,8 @@ func getChangelogHandler(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success":   true,
-		"changelog": config.Changelog,
+		"changelog": config.History[0].Changes,
+		"history":   config.History,
 	})
 }
 

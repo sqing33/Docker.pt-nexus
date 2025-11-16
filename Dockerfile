@@ -97,7 +97,7 @@ COPY --from=updater-builder /app/updater/updater ./updater
 RUN chmod +x ./updater
 
 # 复制版本文件
-COPY ./update_mapping.json ./update_mapping.json
+COPY ./CHANGELOG.json ./CHANGELOG.json
 
 # 复制启动脚本
 COPY ./start-services.sh ./start-services.sh
