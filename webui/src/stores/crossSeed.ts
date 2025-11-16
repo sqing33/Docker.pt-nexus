@@ -29,6 +29,7 @@ export const useCrossSeedStore = defineStore('crossSeed', {
   state: () => ({
     taskId: null as string | null,
     sourceInfo: null as ISourceInfo | null,
+    workingParams: null as object | null, // 使用 object 类型以避免循环依赖
   }),
   actions: {
     /**
@@ -59,6 +60,29 @@ export const useCrossSeedStore = defineStore('crossSeed', {
      */
     clearSourceInfo() {
       this.sourceInfo = null
+    },
+
+    /**
+     * 设置工作参数。
+     */
+    setParams(params: object) {
+      this.workingParams = params
+    },
+
+    /**
+     * 清除工作参数。
+     */
+    clearParams() {
+      this.workingParams = null
+    },
+
+    /**
+     * 重置所有状态。
+     */
+    reset() {
+      this.clearTaskId()
+      this.clearSourceInfo()
+      this.clearParams()
     },
   },
 })
