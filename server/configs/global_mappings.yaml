@@ -6,6 +6,7 @@ global_standard_keys:
   type:
     # 电影相关
     "电影": "category.movie"
+    "Movies电影": "category.movie"
     "Movies/电影": "category.movie"
     "电影/Movies": "category.movie"
     "Movie(电影)": "category.movie"
@@ -15,6 +16,7 @@ global_standard_keys:
 
     # 电视剧相关
     "电视剧": "category.tv_series"
+    "TV Series电视剧": "category.tv_series"
     "TV Series/电视剧": "category.tv_series"
     "连续剧/TV Series": "category.tv_series"
     "TV Series(电视剧)": "category.tv_series"
@@ -24,6 +26,7 @@ global_standard_keys:
 
     # 综艺相关
     "综艺": "category.tv_shows"
+    "TV Shows综艺": "category.tv_shows"
     "TV Shows/综艺": "category.tv_shows"
     "综艺/TV Shows": "category.tv_shows"
     "TV Shows(综艺)": "category.tv_shows"
@@ -33,6 +36,7 @@ global_standard_keys:
 
     # 动漫相关
     "动漫": "category.animation"
+    "Animations动漫": "category.animation"
     "Animations/动漫": "category.animation"
     "动漫/Animations": "category.animation"
     "Animations/动漫、动画": "category.animation"
@@ -52,6 +56,7 @@ global_standard_keys:
     "Music(音乐)": "category.music"
     "Music": "category.music"
     "HQ音乐": "category.music"
+    "HQ Audio音乐": "category.music"
     "HQ Audio/音乐": "category.music"
     "音乐 / Music": "category.music"
     "无损音乐": "category.music"
@@ -65,6 +70,7 @@ global_standard_keys:
     "MV(演唱)": "category.mv"
     "MV(音乐视频)": "category.mv"
     "Music Video": "category.mv"
+    "Music Videos": "category.mv"
     "演唱会/音乐会": "category.mv"
     "MV/演唱会": "category.mv"
     "Concern/演唱会": "category.mv"
@@ -77,16 +83,19 @@ global_standard_keys:
     "Audio": "category.audio"
 
     # 有声书相关
+    "Audiobook": "category.audiobook"
     "Audiobook/有声书": "category.audiobook"
     "Audio Books/有声读物": "category.audiobook"
     "有声书 / Audiobook": "category.audiobook"
     "Audio(有声)": "category.audiobook"
 
     # 纪录片相关
+    "documentary": "category.documentaries"
     "纪录片": "category.documentaries"
     "Record Education/纪录教育": "category.documentaries"
     "纪录片/Docmentaries": "category.documentaries"
     "Documentaries(纪录片)": "category.documentaries"
+    "Documentaries纪录片": "category.documentaries"
     "Documentaries/纪录片": "category.documentaries"
     "Documentaries": "category.documentaries"
     "纪录": "category.documentaries"
@@ -100,10 +109,12 @@ global_standard_keys:
     "Playlet/短剧": "category.playlet"
     "Playlet（短剧）": "category.playlet"
     "Playlet": "category.playlet"
+    "Short Play": "category.playlet"
     "短剧/ShortDrama": "category.playlet"
 
     # 游戏相关
     "游戏": "category.game"
+    "Game游戏": "category.game"
     "Game/游戏": "category.game"
     "Game(游戏)": "category.game"
     "Game": "category.game"
@@ -118,12 +129,14 @@ global_standard_keys:
 
     # 体育相关
     "体育": "category.sports"
+    "Sports体育": "category.sports"
     "Sports/体育运动": "category.sports"
     "Sports(体育)": "category.sports"
     "Sports": "category.sports"
 
     # 学习教育相关
     "学习": "category.study"
+    "Study学习": "category.study"
     "Study/学习": "category.study"
     "Education/教育视频": "category.study"
     "Education(资料)": "category.study"
@@ -133,6 +146,7 @@ global_standard_keys:
     "TOP100": "category.top100"
 
     # 软件相关
+    "Software": "category.software"
     "软件": "category.software"
     "软件 / Software": "category.software"
     "APP/软件": "category.software"
@@ -203,6 +217,7 @@ global_standard_keys:
     "WEB-DL/WEBRip": "medium.webdl"
     "WEB-DL/WEBRip TV": "medium.webdl"
     "WEB-DL(TV)": "medium.webdl"
+    "FEED": "medium.feed"
 
     # HDTV相关
     "HDTV": "medium.hdtv"
@@ -751,6 +766,7 @@ global_standard_keys:
     "官组": "tag.官组"
     "柠檬爱原盘": "tag.untouch"
     "转载": "tag.转载"
+    "应求": "tag.应求"
     "default": null
 
 # 默认 title_components 配置

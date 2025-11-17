@@ -1,57 +1,114 @@
 <template>
   <div class="batch-fetch-panel">
-    <el-alert v-if="error" :title="error" type="error" show-icon :closable="false" center
-      style="margin-bottom: 15px"></el-alert>
+    <el-alert
+      v-if="error"
+      :title="error"
+      type="error"
+      show-icon
+      :closable="false"
+      center
+      style="margin-bottom: 15px"
+    ></el-alert>
 
     <!-- 搜索和控制栏 -->
     <div class="search-and-controls">
-      <el-input v-model="nameSearch" placeholder="搜索名称..." clearable class="search-input"
-        style="width: 300px; margin-right: 15px;" />
+      <el-input
+        v-model="nameSearch"
+        placeholder="搜索名称..."
+        clearable
+        class="search-input"
+        style="width: 300px; margin-right: 15px"
+      />
 
       <!-- 筛选按钮 -->
-      <el-button type="primary" @click="openFilterDialog" plain style="margin-right: 15px;">
+      <el-button type="primary" @click="openFilterDialog" plain style="margin-right: 15px">
         筛选
       </el-button>
-      <div v-if="hasActiveFilters" class="current-filters"
-        style="margin-right: 15px; display: flex; align-items: center;">
+      <div
+        v-if="hasActiveFilters"
+        class="current-filters"
+        style="margin-right: 15px; display: flex; align-items: center"
+      >
         <el-tag type="info" size="default" effect="plain">{{ currentFilterText }}</el-tag>
-        <el-button type="danger" link style="padding: 0; margin-left: 8px;" @click="clearFilters">清除</el-button>
+        <el-button type="danger" link style="padding: 0; margin-left: 8px" @click="clearFilters"
+          >清除</el-button
+        >
       </div>
 
       <!-- 设置优先级按钮 -->
-      <el-button type="warning" @click="openPrioritySettingsDialog" plain style="margin-right: 15px;">
-        <el-icon style="margin-right: 5px;">
+      <el-button
+        type="warning"
+        @click="openPrioritySettingsDialog"
+        plain
+        style="margin-right: 15px"
+      >
+        <el-icon style="margin-right: 5px">
           <Setting />
         </el-icon>
         设置优先级
       </el-button>
 
       <!-- 批量获取按钮 -->
-      <el-button type="success" @click="openBatchFetchDialog" plain style="margin-right: 15px;"
-        :disabled="selectedRows.length === 0">
+      <el-button
+        type="success"
+        @click="openBatchFetchDialog"
+        plain
+        style="margin-right: 15px"
+        :disabled="selectedRows.length === 0"
+      >
         批量获取数据 ({{ selectedRows.length }})
       </el-button>
 
       <!-- 查看进度按钮 -->
-      <el-button v-if="currentTaskId" type="info" @click="openProgressDialog" plain style="margin-right: 15px;">
+      <el-button
+        v-if="currentTaskId"
+        type="info"
+        @click="openProgressDialog"
+        plain
+        style="margin-right: 15px"
+      >
         查看进度
       </el-button>
 
       <div class="pagination-controls" v-if="tableData.length > 0">
-        <el-pagination v-model:current-page="currentPage" v-model:page-size="pageSize" :page-sizes="[20, 50, 100]"
-          :total="total" layout="total, sizes, prev, pager, next, jumper" @size-change="handleSizeChange"
-          @current-change="handleCurrentChange" background>
+        <el-pagination
+          v-model:current-page="currentPage"
+          v-model:page-size="pageSize"
+          :page-sizes="[20, 50, 100]"
+          :total="total"
+          layout="total, sizes, prev, pager, next, jumper"
+          @size-change="handleSizeChange"
+          @current-change="handleCurrentChange"
+          background
+        >
         </el-pagination>
       </div>
     </div>
 
     <!-- 种子列表表格 -->
     <div class="table-container">
-      <el-table :data="tableData" v-loading="loading" border style="width: 100%" empty-text="暂无种子数据" height="100%"
-        @selection-change="handleSelectionChange">
-        <el-table-column type="selection" width="55" align="center" header-align="center"></el-table-column>
-        <el-table-column prop="name" label="种子名称" min-width="400" show-overflow-tooltip
-          header-align="center"></el-table-column>
+      <el-table
+        :data="tableData"
+        v-loading="loading"
+        border
+        style="width: 100%"
+        empty-text="暂无种子数据"
+        height="100%"
+        @selection-change="handleSelectionChange"
+      >
+        <el-table-column
+          type="selection"
+          width="55"
+          align="center"
+          header-align="center"
+        ></el-table-column>
+        <el-table-column
+          prop="name"
+          label="种子名称"
+          min-width="400"
+          show-overflow-tooltip
+          header-align="center"
+        ></el-table-column>
         <el-table-column prop="size" label="大小" width="110" align="center" header-align="center">
           <template #default="scope">
             {{ formatBytes(scope.row.size) }}
@@ -59,25 +116,47 @@
         </el-table-column>
         <el-table-column prop="save_path" label="保存路径" width="200" header-align="center">
           <template #default="scope">
-            <div :title="scope.row.save_path"
-              style="width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            <div
+              :title="scope.row.save_path"
+              style="width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"
+            >
               {{ shortenPath(scope.row.save_path, 30) }}
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="site_count" label="站点数" width="100" align="center" header-align="center">
+        <el-table-column
+          prop="site_count"
+          label="站点数"
+          width="100"
+          align="center"
+          header-align="center"
+        >
           <template #default="scope">
             {{ Object.keys(scope.row.sites || {}).length }}
           </template>
         </el-table-column>
-        <el-table-column prop="state" label="状态" width="120" align="center" header-align="center"></el-table-column>
+        <el-table-column
+          prop="state"
+          label="状态"
+          width="120"
+          align="center"
+          header-align="center"
+        ></el-table-column>
         <el-table-column label="已有源站点" min-width="200" header-align="center">
           <template #default="scope">
-            <el-tag v-for="(siteData, siteName) in getSourceSites(scope.row.sites)" :key="siteName" size="small"
-              type="success" style="margin: 2px;">
+            <el-tag
+              v-for="(siteData, siteName) in getSourceSites(scope.row.sites)"
+              :key="siteName"
+              size="small"
+              type="success"
+              style="margin: 2px"
+            >
               {{ siteName }}
             </el-tag>
-            <span v-if="Object.keys(getSourceSites(scope.row.sites)).length === 0" style="color: #909399;">
+            <span
+              v-if="Object.keys(getSourceSites(scope.row.sites)).length === 0"
+              style="color: #909399"
+            >
               无可用源站点
             </span>
           </template>
@@ -86,7 +165,11 @@
     </div>
 
     <!-- 筛选器弹窗 -->
-    <div v-if="filterDialogVisible" class="filter-overlay" @click.self="filterDialogVisible = false">
+    <div
+      v-if="filterDialogVisible"
+      class="filter-overlay"
+      @click.self="filterDialogVisible = false"
+    >
       <el-card class="filter-card">
         <template #header>
           <div class="filter-card-header">
@@ -97,18 +180,39 @@
         <div class="filter-card-body">
           <el-divider content-position="left">保存路径</el-divider>
           <div class="path-tree-container">
-            <el-tree ref="pathTreeRef" :data="pathTreeData" show-checkbox node-key="path" default-expand-all
-              :expand-on-click-node="false" check-on-click-node :check-strictly="true" :props="{ class: 'path-tree-node' }" />
+            <el-tree
+              ref="pathTreeRef"
+              :data="pathTreeData"
+              show-checkbox
+              node-key="path"
+              default-expand-all
+              :expand-on-click-node="false"
+              check-on-click-node
+              :check-strictly="true"
+              :props="{ class: 'path-tree-node' }"
+            />
           </div>
+
+          <el-divider content-position="left">源站点</el-divider>
+          <el-checkbox-group v-model="tempFilters.sourceSiteAvailability">
+            <el-checkbox label="存在源站点">存在源站点</el-checkbox>
+            <el-checkbox label="无可用源站点">无可用源站点</el-checkbox>
+          </el-checkbox-group>
 
           <el-divider content-position="left">状态</el-divider>
           <el-checkbox-group v-model="tempFilters.states">
-            <el-checkbox v-for="state in uniqueStates" :key="state" :label="state">{{ state }}</el-checkbox>
+            <el-checkbox v-for="state in uniqueStates" :key="state" :label="state">{{
+              state
+            }}</el-checkbox>
           </el-checkbox-group>
 
           <el-divider content-position="left">下载器</el-divider>
           <el-checkbox-group v-model="tempFilters.downloaderIds">
-            <el-checkbox v-for="downloader in downloadersList" :key="downloader.id" :label="downloader.id">
+            <el-checkbox
+              v-for="downloader in downloadersList"
+              :key="downloader.id"
+              :label="downloader.id"
+            >
               {{ downloader.name }}
             </el-checkbox>
           </el-checkbox-group>
@@ -132,16 +236,14 @@
         <div class="batch-fetch-content">
           <div class="config-section">
             <h3>已选择 {{ selectedRows.length }} 个种子</h3>
-            <p style="color: #909399; font-size: 13px; margin-top: 5px;">
+            <p style="color: #909399; font-size: 13px; margin-top: 5px">
               系统将按名称聚合，逐个从源站点获取种子数据并存储到数据库
             </p>
           </div>
         </div>
         <div class="batch-fetch-footer">
           <el-button @click="closeBatchFetchDialog">取消</el-button>
-          <el-button type="primary" @click="startBatchFetch">
-            开始批量获取
-          </el-button>
+          <el-button type="primary" @click="startBatchFetch"> 开始批量获取 </el-button>
         </div>
       </el-card>
     </div>
@@ -156,41 +258,38 @@
           </div>
         </template>
         <div class="priority-settings-content">
-          <el-alert type="info" show-icon :closable="false" style="margin-bottom: 20px;">
+          <el-alert type="info" show-icon :closable="false" style="margin-bottom: 20px">
             <template #title>
-              设置批量获取种子数据时的源站点优先级顺序，系统将按顺序查找第一个可用的源站点
+              设置批量获取种子数据时的源站点优先级顺序，系统将按顺序查找第一个可用的源站点<br />
+              如果第一个源站点无法获取会按顺序自动切换源站点
             </template>
           </el-alert>
 
           <div class="priority-section">
-            <p style="color: #606266; font-size: 14px; margin-bottom: 10px; font-weight: 600;">
-              优先级顺序（拖拽调整）：
+            <p style="color: #606266; font-size: 14px; margin-bottom: 10px; font-weight: 600">
+              源站点优先级顺序：
             </p>
             <div class="priority-list" v-loading="priorityLoading">
-              <el-tag v-for="(site, index) in sourceSitesPriority" :key="site" :type="getSitePriorityType(index)"
-                size="large" closable @close="removeSiteFromPriority(site)" draggable="true"
-                @dragstart="handleDragStart(index)" @dragover.prevent @drop="handleDrop(index)"
-                style="margin: 5px; cursor: move; user-select: none;">
-                {{ index + 1 }}. {{ site }}
+              <el-tag
+                v-for="(site, index) in sourceSitesOrder"
+                :key="site.name"
+                :type="getSitePriorityType(index)"
+                size="large"
+                draggable="true"
+                @dragstart="handleDragStart(index)"
+                @dragover.prevent
+                @drop="handleDrop(index)"
+                style="margin: 5px; cursor: move; user-select: none"
+              >
+                {{ index + 1 }}. {{ site.name }}
               </el-tag>
-              <span v-if="sourceSitesPriority.length === 0" style="color: #909399; margin-left: 10px;">
-                暂无源站点，请从下方添加
+              <span v-if="sourceSitesOrder.length === 0" style="color: #909399; margin-left: 10px">
+                未配置源站点优先级
               </span>
             </div>
 
-            <el-divider />
-
-            <p style="color: #606266; font-size: 14px; margin-bottom: 10px; font-weight: 600;">
-              可用源站点列表（点击添加）：
-            </p>
-            <div class="available-sites" v-loading="priorityLoading">
-              <el-tag v-for="site in availableSourceSites" :key="site" type="info" size="default"
-                @click="addSiteToPriority(site)" style="margin: 5px; cursor: pointer;">
-                {{ site }}
-              </el-tag>
-              <span v-if="availableSourceSites.length === 0" style="color: #909399; margin-left: 10px;">
-                所有源站点已添加
-              </span>
+            <div class="priority-tip" style="margin-top: 10px; font-size: 12px; color: #909399">
+              拖拽调整优先级顺序，系统将按此顺序查找可用的源站点。
             </div>
           </div>
         </div>
@@ -210,7 +309,12 @@
           <div class="modal-header">
             <span>批量获取进度 {{ progress.isRunning ? '(进行中...)' : '(已完成)' }}</span>
             <div class="progress-header-controls">
-              <el-button v-if="progress.isRunning" type="warning" size="small" @click="stopAutoRefresh">
+              <el-button
+                v-if="progress.isRunning"
+                type="warning"
+                size="small"
+                @click="stopAutoRefresh"
+              >
                 停止自动刷新
               </el-button>
               <el-button v-else type="primary" size="small" @click="refreshProgress">
@@ -242,13 +346,23 @@
               </el-descriptions-item>
             </el-descriptions>
 
-            <el-progress :percentage="progressPercentage" :status="progressStatus" style="margin-top: 15px;" />
+            <el-progress
+              :percentage="progressPercentage"
+              :status="progressStatus"
+              style="margin-top: 15px"
+            />
           </div>
 
           <!-- 详细结果列表 -->
           <el-divider content-position="left">处理详情</el-divider>
           <div class="results-table-container">
-            <el-table :data="progress.results" style="width: 100%" size="small" stripe max-height="400">
+            <el-table
+              :data="progress.results"
+              style="width: 100%"
+              size="small"
+              stripe
+              max-height="400"
+            >
               <el-table-column prop="name" label="种子名称" min-width="300" show-overflow-tooltip />
               <el-table-column prop="status" label="状态" width="100" align="center">
                 <template #default="scope">
@@ -258,7 +372,12 @@
                 </template>
               </el-table-column>
               <el-table-column prop="source_site" label="源站点" width="120" align="center" />
-              <el-table-column prop="reason" label="失败原因" min-width="200" show-overflow-tooltip />
+              <el-table-column
+                prop="reason"
+                label="失败原因"
+                min-width="200"
+                show-overflow-tooltip
+              />
             </el-table>
           </div>
         </div>
@@ -279,7 +398,7 @@ import type { ElTree } from 'element-plus'
 
 const emit = defineEmits<{
   (e: 'cancel'): void
-  (e: 'fetch-completed'): void  // 新增：批量获取完成事件
+  (e: 'fetch-completed'): void // 新增：批量获取完成事件
 }>()
 
 interface PathNode {
@@ -289,9 +408,9 @@ interface PathNode {
 }
 
 interface Downloader {
-  id: string;
-  name: string;
-  enabled?: boolean;
+  id: string
+  name: string
+  enabled?: boolean
 }
 
 interface SiteData {
@@ -344,8 +463,7 @@ const progressDialogVisible = ref<boolean>(false)
 const prioritySettingsDialogVisible = ref<boolean>(false)
 const priorityLoading = ref<boolean>(false)
 const prioritySaving = ref<boolean>(false)
-const allSourceSites = ref<SiteStatus[]>([])
-const sourceSitesPriority = ref<string[]>([])
+const sourceSitesOrder = ref<SiteStatus[]>([])
 const draggedIndex = ref<number | null>(null)
 
 const pathTreeRef = ref<InstanceType<typeof ElTree> | null>(null)
@@ -364,7 +482,8 @@ const filterDialogVisible = ref<boolean>(false)
 const activeFilters = ref({
   paths: [] as string[],
   states: [] as string[],
-  downloaderIds: [] as string[]
+  downloaderIds: [] as string[],
+  sourceSiteAvailability: [] as string[],
 })
 const tempFilters = ref({ ...activeFilters.value })
 
@@ -377,7 +496,7 @@ const progress = ref<BatchProgress>({
   failed: 0,
   skipped: 0,
   isRunning: false,
-  results: []
+  results: [],
 })
 const refreshTimer = ref<ReturnType<typeof setInterval> | null>(null)
 const REFRESH_INTERVAL = 3000 // 3秒刷新一次
@@ -385,6 +504,10 @@ const REFRESH_INTERVAL = 3000 // 3秒刷新一次
 const currentFilterText = computed(() => {
   const filters = activeFilters.value
   const filterTexts = []
+
+  if (filters.sourceSiteAvailability && filters.sourceSiteAvailability.length > 0) {
+    filterTexts.push(`源站点: ${filters.sourceSiteAvailability.length}`)
+  }
 
   if (filters.paths && filters.paths.length > 0) {
     filterTexts.push(`路径: ${filters.paths.length}`)
@@ -404,18 +527,23 @@ const currentFilterText = computed(() => {
 const hasActiveFilters = computed(() => {
   const filters = activeFilters.value
   return (
+    (filters.sourceSiteAvailability && filters.sourceSiteAvailability.length > 0) ||
     (filters.paths && filters.paths.length > 0) ||
     (filters.states && filters.states.length > 0) ||
     (filters.downloaderIds && filters.downloaderIds.length > 0)
   )
 })
 
-const availableSourceSites = computed(() => {
-  return allSourceSites.value
-    .filter(s => s.is_source && s.has_cookie)
-    .map(s => s.name)
-    .filter(name => !sourceSitesPriority.value.includes(name))
-})
+const siteStatuses = ref<SiteStatus[]>([])
+
+const loadSiteStatuses = async () => {
+  try {
+    const response = await axios.get('/api/sites/status')
+    siteStatuses.value = response.data
+  } catch (e: any) {
+    console.error('加载站点状态失败:', e)
+  }
+}
 
 const progressPercentage = computed(() => {
   if (progress.value.total === 0) return 0
@@ -469,7 +597,8 @@ const fetchData = async () => {
       path_filters: JSON.stringify(activeFilters.value.paths),
       state_filters: JSON.stringify(activeFilters.value.states),
       downloader_filters: JSON.stringify(activeFilters.value.downloaderIds),
-      exclude_existing: 'true'  // 排除已存在于 seed_parameters 表的种子
+      source_availability_filters: JSON.stringify(activeFilters.value.sourceSiteAvailability),
+      exclude_existing: 'true', // 排除已存在于 seed_parameters 表的种子
     })
 
     const response = await axios.get(`/api/data?${params.toString()}`)
@@ -484,7 +613,7 @@ const fetchData = async () => {
         progress: item.progress,
         state: item.state,
         sites: item.sites || {},
-        downloader_ids: item.downloader_ids || []
+        downloader_ids: item.downloader_ids || [],
       }))
       total.value = result.total
 
@@ -508,9 +637,9 @@ const fetchDownloadersList = async () => {
   try {
     const response = await axios.get('/api/all_downloaders')
     const allDownloaders = response.data
-    downloadersList.value = allDownloaders.filter((d: any) => d.enabled);
+    downloadersList.value = allDownloaders.filter((d: any) => d.enabled)
   } catch (e: any) {
-    error.value = e.message;
+    error.value = e.message
   }
 }
 
@@ -521,18 +650,19 @@ const fetchAllPaths = async () => {
       page_size: '1', // 只需要获取路径信息，不需要实际数据
       path_filters: JSON.stringify([]), // 清空路径筛选以获取所有路径
       state_filters: JSON.stringify([]), // 清空状态筛选
-      downloader_filters: JSON.stringify([]) // 清空下载器筛选
-    });
+      downloader_filters: JSON.stringify([]), // 清空下载器筛选
+      source_availability_filters: JSON.stringify([]), // 清空源站点筛选
+    })
 
     const response = await axios.get(`/api/data?${params.toString()}`)
     const result = response.data
 
     if (result.unique_paths) {
-      uniquePaths.value = result.unique_paths;
-      pathTreeData.value = buildPathTree(uniquePaths.value);
+      uniquePaths.value = result.unique_paths
+      pathTreeData.value = buildPathTree(uniquePaths.value)
     }
   } catch (e: any) {
-    console.error('获取路径列表失败:', e);
+    console.error('获取路径列表失败:', e)
   }
 }
 
@@ -551,7 +681,8 @@ const clearFilters = () => {
   activeFilters.value = {
     paths: [],
     states: [],
-    downloaderIds: []
+    downloaderIds: [],
+    sourceSiteAvailability: [],
   }
   nameSearch.value = ''
   currentPage.value = 1
@@ -592,7 +723,7 @@ const saveFiltersToConfig = async () => {
   try {
     await axios.post('/api/config/batch_fetch_filters', {
       batch_fetch_filters: activeFilters.value,
-      batch_fetch_name_search: nameSearch.value
+      batch_fetch_name_search: nameSearch.value,
     })
   } catch (e: any) {
     console.error('保存筛选条件失败:', e)
@@ -604,7 +735,13 @@ const loadFiltersFromConfig = async () => {
     const response = await axios.get('/api/config/batch_fetch_filters')
     const result = response.data
     if (result.success && result.data) {
-      activeFilters.value = result.data
+      const defaultFilters = {
+        paths: [] as string[],
+        states: [] as string[],
+        downloaderIds: [] as string[],
+        sourceSiteAvailability: [] as string[],
+      }
+      activeFilters.value = { ...defaultFilters, ...result.data }
     }
     // 加载搜索内容
     if (result.success && result.name_search !== undefined) {
@@ -622,7 +759,10 @@ const handleSelectionChange = (selection: Torrent[]) => {
 const getSourceSites = (sites: Record<string, SiteData>) => {
   const sourceSites: Record<string, SiteData> = {}
   for (const [siteName, siteData] of Object.entries(sites || {})) {
-    if (siteData.migration === 1 || siteData.migration === 3) {
+    if (
+      (siteData.migration === 1 || siteData.migration === 3) &&
+      siteStatuses.value.find((s) => s.name === siteName)?.has_cookie
+    ) {
       sourceSites[siteName] = siteData
     }
   }
@@ -653,16 +793,39 @@ const closePrioritySettingsDialog = () => {
 const loadPrioritySettings = async () => {
   priorityLoading.value = true
   try {
-    // 加载所有源站点
+    // 加载所有源站点状态
     const sitesResponse = await axios.get('/api/sites/status')
-    allSourceSites.value = sitesResponse.data
+    const allSites = sitesResponse.data
+
+    // 过滤出有cookie的源站点
+    const availableSites = allSites.filter((s: SiteStatus) => s.is_source && s.has_cookie)
 
     // 加载已保存的优先级配置
     const configResponse = await axios.get('/api/config/source_priority')
     const configResult = configResponse.data
-    if (configResult.success) {
-      sourceSitesPriority.value = configResult.data || []
-    }
+    const savedPriority = configResult.success ? configResult.data || [] : []
+
+    // 构建有序的站点列表：首先按保存的优先级排序，然后添加其他站点
+    const orderedSites: SiteStatus[] = []
+    const usedSites = new Set<string>()
+
+    // 先添加按优先级排序的站点
+    savedPriority.forEach((siteName: string) => {
+      const site = availableSites.find((s: SiteStatus) => s.name === siteName)
+      if (site && !usedSites.has(site.name)) {
+        orderedSites.push(site)
+        usedSites.add(site.name)
+      }
+    })
+
+    // 添加剩余的站点，按原始顺序
+    availableSites.forEach((site: SiteStatus) => {
+      if (!usedSites.has(site.name)) {
+        orderedSites.push(site)
+      }
+    })
+
+    sourceSitesOrder.value = orderedSites
   } catch (e: any) {
     ElMessage.error(e.message || '加载配置失败')
   } finally {
@@ -673,8 +836,9 @@ const loadPrioritySettings = async () => {
 const savePrioritySettings = async () => {
   prioritySaving.value = true
   try {
+    const sourcePriority = sourceSitesOrder.value.map((site) => site.name)
     const response = await axios.post('/api/config/source_priority', {
-      source_priority: sourceSitesPriority.value
+      source_priority: sourcePriority,
     })
 
     if (response.data.success) {
@@ -697,19 +861,6 @@ const getSitePriorityType = (index: number) => {
   return 'info'
 }
 
-const addSiteToPriority = (site: string) => {
-  if (!sourceSitesPriority.value.includes(site)) {
-    sourceSitesPriority.value.push(site)
-  }
-}
-
-const removeSiteFromPriority = (site: string) => {
-  const index = sourceSitesPriority.value.indexOf(site)
-  if (index > -1) {
-    sourceSitesPriority.value.splice(index, 1)
-  }
-}
-
 const handleDragStart = (index: number) => {
   draggedIndex.value = index
 }
@@ -717,19 +868,19 @@ const handleDragStart = (index: number) => {
 const handleDrop = (dropIndex: number) => {
   if (draggedIndex.value === null) return
 
-  const draggedItem = sourceSitesPriority.value[draggedIndex.value]
-  sourceSitesPriority.value.splice(draggedIndex.value, 1)
-  sourceSitesPriority.value.splice(dropIndex, 0, draggedItem)
+  const draggedItem = sourceSitesOrder.value[draggedIndex.value]
+  sourceSitesOrder.value.splice(draggedIndex.value, 1)
+  sourceSitesOrder.value.splice(dropIndex, 0, draggedItem)
 
   draggedIndex.value = null
 }
 
 const startBatchFetch = async () => {
   try {
-    const torrentNames = selectedRows.value.map(row => row.name)
+    const torrentNames = selectedRows.value.map((row) => row.name)
 
     const response = await axios.post('/api/migrate/batch_fetch_seed_data', {
-      torrentNames
+      torrentNames,
     })
 
     const result = response.data
@@ -792,7 +943,9 @@ const refreshProgress = async () => {
   if (!currentTaskId.value) return
 
   try {
-    const response = await axios.get(`/api/migrate/batch_fetch_progress?task_id=${currentTaskId.value}`)
+    const response = await axios.get(
+      `/api/migrate/batch_fetch_progress?task_id=${currentTaskId.value}`,
+    )
     const result = response.data
     if (result.success) {
       const wasRunning = progress.value.isRunning
@@ -812,19 +965,27 @@ const refreshProgress = async () => {
 
 const getResultStatusType = (status: string) => {
   switch (status) {
-    case 'success': return 'success'
-    case 'failed': return 'danger'
-    case 'skipped': return 'info'
-    default: return 'info'
+    case 'success':
+      return 'success'
+    case 'failed':
+      return 'danger'
+    case 'skipped':
+      return 'info'
+    default:
+      return 'info'
   }
 }
 
 const getResultStatusText = (status: string) => {
   switch (status) {
-    case 'success': return '成功'
-    case 'failed': return '失败'
-    case 'skipped': return '跳过'
-    default: return '未知'
+    case 'success':
+      return '成功'
+    case 'failed':
+      return '失败'
+    case 'skipped':
+      return '跳过'
+    default:
+      return '未知'
   }
 }
 
@@ -863,6 +1024,7 @@ const shortenPath = (path: string, maxLength: number = 50) => {
 onMounted(async () => {
   await fetchDownloadersList()
   await loadFiltersFromConfig()
+  await loadSiteStatuses() // 加载站点状态
   await fetchAllPaths() // 获取所有路径
   fetchData()
 })

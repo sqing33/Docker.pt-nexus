@@ -165,8 +165,9 @@ const loadVersionInfo = async () => {
       currentVersion.value = data.local_version
       emit('version-loaded', currentVersion.value)
 
-      // 如果有更新，自动弹出提示
-      if (data.has_update) {
+      // 只有当远程版本高于本地版本时才提示更新
+      const isReallyHasUpdate = compareVersions(data.remote_version || '', data.local_version) > 0
+      if (isReallyHasUpdate) {
         setTimeout(() => {
           showUpdateDialog()
         }, 1000)
@@ -190,7 +191,7 @@ const showUpdateDialog = async () => {
     const changelogData = changelogResponse.data
     const versionData = versionResponse.data
 
-    updateInfo.hasUpdate = versionData.has_update
+    updateInfo.hasUpdate = compareVersions(versionData.remote_version, currentVersion.value) > 0
     updateInfo.currentVersion = currentVersion.value
     updateInfo.remoteVersion = versionData.remote_version
     updateInfo.changelog = changelogData.changelog || []

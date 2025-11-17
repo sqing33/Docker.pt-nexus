@@ -1178,15 +1178,8 @@ class ParameterMapper:
 
             # 如果都找不到，返回一个默认值或处理过的原始值
             if param_key == "team":
-                # [修复] 只有当原始值是明确的无效值时才返回 team.other
-                # 否则保留原始完整的制作组名称（包括合作制作组）
-                if original_value_str.lower() in [
-                        "other", "未知", "unknown", ""
-                ]:
-                    return "team.other"
-                else:
-                    # 保留原始完整制作组名称（如 "Nest@ADE"）
-                    return original_value_str
+                # [修改] 无论原始值是什么，只要无法映射就返回 team.other
+                return "team.other"
             return value_str  # 其他参数返回原始值
 
         # 1. 分别从 source_params 和 title_components 提取并标准化

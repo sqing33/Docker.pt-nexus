@@ -757,314 +757,388 @@ class TorrentMigrator:
 
     def prepare_review_data(self):
         """重构后的方法：获取、解析信息，并输出标准化参数。"""
-        try:
-            self.logger.info(f"--- [步骤1] 开始获取种子信息 (源: {self.SOURCE_NAME}) ---")
-            print(f"开始获取种子信息，源站点: {self.SOURCE_NAME}")
+        # [新增] 定义重试配置
+        MAX_RETRIES = 3  # 最大重试次数
+        RETRY_DELAY = 5  # 重试等待时间(秒)
+        PAGE_LOAD_WAIT = 3  # 页面加载等待时间(秒)
 
-            # 发送日志：开始获取种子信息
-            if self.task_id:
-                log_streamer.emit_log(self.task_id, "获取种子信息",
-                                      f"开始从 {self.SOURCE_NAME} 获取种子详情...",
-                                      "processing")
+        retry_count = 0
+        last_error = None
 
-            torrent_id = (self.search_term)
-            if not torrent_id:
+        while retry_count < MAX_RETRIES:
+            try:
+                if retry_count > 0:
+                    self.logger.warning(f"第 {retry_count + 1} 次尝试获取种子信息...")
+                    if self.task_id:
+                        log_streamer.emit_log(
+                            self.task_id, "重试获取信息",
+                            f"正在进行第 {retry_count + 1} 次重试...", "processing")
+
+                self.logger.info(
+                    f"--- [步骤1] 开始获取种子信息 (源: {self.SOURCE_NAME}) ---")
+                print(f"开始获取种子信息，源站点: {self.SOURCE_NAME}")
+
+                # 发送日志：开始获取种子信息
                 if self.task_id:
-                    log_streamer.emit_log(self.task_id, "获取种子信息", "未能获取到种子ID",
-                                          "error")
-                raise Exception("未能获取到种子ID，请检查种子名称或ID是否正确。")
+                    log_streamer.emit_log(self.task_id, "获取种子信息",
+                                          f"开始从 {self.SOURCE_NAME} 获取种子详情...",
+                                          "processing")
 
-            if self.task_id:
-                log_streamer.emit_log(self.task_id, "获取种子信息",
-                                      f"成功获取种子 ID: {torrent_id}", "success")
+                torrent_id = (self.search_term)
+                if not torrent_id:
+                    if self.task_id:
+                        log_streamer.emit_log(self.task_id, "获取种子信息",
+                                              "未能获取到种子ID", "error")
+                    raise Exception("未能获取到种子ID，请检查种子名称或ID是否正确。")
 
-            # 初始化种子参数模型
-            # 使用构造函数传入的 db_manager
-            if not self.db_manager:
-                raise Exception("数据库管理器未初始化，无法保存种子参数。")
-            seed_param_model = SeedParameter(self.db_manager)
-
-            self.logger.info(f"正在获取种子(ID: {torrent_id})的详细信息...")
-
-            response = self.scraper.get(
-                f"{self.SOURCE_BASE_URL}/details.php",
-                headers={"Cookie": self.SOURCE_COOKIE},
-                params={
-                    "id": torrent_id,
-                    "hit": "1"
-                },
-                timeout=180,
-            )
-            response.raise_for_status()
-            response.encoding = "utf-8"
-
-            self.logger.success("详情页请求成功！")
-
-            soup = BeautifulSoup(response.text, "html.parser")
-
-            # Pre-check for acknowledgment statement on the raw description
-            descr_container_for_check = soup.select_one("div#kdescr")
-            full_bbcode_descr_for_check = ""
-            if descr_container_for_check:
-                # Convert raw HTML description to BBCode for an accurate check
-                full_bbcode_descr_for_check = self._html_to_bbcode(
-                    descr_container_for_check)
-
-            # --- [核心修改 1] 开始 ---
-            # 先下载种子文件，以便获取其准确的文件名
-            download_link_tag = soup.select_one(
-                f'a.index[href^="download.php?id={torrent_id}"]')
-            if not download_link_tag:
-                raise Exception("在详情页未找到种子下载链接。")
-            torrent_response = self.scraper.get(
-                f"{self.SOURCE_BASE_URL}/{download_link_tag['href']}",
-                headers={"Cookie": self.SOURCE_COOKIE},
-                timeout=180,
-            )
-            torrent_response.raise_for_status()
-
-            # 从响应头中尝试获取文件名，这是最准确的方式
-            content_disposition = torrent_response.headers.get(
-                'content-disposition')
-            torrent_filename = "default.torrent"  # 设置一个默认值
-            if content_disposition:
-                # 尝试匹配filename*（支持UTF-8编码）和filename
-                filename_match = re.search(r'filename\*="?UTF-8\'\'([^"]+)"?',
-                                           content_disposition, re.IGNORECASE)
-                if filename_match:
-                    torrent_filename = filename_match.group(1)
-                    # URL解码文件名（UTF-8编码）
-                    torrent_filename = urllib.parse.unquote(torrent_filename,
-                                                            encoding='utf-8')
-                else:
-                    # 尝试匹配普通的filename
-                    filename_match = re.search(r'filename="?([^"]+)"?',
-                                               content_disposition)
-                    if filename_match:
-                        torrent_filename = filename_match.group(1)
-                        # URL解码文件名
-                        torrent_filename = urllib.parse.unquote(
-                            torrent_filename)
-
-            # 使用统一的数据提取方法
-            extracted_data = self._extract_data_by_site_type(soup, torrent_id)
-
-            if os.getenv("DEV_ENV") == "true":
-                try:
-                    import json
-                    # TEMP_DIR 已在文件开头从 config 导入，这里无需重复导入
-                    save_dir = os.path.join(TEMP_DIR, "extracted_data")
-                    os.makedirs(save_dir, exist_ok=True)
-                    # 使用与种子文件相同的命名格式: 站点代码-种子ID-原文件名
-                    extracted_filename = f"{self.SOURCE_SITE_CODE}-{torrent_id}-{torrent_filename.replace('.torrent', '.json')}"
-                    save_path = os.path.join(save_dir, extracted_filename)
-                    with open(save_path, "w", encoding="utf-8") as f:
-                        json.dump(extracted_data,
-                                  f,
-                                  ensure_ascii=False,
-                                  indent=2)
-                    print(f"提取的数据已保存到: {save_path}")
-                except Exception as e:
-                    print(f"保存提取数据时出错: {e}")
-
-            # 获取主标题
-            original_main_title = extracted_data.get("title", "")
-            if not original_main_title:
-                # 如果提取器没有返回标题，则从h1#top获取
-                h1_top = soup.select_one("h1#top")
-                original_main_title = list(
-                    h1_top.stripped_strings)[0] if h1_top else "未找到标题"
-                # 统一处理标题中的点号，将点(.)替换为空格，但保留小数点格式(如 7.1)
-                original_main_title = re.sub(r'(?<!\d)\.|\.(?!\d\b)', ' ',
-                                             original_main_title)
-                original_main_title = re.sub(r'\s+', ' ',
-                                             original_main_title).strip()
-
-            self.logger.info(f"获取到原始主标题: {original_main_title}")
-
-            # 使用统一的种子目录，不再为每个种子创建单独文件夹
-            torrent_dir = os.path.join(TEMP_DIR, "torrents")
-            os.makedirs(torrent_dir, exist_ok=True)
-
-            # [核心修改] 在文件名前添加站点标识符和种子ID，格式: 站点-ID-原文件名.torrent
-            # 例如: ssd-12345-abc.torrent
-            prefixed_torrent_filename = f"{self.SOURCE_SITE_CODE}-{torrent_id}-{torrent_filename}"
-            original_torrent_path = os.path.join(torrent_dir,
-                                                 prefixed_torrent_filename)
-
-            with open(original_torrent_path, "wb") as f:
-                f.write(torrent_response.content)
-            self.temp_files.append(original_torrent_path)
-
-            self.logger.info(f"种子文件已保存到: {original_torrent_path}")
-
-            # 发送日志：开始解析标题
-            if self.task_id:
-                log_streamer.emit_log(self.task_id, "解析参数", "正在解析标题组件...",
-                                      "processing")
-
-            # 调用 upload_data_title 时，传入主标题和种子文件名
-            title_components = upload_data_title(original_main_title,
-                                                 torrent_filename)
-            # --- [核心修改 1] 结束 ---
-
-            if not title_components:
-                self.logger.warning("主标题解析失败，将使用原始标题作为回退。")
-                title_components = [{
-                    "key": "主标题",
-                    "value": original_main_title
-                }]
                 if self.task_id:
-                    log_streamer.emit_log(self.task_id, "解析参数",
-                                          "标题解析失败，使用原始标题", "warning")
-            else:
-                self.logger.success("主标题成功解析为参数。")
-                if self.task_id:
-                    log_streamer.emit_log(self.task_id, "解析参数", "标题解析完成",
+                    log_streamer.emit_log(self.task_id, "获取种子信息",
+                                          f"成功获取种子 ID: {torrent_id}",
                                           "success")
 
-            # 从提取的数据中获取其他信息
-            subtitle = extracted_data.get("subtitle", "")
-            intro = extracted_data.get("intro", {})
-            mediainfo_text = extracted_data.get("mediainfo", "")
-            source_params = extracted_data.get("source_params", {})
+                # 初始化种子参数模型
+                # 使用构造函数传入的 db_manager
+                if not self.db_manager:
+                    raise Exception("数据库管理器未初始化，无法保存种子参数。")
+                seed_param_model = SeedParameter(self.db_manager)
 
-            # [调试] 打印提取器返回的原始制作组信息
-            self.logger.info(
-                f"[调试] extractor返回的source_params['制作组']: {source_params.get('制作组')}"
-            )
-            print(
-                f"[调试] extractor返回的source_params['制作组']: {source_params.get('制作组')}"
-            )
+                self.logger.info(f"正在获取种子(ID: {torrent_id})的详细信息...")
 
-            # [调试] 打印标题组件中的制作组信息
-            team_from_title = None
-            if title_components:
-                for component in title_components:
-                    if component.get("key") == "制作组":
-                        team_from_title = component.get("value")
-                        break
-            self.logger.info(f"[调试] 标题解析得到的制作组: {team_from_title}")
-            print(f"[调试] 标题解析得到的制作组: {team_from_title}")
+                response = self.scraper.get(
+                    f"{self.SOURCE_BASE_URL}/details.php",
+                    headers={"Cookie": self.SOURCE_COOKIE},
+                    params={
+                        "id": torrent_id,
+                        "hit": "1"
+                    },
+                    timeout=180,
+                )
+                response.raise_for_status()
+                response.encoding = "utf-8"
 
-            # [修复] 将 title_components 中的制作组信息补充到 source_params 中
-            if title_components:
-                for component in title_components:
-                    if component.get("key") == "制作组":
-                        team_value = component.get("value")
-                        if team_value:
-                            current_team = source_params.get("制作组")
-                            # 如果制作组为空、为None、或为默认值"Other"，则使用标题中的制作组
-                            if not current_team or current_team.lower(
-                            ) == "other":
-                                source_params["制作组"] = team_value
-                                self.logger.info(
-                                    f"✓ 从标题组件中补充制作组信息: {team_value} (原值: {current_team})"
-                                )
-                                print(
-                                    f"✓ 从标题组件中补充制作组信息: {team_value} (原值: {current_team})"
-                                )
-                            else:
-                                self.logger.info(
-                                    f"✓ source_params中已有有效制作组信息，保持: {current_team}"
-                                )
-                                print(
-                                    f"✓ source_params中已有有效制作组信息，保持: {current_team}"
-                                )
-                            break
+                self.logger.success("详情页请求成功！")
 
-            # [调试] 打印补充后的制作组信息
-            self.logger.info(
-                f"[调试] 补充后的source_params['制作组']: {source_params.get('制作组')}")
-            print(f"[调试] 补充后的source_params['制作组']: {source_params.get('制作组')}")
+                # [新增] 等待页面内容完全加载
+                self.logger.info(f"等待 {PAGE_LOAD_WAIT} 秒确保页面内容完全加载...")
+                time.sleep(PAGE_LOAD_WAIT)
 
-            # 提取IMDb和豆瓣链接
-            imdb_link = intro.get("imdb_link", "")
-            douban_link = intro.get("douban_link", "")
+                soup = BeautifulSoup(response.text, "html.parser")
 
-            # 使用统一提取方法获取的数据
-            descr_container = soup.select_one("div#kdescr")
+                # Pre-check for acknowledgment statement on the raw description
+                descr_container_for_check = soup.select_one("div#kdescr")
+                full_bbcode_descr_for_check = ""
+                if descr_container_for_check:
+                    # Convert raw HTML description to BBCode for an accurate check
+                    full_bbcode_descr_for_check = self._html_to_bbcode(
+                        descr_container_for_check)
 
-            # 从提取的数据中获取简介信息
-            intro_data = extracted_data.get("intro", {})
-            quotes = intro_data.get(
-                "statement",
-                "").split('\n') if intro_data.get("statement") else []
-            images = []
-            if intro_data.get("poster"):
-                images.append(intro_data.get("poster"))
-            if intro_data.get("screenshots"):
-                images.extend(intro_data.get("screenshots").split('\n'))
-            body = intro_data.get("body", "")
-            ardtu_declarations = intro_data.get("removed_ardtudeclarations",
-                                                [])
+                # --- [核心修改 1] 开始 ---
+                # 先下载种子文件，以便获取其准确的文件名
+                download_link_tag = soup.select_one(
+                    f'a.index[href^="download.php?id={torrent_id}"]')
+                if not download_link_tag:
+                    raise Exception("在详情页未找到种子下载链接。")
+                torrent_response = self.scraper.get(
+                    f"{self.SOURCE_BASE_URL}/{download_link_tag['href']}",
+                    headers={"Cookie": self.SOURCE_COOKIE},
+                    timeout=180,
+                )
+                torrent_response.raise_for_status()
 
-            # [统一海报处理] 所有提取器返回海报后，在此统一验证和转存
-            from utils import upload_data_movie_info
-            from utils.media_helper import _get_smart_poster_url
+                # 从响应头中尝试获取文件名，这是最准确的方式
+                content_disposition = torrent_response.headers.get(
+                    'content-disposition')
+                torrent_filename = "default.torrent"  # 设置一个默认值
+                if content_disposition:
+                    # 尝试匹配filename*（支持UTF-8编码）和filename
+                    filename_match = re.search(
+                        r'filename\*="?UTF-8\'\'([^"]+)"?',
+                        content_disposition, re.IGNORECASE)
+                    if filename_match:
+                        torrent_filename = filename_match.group(1)
+                        # URL解码文件名（UTF-8编码）
+                        torrent_filename = urllib.parse.unquote(
+                            torrent_filename, encoding='utf-8')
+                    else:
+                        # 尝试匹配普通的filename
+                        filename_match = re.search(r'filename="?([^"]+)"?',
+                                                   content_disposition)
+                        if filename_match:
+                            torrent_filename = filename_match.group(1)
+                            # URL解码文件名
+                            torrent_filename = urllib.parse.unquote(
+                                torrent_filename)
 
-            # 检查媒体链接（不发送日志，内部处理）
-            self.logger.info("[*] 开始统一验证海报链接...")
+                # 使用统一的数据提取方法
+                extracted_data = self._extract_data_by_site_type(
+                    soup, torrent_id)
 
-            # 提取海报URL
-            poster_url = None
-            if images and images[0]:
-                # 从BBCode [img]...[/img] 中提取URL
-                if poster_url_match := re.search(r'\[img\](.*?)\[/img\]',
-                                                 images[0], re.IGNORECASE):
-                    poster_url = poster_url_match.group(1)
-                    self.logger.info(f"从ptgen提取到原始海报URL: {poster_url}")
+                if os.getenv("DEV_ENV") == "true":
+                    try:
+                        import json
+                        # TEMP_DIR 已在文件开头从 config 导入，这里无需重复导入
+                        save_dir = os.path.join(TEMP_DIR, "extracted_data")
+                        os.makedirs(save_dir, exist_ok=True)
+                        # 使用与种子文件相同的命名格式: 站点代码-种子ID-原文件名
+                        extracted_filename = f"{self.SOURCE_SITE_CODE}-{torrent_id}-{torrent_filename.replace('.torrent', '.json')}"
+                        save_path = os.path.join(save_dir, extracted_filename)
+                        with open(save_path, "w", encoding="utf-8") as f:
+                            json.dump(extracted_data,
+                                      f,
+                                      ensure_ascii=False,
+                                      indent=2)
+                        print(f"提取的数据已保存到: {save_path}")
+                    except Exception as e:
+                        print(f"保存提取数据时出错: {e}")
 
-            # 检查是否已经是pixhost图床
-            is_pixhost = poster_url and 'pixhost.to' in poster_url
+                # 获取主标题
+                original_main_title = extracted_data.get("title", "")
+                if not original_main_title:
+                    # 如果提取器没有返回标题，则从h1#top获取
+                    h1_top = soup.select_one("h1#top")
+                    original_main_title = list(
+                        h1_top.stripped_strings)[0] if h1_top else "未找到标题"
+                    # 统一处理标题中的点号，将点(.)替换为空格，但保留小数点格式(如 7.1)
+                    original_main_title = re.sub(r'(?<!\d)\.|\.(?!\d\b)', ' ',
+                                                 original_main_title)
+                    original_main_title = re.sub(r'\s+', ' ',
+                                                 original_main_title).strip()
 
-            if is_pixhost:
-                self.logger.info("海报已是pixhost图床，跳过校验和转存")
-                # 海报已经是pixhost，直接使用
-                current_poster_valid = True
-            elif poster_url:
-                # 非pixhost图床，执行智能获取和转存
-                self.logger.info("[*] 检测到非pixhost图片，执行智能海报获取...")
+                self.logger.info(f"获取到原始主标题: {original_main_title}")
 
-                # 调用智能海报获取函数（内部会验证和转存）
-                valid_poster_url = _get_smart_poster_url(poster_url)
+                # 使用统一的种子目录，不再为每个种子创建单独文件夹
+                torrent_dir = os.path.join(TEMP_DIR, "torrents")
+                os.makedirs(torrent_dir, exist_ok=True)
 
-                if valid_poster_url:
-                    # 智能获取成功，更新海报
-                    images[0] = f"[img]{valid_poster_url}[/img]"
-                    self.logger.success(f"海报已成功处理: {valid_poster_url}")
-                    current_poster_valid = True
+                # [核心修改] 在文件名前添加站点标识符和种子ID，格式: 站点-ID-原文件名.torrent
+                # 例如: ssd-12345-abc.torrent
+                prefixed_torrent_filename = f"{self.SOURCE_SITE_CODE}-{torrent_id}-{torrent_filename}"
+                original_torrent_path = os.path.join(
+                    torrent_dir, prefixed_torrent_filename)
+
+                with open(original_torrent_path, "wb") as f:
+                    f.write(torrent_response.content)
+                self.temp_files.append(original_torrent_path)
+
+                self.logger.info(f"种子文件已保存到: {original_torrent_path}")
+
+                # 发送日志：开始解析标题
+                if self.task_id:
+                    log_streamer.emit_log(self.task_id, "解析参数", "正在解析标题组件...",
+                                          "processing")
+
+                # 调用 upload_data_title 时，传入主标题和种子文件名
+                title_components = upload_data_title(original_main_title,
+                                                     torrent_filename)
+                # --- [核心修改 1] 结束 ---
+
+                if not title_components:
+                    self.logger.warning("主标题解析失败，将使用原始标题作为回退。")
+                    title_components = [{
+                        "key": "主标题",
+                        "value": original_main_title
+                    }]
+                    if self.task_id:
+                        log_streamer.emit_log(self.task_id, "解析参数",
+                                              "标题解析失败，使用原始标题", "warning")
                 else:
-                    # 智能获取失败，标记需要重新获取
-                    self.logger.warning("智能海报获取失败，将尝试从豆瓣/IMDb重新获取")
+                    self.logger.success("主标题成功解析为参数。")
+                    if self.task_id:
+                        log_streamer.emit_log(self.task_id, "解析参数", "标题解析完成",
+                                              "success")
+
+                # 从提取的数据中获取其他信息
+                subtitle = extracted_data.get("subtitle", "")
+                intro = extracted_data.get("intro", {})
+                mediainfo_text = extracted_data.get("mediainfo", "")
+                source_params = extracted_data.get("source_params", {})
+
+                # [调试] 打印提取器返回的原始制作组信息
+                self.logger.info(
+                    f"[调试] extractor返回的source_params['制作组']: {source_params.get('制作组')}"
+                )
+                print(
+                    f"[调试] extractor返回的source_params['制作组']: {source_params.get('制作组')}"
+                )
+
+                # [调试] 打印标题组件中的制作组信息
+                team_from_title = None
+                if title_components:
+                    for component in title_components:
+                        if component.get("key") == "制作组":
+                            team_from_title = component.get("value")
+                            break
+                self.logger.info(f"[调试] 标题解析得到的制作组: {team_from_title}")
+                print(f"[调试] 标题解析得到的制作组: {team_from_title}")
+
+                # [修复] 将 title_components 中的制作组信息补充到 source_params 中
+                if title_components:
+                    for component in title_components:
+                        if component.get("key") == "制作组":
+                            team_value = component.get("value")
+                            if team_value:
+                                current_team = source_params.get("制作组")
+                                # 如果制作组为空、为None、或为默认值"Other"，则使用标题中的制作组
+                                if not current_team or current_team.lower(
+                                ) == "other":
+                                    source_params["制作组"] = team_value
+                                    self.logger.info(
+                                        f"✓ 从标题组件中补充制作组信息: {team_value} (原值: {current_team})"
+                                    )
+                                    print(
+                                        f"✓ 从标题组件中补充制作组信息: {team_value} (原值: {current_team})"
+                                    )
+                                else:
+                                    self.logger.info(
+                                        f"✓ source_params中已有有效制作组信息，保持: {current_team}"
+                                    )
+                                    print(
+                                        f"✓ source_params中已有有效制作组信息，保持: {current_team}"
+                                    )
+                                break
+
+                # [调试] 打印补充后的制作组信息
+                self.logger.info(
+                    f"[调试] 补充后的source_params['制作组']: {source_params.get('制作组')}"
+                )
+                print(
+                    f"[调试] 补充后的source_params['制作组']: {source_params.get('制作组')}"
+                )
+
+                # 提取IMDb和豆瓣链接
+                imdb_link = intro.get("imdb_link", "")
+                douban_link = intro.get("douban_link", "")
+
+                # 使用统一提取方法获取的数据
+                descr_container = soup.select_one("div#kdescr")
+
+                # 从提取的数据中获取简介信息
+                intro_data = extracted_data.get("intro", {})
+                quotes = intro_data.get(
+                    "statement",
+                    "").split('\n') if intro_data.get("statement") else []
+                images = []
+                if intro_data.get("poster"):
+                    images.append(intro_data.get("poster"))
+                if intro_data.get("screenshots"):
+                    images.extend(intro_data.get("screenshots").split('\n'))
+                body = intro_data.get("body", "")
+                ardtu_declarations = intro_data.get(
+                    "removed_ardtudeclarations", [])
+
+                # [统一海报处理] 所有提取器返回海报后，在此统一验证和转存
+                from utils import upload_data_movie_info
+                from utils.media_helper import _get_smart_poster_url
+
+                # 检查媒体链接（不发送日志，内部处理）
+                self.logger.info("[*] 开始统一验证海报链接...")
+
+                # 提取海报URL
+                poster_url = None
+                if images and images[0]:
+                    # 从BBCode [img]...[/img] 中提取URL
+                    if poster_url_match := re.search(r'\[img\](.*?)\[/img\]',
+                                                     images[0], re.IGNORECASE):
+                        poster_url = poster_url_match.group(1)
+                        self.logger.info(f"从ptgen提取到原始海报URL: {poster_url}")
+
+                # 检查是否已经是pixhost图床
+                is_pixhost = poster_url and 'pixhost.to' in poster_url
+
+                if is_pixhost:
+                    self.logger.info("海报已是pixhost图床，跳过校验和转存")
+                    # 海报已经是pixhost，直接使用
+                    current_poster_valid = True
+                elif poster_url:
+                    # 非pixhost图床，执行智能获取和转存
+                    self.logger.info("[*] 检测到非pixhost图片，执行智能海报获取...")
+
+                    # 调用智能海报获取函数（内部会验证和转存）
+                    valid_poster_url = _get_smart_poster_url(poster_url)
+
+                    if valid_poster_url:
+                        # 智能获取成功，更新海报
+                        images[0] = f"[img]{valid_poster_url}[/img]"
+                        self.logger.success(f"海报已成功处理: {valid_poster_url}")
+                        current_poster_valid = True
+                    else:
+                        # 智能获取失败，标记需要重新获取
+                        self.logger.warning("智能海报获取失败，将尝试从豆瓣/IMDb重新获取")
+                        current_poster_valid = False
+                else:
+                    # 没有海报URL
+                    self.logger.info("未找到海报URL，将尝试从豆瓣/IMDb获取")
                     current_poster_valid = False
-            else:
-                # 没有海报URL
-                self.logger.info("未找到海报URL，将尝试从豆瓣/IMDb获取")
-                current_poster_valid = False
 
-            # 如果海报处理失败，尝试从豆瓣或IMDb获取新海报
-            if not current_poster_valid:
-                self.logger.info("尝试从豆瓣或IMDb获取新海报...")
+                # 如果海报处理失败，尝试从豆瓣或IMDb获取新海报
+                if not current_poster_valid:
+                    self.logger.info("尝试从豆瓣或IMDb获取新海报...")
 
-                # 优先级1：如果有豆瓣链接，优先从豆瓣获取
-                if douban_link:
-                    self.logger.info(f"尝试从豆瓣链接获取海报: {douban_link}")
-                    poster_status, poster_content, description_content, extracted_imdb = upload_data_movie_info(
-                        douban_link, "")
+                    # 优先级1：如果有豆瓣链接，优先从豆瓣获取
+                    if douban_link:
+                        self.logger.info(f"尝试从豆瓣链接获取海报: {douban_link}")
+                        poster_status, poster_content, description_content, extracted_imdb = upload_data_movie_info(
+                            douban_link, "")
 
-                    if poster_status and poster_content:
-                        # 成功获取到海报（已经过智能处理和转存）
-                        if not images:
-                            images = [poster_content]
+                        if poster_status and poster_content:
+                            # 成功获取到海报（已经过智能处理和转存）
+                            if not images:
+                                images = [poster_content]
+                            else:
+                                images[0] = poster_content
+                            self.logger.success("成功从豆瓣获取到海报")
+
+                            # 如果同时获取到IMDb链接且当前没有IMDb链接，也更新IMDb链接
+                            if extracted_imdb and not imdb_link:
+                                imdb_link = extracted_imdb
+                                self.logger.info(
+                                    f"通过豆瓣海报提取到IMDb链接: {imdb_link}")
+
+                                # 将IMDb链接添加到简介中
+                                imdb_info = f"◎IMDb链接　[url={imdb_link}]{imdb_link}[/url]"
+                                douban_pattern = r"◎豆瓣链接　\[url=[^\]]+\][^\[]+\[/url\]"
+                                if re.search(douban_pattern, body):
+                                    body = re.sub(
+                                        douban_pattern, lambda m: m.group(0) +
+                                        "\n" + imdb_info, body)
+                                else:
+                                    if body:
+                                        body = f"{body}\n\n{imdb_info}"
+                                    else:
+                                        body = imdb_info
                         else:
-                            images[0] = poster_content
-                        self.logger.success("成功从豆瓣获取到海报")
+                            self.logger.warning(
+                                f"从豆瓣链接获取海报失败: {poster_content}")
 
-                        # 如果同时获取到IMDb链接且当前没有IMDb链接，也更新IMDb链接
-                        if extracted_imdb and not imdb_link:
+                    # 优先级2：如果没有豆瓣链接或豆瓣获取失败，尝试从IMDb链接获取
+                    elif imdb_link and (not images or not images[0]
+                                        or "[img]" not in images[0]):
+                        self.logger.info(f"尝试从IMDb链接获取海报: {imdb_link}")
+                        poster_status, poster_content, description_content, _ = upload_data_movie_info(
+                            "", imdb_link)
+
+                        if poster_status and poster_content:
+                            # 成功获取到海报（已经过智能处理和转存）
+                            if not images:
+                                images = [poster_content]
+                            else:
+                                images[0] = poster_content
+                            self.logger.success("成功从IMDb获取到海报")
+                        else:
+                            self.logger.warning(
+                                f"从IMDb链接获取海报失败: {poster_content}")
+
+                    # 如果两种方式都失败了，记录日志
+                    if not images or not images[0] or "[img]" not in images[0]:
+                        self.logger.warning("无法从豆瓣或IMDb获取到有效的海报")
+                else:
+                    # 海报已处理成功，尝试获取IMDb链接（如果需要）
+                    if douban_link and not imdb_link:
+                        poster_status, poster_content, description_content, extracted_imdb = upload_data_movie_info(
+                            douban_link, "")
+                        if extracted_imdb:
                             imdb_link = extracted_imdb
-                            self.logger.info(f"通过豆瓣海报提取到IMDb链接: {imdb_link}")
+                            self.logger.info(f"通过豆瓣提取到IMDb链接: {imdb_link}")
 
                             # 将IMDb链接添加到简介中
                             imdb_info = f"◎IMDb链接　[url={imdb_link}]{imdb_link}[/url]"
@@ -1079,122 +1153,97 @@ class TorrentMigrator:
                                     body = f"{body}\n\n{imdb_info}"
                                 else:
                                     body = imdb_info
-                    else:
-                        self.logger.warning(f"从豆瓣链接获取海报失败: {poster_content}")
 
-                # 优先级2：如果没有豆瓣链接或豆瓣获取失败，尝试从IMDb链接获取
-                elif imdb_link and (not images or not images[0]
-                                    or "[img]" not in images[0]):
-                    self.logger.info(f"尝试从IMDb链接获取海报: {imdb_link}")
-                    poster_status, poster_content, description_content, _ = upload_data_movie_info(
-                        "", imdb_link)
+                # 重新组装intro字典
+                intro = {
+                    "statement": "\n".join(quotes),
+                    "poster": images[0] if images else "",
+                    "body": re.sub(r"\n{2,}", "\n", body),
+                    "screenshots": "\n".join(images[1:]),
+                    "removed_ardtudeclarations": ardtu_declarations,
+                    "imdb_link": imdb_link,
+                    "douban_link": douban_link,
+                }
 
-                    if poster_status and poster_content:
-                        # 成功获取到海报（已经过智能处理和转存）
-                        if not images:
-                            images = [poster_content]
-                        else:
-                            images[0] = poster_content
-                        self.logger.success("成功从IMDb获取到海报")
-                    else:
-                        self.logger.warning(f"从IMDb链接获取海报失败: {poster_content}")
+                # 6. 提取产地信息并添加到source_params中
+                full_description_text = f"{intro.get('statement', '')}\n{intro.get('body', '')}"
+                origin_info = extract_origin_from_description(
+                    full_description_text)
 
-                # 如果两种方式都失败了，记录日志
-                if not images or not images[0] or "[img]" not in images[0]:
-                    self.logger.warning("无法从豆瓣或IMDb获取到有效的海报")
-            else:
-                # 海报已处理成功，尝试获取IMDb链接（如果需要）
-                if douban_link and not imdb_link:
-                    poster_status, poster_content, description_content, extracted_imdb = upload_data_movie_info(
-                        douban_link, "")
-                    if extracted_imdb:
-                        imdb_link = extracted_imdb
-                        self.logger.info(f"通过豆瓣提取到IMDb链接: {imdb_link}")
+                # --- [核心修改结束] ---
 
-                        # 将IMDb链接添加到简介中
-                        imdb_info = f"◎IMDb链接　[url={imdb_link}]{imdb_link}[/url]"
-                        douban_pattern = r"◎豆瓣链接　\[url=[^\]]+\][^\[]+\[/url\]"
-                        if re.search(douban_pattern, body):
-                            body = re.sub(
-                                douban_pattern,
-                                lambda m: m.group(0) + "\n" + imdb_info, body)
-                        else:
-                            if body:
-                                body = f"{body}\n\n{imdb_info}"
+                # 处理torrent_filename，去除.torrent扩展名、URL解码并过滤站点信息，以便正确查找视频文件
+                processed_torrent_name = urllib.parse.unquote(torrent_filename)
+                if processed_torrent_name.endswith('.torrent'):
+                    processed_torrent_name = processed_torrent_name[:
+                                                                    -8]  # 去除.torrent扩展名
+
+                # 过滤掉文件名中的站点信息（如[HDHome]、[HDSpace]等）
+                processed_torrent_name = re.sub(r'^\[[^\]]+\]\.', '',
+                                                processed_torrent_name)
+
+                # --- [核心修改] 在这里统一验证和重新生成截图 ---
+                screenshots_valid = True
+                screenshots_sufficient = True
+                required_screenshot_count = 3  # 需要至少3张截图
+
+                # 使用 intro_data 来检查，因为它包含了从 extractor 提取的原始截图
+                if intro_data.get("screenshots"):
+                    screenshot_links = intro_data["screenshots"].strip().split(
+                        '\n')
+                    # 过滤掉空字符串
+                    screenshot_links = [
+                        link for link in screenshot_links if link.strip()
+                    ]
+
+                    if screenshot_links:
+                        self.logger.info(
+                            f"[*] 开始验证 {len(screenshot_links)} 个截图链接的有效性...")
+                        print(f"[*] 开始验证 {len(screenshot_links)} 个截图链接的有效性...")
+
+                        # 检查数量是否足够
+                        if len(screenshot_links) < required_screenshot_count:
+                            self.logger.warning(
+                                f"⚠️ 截图数量不足（当前: {len(screenshot_links)}，需要: {required_screenshot_count}张）"
+                            )
+                            print(
+                                f"⚠️ 截图数量不足（当前: {len(screenshot_links)}，需要: {required_screenshot_count}张）"
+                            )
+                            screenshots_sufficient = False
+
+                        # 验证每个截图的有效性
+                        valid_count = 0
+                        invalid_count = 0
+                        for i, shot_tag in enumerate(screenshot_links):
+                            if shot_url_match := re.search(
+                                    r'\[img\](.*?)\[/img\]', shot_tag,
+                                    re.IGNORECASE):
+                                shot_url = shot_url_match.group(1)
+                                if is_image_url_valid_robust(shot_url):
+                                    valid_count += 1
+                                else:
+                                    invalid_count += 1
+                                    self.logger.warning(
+                                        f"检测到第 {i+1} 个截图链接失效: {shot_url}")
+                                    # 如果超过5张图片失效，直接清空全部重新获取
+                                    if invalid_count > 5:
+                                        self.logger.warning(
+                                            f"失效图片数量超过5张（{invalid_count}张），直接清空全部截图重新获取"
+                                        )
+                                        print(
+                                            f"⚠️ 失效图片数量超过5张（{invalid_count}张），直接清空全部截图重新获取"
+                                        )
+                                        screenshots_valid = False
+                                        screenshots_sufficient = False
+                                        # 清空截图数据，强制重新生成
+                                        intro_data["screenshots"] = ""
+                                        screenshot_links = []
+                                        break
                             else:
-                                body = imdb_info
-
-            # 重新组装intro字典
-            intro = {
-                "statement": "\n".join(quotes),
-                "poster": images[0] if images else "",
-                "body": re.sub(r"\n{2,}", "\n", body),
-                "screenshots": "\n".join(images[1:]),
-                "removed_ardtudeclarations": ardtu_declarations,
-                "imdb_link": imdb_link,
-                "douban_link": douban_link,
-            }
-
-            # 6. 提取产地信息并添加到source_params中
-            full_description_text = f"{intro.get('statement', '')}\n{intro.get('body', '')}"
-            origin_info = extract_origin_from_description(
-                full_description_text)
-
-            # --- [核心修改结束] ---
-
-            # 处理torrent_filename，去除.torrent扩展名、URL解码并过滤站点信息，以便正确查找视频文件
-            processed_torrent_name = urllib.parse.unquote(torrent_filename)
-            if processed_torrent_name.endswith('.torrent'):
-                processed_torrent_name = processed_torrent_name[:
-                                                                -8]  # 去除.torrent扩展名
-
-            # 过滤掉文件名中的站点信息（如[HDHome]、[HDSpace]等）
-            processed_torrent_name = re.sub(r'^\[[^\]]+\]\.', '',
-                                            processed_torrent_name)
-
-            # --- [核心修改] 在这里统一验证和重新生成截图 ---
-            screenshots_valid = True
-            screenshots_sufficient = True
-            required_screenshot_count = 3  # 需要至少3张截图
-
-            # 使用 intro_data 来检查，因为它包含了从 extractor 提取的原始截图
-            if intro_data.get("screenshots"):
-                screenshot_links = intro_data["screenshots"].strip().split(
-                    '\n')
-                # 过滤掉空字符串
-                screenshot_links = [
-                    link for link in screenshot_links if link.strip()
-                ]
-
-                if screenshot_links:
-                    self.logger.info(
-                        f"[*] 开始验证 {len(screenshot_links)} 个截图链接的有效性...")
-                    print(f"[*] 开始验证 {len(screenshot_links)} 个截图链接的有效性...")
-
-                    # 检查数量是否足够
-                    if len(screenshot_links) < required_screenshot_count:
-                        self.logger.warning(
-                            f"⚠️ 截图数量不足（当前: {len(screenshot_links)}，需要: {required_screenshot_count}张）"
-                        )
-                        print(
-                            f"⚠️ 截图数量不足（当前: {len(screenshot_links)}，需要: {required_screenshot_count}张）"
-                        )
-                        screenshots_sufficient = False
-
-                    # 验证每个截图的有效性
-                    valid_count = 0
-                    invalid_count = 0
-                    for i, shot_tag in enumerate(screenshot_links):
-                        if shot_url_match := re.search(r'\[img\](.*?)\[/img\]',
-                                                       shot_tag,
-                                                       re.IGNORECASE):
-                            shot_url = shot_url_match.group(1)
-                            if is_image_url_valid_robust(shot_url):
-                                valid_count += 1
-                            else:
+                                # 如果标签格式不正确，也视为无效
                                 invalid_count += 1
                                 self.logger.warning(
-                                    f"检测到第 {i+1} 个截图链接失效: {shot_url}")
+                                    f"第 {i+1} 个截图标签格式不正确: {shot_tag}")
                                 # 如果超过5张图片失效，直接清空全部重新获取
                                 if invalid_count > 5:
                                     self.logger.warning(
@@ -1209,699 +1258,712 @@ class TorrentMigrator:
                                     intro_data["screenshots"] = ""
                                     screenshot_links = []
                                     break
-                        else:
-                            # 如果标签格式不正确，也视为无效
-                            invalid_count += 1
+
+                        # 只有在没有提前退出循环的情况下才设置screenshots_valid
+                        if invalid_count <= 5 and invalid_count > 0:
+                            screenshots_valid = False
+
+                        # 最终检查：即使所有链接有效，如果数量不足也需要重新生成
+                        if screenshots_valid and valid_count < required_screenshot_count:
                             self.logger.warning(
-                                f"第 {i+1} 个截图标签格式不正确: {shot_tag}")
-                            # 如果超过5张图片失效，直接清空全部重新获取
-                            if invalid_count > 5:
-                                self.logger.warning(
-                                    f"失效图片数量超过5张（{invalid_count}张），直接清空全部截图重新获取"
-                                )
-                                print(
-                                    f"⚠️ 失效图片数量超过5张（{invalid_count}张），直接清空全部截图重新获取"
-                                )
-                                screenshots_valid = False
-                                screenshots_sufficient = False
-                                # 清空截图数据，强制重新生成
-                                intro_data["screenshots"] = ""
-                                screenshot_links = []
-                                break
+                                f"⚠️ 有效截图数量不足（总图片: {len(screenshot_links)}，有效: {valid_count}，需要: {required_screenshot_count}张）"
+                            )
+                            print(
+                                f"⚠️ 有效截图数量不足（总图片: {len(screenshot_links)}，有效: {valid_count}，需要: {required_screenshot_count}张）"
+                            )
+                            screenshots_sufficient = False
 
-                    # 只有在没有提前退出循环的情况下才设置screenshots_valid
-                    if invalid_count <= 5 and invalid_count > 0:
+                        if screenshots_valid and screenshots_sufficient:
+                            self.logger.info(
+                                f"[*] 验证完成，保留 {valid_count} 个有效截图链接。")
+                            print(f"[*] 验证完成，保留 {valid_count} 个有效截图链接。")
+                            # 截图有效，发送验证成功日志
+                            if self.task_id:
+                                log_streamer.emit_log(
+                                    self.task_id, "验证图片链接",
+                                    f"图片链接验证通过 ({valid_count}张)", "success")
+                    else:
+                        # 如果 screenshots 字段存在但为空，视为需要生成
+                        self.logger.info("未找到截图链接，将重新生成。")
+                        print("未找到截图链接，将重新生成。")
                         screenshots_valid = False
-
-                    # 最终检查：即使所有链接有效，如果数量不足也需要重新生成
-                    if screenshots_valid and valid_count < required_screenshot_count:
-                        self.logger.warning(
-                            f"⚠️ 有效截图数量不足（总图片: {len(screenshot_links)}，有效: {valid_count}，需要: {required_screenshot_count}张）"
-                        )
-                        print(
-                            f"⚠️ 有效截图数量不足（总图片: {len(screenshot_links)}，有效: {valid_count}，需要: {required_screenshot_count}张）"
-                        )
-                        screenshots_sufficient = False
-
-                    if screenshots_valid and screenshots_sufficient:
-                        self.logger.info(f"[*] 验证完成，保留 {valid_count} 个有效截图链接。")
-                        print(f"[*] 验证完成，保留 {valid_count} 个有效截图链接。")
-                        # 截图有效，发送验证成功日志
-                        if self.task_id:
-                            log_streamer.emit_log(
-                                self.task_id, "验证图片链接",
-                                f"图片链接验证通过 ({valid_count}张)", "success")
                 else:
-                    # 如果 screenshots 字段存在但为空，视为需要生成
-                    self.logger.info("未找到截图链接，将重新生成。")
-                    print("未找到截图链接，将重新生成。")
+                    # 如果没有截图字段，也需要生成
+                    self.logger.info("未找到截图字段，将重新生成。")
+                    print("未找到截图字段，将重新生成。")
                     screenshots_valid = False
-            else:
-                # 如果没有截图字段，也需要生成
-                self.logger.info("未找到截图字段，将重新生成。")
-                print("未找到截图字段，将重新生成。")
-                screenshots_valid = False
 
-            # 如果截图无效或数量不足，则立即重新生成（不再只是标记）
-            if not screenshots_valid or not screenshots_sufficient:
-                if not screenshots_valid:
-                    self.logger.warning("⚠️ 检测到截图失效，立即重新生成截图...")
-                    print("⚠️ 检测到截图失效，立即重新生成截图...")
-                    if self.task_id:
-                        log_streamer.emit_log(self.task_id, "验证图片链接",
-                                              "检测到截图失效，开始重新生成...",
-                                              "processing")
-                else:
-                    self.logger.warning(f"⚠️ 截图数量不足，立即重新生成截图...")
-                    print(f"⚠️ 截图数量不足，立即重新生成截图...")
-                    if self.task_id:
-                        log_streamer.emit_log(self.task_id, "验证图片链接",
-                                              f"截图数量不足，开始重新生成...",
-                                              "processing")
+                # 如果截图无效或数量不足，则立即重新生成（不再只是标记）
+                if not screenshots_valid or not screenshots_sufficient:
+                    if not screenshots_valid:
+                        self.logger.warning("⚠️ 检测到截图失效，立即重新生成截图...")
+                        print("⚠️ 检测到截图失效，立即重新生成截图...")
+                        if self.task_id:
+                            log_streamer.emit_log(self.task_id, "验证图片链接",
+                                                  "检测到截图失效，开始重新生成...",
+                                                  "processing")
+                    else:
+                        self.logger.warning(f"⚠️ 截图数量不足，立即重新生成截图...")
+                        print(f"⚠️ 截图数量不足，立即重新生成截图...")
+                        if self.task_id:
+                            log_streamer.emit_log(self.task_id, "验证图片链接",
+                                                  f"截图数量不足，开始重新生成...",
+                                                  "processing")
 
-                # 准备调用截图函数所需参数
-                source_info_for_screenshot = {
-                    'main_title': original_main_title
-                }
+                    # 准备调用截图函数所需参数
+                    source_info_for_screenshot = {
+                        'main_title': original_main_title
+                    }
 
-                # 立即调用截图函数
-                from utils import upload_data_screenshot
-                new_screenshots = upload_data_screenshot(
-                    source_info=source_info_for_screenshot,
+                    # 立即调用截图函数
+                    from utils import upload_data_screenshot
+                    new_screenshots = upload_data_screenshot(
+                        source_info=source_info_for_screenshot,
+                        save_path=self.save_path,
+                        torrent_name=processed_torrent_name,
+                        downloader_id=self.downloader_id)
+
+                    if new_screenshots:
+                        # 更新 intro 字典中的截图
+                        intro["screenshots"] = new_screenshots
+                        self.logger.success("✅ 成功重新生成并上传截图。")
+                        print("✅ 成功重新生成并上传截图。")
+                        if self.task_id:
+                            log_streamer.emit_log(self.task_id, "验证图片链接",
+                                                  "截图重新生成并上传成功", "success")
+
+                        # 更新 images 列表，保持数据同步
+                        # 保留海报（第一个元素），然后添加新截图
+                        images = [images[0]] if images and images[0] else []
+                        images.extend(new_screenshots.strip().split('\n'))
+                    else:
+                        self.logger.error("❌ 重新生成截图失败。")
+                        print("❌ 重新生成截图失败。")
+                        if self.task_id:
+                            log_streamer.emit_log(self.task_id, "验证图片链接",
+                                                  "截图重新生成失败", "error")
+                        # 清空截图
+                        intro["screenshots"] = ""
+                        images = [images[0]] if images and images[0] else []
+
+                # 使用upload_data_mediaInfo处理mediainfo
+                if self.task_id:
+                    log_streamer.emit_log(self.task_id, "提取媒体信息",
+                                          "正在提取 MediaInfo...", "processing")
+
+                mediainfo = upload_data_mediaInfo(
+                    mediaInfo=mediainfo_text
+                    if mediainfo_text else "未找到 Mediainfo 或 BDInfo",
                     save_path=self.save_path,
                     torrent_name=processed_torrent_name,
                     downloader_id=self.downloader_id)
 
-                if new_screenshots:
-                    # 更新 intro 字典中的截图
-                    intro["screenshots"] = new_screenshots
-                    self.logger.success("✅ 成功重新生成并上传截图。")
-                    print("✅ 成功重新生成并上传截图。")
-                    if self.task_id:
-                        log_streamer.emit_log(self.task_id, "验证图片链接",
-                                              "截图重新生成并上传成功", "success")
+                if self.task_id:
+                    if mediainfo and mediainfo != "未找到 Mediainfo 或 BDInfo":
+                        log_streamer.emit_log(self.task_id, "提取媒体信息",
+                                              "MediaInfo 提取成功", "success")
+                    else:
+                        log_streamer.emit_log(self.task_id, "提取媒体信息",
+                                              "MediaInfo 提取失败或不存在", "warning")
 
-                    # 更新 images 列表，保持数据同步
-                    # 保留海报（第一个元素），然后添加新截图
-                    images = [images[0]] if images and images[0] else []
-                    images.extend(new_screenshots.strip().split('\n'))
-                else:
-                    self.logger.error("❌ 重新生成截图失败。")
-                    print("❌ 重新生成截图失败。")
-                    if self.task_id:
-                        log_streamer.emit_log(self.task_id, "验证图片链接",
-                                              "截图重新生成失败", "error")
-                    # 清空截图
-                    intro["screenshots"] = ""
-                    images = [images[0]] if images and images[0] else []
-
-            # 使用upload_data_mediaInfo处理mediainfo
-            if self.task_id:
-                log_streamer.emit_log(self.task_id, "提取媒体信息",
-                                      "正在提取 MediaInfo...", "processing")
-
-            mediainfo = upload_data_mediaInfo(
-                mediaInfo=mediainfo_text
-                if mediainfo_text else "未找到 Mediainfo 或 BDInfo",
-                save_path=self.save_path,
-                torrent_name=processed_torrent_name,
-                downloader_id=self.downloader_id)
-
-            if self.task_id:
+                # [新增] 从 MediaInfo 中提取标签并补充到 source_params
                 if mediainfo and mediainfo != "未找到 Mediainfo 或 BDInfo":
-                    log_streamer.emit_log(self.task_id, "提取媒体信息",
-                                          "MediaInfo 提取成功", "success")
-                else:
-                    log_streamer.emit_log(self.task_id, "提取媒体信息",
-                                          "MediaInfo 提取失败或不存在", "warning")
+                    self.logger.info("开始从 MediaInfo 提取标签...")
+                    tags_from_mediainfo = extract_tags_from_mediainfo(
+                        mediainfo)
+                    if tags_from_mediainfo:
+                        # 将从 MediaInfo 提取的标签与源站点的标签合并（去重）
+                        existing_tags = source_params.get("标签", [])
 
-            # [新增] 从 MediaInfo 中提取标签并补充到 source_params
-            if mediainfo and mediainfo != "未找到 Mediainfo 或 BDInfo":
-                self.logger.info("开始从 MediaInfo 提取标签...")
-                tags_from_mediainfo = extract_tags_from_mediainfo(mediainfo)
-                if tags_from_mediainfo:
-                    # 将从 MediaInfo 提取的标签与源站点的标签合并（去重）
+                        # [修复] 统一标签格式：移除 tag. 前缀以确保去重正常工作
+                        # MediaInfo 提取的标签格式为 'tag.中字'，网页提取的为 '中字'
+                        normalized_mediainfo_tags = [
+                            tag.replace('tag.', '')
+                            if tag.startswith('tag.') else tag
+                            for tag in tags_from_mediainfo
+                        ]
+
+                        # 合并标签并去重，保持顺序
+                        merged_tags = list(
+                            dict.fromkeys(existing_tags +
+                                          normalized_mediainfo_tags))
+                        source_params["标签"] = merged_tags
+                        self.logger.info(
+                            f"从 MediaInfo 提取到标签: {tags_from_mediainfo}")
+                        self.logger.info(
+                            f"标准化后的标签: {normalized_mediainfo_tags}")
+                        self.logger.info(f"合并后的标签: {merged_tags}")
+                    else:
+                        self.logger.info("MediaInfo 中未提取到额外标签")
+
+                # [新增] 从标题参数中提取标签（DIY、VCB-Studio等）
+                from utils import extract_tags_from_title
+                self.logger.info("开始从标题参数提取标签...")
+                tags_from_title = extract_tags_from_title(title_components)
+                if tags_from_title:
+                    # 将从标题提取的标签与现有标签合并（去重）
                     existing_tags = source_params.get("标签", [])
-
-                    # [修复] 统一标签格式：移除 tag. 前缀以确保去重正常工作
-                    # MediaInfo 提取的标签格式为 'tag.中字'，网页提取的为 '中字'
-                    normalized_mediainfo_tags = [
-                        tag.replace('tag.', '')
-                        if tag.startswith('tag.') else tag
-                        for tag in tags_from_mediainfo
-                    ]
-
                     # 合并标签并去重，保持顺序
                     merged_tags = list(
-                        dict.fromkeys(existing_tags +
-                                      normalized_mediainfo_tags))
+                        dict.fromkeys(existing_tags + tags_from_title))
                     source_params["标签"] = merged_tags
-                    self.logger.info(
-                        f"从 MediaInfo 提取到标签: {tags_from_mediainfo}")
-                    self.logger.info(f"标准化后的标签: {normalized_mediainfo_tags}")
+                    self.logger.info(f"从标题参数提取到标签: {tags_from_title}")
                     self.logger.info(f"合并后的标签: {merged_tags}")
                 else:
-                    self.logger.info("MediaInfo 中未提取到额外标签")
+                    self.logger.info("标题参数中未提取到额外标签")
 
-            # [新增] 从标题参数中提取标签（DIY、VCB-Studio等）
-            from utils import extract_tags_from_title
-            self.logger.info("开始从标题参数提取标签...")
-            tags_from_title = extract_tags_from_title(title_components)
-            if tags_from_title:
-                # 将从标题提取的标签与现有标签合并（去重）
-                existing_tags = source_params.get("标签", [])
-                # 合并标签并去重，保持顺序
-                merged_tags = list(
-                    dict.fromkeys(existing_tags + tags_from_title))
-                source_params["标签"] = merged_tags
-                self.logger.info(f"从标题参数提取到标签: {tags_from_title}")
-                self.logger.info(f"合并后的标签: {merged_tags}")
-            else:
-                self.logger.info("标题参数中未提取到额外标签")
+                # [新增] 检查电视剧/动漫是否完结
+                self.logger.info("开始检查电视剧/动漫完结状态...")
+                full_description_for_completion = f"{intro.get('statement', '')}\n{intro.get('body', '')}"
 
-            # [新增] 检查电视剧/动漫是否完结
-            self.logger.info("开始检查电视剧/动漫完结状态...")
-            full_description_for_completion = f"{intro.get('statement', '')}\n{intro.get('body', '')}"
+                completion_status = check_completion_status(
+                    title=original_main_title,
+                    subtitle=subtitle,
+                    description=full_description_for_completion,
+                    local_path=self.save_path,
+                    downloader_id=self.downloader_id,
+                    torrent_name=processed_torrent_name  # 传入处理后的种子名称
+                )
 
-            completion_status = check_completion_status(
-                title=original_main_title,
-                subtitle=subtitle,
-                description=full_description_for_completion,
-                local_path=self.save_path,
-                downloader_id=self.downloader_id,
-                torrent_name=processed_torrent_name  # 传入处理后的种子名称
-            )
+                if completion_status.get("is_complete"):
+                    self.logger.info(
+                        f"✓ 检测到完结状态: {completion_status['reason']} "
+                        f"(置信度: {completion_status['confidence']})")
 
-            if completion_status.get("is_complete"):
-                self.logger.info(f"✓ 检测到完结状态: {completion_status['reason']} "
-                                 f"(置信度: {completion_status['confidence']})")
+                    # 添加完结标签
+                    existing_tags = source_params.get("标签", [])
+                    updated_tags = add_completion_tag_if_needed(
+                        existing_tags, completion_status)
+                    source_params["标签"] = updated_tags
 
-                # 添加完结标签
-                existing_tags = source_params.get("标签", [])
-                updated_tags = add_completion_tag_if_needed(
-                    existing_tags, completion_status)
-                source_params["标签"] = updated_tags
+                    # 记录详细信息
+                    if completion_status.get("details"):
+                        details = completion_status["details"]
+                        if "episode_check" in details:
+                            ep_check = details["episode_check"]
+                            self.logger.info(
+                                f"  集数信息: 简介总集数={ep_check.get('total_episodes')}, "
+                                f"本地集数={ep_check.get('local_episodes')}")
+                else:
+                    self.logger.info(
+                        f"未检测到完结标识: {completion_status['reason']}")
 
-                # 记录详细信息
-                if completion_status.get("details"):
-                    details = completion_status["details"]
-                    if "episode_check" in details:
-                        ep_check = details["episode_check"]
-                        self.logger.info(
-                            f"  集数信息: 简介总集数={ep_check.get('total_episodes')}, "
-                            f"本地集数={ep_check.get('local_episodes')}")
-            else:
-                self.logger.info(f"未检测到完结标识: {completion_status['reason']}")
-
-            # 步骤5：验证简介格式
-            if self.task_id:
-                log_streamer.emit_log(self.task_id, "验证简介格式", "正在检查简介完整性...",
-                                      "processing")
-
-            # 检查简介是否有效
-            intro_valid = bool(intro.get("body") and intro.get("body").strip())
-
-            if intro_valid:
+                # 步骤5：验证简介格式
                 if self.task_id:
-                    log_streamer.emit_log(self.task_id, "验证简介格式", "简介格式验证通过",
-                                          "success")
-            else:
-                # 如果简介无效，尝试从豆瓣重新获取
-                if douban_link:
+                    log_streamer.emit_log(self.task_id, "验证简介格式",
+                                          "正在检查简介完整性...", "processing")
+
+                # 检查简介是否有效
+                intro_valid = bool(
+                    intro.get("body") and intro.get("body").strip())
+
+                if intro_valid:
                     if self.task_id:
                         log_streamer.emit_log(self.task_id, "验证简介格式",
-                                              "简介缺失，尝试从豆瓣获取...", "warning")
-
-                    try:
-                        from utils import upload_data_movie_info
-                        status, posters, description, extracted_imdb = upload_data_movie_info(
-                            douban_link, imdb_link)
-
-                        if status and description:
-                            # 更新简介内容
-                            intro["body"] = description
-                            if self.task_id:
-                                log_streamer.emit_log(self.task_id, "验证简介格式",
-                                                      "成功从豆瓣重新获取简介", "success")
-                        else:
-                            if self.task_id:
-                                log_streamer.emit_log(self.task_id, "验证简介格式",
-                                                      "从豆瓣获取简介失败", "warning")
-                    except Exception as e:
-                        self.logger.warning(f"从豆瓣重新获取简介时出错: {e}")
+                                              "简介格式验证通过", "success")
+                else:
+                    # 如果简介无效，尝试从豆瓣重新获取
+                    if douban_link:
                         if self.task_id:
                             log_streamer.emit_log(self.task_id, "验证简介格式",
-                                                  f"获取简介失败: {str(e)}", "error")
-                else:
-                    if self.task_id:
-                        log_streamer.emit_log(self.task_id, "验证简介格式",
-                                              "简介缺失且无豆瓣链接", "warning")
+                                                  "简介缺失，尝试从豆瓣获取...", "warning")
 
-            # 步骤6：检查声明感谢
-            if self.task_id:
-                log_streamer.emit_log(self.task_id, "检查声明感谢", "正在检查官组致谢声明...",
-                                      "processing")
+                        try:
+                            from utils import upload_data_movie_info
+                            status, posters, description, extracted_imdb = upload_data_movie_info(
+                                douban_link, imdb_link)
 
-            # 这部分逻辑将在后面的官组致谢声明处理中完成，这里先标记为处理中
-            # 实际的检查和添加会在后续代码中进行
-
-            # 参数标准化（内部处理，不发送进度日志）
-
-            # 提取产地信息并更新到source_params中（如果还没有）
-            if "产地" not in source_params or not source_params["产地"]:
-                full_description_text = f"{intro.get('statement', '')}\n{intro.get('body', '')}"
-                origin_info = extract_origin_from_description(
-                    full_description_text)
-                source_params["产地"] = origin_info
-
-            # 如果source_params中缺少基本信息，从网页中提取
-            if not source_params.get("类型") or not source_params.get("媒介"):
-                basic_info_td = soup.find("td", string="基本信息")
-                basic_info_dict = {}
-                if basic_info_td and basic_info_td.find_next_sibling("td"):
-                    strings = list(
-                        basic_info_td.find_next_sibling("td").stripped_strings)
-                    basic_info_dict = {
-                        s.replace(":", "").strip(): strings[i + 1]
-                        for i, s in enumerate(strings)
-                        if ":" in s and i + 1 < len(strings)
-                    }
-
-                tags_td = soup.find("td", string="标签")
-                tags = ([
-                    s.get_text(strip=True)
-                    for s in tags_td.find_next_sibling("td").find_all("span")
-                ] if tags_td and tags_td.find_next_sibling("td") else [])
-
-                # 过滤掉指定的标签
-                filtered_tags = []
-                unwanted_tags = ["官方", "官种", "首发", "自购", "应求"]
-                for tag in tags:
-                    if tag not in unwanted_tags:
-                        filtered_tags.append(tag)
-                tags = filtered_tags
-
-                type_text = basic_info_dict.get("类型", "")
-                type_match = re.search(r"[\(（](.*?)[\)）]", type_text)
-
-                # 只更新缺失的字段
-                if not source_params.get("类型"):
-                    source_params["类型"] = type_match.group(
-                        1) if type_match else type_text.split("/")[-1]
-                if not source_params.get("媒介"):
-                    source_params["媒介"] = basic_info_dict.get("媒介")
-                if not source_params.get("视频编码"):
-                    # 优先获取"视频编码"，如果没有则获取"编码"
-                    source_params["视频编码"] = basic_info_dict.get(
-                        "视频编码") or basic_info_dict.get("编码")
-                if not source_params.get("音频编码"):
-                    source_params["音频编码"] = basic_info_dict.get("音频编码")
-                if not source_params.get("分辨率"):
-                    source_params["分辨率"] = basic_info_dict.get("分辨率")
-                if not source_params.get("制作组"):
-                    source_params["制作组"] = basic_info_dict.get("制作组")
-                if not source_params.get("标签"):
-                    source_params["标签"] = tags
-            # 确保source_params始终存在
-            if "source_params" not in locals() or not source_params:
-                source_params = {
-                    "类型": "",
-                    "媒介": None,
-                    "视频编码": None,
-                    "音频编码": None,
-                    "分辨率": None,
-                    "制作组": None,
-                    "标签": [],
-                    "产地": ""
-                }
-
-            # 此处已提前下载种子文件，无需重复下载
-
-            # --- [三层解耦模型核心实现] 开始: 构建标准化参数 ---
-            # [调试] 打印标准化前的数据
-            self.logger.info(
-                f"[调试] 标准化前 - extracted_data['source_params']['制作组']: {extracted_data.get('source_params', {}).get('制作组')}"
-            )
-            print(
-                f"[调试] 标准化前 - extracted_data['source_params']['制作组']: {extracted_data.get('source_params', {}).get('制作组')}"
-            )
-
-            # 使用三层解耦模型标准化参数
-            standardized_params = self._standardize_parameters(
-                extracted_data, title_components)
-
-            # [调试] 打印标准化后的制作组信息
-            self.logger.info(
-                f"[调试] 标准化后 - standardized_params['team']: {standardized_params.get('team')}"
-            )
-            print(
-                f"[调试] 标准化后 - standardized_params['team']: {standardized_params.get('team')}"
-            )
-
-            # [新增] 音频编码择优逻辑
-            try:
-                # 1. 单独为标题组件中的音频编码进行一次标准化
-                audio_from_title_raw = next(
-                    (item['value'] for item in title_components
-                     if item.get('key') == '音频编码'), None)
-                if audio_from_title_raw:
-                    # 借用 ParameterMapper 的能力来标准化这个单独的值
-                    temp_extracted = {
-                        'source_params': {
-                            '音频编码': audio_from_title_raw
-                        }
-                    }
-                    temp_standardized = self.parameter_mapper.map_parameters(
-                        self.SOURCE_NAME, self.SOURCE_SITE_CODE,
-                        temp_extracted)
-                    audio_from_title_standard = temp_standardized.get(
-                        'audio_codec')
-
-                    # 2. 对比层级并覆盖
-                    if audio_from_title_standard:
-                        audio_from_params_standard = standardized_params.get(
-                            'audio_codec')
-
-                        title_rank = AUDIO_CODEC_HIERARCHY.get(
-                            audio_from_title_standard, 0)
-                        params_rank = AUDIO_CODEC_HIERARCHY.get(
-                            audio_from_params_standard, -1)
-
-                        if title_rank > params_rank:
-                            self.logger.info(
-                                f"音频编码优化：使用标题中的 '{audio_from_title_standard}' (层级 {title_rank}) 覆盖了参数中的 '{audio_from_params_standard}' (层级 {params_rank})。"
-                            )
-                            standardized_params[
-                                'audio_codec'] = audio_from_title_standard
-            except Exception as e:
-                self.logger.warning(f"音频编码择优处理时发生错误: {e}")
-            # [新增结束]
-
-            # [新增] 添加官组致谢声明
-            try:
-                # 初始化变量，避免在某些分支中未赋值导致的 UnboundLocalError
-                has_official_statement = False
-                display_name = None
-
-                # 1. 加载致谢配置
-                acknowledgment_config = self._load_acknowledgment_config()
-
-                # 2. 检查是否启用致谢声明
-                if acknowledgment_config.get("enabled", False):
-                    # 3. 从标准化参数中获取制作组
-                    team_standard = standardized_params.get("team", "")
-
-                    # 4. 检查是否在排除列表中
-                    exclude_teams = acknowledgment_config.get(
-                        "exclude_teams", [])
-
-                    if team_standard and team_standard not in exclude_teams:
-                        # 5. 使用结构化检测判断是否已包含官组声明
-                        # [修复] 优先使用已提取的statement内容，如果为空才使用原始BBCode
-                        # 这样可以正确处理SSD等特殊站点
-                        original_statement = intro.get("statement", "")
-                        detection_content = original_statement if original_statement.strip(
-                        ) else full_bbcode_descr_for_check
-
-                        has_official_statement = self._detect_official_statement(
-                            detection_content, acknowledgment_config)
-
-                        if has_official_statement:
-                            self.logger.info("检测到声明中已包含官组相关说明，跳过添加致谢声明")
-                        else:
-                            # 6. 获取制作组显示名称（从数据库查询）
-                            display_name = self._get_team_display_name(
-                                team_standard, acknowledgment_config)
-
-                            # 7. 如果数据库中未找到匹配，跳过添加致谢声明
-                            if display_name is None:
-                                self.logger.info(
-                                    f"数据库中未找到制作组 '{team_standard}' 的匹配，跳过添加致谢声明"
-                                )
+                            if status and description:
+                                # 更新简介内容
+                                intro["body"] = description
+                                if self.task_id:
+                                    log_streamer.emit_log(
+                                        self.task_id, "验证简介格式", "成功从豆瓣重新获取简介",
+                                        "success")
                             else:
-                                # 8. 生成致谢声明
-                                template = acknowledgment_config.get(
-                                    "template",
-                                    "[quote][b][color=blue]{team_name}官组作品，感谢原制作者发布。[/color][/b][/quote]"
-                                )
-                                acknowledgment = template.format(
-                                    team_name=display_name)
-
-                                # 9. 将致谢声明插入到 intro["statement"] 的开头
-                                if original_statement:
-                                    intro[
-                                        "statement"] = acknowledgment + "\n\n" + original_statement
-                                else:
-                                    intro["statement"] = acknowledgment
-
-                                self.logger.info(
-                                    f"已添加官组致谢声明: {display_name}官组作品")
-
-                # 发送步骤6完成日志
-                if self.task_id:
-                    if has_official_statement:
-                        log_streamer.emit_log(self.task_id, "检查声明感谢", "存在声明信息",
-                                              "success")
-                    elif display_name is not None:
-                        log_streamer.emit_log(self.task_id, "检查声明感谢",
-                                              "成功生成声明信息", "success")
+                                if self.task_id:
+                                    log_streamer.emit_log(
+                                        self.task_id, "验证简介格式", "从豆瓣获取简介失败",
+                                        "warning")
+                        except Exception as e:
+                            self.logger.warning(f"从豆瓣重新获取简介时出错: {e}")
+                            if self.task_id:
+                                log_streamer.emit_log(self.task_id, "验证简介格式",
+                                                      f"获取简介失败: {str(e)}",
+                                                      "error")
                     else:
-                        log_streamer.emit_log(self.task_id, "检查声明感谢", "无需添加声明",
-                                              "success")
-            except Exception as e:
-                self.logger.warning(f"添加官组致谢声明时发生错误: {e}")
-                # 即使出错也发送完成日志
+                        if self.task_id:
+                            log_streamer.emit_log(self.task_id, "验证简介格式",
+                                                  "简介缺失且无豆瓣链接", "warning")
+
+                # 步骤6：检查声明感谢
                 if self.task_id:
                     log_streamer.emit_log(self.task_id, "检查声明感谢",
-                                          f"处理出错: {str(e)}", "warning")
-            # [致谢声明添加结束]
+                                          "正在检查官组致谢声明...", "processing")
 
-            # 输出标准化参数以供前端预览
-            final_publish_parameters = {
-                "主标题 (预览)": standardized_params.get("title", ""),
-                "副标题": subtitle,
-                "IMDb链接": standardized_params.get("imdb_link", ""),
-                "类型": standardized_params.get("type", ""),
-                "媒介": standardized_params.get("medium", ""),
-                "视频编码": standardized_params.get("video_codec", ""),
-                "音频编码": standardized_params.get("audio_codec",
-                                                ""),  # [注意] 这里现在会使用优化后的值
-                "分辨率": standardized_params.get("resolution", ""),
-                "制作组": standardized_params.get("team", ""),
-                "产地": standardized_params.get("source", ""),
-                "标签": standardized_params.get("tags", []),
-            }
+                # 这部分逻辑将在后面的官组致谢声明处理中完成，这里先标记为处理中
+                # 实际的检查和添加会在后续代码中进行
 
-            # 构建完整的发布参数用于预览（兼容现有BaseUploader）
-            complete_publish_params = {
-                "title_components": title_components,
-                "subtitle": subtitle,
-                "imdb_link": standardized_params.get("imdb_link", ""),
-                "douban_link": standardized_params.get("douban_link", ""),
-                "intro": standardized_params.get("description", {}),
-                "mediainfo": mediainfo,
-                "source_params": source_params,
-                "modified_torrent_path": "",  # 临时占位符
-                # 添加标准化参数供预览
-                "standardized_params": standardized_params
-            }
+                # 参数标准化（内部处理，不发送进度日志）
 
-            # 创建前端预览参数
-            raw_params_for_preview = {
-                "final_main_title": standardized_params.get("title", ""),
-                "subtitle": subtitle,
-                "imdb_link": standardized_params.get("imdb_link", ""),
-                "type": standardized_params.get("type", ""),
-                "medium": standardized_params.get("medium", ""),
-                "video_codec": standardized_params.get("video_codec", ""),
-                "audio_codec": standardized_params.get("audio_codec", ""),
-                "resolution": standardized_params.get("resolution", ""),
-                "release_group": standardized_params.get("team", ""),
-                "source": standardized_params.get("source", ""),
-                "tags": standardized_params.get("tags", [])
-            }
-            # --- [三层解耦模型核心实现] 结束 ---
+                # 提取产地信息并更新到source_params中（如果还没有）
+                if "产地" not in source_params or not source_params["产地"]:
+                    full_description_text = f"{intro.get('statement', '')}\n{intro.get('body', '')}"
+                    origin_info = extract_origin_from_description(
+                        full_description_text)
+                    source_params["产地"] = origin_info
 
-            self.logger.info("--- [步骤1] 种子信息获取和解析完成 ---")
+                # 如果source_params中缺少基本信息，从网页中提取
+                if not source_params.get("类型") or not source_params.get("媒介"):
+                    basic_info_td = soup.find("td", string="基本信息")
+                    basic_info_dict = {}
+                    if basic_info_td and basic_info_td.find_next_sibling("td"):
+                        strings = list(
+                            basic_info_td.find_next_sibling(
+                                "td").stripped_strings)
+                        basic_info_dict = {
+                            s.replace(":", "").strip(): strings[i + 1]
+                            for i, s in enumerate(strings)
+                            if ":" in s and i + 1 < len(strings)
+                        }
 
-            review_data_payload = {
-                "original_main_title":
-                original_main_title,
-                "title_components":
-                title_components,
-                "subtitle":
-                subtitle,
-                "imdb_link":
-                imdb_link,
-                "intro":
-                intro,
-                "mediainfo":
-                mediainfo,
-                "source_params":
-                source_params,
-                # 标准化参数
-                "standardized_params":
-                standardized_params,
-                "final_publish_parameters":
-                final_publish_parameters,
-                "complete_publish_params":
-                complete_publish_params,
-                "raw_params_for_preview":
-                raw_params_for_preview,
-                # 添加特殊提取器处理标志
-                "special_extractor_processed":
-                getattr(self, '_special_extractor_processed', False)
-            }
+                    tags_td = soup.find("td", string="标签")
+                    tags = ([
+                        s.get_text(strip=True) for s in
+                        tags_td.find_next_sibling("td").find_all("span")
+                    ] if tags_td and tags_td.find_next_sibling("td") else [])
 
-            # 获取源站点种子的 hash 值
-            hash = seed_param_model.search_torrent_hash(
-                self.torrent_name, self.SOURCE_NAME)
+                    # 过滤掉指定的标签
+                    filtered_tags = []
+                    unwanted_tags = ["官方", "官种", "首发", "自购", "应求"]
+                    for tag in tags:
+                        if tag not in unwanted_tags:
+                            filtered_tags.append(tag)
+                    tags = filtered_tags
 
-            # 从torrents表中获取下载器ID
-            downloader_id_from_db = None
-            if hash and self.db_manager:
-                try:
-                    conn = self.db_manager._get_connection()
-                    cursor = self.db_manager._get_cursor(conn)
-                    ph = self.db_manager.get_placeholder()
+                    type_text = basic_info_dict.get("类型", "")
+                    type_match = re.search(r"[\(（](.*?)[\)）]", type_text)
 
-                    # 查询torrents表中对应的下载器ID
-                    if self.db_manager.db_type == "postgresql":
-                        cursor.execute(
-                            "SELECT downloader_id FROM torrents WHERE hash = %s",
-                            (hash, ))
-                    else:  # mysql and sqlite
-                        cursor.execute(
-                            f"SELECT downloader_id FROM torrents WHERE hash = {ph}",
-                            (hash, ))
+                    # 只更新缺失的字段
+                    if not source_params.get("类型"):
+                        source_params["类型"] = type_match.group(
+                            1) if type_match else type_text.split("/")[-1]
+                    if not source_params.get("媒介"):
+                        source_params["媒介"] = basic_info_dict.get("媒介")
+                    if not source_params.get("视频编码"):
+                        # 优先获取"视频编码"，如果没有则获取"编码"
+                        source_params["视频编码"] = basic_info_dict.get(
+                            "视频编码") or basic_info_dict.get("编码")
+                    if not source_params.get("音频编码"):
+                        source_params["音频编码"] = basic_info_dict.get("音频编码")
+                    if not source_params.get("分辨率"):
+                        source_params["分辨率"] = basic_info_dict.get("分辨率")
+                    if not source_params.get("制作组"):
+                        source_params["制作组"] = basic_info_dict.get("制作组")
+                    if not source_params.get("标签"):
+                        source_params["标签"] = tags
+                # 确保source_params始终存在
+                if "source_params" not in locals() or not source_params:
+                    source_params = {
+                        "类型": "",
+                        "媒介": None,
+                        "视频编码": None,
+                        "音频编码": None,
+                        "分辨率": None,
+                        "制作组": None,
+                        "标签": [],
+                        "产地": ""
+                    }
 
-                    result = cursor.fetchone()
-                    if result:
-                        downloader_id_from_db = dict(result).get(
-                            "downloader_id")
+                # 此处已提前下载种子文件，无需重复下载
 
-                    cursor.close()
-                    conn.close()
-                except Exception as e:
-                    self.logger.error(f"获取下载器ID时出错: {e}")
-
-            # 如果从数据库未获取到下载器ID，尝试使用构造函数中传入的下载器ID
-            final_downloader_id = downloader_id_from_db or self.downloader_id
-
-            # 处理种子名称：去除 .torrent 后缀
-            torrent_name_without_ext = self.torrent_name
-            if torrent_name_without_ext.lower().endswith('.torrent'):
-                torrent_name_without_ext = torrent_name_without_ext[:
-                                                                    -8]  # 去除 .torrent (8个字符)
-
-            # 从title_components中提取标题拆解的各项参数（title_components已在方法开头定义）
-
-            # 1. 先构建包含非标准化信息的字典
-            # [新增] 过滤豆瓣链接，只保留ID部分
-            filtered_douban_link = douban_link
-            if douban_link:
-                douban_match = re.match(
-                    r'(https?://movie\.douban\.com/subject/\d+)', douban_link)
-                filtered_douban_link = douban_match.group(
-                    1) if douban_match else douban_link
-
-            seed_parameters = {
-                "name":
-                torrent_name_without_ext,  # 添加去除后缀的种子名称
-                "title":
-                original_main_title,
-                "subtitle":
-                subtitle,
-                "imdb_link":
-                imdb_link,
-                "douban_link":
-                filtered_douban_link,  # 使用过滤后的豆瓣链接
-                "poster":
-                intro.get("poster"),
-                "screenshots":
-                intro.get("screenshots"),
-                "statement":
-                intro.get("statement", "").strip(),
-                "body":
-                intro.get("body", "").strip(),
-                "mediainfo":
-                mediainfo,
-                # [修正] 从 standardized_params 获取已经标准化的标签
-                "tags":
-                standardized_params.get("tags", []),
-
-                # 保存完整的标题组件数据
-                "title_components":
-                title_components,
-
-                # 保存被过滤掉的ARDTU声明内容
-                "removed_ardtudeclarations":
-                intro.get("removed_ardtudeclarations", []),
-            }
-
-            # 2. 将 standardized_params 中所有标准化的键值对合并进来。
-            #    这里的 .get() 会返回 'category.movie' 这样的完整字符串。
-            seed_parameters.update({
-                "nickname":
-                self.SOURCE_NAME,
-                "save_path":
-                self.save_path,
-                "type":
-                standardized_params.get("type"),
-                "medium":
-                standardized_params.get("medium"),
-                "video_codec":
-                standardized_params.get("video_codec"),
-                "audio_codec":
-                standardized_params.get("audio_codec"),
-                "resolution":
-                standardized_params.get("resolution"),
-                "team":
-                standardized_params.get("team"),
-                "source":
-                standardized_params.get("source"),
-                # 移除单独的processing参数保存，统一使用source参数
-                "downloader_id":
-                final_downloader_id  # 添加下载器ID
-            })
-            # ------------------------------------------------------------------------------------------
-
-            # 保存到数据库并发送最终日志（步骤7）
-            if self.task_id:
-                log_streamer.emit_log(self.task_id, "成功获取参数", "正在保存参数到数据库...",
-                                      "processing")
-
-            # 保存到数据库（优先）和JSON文件（后备），使用英文站点名作为标识
-            save_result = seed_param_model.save_parameters(
-                hash, torrent_id, self.SOURCE_SITE_CODE, seed_parameters)
-            if save_result:
+                # --- [三层解耦模型核心实现] 开始: 构建标准化参数 ---
+                # [调试] 打印标准化前的数据
                 self.logger.info(
-                    f"种子参数(使用标准化键)已保存: {hash} from {self.SOURCE_NAME} ({self.SOURCE_SITE_CODE})"
+                    f"[调试] 标准化前 - extracted_data['source_params']['制作组']: {extracted_data.get('source_params', {}).get('制作组')}"
                 )
-                if self.task_id:
-                    log_streamer.emit_log(self.task_id, "成功获取参数", "参数已成功获取",
-                                          "success")
-                    # 注意：不在这里关闭日志流，让调用方（routes_migrate.py）来关闭
-            else:
-                self.logger.warning(
-                    f"种子参数(使用标准化键)保存失败: {hash} from {self.SOURCE_NAME} ({self.SOURCE_SITE_CODE})"
+                print(
+                    f"[调试] 标准化前 - extracted_data['source_params']['制作组']: {extracted_data.get('source_params', {}).get('制作组')}"
                 )
-                if self.task_id:
-                    log_streamer.emit_log(self.task_id, "成功获取参数", "参数保存失败",
-                                          "error")
-                    # 注意：不在这里关闭日志流，让调用方（routes_migrate.py）来关闭
 
-            return {
-                "review_data": review_data_payload,
-                "original_torrent_path": original_torrent_path,
-                "torrent_dir": torrent_dir,  # 返回种子目录路径以便发种时查找文件
-                "logs": self.log_handler.get_logs(),
-            }
-        except Exception as e:
-            self.logger.error(f"获取信息过程中发生错误: {e}")
-            self.logger.debug(traceback.format_exc())
-            # self.cleanup() # 此处不清理，因为原始种子文件需要被缓存
-            return {"logs": self.log_handler.get_logs()}
+                # 使用三层解耦模型标准化参数
+                standardized_params = self._standardize_parameters(
+                    extracted_data, title_components)
+
+                # [调试] 打印标准化后的制作组信息
+                self.logger.info(
+                    f"[调试] 标准化后 - standardized_params['team']: {standardized_params.get('team')}"
+                )
+                print(
+                    f"[调试] 标准化后 - standardized_params['team']: {standardized_params.get('team')}"
+                )
+
+                # [新增] 音频编码择优逻辑
+                try:
+                    # 1. 单独为标题组件中的音频编码进行一次标准化
+                    audio_from_title_raw = next(
+                        (item['value'] for item in title_components
+                         if item.get('key') == '音频编码'), None)
+                    if audio_from_title_raw:
+                        # 借用 ParameterMapper 的能力来标准化这个单独的值
+                        temp_extracted = {
+                            'source_params': {
+                                '音频编码': audio_from_title_raw
+                            }
+                        }
+                        temp_standardized = self.parameter_mapper.map_parameters(
+                            self.SOURCE_NAME, self.SOURCE_SITE_CODE,
+                            temp_extracted)
+                        audio_from_title_standard = temp_standardized.get(
+                            'audio_codec')
+
+                        # 2. 对比层级并覆盖
+                        if audio_from_title_standard:
+                            audio_from_params_standard = standardized_params.get(
+                                'audio_codec')
+
+                            title_rank = AUDIO_CODEC_HIERARCHY.get(
+                                audio_from_title_standard, 0)
+                            params_rank = AUDIO_CODEC_HIERARCHY.get(
+                                audio_from_params_standard, -1)
+
+                            if title_rank > params_rank:
+                                self.logger.info(
+                                    f"音频编码优化：使用标题中的 '{audio_from_title_standard}' (层级 {title_rank}) 覆盖了参数中的 '{audio_from_params_standard}' (层级 {params_rank})。"
+                                )
+                                standardized_params[
+                                    'audio_codec'] = audio_from_title_standard
+                except Exception as e:
+                    self.logger.warning(f"音频编码择优处理时发生错误: {e}")
+                # [新增结束]
+
+                # [新增] 添加官组致谢声明
+                try:
+                    # 初始化变量，避免在某些分支中未赋值导致的 UnboundLocalError
+                    has_official_statement = False
+                    display_name = None
+
+                    # 1. 加载致谢配置
+                    acknowledgment_config = self._load_acknowledgment_config()
+
+                    # 2. 检查是否启用致谢声明
+                    if acknowledgment_config.get("enabled", False):
+                        # 3. 从标准化参数中获取制作组
+                        team_standard = standardized_params.get("team", "")
+
+                        # 4. 检查是否在排除列表中
+                        exclude_teams = acknowledgment_config.get(
+                            "exclude_teams", [])
+
+                        if team_standard and team_standard not in exclude_teams:
+                            # 5. 使用结构化检测判断是否已包含官组声明
+                            # [修复] 优先使用已提取的statement内容，如果为空才使用原始BBCode
+                            # 这样可以正确处理SSD等特殊站点
+                            original_statement = intro.get("statement", "")
+                            detection_content = original_statement if original_statement.strip(
+                            ) else full_bbcode_descr_for_check
+
+                            has_official_statement = self._detect_official_statement(
+                                detection_content, acknowledgment_config)
+
+                            if has_official_statement:
+                                self.logger.info("检测到声明中已包含官组相关说明，跳过添加致谢声明")
+                            else:
+                                # 6. 获取制作组显示名称（从数据库查询）
+                                display_name = self._get_team_display_name(
+                                    team_standard, acknowledgment_config)
+
+                                # 7. 如果数据库中未找到匹配，跳过添加致谢声明
+                                if display_name is None:
+                                    self.logger.info(
+                                        f"数据库中未找到制作组 '{team_standard}' 的匹配，跳过添加致谢声明"
+                                    )
+                                else:
+                                    # 8. 生成致谢声明
+                                    template = acknowledgment_config.get(
+                                        "template",
+                                        "[quote][b][color=blue]{team_name}官组作品，感谢原制作者发布。[/color][/b][/quote]"
+                                    )
+                                    acknowledgment = template.format(
+                                        team_name=display_name)
+
+                                    # 9. 将致谢声明插入到 intro["statement"] 的开头
+                                    if original_statement:
+                                        intro[
+                                            "statement"] = acknowledgment + "\n\n" + original_statement
+                                    else:
+                                        intro["statement"] = acknowledgment
+
+                                    self.logger.info(
+                                        f"已添加官组致谢声明: {display_name}官组作品")
+
+                    # 发送步骤6完成日志
+                    if self.task_id:
+                        if has_official_statement:
+                            log_streamer.emit_log(self.task_id, "检查声明感谢",
+                                                  "存在声明信息", "success")
+                        elif display_name is not None:
+                            log_streamer.emit_log(self.task_id, "检查声明感谢",
+                                                  "成功生成声明信息", "success")
+                        else:
+                            log_streamer.emit_log(self.task_id, "检查声明感谢",
+                                                  "无需添加声明", "success")
+                except Exception as e:
+                    self.logger.warning(f"添加官组致谢声明时发生错误: {e}")
+                    # 即使出错也发送完成日志
+                    if self.task_id:
+                        log_streamer.emit_log(self.task_id, "检查声明感谢",
+                                              f"处理出错: {str(e)}", "warning")
+                # [致谢声明添加结束]
+
+                # 输出标准化参数以供前端预览
+                final_publish_parameters = {
+                    "主标题 (预览)": standardized_params.get("title", ""),
+                    "副标题": subtitle,
+                    "IMDb链接": standardized_params.get("imdb_link", ""),
+                    "类型": standardized_params.get("type", ""),
+                    "媒介": standardized_params.get("medium", ""),
+                    "视频编码": standardized_params.get("video_codec", ""),
+                    "音频编码": standardized_params.get("audio_codec",
+                                                    ""),  # [注意] 这里现在会使用优化后的值
+                    "分辨率": standardized_params.get("resolution", ""),
+                    "制作组": standardized_params.get("team", ""),
+                    "产地": standardized_params.get("source", ""),
+                    "标签": standardized_params.get("tags", []),
+                }
+
+                # 构建完整的发布参数用于预览（兼容现有BaseUploader）
+                complete_publish_params = {
+                    "title_components": title_components,
+                    "subtitle": subtitle,
+                    "imdb_link": standardized_params.get("imdb_link", ""),
+                    "douban_link": standardized_params.get("douban_link", ""),
+                    "intro": standardized_params.get("description", {}),
+                    "mediainfo": mediainfo,
+                    "source_params": source_params,
+                    "modified_torrent_path": "",  # 临时占位符
+                    # 添加标准化参数供预览
+                    "standardized_params": standardized_params
+                }
+
+                # 创建前端预览参数
+                raw_params_for_preview = {
+                    "final_main_title": standardized_params.get("title", ""),
+                    "subtitle": subtitle,
+                    "imdb_link": standardized_params.get("imdb_link", ""),
+                    "type": standardized_params.get("type", ""),
+                    "medium": standardized_params.get("medium", ""),
+                    "video_codec": standardized_params.get("video_codec", ""),
+                    "audio_codec": standardized_params.get("audio_codec", ""),
+                    "resolution": standardized_params.get("resolution", ""),
+                    "release_group": standardized_params.get("team", ""),
+                    "source": standardized_params.get("source", ""),
+                    "tags": standardized_params.get("tags", [])
+                }
+                # --- [三层解耦模型核心实现] 结束 ---
+
+                self.logger.info("--- [步骤1] 种子信息获取和解析完成 ---")
+
+                review_data_payload = {
+                    "original_main_title":
+                    original_main_title,
+                    "title_components":
+                    title_components,
+                    "subtitle":
+                    subtitle,
+                    "imdb_link":
+                    imdb_link,
+                    "intro":
+                    intro,
+                    "mediainfo":
+                    mediainfo,
+                    "source_params":
+                    source_params,
+                    # 标准化参数
+                    "standardized_params":
+                    standardized_params,
+                    "final_publish_parameters":
+                    final_publish_parameters,
+                    "complete_publish_params":
+                    complete_publish_params,
+                    "raw_params_for_preview":
+                    raw_params_for_preview,
+                    # 添加特殊提取器处理标志
+                    "special_extractor_processed":
+                    getattr(self, '_special_extractor_processed', False)
+                }
+
+                # 获取源站点种子的 hash 值
+                hash = seed_param_model.search_torrent_hash(
+                    self.torrent_name, self.SOURCE_NAME)
+
+                # 从torrents表中获取下载器ID
+                downloader_id_from_db = None
+                if hash and self.db_manager:
+                    try:
+                        conn = self.db_manager._get_connection()
+                        cursor = self.db_manager._get_cursor(conn)
+                        ph = self.db_manager.get_placeholder()
+
+                        # 查询torrents表中对应的下载器ID
+                        if self.db_manager.db_type == "postgresql":
+                            cursor.execute(
+                                "SELECT downloader_id FROM torrents WHERE hash = %s",
+                                (hash, ))
+                        else:  # mysql and sqlite
+                            cursor.execute(
+                                f"SELECT downloader_id FROM torrents WHERE hash = {ph}",
+                                (hash, ))
+
+                        result = cursor.fetchone()
+                        if result:
+                            downloader_id_from_db = dict(result).get(
+                                "downloader_id")
+
+                        cursor.close()
+                        conn.close()
+                    except Exception as e:
+                        self.logger.error(f"获取下载器ID时出错: {e}")
+
+                # 如果从数据库未获取到下载器ID，尝试使用构造函数中传入的下载器ID
+                final_downloader_id = downloader_id_from_db or self.downloader_id
+
+                # 处理种子名称：去除 .torrent 后缀
+                torrent_name_without_ext = self.torrent_name
+                if torrent_name_without_ext.lower().endswith('.torrent'):
+                    torrent_name_without_ext = torrent_name_without_ext[:
+                                                                        -8]  # 去除 .torrent (8个字符)
+
+                # 从title_components中提取标题拆解的各项参数（title_components已在方法开头定义）
+
+                # 1. 先构建包含非标准化信息的字典
+                # [新增] 过滤豆瓣链接，只保留ID部分
+                filtered_douban_link = douban_link
+                if douban_link:
+                    douban_match = re.match(
+                        r'(https?://movie\.douban\.com/subject/\d+)',
+                        douban_link)
+                    filtered_douban_link = douban_match.group(
+                        1) if douban_match else douban_link
+
+                seed_parameters = {
+                    "name":
+                    torrent_name_without_ext,  # 添加去除后缀的种子名称
+                    "title":
+                    original_main_title,
+                    "subtitle":
+                    subtitle,
+                    "imdb_link":
+                    imdb_link,
+                    "douban_link":
+                    filtered_douban_link,  # 使用过滤后的豆瓣链接
+                    "poster":
+                    intro.get("poster"),
+                    "screenshots":
+                    intro.get("screenshots"),
+                    "statement":
+                    intro.get("statement", "").strip(),
+                    "body":
+                    intro.get("body", "").strip(),
+                    "mediainfo":
+                    mediainfo,
+                    # [修正] 从 standardized_params 获取已经标准化的标签
+                    "tags":
+                    standardized_params.get("tags", []),
+
+                    # 保存完整的标题组件数据
+                    "title_components":
+                    title_components,
+
+                    # 保存被过滤掉的ARDTU声明内容
+                    "removed_ardtudeclarations":
+                    intro.get("removed_ardtudeclarations", []),
+                }
+
+                # 2. 将 standardized_params 中所有标准化的键值对合并进来。
+                #    这里的 .get() 会返回 'category.movie' 这样的完整字符串。
+                seed_parameters.update({
+                    "nickname":
+                    self.SOURCE_NAME,
+                    "save_path":
+                    self.save_path,
+                    "type":
+                    standardized_params.get("type"),
+                    "medium":
+                    standardized_params.get("medium"),
+                    "video_codec":
+                    standardized_params.get("video_codec"),
+                    "audio_codec":
+                    standardized_params.get("audio_codec"),
+                    "resolution":
+                    standardized_params.get("resolution"),
+                    "team":
+                    standardized_params.get("team"),
+                    "source":
+                    standardized_params.get("source"),
+                    # 移除单独的processing参数保存，统一使用source参数
+                    "downloader_id":
+                    final_downloader_id  # 添加下载器ID
+                })
+                # ------------------------------------------------------------------------------------------
+
+                # 保存到数据库并发送最终日志（步骤7）
+                if self.task_id:
+                    log_streamer.emit_log(self.task_id, "成功获取参数",
+                                          "正在保存参数到数据库...", "processing")
+
+                # 保存到数据库（优先）和JSON文件（后备），使用英文站点名作为标识
+                save_result = seed_param_model.save_parameters(
+                    hash, torrent_id, self.SOURCE_SITE_CODE, seed_parameters)
+                if save_result:
+                    self.logger.info(
+                        f"种子参数(使用标准化键)已保存: {hash} from {self.SOURCE_NAME} ({self.SOURCE_SITE_CODE})"
+                    )
+                    if self.task_id:
+                        log_streamer.emit_log(self.task_id, "成功获取参数",
+                                              "参数已成功获取", "success")
+                        # 注意：不在这里关闭日志流，让调用方（routes_migrate.py）来关闭
+                else:
+                    self.logger.warning(
+                        f"种子参数(使用标准化键)保存失败: {hash} from {self.SOURCE_NAME} ({self.SOURCE_SITE_CODE})"
+                    )
+                    if self.task_id:
+                        log_streamer.emit_log(self.task_id, "成功获取参数", "参数保存失败",
+                                              "error")
+                        # 注意：不在这里关闭日志流，让调用方（routes_migrate.py）来关闭
+
+                # [修改] 如果执行到这里说明成功,直接返回结果
+                return {
+                    "review_data": review_data_payload,
+                    "original_torrent_path": original_torrent_path,
+                    "torrent_dir": torrent_dir,  # 返回种子目录路径以便发种时查找文件
+                    "logs": self.log_handler.get_logs(),
+                }
+                
+            except Exception as e:
+                last_error = e
+                retry_count += 1
+                
+                self.logger.error(f"获取信息过程中发生错误: {e}")
+                self.logger.debug(traceback.format_exc())
+                
+                if retry_count < MAX_RETRIES:
+                    self.logger.warning(f"将在 {RETRY_DELAY} 秒后进行第 {retry_count + 1} 次重试...")
+                    if self.task_id:
+                        log_streamer.emit_log(self.task_id, "错误重试",
+                                              f"发生错误，{RETRY_DELAY} 秒后重试 ({retry_count}/{MAX_RETRIES})...",
+                                              "warning")
+                    time.sleep(RETRY_DELAY)
+                else:
+                    self.logger.error(f"已达到最大重试次数 ({MAX_RETRIES})，放弃重试")
+                    if self.task_id:
+                        log_streamer.emit_log(self.task_id, "获取失败",
+                                              f"已重试 {MAX_RETRIES} 次仍然失败",
+                                              "error")
+        
+        # [新增] 如果所有重试都失败,返回错误信息
+        # self.cleanup() # 此处不清理，因为原始种子文件需要被缓存
+        return {"logs": self.log_handler.get_logs(), "error": str(last_error) if last_error else "未知错误"}
 
     def publish_prepared_torrent(self, upload_data, modified_torrent_path):
         """第二步：使用准备好的信息和文件执行上传。"""

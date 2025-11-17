@@ -9,7 +9,7 @@ form_fields:
   audio_codec: "audiocodec_sel[4]"
   resolution: "standard_sel[4]"
   team: "team_sel[4]"
-  category: "type"  # 类别字段映射到type参数
+  category: "type" # 类别字段映射到type参数
 
 # 标准化键映射 - 定义源文本到标准化键的映射规则
 # source_parsers部分：定义如何从原始数据解析出标准化参数
@@ -42,6 +42,18 @@ source_parsers:
       "有声书 / Audiobook": "category.audiobook"
       "软件 / Software": "category.software"
       "游戏 / Game": "category.game"
+
+      "Misc": "category.other"
+      "documentary": "category.documentaries"
+      "Anime": "category.animation"
+      "Short Play": "category.playlet"
+      "Movies": "category.movie"
+      "TV Series": "category.tv_series"
+      "TV Shows": "category.tv_shows"
+      "Music": "category.music"
+      "Audiobook": "category.audiobook"
+      "Software": "category.software"
+      "Game": "category.game"
 
     medium:
       "其他资料": "medium.other"

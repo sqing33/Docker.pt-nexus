@@ -63,6 +63,8 @@ def get_data_api():
         state_filters = json.loads(request.args.get("state_filters", "[]"))
         downloader_filters = json.loads(
             request.args.get("downloader_filters", "[]"))
+        source_availability_filters = json.loads(
+            request.args.get("source_availability_filters") or "[]")
         exist_site_names = json.loads(request.args.get("existSiteNames", "[]"))
         not_exist_site_names = json.loads(
             request.args.get("notExistSiteNames", "[]"))
@@ -80,7 +82,7 @@ def get_data_api():
         cursor = db_manager._get_cursor(conn)
 
         # --- [新增] 开始: 一次性获取所有站点配置信息 ---
-        cursor.execute("SELECT nickname, migration FROM sites")
+        cursor.execute("SELECT nickname, migration, cookie FROM sites")
         # [修复] 将 sqlite3.Row 对象转换为标准的 dict，以支持 .get() 方法
         site_configs = {
             row["nickname"]: dict(row)
@@ -229,6 +231,24 @@ def get_data_api():
                 t for t in filtered_list
                 if any(downloader_id in downloader_filters
                        for downloader_id in t.get("downloaderIds", []))
+            ]
+        # 源站点可用性筛选（只计算有cookie的源站点）
+        if "存在源站点" in source_availability_filters and "无可用源站点" in source_availability_filters:
+            # 包含所有（默认）
+            pass
+        elif "存在源站点" in source_availability_filters:
+            filtered_list = [
+                t for t in filtered_list
+                if len([site_name for site_name, site_data in t.get("sites", {}).items()
+                        if site_data.get("migration", 0) in [1, 3] and
+                           site_configs.get(site_name, {}).get("cookie", "") != ""]) > 0
+            ]
+        elif "无可用源站点" in source_availability_filters:
+            filtered_list = [
+                t for t in filtered_list
+                if len([site_name for site_name, site_data in t.get("sites", {}).items()
+                        if site_data.get("migration", 0) in [1, 3] and
+                           site_configs.get(site_name, {}).get("cookie", "") != ""]) == 0
             ]
         # 站点筛选逻辑：同时支持存在于和不存在于的筛选
         # 种子必须存在于exist_site_names中的所有站点

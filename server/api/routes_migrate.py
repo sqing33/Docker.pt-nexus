@@ -418,16 +418,18 @@ def download_torrent_only():
         if torrent_path and os.path.exists(torrent_path):
             # 获取原始文件名
             original_filename = os.path.basename(torrent_path)
-            
+
             # 添加站点-ID-前缀，与prepare_review_data保持一致
             prefixed_filename = f"{site_code}-{torrent_id}-{original_filename}"
-            prefixed_torrent_path = os.path.join(torrent_dir, prefixed_filename)
-            
+            prefixed_torrent_path = os.path.join(torrent_dir,
+                                                 prefixed_filename)
+
             # 重命名文件
             try:
                 os.rename(torrent_path, prefixed_torrent_path)
-                logging.info(f"种子文件已重命名: {original_filename} -> {prefixed_filename}")
-                
+                logging.info(
+                    f"种子文件已重命名: {original_filename} -> {prefixed_filename}")
+
                 return jsonify({
                     "success": True,
                     "torrent_path": prefixed_torrent_path,
@@ -909,29 +911,34 @@ def migrate_publish():
         # [核心修改] 优先在统一的 torrents 目录中查找
         source_torrent_id = context.get("source_torrent_id", "")
         source_site_code = source_info.get("site", source_site_name.lower())
-        
-        if original_torrent_path is None or not os.path.exists(original_torrent_path):
+
+        if original_torrent_path is None or not os.path.exists(
+                original_torrent_path):
             logging.info("原始种子文件路径不存在，开始在统一目录中查找")
-            
+
             from config import TEMP_DIR
             torrents_dir = os.path.join(TEMP_DIR, "torrents")
-            
+
             # [新增] 首先在统一的 torrents 目录中查找以"站点-ID-"开头的种子文件
             if os.path.exists(torrents_dir) and source_torrent_id:
                 prefix = f"{source_site_code}-{source_torrent_id}-"
                 logging.info(f"在统一目录中查找种子文件，前缀: {prefix}")
-                
+
                 try:
                     for file in os.listdir(torrents_dir):
-                        if file.startswith(prefix) and file.endswith('.torrent'):
-                            original_torrent_path = os.path.join(torrents_dir, file)
+                        if file.startswith(prefix) and file.endswith(
+                                '.torrent'):
+                            original_torrent_path = os.path.join(
+                                torrents_dir, file)
                             logging.info(f"✅ 在统一目录中找到种子文件: {file}")
                             break
                 except Exception as e:
                     logging.warning(f"遍历统一目录时出错: {e}")
-            
+
             # 如果在统一目录中没找到，再检查旧格式目录
-            if (original_torrent_path is None or not os.path.exists(original_torrent_path)) and source_torrent_id:
+            if (original_torrent_path is None
+                    or not os.path.exists(original_torrent_path)
+                ) and source_torrent_id:
                 logging.info("统一目录中未找到，检查旧格式目录")
                 # 检查旧格式目录
                 old_torrent_dir = os.path.join(TEMP_DIR,
@@ -1145,7 +1152,8 @@ def migrate_publish():
                             os.makedirs(torrent_dir, exist_ok=True)
 
                             # 获取站点代码用于文件名前缀
-                            source_site_code = source_info.get("site", source_site_name.lower())
+                            source_site_code = source_info.get(
+                                "site", source_site_name.lower())
 
                             # 保存种子文件，添加站点-ID-前缀
                             try:
@@ -1381,7 +1389,7 @@ def migrate_publish():
                             print(f"[批量转种记录] ⚠️ 数据库中未找到种子标题，使用默认值")
                     except Exception as e:
                         print(f"[批量转种记录] ⚠️ 查询种子标题失败: {e}")
-                    
+
                     conn = db_manager._get_connection()
                     cursor = db_manager._get_cursor(conn)
 
@@ -2471,84 +2479,267 @@ def _process_batch_fetch(task_id, torrent_names, source_sites_priority,
                         if source_found:
                             break
 
-                if not source_found:
-                    BATCH_FETCH_TASKS[task_id]["results"].append({
-                        "name":
-                        torrent_name,
-                        "status":
-                        "failed",
-                        "reason":
-                        "未找到可用的源站点"
-                    })
-                    BATCH_FETCH_TASKS[task_id]["failed"] += 1
-                    BATCH_FETCH_TASKS[task_id]["processed"] += 1
-                    continue
+                # 新增：自动重试和站点切换逻辑
+                # 实现站点自动重试和智能切换功能
+                max_retry_per_site = 2  # 每个站点最多重试2次
+                fetch_success = False
+                final_source = None
+                attempted_sites_details = []
 
-                # 获取种子数据
-                try:
-                    # 检查该站点的最后请求时间，如果间隔不足则等待
-                    current_site = source_found["site"]
-                    if current_site in site_last_request_time:
-                        elapsed = time.time(
-                        ) - site_last_request_time[current_site]
-                        if elapsed < REQUEST_INTERVAL:
-                            wait_time = REQUEST_INTERVAL - elapsed
-                            logging.info(
-                                f"站点 {current_site} 请求间隔不足，等待 {wait_time:.1f} 秒..."
+                # 构建所有可用站点列表（按优先级排序）
+                all_available_sites = []
+
+                # 1. 首先按配置的优先级顺序添加优先级站点
+                for priority_site in source_sites_priority:
+                    source_info = db_manager.get_site_by_nickname(
+                        priority_site)
+                    if not source_info or not source_info.get("cookie"):
+                        continue
+                    if source_info.get("migration", 0) not in [1, 3]:
+                        continue
+
+                    # 查找该优先级站点的种子记录
+                    for torrent in torrents:
+                        if torrent.get("sites") == priority_site:
+                            comment = torrent.get("details", "")
+                            torrent_id = None
+                            if comment:
+                                import re
+                                id_match = re.search(r'id=(\d+)', comment)
+                                if id_match:
+                                    torrent_id = id_match.group(1)
+                                elif re.match(r'^\d+$', comment.strip()):
+                                    torrent_id = comment.strip()
+
+                            if torrent_id:
+                                all_available_sites.append({
+                                    "site_name":
+                                    priority_site,
+                                    "site_info":
+                                    source_info,
+                                    "torrent_id":
+                                    torrent_id,
+                                    "torrent":
+                                    torrent,
+                                    "priority":
+                                    "configured"
+                                })
+                                logging.info(f"✓ 添加优先级站点: {priority_site}")
+                                break
+
+                # 2. 然后添加其他可用站点作为后备
+                # 获取所有在torrents中有记录的站点（排除已在优先级中的）
+                priority_site_names = set(source_sites_priority)
+                site_name_map = {}
+                for torrent in torrents:
+                    site_name = torrent.get("sites")
+                    if site_name and site_name not in priority_site_names:
+                        site_name_map[site_name] = torrent
+
+                # 按迁移状态排序后备站点
+                sorted_sites = []
+                for site_name, torrent in site_name_map.items():
+                    source_info = db_manager.get_site_by_nickname(site_name)
+                    if source_info and source_info.get("cookie"):
+                        migration_status = source_info.get("migration", 0)
+                        # 优先级：可作为源(1,3) > 只作为目标(2) > 只配置不迁移(0)
+                        priority = 2 if migration_status in [
+                            1, 3
+                        ] else 1 if migration_status == 2 else 0
+                        sorted_sites.append(
+                            (site_name, torrent, source_info, priority))
+
+                # 按优先级降序排序
+                sorted_sites.sort(key=lambda x: x[3], reverse=True)
+
+                # 3. 将后备站点添加到可用站点列表
+                for site_name, torrent, source_info, _ in sorted_sites:
+                    # 提取种子ID
+                    comment = torrent.get("details", "")
+                    torrent_id = None
+                    if comment:
+                        import re
+                        id_match = re.search(r'id=(\d+)', comment)
+                        if id_match:
+                            torrent_id = id_match.group(1)
+                        elif re.match(r'^\d+$', comment.strip()):
+                            torrent_id = comment.strip()
+
+                    if torrent_id:
+                        all_available_sites.append({
+                            "site_name": site_name,
+                            "site_info": source_info,
+                            "torrent_id": torrent_id,
+                            "torrent": torrent,
+                            "priority": "fallback"
+                        })
+                        logging.info(f"  添加后备站点: {site_name}")
+
+                logging.info(
+                    f"为 {torrent_name} 构建可用站点列表完成，共 {len(all_available_sites)} 个站点"
+                )
+
+                # 遍历所有可用站点进行尝试
+                for site_attempt in all_available_sites:
+                    for attempt in range(1, max_retry_per_site + 1):
+                        if fetch_success:
+                            break
+
+                        try:
+                            site_name = site_attempt["site_name"]
+
+                            # 检查站点请求间隔
+                            if site_name in site_last_request_time:
+                                elapsed = time.time(
+                                ) - site_last_request_time[site_name]
+                                if elapsed < REQUEST_INTERVAL:
+                                    wait_time = REQUEST_INTERVAL - elapsed
+                                    logging.info(
+                                        f"⏰ 站点 {site_name} 请求间隔控制，等待 {wait_time:.1f} 秒"
+                                    )
+                                    time.sleep(wait_time)
+
+                            site_last_request_time[site_name] = time.time()
+
+                            if attempt > 1:
+                                logging.info(f"🔄 站点 {site_name} 第{attempt}次重试")
+                            else:
+                                priority_indicator = "⭐" if site_attempt.get(
+                                    "priority") == "configured" else "📋"
+                                logging.info(
+                                    f"{priority_indicator} 正在从站点 {site_name} 获取 {torrent_name}"
+                                )
+
+                            # 初始化TorrentMigrator
+                            migrator = TorrentMigrator(
+                                source_site_info=site_attempt["site_info"],
+                                target_site_info=None,
+                                search_term=site_attempt["torrent_id"],
+                                save_path=site_attempt["torrent"].get(
+                                    "save_path", ""),
+                                torrent_name=torrent_name,
+                                downloader_id=site_attempt["torrent"].get(
+                                    "downloader_id"),
+                                config_manager=config_manager,
+                                db_manager=db_manager)
+
+                            # 尝试获取数据
+                            result = migrator.prepare_review_data()
+
+                            if "review_data" in result:
+                                # 成功获取
+                                final_source = site_attempt
+                                fetch_success = True
+                                logging.info(
+                                    f"✅ 从站点 {site_name} 成功获取 {torrent_name}")
+                                break
+                            else:
+                                # 获取失败，记录错误
+                                error_detail = result.get("logs", "未知错误")
+
+                                # 记录尝试过的站点
+                                if site_name not in attempted_sites_details:
+                                    attempted_sites_details.append(site_name)
+
+                                # 判断是否需要重试
+                                should_retry = False
+                                if attempt < max_retry_per_site:
+                                    # 对于网络相关错误和种子链接查找错误，使用指数退避重试
+                                    if ("连接" in error_detail.lower() or
+                                            "timeout" in error_detail.lower()
+                                            or "网络" in error_detail.lower()
+                                            or "placeholder"
+                                            in error_detail.lower()
+                                            or "429" in error_detail
+                                            or "502" in error_detail
+                                            or "503" in error_detail
+                                            or "504" in error_detail
+                                            or "未找到种子下载链接"
+                                            in error_detail):  # 新增：种子下载链接未找到错误
+
+                                        wait_time = REQUEST_INTERVAL * (
+                                            2**(attempt - 1))  # 指数退避
+                                        logging.warning(
+                                            f"⚠️ 站点 {site_name} 第{attempt}次失败 ({error_detail})，{wait_time}秒后重试"
+                                        )
+                                        time.sleep(wait_time)
+                                        should_retry = True
+                                    else:
+                                        logging.warning(
+                                            f"❌ 站点 {site_name} 获取失败（非重试错误）: {error_detail}"
+                                        )
+
+                                if not should_retry:
+                                    logging.info(
+                                        f"⏭️ 站点 {site_name} 获取失败，尝试下一个站点")
+                                    break
+
+                        except Exception as attempt_error:
+                            error_msg = str(attempt_error)
+                            logging.error(
+                                f"站点 {site_attempt['site_name']} 第{attempt}次尝试异常: {error_msg}"
                             )
-                            time.sleep(wait_time)
 
-                    # 记录本次请求时间
-                    site_last_request_time[current_site] = time.time()
+                            # 记录尝试过的站点
+                            if site_attempt[
+                                    'site_name'] not in attempted_sites_details:
+                                attempted_sites_details.append(
+                                    site_attempt['site_name'])
 
-                    migrator = TorrentMigrator(
-                        source_site_info=source_found["site_info"],
-                        target_site_info=None,
-                        search_term=source_found["torrent_id"],
-                        save_path=source_found["torrent"].get("save_path", ""),
-                        torrent_name=torrent_name,
-                        downloader_id=source_found["torrent"].get(
-                            "downloader_id"),
-                        config_manager=config_manager,
-                        db_manager=db_manager)
+                            # 对于网络异常，如果还没到重试上限则重试
+                            if attempt < max_retry_per_site and (
+                                    "连接" in error_msg.lower()
+                                    or "timeout" in error_msg.lower()):
+                                wait_time = REQUEST_INTERVAL * (2**(attempt -
+                                                                    1))
+                                logging.warning(
+                                    f"⚠️ 站点 {site_attempt['site_name']} 第{attempt}次异常，{wait_time}秒后重试"
+                                )
+                                time.sleep(wait_time)
+                            else:
+                                logging.info(
+                                    f"⏭️ 站点 {site_attempt['site_name']} 异常，尝试下一个站点"
+                                )
+                                break
 
-                    result = migrator.prepare_review_data()
+                    if fetch_success:
+                        break  # 成功获取，退出站点循环
 
-                    if "review_data" in result:
-                        BATCH_FETCH_TASKS[task_id]["results"].append({
-                            "name":
-                            torrent_name,
-                            "status":
-                            "success",
-                            "source_site":
-                            source_found["site"]
-                        })
-                        BATCH_FETCH_TASKS[task_id]["success"] += 1
-                        logging.info(
-                            f"批量获取成功: {torrent_name} from {source_found['site']}"
-                        )
-                    else:
-                        BATCH_FETCH_TASKS[task_id]["results"].append({
-                            "name":
-                            torrent_name,
-                            "status":
-                            "failed",
-                            "reason":
-                            result.get("logs", "未知错误")
-                        })
-                        BATCH_FETCH_TASKS[task_id]["failed"] += 1
+                # 处理最终结果
+                if fetch_success and final_source:
+                    BATCH_FETCH_TASKS[task_id]["results"].append({
+                        "name":
+                        torrent_name,
+                        "status":
+                        "success",
+                        "source_site":
+                        final_source["site_name"],
+                        "attempted_sites":
+                        len(attempted_sites_details),
+                        "retries":
+                        max_retry_per_site
+                    })
+                    BATCH_FETCH_TASKS[task_id]["success"] += 1
+                    logging.info(
+                        f"📊 {torrent_name} 批量获取成功 (尝试了{len(attempted_sites_details)}个站点，来自{final_source['site_name']})"
+                    )
+                else:
+                    failure_reason = f"在{len(attempted_sites_details)}个站点全部尝试失败"
+                    if attempted_sites_details:
+                        failure_reason += f" (尝试站点: {', '.join(attempted_sites_details)})"
 
-                except Exception as e:
                     BATCH_FETCH_TASKS[task_id]["results"].append({
                         "name":
                         torrent_name,
                         "status":
                         "failed",
                         "reason":
-                        str(e)
+                        failure_reason,
+                        "attempted_sites":
+                        len(attempted_sites_details)
                     })
                     BATCH_FETCH_TASKS[task_id]["failed"] += 1
-                    logging.error(f"批量获取失败: {torrent_name}, 错误: {e}")
+                    logging.error(f"❌ {torrent_name} 批量获取失败: {failure_reason}")
 
                 BATCH_FETCH_TASKS[task_id]["processed"] += 1
 
