@@ -555,8 +555,9 @@ class BaseUploader(ABC):
                 # 种子ID可能在 modified_torrent_path 文件名中（格式: 站点代码-种子ID-原文件名.torrent）
                 torrent_id = "unknown"
                 source_site_code = "unknown"
-                
-                modified_torrent_path = self.upload_data.get("modified_torrent_path", "")
+
+                modified_torrent_path = self.upload_data.get(
+                    "modified_torrent_path", "")
                 if modified_torrent_path:
                     torrent_filename = os.path.basename(modified_torrent_path)
                     # 尝试从文件名中提取站点代码和种子ID（格式: 站点代码-种子ID-xxx.torrent）
@@ -564,10 +565,10 @@ class BaseUploader(ABC):
                     if match:
                         source_site_code = match.group(1)
                         torrent_id = match.group(2)
-                
+
                 # 生成可读的时间戳格式: YYYY-MM-DD-HH:MM:SS
                 timestamp = datetime.now().strftime("%Y-%m-%d-%H:%M:%S")
-                
+
                 # 格式: {站点代码}-{种子ID}-{目标站点self.site_name}-{时间戳}
                 filename = f"{source_site_code}-{torrent_id}-{self.site_name}-{timestamp}.json"
                 filepath = os.path.join(torrent_dir, filename)
