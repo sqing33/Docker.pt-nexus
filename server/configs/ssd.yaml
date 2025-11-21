@@ -72,7 +72,7 @@ source_parsers:
       "Other": "video.other"
 
     audio_codec:
-      "DTS-HD": "audio.dts_hd_ma"
+      "DTS-HD": "audio.dts_hd"
       "TrueHD": "audio.truehd"
       "LPCM": "audio.lpcm"
       "DTS": "audio.dts"
@@ -116,7 +116,7 @@ source_parsers:
       "HDR10": "tag.hdr10"
       "HDR10+": "tag.hdr10plus"
       "菁彩HDR": "tag.菁彩HDR"
-      "HLG": "tag.hlg"
+      "HLG": "tag.HLG"
       "CC": "tag.cc"
       "3D": "tag.3d"
       "国语": "tag.国语"

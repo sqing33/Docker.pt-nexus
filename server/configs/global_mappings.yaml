@@ -21,6 +21,7 @@ global_standard_keys:
     "连续剧/TV Series": "category.tv_series"
     "TV Series(电视剧)": "category.tv_series"
     "TV Series": "category.tv_series"
+    "TVSeries": "category.tv_series"
     "剧集": "category.tv_series"
     "电视剧 / TV Series": "category.tv_series"
 
@@ -33,6 +34,8 @@ global_standard_keys:
     "TV Shows": "category.tv_shows"
     "脱口秀": "category.tv_shows"
     "综艺 / TV Shows": "category.tv_shows"
+    "TVShow": "category.tv_shows"
+    "TVShows": "category.tv_shows"
 
     # 动漫相关
     "动漫": "category.animation"
@@ -55,6 +58,7 @@ global_standard_keys:
     "音乐/Music": "category.music"
     "Music(音乐)": "category.music"
     "Music": "category.music"
+    "Musics": "category.music"
     "HQ音乐": "category.music"
     "HQ Audio音乐": "category.music"
     "HQ Audio/音乐": "category.music"
@@ -102,6 +106,7 @@ global_standard_keys:
     "纪录片 / Documentaries": "category.documentaries"
     "Docs(纪录)": "category.documentaries"
     "Drama/戏剧": "category.drama"
+    "Doc": "category.documentaries"
 
     # 短剧相关
     "短剧": "category.playlet"
@@ -274,6 +279,7 @@ global_standard_keys:
     "H.266/VVC": "video.h266"
     "AV1": "video.av1"
     "VP9": "video.vp9"
+    "VP8/9": "video.vp9"
     "VPB/VP9": "video.vp9"
     "VC-1": "video.vc1"
     "MPEG-1": "video.mpeg1"
@@ -296,7 +302,9 @@ global_standard_keys:
     "DTS-HD MA": "audio.dts_hd_ma"
     "DTS-HD|MA": "audio.dts_hd_ma"
     "DTS-HDMA": "audio.dts_hd_ma"
+    "DTS-HDMA:X 7.1": "audio.dts_hd_ma"
     "DTS-HD HR": "audio.dts_hd_hr"
+    "DTS-HDHRA": "audio.dts_hd_hr"
     "DTS:X": "audio.dtsx"
     "DTS-X": "audio.dtsx"
 
@@ -311,6 +319,7 @@ global_standard_keys:
     "E-AC3": "audio.ddp"
     "DD": "audio.ac3"
     "DD/AC3": "audio.ac3"
+    "AC3/DD": "audio.ac3"
     "Dolby Digital/DD": "audio.ac3"
     "AC3": "audio.ac3"
     "AC-3": "audio.ac3"
@@ -327,13 +336,16 @@ global_standard_keys:
     "ALAC": "audio.alac"
     "WAV": "audio.wav"
     "LPCM": "audio.lpcm"
+    "LPCM/PCM": "audio.lpcm"
     "PCM": "audio.pcm"
     "DSD": "audio.dsd"
     "TTA": "audio.tta"
+    "TAA": "audio.taa"
 
     # 有损音频
     "AAC": "audio.aac"
     "MP3": "audio.mp3"
+    "MP2/3": "audio.mp3"
     "OGG": "audio.ogg"
     "M4A": "audio.m4a"
     "m4a": "audio.m4a"
@@ -371,6 +383,7 @@ global_standard_keys:
     "8K/4320P": "resolution.r4320p"
     "8K/4320p/4320i": "resolution.r4320p"
     "4320p": "resolution.r4320p"
+    "4320p/8K": "resolution.r4320p"
 
     # 4K分辨率
     "4K": "resolution.r2160p"
@@ -613,6 +626,10 @@ global_standard_keys:
     "HDC/HDChina": "team.hdchina"
     "HDo": "team.hdo"
     "HDHome": "team.hdhome"
+    "HDH": "team.hdh"
+    "HDHTV": "team.hdhtv"
+    "HDHPad": "team.hdhpad"
+    "HDHWEB": "team.hdhomeweb"
     "HDK": "team.hdk"
     "HDKGame": "team.hdkgame"
     "HDKWeb": "team.hdkweb"
@@ -659,6 +676,7 @@ global_standard_keys:
     "Starfall": "team.starfall"
     "StarfallWeb": "team.starfallweb"
     "Sunny": "team.sunny"
+    "SHMA": "team.shma"
     "Telesto": "team.telesto"
     "TLF": "team.tlf"
     "TJUPT": "team.tjupt"
@@ -730,7 +748,7 @@ global_standard_keys:
     "HDR10+": "tag.hdr10plus"
     "Dolby Vision": "tag.Dolby_Vision"
     "菁彩HDR": "tag.菁彩HDR"
-    "HLG": "tag.hlg"
+    "HLG": "tag.HLG"
     "杜比": "tag.杜比"
 
     # 视频质量标签
@@ -764,9 +782,11 @@ global_standard_keys:
     "三级": "tag.三级"
     "VCB-Studio": "tag.vcb_studio"
     "官组": "tag.官组"
+    "官字": "tag.官字"
     "柠檬爱原盘": "tag.untouch"
     "转载": "tag.转载"
     "应求": "tag.应求"
+    "Criterion": "tag.Criterion"
     "default": null
 
 # 默认 title_components 配置
@@ -985,8 +1005,6 @@ fallback_chains:
       - "audio.ddp"
       - "audio.ac3"
       - "audio.other"
-    "audio.truehd":
-      - "audio.other"
     "audio.ddp":
       - "audio.ac3"
       - "audio.other"
@@ -997,12 +1015,12 @@ fallback_chains:
       - "audio.dts"
       - "audio.other"
     "audio.dts_hd_ma":
+      - "audio.dts_hd"
       - "audio.dts"
       - "audio.other"
     "audio.dts_hd_hr":
+      - "audio.dts_hd"
       - "audio.dts"
-      - "audio.other"
-    "audio.dts":
       - "audio.other"
 
   video_codec:
@@ -1015,12 +1033,14 @@ fallback_chains:
 
   medium:
     "medium.remux":
-      - "medium.encode"
       - "medium.other"
     "medium.uhd_bluray":
       - "medium.bluray"
       - "medium.other"
     "medium.bdrip":
+      - "medium.encode"
+      - "medium.other"
+    "medium.minibd":
       - "medium.encode"
       - "medium.other"
     "medium.webrip":
@@ -1035,6 +1055,10 @@ fallback_chains:
     "hdr.hdr10_plus":
       - "hdr.hdr10"
       - "hdr.sdr"
+
+  resolution:
+    "resolution.r1080i":
+      - "resolution.r1080p"
 
 # General configuration for the fallback mechanism.
 # 降级机制的通用配置。

@@ -99,6 +99,10 @@ RUN chmod +x ./updater
 # 复制版本文件
 COPY ./CHANGELOG.json ./CHANGELOG.json
 
+# 复制 BDInfo 工具
+COPY ./bdinfo /app/bdinfo
+RUN chmod +x /app/bdinfo/BDInfo /app/bdinfo/BDInfoDataSubstractor
+
 # 复制启动脚本
 COPY ./start-services.sh ./start-services.sh
 RUN chmod +x ./start-services.sh

@@ -134,8 +134,8 @@ class HHCLUBSpecialExtractor:
         if douban_link or imdb_link:
             try:
                 from utils import upload_data_movie_info
-                movie_status, poster_content, description_content, imdb_content = upload_data_movie_info(
-                    douban_link, imdb_link)
+                movie_status, poster_content, description_content, imdb_content, douban_content = upload_data_movie_info(
+                    "", douban_link, imdb_link, "")
 
                 if movie_status and description_content:
                     body = description_content

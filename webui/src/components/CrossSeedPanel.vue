@@ -96,7 +96,10 @@
                             v-model="torrentData.standardized_params.type"
                             placeholder="请选择类型"
                             clearable
-                            :class="{ 'is-invalid': invalidStandardParams.includes('type') }"
+                            :class="{
+                              'is-invalid': invalidStandardParams.includes('type'),
+                              'is-empty': !torrentData.standardized_params.type,
+                            }"
                             data-tag-style
                           >
                             <el-option
@@ -113,7 +116,10 @@
                             v-model="torrentData.standardized_params.medium"
                             placeholder="请选择媒介"
                             clearable
-                            :class="{ 'is-invalid': invalidStandardParams.includes('medium') }"
+                            :class="{
+                              'is-invalid': invalidStandardParams.includes('medium'),
+                              'is-empty': !torrentData.standardized_params.medium,
+                            }"
                             data-tag-style
                           >
                             <el-option
@@ -130,7 +136,10 @@
                             v-model="torrentData.standardized_params.video_codec"
                             placeholder="请选择视频编码"
                             clearable
-                            :class="{ 'is-invalid': invalidStandardParams.includes('video_codec') }"
+                            :class="{
+                              'is-invalid': invalidStandardParams.includes('video_codec'),
+                              'is-empty': !torrentData.standardized_params.video_codec,
+                            }"
                             data-tag-style
                           >
                             <el-option
@@ -147,7 +156,10 @@
                             v-model="torrentData.standardized_params.audio_codec"
                             placeholder="请选择音频编码"
                             clearable
-                            :class="{ 'is-invalid': invalidStandardParams.includes('audio_codec') }"
+                            :class="{
+                              'is-invalid': invalidStandardParams.includes('audio_codec'),
+                              'is-empty': !torrentData.standardized_params.audio_codec,
+                            }"
                             data-tag-style
                           >
                             <el-option
@@ -164,7 +176,10 @@
                             v-model="torrentData.standardized_params.resolution"
                             placeholder="请选择分辨率"
                             clearable
-                            :class="{ 'is-invalid': invalidStandardParams.includes('resolution') }"
+                            :class="{
+                              'is-invalid': invalidStandardParams.includes('resolution'),
+                              'is-empty': !torrentData.standardized_params.resolution,
+                            }"
                             data-tag-style
                           >
                             <el-option
@@ -189,7 +204,9 @@
                             allow-create
                             default-first-option
                             class="team-select"
-                            :class="{ 'is-invalid': invalidStandardParams.includes('team') }"
+                            :class="{
+                              'is-invalid': invalidStandardParams.includes('team'),
+                            }"
                           >
                             <el-option
                               v-for="(label, value) in reverseMappings.team"
@@ -205,7 +222,9 @@
                             v-model="torrentData.standardized_params.source"
                             placeholder="请选择产地"
                             clearable
-                            :class="{ 'is-invalid': invalidStandardParams.includes('source') }"
+                            :class="{
+                              'is-invalid': invalidStandardParams.includes('source'),
+                            }"
                             data-tag-style
                           >
                             <el-option
@@ -226,7 +245,6 @@
                             default-first-option
                             placeholder="请选择或输入标签"
                             style="width: 100%"
-                            @remove-tag="handleTagRemove"
                           >
                             <template #tag="{ data }">
                               <el-tag
@@ -850,56 +868,66 @@
     <footer class="panel-footer">
       <!-- 步骤 0 的按钮 -->
       <div v-if="activeStep === 0" class="button-group">
+        <transition name="el-fade-in-linear">
+          <div class="check-hint">修改完成后请预览一遍种子信息确保无误后完成修改！</div>
+        </transition>
         <el-button @click="handleCancelClick">取消</el-button>
 
-        <el-tooltip
-          :content="nextButtonTooltipContent"
-          placement="top"
-          :disabled="!isNextButtonDisabled"
-        >
-          <!-- 添加一个 span 作为包裹元素 -->
+        <el-button type="primary" @click="goToPublishPreviewStep" :disabled="isNextButtonDisabled">
+          下一步：发布参数预览
+        </el-button>
 
-          <el-button
-            type="primary"
-            @click="goToPublishPreviewStep"
-            :disabled="isNextButtonDisabled"
-          >
-            下一步：发布参数预览
-          </el-button>
-        </el-tooltip>
+        <!-- 新增：直接在右侧显示的提示文本 -->
+        <transition name="el-fade-in-linear">
+          <div v-if="isNextButtonDisabled" class="validation-hint">
+            <el-icon class="hint-icon"><Warning /></el-icon>
+            <span>{{ nextButtonTooltipContent }}</span>
+          </div>
+        </transition>
       </div>
       <!-- 步骤 1 的按钮 -->
       <div v-if="activeStep === 1" class="button-group">
         <el-button @click="handlePreviousStep" :disabled="isLoading">上一步</el-button>
-        <el-tooltip
-          :content="isScrolledToBottom ? '' : '请先滚动到页面底部检查完种子信息再修改！'"
-          :disabled="isScrolledToBottom"
-          placement="top"
+
+        <el-button
+          type="primary"
+          @click="handleCompleteClick"
+          v-if="props.showCompleteButton"
+          :disabled="isLoading || !isScrolledToBottom"
+          :class="{ 'scrolled-to-bottom': isScrolledToBottom }"
         >
-          <el-button
-            type="primary"
-            @click="handleCompleteClick"
-            v-if="props.showCompleteButton"
-            :disabled="isLoading || !isScrolledToBottom"
-            :class="{ 'scrolled-to-bottom': isScrolledToBottom }"
-          >
-            修改完成
-          </el-button>
-        </el-tooltip>
-        <el-tooltip
-          :content="isScrolledToBottom ? '' : '请先滚动到页面底部检查完种子信息再发布！'"
-          :disabled="isScrolledToBottom"
-          placement="top"
+          修改完成
+        </el-button>
+
+        <!-- 注意：原本这里的 hint 移到了下面 -->
+
+        <el-button
+          type="primary"
+          @click="goToSelectSiteStep"
+          :disabled="isLoading || !isScrolledToBottom"
+          :class="{ 'scrolled-to-bottom': isScrolledToBottom }"
         >
-          <el-button
-            type="primary"
-            @click="goToSelectSiteStep"
-            :disabled="isLoading || !isScrolledToBottom"
-            :class="{ 'scrolled-to-bottom': isScrolledToBottom }"
-          >
-            下一步：选择发布站点
-          </el-button>
-        </el-tooltip>
+          下一步：选择发布站点
+        </el-button>
+
+        <!-- 将所有提示组件移到按钮组的末尾，这样它们会统一显示在按钮组的最右侧 -->
+
+        <!-- 提示 1：针对修改完成按钮 (如果需要区分显示，可以使用 v-else-if，防止重叠) -->
+        <transition name="el-fade-in-linear">
+          <div v-if="props.showCompleteButton && !isScrolledToBottom" class="validation-hint">
+            <el-icon class="hint-icon"><Warning /></el-icon>
+            <span>请滚动到页面底部检查完种子信息无误再发布！</span>
+          </div>
+        </transition>
+
+        <!-- 提示 2：针对下一步按钮 -->
+        <!-- 使用 v-else-if 避免两个提示同时出现重叠显示 -->
+        <transition name="el-fade-in-linear">
+          <div v-if="!props.showCompleteButton && !isScrolledToBottom" class="validation-hint">
+            <el-icon class="hint-icon"><Warning /></el-icon>
+            <span>请先滚动到页面底部检查完种子信息再发布！</span>
+          </div>
+        </transition>
       </div>
       <!-- 步骤 2 的按钮 -->
       <div v-if="activeStep === 2" class="button-group">
@@ -953,6 +981,7 @@ import {
   CircleCloseFilled,
   Close,
   InfoFilled,
+  Warning,
 } from '@element-plus/icons-vue'
 import { useCrossSeedStore } from '@/stores/crossSeed'
 import LogProgress from './LogProgress.vue'
@@ -1279,11 +1308,6 @@ const getButtonType = (site: SiteStatus) => {
 }
 
 const refreshIntro = async () => {
-  if (!torrentData.value.douban_link && !torrentData.value.imdb_link) {
-    ElNotification.warning('没有豆瓣或IMDb链接，无法重新获取简介。')
-    return
-  }
-
   isRefreshingIntro.value = true
   ElNotification.info({
     title: '正在重新获取',
@@ -1295,6 +1319,7 @@ const refreshIntro = async () => {
     type: 'intro',
     source_info: {
       main_title: torrentData.value.original_main_title,
+      subtitle: torrentData.value.subtitle,
       source_site: sourceSite.value,
       imdb_link: torrentData.value.imdb_link,
       douban_link: torrentData.value.douban_link,
@@ -1308,9 +1333,13 @@ const refreshIntro = async () => {
     if (response.data.success && response.data.intro) {
       torrentData.value.intro.body = filterExtraEmptyLines(response.data.intro)
 
-      // 如果返回了新的IMDb链接，也更新它
+      // 使用返回的IMDb链接、豆瓣链接填充
       if (response.data.extracted_imdb_link && !torrentData.value.imdb_link) {
         torrentData.value.imdb_link = response.data.extracted_imdb_link
+      }
+
+      if (response.data.extracted_douban_link && !torrentData.value.douban_link) {
+        torrentData.value.douban_link = response.data.extracted_douban_link
       }
 
       ElNotification.success({
@@ -1325,7 +1354,7 @@ const refreshIntro = async () => {
     }
   } catch (error: any) {
     ElNotification.closeAll()
-    const errorMsg = error.response?.data?.error || '重新获取简介时发生网络错误'
+    const errorMsg = error.response?.data?.error || '未能重新获取简介'
     ElNotification.error({
       title: '操作失败',
       message: errorMsg,
@@ -1386,12 +1415,12 @@ const refreshScreenshots = async () => {
       screenshotValid.value = false
       ElNotification.error({
         title: '重新获取失败',
-        message: response.data.error || '无法从后端获取新的截图。',
+        message: response.data.error || '无法从后端获取新的截图，请查看后台日志。',
       })
     }
   } catch (error: any) {
     ElNotification.closeAll()
-    const errorMsg = error.response?.data?.error || '重新获取截图时发生网络错误'
+    const errorMsg = error.response?.data?.error || '未能重新获取截图，请查看后台日志。'
     ElNotification.error({
       title: '操作失败',
       message: errorMsg,
@@ -1448,12 +1477,12 @@ const refreshMediainfo = async () => {
     } else {
       ElNotification.error({
         title: '重新获取失败',
-        message: response.data.error || '无法从后端获取新的媒体信息。',
+        message: response.data.error || '无法从后端获取新的媒体信息，请查看后台日志。',
       })
     }
   } catch (error: any) {
     ElNotification.closeAll()
-    const errorMsg = error.response?.data?.error || '重新获取媒体信息时发生网络错误'
+    const errorMsg = error.response?.data?.error || '未能重新获取媒体信息，请查看后台日志。'
     ElNotification.error({
       title: '操作失败',
       message: errorMsg,
@@ -1511,12 +1540,12 @@ const refreshPosters = async () => {
     } else {
       ElNotification.error({
         title: '重新获取失败',
-        message: response.data.error || '无法从后端获取新的海报。',
+        message: response.data.error || '无法从后端获取新的海报，请查看后台日志。',
       })
     }
   } catch (error: any) {
     ElNotification.closeAll()
-    const errorMsg = error.response?.data?.error || '重新获取海报时发生网络错误'
+    const errorMsg = error.response?.data?.error || '未能重新获取海报，请查看后台日志。'
     ElNotification.error({
       title: '操作失败',
       message: errorMsg,
@@ -1543,7 +1572,7 @@ const reparseTitle = async () => {
       ElNotification.error(response.data.message || '解析失败')
     }
   } catch (error) {
-    handleApiError(error, '重新解析标题时发生网络错误')
+    handleApiError(error, '未能重新解析标题，请查看后台日志。')
   } finally {
     isReparsing.value = false
   }
@@ -1621,8 +1650,8 @@ const handleImageError = async (url: string, type: 'poster' | 'screenshot', inde
   } catch (error: any) {
     const errorMsg =
       error.response?.data?.error ||
-      `发送失效${type === 'poster' ? '海报' : '截图'}信息请求时发生网络错误`
-    console.error('发送失效图片信息请求时发生网络错误:', error)
+      `发送失效${type === 'poster' ? '海报' : '截图'}信息请求时发生错误，请查看后台日志。`
+    console.error('发送失效图片信息请求时发生错误:', error)
     ElNotification.error({
       title: '操作失败',
       message: errorMsg,
@@ -1835,7 +1864,7 @@ const fetchTorrentInfo = async () => {
         return
       } catch (error: any) {
         ElNotification.closeAll()
-        handleApiError(error, '从源站点抓取时发生网络错误')
+        handleApiError(error, '从源站点抓取时发生错误，请查看后台日志。')
         emit('cancel')
         isLoading.value = false
         return
@@ -2242,7 +2271,7 @@ const fetchTorrentInfo = async () => {
       })
     } else {
       // 使用原有的错误处理
-      handleApiError(error, '获取种子信息时发生网络错误')
+      handleApiError(error, '获取种子信息时发生错误，请查看后台日志。')
     }
     emit('cancel')
   } finally {
@@ -2451,7 +2480,7 @@ const goToPublishPreviewStep = async () => {
     }
   } catch (error) {
     ElNotification.closeAll()
-    handleApiError(error, '更新预览数据时发生网络错误')
+    handleApiError(error, '更新预览数据时发生错误，请查看后台日志。')
   } finally {
     isLoading.value = false
   }
@@ -2652,7 +2681,7 @@ const handlePublish = async () => {
         success: false,
         logs: error.response?.data?.logs || error.message,
         url: null,
-        message: `发布到 ${siteName} 时发生网络错误。`,
+        message: `发布到 ${siteName} 时发生错误，请查看日志。`,
         downloaderStatus: {
           success: false,
           message: '发布失败，无法添加到下载器',
@@ -3002,47 +3031,71 @@ const isUbitsDisabled = computed(() => {
 })
 
 // 计算属性：检查下一步按钮是否应该禁用
-// 只有当"无法识别"的参数为空字符串，截图有效，标准化参数符合格式，且mediainfo/bdinfo内容有效时才允许点击按钮
-// mediainfo/bdinfo有效性的检查：非空、长度足够、包含各自格式的关键字段
 const isNextButtonDisabled = computed(() => {
+  // 1. 检查“无法识别”
   const unrecognized = torrentData.value.title_components.find((param) => param.key === '无法识别')
   const hasUnrecognized = unrecognized && unrecognized.value !== ''
-  const hasInvalidScreenshots = !screenshotValid.value
 
-  // 检查是否包含受限标签
+  // 2. 检查禁转标签
   if (hasRestrictedTag.value) {
     return true
   }
 
-  // 检查 mediainfo/bdinfo 的有效性
+  // 3. 【新增】检查简介、海报、截图是否为空
+  const intro = torrentData.value.intro
+  const hasEmptyPoster = !intro.poster || intro.poster.trim() === ''
+  const hasEmptyScreenshots = !intro.screenshots || intro.screenshots.trim() === ''
+  const hasEmptyBody = !intro.body || intro.body.trim() === ''
+
+  if (hasEmptyPoster || hasEmptyScreenshots || hasEmptyBody) {
+    return true
+  }
+
+  // 4. 检查标准参数是否为空 (类型、媒介、视频编码、音频编码、分辨率)
+  const params = torrentData.value.standardized_params
+  const hasEmptyType = !params.type || params.type.trim() === ''
+  const hasEmptyMedium = !params.medium || params.medium.trim() === ''
+  const hasEmptyVideoCodec = !params.video_codec || params.video_codec.trim() === ''
+  const hasEmptyAudioCodec = !params.audio_codec || params.audio_codec.trim() === ''
+  const hasEmptyResolution = !params.resolution || params.resolution.trim() === ''
+
+  if (
+    hasEmptyType ||
+    hasEmptyMedium ||
+    hasEmptyVideoCodec ||
+    hasEmptyAudioCodec ||
+    hasEmptyResolution
+  ) {
+    return true
+  }
+
+  // 5. 检查 Mediainfo 是否为空或格式无效
   const mediaInfoText = torrentData.value.mediainfo || ''
   const hasInvalidMediaInfo = !mediaInfoText || mediaInfoText.trim() === ''
 
-  // 如果有内容，进一步检查格式有效性
   if (!hasInvalidMediaInfo) {
-    // 检查是否为有效的 MediaInfo 或 BDInfo 格式
+    // 如果有内容，进一步检查格式有效性
     const isStandardMediainfo = _isValidMediainfo(mediaInfoText)
     const isBDInfo = _isValidBDInfo(mediaInfoText)
-
-    // 如果既不是有效的 MediaInfo 也不是有效的 BDInfo，则认为无效
     if (!isStandardMediainfo && !isBDInfo) {
       return true
     }
+  } else {
+    // 如果为空，也禁用
+    return true
   }
 
-  // 将 getInvalidStandardParams() 修改为 invalidStandardParams.value
+  // 6. 检查参数格式验证
   const hasInvalidStandardParams = invalidStandardParams.value.length > 0
-
-  if (hasUnrecognized) {
-    return true
-  }
-  if (hasInvalidScreenshots) {
-    return true
-  }
   if (hasInvalidStandardParams) {
     return true
   }
-  if (hasInvalidMediaInfo) {
+
+  // 7. 检查截图链接是否有效 (加载失败的情况)
+  // 注意：这里依靠 screenshotValid 状态，但如果截图文本本身为空，在第3步就已经拦截了
+  const hasInvalidScreenshots = !screenshotValid.value
+
+  if (hasUnrecognized || hasInvalidScreenshots) {
     return true
   }
 
@@ -3051,10 +3104,72 @@ const isNextButtonDisabled = computed(() => {
 
 // 计算属性：获取下一步按钮的提示文本
 const nextButtonTooltipContent = computed(() => {
+  // 1. 优先级最高：检查禁转标签
   if (hasRestrictedTag.value) {
     return '检测到禁转标签，不允许继续发布'
   }
-  return '存在待修改的参数'
+
+  // 2. 检查是否存在“无法识别”的内容
+  const unrecognized = torrentData.value.title_components.find((param) => param.key === '无法识别')
+  if (unrecognized && unrecognized.value !== '') {
+    return '存在无法识别的标题内容，请手动修正或删除'
+  }
+
+  // 3. 检查必填参数是否为空 (包含：简介信息 + 标准化参数)
+  const params = torrentData.value.standardized_params
+  const intro = torrentData.value.intro
+  const missingFields: string[] = []
+
+  // --- 检查简介信息 ---
+  if (!intro.poster || intro.poster.trim() === '') missingFields.push('海报')
+  if (!intro.screenshots || intro.screenshots.trim() === '') missingFields.push('截图')
+  if (!intro.body || intro.body.trim() === '') missingFields.push('简介正文')
+
+  // --- 检查 Mediainfo ---
+  if (!torrentData.value.mediainfo || torrentData.value.mediainfo.trim() === '')
+    missingFields.push('Mediainfo')
+
+  // --- 检查标准化参数 ---
+  if (!params.type || params.type.trim() === '') missingFields.push('类型')
+  if (!params.medium || params.medium.trim() === '') missingFields.push('媒介')
+  if (!params.video_codec || params.video_codec.trim() === '') missingFields.push('视频编码')
+  if (!params.audio_codec || params.audio_codec.trim() === '') missingFields.push('音频编码')
+  if (!params.resolution || params.resolution.trim() === '') missingFields.push('分辨率')
+
+  if (missingFields.length > 0) {
+    return `请补充必填项：${missingFields.join('、')}`
+  }
+
+  // 4. 检查参数格式 (红框/正则验证)
+  if (invalidStandardParams.value.length > 0) {
+    const paramNameMap: Record<string, string> = {
+      type: '类型',
+      medium: '媒介',
+      video_codec: '视频编码',
+      audio_codec: '音频编码',
+      resolution: '分辨率',
+      team: '制作组',
+      source: '产地',
+      tags: '标签',
+    }
+    const invalidNames = invalidStandardParams.value
+      .map((key) => paramNameMap[key] || key)
+      .join('、')
+    return `参数格式不正确 (${invalidNames})`
+  }
+
+  // 5. 检查 MediaInfo/BDInfo 格式有效性
+  const mediaInfoText = torrentData.value.mediainfo || ''
+  if (!_isValidMediainfo(mediaInfoText) && !_isValidBDInfo(mediaInfoText)) {
+    return 'MediaInfo 或 BDInfo 格式无效'
+  }
+
+  // 6. 检查截图链接有效性
+  if (!screenshotValid.value) {
+    return '截图链接失效，请等待重新获取或手动修复'
+  }
+
+  return '准备就绪'
 })
 
 // 辅助函数：检查是否为有效的 MediaInfo 格式
@@ -4315,5 +4430,117 @@ const filterUploadedParam = (url: string): string => {
   border-radius: 4px;
   height: 25px;
   margin: 3px 0;
+}
+
+/* --- 类型和媒介未选择时的红色提示样式 --- */
+.el-select.is-empty :deep(.el-select__wrapper) {
+  box-shadow: 0 0 0 1px var(--el-color-danger) inset !important;
+}
+
+.el-select.is-empty :deep(.el-select__placeholder) {
+  color: var(--el-color-danger) !important;
+}
+
+.el-select.is-empty :deep(.el-select__selected-item) {
+  background-color: var(--el-color-danger-light-9) !important;
+}
+
+/* --- 底部按钮组样式调整 --- */
+.button-group {
+  position: relative !important; /* 强制生效 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  /* 确保宽度只包含按钮，不包含绝对定位的子元素 */
+  width: max-content;
+  margin: 0 auto;
+}
+
+/* 检查提示文本样式 */
+.check-hint {
+  position: absolute !important; /* 强制脱离文档流，不占位置 */
+  right: 100% !important; /* 定位到按钮组的最右边 */
+  top: 50% !important;
+  transform: translateY(-50%) !important; /* 垂直居中 */
+  margin-right: 20px; /* 与按钮保持距离 */
+  white-space: nowrap; /* 防止文字换行 */
+  z-index: 10; /* 确保显示在最上层 */
+
+  /* 原有美化样式 */
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  color: #f56c6c;
+  background-color: #fef0f0;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid #fde2e2;
+  animation: shake 0.5s ease-in-out;
+}
+
+/* 验证提示文本样式 */
+.validation-hint {
+  position: absolute !important; /* 强制脱离文档流，不占位置 */
+  left: 100% !important; /* 定位到按钮组的最右边 */
+  top: 50% !important;
+  transform: translateY(-50%) !important; /* 垂直居中 */
+  margin-left: 20px; /* 与按钮保持距离 */
+  white-space: nowrap; /* 防止文字换行 */
+  z-index: 10; /* 确保显示在最上层 */
+
+  /* 原有美化样式 */
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  color: #f56c6c;
+  background-color: #fef0f0;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid #fde2e2;
+  animation: shake 0.5s ease-in-out;
+}
+
+/* 动画关键帧 */
+@keyframes shake {
+  0% {
+    transform: translateY(-50%) translateX(0);
+  }
+  25% {
+    transform: translateY(-50%) translateX(-2px);
+  }
+  50% {
+    transform: translateY(-50%) translateX(2px);
+  }
+  75% {
+    transform: translateY(-50%) translateX(-2px);
+  }
+  100% {
+    transform: translateY(-50%) translateX(0);
+  }
+}
+
+.hint-icon {
+  margin-right: 5px;
+  font-size: 14px;
+}
+
+/* 可选：添加一个轻微的晃动动画，当提示出现时 */
+@keyframes shake {
+  0% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-2px);
+  }
+  50% {
+    transform: translateX(2px);
+  }
+  75% {
+    transform: translateX(-2px);
+  }
+  100% {
+    transform: translateX(0);
+  }
 }
 </style>

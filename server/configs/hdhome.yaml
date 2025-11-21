@@ -1,0 +1,114 @@
+site_name: "HDHome"
+
+form_fields:
+  category: "type"
+  source: "source_sel"
+  medium: "medium_sel"
+  resolution: "standard_sel"
+  video_codec: "codec_sel"
+  audio_codec: "audiocodec_sel"
+
+source_parsers:
+  source_params:
+    type:
+      source_key: "类型"
+    medium:
+      source_key: "媒介"
+    video_codec:
+      source_key: "视频编码"
+    audio_codec:
+      source_key: "音频编码"
+    resolution:
+      source_key: "分辨率"
+    team:
+      source_key: "制作组"
+    source:
+      source_key: "产地"
+
+  standard_keys:
+    type:
+      "Movies": "category.movie"
+      "TVSeries": "category.tv_series"
+      "Anime": "category.animation"
+      "Doc": "category.documentaries"
+      "TVShow": "category.tv_shows"
+      "TVShows": "category.tv_shows"
+      "Musics": "category.music"
+      "TVMusic": "category.mv"
+      "Sports": "category.sports"
+      "Misc": "category.other"
+
+    medium:
+      "UHD Blu-ray": "medium.uhd_bluray"
+      "Blu-ray": "medium.bluray"
+      "Remux": "medium.remux"
+      "Encode": "medium.encode"
+      "HDTV": "medium.hdtv"
+      "CD": "medium.cd"
+      "MiniBD": "medium.minibd"
+      "WEB-DL": "medium.webdl"
+
+    video_codec:
+      "HEVC/H265/x265": "video.h265"
+      "AVC/H264/x264": "video.h264"
+      "VC-1": "video.vc1"
+      "MPEG-2": "video.mpeg2"
+      "Other": "video.other"
+
+    audio_codec:
+      "AAC": "audio.aac"
+      "AC3/DD": "audio.ac3"
+      "APE": "audio.ape"
+      "WAV": "audio.wav"
+      "FLAC": "audio.flac"
+      "DTS": "audio.dts"
+      "TrueHD": "audio.truehd"
+      "LPCM": "audio.lpcm"
+      "DTS-HD": "audio.dts_hd"
+      "DTS-HDHRA": "audio.dts_hd_hr"
+      "TrueHD Atmos": "audio.truehd_atmos"
+      "DTS-HDMA:X 7.1": "audio.dts_hd_ma"
+      "Other": "audio.other"
+
+    resolution:
+      "4320p/8K": "resolution.r4320p"
+      "2160p/4K": "resolution.r2160p"
+      "1080p": "resolution.r1080p"
+      "1080i": "resolution.r1080i"
+      "720p": "resolution.r720p"
+      "SD": "resolution.sd"
+      "Other": "resolution.other"
+
+    team:
+      "HDH": "team.hdh"
+      "HDHome": "team.hdhome"
+      "HDHTV": "team.hdhtv"
+      "HDHPad": "team.hdhpad"
+      "HDHWEB": "team.hdhomeweb"
+      "SHMA": "team.shma"
+      "TTG": "team.ttg"
+      "BMDru": "team.bmdru"
+
+    tag:
+      "禁转": "tag.禁转"
+      "限转": "tag.限转"
+      "官方": "tag.官方"
+      "保种": "tag.保种"
+      "原创": "tag.原创"
+      "首发": "tag.首发"
+      "国语": "tag.国语"
+      "粤语": "tag.粤语"
+      "中字": "tag.中字"
+      "特效": "tag.特效"
+      "官字": "tag.官字"
+      "原生": "tag.原生"
+      "连载": "tag.连载"
+      "完结": "tag.完结"
+      "DIY": "tag.DIY"
+      "Dolby Vision": "tag.Dolby_Vision"
+      "HDR10": "tag.HDR10"
+      "HDR10+": "tag.hdr10plus"
+      "Criterion": "tag.Criterion"
+      "应求": "tag.应求"
+      "零魔": "tag.零魔"
+      "default": null

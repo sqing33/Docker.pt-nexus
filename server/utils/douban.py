@@ -1,0 +1,981 @@
+import logging
+import requests
+import re
+import urllib.parse
+import tempfile
+import os
+from config import config_manager
+from utils import _convert_pixhost_url_to_direct
+
+
+def search_by_subtitle(subtitle):
+    """
+    根据副标题搜索IMDb或豆瓣链接
+    
+    Args:
+        subtitle (str): 副标题
+        
+    Returns:
+        tuple: (imdb_link, douban_link) 搜索到的链接元组
+    """
+    imdb_link = ""
+    douban_link = ""
+
+    if subtitle:
+        # 使用多种分隔符分割标题，并尝试每个片段
+        segments = re.split(r'[/|\\[\]()（）\[\]【】\s]+', subtitle)
+        # 过滤掉太短的片段和明显不是片名的片段
+        candidates = [
+            seg.strip() for seg in segments
+            if len(seg.strip()) > 1 and not re.match(
+                r'^(DIY|特效|简繁|字幕|原盘|BluRay|1080p|x264|x265).*$', seg, re.I)
+        ]
+
+        # 添加原始完整标题作为最后一个候选项
+        candidates.append(subtitle)
+
+        for candidate in candidates:
+            if candidate:
+                search_name = re.split(r'\s*[|/]\s*', candidate, 1)[0].strip()
+                if search_name:
+                    logging.info(f"未找到链接，尝试使用副标题 '{search_name}' 进行名称搜索...")
+                    print(f"[*] 未找到链接，尝试使用副标题 '{search_name}' 进行名称搜索...")
+                    try:
+                        encoded_name = urllib.parse.quote_plus(search_name)
+                        api_base_url = "https://ptn-douban.sqing33.dpdns.org/"
+                        api_url = f"{api_base_url}?name={encoded_name}"
+
+                        response = requests.get(api_url, timeout=10)
+                        if response.status_code == 200:
+                            data = response.json().get('data', [])
+                            if data and data[0]:
+                                found_record = data[0]
+                                found_imdb_id = found_record.get('imdbid')
+                                found_douban_id = found_record.get('doubanid')
+
+                                # 一次性获取两个链接
+                                if found_imdb_id:
+                                    imdb_link = f"https://www.imdb.com/title/{found_imdb_id}/"
+
+                                if found_douban_id:
+                                    douban_link = f"https://movie.douban.com/subject/{found_douban_id}/"
+
+                                # 如果至少有一个链接被找到，就返回
+                                if imdb_link or douban_link:
+                                    logging.info(
+                                        f"成功通过名称搜索补充链接: IMDb={imdb_link}, 豆瓣={douban_link}"
+                                    )
+                                    if imdb_link:
+                                        print(
+                                            f"  [+] 成功通过名称搜索补充 IMDb 链接: {imdb_link}"
+                                        )
+                                    if douban_link:
+                                        print(
+                                            f"  [+] 成功通过名称搜索补充豆瓣链接: {douban_link}"
+                                        )
+                                    return imdb_link, douban_link
+
+                        else:
+                            logging.warning(
+                                f"名称搜索 API 查询失败, 状态码: {response.status_code}")
+                            print(
+                                f"  [-] 名称搜索 API 查询失败, 状态码: {response.status_code}"
+                            )
+
+                    except requests.exceptions.RequestException as e:
+                        logging.error(f"使用名称搜索 API 时发生网络错误: {e}")
+                        print(f"  [!] 使用名称搜索 API 时发生网络错误: {e}")
+                    except Exception as e:
+                        logging.error(f"使用名称搜索时发生错误: {e}")
+                        print(f"  [!] 使用名称搜索时发生错误: {e}")
+
+    return imdb_link, douban_link
+
+
+def handle_incomplete_links(imdb_link, douban_link, subtitle):
+    """
+    当检测到 IMDb 或豆瓣链接不完整时，尝试使用远程 API 补充缺失的链接
+    
+    Args:
+        imdb_link (str): 已有的 IMDb 链接
+        douban_link (str): 已有的豆瓣链接
+        
+    Returns:
+        tuple: (imdb_link, douban_link) 补充后的链接元组
+    """
+    if not imdb_link and not douban_link:
+        logging.info("未找到任何链接，尝试使用远程 API 补充...")
+        print("未找到任何链接，尝试使用远程 API 补充...")
+        imdb_link, douban_link = search_by_subtitle(subtitle)
+
+    if (imdb_link and not douban_link) or (douban_link and not imdb_link):
+        logging.info("检测到 IMDb/豆瓣 链接不完整，尝试使用远程 API 补充...")
+        print("检测到 IMDb/豆瓣 链接不完整，尝试使用远程 API 补充...")
+
+        api_base_url = "https://ptn-douban.sqing33.dpdns.org/"
+
+        try:
+            if imdb_link and not douban_link:
+                print("[DEBUG] 尝试从IMDb链接获取豆瓣链接")
+                if imdb_id_match := re.search(r'(tt\d+)', imdb_link):
+                    imdb_id = imdb_id_match.group(1)
+                    api_url = f"{api_base_url}?imdbid={imdb_id}"
+                    logging.info(f"使用 IMDb ID 查询远程 API: {api_url}")
+                    print(f"[*] 正在使用 IMDb ID 查询 API: {api_url}")
+
+                    response = requests.get(api_url, timeout=10)
+                    if response.status_code == 200:
+                        data = response.json().get('data', [])
+                        if data and data[0].get('doubanid'):
+                            douban_id = data[0]['doubanid']
+                            douban_link = f"https://movie.douban.com/subject/{douban_id}/"
+                            logging.info(f"✅ 成功从 API 补充豆瓣链接: {douban_link}")
+                            print(f"  [+] 成功补充豆瓣链接: {douban_link}")
+                        else:
+                            logging.warning(f"API 响应中未找到与 {imdb_id} 匹配的豆瓣ID")
+                            print(f"  [-] API 响应中未找到与 {imdb_id} 匹配的豆瓣ID")
+                    else:
+                        logging.warning(
+                            f"API 查询失败, 状态码: {response.status_code}, 响应: {response.text}"
+                        )
+                        print(f"  [-] API 查询失败, 状态码: {response.status_code}")
+
+            elif douban_link and not imdb_link:
+                print("[DEBUG] 尝试从豆瓣链接获取IMDb链接")
+                if douban_id_match := re.search(r'subject/(\d+)', douban_link):
+                    douban_id = douban_id_match.group(1)
+                    api_url = f"{api_base_url}?doubanid={douban_id}"
+                    logging.info(f"使用 Douban ID 查询远程 API: {api_url}")
+                    print(f"[*] 正在使用 Douban ID 查询 API: {api_url}")
+
+                    response = requests.get(api_url, timeout=10)
+                    if response.status_code == 200:
+                        data = response.json().get('data', [])
+                        if data and data[0].get('imdbid'):
+                            imdb_id = data[0]['imdbid']
+                            imdb_link = f"https://www.imdb.com/title/{imdb_id}/"
+                            logging.info(f"✅ 成功从 API 补充 IMDb 链接: {imdb_link}")
+                            print(f"  [+] 成功补充 IMDb 链接: {imdb_link}")
+                        else:
+                            logging.warning(
+                                f"API 响应中未找到与 {douban_id} 匹配的IMDb ID")
+                            print(f"  [-] API 响应中未找到与 {douban_id} 匹配的IMDb ID")
+                    else:
+                        logging.warning(
+                            f"API 查询失败, 状态码: {response.status_code}, 响应: {response.text}"
+                        )
+                        print(f"  [-] API 查询失败, 状态码: {response.status_code}")
+
+        except requests.exceptions.RequestException as e:
+            logging.error(f"访问远程链接补充 API 时发生网络错误: {e}")
+            print(f"  [!] 访问远程链接补充 API 时发生网络错误: {e}")
+        except Exception as e:
+            logging.error(f"处理远程链接补充 API 响应时发生错误: {e}", exc_info=True)
+            print(f"  [!] 处理远程链接补充 API 响应时发生错误: {e}")
+
+    print(
+        f"[DEBUG] handle_incomplete_links returning: imdb_link={imdb_link}, douban_link={douban_link}"
+    )
+    return imdb_link, douban_link
+
+
+def upload_data_movie_info(media_type: str,
+                           douban_link: str,
+                           imdb_link: str,
+                           subtitle: str = ""):
+    """
+    通过多个PT-Gen API获取电影信息的完整内容，包括海报、简介和IMDb链接。
+    支持从豆瓣链接或IMDb链接获取信息，失败时自动切换API。
+    返回: (状态, 海报, 简介, IMDb链接, 豆瓣链接)
+    """
+    # 如果缺失豆瓣链接，尝试使用远程API获取豆瓣链接
+    if not douban_link:
+        print("检测到缺失豆瓣链接，尝试通过远程API补充豆瓣链接...")
+        new_imdb_link, new_douban_link = handle_incomplete_links(
+            imdb_link, douban_link, subtitle)
+        douban_link = new_douban_link
+
+        if douban_link or imdb_link:
+            print(f"成功补充链接: IMDb={imdb_link}, 豆瓣={douban_link}")
+        else:
+            print("未能补充IMDb链接或豆瓣链接")
+
+    # 过滤豆瓣链接，只保留完整的 subject URL 部分
+    if douban_link:
+        douban_match = re.match(r'(https?://movie\.douban\.com/subject/\d+)',
+                                douban_link)
+        if douban_match:
+            douban_link = douban_match.group(1)
+            print(f"🔗 已过滤豆瓣链接: {douban_link}")
+        else:
+            print("⚠️  警告: 提供的豆瓣链接格式无效。")
+            douban_link = ""
+
+    # 从配置文件获取财神ptgen的token
+    config = config_manager.get()
+    cspt_token = config.get("cross_seed", {}).get("cspt_ptgen_token", "")
+
+    # API配置列表，按优先级排序
+    api_configs = [
+        {
+            'name': 'ptn-ptgen.sqing33.dpdns.org',
+            'base_url': 'https://ptn-ptgen.sqing33.dpdns.org',
+            'type': 'refactor_url_format'
+        },
+        {
+            'name': 'ptgen.tju.pt',
+            'base_url': 'https://ptgen.tju.pt/infogen',
+            'type': 'tju_format',
+            'force_douban': True  # 强制使用site=douban模式
+        },
+        {
+            'name': 'ptgen.homeqian.top',
+            'base_url': 'https://ptgen.homeqian.top',
+            'type': 'url_format'
+        },
+        {
+            'name': 'api.iyuu.cn',
+            'base_url': 'https://api.iyuu.cn/App Movie.Ptgen',
+            'type': 'iyuu_format'
+        }
+    ]
+
+    # 如果配置了财神ptgen的token，则将其添加到API配置列表的最前面
+    if cspt_token:
+        api_configs.insert(
+            0, {
+                'name': 'cspt.top',
+                'base_url': 'https://cspt.top/api/ptgen/query',
+                'type': 'cspt_format',
+                'token': cspt_token
+            })
+
+    # 确定要使用的资源URL（豆瓣优先）
+    if not douban_link and not imdb_link:
+        return False, "", "", "", "未提供豆瓣或IMDb链接。"
+
+    # 确保返回的链接是完整的
+    final_douban_link = douban_link
+    final_imdb_link = imdb_link
+
+    # 尝试每个API
+    last_error = ""
+    for api_config in api_configs:
+        try:
+            print(f"尝试使用API: {api_config['name']}")
+
+            if api_config['type'] == 'cspt_format':
+                # CSPT格式API (cspt.top)
+                success, poster, description, imdb_link_result = _call_cspt_format_api(
+                    api_config, douban_link, imdb_link, media_type)
+            elif api_config['type'] == 'tju_format':
+                # TJU格式API (ptgen.tju.pt) - 强制使用豆瓣模式
+                success, poster, description, imdb_link_result = _call_tju_format_api(
+                    api_config, douban_link, imdb_link, media_type)
+            elif api_config['type'] == 'refactor_url_format':
+                # 新的URL格式API (ptn-ptgen.sqing33.dpdns.org)
+                success, poster, description, imdb_link_result = _call_refactor_url_format_api(
+                    api_config, douban_link, imdb_link, media_type)
+            elif api_config['type'] == 'url_format':
+                # URL格式API (workers.dev, homeqian.top)
+                success, poster, description, imdb_link_result = _call_url_format_api(
+                    api_config, douban_link, imdb_link, media_type)
+            elif api_config['type'] == 'iyuu_format':
+                # IYUU格式API (api.iyuu.cn)
+                success, poster, description, imdb_link_result = _call_iyuu_format_api(
+                    api_config, douban_link, imdb_link, media_type)
+            else:
+                continue
+
+            if success:
+                print(f"API {api_config['name']} 调用成功")
+                # 更新最终链接，如果API返回了新的链接
+                if imdb_link_result:
+                    final_imdb_link = imdb_link_result
+                    # 如果之前没有豆瓣链接，尝试从新的IMDb链接补全豆瓣链接
+                    if not final_douban_link:
+                        _, new_douban_link = handle_incomplete_links(
+                            final_imdb_link, "", "")
+                        if new_douban_link:
+                            final_douban_link = new_douban_link
+
+                return True, poster, description, final_imdb_link, final_douban_link
+            else:
+                last_error = description  # 错误信息存储在description中
+                print(f"API {api_config['name']} 返回失败: {last_error}")
+
+        except Exception as e:
+            last_error = f"API {api_config['name']} 请求异常: {e}"
+            print(last_error)
+            continue
+
+    # 所有API都失败
+    return False, "", "", final_imdb_link, final_douban_link
+
+
+def _call_cspt_format_api(api_config: dict, douban_link: str, imdb_link: str,
+                          media_type: str):
+    """
+    调用CSPT格式API (cspt.top)
+    API格式: https://cspt.top/api/ptgen/query/{token}?url=https://movie.douban.com/subject/2254648/
+    """
+    try:
+        resource_url = douban_link or imdb_link
+        if not resource_url:
+            return False, "", "未提供豆瓣或IMDb链接", ""
+
+        token = api_config.get('token', '')
+        if not token:
+            return False, "", "未配置财神ptgen token", ""
+
+        url = f"{api_config['base_url']}/{token}?url={resource_url}"
+
+        response = requests.get(url, timeout=30)
+        response.raise_for_status()
+
+        # 尝试解析为JSON
+        try:
+            data = response.json()
+        except:
+            # 如果不是JSON，可能是直接返回的文本格式
+            text_content = response.text.strip()
+            if text_content and ('[img]' in text_content or '◎' in text_content
+                                 or '❁' in text_content):
+                # 直接返回文本内容作为format
+                return _parse_format_content(text_content, media_type)
+            else:
+                return False, "", "API返回了无效的内容格式", ""
+
+        # JSON格式处理
+        if isinstance(data, dict):
+            # 检查是否有错误
+            if data.get('success') is False:
+                error_msg = data.get('message', data.get('error', '未知错误'))
+                return False, "", f"API返回失败: {error_msg}", ""
+
+            # 获取格式化内容
+            format_data = data.get('format', data.get('content', ''))
+            if format_data:
+                return _parse_format_content(format_data,
+                                             data.get('imdb_link', ''),
+                                             media_type)
+            else:
+                return False, "", "API未返回有效的格式化内容", ""
+        else:
+            return False, "", "API返回了无效的数据格式", ""
+
+    except Exception as e:
+        return False, "", f"CSPT格式API调用失败: {e}", ""
+
+
+def _call_tju_format_api(api_config: dict, douban_link: str, imdb_link: str,
+                         media_type: str):
+    """
+    调用TJU格式API (ptgen.tju.pt) - 强制使用site=douban模式
+    """
+    try:
+        # 强制使用site=douban，这样IMDb链接也会被转换查询豆瓣
+        if douban_link:
+            # 从豆瓣链接提取ID
+            douban_id = _extract_douban_id(douban_link)
+            if douban_id:
+                url = f"{api_config['base_url']}?site=douban&sid={douban_id}"
+            else:
+                raise ValueError("无法从豆瓣链接提取ID")
+        elif imdb_link:
+            # 从IMDb链接提取ID，但强制使用douban模式
+            imdb_id = _extract_imdb_id(imdb_link)
+            if imdb_id:
+                url = f"{api_config['base_url']}?site=douban&sid={imdb_id}"
+            else:
+                raise ValueError("无法从IMDb链接提取ID")
+        else:
+            raise ValueError("没有可用的链接")
+
+        response = requests.get(url, timeout=30)
+        response.raise_for_status()
+
+        data = response.json()
+
+        if not data.get('success', False):
+            error_msg = data.get('error', '未知错误')
+            return False, "", f"API返回失败: {error_msg}", ""
+
+        format_data = data.get('format', '')
+        if not format_data:
+            return False, "", "API未返回有效的格式化内容", ""
+
+        # 提取信息
+        extracted_imdb_link = data.get('imdb_link', '')
+        poster = ""
+        description = ""
+
+        # 提取海报图片并进行智能处理
+        if media_type != "intro":
+            img_match = re.search(r'\[img\](.*?)\[/img\]', format_data)
+            if img_match:
+                original_poster_url = img_match.group(1)
+                # 先替换域名为img9
+                original_poster_url = re.sub(r'img1', 'img9',
+                                             original_poster_url)
+                # 使用海报处理函数进行智能验证和转存
+                poster = _process_poster_url(original_poster_url)
+
+        # 提取简介内容（去除海报部分）
+        description = re.sub(r'\[img\].*?\[/img\]', '', format_data).strip()
+        description = re.sub(r'\n{3,}', '\n\n', description)
+
+        return True, poster, description, extracted_imdb_link
+
+    except Exception as e:
+        return False, "", f"TJU格式API调用失败: {e}", ""
+
+
+def _call_url_format_api(api_config: dict, douban_link: str, imdb_link: str,
+                         media_type: str):
+    """
+    调用URL格式API (workers.dev, homeqian.top)
+    """
+    try:
+        # 根据API名称确定使用的参数格式
+        base_url = api_config['base_url']
+        api_name = api_config.get('name', '')
+
+        # 默认使用URL参数方式
+        if douban_link:
+            resource_url = douban_link
+        elif imdb_link:
+            resource_url = imdb_link
+        else:
+            return False, "", "未提供豆瓣或IMDb链接", ""
+
+        # 对于特定API，尝试使用不同的参数方式
+        if 'ptn-ptgen.sqing33.dpdns.org' in api_name or 'ptn-ptgen' in api_name:
+            # 使用 /api?url= 格式
+            if base_url.endswith('/api'):
+                url = f"{base_url}?url={resource_url}"
+            else:
+                # 检查是否需要使用/api端点
+                url = f"{base_url}/api?url={resource_url}"
+        else:
+            # 默认格式
+            url = f"{base_url}/?url={resource_url}"
+
+        response = requests.get(url, timeout=30)
+        response.raise_for_status()
+
+        # 尝试解析为JSON
+        try:
+            data = response.json()
+        except:
+            # 如果不是JSON，可能是直接返回的文本格式
+            text_content = response.text.strip()
+            if text_content and ('[img]' in text_content or '◎' in text_content
+                                 or '❁' in text_content):
+                # 直接返回文本内容作为format
+                return _parse_format_content(text_content, imdb_link,
+                                             media_type)
+            else:
+                return False, "", "API返回了无效的内容格式", ""
+
+        # JSON格式处理
+        if isinstance(data, dict):
+            # 检查是否有错误
+            if data.get('success') is False:
+                error_msg = data.get('message', data.get('error', '未知错误'))
+                return False, "", f"API返回失败: {error_msg}", ""
+
+            # 获取格式化内容
+            format_data = data.get('format', data.get('content', ''))
+            if format_data:
+                return _parse_format_content(format_data,
+                                             data.get('imdb_link', ''),
+                                             media_type)
+            else:
+                return False, "", "API未返回有效的格式化内容", ""
+        else:
+            return False, "", "API返回了无效的数据格式", ""
+
+    except Exception as e:
+        return False, "", f"URL格式API调用失败: {e}", ""
+
+
+def _call_refactor_url_format_api(api_config: dict, douban_link: str,
+                                  imdb_link: str, media_type: str):
+    """
+    调用新的URL格式API (ptn-ptgen.sqing33.dpdns.org)
+    只使用URL 参数方式（前后端一起部署）:
+    /api?url=https://movie.douban.com/subject/123456/
+    /api?url=https://www.imdb.com/title/tt123456/
+    /api?url=https://www.themoviedb.org/movie/123456
+    """
+    try:
+        base_url = api_config['base_url']
+
+        # 确定资源URL
+        resource_url = None
+        if douban_link:
+            resource_url = douban_link
+        elif imdb_link:
+            resource_url = imdb_link
+        else:
+            return False, "", "未提供豆瓣或IMDb链接", ""
+
+        # 构造API URL，只使用/api?url=这种方式
+        if not base_url.endswith('/api'):
+            url = f"{base_url}/api?url={resource_url}"
+        else:
+            url = f"{base_url}?url={resource_url}"
+
+        print(f"[*] 正在调用URL格式API: {url}")
+        response = requests.post(url, timeout=30)
+        response.raise_for_status()
+
+        print(f"[*] API响应状态码: {response.status_code}")
+
+        # 尝试解析为JSON
+        try:
+            data = response.json()
+        except:
+            # 如果不是JSON，可能是直接返回的文本格式
+            text_content = response.text.strip()
+            print(f"[*] API返回文本内容: {text_content}")
+            if text_content and ('[img]' in text_content or '◎' in text_content
+                                 or '❁' in text_content):
+                # 直接返回文本内容作为format
+                print("[*] 使用API返回的文本内容作为格式化数据")
+                return _parse_format_content(text_content, imdb_link,
+                                             media_type)
+            else:
+                print("[!] API返回了无效的内容格式")
+                return False, "", "API返回了无效的内容格式", ""
+
+        # JSON格式处理
+        if isinstance(data, dict):
+            # 检查是否有错误
+            if not data.get('success', True):  # 默认认为成功，除非明确指定失败
+                error_msg = data.get('message', data.get('error', '未知错误'))
+                print(f"[!] API返回失败: {error_msg}")
+                return False, "", f"API返回失败: {error_msg}", ""
+
+            # 获取格式化内容 - 支持多层嵌套
+            format_data = (data.get('format')
+                           or data.get('data', {}).get('format')
+                           or data.get('content') or "")
+
+            if format_data:
+                imdb_link = (data.get('imdb_link')
+                             or data.get('data', {}).get('imdb_link') or "")
+                return _parse_format_content(format_data, imdb_link,
+                                             media_type)
+            else:
+                print("[!] API未返回有效的格式化内容")
+                return False, "", "API未返回有效的格式化内容", ""
+        else:
+            print("[!] API返回了无效的数据格式")
+            return False, "", "API返回了无效的数据格式", ""
+
+    except Exception as e:
+        print(f"[!] 新的URL格式API调用失败: {e}")
+        return False, "", f"新的URL格式API调用失败: {e}", ""
+
+
+def _call_iyuu_format_api(api_config: dict, douban_link: str, imdb_link: str,
+                          media_type: str):
+    """
+    调用IYUU格式API (api.iyuu.cn)
+    """
+    try:
+        resource_url = douban_link or imdb_link
+        url = f"{api_config['base_url']}?url={resource_url}"
+
+        response = requests.get(url, timeout=30)
+        response.raise_for_status()
+
+        data = response.json()
+
+        # 检查业务状态码
+        if data.get('ret') != 200 and data.get('ret') != 0:
+            error_msg = data.get('msg', '未知错误')
+            return False, "", f"API返回错误(状态码{data.get('ret')}): {error_msg}", ""
+
+        format_data = data.get('format') or data.get('data', {}).get(
+            'format', '')
+        if not format_data:
+            return False, "", "API未返回有效的简介内容", ""
+
+        return _parse_format_content(format_data, imdb_link, media_type)
+
+    except Exception as e:
+        return False, "", f"IYUU格式API调用失败: {e}", ""
+
+
+def _process_poster_url(original_poster_url: str,
+                        imdb_link: str = "",
+                        douban_link: str = "") -> str:
+    """
+    处理海报URL：检查是否为pixhost，如果不是则进行智能验证和转存
+    
+    :param original_poster_url: 原始海报URL
+    :return: 处理后的海报URL（带[img]标签），失败返回空字符串
+    """
+    if not original_poster_url:
+        return ""
+
+    # 检查是否已经是pixhost图床
+    if 'pixhost.to' in original_poster_url or 'img1.pixhost.to' in original_poster_url:
+        # 已经是pixhost，直接使用
+        print(f"[*] 海报已是pixhost图床，直接使用: {original_poster_url}")
+        return f"[img]{original_poster_url}[/img]"
+    else:
+        # 非pixhost，进行智能验证和转存
+        print(f"[*] 海报非pixhost图床，执行智能验证和转存...")
+        smart_poster_url = _get_smart_poster_url(original_poster_url,
+                                                 imdb_link, douban_link)
+
+        if smart_poster_url:
+            print(f"[*] 智能验证和转存成功: {smart_poster_url}")
+            return f"[img]{smart_poster_url}[/img]"
+        else:
+            # 智能获取失败，保留原URL
+            print(f"[*] 智能验证失败，使用原始URL")
+            return f"[img]{original_poster_url}[/img]"
+
+
+def _parse_format_content(format_data: str,
+                          provided_imdb_link: str = "",
+                          media_type: str = ""):
+    """
+    解析格式化内容,提取海报、简介和IMDb链接
+    自动对海报进行智能验证和转存到pixhost
+    """
+    try:
+        # 提取信息
+        extracted_imdb_link = provided_imdb_link
+        poster = ""
+        description = ""
+
+        # 如果没有提供IMDb链接，尝试从格式化内容中提取
+        if not extracted_imdb_link:
+            imdb_match = re.search(
+                r'[◎❁]IMDb链接\s*(https?://www\.imdb\.com/title/tt\d+/)',
+                format_data)
+            if imdb_match:
+                extracted_imdb_link = imdb_match.group(1)
+
+        # 提取海报图片并进行智能验证和转存
+        img_match = re.search(r'\[img\](.*?)\[/img\]', format_data)
+        if img_match:
+            poster = img_match.group(1)
+            # 使用新的海报处理函数
+            if media_type != "intro":
+                poster = _process_poster_url(poster)
+
+        # 提取简介内容（去除海报部分）
+        description = re.sub(r'\[img\].*?\[/img\]', '', format_data).strip()
+        description = re.sub(r'\n{3,}', '\n\n', description)
+
+        return True, poster, description, extracted_imdb_link
+
+    except Exception as e:
+        return False, "", f"解析格式化内容失败: {e}", ""
+
+
+def _extract_douban_id(douban_link: str) -> str:
+    """
+    从豆瓣链接中提取ID
+    例如: https://movie.douban.com/subject/34832354/ -> 34832354
+    """
+    match = re.search(r'/subject/(\d+)', douban_link)
+    return match.group(1) if match else ""
+
+
+def _extract_imdb_id(imdb_link: str) -> str:
+    """
+    从IMDb链接中提取ID
+    例如: https://www.imdb.com/title/tt13721828/ -> tt13721828
+    """
+    match = re.search(r'/title/(tt\d+)', imdb_link)
+    return match.group(1) if match else ""
+
+
+def _get_smart_poster_url(original_url: str,
+                          imdb_link: str = "",
+                          douban_link: str = "") -> str:
+    """
+    智能海报URL获取和验证，并自动转存到pixhost
+    参考油猴插件逻辑：
+    1. 优先尝试豆瓣官方高清图（多域名轮询 img1-img9）
+    2. 尝试两种清晰度路径（l_ratio_poster 高清，m_ratio_poster 中清）
+    3. 如果豆瓣全失败，尝试第三方托管（dou.img.lithub.cc）
+    4. 验证成功后自动转存到pixhost
+    
+    :param original_url: 原始海报URL
+    :return: pixhost直链URL，失败返回空字符串
+    """
+    if not original_url:
+        return ""
+
+    print(f"[*] 开始验证海报链接...")
+    print(f"[*] 检测到非pixhost图片，执行智能海报获取...")
+    print(f"开始智能海报URL验证: {original_url}")
+
+    # 检查是否为豆瓣图片
+    douban_match = re.search(r'https?://img(\d+)\.doubanio\.com.*?/(p\d+)',
+                             original_url)
+
+    if douban_match:
+        original_domain_num = douban_match.group(1)
+        image_id = douban_match.group(2)
+
+        print(f"检测到豆瓣图片: 域名img{original_domain_num}, 图片ID={image_id}")
+
+        # 生成候选URL列表
+        candidates = []
+
+        # 优先原始域名
+        domain_numbers = [original_domain_num]
+        # 添加其他域名1-9
+        for i in range(1, 10):
+            if str(i) != original_domain_num:
+                domain_numbers.append(str(i))
+
+        # 路径优先级：先高清，后中清
+        paths = [
+            'view/photo/l_ratio_poster/public',  # 高清
+            'view/photo/m_ratio_poster/public'  # 中清
+        ]
+
+        # 生成候选URL矩阵
+        for domain_num in domain_numbers:
+            for path in paths:
+                candidate_url = f"https://img{domain_num}.doubanio.com/{path}/{image_id}.jpg"
+                candidates.append(candidate_url)
+
+        print(f"生成 {len(candidates)} 个候选URL")
+
+        # 依次验证候选URL
+        for i, candidate_url in enumerate(candidates):
+            domain_info = re.search(r'img(\d+)\.doubanio\.com', candidate_url)
+            path_info = '高清' if 'l_ratio_poster' in candidate_url else '中清'
+            domain_num = domain_info.group(1) if domain_info else '?'
+
+            print(
+                f"测试 [{i+1}/{len(candidates)}] img{domain_num} ({path_info}): {candidate_url}"
+            )
+
+            if _validate_image_url(candidate_url):
+                print(f"✓ 验证成功！使用 img{domain_num} 域名")
+                print(f"[*] 智能海报获取成功: {candidate_url}")
+
+                # 转存到pixhost
+                pixhost_url = _transfer_poster_to_pixhost(candidate_url)
+                if pixhost_url:
+                    return pixhost_url
+                else:
+                    print("[!] pixhost转存失败，使用原始验证URL")
+                    return candidate_url
+            else:
+                print(f"✗ img{domain_num} 验证失败")
+
+        # 豆瓣全部失败，尝试第三方托管
+        print("豆瓣官方图片全部失败，尝试第三方托管...")
+
+        # 从原始URL中提取豆瓣ID
+        douban_id_match = re.search(r'/subject/(\d+)', original_url)
+        if not douban_id_match:
+            # 尝试从图片ID推测（这通常不可行，但作为备选）
+            print("无法提取豆瓣ID，跳过第三方托管")
+        else:
+            douban_id = douban_id_match.group(1)
+            third_party_url = f"https://dou.img.lithub.cc/movie/{douban_id}.jpg"
+            print(f"测试第三方URL: {third_party_url}")
+
+            if _validate_image_url(third_party_url):
+                print("✓ 第三方URL验证成功")
+                print(f"[*] 智能海报获取成功: {third_party_url}")
+
+                # 转存到pixhost
+                pixhost_url = _transfer_poster_to_pixhost(third_party_url)
+                if pixhost_url:
+                    return pixhost_url
+                else:
+                    print("[!] pixhost转存失败，使用原始验证URL")
+                    return third_party_url
+            else:
+                print("✗ 第三方URL验证失败")
+
+    else:
+        # 非豆瓣图片，直接验证原始URL
+        print("非豆瓣图片，直接验证原始URL")
+        if _validate_image_url(original_url):
+            print("✓ 原始URL验证成功")
+            print(f"[*] 智能海报获取成功: {original_url}")
+
+            # 转存到pixhost
+            pixhost_url = _transfer_poster_to_pixhost(original_url)
+            if pixhost_url:
+                return pixhost_url
+            else:
+                print("[!] pixhost转存失败，使用原始验证URL")
+                return original_url
+        else:
+            print("✗ 原始URL验证失败，使用 ptgen 获取海报")
+            status, poster, description, final_imdb_link, final_douban_link = upload_data_movie_info(
+                '', douban_link, imdb_link)
+            if status and poster:
+                return _process_poster_url(poster, final_imdb_link,
+                                           final_douban_link)
+            else:
+                print("✗ 使用 ptgen 获取海报失败，返回原始URL")
+
+                return original_url
+
+    print("所有URL验证都失败")
+    return ""
+
+
+def _validate_image_url(url: str) -> bool:
+    """
+    验证图片URL是否有效
+    使用HEAD请求验证URL是否可访问且返回有效图片
+    
+    :param url: 图片URL
+    :return: URL有效返回True，否则返回False
+    """
+    if not url:
+        return False
+
+    try:
+        headers = {
+            'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Referer': 'https://movie.douban.com/'
+        }
+
+        response = requests.head(url,
+                                 headers=headers,
+                                 timeout=10,
+                                 allow_redirects=True)
+
+        if response.status_code == 200:
+            # 检查Content-Type
+            content_type = response.headers.get('Content-Type', '').lower()
+            if 'image/' in content_type:
+                # 检查Content-Length（至少大于1KB）
+                content_length = response.headers.get('Content-Length')
+                if content_length:
+                    file_size = int(content_length)
+                    if file_size > 1024:
+                        return True
+                    else:
+                        print(f"   文件太小: {file_size} bytes")
+                        return False
+                else:
+                    # 如果没有Content-Length，认为有效
+                    return True
+            else:
+                print(f"   无效的Content-Type: {content_type}")
+                return False
+        else:
+            print(f"   HTTP状态码: {response.status_code}")
+            return False
+
+    except Exception as e:
+        print(f"   验证异常: {type(e).__name__}")
+        return False
+
+
+def _transfer_poster_to_pixhost(poster_url: str) -> str:
+    """
+    将海报图片转存到pixhost
+    
+    :param poster_url: 海报图片URL
+    :return: pixhost直链URL，失败返回空字符串
+    """
+    if not poster_url:
+        return ""
+
+    print(f"开始转存海报到pixhost: {poster_url}")
+
+    try:
+        # 1. 下载图片到临时文件
+        headers = {
+            'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Referer': 'https://movie.douban.com/'
+        }
+
+        response = requests.get(poster_url, headers=headers, timeout=30)
+        response.raise_for_status()
+
+        # 检查文件大小
+        if len(response.content) == 0:
+            print("   下载的图片文件为空")
+            return ""
+
+        if len(response.content) > 10 * 1024 * 1024:
+            print("   图片文件过大 (>10MB)")
+            return ""
+
+        print(f"   图片下载成功，大小: {len(response.content)} bytes")
+
+        # 2. 保存到临时文件
+        temp_file = None
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as f:
+                f.write(response.content)
+                temp_file = f.name
+
+            print(f"   临时文件已保存: {temp_file}")
+
+            # 3. 上传到pixhost
+            api_url = 'https://api.pixhost.to/images'
+            params = {'content_type': 0, 'max_th_size': 420}
+            upload_headers = {
+                'User-Agent':
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': 'application/json'
+            }
+
+            with open(temp_file, 'rb') as f:
+                files = {'img': ('poster.jpg', f, 'image/jpeg')}
+                upload_response = requests.post(api_url,
+                                                data=params,
+                                                files=files,
+                                                headers=upload_headers,
+                                                timeout=30)
+
+            if upload_response.status_code == 200:
+                data = upload_response.json()
+                show_url = data.get('show_url')
+
+                if not show_url:
+                    print("   API未返回有效URL")
+                    return ""
+
+                # 转换为直链URL
+                direct_url = _convert_pixhost_url_to_direct(show_url)
+
+                if direct_url:
+                    print(f"   上传成功！直链: {direct_url}")
+                    return direct_url
+                else:
+                    print("   URL转换失败")
+                    return ""
+            else:
+                print(f"   上传失败，状态码: {upload_response.status_code}")
+                return ""
+
+        finally:
+            # 清理临时文件
+            if temp_file and os.path.exists(temp_file):
+                try:
+                    os.remove(temp_file)
+                    print(f"   临时文件已清理: {temp_file}")
+                except:
+                    pass
+
+    except Exception as e:
+        print(f"   转存失败: {type(e).__name__} - {e}")
+        return ""

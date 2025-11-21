@@ -132,7 +132,7 @@ source_parsers:
       "DOLBY VISION": "tag.Dolby_Vision"
       "HDR10": "tag.hdr10"
       "HDR10+": "tag.hdr10plus"
-      "HLG": "tag.hlg"
+      "HLG": "tag.HLG"
       "HDR Vivid": "tag.hdr_vivid"
       "高码率": "tag.高码率"
       "高帧率": "tag.高帧率"

@@ -187,8 +187,8 @@ def _extract_total_episodes_from_description(
 
     # 定义提取模式（按优先级排序）
     patterns = [
-        r'◎\s*集\s*数\s+(\d+)',  # ◎集　　数　12
-        r'◎\s*集\s*数\s*[:：]\s*(\d+)',  # ◎集数：12
+        r'[◎❁]\s*集\s*数\s+(\d+)',  # ◎集　　数　12
+        r'[◎❁]\s*集\s*数\s*[:：]\s*(\d+)',  # ◎集数：12
         r'集\s*数\s*[:：]\s*(\d+)',  # 集数：12
         r'Episodes?\s*[:：]\s*(\d+)',  # Episodes: 12
         r'Total\s+Episodes?\s*[:：]\s*(\d+)',  # Total Episodes: 12

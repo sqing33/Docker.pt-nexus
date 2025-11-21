@@ -120,7 +120,7 @@ source_parsers:
       "HDR10": "tag.hdr10"
       "连载": "tag.连载"
       "合集": "tag.完结"
-      "HLG": "tag.hlg"
+      "HLG": "tag.HLG"
       "菜单修改": "tag.菜单修改"
 
 mappings:

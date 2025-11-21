@@ -9,7 +9,7 @@ import urllib.parse
 import json
 from flask import Blueprint, jsonify, request, Response, stream_with_context
 from bs4 import BeautifulSoup
-from utils import upload_data_title, upload_data_screenshot, upload_data_poster, upload_data_movie_info, add_torrent_to_downloader, extract_tags_from_mediainfo, extract_origin_from_description, extract_resolution_from_mediainfo
+from utils import upload_data_title, upload_data_screenshot, upload_data_movie_info, add_torrent_to_downloader, extract_tags_from_mediainfo, extract_origin_from_description, extract_resolution_from_mediainfo
 from core.migrator import TorrentMigrator
 
 # 导入种子参数模型
@@ -1590,6 +1590,7 @@ def validate_media():
     save_path = data.get("savePath")
     torrent_name = data.get("torrentName")
     downloader_id = data.get("downloaderId")  # 获取下载器ID
+    subtitle = source_info.get("subtitle") if source_info else ''
     imdb_link = source_info.get("imdb_link", '') if source_info else ''
     douban_link = source_info.get("douban_link", '') if source_info else ''
 
@@ -1604,25 +1605,27 @@ def validate_media():
         return jsonify({"success": True, "screenshots": screenshots}), 200
     elif media_type == "poster":
         # 海报验证和转存已经在 upload_data_movie_info -> _parse_format_content 中自动完成
-        status, posters, description, extracted_imdb_link = upload_data_movie_info(
-            douban_link, imdb_link)
+        status, posters, description, extracted_imdb_link, extracted_douban_link = upload_data_movie_info(
+            media_type, douban_link, imdb_link, subtitle)
         if status:
             return jsonify({
                 "success": True,
                 "posters": posters,
-                "extracted_imdb_link": extracted_imdb_link
+                "extracted_imdb_link": extracted_imdb_link,
+                "extracted_douban_link": extracted_douban_link
             }), 200
         else:
             return jsonify({"success": False, "error": posters}), 400
     elif media_type == "intro":
         # 处理简介重新获取请求
-        status, posters, description, extracted_imdb_link = upload_data_movie_info(
-            douban_link, imdb_link)
+        status, posters, description, extracted_imdb_link, extracted_douban_link = upload_data_movie_info(
+            media_type, douban_link, imdb_link, subtitle)
         if status:
             return jsonify({
                 "success": True,
                 "intro": description,
-                "extracted_imdb_link": extracted_imdb_link
+                "extracted_imdb_link": extracted_imdb_link,
+                "extracted_douban_link": extracted_douban_link
             }), 200
         else:
             return jsonify({"success": False, "error": description}), 400

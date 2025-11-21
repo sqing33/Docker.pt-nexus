@@ -208,8 +208,8 @@ class SSDSpecialExtractor:
             try:
                 from utils import upload_data_movie_info
                 # 使用upload_data_movie_info函数同时获取海报和简介
-                movie_status, poster_content, description_content, imdb_content = upload_data_movie_info(
-                    douban_link, imdb_link)
+                movie_status, poster_content, description_content, imdb_content, douban_content = upload_data_movie_info(
+                    "", douban_link, imdb_link, "")
 
                 if movie_status and description_content:
                     body = description_content
