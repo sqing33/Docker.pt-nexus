@@ -1096,7 +1096,12 @@ def migrate_publish():
                         # 获取详情页以找到下载链接
                         response = scraper.get(
                             f"{SOURCE_BASE_URL}/details.php",
-                            headers={"Cookie": SOURCE_COOKIE},
+                            headers={
+                                "Cookie":
+                                SOURCE_COOKIE,
+                                "User-Agent":
+                                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+                            },
                             params={
                                 "id": source_torrent_id,
                                 "hit": "1"
@@ -1115,7 +1120,12 @@ def migrate_publish():
                             # 下载种子文件
                             torrent_response = scraper.get(
                                 f"{SOURCE_BASE_URL}/{download_link_tag['href']}",
-                                headers={"Cookie": SOURCE_COOKIE},
+                                headers={
+                                    "Cookie":
+                                    SOURCE_COOKIE,
+                                    "User-Agent":
+                                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+                                },
                                 timeout=180,
                             )
                             torrent_response.raise_for_status()
@@ -1635,11 +1645,12 @@ def validate_media():
         # 获取当前的mediainfo（如果有的话）
         current_mediainfo = data.get("current_mediainfo", "")
         # 调用upload_data_mediaInfo函数重新生成mediainfo，设置force_refresh=True强制重新获取
-        new_mediainfo = upload_data_mediaInfo(current_mediainfo,
-                                              save_path,
-                                              torrent_name=torrent_name,
-                                              downloader_id=downloader_id,
-                                              force_refresh=True)  # 强制重新获取
+        new_mediainfo, _, _ = upload_data_mediaInfo(
+            current_mediainfo,
+            save_path,
+            torrent_name=torrent_name,
+            downloader_id=downloader_id,
+            force_refresh=True)  # 强制重新获取
         if new_mediainfo:
             return jsonify({"success": True, "mediainfo": new_mediainfo}), 200
         else:

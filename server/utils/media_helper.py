@@ -90,7 +90,7 @@ def _upload_to_pixhost(image_path: str):
     params = {'content_type': 0}
     headers = {
         'User-Agent':
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
     }
 
     print(f"准备上传图片: {image_path}")
@@ -148,7 +148,7 @@ def _upload_to_agsv(image_path: str, token: str):
         "Accept":
         "application/json",
         "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
     }
 
     mime_type = mimetypes.guess_type(
@@ -499,6 +499,63 @@ def _find_target_video_file(path: str) -> tuple[str | None, bool]:
         return None, is_bluray_disc
 
 
+def validate_media_info_format(mediaInfo: str):
+    """
+    验证 MediaInfo 或 BDInfo 格式的有效性
+    从 global_mappings.yaml 读取配置的关键字进行验证
+    """
+    # 从配置文件加载关键字配置
+    try:
+        config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)),
+                                   'configs', 'global_mappings.yaml')
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+
+        mediainfo_keywords = config.get('content_filtering',
+                                        {}).get('mediainfo_keywords', {})
+        bdinfo_keywords = config.get('content_filtering',
+                                     {}).get('bdinfo_keywords', {})
+
+        mediainfo_required = mediainfo_keywords.get('required', [])
+        mediainfo_optional = mediainfo_keywords.get('optional', [])
+        bdinfo_required = bdinfo_keywords.get('required', [])
+        bdinfo_optional = bdinfo_keywords.get('optional', [])
+    except Exception as e:
+        print(f"读取配置文件失败: {e}")
+        # 使用默认配置
+        mediainfo_required = ["General", "Video", "Audio"]
+        mediainfo_optional = [
+            "Complete name", "File size", "Duration", "Width", "Height"
+        ]
+        bdinfo_required = ["DISC INFO", "PLAYLIST REPORT"]
+        bdinfo_optional = [
+            "VIDEO:", "AUDIO:", "SUBTITLES:", "FILES:", "Disc Label",
+            "Disc Size", "BDInfo:", "Protection:", "Codec", "Bitrate",
+            "Language", "Description"
+        ]
+
+    # 验证 MediaInfo 格式
+    mediainfo_required_matches = sum(1 for keyword in mediainfo_required
+                                     if keyword in mediaInfo)
+    mediainfo_optional_matches = sum(1 for keyword in mediainfo_optional
+                                     if keyword in mediaInfo)
+    is_mediainfo = (len(mediainfo_required) > 0 and
+                            mediainfo_required_matches == len(mediainfo_required) and
+                            mediainfo_optional_matches >= 0) or \
+                           (mediainfo_required_matches >= 2 and
+                            mediainfo_optional_matches >= 1)
+
+    # 验证 BDInfo 格式
+    bdinfo_required_matches = sum(1 for keyword in bdinfo_required
+                                  if keyword in mediaInfo)
+    bdinfo_optional_matches = sum(1 for keyword in bdinfo_optional
+                                  if keyword in mediaInfo)
+    is_bdinfo = (len(bdinfo_required) > 0 and bdinfo_required_matches == len(bdinfo_required)) or \
+                (bdinfo_required_matches >= 1 and bdinfo_optional_matches >= 2)
+
+    return is_mediainfo, is_bdinfo, mediainfo_required_matches, mediainfo_optional_matches, bdinfo_required_matches, bdinfo_optional_matches
+
+
 # --- [修改] 主函数，整合了新的文件查找逻辑 ---
 def upload_data_mediaInfo(mediaInfo: str,
                           save_path: str,
@@ -514,60 +571,29 @@ def upload_data_mediaInfo(mediaInfo: str,
     【新增】支持传入 force_refresh 强制重新获取 MediaInfo，忽略已有的有效格式
     """
     print("开始检查 MediaInfo/BDInfo 格式")
-    print(f"提供的 MediaInfo: {mediaInfo[:80]}...")  # 打印部分MediaInfo
 
-    # 1. (此部分代码不变) ...
-    standard_mediainfo_keywords = [
-        "General",
-        "Video",
-        "Audio",
-        "Complete name",
-        "File size",
-        "Duration",
-        "Width",
-        "Height",
-    ]
-    bdinfo_required_keywords = ["DISC INFO", "PLAYLIST REPORT"]
-    bdinfo_optional_keywords = [
-        "VIDEO:",
-        "AUDIO:",
-        "SUBTITLES:",
-        "FILES:",
-        "Disc Label",
-        "Disc Size",
-        "BDInfo:",
-        "Protection:",
-        "Codec",
-        "Bitrate",
-        "Language",
-        "Description",
-    ]
-    mediainfo_matches = sum(1 for keyword in standard_mediainfo_keywords
-                            if keyword in mediaInfo)
-    is_standard_mediainfo = mediainfo_matches >= 3
-    bdinfo_required_matches = sum(1 for keyword in bdinfo_required_keywords
-                                  if keyword in mediaInfo)
-    bdinfo_optional_matches = sum(1 for keyword in bdinfo_optional_keywords
-                                  if keyword in mediaInfo)
-    is_bdinfo = (bdinfo_required_matches == len(bdinfo_required_keywords)) or \
-                (bdinfo_required_matches >= 1 and bdinfo_optional_matches >= 2)
+    # 使用新的验证函数进行格式验证
+    is_mediainfo, is_bdinfo, mediainfo_required_matches, mediainfo_optional_matches, bdinfo_required_matches, bdinfo_optional_matches = validate_media_info_format(
+        mediaInfo)
 
-    if is_standard_mediainfo:
+    if is_mediainfo:
         if force_refresh:
             print(f"检测到标准 MediaInfo 格式，但设置了强制刷新，将重新提取。")
             # 不return，继续执行下面的提取逻辑
         else:
-            print(f"检测到标准 MediaInfo 格式，验证通过。(匹配关键字数: {mediainfo_matches})")
-            return mediaInfo
+            print(
+                f"检测到标准 MediaInfo 格式，验证通过。(必要关键字: {mediainfo_required_matches}/2, 匹配关键字数: {mediainfo_required_matches + mediainfo_optional_matches})"
+            )
+            return mediaInfo, True, False
     elif is_bdinfo:
         if force_refresh:
             print(f"检测到 BDInfo 格式，但设置了强制刷新，将重新提取。")
             # 不return，继续执行下面的提取逻辑
         else:
             print(
-                f"检测到 BDInfo 格式，验证通过。(必要关键字: {bdinfo_required_matches}/{len(bdinfo_required_keywords)}, 可选关键字: {bdinfo_optional_matches})"
+                f"检测到 BDInfo 格式，验证通过。(必要关键字: {bdinfo_required_matches}/2, 可选关键字: {bdinfo_required_matches + bdinfo_optional_matches})"
             )
-            return mediaInfo
+            return mediaInfo, False, True
     elif not force_refresh:
         # 只有在不是强制刷新时才打印这个消息
         print("提供的文本不是有效的 MediaInfo/BDInfo，将尝试从本地文件提取。")
@@ -575,7 +601,7 @@ def upload_data_mediaInfo(mediaInfo: str,
     # 如果执行到这里，说明需要重新提取（force_refresh=True 或者没有有效格式）
     if not save_path:
         print("错误：未提供 save_path，无法从文件提取 MediaInfo。")
-        return mediaInfo
+        return mediaInfo, False, False
 
     # --- 【代理检查和处理逻辑】 ---
     proxy_config = _get_downloader_proxy_config(downloader_id)
@@ -606,7 +632,7 @@ def upload_data_mediaInfo(mediaInfo: str,
                     r'(Complete name\s*:\s*)(.+)', lambda m:
                     f"{m.group(1)}{os.path.basename(m.group(2).strip())}",
                     proxy_mediainfo)
-                return proxy_mediainfo
+                return proxy_mediainfo, True, False
             else:
                 print(f"通过代理获取 MediaInfo 失败: {result.get('message', '未知错误')}")
         except Exception as e:
@@ -633,7 +659,7 @@ def upload_data_mediaInfo(mediaInfo: str,
 
     if not target_video_file:
         print("未能在指定路径中找到合适的视频文件，提取失败。")
-        return mediaInfo
+        return mediaInfo, False, False
 
     # 检查是否为原盘文件
     if is_bluray_disc:
@@ -653,10 +679,10 @@ def upload_data_mediaInfo(mediaInfo: str,
             lambda m: f"{m.group(1)}{os.path.basename(m.group(2).strip())}",
             media_info_str)
         print("从文件重新提取 MediaInfo 成功。")
-        return media_info_str
+        return media_info_str, True, False
     except Exception as e:
         print(f"从文件 '{target_video_file}' 处理时出错: {e}。将返回原始 mediainfo。")
-        return mediaInfo
+        return mediaInfo, False, False
 
 
 def _extract_bdinfo(bluray_path: str) -> str:
@@ -1535,7 +1561,7 @@ def add_torrent_to_downloader(detail_page_url: str, save_path: str,
             "Cookie":
             site_info["cookie"],
             "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36",
         }
         scraper = cloudscraper.create_scraper()
 
@@ -1755,8 +1781,6 @@ def extract_tags_from_title(title_components: list) -> list:
             (r'\bDIY\b', 'DIY'),
             (r'\bBlu-?ray\s+DIY\b', 'DIY'),
             (r'\bBluRay\s+DIY\b', 'DIY'),
-            (r'\bBlu-?ray\b', 'Bluray'),
-            (r'\bBluRay\b', 'Bluray'),
             (r'\bRemux\b', 'Remux'),
         ],
         '制作组': [
@@ -2676,7 +2700,7 @@ def _transfer_poster_to_pixhost(poster_url: str) -> str:
         # 1. 下载图片到临时文件
         headers = {
             'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
             'Referer': 'https://movie.douban.com/'
         }
 
@@ -2708,7 +2732,7 @@ def _transfer_poster_to_pixhost(poster_url: str) -> str:
             params = {'content_type': 0, 'max_th_size': 420}
             upload_headers = {
                 'User-Agent':
-                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36',
                 'Accept': 'application/json'
             }
 

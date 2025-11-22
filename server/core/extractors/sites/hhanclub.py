@@ -1,9 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-HHCLUB特殊站点种子详情参数提取器
-用于处理HHCLUB站点特殊结构的种子详情页 (已修正)
-"""
-
 import re
 import os
 import yaml
@@ -29,7 +23,7 @@ except Exception as e:
 class HHCLUBSpecialExtractor:
     """HHCLUB特殊站点提取器"""
 
-    def __init__(self, soup):
+    def __init__(self, soup, base_url, cookie, torrent_id):
         self.soup = soup
 
     def _find_section_container(self, header_text: str):

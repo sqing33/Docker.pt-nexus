@@ -136,10 +136,10 @@ type EpisodeCountRequest struct {
 	RemotePath string `json:"remote_path"`
 }
 type EpisodeCountResponse struct {
-	Success       bool   `json:"success"`
-	Message       string `json:"message"`
-	EpisodeCount  int    `json:"episode_count,omitempty"`
-	SeasonNumber  int    `json:"season_number,omitempty"`
+	Success      bool   `json:"success"`
+	Message      string `json:"message"`
+	EpisodeCount int    `json:"episode_count,omitempty"`
+	SeasonNumber int    `json:"season_number,omitempty"`
 }
 type SubtitleEvent struct {
 	StartTime float64
@@ -638,7 +638,7 @@ func uploadToPixhost(imagePath string) (string, error) {
 		}
 		req, _ := http.NewRequest("POST", "https://api.pixhost.to/images", body)
 		req.Header.Set("Content-Type", writer.FormDataContentType())
-		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36")
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36")
 		client := &http.Client{Timeout: 60 * time.Second}
 		resp, err := client.Do(req)
 		if err != nil {
@@ -1058,7 +1058,7 @@ func screenshotHandler(w http.ResponseWriter, r *http.Request) {
 
 		timestamp := time.Now().UnixNano()
 		intermediatePngPath := filepath.Join(tempDir, fmt.Sprintf("s%d_%d.png", i+1, timestamp%1000000)) // 更短的文件名
-		finalJpegPath := filepath.Join(tempDir, fmt.Sprintf("s%d_%d.jpg", i+1, timestamp%1000000)) // 更短的文件名
+		finalJpegPath := filepath.Join(tempDir, fmt.Sprintf("s%d_%d.jpg", i+1, timestamp%1000000))       // 更短的文件名
 
 		// 步骤1: 截图
 		if err := takeScreenshot(videoPath, intermediatePngPath, point, subtitleIndex); err != nil {
@@ -1355,8 +1355,8 @@ func episodeCountHandler(w http.ResponseWriter, r *http.Request) {
 	if len(episodeSet) == 0 {
 		log.Printf("集数统计请求: 未找到剧集文件 '%s'", remotePath)
 		writeJSONResponse(w, r, http.StatusOK, EpisodeCountResponse{
-			Success: true,
-			Message: "未找到剧集文件",
+			Success:      true,
+			Message:      "未找到剧集文件",
 			EpisodeCount: 0,
 		})
 		return

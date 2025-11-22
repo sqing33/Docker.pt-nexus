@@ -1,0 +1,82 @@
+site_name: "FRDS"
+
+form_fields:
+  category: "type"
+  source: "source_sel"
+  medium: "medium_sel"
+  resolution: "standard_sel"
+  video_codec: "codec_sel"
+  audio_codec: "audiocodec_sel"
+
+source_parsers:
+  source_params:
+    type:
+      source_key: "类型"
+    medium:
+      source_key: "媒介"
+    video_codec:
+      source_key: "视频编码"
+    audio_codec:
+      source_key: "音频编码"
+    resolution:
+      source_key: "分辨率"
+    team:
+      source_key: "制作组"
+    source:
+      source_key: "产地"
+
+  standard_keys:
+    type:
+      "电影": "category.movie"
+      "剧集": "category.tv_series"
+      "动画": "category.animation"
+      "纪录片-传记": "category.documentaries"
+      "偶像": "category.documentaries"
+      "综艺": "category.tv_shows"
+      "舞台": "category.tv_shows"
+      "演唱会-音乐剧": "category.mv"
+      "音乐短片(MV)": "category.mv"
+      "音乐": "category.music"
+      "体育": "category.sports"
+      "有声读物": "category.audiobook"
+      "电子书": "category.ebook"
+      "游戏": "category.game"
+      "软件": "category.software"
+      "其他类型": "category.other"
+
+    medium:
+      "UHD Blu-ray": "medium.uhd_bluray"
+      "Blu-ray": "medium.bluray"
+      "HD DVD": "medium.hd_dvd"
+      "HDTV": "medium.hdtv"
+      "WEB-DL": "medium.webdl"
+      "WEB-Rip": "medium.webrip"
+      "TVRip": "medium.tvrip"
+      "DVD": "medium.dvd"
+      "TV": "medium.tv"
+      "Other": "medium.other"
+
+    video_codec:
+      "HEVC": "video.h265"
+      "AVC": "video.h264"
+      "VC-1": "video.vc1"
+      "MPEG-2": "video.mpeg2"
+      "AV1": "video.av1"
+      "VP9": "video.vp9"
+      "Other": "video.other"
+
+    resolution:
+      "8K": "resolution.r4320p"
+      "2160p(4k)": "resolution.r2160p"
+      "1080p": "resolution.r1080p"
+      "1080i": "resolution.r1080i"
+      "720p": "resolution.r720p"
+      "480p": "resolution.r480p"
+      "SD": "resolution.sd"
+      "Other": "resolution.other"
+
+    team:
+      "FRDS": "team.frds"
+
+    tag:
+      "限时禁转": "tag.限转"

@@ -52,7 +52,7 @@ class BaseUploader(ABC):
             "referer":
             f"{base_url}/upload.php",
             "user-agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
         }
 
         # 加载该站点对应的配置文件
@@ -534,6 +534,7 @@ class BaseUploader(ABC):
                 "name": final_main_title,
                 "small_descr": self.upload_data.get("subtitle", ""),
                 "url": self.upload_data.get("imdb_link", "") or "",
+                "dburl": self.upload_data.get("douban_link", "") or "",
                 "descr": description,
                 "technical_info": self.upload_data.get("mediainfo", ""),
                 "uplver": uplver_value,  # 根据配置设置匿名上传
@@ -584,6 +585,8 @@ class BaseUploader(ABC):
                     "upload_data_summary": {
                         "subtitle":
                         self.upload_data.get("subtitle", ""),
+                        "douban_link":
+                        self.upload_data.get("douban_link", ""),
                         "imdb_link":
                         self.upload_data.get("imdb_link", ""),
                         "mediainfo_length":

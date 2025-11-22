@@ -849,7 +849,7 @@ def _validate_image_url(url: str) -> bool:
     try:
         headers = {
             'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
             'Referer': 'https://movie.douban.com/'
         }
 
@@ -902,7 +902,7 @@ def _transfer_poster_to_pixhost(poster_url: str) -> str:
         # 1. 下载图片到临时文件
         headers = {
             'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
             'Referer': 'https://movie.douban.com/'
         }
 
@@ -934,7 +934,7 @@ def _transfer_poster_to_pixhost(poster_url: str) -> str:
             params = {'content_type': 0, 'max_th_size': 420}
             upload_headers = {
                 'User-Agent':
-                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36',
                 'Accept': 'application/json'
             }
 

@@ -1,25 +1,22 @@
-# -*- coding: utf-8 -*-
-"""
-SSD("不可说")特殊站点种子详情参数提取器
-用于处理"不可说"站点特殊结构的种子详情页
-"""
-
 import re
 import os
 import yaml
 from bs4 import BeautifulSoup
 from utils import extract_tags_from_mediainfo, extract_origin_from_description
+from utils.media_helper import validate_media_info_format
 
 # 加载内容过滤配置
 CONFIG_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), "configs")
+    os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.dirname(__file__)))), "configs")
 CONTENT_FILTERING_CONFIG = {}
 try:
     global_mappings_path = os.path.join(CONFIG_DIR, "global_mappings.yaml")
     if os.path.exists(global_mappings_path):
         with open(global_mappings_path, 'r', encoding='utf-8') as f:
             global_config = yaml.safe_load(f)
-            CONTENT_FILTERING_CONFIG = global_config.get("content_filtering", {})
+            CONTENT_FILTERING_CONFIG = global_config.get(
+                "content_filtering", {})
 except Exception as e:
     print(f"警告：无法加载内容过滤配置: {e}")
 
@@ -86,28 +83,9 @@ class SSDSpecialExtractor:
         if not content or len(content) < 50:
             return False
 
-        # MediaInfo 格式的必要关键字
-        mediainfo_required_keywords = ["General", "Video", "Audio"]
-
-        # BDInfo 格式的必要关键字
-        bdinfo_required_keywords = ["DISC INFO", "PLAYLIST REPORT"]
-
-        content_lines = content.split('\n')
-
-        # 检查是否为标准MediaInfo格式
-        mediainfo_matches = sum(1 for keyword in mediainfo_required_keywords
-                                if any(
-                                    keyword in line for line in content_lines))
-        if mediainfo_matches >= 2:  # 至少匹配2个关键字
-            return True
-
-        # 检查是否为BDInfo格式
-        bdinfo_matches = sum(1 for keyword in bdinfo_required_keywords
-                             if any(keyword in line for line in content_lines))
-        if bdinfo_matches == len(bdinfo_required_keywords):
-            return True
-
-        return False
+        # 使用统一的验证函数
+        is_mediainfo, is_bdinfo, _, _, _, _ = validate_media_info_format(content)
+        return is_mediainfo or is_bdinfo
 
     def extract_intro(self):
         """
@@ -244,8 +222,9 @@ class SSDSpecialExtractor:
         """
         if not CONTENT_FILTERING_CONFIG.get("enabled", False):
             return False
-            
-        unwanted_patterns = CONTENT_FILTERING_CONFIG.get("unwanted_patterns", [])
+
+        unwanted_patterns = CONTENT_FILTERING_CONFIG.get(
+            "unwanted_patterns", [])
         return any(pattern in text for pattern in unwanted_patterns)
 
     def extract_basic_info(self):
@@ -332,7 +311,7 @@ class SSDSpecialExtractor:
                 s.get_text(strip=True)
                 for s in tags_td.find_next_sibling("td").find_all("span")
             ]
-            
+
             # 过滤掉指定的标签
             filtered_tags = []
             unwanted_tags = ["官方", "官种", "首发", "自购", "应求"]
@@ -343,7 +322,7 @@ class SSDSpecialExtractor:
                         filtered_tags.append("完结")
                     else:
                         filtered_tags.append(tag)
-            
+
             return filtered_tags
         return []
 
@@ -513,8 +492,10 @@ class SSDSpecialExtractor:
         # 更新intro中的豆瓣和IMDb链接信息
         # 过滤豆瓣链接，只保留ID部分
         if douban_info:
-            douban_match = re.match(r'(https?://movie\.douban\.com/subject/\d+)', douban_info)
-            intro["douban_link"] = douban_match.group(1) if douban_match else douban_info
+            douban_match = re.match(
+                r'(https?://movie\.douban\.com/subject/\d+)', douban_info)
+            intro["douban_link"] = douban_match.group(
+                1) if douban_match else douban_info
         else:
             intro["douban_link"] = douban_info
         intro["imdb_link"] = imdb_info

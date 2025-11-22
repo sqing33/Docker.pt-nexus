@@ -107,6 +107,8 @@ global_standard_keys:
     "Docs(纪录)": "category.documentaries"
     "Drama/戏剧": "category.drama"
     "Doc": "category.documentaries"
+    "纪录片-传记": "category.documentaries"
+    "偶像": "category.documentaries"
 
     # 短剧相关
     "短剧": "category.playlet"
@@ -186,6 +188,12 @@ global_standard_keys:
 
   # 媒介映射
   medium:
+    # 编码相关
+    "Encode": "medium.encode"
+    "Encode TV": "medium.encode"
+    "1080p/i压制": "medium.encode"
+    "720P压制": "medium.encode"
+
     # 蓝光相关
     "Blu-ray": "medium.bluray"
     "BluRay": "medium.bluray"
@@ -203,10 +211,10 @@ global_standard_keys:
     "UHD": "medium.uhd_bluray"
     "UHD原盘": "medium.uhd_bluray"
     "UHD DIY": "medium.uhd_diy"
-    "UHD Remux": "medium.uhd_remux"
-    "UHD Remux TV": "medium.uhd_remux_tv"
-    "UHD 压制": "medium.uhd_encode"
-    "UHD压制": "medium.uhd_encode"
+    "UHD Remux": "medium.remux"
+    "UHD Remux TV": "medium.remux"
+    "UHD 压制": "medium.encode"
+    "UHD压制": "medium.encode"
 
     # DVD相关
     "DVD": "medium.dvd"
@@ -226,15 +234,9 @@ global_standard_keys:
 
     # HDTV相关
     "HDTV": "medium.hdtv"
+    "TV": "medium.tv"
     "UHDTV": "medium.uhdtv"
     "TVRip": "medium.tvrip"
-
-    # 编码相关
-    "Encode": "medium.encode"
-    "Encode TV": "medium.encode_tv"
-    "1080p/i压制": "medium.encode_1080p"
-    "1080P/i压制": "medium.encode"
-    "720P压制": "medium.encode"
 
     # 音频相关
     "CD": "medium.cd"
@@ -394,6 +396,7 @@ global_standard_keys:
     "2160p/4K": "resolution.r2160p"
     "2160p": "resolution.r2160p"
     "2160P": "resolution.r2160p"
+    "2160p(4k)": "resolution.r2160p"
 
     # 2K分辨率
     "2K": "resolution.r1440p"
@@ -693,11 +696,22 @@ global_standard_keys:
     "原创": "team.original"
     "Other": "team.other"
     "Other/其他": "team.other"
+    "REMUX": "team.remux"
+    "CHDTV": "team.chdtv"
+    "CHDPAD": "team.chdpad"
+    "CHDHKTV": "team.chdhktv"
+    "OneHD": "team.onehd"
+    "blucook": "team.blucook"
+    "KAN": "team.kan"
+    "JKCT": "team.jkct"
+    "Destiny": "team.destiny"
 
   # 标签映射
   tag:
     # 禁转相关标签
     "禁转": "tag.禁转"
+    "限转": "tag.限转"
+    "限时禁转": "tag.限转"
 
     # 内容相关标签
     "合集": "tag.合集"
@@ -903,11 +917,30 @@ content_filtering:
       - "General"
       - "Video"
       - "Audio"
+    optional:
+      - "Complete name"
+      - "File size"
+      - "Duration"
+      - "Width"
+      - "Height"
 
   bdinfo_keywords:
     required:
       - "DISC INFO"
       - "PLAYLIST REPORT"
+    optional:
+      - "VIDEO:"
+      - "AUDIO:"
+      - "SUBTITLES:"
+      - "FILES:"
+      - "Disc Label"
+      - "Disc Size"
+      - "BDInfo:"
+      - "Protection:"
+      - "Codec"
+      - "Bitrate"
+      - "Language"
+      - "Description"
 
   # 技术参数quote检测规则
   technical_params_detection:

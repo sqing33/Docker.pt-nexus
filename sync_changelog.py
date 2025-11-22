@@ -35,13 +35,15 @@ def update_readme(changelog_md):
     readme_path = Path("readme.md")
     content = readme_path.read_text(encoding="utf-8")
 
-    pattern = r"(# 更新日志\n)(.*?)(?=\n#|\Z)"
+    # 匹配更新日志部分直到下一个一级标题或文件结尾
+    pattern = r"(# 更新日志\n)(.*?)(?=\n# |\Z)"
     match = re.search(pattern, content, re.DOTALL)
 
     if match:
         # 替换更新日志部分
-        new_content = content[:match.start()] + changelog_md + content[match.
-                                                                       end():]
+        before_log = content[:match.start()]
+        after_log = content[match.end():]
+        new_content = before_log + changelog_md + after_log
     else:
         # 如果没有找到，添加到文件末尾
         new_content = content + "\n\n" + changelog_md
@@ -55,13 +57,15 @@ def update_wiki_docs(changelog_md):
     wiki_path = Path("wiki/docs/index.md")
     content = wiki_path.read_text(encoding="utf-8")
 
-    # 查找更新日志部分
-    pattern = r"(# 更新日志\n)(.*?)(?=\Z)"
+    # 查找更新日志部分直到文件结尾
+    pattern = r"(# 更新日志\n)(.*?)(?=\n---|\Z)"
     match = re.search(pattern, content, re.DOTALL)
 
     if match:
         # 替换更新日志部分
-        new_content = content[:match.start()] + changelog_md
+        before_log = content[:match.start()]
+        after_log = content[match.end():]
+        new_content = before_log + changelog_md + after_log
     else:
         # 如果没有找到，添加到文件末尾
         new_content = content + "\n\n---\n\n" + changelog_md

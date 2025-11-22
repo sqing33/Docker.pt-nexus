@@ -869,7 +869,9 @@
       <!-- 步骤 0 的按钮 -->
       <div v-if="activeStep === 0" class="button-group">
         <transition name="el-fade-in-linear">
-          <div class="check-hint">修改完成后请预览一遍种子信息确保无误后完成修改！</div>
+          <div v-if="props.showCompleteButton" class="check-hint">
+            修改完成后请预览一遍种子信息确保无误后完成修改！
+          </div>
         </transition>
         <el-button @click="handleCancelClick">取消</el-button>
 
@@ -2505,7 +2507,7 @@ const allTagOptions = computed(() => {
 // 【修改并添加调试代码】方法：根据标签是否有效，返回不同的类型
 const getTagType = (tag: string) => {
   // 优先检查是否为禁转标签
-  if (tag === '禁转' || tag === 'tag.禁转') {
+  if (tag === '禁转' || tag === 'tag.禁转' || tag === '限转' || tag === 'tag.限转') {
     return 'danger' // 红色
   }
 
@@ -2942,7 +2944,7 @@ const initialTitleComponents = computed(() => {
 
 // 检查是否为受限标签（禁转或tag.禁转）
 const isRestrictedTag = (tag: string): boolean => {
-  return tag === '禁转' || tag === 'tag.禁转'
+  return tag === '禁转' || tag === 'tag.禁转' || tag === '限转' || tag === 'tag.限转'
 }
 
 // 检查是否包含受限标签
@@ -2956,7 +2958,7 @@ const handleTagClose = (tagToRemove: string) => {
   if (isRestrictedTag(tagToRemove)) {
     ElNotification.warning({
       title: '无法删除',
-      message: '禁转标签不允许删除',
+      message: '禁转/限转标签不允许删除',
       duration: 2000,
     })
     return
@@ -3106,7 +3108,7 @@ const isNextButtonDisabled = computed(() => {
 const nextButtonTooltipContent = computed(() => {
   // 1. 优先级最高：检查禁转标签
   if (hasRestrictedTag.value) {
-    return '检测到禁转标签，不允许继续发布'
+    return '检测到禁转/限转标签，不允许继续发布'
   }
 
   // 2. 检查是否存在“无法识别”的内容

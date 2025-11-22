@@ -13,14 +13,16 @@ from config import TEMP_DIR
 
 # 加载内容过滤配置
 CONFIG_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), "configs")
+    os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.dirname(__file__)))), "configs")
 CONTENT_FILTERING_CONFIG = {}
 try:
     global_mappings_path = os.path.join(CONFIG_DIR, "global_mappings.yaml")
     if os.path.exists(global_mappings_path):
         with open(global_mappings_path, 'r', encoding='utf-8') as f:
             global_config = yaml.safe_load(f)
-            CONTENT_FILTERING_CONFIG = global_config.get("content_filtering", {})
+            CONTENT_FILTERING_CONFIG = global_config.get(
+                "content_filtering", {})
 except Exception as e:
     print(f"警告：无法加载内容过滤配置: {e}")
 
@@ -28,7 +30,7 @@ except Exception as e:
 class AudiencesSpecialExtractor:
     """Audiences特殊站点提取器"""
 
-    def __init__(self, soup):
+    def __init__(self, soup, base_url, cookie, torrent_id):
         self.soup = soup
 
     def extract_mediainfo(self):
@@ -240,8 +242,9 @@ class AudiencesSpecialExtractor:
         """
         if not CONTENT_FILTERING_CONFIG.get("enabled", False):
             return False
-            
-        unwanted_patterns = CONTENT_FILTERING_CONFIG.get("unwanted_patterns", [])
+
+        unwanted_patterns = CONTENT_FILTERING_CONFIG.get(
+            "unwanted_patterns", [])
         return any(pattern in text for pattern in unwanted_patterns)
 
     def extract_basic_info(self):
@@ -309,14 +312,14 @@ class AudiencesSpecialExtractor:
                 s.get_text(strip=True)
                 for s in tags_td.find_next_sibling("td").find_all("span")
             ]
-            
+
             # 过滤掉指定的标签
             filtered_tags = []
             unwanted_tags = ["官方", "官种", "首发", "自购", "应求"]
             for tag in tags:
                 if tag not in unwanted_tags:
                     filtered_tags.append(tag)
-            
+
             return filtered_tags
         return []
 

@@ -45,7 +45,7 @@ source_parsers:
       "BD 原盘": "medium.bluray"
       "BD DIY": "medium.bluray_diy"
       "BD Remux": "medium.bluray_remux"
-      "1080p/i压制": "medium.encode_1080p"
+      "1080p/i压制": "medium.encode"
       "WEB-DL": "medium.webdl"
       "HDTV": "medium.hdtv"
       "Other": "medium.other"

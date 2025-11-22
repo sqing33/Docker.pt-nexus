@@ -404,7 +404,8 @@ def create_app():
 
         # # --- 启动IYUU后台线程 ---
         logging.info("正在启动IYUU后台线程...")
-        start_iyuu_thread(db_manager, config_manager)
+        if os.getenv("DEV_ENV") != "true":
+            start_iyuu_thread(db_manager, config_manager)
     else:
         logging.info("检测到调试监控进程，跳过后台线程启动。")
 

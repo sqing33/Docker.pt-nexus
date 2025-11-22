@@ -630,18 +630,18 @@ interface ISourceInfo {
    * The site's nickname, e.g., 'MTeam'.
    * This is used for display purposes.
    */
-  name: string;
+  name: string
 
   /**
    * The site's internal identifier, e.g., 'mteam'.
    * This is used for API calls.
    */
-  site: string;
+  site: string
 
   /**
    * The torrent ID on the source site.
    */
-  torrentId: string;
+  torrentId: string
 }
 
 // 定义emit事件
@@ -950,7 +950,12 @@ const getTagType = (tags: string[] | string, index: number) => {
   const originalTag = tagList[index]
 
   // 检查是否为禁转标签，如果是则显示为红色
-  if (originalTag === '禁转' || originalTag === 'tag.禁转') {
+  if (
+    originalTag === '禁转' ||
+    originalTag === 'tag.禁转' ||
+    originalTag === '限转' ||
+    originalTag === 'tag.限转'
+  ) {
     return 'danger' // 红色
   }
 
@@ -984,7 +989,12 @@ const getTagClass = (tags: string[] | string, index: number) => {
   const originalTag = tagList[index]
 
   // 检查是否为禁转标签
-  if (originalTag === '禁转' || originalTag === 'tag.禁转') {
+  if (
+    originalTag === '禁转' ||
+    originalTag === 'tag.禁转' ||
+    originalTag === '限转' ||
+    originalTag === 'tag.限转'
+  ) {
     return 'restricted-tag' // 返回禁转标签的自定义类名
   }
 
@@ -1459,7 +1469,7 @@ const hasRestrictedTag = (tags: string[] | string): boolean => {
   }
 
   // 检查是否包含"禁转"或"tag.禁转"
-  return tagList.some((tag) => tag === '禁转' || tag === 'tag.禁转')
+  return tagList.some((tag) => tag === '禁转' || tag === 'tag.禁转'  || tag === '限转' || tag === 'tag.限转')
 }
 
 // 控制表格行是否可选择

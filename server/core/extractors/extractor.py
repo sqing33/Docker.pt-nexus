@@ -32,6 +32,7 @@ except Exception as e:
     print(f"警告：无法加载全局映射配置: {e}")
 from .sites.ssd import SSDSpecialExtractor
 from .sites.hhanclub import HHCLUBSpecialExtractor
+from .sites.keepfrds import KEEPFRDSSpecialExtractor
 
 
 class Extractor:
@@ -42,11 +43,14 @@ class Extractor:
             "人人": AudiencesSpecialExtractor,
             "不可说": SSDSpecialExtractor,
             "憨憨": HHCLUBSpecialExtractor,
+            "月月": KEEPFRDSSpecialExtractor
         }
 
     def extract(self,
                 soup: BeautifulSoup,
                 site_name: str,
+                base_url: str,
+                cookie: str,
                 torrent_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Extract parameters from torrent page using appropriate extractor
@@ -63,8 +67,14 @@ class Extractor:
         if site_name in self.special_extractors:
             # Use special extractor for specific sites
             extractor_class = self.special_extractors[site_name]
-            extractor = extractor_class(soup)
+            extractor = extractor_class(soup, base_url, cookie, torrent_id)
             extracted_data = extractor.extract_all(torrent_id)
+
+            # Check if the extractor returned an error for this special site
+            if isinstance(extracted_data,
+                          dict) and extracted_data.get("error") == True:
+                # Return the error as-is so it propagates up to the calling code
+                return extracted_data
         else:
             # Use public extractor for general sites
             extracted_data = self._extract_with_public_extractor(soup)
