@@ -276,20 +276,25 @@ class KEEPFRDSSpecialExtractor:
         # 2. 提取并互换标题
         main_title, subtitle = self.extract_titles()
 
-        # 3. 提取简介、海报、声明
-        intro = self.extract_intro(subtitle)
-
-        # 4. 提取 MediaInfo
-        mediainfo = self.extract_mediainfo()
-
-        # 5. 计算发布时长
-        hours_elapsed = self.extract_time_elapsed()
-        print(f"发布时长: {hours_elapsed}小时")
-
-        # 6. 提取标签
+        # 3. 提取标签
         tags = TorrentListFetcher.get_tags(self.base_url, self.cookie,
                                            main_title, self.torrent_id)
 
+        if tags is False:
+            error_msg = (f"在站点搜索结果中未找到 ID 为 {self.torrent_id} 的种子！"
+                         f"可能搜索结果不匹配或种子不存在。停止处理。")
+            print(error_msg)
+            raise ValueError(error_msg)
+
+        # 4. 提取简介、海报、声明
+        intro = self.extract_intro(subtitle)
+
+        # 5. 提取 MediaInfo
+        mediainfo = self.extract_mediainfo()
+
+        # 6. 计算发布时长
+        hours_elapsed = self.extract_time_elapsed()
+        print(f"发布时长: {hours_elapsed}小时")
 
         # 7. 提取产地
         full_description_text = f"{intro.get('statement', '')}\n{intro.get('body', '')}"

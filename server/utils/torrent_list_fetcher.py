@@ -42,7 +42,7 @@ class TorrentListFetcher:
                  base_url: str,
                  cookie: str,
                  main_title: str,
-                 torrent_id: str = None) -> list:
+                 torrent_id: str = ''):
         """
         静态调用方法：通过搜索标题获取种子的 Tags
         
@@ -50,10 +50,13 @@ class TorrentListFetcher:
             base_url: 站点地址
             cookie: 用户 Cookie
             main_title: 搜索关键词（通常是主标题）
-            torrent_id: 种子ID（可选，用于精确匹配，如果为空则返回搜索结果的第一个）
+            torrent_id: 种子ID（可选）。
+                        如果传入此参数，将开启严格模式：
+                        - 搜索结果中有此 ID -> 返回 tags list
+                        - 搜索结果中无此 ID -> 返回 False
             
         Returns:
-            list: 包含标签的列表，如 ['官组', '禁转', '国语']
+            list | bool: 成功找到时返回标签列表(list)；如果开启严格模式且ID不匹配返回 False(bool)
         """
         # 1. 构造临时的 site_info
         site_info = {
@@ -67,63 +70,69 @@ class TorrentListFetcher:
         fetcher = cls(site_info)
 
         # 3. 构造搜索参数
-        # 这里的 search_mode 设为 0 (AND/与) 或 2 (Exact/准确) 取决于站点支持，
-        # 为了兼容性通常设为 0，然后在代码里筛选
+        # 这里的 search_mode 设为 0 (AND/与)，以防标点符号差异导致搜不到
         search_params = {
             'search': main_title,
             'search_area': 0,  # 标题
-            'search_mode': 0,  # 0=AND, 2=Exact. 建议用0以防标点符号差异导致搜不到
+            'search_mode': 0,  # 0=AND
             'incldead': 1,  # 包括死种
             'spstate': 0  # 促销状态：全部
         }
 
         try:
             # 4. 获取并解析列表
-            # save_to_file=False 不需要保存文件
-            torrents = fetcher.fetch_torrents_page(params=search_params,
-                                                   save_to_file=False)
+            torrents = fetcher.fetch_torrents_page(params=search_params)
 
+            # ================== 逻辑分支 A: 严格模式 (传入了 ID) ==================
+            if torrent_id is not None:
+                if not torrents:
+                    print(f"搜索 '{main_title}' 无结果，无法验证 ID: {torrent_id}")
+                    return False
+
+                # 遍历结果查找精确匹配的 ID
+                for t in torrents:
+                    if str(t.get('id')) == str(torrent_id):
+                        print(
+                            f"已精确匹配种子 ID: {torrent_id}, Tags: {t.get('tags')}")
+                        return t.get('tags', [])
+
+                # 循环结束仍未找到匹配 ID
+                print(
+                    f"在站点搜索结果中未找到 ID 为 {torrent_id} 的种子 (搜索关键词: {main_title})")
+                return False
+
+            # ================== 逻辑分支 B: 模糊模式 (未传入 ID) ==================
             if not torrents:
-                fetcher.logger.warning(f"未搜索到关于 '{main_title}' 的种子")
+                print(f"未搜索到关于 '{main_title}' 的种子")
                 return []
 
             # 5. 筛选匹配结果
             target_torrent = None
 
-            # 5.1 如果传入了 ID，优先匹配 ID
-            if torrent_id:
-                for t in torrents:
-                    if str(t.get('id')) == str(torrent_id):
-                        target_torrent = t
-                        break
+            # 5.1 尝试精确匹配标题
+            for t in torrents:
+                if t.get('main_title') == main_title:
+                    target_torrent = t
+                    break
 
-            # 5.2 如果没有 ID 或没匹配到 ID，尝试匹配标题
-            if not target_torrent:
-                # 尝试精确匹配标题
-                for t in torrents:
-                    if t.get('main_title') == main_title:
-                        target_torrent = t
-                        break
-
-            # 5.3 如果还是没找到，且列表有结果，默认取第一个（假设搜索很精准）
+            # 5.2 如果还是没找到，且列表有结果，默认取第一个（假设搜索很精准）
             if not target_torrent and torrents:
                 target_torrent = torrents[0]
 
             if target_torrent:
-                fetcher.logger.success(
-                    f"已找到种子 ID: {target_torrent.get('id')}, Tags: {target_torrent.get('tags')}"
+                print(
+                    f"已模糊匹配种子 ID: {target_torrent.get('id')}, Tags: {target_torrent.get('tags')}"
                 )
                 return target_torrent.get('tags', [])
 
             return []
 
         except Exception as e:
-            fetcher.logger.error(f"获取 Tags 失败: {e}")
+            print(f"获取 Tags 失败: {e}")
+            print(f"获取 Tags 失败: {e}")
             return []
 
-    def fetch_torrents_page(self,
-                            params: dict = None,
-                            save_to_file: bool = False) -> str:
+    def fetch_torrents_page(self, params: dict = None) -> str:
         """
         获取站点的种子列表页面
         """
@@ -159,9 +168,6 @@ class TorrentListFetcher:
 
             self.logger.success(f"成功获取站点 {self.nickname} 的种子列表页面")
 
-            if save_to_file:
-                self._save_page_content(page_content, params)
-
             # 解析提取种子信息
             torrents = self.parse_torrent_list(page_content)
             return torrents
@@ -169,50 +175,6 @@ class TorrentListFetcher:
         except Exception as e:
             self.logger.error(f"获取站点 {self.nickname} 种子列表页面时发生错误: {e}")
             raise
-
-    def _save_page_content(self, content: str, params: dict = None) -> str:
-        """保存HTML内容到文件 (调试用)"""
-        try:
-            timestamp = int(time.time())
-            site_name = self.site_info.get("site", "unknown").replace(
-                " ", "_").replace("-", "_")
-            save_dir = "/root/Code/Docker.pt-nexus-dev/server/data"
-            if not os.path.exists(save_dir):
-                os.makedirs(save_dir)
-
-            search_keyword = ""
-            if params and 'search' in params:
-                safe_keyword = re.sub(r'[^\w\-_]', '_', params['search'])[:50]
-                search_keyword = f"_search_{safe_keyword}"
-
-            filename = f"{site_name}_torrents{search_keyword}_{timestamp}.html"
-            filepath = os.path.join(save_dir, filename)
-
-            with open(filepath, 'w', encoding='utf-8') as f:
-                f.write(content)
-            return filepath
-        except Exception:
-            return ""
-
-    def save_torrents_to_fixed_json(self,
-                                    torrents: list,
-                                    json_file_path: str = None) -> str:
-        """将种子信息保存到固定文件名的JSON文件中"""
-        save_dir = "/root/Code/Docker.pt-nexus-dev/server/data"
-        if not os.path.exists(save_dir):
-            os.makedirs(save_dir)
-
-        if json_file_path is None:
-            site_name = self.site_info.get("site", "unknown").replace(
-                " ", "_").replace("-", "_")
-            json_file_path = os.path.join(save_dir,
-                                          f"{site_name}_torrents.json")
-
-        with open(json_file_path, 'w', encoding='utf-8') as f:
-            json.dump(torrents, f, ensure_ascii=False, indent=2)
-
-        self.logger.success(f"种子列表已保存到固定文件: {json_file_path}")
-        return json_file_path
 
     def parse_torrent_list(self, html_content: str) -> list:
         """

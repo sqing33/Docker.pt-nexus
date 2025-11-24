@@ -33,6 +33,7 @@ except Exception as e:
 from .sites.ssd import SSDSpecialExtractor
 from .sites.hhanclub import HHCLUBSpecialExtractor
 from .sites.keepfrds import KEEPFRDSSpecialExtractor
+from .sites.chdbits import CHDBitsSpecialExtractor
 
 
 class Extractor:
@@ -43,7 +44,8 @@ class Extractor:
             "人人": AudiencesSpecialExtractor,
             "不可说": SSDSpecialExtractor,
             "憨憨": HHCLUBSpecialExtractor,
-            "月月": KEEPFRDSSpecialExtractor
+            "月月": KEEPFRDSSpecialExtractor,
+            "彩虹岛": CHDBitsSpecialExtractor,
         }
 
     def extract(self,
