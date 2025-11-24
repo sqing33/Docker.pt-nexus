@@ -272,7 +272,7 @@ class HHCLUBSpecialExtractor:
 
         # 过滤掉指定的标签
         filtered_tags = []
-        unwanted_tags = ["官方", "官种", "首发", "自购", "应求"]
+        unwanted_tags = ["官方", "官种", "首发", "自购", "自抓", "应求"]
         for tag in tags:
             if tag not in unwanted_tags:
                 filtered_tags.append(tag)

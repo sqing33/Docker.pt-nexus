@@ -679,27 +679,30 @@ class TorrentMigrator:
 
                 # 先下载种子文件，以便获取其准确的文件名
                 download_url = None
-                
+
                 # 策略 1: 标准 NexusPHP 站点 (查找 a.index 标签)
-                download_link_tag = soup.select_one(f'a.index[href*="download.php?id={torrent_id}"]')
+                download_link_tag = soup.select_one(
+                    f'a.index[href*="download.php?id={torrent_id}"]')
                 if download_link_tag:
                     download_url = download_link_tag['href']
-                
+
                 # 策略 2: HDSky 等使用 form 表单的站点
                 if not download_url:
-                    download_form = soup.select_one(f'form[action*="download.php?id={torrent_id}"]')
+                    download_form = soup.select_one(
+                        f'form[action*="download.php?id={torrent_id}"]')
                     if download_form:
                         download_url = download_form['action']
-                
+
                 # 策略 3: 尝试查找任何包含 download.php?id=xxx 的链接 (兜底)
                 if not download_url:
-                     generic_link = soup.select_one(f'a[href*="download.php?id={torrent_id}"]')
-                     if generic_link:
-                         download_url = generic_link['href']
+                    generic_link = soup.select_one(
+                        f'a[href*="download.php?id={torrent_id}"]')
+                    if generic_link:
+                        download_url = generic_link['href']
 
                 if not download_url:
                     # 打印页面HTML片段以便调试（可选）
-                    # print(soup.prettify()[:1000]) 
+                    # print(soup.prettify()[:1000])
                     raise Exception("在详情页未找到种子下载链接 (已尝试 a标签 和 form表单)。")
 
                 # 处理 URL：如果是相对路径则拼接 Base URL，如果是绝对路径则直接使用
@@ -1003,6 +1006,11 @@ class TorrentMigrator:
                                                                     -8]  # 去除.torrent扩展名
 
                 # 过滤掉文件名中的站点信息（如[HDHome]、[HDSpace]等）
+                # 修改为可以移除多个连续的方括号标识符，包括纯数字标识符
+                processed_torrent_name = re.sub(r'^(?:\[[^\]]+\]\.?)+', '',
+                                                processed_torrent_name)
+
+                # 过滤掉第二个文件名中的站点信息（如[OurBits].[230254]）
                 processed_torrent_name = re.sub(r'^\[[^\]]+\]\.', '',
                                                 processed_torrent_name)
 
@@ -1355,7 +1363,7 @@ class TorrentMigrator:
 
                     # 过滤掉指定的标签
                     filtered_tags = []
-                    unwanted_tags = ["官方", "官种", "首发", "自购", "应求"]
+                    unwanted_tags = ["官方", "官种", "首发", "自购", "自抓", "应求"]
                     for tag in tags:
                         if tag not in unwanted_tags:
                             filtered_tags.append(tag)

@@ -1,0 +1,99 @@
+site_name: "OurBits"
+
+form_fields:
+  category: "type"
+  medium: "medium_sel"
+  video_codec: "codec_sel"
+  audio_codec: "audiocodec_sel"
+  resolution: "standard_sel"
+  source: "processing_sel"
+  team: "team_sel"
+  name: "name"
+  small_descr: "small_descr"
+  imdb_url: "url"
+  douban_url: "dburl"
+  picture: "picture"
+
+source_parsers:
+  source_params:
+    type:
+      source_key: "类型"
+    medium:
+      source_key: "媒介"
+    video_codec:
+      source_key: "编码"
+    audio_codec:
+      source_key: "音频编码"
+    resolution:
+      source_key: "分辨率"
+    source:
+      source_key: "地区"
+    team:
+      source_key: "制作组"
+
+  standard_keys:
+    type:
+      "Movies": "category.movie"
+      "Movies-3D": "category.movie"
+      "Concert": "category.mv"
+      "TV-Episode": "category.tv_series"
+      "TV-Pack": "category.tv_series"
+      "TV-Show": "category.tv_shows"
+      "Documentary": "category.documentaries"
+      "Animation": "category.animation"
+      "Sports": "category.sports"
+      "Music-Video": "category.mv"
+      "Music": "category.music"
+
+    medium:
+      "UHD Blu-ray": "medium.uhd_bluray"
+      "FHD Blu-ray": "medium.bluray"
+      "Encode": "medium.encode"
+      "WEB-DL": "medium.webdl"
+      "HDTV": "medium.hdtv"
+      "DVD": "medium.dvd"
+      "CD": "medium.cd"
+
+    video_codec:
+      "H.264": "video.h264"
+      "HEVC": "video.h265"
+      "MPEG-2": "video.mpeg2"
+      "VC-1": "video.vc1"
+      "Xvid": "video.xvid"
+      "AV1": "video.av1"
+      "Other": "video.other"
+
+    audio_codec:
+      "DTS X": "audio.dtsx"
+      "DTS-HDMA": "audio.dts_hd_ma"
+      "TrueHD": "audio.truehd"
+      "DTS": "audio.dts"
+      "LPCM": "audio.lpcm"
+      "FLAC": "audio.flac"
+      "APE": "audio.ape"
+      "AAC": "audio.aac"
+      "AC3": "audio.ac3"
+      "WAV": "audio.wav"
+      "MPEG": "audio.mpeg"
+      "OPUS": "audio.opus"
+
+    resolution:
+      "SD": "resolution.sd"
+      "720p": "resolution.r720p"
+      "1080i": "resolution.r1080i"
+      "1080p": "resolution.r1080p"
+      "2160p": "resolution.r2160p"
+
+    source:
+      "CN(中国大陆)": "source.china"
+      "US/EU(欧美)": "source.western"
+      "HK/TW(港台)": "source.hongkong_taiwan"
+      "JP(日)": "source.japan"
+      "KR(韩)": "source.korea"
+      "OT(其他)": "source.other"
+
+    tag:
+      "DIY": "tag.DIY"
+      "国语": "tag.国语"
+      "中字": "tag.中字"
+      "禁转": "tag.禁转"

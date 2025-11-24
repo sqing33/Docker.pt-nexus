@@ -136,7 +136,6 @@ source_parsers:
       "HDR Vivid": "tag.hdr_vivid"
       "高码率": "tag.高码率"
       "高帧率": "tag.高帧率"
-      "应求": "tag.应求"
 
 # 参数映射规则 - 定义如何将标准化键映射到站点特定参数
 mappings:
@@ -253,5 +252,4 @@ mappings:
     "tag.hdr_vivid": "hdrv"
     "tag.高码率": "hq"
     "tag.高帧率": "hfr"
-    "tag.应求": "yq"
     "default": null

@@ -36,6 +36,7 @@ from .sites.keepfrds import KEEPFRDSSpecialExtractor
 from .sites.chdbits import CHDBitsSpecialExtractor
 from .sites.hdsky import HDSkySpecialExtractor
 
+
 class Extractor:
     """Main extractor class that orchestrates the extraction process"""
 
@@ -188,14 +189,12 @@ class Extractor:
             title = list(
                 h1_top.stripped_strings)[0] if h1_top.stripped_strings else ""
             # Normalize title (replace dots with spaces, but preserve decimal points and codec formats)
-            import re
             title = re.sub(r'(?<!\d)(?<!H)(?<!x)\.|\.(?!\d\b)(?!264)(?!265)',
                            ' ', title)
             title = re.sub(r'\s+', ' ', title).strip()
             extracted_data["title"] = title
 
         # Extract subtitle
-        import re
         subtitle_td = soup.find("td", string=re.compile(r"\s*副标题\s*"))
         if subtitle_td and subtitle_td.find_next_sibling("td"):
             subtitle = subtitle_td.find_next_sibling("td").get_text(strip=True)
@@ -688,15 +687,31 @@ class Extractor:
                 if ":" in s and i + 1 < len(strings)
             }
 
-        tags_td = soup.find("td", string="标签")
-        tags = ([
-            s.get_text(strip=True)
-            for s in tags_td.find_next_sibling("td").find_all("span")
-        ] if tags_td and tags_td.find_next_sibling("td") else [])
+        tags_td = soup.find("td",
+                            string=re.compile(r"^\s*(?:标签|Tags)\s*$",
+                                              re.IGNORECASE))
+
+        tags = []
+        if tags_td and tags_td.find_next_sibling("td"):
+            # 优先查找 span 标签 (OurBits 使用 <span class="tag ...">)
+            tag_spans = tags_td.find_next_sibling("td").find_all("span")
+            if tag_spans:
+                tags = [s.get_text(strip=True) for s in tag_spans]
+            else:
+                # 如果没有 span，尝试直接获取文本并按逗号或空格分割 (作为后备方案)
+                tags_text = tags_td.find_next_sibling("td").get_text(
+                    strip=True)
+                if tags_text:
+                    # 替换常见的全角分隔符
+                    tags_text = tags_text.replace("，", ",").replace("、", ",")
+                    tags = [
+                        t.strip() for t in re.split(r"[,/ ]+", tags_text)
+                        if t.strip()
+                    ]
 
         # 过滤掉指定的标签
         filtered_tags = []
-        unwanted_tags = ["官方", "官种", "首发", "自购", "应求"]
+        unwanted_tags = ["官方", "官种", "首发", "自购", "自抓", "应求"]
         for tag in tags:
             if tag not in unwanted_tags:
                 filtered_tags.append(tag)
@@ -752,7 +767,6 @@ class Extractor:
         Returns:
             BBCode string
         """
-        import re
         content = []
         if not hasattr(tag, "contents"):
             return ""

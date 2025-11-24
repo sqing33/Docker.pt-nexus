@@ -146,7 +146,6 @@ source_parsers:
       "HDR10": "tag.HDR10"
       "菁彩HDR": "tag.菁彩HDR"
       "特效": "tag.特效"
-      "自购": "tag.自购"
       "ASMR": "tag.ASMR"
       "网络小说": "tag.网络小说"
       "漫画": "tag.漫画"

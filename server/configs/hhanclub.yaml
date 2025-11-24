@@ -100,7 +100,6 @@ source_parsers:
       "Other": "team.other"
 
     tag:
-      "官方": "tag.官方"
       "完结": "tag.完结"
       "原创": "tag.原创"
       "禁转": "tag.禁转"
@@ -113,5 +112,4 @@ source_parsers:
       "杜比视界": "tag.Dolby_Vision"
       "HDR": "tag.HDR"
       "HLG": "tag.HLG"
-      "应求": "tag.应求"
       "转载": "tag.转载"

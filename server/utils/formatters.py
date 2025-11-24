@@ -65,7 +65,8 @@ def _extract_url_from_comment(comment):
     2. 链接前后有内容：更多信息请访问 https://example.com/torrent/12345 查看详情
     3. 只有一串数字（种子ID）：12345
     4. 特殊格式注释（如HDH）：HDHx122230x1653609725x185205f1（提取第二个x和第三个x之间的ID）
-    5. 无效注释：返回None而不是保留原内容
+    5. ob_tid格式：ob_tid=160955
+    6. 无效注释：返回None而不是保留原内容
     """
     if not isinstance(comment, str) or not comment.strip():
         return None
@@ -74,6 +75,11 @@ def _extract_url_from_comment(comment):
     url_match = re.search(r"https?://[^\s/$.?#].[^\s]*", comment)
     if url_match:
         return url_match.group(0)
+
+    # 情况5：提取ob_tid格式的种子ID（如ob_tid=160955）
+    ob_tid_match = re.search(r"ob_tid=(\d+)", comment)
+    if ob_tid_match:
+        return ob_tid_match.group(1)
 
     # 情况4：特殊格式注释提取种子ID（如HDH格式：HDHx122230x1653609725x185205f1）
     hdh_match = re.search(r"[A-Za-z0-9]+x(\d+)x\d+x[0-9a-zA-Z]+", comment)
@@ -85,7 +91,7 @@ def _extract_url_from_comment(comment):
     if id_match:
         return id_match.group(1)
 
-    # 情况5：无效注释，返回None
+    # 情况6：无效注释，返回None
     return None
 
 

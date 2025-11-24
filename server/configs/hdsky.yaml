@@ -118,13 +118,11 @@ source_parsers:
       "Autoseed/自动发布机器人": "team.autoseed"
       "BMDru小组": "team.bmdru"
       "AREA11/韩剧合作小组": "team.area11"
-      "Request/应求发布资源": "team.request"
       "HDSWEB/(网络视频小组合集专用)": "team.hdsweb_pack"
       "HDSAB/有声书小组": "team.hdsab"
       "HDSWEB/(补档专用)": "team.hdsweb_reup"
 
     tag:
-      "官组": "tag.官方"
       "禁转": "tag.禁转"
       "限转": "tag.限转"
       "Dolby Vision": "tag.Dolby_Vision"

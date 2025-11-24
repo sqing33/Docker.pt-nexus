@@ -92,7 +92,6 @@ source_parsers:
     tag:
       "禁转": "tag.禁转"
       "限转": "tag.限转"
-      "官方": "tag.官方"
       "保种": "tag.保种"
       "原创": "tag.原创"
       "首发": "tag.首发"
@@ -109,6 +108,5 @@ source_parsers:
       "HDR10": "tag.HDR10"
       "HDR10+": "tag.hdr10plus"
       "Criterion": "tag.Criterion"
-      "应求": "tag.应求"
       "零魔": "tag.零魔"
       "default": null

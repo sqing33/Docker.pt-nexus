@@ -9,6 +9,7 @@ global_standard_keys:
     "Movies电影": "category.movie"
     "Movies/电影": "category.movie"
     "电影/Movies": "category.movie"
+    "Movies-3D": "category.movie"
     "Movie(电影)": "category.movie"
     "Movie": "category.movie"
     "Movies": "category.movie"
@@ -22,6 +23,8 @@ global_standard_keys:
     "TV Series(电视剧)": "category.tv_series"
     "TV Series": "category.tv_series"
     "TVSeries": "category.tv_series"
+    "TV-Episode": "category.tv_series"
+    "TV-Pack": "category.tv_series"
     "剧集": "category.tv_series"
     "电视剧 / TV Series": "category.tv_series"
 
@@ -34,6 +37,7 @@ global_standard_keys:
     "TV Shows": "category.tv_shows"
     "脱口秀": "category.tv_shows"
     "综艺 / TV Shows": "category.tv_shows"
+    "TV-Show": "category.tv_shows"
     "TVShow": "category.tv_shows"
     "TVShows": "category.tv_shows"
 
@@ -75,8 +79,10 @@ global_standard_keys:
     "MV(音乐视频)": "category.mv"
     "Music Video": "category.mv"
     "Music Videos": "category.mv"
+    "Music-Video": "category.mv"
     "演唱会/音乐会": "category.mv"
     "MV/演唱会": "category.mv"
+    "Concert": "category.mv"
     "Concern/演唱会": "category.mv"
     "音乐 MV": "category.mv"
 
@@ -95,6 +101,7 @@ global_standard_keys:
 
     # 纪录片相关
     "documentary": "category.documentaries"
+    "Documentary": "category.documentaries"
     "纪录片": "category.documentaries"
     "Record Education/纪录教育": "category.documentaries"
     "纪录片/Docmentaries": "category.documentaries"
@@ -309,6 +316,7 @@ global_standard_keys:
     "DTS-HDHRA": "audio.dts_hd_hr"
     "DTS:X": "audio.dtsx"
     "DTS-X": "audio.dtsx"
+    "DTS X": "audio.dtsx"
 
     # AC3/DDP相关
     "DDP": "audio.ddp"
@@ -453,6 +461,9 @@ global_standard_keys:
     "Mainland(大陆)": "source.china"
     "国剧": "source.china"
     "大陆剧": "source.china"
+    "CN(中国大陆)": "source.china"
+
+    "HK/TW(港台)": "source.hongkong_taiwan"
 
     # 香港
     "香港": "source.hongkong"
@@ -478,6 +489,7 @@ global_standard_keys:
     "America": "source.western"
     "欧美": "source.western"
     "West(欧美)": "source.western"
+    "US/EU(欧美)": "source.western"
     "美剧": "source.western"
 
     # 日本
@@ -485,6 +497,7 @@ global_standard_keys:
     "JP": "source.japan"
     "JPN": "source.japan"
     "JPN/日本": "source.japan"
+    "JP(日)": "source.japan"
     "Japan(日本)": "source.japan"
     "日剧": "source.japan"
 
@@ -493,6 +506,7 @@ global_standard_keys:
     "KR": "source.korea"
     "Korea": "source.korea"
     "Kr/韩国": "source.korea"
+    "KR(韩)": "source.korea"
     "Korea(韩国)": "source.korea"
     "韩剧": "source.korea"
 
@@ -570,6 +584,7 @@ global_standard_keys:
     "Other": "source.other"
     "Other/其他": "source.other"
     "Other（其他）": "source.other"
+    "OT(其他)": "source.other"
     "Other(其他地区)": "source.other"
 
     # 制作组映射
@@ -740,9 +755,9 @@ global_standard_keys:
 
     # 语言相关标签
     "国配": "tag.国语"
-    "国语": "tag.国语"
     "次时代国语": "tag.国语"
     "全景声国语": "tag.国语"
+    "国语": "tag.国语"
     "粤语": "tag.粤语"
     "台配": "tag.台配"
     "中字": "tag.中字"
@@ -806,7 +821,6 @@ global_standard_keys:
     "官字": "tag.官字"
     "柠檬爱原盘": "tag.untouch"
     "转载": "tag.转载"
-    "应求": "tag.应求"
     "Criterion": "tag.Criterion"
     "default": null
 
@@ -1061,6 +1075,9 @@ fallback_chains:
     "audio.dts_hd_hr":
       - "audio.dts_hd"
       - "audio.dts"
+      - "audio.other"
+    "audio.mpeg":
+      - "audio.mp3"
       - "audio.other"
 
   video_codec:

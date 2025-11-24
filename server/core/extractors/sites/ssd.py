@@ -84,7 +84,8 @@ class SSDSpecialExtractor:
             return False
 
         # 使用统一的验证函数
-        is_mediainfo, is_bdinfo, _, _, _, _ = validate_media_info_format(content)
+        is_mediainfo, is_bdinfo, _, _, _, _ = validate_media_info_format(
+            content)
         return is_mediainfo or is_bdinfo
 
     def extract_intro(self):
@@ -314,7 +315,7 @@ class SSDSpecialExtractor:
 
             # 过滤掉指定的标签
             filtered_tags = []
-            unwanted_tags = ["官方", "官种", "首发", "自购", "应求"]
+            unwanted_tags = ["官方", "官种", "首发", "自购", "自抓", "应求"]
             for tag in tags:
                 if tag not in unwanted_tags:
                     # 将"合集"替换成"完结"

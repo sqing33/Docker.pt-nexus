@@ -102,7 +102,6 @@ source_parsers:
       "Destiny": "team.destiny"
 
     tag:
-      "官方": "tag.官方"
       "首发": "tag.首发"
       "独占": "tag.禁转"
       "限转": "tag.限转"
