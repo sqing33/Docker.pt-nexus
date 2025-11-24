@@ -1,0 +1,143 @@
+site_name: "HDSky"
+
+form_fields:
+  category: "type"
+  source: "source_sel"
+  medium: "medium_sel"
+  resolution: "standard_sel"
+  video_codec: "codec_sel"
+  audio_codec: "audiocodec_sel"
+
+source_parsers:
+  source_params:
+    type:
+      source_key: "类型"
+    medium:
+      source_key: "媒介"
+    video_codec:
+      source_key: "编码"
+    audio_codec:
+      source_key: "音频编码"
+    resolution:
+      source_key: "分辨率"
+    team:
+      source_key: "制作组"
+
+  standard_keys:
+    type:
+      "Movies/电影": "category.movie"
+      "Documentaries/纪录片": "category.documentaries"
+      "iPad/iPad影视": "category.movie"
+      "Animations/动漫": "category.animations"
+      "TV Series/剧集(分集）": "category.tv_series"
+      "TV Series/剧集(合集）": "category.tv_pack"
+      "TV Shows/综艺": "category.tv_shows"
+      "Music Videos/音乐MV": "category.music_video"
+      "Sports/体育": "category.sports"
+      "HQ Audio/无损音乐": "category.music"
+      "Misc/其他": "category.other"
+      "TV Series/海外剧集(分集）": "category.tv_series"
+      "TV Series/海外剧集(合集）": "category.tv_pack"
+      "TV Shows/海外综艺(分集）": "category.tv_shows"
+      "TV Shows/海外综艺(合集）": "category.tv_shows"
+      "Shortplay/短剧": "category.tv_series"
+
+    medium:
+      "UHD Blu-ray": "medium.uhd_bluray"
+      "UHD Blu-ray/DIY": "medium.uhd_bluray"
+      "Blu-ray": "medium.bluray"
+      "Blu-ray/DIY": "medium.bluray"
+      "Remux": "medium.remux"
+      "Encode": "medium.encode"
+      "HDTV": "medium.hdtv"
+      "DVDR": "medium.dvd"
+      "CD": "medium.cd"
+      "MiniBD": "medium.minibd"
+      "Track": "medium.other"
+      "WEB-DL": "medium.webdl"
+      "SACD": "medium.sacd"
+      "HD DVD": "medium.hddvd"
+      "3D Blu-ray": "medium.bluray_3d"
+
+    video_codec:
+      "H.264/AVC": "video.h264"
+      "x265": "video.h265"
+      "x264": "video.h264"
+      "HEVC": "video.h265"
+      "VC-1": "video.vc1"
+      "MPEG-2": "video.mpeg2"
+      "Xvid": "video.xvid"
+      "Other": "video.other"
+      "MVC": "video.h264"
+      "ProRes": "video.other"
+      "VP9": "video.vp9"
+      "AV1": "video.av1"
+
+    audio_codec:
+      "DTS-HDMA ": "audio.dts_hd_ma"
+      "DTS-HDMA:X 7.1": "audio.dts_x"
+      "TrueHD Atmos": "audio.atmos"
+      "PCM": "audio.lpcm"
+      "TrueHD": "audio.truehd"
+      "DTS": "audio.dts"
+      "LPCM": "audio.lpcm"
+      "FLAC": "audio.flac"
+      "APE": "audio.ape"
+      "MP3": "audio.mp3"
+      "OGG": "audio.ogg"
+      "AAC": "audio.aac"
+      "AC3/DD": "audio.ac3"
+      "DTS-HD HR": "audio.dts_hd_hr"
+      "WAV": "audio.wav"
+      "DSD": "audio.dsd"
+      "Opus": "audio.opus"
+      "E-AC3": "audio.eac3"
+      "DDP with Dolby Atmos": "audio.atmos"
+      "ALAC": "audio.alac"
+      "Other": "audio.other"
+
+    resolution:
+      "4K/2160p": "resolution.r2160p"
+      "2K/1080p": "resolution.r1080p"
+      "1080i": "resolution.r1080i"
+      "720p": "resolution.r720p"
+      "SD": "resolution.sd"
+      "8K/4320P": "resolution.r4320p"
+
+    team:
+      "HDSky/原盘DIY小组": "team.hdsky"
+      "HDS/重编码及remux小组": "team.hds"
+      "HDS3D/3D重编码小组": "team.hds3d"
+      "HDSTV/电视录制小组": "team.hdstv"
+      "HDSWEB/网络视频小组": "team.hdsweb"
+      "HDSPad/移动视频小组": "team.hdspad"
+      "HDSCD/无损音乐小组": "team.hdscd"
+      "HDSpecial|稀缺资源": "team.hdspecial"
+      "Original/自制原创资源": "team.original"
+      "Other/其他制作组或转发资源": "team.other"
+      "Autoseed/自动发布机器人": "team.autoseed"
+      "BMDru小组": "team.bmdru"
+      "AREA11/韩剧合作小组": "team.area11"
+      "Request/应求发布资源": "team.request"
+      "HDSWEB/(网络视频小组合集专用)": "team.hdsweb_pack"
+      "HDSAB/有声书小组": "team.hdsab"
+      "HDSWEB/(补档专用)": "team.hdsweb_reup"
+
+    tag:
+      "官组": "tag.官方"
+      "禁转": "tag.禁转"
+      "限转": "tag.限转"
+      "Dolby Vision": "tag.Dolby_Vision"
+      "DoVi+HDR": "tag.Dolby_Vision"
+      "去头尾广告纯净版": "tag.去头尾广告纯净版"
+      "国语": "tag.国语"
+      "粤语": "tag.粤语"
+      "中字": "tag.中字"
+      "DIY": "tag.DIY"
+      "DIY纯净版": "tag.DIY"
+      "特效": "tag.特效"
+      "次时代国语": "tag.国语"
+      "全景声国语": "tag.国语"
+      "HDR10": "tag.hdr10"
+      "原生原盘": "tag.原生"
+      "default": null

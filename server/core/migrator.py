@@ -598,7 +598,7 @@ class TorrentMigrator:
     def prepare_review_data(self):
         """重构后的方法：获取、解析信息，并输出标准化参数。"""
         # [新增] 定义重试配置
-        MAX_RETRIES = 3  # 最大重试次数
+        MAX_RETRIES = 2  # 最大重试次数
         RETRY_DELAY = 5  # 重试等待时间(秒)
         PAGE_LOAD_WAIT = 3  # 页面加载等待时间(秒)
 
@@ -677,14 +677,44 @@ class TorrentMigrator:
                     full_bbcode_descr_for_check = self._html_to_bbcode(
                         descr_container_for_check)
 
-                # --- [核心修改 1] 开始 ---
                 # 先下载种子文件，以便获取其准确的文件名
-                download_link_tag = soup.select_one(
-                    f'a.index[href^="download.php?id={torrent_id}"]')
-                if not download_link_tag:
-                    raise Exception("在详情页未找到种子下载链接。")
+                download_url = None
+                
+                # 策略 1: 标准 NexusPHP 站点 (查找 a.index 标签)
+                download_link_tag = soup.select_one(f'a.index[href*="download.php?id={torrent_id}"]')
+                if download_link_tag:
+                    download_url = download_link_tag['href']
+                
+                # 策略 2: HDSky 等使用 form 表单的站点
+                if not download_url:
+                    download_form = soup.select_one(f'form[action*="download.php?id={torrent_id}"]')
+                    if download_form:
+                        download_url = download_form['action']
+                
+                # 策略 3: 尝试查找任何包含 download.php?id=xxx 的链接 (兜底)
+                if not download_url:
+                     generic_link = soup.select_one(f'a[href*="download.php?id={torrent_id}"]')
+                     if generic_link:
+                         download_url = generic_link['href']
+
+                if not download_url:
+                    # 打印页面HTML片段以便调试（可选）
+                    # print(soup.prettify()[:1000]) 
+                    raise Exception("在详情页未找到种子下载链接 (已尝试 a标签 和 form表单)。")
+
+                # 处理 URL：如果是相对路径则拼接 Base URL，如果是绝对路径则直接使用
+                if download_url.startswith("http"):
+                    final_download_url = download_url
+                else:
+                    # 确保 base_url 没有尾部斜杠，download_url 没有头部斜杠，避免双斜杠问题
+                    base = self.SOURCE_BASE_URL.rstrip('/')
+                    path = download_url.lstrip('/')
+                    final_download_url = f"{base}/{path}"
+
+                self.logger.info(f"找到下载链接: {final_download_url}")
+
                 torrent_response = self.scraper.get(
-                    f"{self.SOURCE_BASE_URL}/{download_link_tag['href']}",
+                    final_download_url,
                     headers={
                         "Cookie":
                         self.SOURCE_COOKIE,

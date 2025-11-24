@@ -34,7 +34,7 @@ from .sites.ssd import SSDSpecialExtractor
 from .sites.hhanclub import HHCLUBSpecialExtractor
 from .sites.keepfrds import KEEPFRDSSpecialExtractor
 from .sites.chdbits import CHDBitsSpecialExtractor
-
+from .sites.hdsky import HDSkySpecialExtractor
 
 class Extractor:
     """Main extractor class that orchestrates the extraction process"""
@@ -46,6 +46,7 @@ class Extractor:
             "憨憨": HHCLUBSpecialExtractor,
             "月月": KEEPFRDSSpecialExtractor,
             "彩虹岛": CHDBitsSpecialExtractor,
+            "天空": HDSkySpecialExtractor,
         }
 
     def extract(self,

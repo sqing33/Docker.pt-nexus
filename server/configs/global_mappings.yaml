@@ -709,10 +709,11 @@ global_standard_keys:
   # 标签映射
   tag:
     # 禁转相关标签
+    "独占": "tag.禁转"
     "禁转": "tag.禁转"
     "限转": "tag.限转"
-    "独占": "tag.禁转"
     "限时禁转": "tag.限转"
+    "去头尾广告纯净版": "tag.去头尾广告纯净版"
 
     # 内容相关标签
     "合集": "tag.合集"
@@ -722,6 +723,7 @@ global_standard_keys:
     "原声": "tag.原声"
     "原盘": "tag.原盘"
     "原生": "tag.原生"
+    "原生原盘": "tag.原生"
     "重制": "tag.重制"
     "自压": "tag.自压"
     "自译": "tag.自译"
@@ -729,6 +731,7 @@ global_standard_keys:
     "特效字幕": "tag.特效"
     "特效": "tag.特效"
     "DIY": "tag.DIY"
+    "DIY纯净版": "tag.DIY"
     "Remux": "tag.Remux"
     "动画": "tag.动画"
     "大包": "tag.大包"
@@ -738,6 +741,8 @@ global_standard_keys:
     # 语言相关标签
     "国配": "tag.国语"
     "国语": "tag.国语"
+    "次时代国语": "tag.国语"
+    "全景声国语": "tag.国语"
     "粤语": "tag.粤语"
     "台配": "tag.台配"
     "中字": "tag.中字"
@@ -762,6 +767,7 @@ global_standard_keys:
     "HDR10": "tag.hdr10"
     "HDR10+": "tag.hdr10plus"
     "Dolby Vision": "tag.Dolby_Vision"
+    "DoVi+HDR": "tag.Dolby_Vision"
     "菁彩HDR": "tag.菁彩HDR"
     "HLG": "tag.HLG"
     "杜比": "tag.杜比"
