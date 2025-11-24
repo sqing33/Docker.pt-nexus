@@ -969,6 +969,66 @@
     @complete="handleLogProgressComplete"
     @close="showLogProgress = false"
   />
+
+  <!-- [新增] 抓取失败详情弹窗 -->
+  <el-dialog
+    v-model="showErrorDialog"
+    title="抓取失败 - 详细日志"
+    width="800px"
+    destroy-on-close
+    append-to-body
+    class="error-log-dialog"
+  >
+    <div class="error-log-container">
+      <el-alert
+        title="获取种子信息过程中发生错误"
+        type="error"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 15px;"
+      >
+        <template #default>
+          <div>请查看下方详细日志以排查问题（如 Python 堆栈信息）。</div>
+        </template>
+      </el-alert>
+
+      <el-scrollbar height="500px">
+        <div class="log-timeline">
+          <div
+            v-for="log in parsedErrorLogs"
+            :key="log.id"
+            class="log-entry"
+            :class="{ 'is-error': log.isError }"
+          >
+            <!-- 日志头部：时间与摘要 -->
+            <div class="log-entry-header">
+              <span class="log-time">{{ log.time }}</span>
+              <el-tag
+                :type="getLogLevelType(log.level)"
+                size="small"
+                effect="dark"
+                class="log-level-tag"
+              >
+                {{ log.level }}
+              </el-tag>
+              <span class="log-site" v-if="log.site">[{{ log.site }}]</span>
+              <span class="log-text">{{ log.message }}</span>
+            </div>
+
+            <!-- 日志详情（报错堆栈） -->
+            <div v-if="log.details" class="log-entry-details">
+              <pre class="code-block">{{ log.details }}</pre>
+            </div>
+          </div>
+        </div>
+      </el-scrollbar>
+    </div>
+    <template #footer>
+      <span class="dialog-footer">
+        <el-button @click="showErrorDialog = false">关闭</el-button>
+      </span>
+    </template>
+  </el-dialog>
 </template>
 
 <script setup lang="ts">
@@ -1061,6 +1121,78 @@ const parseBBCode = (text: string): string => {
   text = text.replace(/\n/g, '<br>')
 
   return text
+}
+
+// --- [新增] 日志解析函数：将后端返回的文本日志解析为结构化数据 ---
+const parseLogText = (text: string) => {
+  if (!text) return []
+
+  const lines = text.split('\n')
+  const results: any[] = []
+  let currentEntry: any = null
+
+  // 正则匹配日志行：[站点名] HH:mm:ss - LEVEL - 内容
+  // 参考你的日志格式: [不可说] 21:29:26 - INFO - ...
+  const logRegex = /^\[(.*?)\]\s+(\d{2}:\d{2}:\d{2})\s+-\s+([A-Z]+)\s+-\s+(.*)$/
+
+  lines.forEach((line, index) => {
+    const trimmedLine = line.trimEnd()
+    if (!trimmedLine) return
+
+    const match = trimmedLine.match(logRegex)
+
+    if (match) {
+      // 这是一个新的日志行
+      currentEntry = {
+        id: index,
+        site: match[1],
+        time: match[2],
+        level: match[3],
+        message: match[4],
+        details: '', // 用于存放后续的堆栈信息
+        isError: match[3] === 'ERROR' || match[3] === 'CRITICAL'
+      }
+      // 如果消息本身就包含 Traceback 关键字，标记为错误
+      if (currentEntry.message.includes('Traceback')) {
+        currentEntry.isError = true
+      }
+      results.push(currentEntry)
+    } else {
+      // 这不是标准的日志头（例如 Python 的 Traceback 堆栈信息）
+      if (currentEntry) {
+        // 追加到上一条日志的详情中
+        currentEntry.details += (currentEntry.details ? '\n' : '') + trimmedLine
+        // 如果包含 File "...", line ... 这种堆栈特征，强制标记上一条为错误
+        if (trimmedLine.trim().startsWith('File "')) {
+          currentEntry.isError = true
+        }
+      } else {
+        // 只有第一行就是非标准格式时才会走到这里
+        results.push({
+          id: index,
+          site: 'System',
+          time: '',
+          level: 'INFO',
+          message: trimmedLine,
+          details: '',
+          isError: false
+        })
+      }
+    }
+  })
+
+  return results
+}
+
+// --- [新增] 获取日志等级对应的标签颜色 ---
+const getLogLevelType = (level: string) => {
+  switch (level) {
+    case 'SUCCESS': return 'success'
+    case 'ERROR': return 'danger'
+    case 'WARNING': return 'warning'
+    case 'DEBUG': return 'info'
+    default: return 'primary' // INFO
+  }
 }
 
 interface SiteStatus {
@@ -1225,6 +1357,10 @@ const logContent = ref('')
 const showLogCard = ref(false)
 const downloaderList = ref<{ id: string; name: string }[]>([])
 const isDataFromDatabase = ref(false) // Flag to track if data was loaded from database
+
+// --- [新增] 错误弹窗相关的状态 ---
+const showErrorDialog = ref(false)
+const parsedErrorLogs = ref<any[]>([])
 
 // 日志进度组件相关
 const showLogProgress = ref(false)
@@ -1701,6 +1837,64 @@ const getEnglishSiteName = async (chineseSiteName: string): Promise<string> => {
   return commonSiteMapping[chineseSiteName] || chineseSiteName.toLowerCase()
 }
 
+// 提取出来的处理数据库数据的辅助函数 (避免代码重复)
+const processDbData = (dataRes: any, tId: string) => {
+    const dbData = dataRes.data
+    if (!dbData || !dbData.title) throw new Error('数据库返回的种子信息不完整')
+
+    if (dataRes.reverse_mappings) {
+        reverseMappings.value = dataRes.reverse_mappings
+    }
+
+    torrentData.value = {
+        original_main_title: dbData.title || '',
+        title_components: dbData.title_components || [],
+        subtitle: dbData.subtitle,
+        imdb_link: dbData.imdb_link,
+        douban_link: dbData.douban_link,
+        intro: {
+          statement: filterExtraEmptyLines(dbData.statement) || '',
+          poster: dbData.poster || '',
+          body: filterExtraEmptyLines(dbData.body) || '',
+          screenshots: dbData.screenshots || '',
+          removed_ardtudeclarations: dbData.removed_ardtudeclarations || [],
+        },
+        mediainfo: dbData.mediainfo || '',
+        source_params: dbData.source_params || {},
+        standardized_params: {
+          type: dbData.type || '',
+          medium: dbData.medium || '',
+          video_codec: dbData.video_codec || '',
+          audio_codec: dbData.audio_codec || '',
+          resolution: dbData.resolution || '',
+          team: dbData.team || '',
+          source: dbData.source || '',
+          tags: (dbData.tags || []).sort((a: any, b: any) => {
+            const restricted = ['禁转', 'tag.禁转', '限转', 'tag.限转']
+            const isRa = restricted.includes(a)
+            const isRb = restricted.includes(b)
+            return isRa === isRb ? 0 : isRa ? -1 : 1
+          }),
+        },
+        final_publish_parameters: dbData.final_publish_parameters || {},
+        complete_publish_params: dbData.complete_publish_params || {},
+        raw_params_for_preview: dbData.raw_params_for_preview || {},
+    }
+
+    // 自动解析标题逻辑
+    if ((!dbData.title_components || dbData.title_components.length === 0) && dbData.title) {
+        axios.post('/api/utils/parse_title', { title: dbData.title }).then(res => {
+            if(res.data.success) torrentData.value.title_components = res.data.components
+        }).catch(console.warn)
+    }
+
+    taskId.value = tId
+    isDataFromDatabase.value = true
+    activeStep.value = 0
+    nextTick(() => { checkScreenshotValidity() })
+    isLoading.value = false
+}
+
 const fetchSitesStatus = async () => {
   try {
     const response = await axios.get('/api/sites/status')
@@ -1779,13 +1973,17 @@ const fetchTorrentInfo = async () => {
 
         if (!storeResponse.data.success) {
           ElNotification.closeAll()
-          ElNotification.error({
-            title: '抓取失败',
-            message: storeResponse.data.message || '从源站点抓取失败',
-            duration: 0,
-            showClose: true,
-          })
-          emit('cancel')
+
+          // 1. 获取错误消息
+          const errorMsg = storeResponse.data.message || '从源站点抓取失败'
+
+          // 2. 解析日志内容
+          parsedErrorLogs.value = parseLogText(errorMsg)
+
+          // 3. 打开美化后的错误弹窗
+          showErrorDialog.value = true
+
+          // 4. 停止加载，但不触发取消（修复问题：避免组件销毁导致弹窗无法显示）
           isLoading.value = false
           return
         }
@@ -1801,13 +1999,17 @@ const fetchTorrentInfo = async () => {
 
         if (!finalDbResponse.data.success) {
           ElNotification.closeAll()
-          ElNotification.error({
-            title: '读取失败',
-            message: '数据抓取成功但从数据库读取失败',
-            duration: 0,
-            showClose: true,
-          })
-          emit('cancel')
+
+          // 1. 获取错误消息
+          const errorMsg = '数据抓取成功但从数据库读取失败'
+
+          // 2. 解析日志内容
+          parsedErrorLogs.value = parseLogText(errorMsg)
+
+          // 3. 打开美化后的错误弹窗
+          showErrorDialog.value = true
+
+          // 4. 停止加载，但不触发取消（修复问题：避免组件销毁导致弹窗无法显示）
           isLoading.value = false
           return
         }
@@ -1847,7 +2049,12 @@ const fetchTorrentInfo = async () => {
             resolution: dbData.resolution || '',
             team: dbData.team || '',
             source: dbData.source || '',
-            tags: dbData.tags || [],
+            tags: (dbData.tags || []).sort((a, b) => {
+              const restricted = ['禁转', 'tag.禁转', '限转', 'tag.限转']
+              const isRa = restricted.includes(a)
+              const isRb = restricted.includes(b)
+              return isRa === isRb ? 0 : isRa ? -1 : 1
+            }),
           },
           final_publish_parameters: dbData.final_publish_parameters || {},
           complete_publish_params: dbData.complete_publish_params || {},
@@ -1867,7 +2074,6 @@ const fetchTorrentInfo = async () => {
       } catch (error: any) {
         ElNotification.closeAll()
         handleApiError(error, '从源站点抓取时发生错误，请查看后台日志。')
-        emit('cancel')
         isLoading.value = false
         return
       }
@@ -1918,7 +2124,12 @@ const fetchTorrentInfo = async () => {
           resolution: dbData.resolution || '',
           team: dbData.team || '',
           source: dbData.source || '',
-          tags: dbData.tags || [],
+          tags: (dbData.tags || []).sort((a, b) => {
+            const restricted = ['禁转', 'tag.禁转', '限转', 'tag.限转']
+            const isRa = restricted.includes(a)
+            const isRb = restricted.includes(b)
+            return isRa === isRb ? 0 : isRa ? -1 : 1
+          }),
         },
         final_publish_parameters: dbData.final_publish_parameters || {},
         complete_publish_params: dbData.complete_publish_params || {},
@@ -2147,7 +2358,12 @@ const fetchTorrentInfo = async () => {
             resolution: dbData.resolution || '',
             team: dbData.team || '',
             source: dbData.source || '',
-            tags: dbData.tags || [],
+            tags: (dbData.tags || []).sort((a, b) => {
+              const restricted = ['禁转', 'tag.禁转', '限转', 'tag.限转']
+              const isRa = restricted.includes(a)
+              const isRb = restricted.includes(b)
+              return isRa === isRb ? 0 : isRa ? -1 : 1
+            }),
           },
           final_publish_parameters: dbData.final_publish_parameters || {},
           complete_publish_params: dbData.complete_publish_params || {},
@@ -2216,66 +2432,65 @@ const fetchTorrentInfo = async () => {
         })
       } else {
         ElNotification.closeAll()
-        ElNotification.error({
-          title: '读取失败',
-          message: `数据抓取成功但数据库读取失败，已重试${maxDbReadAttempts}次。请检查数据库连接或稍后重试。`,
-          duration: 0,
-          showClose: true,
-        })
-        emit('cancel')
+
+        // 1. 获取错误消息
+        const errorMsg = `数据抓取成功但数据库读取失败，已重试${maxDbReadAttempts}次。请检查数据库连接或稍后重试。`
+
+        // 2. 解析日志内容
+        parsedErrorLogs.value = parseLogText(errorMsg)
+
+        // 3. 打开美化后的错误弹窗
+        showErrorDialog.value = true
+
+        // 4. 停止加载，但不触发取消（修复问题：避免组件销毁导致弹窗无法显示）
+        isLoading.value = false
       }
     } else {
       ElNotification.closeAll()
       const errorMessage = storeResponse.data.message || '抓取种子信息失败'
 
-      // 如果是数据库相关的错误，提供更详细的建议
+      // 1. 获取错误消息
+      let errorMsg = errorMessage
+
+      // 2. 如果是数据库相关的错误，提供更详细的建议
       if (errorMessage.includes('数据库') || dbError) {
-        ElNotification.error({
-          title: '抓取失败',
-          message: `${errorMessage}。可能由于数据库连接问题导致，请检查数据库状态。`,
-          duration: 0,
-          showClose: true,
-        })
-      } else {
-        ElNotification.error({
-          title: '抓取失败',
-          message: errorMessage,
-          duration: 0,
-          showClose: true,
-        })
+        errorMsg = `${errorMessage}。可能由于数据库连接问题导致，请检查数据库状态。`
       }
-      emit('cancel')
+
+      // 3. 解析日志内容
+      parsedErrorLogs.value = parseLogText(errorMsg)
+
+      // 4. 打开美化后的错误弹窗
+      showErrorDialog.value = true
+
+      // 5. 停止加载，但不触发取消（修复问题：避免组件销毁导致弹窗无法显示）
+      isLoading.value = false
     }
   } catch (error) {
     ElNotification.closeAll()
 
     // 区分不同类型的错误并提供更具体的错误信息
     if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
-      ElNotification.error({
-        title: '请求超时',
-        message: '抓取种子信息超时，请检查网络连接或稍后重试。',
-        duration: 0,
-        showClose: true,
-      })
+      // 1. 获取错误消息
+      const msg = '抓取种子信息超时，请检查网络连接或稍后重试。'
+      parsedErrorLogs.value = parseLogText(msg)
+      showErrorDialog.value = true
     } else if (error.response?.status === 404) {
-      ElNotification.error({
-        title: '资源未找到',
-        message: '在源站点未找到指定的种子，请检查种子ID是否正确。',
-        duration: 0,
-        showClose: true,
-      })
+      // 1. 获取错误消息
+      const msg = '在源站点未找到指定的种子，请检查种子ID是否正确。'
+      parsedErrorLogs.value = parseLogText(msg)
+      showErrorDialog.value = true
     } else if (error.response?.status >= 500) {
-      ElNotification.error({
-        title: '服务器错误',
-        message: '后端服务器发生错误，请稍后重试或联系管理员。',
-        duration: 0,
-        showClose: true,
-      })
+      // 1. 获取错误消息
+      const msg = '后端服务器发生错误，请稍后重试或联系管理员。'
+      parsedErrorLogs.value = parseLogText(msg)
+      showErrorDialog.value = true
     } else {
       // 使用原有的错误处理
-      handleApiError(error, '获取种子信息时发生错误，请查看后台日志。')
+      const msg = error.message || '获取种子信息时发生错误，请查看后台日志。'
+      parsedErrorLogs.value = parseLogText(msg)
+      showErrorDialog.value = true
     }
-    emit('cancel')
   } finally {
     isLoading.value = false
   }
@@ -4544,5 +4759,96 @@ const filterUploadedParam = (url: string): string => {
   100% {
     transform: translateX(0);
   }
+}
+
+/* --- 错误日志弹窗样式 --- */
+.error-log-container {
+  padding: 5px;
+}
+
+.log-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.log-entry {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background-color: #f8f9fa;
+  border-left: 3px solid #dcdfe6;
+  transition: all 0.2s;
+}
+
+/* 错误行高亮 */
+.log-entry.is-error {
+  background-color: #fef0f0;
+  border-left-color: #f56c6c;
+}
+
+.log-entry-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  line-height: 24px;
+  flex-wrap: wrap; /* 防止小屏幕换行问题 */
+}
+
+.log-time {
+  color: #909399;
+  font-family: 'Roboto Mono', monospace;
+  font-size: 12px;
+  min-width: 60px;
+}
+
+.log-level-tag {
+  font-weight: bold;
+  font-family: sans-serif;
+  min-width: 60px;
+  text-align: center;
+}
+
+.log-site {
+  color: #606266;
+  font-weight: 600;
+}
+
+.log-text {
+  color: #303133;
+  flex: 1;
+  word-break: break-all;
+}
+
+.log-entry.is-error .log-text {
+  color: #f56c6c;
+  font-weight: 500;
+}
+
+.log-entry-details {
+  margin-top: 8px;
+  padding-left: 10px;
+}
+
+.code-block {
+  background-color: rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+  padding: 10px;
+  margin: 0;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 12px;
+  color: #333;
+  white-space: pre-wrap;
+  word-break: break-all;
+  line-height: 1.4;
+}
+
+/* 错误堆栈的文字颜色更深一点 */
+.log-entry.is-error .code-block {
+  background-color: #fff;
+  border: 1px solid #fde2e2;
+  color: #c0392b;
 }
 </style>

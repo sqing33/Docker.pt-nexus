@@ -2500,11 +2500,18 @@ def _process_batch_fetch(task_id, torrent_names, source_sites_priority,
                 final_source = None
                 attempted_sites_details = []
 
+                # 排除"我堡"和"OurBits"站点
+                excluded_sites = {"我堡", "OurBits"}
+
                 # 构建所有可用站点列表（按优先级排序）
                 all_available_sites = []
 
                 # 1. 首先按配置的优先级顺序添加优先级站点
                 for priority_site in source_sites_priority:
+                    # 跳过被排除的站点
+                    if priority_site in excluded_sites:
+                        continue
+
                     source_info = db_manager.get_site_by_nickname(
                         priority_site)
                     if not source_info or not source_info.get("cookie"):
@@ -2547,12 +2554,19 @@ def _process_batch_fetch(task_id, torrent_names, source_sites_priority,
                 site_name_map = {}
                 for torrent in torrents:
                     site_name = torrent.get("sites")
+                    # 跳过被排除的站点
+                    if site_name in excluded_sites:
+                        continue
                     if site_name and site_name not in priority_site_names:
                         site_name_map[site_name] = torrent
 
                 # 按迁移状态排序后备站点
                 sorted_sites = []
                 for site_name, torrent in site_name_map.items():
+                    # 跳过被排除的站点
+                    if site_name in excluded_sites:
+                        continue
+
                     source_info = db_manager.get_site_by_nickname(site_name)
                     if source_info and source_info.get("cookie"):
                         migration_status = source_info.get("migration", 0)

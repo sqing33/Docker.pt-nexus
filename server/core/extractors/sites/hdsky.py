@@ -34,7 +34,7 @@ class HDSkySpecialExtractor:
             标签列表或 False（如果未找到种子）
         """
         tags = TorrentListFetcher.get_tags(self.base_url, self.cookie,
-                                           main_title, self.torrent_id)
+                                           main_title, self.torrent_id, "天空")
 
         if tags is False:
             error_msg = (f"在站点搜索结果中未找到 ID 为 {self.torrent_id} 的种子！"

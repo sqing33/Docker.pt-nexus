@@ -759,7 +759,9 @@ class TorrentMigrator:
                 # 检查是否返回了错误
                 if isinstance(extracted_data,
                               dict) and extracted_data.get("error") == True:
-                    error_message = extracted_data.get("error_message", "未知错误")
+                    error_message = extracted_data.get(
+                        "error_message") or extracted_data.get(
+                            "message", "未知错误")
                     print(f"提取器返回错误: {error_message}")
                     raise Exception(error_message)
 

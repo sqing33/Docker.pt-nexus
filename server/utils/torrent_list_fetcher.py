@@ -42,7 +42,8 @@ class TorrentListFetcher:
                  base_url: str,
                  cookie: str,
                  main_title: str,
-                 torrent_id: str = ''):
+                 torrent_id: str = '',
+                 site_name: str = '') -> list | bool:
         """
         静态调用方法：通过搜索标题获取种子的 Tags
         
@@ -62,8 +63,7 @@ class TorrentListFetcher:
         site_info = {
             "base_url": base_url,
             "cookie": cookie,
-            "nickname": "TagFetcher",
-            "site": "temp_site"
+            "nickname": site_name
         }
 
         # 2. 初始化实例

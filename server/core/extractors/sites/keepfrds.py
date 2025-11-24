@@ -278,7 +278,7 @@ class KEEPFRDSSpecialExtractor:
 
         # 3. 提取标签
         tags = TorrentListFetcher.get_tags(self.base_url, self.cookie,
-                                           main_title, self.torrent_id)
+                                           main_title, self.torrent_id, "月月")
 
         if tags is False:
             error_msg = (f"在站点搜索结果中未找到 ID 为 {self.torrent_id} 的种子！"

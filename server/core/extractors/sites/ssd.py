@@ -24,8 +24,11 @@ except Exception as e:
 class SSDSpecialExtractor:
     """SSD("不可说")特殊站点提取器"""
 
-    def __init__(self, soup):
+    def __init__(self, soup, base_url='', cookie='', torrent_id=''):
         self.soup = soup
+        self.base_url = base_url
+        self.cookie = cookie
+        self.torrent_id = torrent_id
 
     def extract_mediainfo(self):
         """
