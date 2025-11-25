@@ -50,13 +50,13 @@
     "speed_limit": 10
   },
   {
-    "site": "pter",
+    "site": "pterclub",
     "nickname": "猫站",
-    "base_url": "pterclub.com",
+    "base_url": "pterclub.net",
     "special_tracker_domain": null,
     "group": "-PTerWEB,-PTer,-PTerDIY,-PTerTV,-PTerGame,-PTerMV",
-    "description": "PTer",
-    "migration": 0,
+    "description": "PTerClub",
+    "migration": 1,
     "speed_limit": 10
   },
   {
@@ -1008,7 +1008,7 @@
   },
   {
     "site": "azusa",
-    "nickname": "喵",
+    "nickname": "梓喵",
     "base_url": "azusa.wiki",
     "special_tracker_domain": null,
     "group": null,

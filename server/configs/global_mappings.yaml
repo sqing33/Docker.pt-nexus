@@ -168,16 +168,16 @@ global_standard_keys:
     "系统镜像": "category.os"
 
     # HDArea特有类型
-    "Movie UHD-4K": "category.movie_uhd"
-    "Movies Blu-ray": "category.movie_bluray"
-    "Movies REMUX": "category.movie_remux"
-    "Movies 3D": "category.movie_3d"
-    "Movies 1080p": "category.movie_1080p"
-    "Movies 720p": "category.movie_720p"
-    "Movies DVD": "category.movie_dvd"
-    "Movies WEB-DL": "category.movie_webdl"
-    "Movies HDTV": "category.movie_hdtv"
-    "Movies iPad": "category.movie_ipad"
+    "Movie UHD-4K": "category.movie"
+    "Movies Blu-ray": "category.movie"
+    "Movies REMUX": "category.movie"
+    "Movies 3D": "category.movie"
+    "Movies 1080p": "category.movie"
+    "Movies 720p": "category.movie"
+    "Movies DVD": "category.movie"
+    "Movies WEB-DL": "category.movie"
+    "Movies HDTV": "category.movie"
+    "Movies iPad": "category.movie"
 
     # 其他分类
     "其他": "category.other"
@@ -192,6 +192,7 @@ global_standard_keys:
     "文档": "category.document"
     "Blu-Ray原盘": "category.blu_ray"
     "OS/系统镜像": "category.os"
+    "舞台演出(Stage Performance)": "category.stage"
 
   # 媒介映射
   medium:
@@ -206,16 +207,18 @@ global_standard_keys:
     "BluRay": "medium.bluray"
     "FHD Blu-ray": "medium.bluray"
     "BD 原盘": "medium.bluray"
+    "BD Discs": "medium.bluray"
     "BD原盘": "medium.bluray"
-    "BD DIY": "medium.bluray_diy"
-    "BD Remux": "medium.bluray_remux"
+    "BD DIY": "medium.bluray"
+    "BD Remux": "medium.remux"
     "Remux": "medium.remux"
-    "Remux TV": "medium.remux_tv"
+    "Remux TV": "medium.remux"
 
     # UHD/4K蓝光相关
     "UHD Blu-ray": "medium.uhd_bluray"
     "Blu-rayUHD": "medium.uhd_bluray"
     "UHD": "medium.uhd_bluray"
+    "UHD Discs": "medium.uhd_bluray"
     "UHD原盘": "medium.uhd_bluray"
     "UHD DIY": "medium.uhd_diy"
     "UHD Remux": "medium.remux"
@@ -460,6 +463,7 @@ global_standard_keys:
     "大陆": "source.china"
     "Mainland(大陆)": "source.china"
     "国剧": "source.china"
+    "大陆 (Mainland,CHN)": "source.china"
     "大陆剧": "source.china"
     "CN(中国大陆)": "source.china"
 
@@ -469,6 +473,7 @@ global_standard_keys:
     "香港": "source.hongkong"
     "中国香港": "source.hongkong"
     "HK": "source.hongkong"
+    "香港 (HKG,CHN)": "source.hongkong"
     "HK/香港": "source.hongkong"
     "Hongkong(香港)": "source.hongkong"
     "港剧": "source.hongkong"
@@ -478,6 +483,7 @@ global_standard_keys:
     "中国台湾": "source.taiwan"
     "TW": "source.taiwan"
     "TW/台湾": "source.taiwan"
+    "台湾 (TWN,CHN)": "source.taiwan"
     "Taiwan(台湾)": "source.taiwan"
     "台剧": "source.taiwan"
 
@@ -488,6 +494,7 @@ global_standard_keys:
     "US/美国": "source.western"
     "America": "source.western"
     "欧美": "source.western"
+    "欧美 (Western)": "source.western"
     "West(欧美)": "source.western"
     "US/EU(欧美)": "source.western"
     "美剧": "source.western"
@@ -497,6 +504,7 @@ global_standard_keys:
     "JP": "source.japan"
     "JPN": "source.japan"
     "JPN/日本": "source.japan"
+    "日本 (JPN)": "source.japan"
     "JP(日)": "source.japan"
     "Japan(日本)": "source.japan"
     "日剧": "source.japan"
@@ -506,6 +514,7 @@ global_standard_keys:
     "KR": "source.korea"
     "Korea": "source.korea"
     "Kr/韩国": "source.korea"
+    "韩国 (KOR)": "source.korea"
     "KR(韩)": "source.korea"
     "Korea(韩国)": "source.korea"
     "韩剧": "source.korea"
@@ -537,6 +546,7 @@ global_standard_keys:
     "印度": "source.india"
     "IN": "source.india"
     "IN/印度": "source.india"
+    "印度 (IND)": "source.india"
     "India(印度)": "source.india"
 
     # 俄罗斯
@@ -746,6 +756,7 @@ global_standard_keys:
     "特效字幕": "tag.特效"
     "特效": "tag.特效"
     "DIY纯净版": "tag.DIY"
+    "DIY原盘": "tag.DIY"
     "DIY": "tag.DIY"
     "Remux": "tag.Remux"
     "动画": "tag.动画"

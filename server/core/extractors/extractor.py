@@ -35,6 +35,7 @@ from .sites.hhanclub import HHCLUBSpecialExtractor
 from .sites.keepfrds import KEEPFRDSSpecialExtractor
 from .sites.chdbits import CHDBitsSpecialExtractor
 from .sites.hdsky import HDSkySpecialExtractor
+from .sites.pterclub import PTerClubSpecialExtractor
 
 
 class Extractor:
@@ -48,6 +49,7 @@ class Extractor:
             "月月": KEEPFRDSSpecialExtractor,
             "彩虹岛": CHDBitsSpecialExtractor,
             "天空": HDSkySpecialExtractor,
+            "猫站": PTerClubSpecialExtractor,
         }
 
     def extract(self,
