@@ -407,7 +407,9 @@ class DataTracker(Thread):
                             "upload_speed": data_point["ul_speed"],
                             "download_speed": data_point["dl_speed"]
                         }
-                        data_points.append(data_point)
+                        # 过滤掉累计上传量和下载量都为0的数据
+                        if data_point["total_ul"] > 0 or data_point["total_dl"] > 0:
+                            data_points.append(data_point)
                     else:
                         # 代理获取失败，跳过此下载器
                         logging.warning(
@@ -459,7 +461,9 @@ class DataTracker(Thread):
                     "upload_speed": data_point["ul_speed"],
                     "download_speed": data_point["dl_speed"]
                 }
-                data_points.append(data_point)
+                # 过滤掉累计上传量和下载量都为0的数据
+                if data_point["total_ul"] > 0 or data_point["total_dl"] > 0:
+                    data_points.append(data_point)
             except Exception as e:
                 logging.warning(f"无法从客户端 '{downloader['name']}' 获取统计信息: {e}")
                 if downloader['id'] in self.clients:
@@ -497,6 +501,23 @@ class DataTracker(Thread):
 
     def _flush_traffic_buffer_to_db(self, buffer):
         if not buffer: return
+
+        # 过滤掉累计上传量和下载量都为0的数据
+        filtered_buffer = []
+        for entry in buffer:
+            filtered_points = []
+            for data_point in entry["points"]:
+                if data_point["total_ul"] > 0 or data_point["total_dl"] > 0:
+                    filtered_points.append(data_point)
+            if filtered_points:  # 只保留有有效数据的条目
+                filtered_entry = entry.copy()
+                filtered_entry["points"] = filtered_points
+                filtered_buffer.append(filtered_entry)
+
+        if not filtered_buffer:
+            logging.info("过滤后的流量缓冲为空，跳过数据库写入")
+            return
+
         conn = None
         try:
             conn = self.db_manager._get_connection()
@@ -509,7 +530,7 @@ class DataTracker(Thread):
 
             # 第一步：获取每个下载器的最后一条记录
             downloader_ids = set()
-            for entry in buffer:
+            for entry in filtered_buffer:
                 for data_point in entry["points"]:
                     downloader_ids.add(data_point["downloader_id"])
 
@@ -541,7 +562,7 @@ class DataTracker(Thread):
             # 第二步：验证并准备插入数据
             params_to_insert = []
 
-            for entry in buffer:
+            for entry in filtered_buffer:
                 timestamp_str = entry["timestamp"].strftime(
                     "%Y-%m-%d %H:%M:%S")
                 for data_point in entry["points"]:

@@ -1529,7 +1529,7 @@ def upload_data_screenshot(source_info,
 
 
 def add_torrent_to_downloader(detail_page_url: str, save_path: str,
-                              downloader_id: str, db_manager, config_manager):
+                              downloader_id: str, db_manager, config_manager, direct_download_url: str = None):
     """
     从种子详情页下载 .torrent 文件并添加到指定的下载器。
     [最终修复版] 修正了向 Transmission 发送数据时的双重编码问题。
@@ -1595,38 +1595,43 @@ def add_torrent_to_downloader(detail_page_url: str, save_path: str,
 
         print(f"站点基础URL: {site_base_url}")
 
-        # 检查是否为haidan站点
-        if 'haidan' in site_base_url:
-            # Haidan站点需要提取torrent_id而不是id
-            torrent_id_match = re.search(r"torrent_id=(\d+)", detail_page_url)
-            if not torrent_id_match:
-                raise ValueError("无法从详情页URL中提取种子ID（torrent_id）。")
-            torrent_id = torrent_id_match.group(1)
-            # Haidan站点的特殊逻辑
-            download_link_tag = soup.find(
-                'a', href=re.compile(r"download.php\?id="))
-
-            if not download_link_tag: raise RuntimeError("在详情页HTML中未能找到下载链接！")
-
-            download_url_part = str(download_link_tag['href'])  # 显式转换为str
-
-            # 替换下载链接中的id为从detail_page_url中提取的torrent_id
-            download_url_part = re.sub(r"id=\d+", f"id={torrent_id}",
-                                       download_url_part)
-
-            full_download_url = f"{site_base_url}/{download_url_part}"
+        # 如果提供了直接下载链接（如朱雀站点），优先使用
+        if direct_download_url:
+            full_download_url = direct_download_url
+            print(f"使用直接下载链接: {full_download_url}")
         else:
-            # 其他站点的通用逻辑 - 提取id参数
-            torrent_id_match = re.search(r"id=(\d+)", detail_page_url)
-            if not torrent_id_match: raise ValueError("无法从详情页URL中提取种子ID。")
-            torrent_id = torrent_id_match.group(1)
+            # 检查是否为haidan站点
+            if 'haidan' in site_base_url:
+                # Haidan站点需要提取torrent_id而不是id
+                torrent_id_match = re.search(r"torrent_id=(\d+)", detail_page_url)
+                if not torrent_id_match:
+                    raise ValueError("无法从详情页URL中提取种子ID（torrent_id）。")
+                torrent_id = torrent_id_match.group(1)
+                # Haidan站点的特殊逻辑
+                download_link_tag = soup.find(
+                    'a', href=re.compile(r"download.php\?id="))
 
-            download_link_tag = soup.select_one(
-                f'a.index[href^="download.php?id={torrent_id}"]')
-            if not download_link_tag: raise RuntimeError("在详情页HTML中未能找到下载链接！")
+                if not download_link_tag: raise RuntimeError("在详情页HTML中未能找到下载链接！")
 
-            download_url_part = str(download_link_tag['href'])  # 显式转换为str
-            full_download_url = f"{site_base_url}/{download_url_part}"
+                download_url_part = str(download_link_tag['href'])  # 显式转换为str
+
+                # 替换下载链接中的id为从detail_page_url中提取的torrent_id
+                download_url_part = re.sub(r"id=\d+", f"id={torrent_id}",
+                                           download_url_part)
+
+                full_download_url = f"{site_base_url}/{download_url_part}"
+            else:
+                # 其他站点的通用逻辑 - 提取id参数
+                torrent_id_match = re.search(r"id=(\d+)", detail_page_url)
+                if not torrent_id_match: raise ValueError("无法从详情页URL中提取种子ID。")
+                torrent_id = torrent_id_match.group(1)
+
+                download_link_tag = soup.select_one(
+                    f'a.index[href^="download.php?id={torrent_id}"]')
+                if not download_link_tag: raise RuntimeError("在详情页HTML中未能找到下载链接！")
+
+                download_url_part = str(download_link_tag['href'])  # 显式转换为str
+                full_download_url = f"{site_base_url}/{download_url_part}"
 
         # 确保full_download_url已被赋值
         if not full_download_url:

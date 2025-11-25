@@ -490,9 +490,20 @@ class TorrentMigrator:
                                                content_disposition)
                     if filename_match:
                         torrent_filename = filename_match.group(1)
-                        # URL解码文件名
+                        # URL解码文件名，强制使用UTF-8编码
                         torrent_filename = urllib.parse.unquote(
-                            torrent_filename)
+                            torrent_filename, encoding='utf-8')
+
+                        # =========== [新增修复代码开始] ===========
+                        # 修复乱码：如果文件名被错误解析为 Latin-1，尝试还原为 UTF-8
+                        try:
+                            torrent_filename_fixed = torrent_filename.encode(
+                                'iso-8859-1').decode('utf-8')
+                            torrent_filename = torrent_filename_fixed
+                        except (UnicodeEncodeError, UnicodeDecodeError):
+                            # 如果转换失败（例如已经是正确中文，或者包含无法在Latin-1表示的字符），则保持原样
+                            pass
+                        # =========== [新增修复代码结束] ===========
 
             # 保存种子文件到临时目录
             torrent_path = os.path.join(temp_dir, torrent_filename)
@@ -751,6 +762,17 @@ class TorrentMigrator:
                             # URL解码文件名
                             torrent_filename = urllib.parse.unquote(
                                 torrent_filename)
+
+                            # =========== [新增修复代码开始] ===========
+                            # 修复乱码：如果文件名被错误解析为 Latin-1，尝试还原为 UTF-8
+                            try:
+                                torrent_filename_fixed = torrent_filename.encode(
+                                    'iso-8859-1').decode('utf-8')
+                                torrent_filename = torrent_filename_fixed
+                            except (UnicodeEncodeError, UnicodeDecodeError):
+                                # 如果转换失败（例如已经是正确中文，或者包含无法在Latin-1表示的字符），则保持原样
+                                pass
+                            # =========== [新增修复代码结束] ===========
 
                 # 使用统一的数据提取方法
                 extracted_data = self._extract_data_by_site_type(
@@ -1829,14 +1851,39 @@ class TorrentMigrator:
 
             self.logger.info("--- [步骤2] 任务执行完毕 ---")
             final_url = None
-            if url_match := re.search(r"(https?://[^\s]+details\.php\?[^\s]+)",
-                                      str(message)):
+            direct_download_url = None
+
+            # 提取详情页URL
+            if not final_url and "hddolby.com" in str(message):
+                if offers_match := re.search(
+                        r"https?://www\.hddolby\.com/offers\.php\?id=(\d+)",
+                        str(message)):
+                    offers_id = offers_match.group(1)
+                    final_url = f"https://www.hddolby.com/details.php?id={offers_id}"
+                    self.logger.info(
+                        f"检测到 hddolby 站点 offers.php 格式，已转换为详情页: {final_url}")
+
+            if url_match := re.search(
+                    r"(https?://[^\s|]+(?:details\.php\?[^\s|]+|/torrent/info/\d+))",
+                    str(message)):
                 final_url = url_match.group(1)
+
+            # 如果上面的正则没匹配到，尝试更宽泛的匹配（兜底策略）
+            if not final_url:
+                if generic_match := re.search(r"链接:\s*(https?://[^\s|]+)",
+                                              str(message)):
+                    final_url = generic_match.group(1)
+
+            # 提取直接下载链接 (朱雀站点特殊处理)
+            if direct_download_match := re.search(
+                    r"DIRECT_DOWNLOAD:(https?://[^\s]+)", str(message)):
+                direct_download_url = direct_download_match.group(1)
 
             return {
                 "success": result,
                 "logs": self.log_handler.get_logs(),
-                "url": final_url
+                "url": final_url,
+                "direct_download_url": direct_download_url
             }
         except Exception as e:
             self.logger.error(f"发布过程中发生致命错误: {e}")
@@ -1844,5 +1891,6 @@ class TorrentMigrator:
             return {
                 "success": False,
                 "logs": self.log_handler.get_logs(),
-                "url": None
+                "url": None,
+                "direct_download_url": None
             }

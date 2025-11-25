@@ -211,7 +211,6 @@ class BaseUploader(ABC):
         # 1. 尝试精确匹配
         for key, value in mapping_dict.items():
             if str(key).lower() == str(key_to_find).lower().strip():
-                print(f"精确匹配成功: '{key_to_find}' -> '{value}'")
                 return value
 
         # 2. 尝试正则部分匹配
@@ -224,7 +223,6 @@ class BaseUploader(ABC):
 
             for key, value in sorted_items:
                 if re.search(pattern, str(key).lower()):
-                    print(f"正则匹配成功: '{key_to_find}' in '{key}' -> '{value}'")
                     return value
         except re.error:
             pass
@@ -237,7 +235,6 @@ class BaseUploader(ABC):
                 return fallback_result
 
         # 4. 所有尝试失败，返回默认值
-        print(f"所有匹配失败，使用默认值: '{key_to_find}'")
         return mapping_dict.get(default_key, "")
 
     def _map_standardized_params(self, standardized_params: dict) -> dict:
@@ -686,6 +683,12 @@ class BaseUploader(ABC):
             if "details.php" in final_url and "uploaded=1" in final_url:
                 logger.success("发布成功！已跳转到种子详情页。")
                 return True, f"发布成功！新种子页面: {final_url}"
+            elif "offers.php" in final_url:
+                logger.success("发布成功！已跳转到种子详情页。")
+                import re
+                pattern = r'offers\.php\?id=(\d+)(&off_details.*)?'
+                replaced_url = re.sub(pattern, r'details.php?id=\1', final_url)
+                return True, f"发布成功！新种子页面: {replaced_url}"
             elif "details.php" in final_url and "existed=1" in final_url:
                 logger.success("种子已存在！已跳转到种子详情页。")
                 # 检查响应内容中是否包含"该种子已存在"的提示
@@ -818,7 +821,18 @@ class BaseUploader(ABC):
 
             from .uploader import create_uploader
             uploader = create_uploader(site_name, site_info, upload_payload)
-            return uploader.execute_upload()
+            result = uploader.execute_upload()
+
+            # 处理朱雀站点的特殊返回值格式 (success, message, extra_info)
+            if len(result) == 3:
+                status, message, extra_info = result
+                if status and extra_info:
+                    if extra_info.get("download_url"):
+                        message = f"{message}|DIRECT_DOWNLOAD:{extra_info['download_url']}"
+                return status, message
+            else:
+                # 标准的两值返回格式
+                return result
         except Exception as e:
             from loguru import logger
             import traceback

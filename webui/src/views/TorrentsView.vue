@@ -560,7 +560,7 @@
           <p class="source-site-tip">
             <el-tag type="success" size="large" style="margin-right: 5px">可获取数据</el-tag>
             <el-tag type="primary" size="large" style="margin-right: 5px"
-              >可尝试iyuu获取链接</el-tag
+              >点击尝试使用iyuu获取链接</el-tag
             >
             <el-tag type="error" size="large" style="margin-right: 5px; opacity: 0.5"
               >未配置Cookie</el-tag

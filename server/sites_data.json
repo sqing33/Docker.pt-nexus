@@ -479,8 +479,8 @@
     "special_tracker_domain": null,
     "group": "-ZWEX",
     "description": "ZHUQUE",
-    "migration": 0,
-    "speed_limit": 25
+    "migration": 2,
+    "speed_limit": 40
   },
   {
     "site": "zmpt",
@@ -678,7 +678,7 @@
     "group": "-QHstudIo,-Dream,-DBTV,-CornerMV",
     "description": "HDDolby",
     "migration": 1,
-    "speed_limit": 10
+    "speed_limit": 90
   },
   {
     "site": "kamept",

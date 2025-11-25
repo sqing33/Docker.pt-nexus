@@ -1330,7 +1330,8 @@ def migrate_publish():
                             save_path=save_path,
                             downloader_id=downloader_id,
                             db_manager=db_manager,
-                            config_manager=config_manager)
+                            config_manager=config_manager,
+                            direct_download_url=result.get("direct_download_url"))
 
                         result["auto_add_result"] = {
                             "success": success,
@@ -1740,7 +1741,7 @@ def migrate_add_to_downloader():
 
     try:
         success, message = add_torrent_to_downloader(detail_page_url,
-                                                     downloader_path,
+                                                     save_path,
                                                      downloader_id, db_manager,
                                                      config_manager)
         return jsonify({"success": success, "message": message})

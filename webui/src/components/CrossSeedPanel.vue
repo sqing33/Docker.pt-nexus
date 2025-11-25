@@ -840,7 +840,7 @@
                     :href="filterUploadedParam(result.url)"
                     target="_blank"
                     rel="noopener noreferrer"
-                    style="transform: translateY(-3px)"
+                    style="transform: translateY(-1px)"
                   >
                     <el-button type="success" size="small"> 查看种子 </el-button>
                   </a>
@@ -985,7 +985,7 @@
         type="error"
         :closable="false"
         show-icon
-        style="margin-bottom: 15px;"
+        style="margin-bottom: 15px"
       >
         <template #default>
           <div>请查看下方详细日志以排查问题（如 Python 堆栈信息）。</div>
@@ -1150,7 +1150,7 @@ const parseLogText = (text: string) => {
         level: match[3],
         message: match[4],
         details: '', // 用于存放后续的堆栈信息
-        isError: match[3] === 'ERROR' || match[3] === 'CRITICAL'
+        isError: match[3] === 'ERROR' || match[3] === 'CRITICAL',
       }
       // 如果消息本身就包含 Traceback 关键字，标记为错误
       if (currentEntry.message.includes('Traceback')) {
@@ -1175,7 +1175,7 @@ const parseLogText = (text: string) => {
           level: 'INFO',
           message: trimmedLine,
           details: '',
-          isError: false
+          isError: false,
         })
       }
     }
@@ -1187,11 +1187,16 @@ const parseLogText = (text: string) => {
 // --- [新增] 获取日志等级对应的标签颜色 ---
 const getLogLevelType = (level: string) => {
   switch (level) {
-    case 'SUCCESS': return 'success'
-    case 'ERROR': return 'danger'
-    case 'WARNING': return 'warning'
-    case 'DEBUG': return 'info'
-    default: return 'primary' // INFO
+    case 'SUCCESS':
+      return 'success'
+    case 'ERROR':
+      return 'danger'
+    case 'WARNING':
+      return 'warning'
+    case 'DEBUG':
+      return 'info'
+    default:
+      return 'primary' // INFO
   }
 }
 
@@ -1839,60 +1844,65 @@ const getEnglishSiteName = async (chineseSiteName: string): Promise<string> => {
 
 // 提取出来的处理数据库数据的辅助函数 (避免代码重复)
 const processDbData = (dataRes: any, tId: string) => {
-    const dbData = dataRes.data
-    if (!dbData || !dbData.title) throw new Error('数据库返回的种子信息不完整')
+  const dbData = dataRes.data
+  if (!dbData || !dbData.title) throw new Error('数据库返回的种子信息不完整')
 
-    if (dataRes.reverse_mappings) {
-        reverseMappings.value = dataRes.reverse_mappings
-    }
+  if (dataRes.reverse_mappings) {
+    reverseMappings.value = dataRes.reverse_mappings
+  }
 
-    torrentData.value = {
-        original_main_title: dbData.title || '',
-        title_components: dbData.title_components || [],
-        subtitle: dbData.subtitle,
-        imdb_link: dbData.imdb_link,
-        douban_link: dbData.douban_link,
-        intro: {
-          statement: filterExtraEmptyLines(dbData.statement) || '',
-          poster: dbData.poster || '',
-          body: filterExtraEmptyLines(dbData.body) || '',
-          screenshots: dbData.screenshots || '',
-          removed_ardtudeclarations: dbData.removed_ardtudeclarations || [],
-        },
-        mediainfo: dbData.mediainfo || '',
-        source_params: dbData.source_params || {},
-        standardized_params: {
-          type: dbData.type || '',
-          medium: dbData.medium || '',
-          video_codec: dbData.video_codec || '',
-          audio_codec: dbData.audio_codec || '',
-          resolution: dbData.resolution || '',
-          team: dbData.team || '',
-          source: dbData.source || '',
-          tags: (dbData.tags || []).sort((a: any, b: any) => {
-            const restricted = ['禁转', 'tag.禁转', '限转', 'tag.限转']
-            const isRa = restricted.includes(a)
-            const isRb = restricted.includes(b)
-            return isRa === isRb ? 0 : isRa ? -1 : 1
-          }),
-        },
-        final_publish_parameters: dbData.final_publish_parameters || {},
-        complete_publish_params: dbData.complete_publish_params || {},
-        raw_params_for_preview: dbData.raw_params_for_preview || {},
-    }
+  torrentData.value = {
+    original_main_title: dbData.title || '',
+    title_components: dbData.title_components || [],
+    subtitle: dbData.subtitle,
+    imdb_link: dbData.imdb_link,
+    douban_link: dbData.douban_link,
+    intro: {
+      statement: filterExtraEmptyLines(dbData.statement) || '',
+      poster: dbData.poster || '',
+      body: filterExtraEmptyLines(dbData.body) || '',
+      screenshots: dbData.screenshots || '',
+      removed_ardtudeclarations: dbData.removed_ardtudeclarations || [],
+    },
+    mediainfo: dbData.mediainfo || '',
+    source_params: dbData.source_params || {},
+    standardized_params: {
+      type: dbData.type || '',
+      medium: dbData.medium || '',
+      video_codec: dbData.video_codec || '',
+      audio_codec: dbData.audio_codec || '',
+      resolution: dbData.resolution || '',
+      team: dbData.team || '',
+      source: dbData.source || '',
+      tags: (dbData.tags || []).sort((a: any, b: any) => {
+        const restricted = ['禁转', 'tag.禁转', '限转', 'tag.限转']
+        const isRa = restricted.includes(a)
+        const isRb = restricted.includes(b)
+        return isRa === isRb ? 0 : isRa ? -1 : 1
+      }),
+    },
+    final_publish_parameters: dbData.final_publish_parameters || {},
+    complete_publish_params: dbData.complete_publish_params || {},
+    raw_params_for_preview: dbData.raw_params_for_preview || {},
+  }
 
-    // 自动解析标题逻辑
-    if ((!dbData.title_components || dbData.title_components.length === 0) && dbData.title) {
-        axios.post('/api/utils/parse_title', { title: dbData.title }).then(res => {
-            if(res.data.success) torrentData.value.title_components = res.data.components
-        }).catch(console.warn)
-    }
+  // 自动解析标题逻辑
+  if ((!dbData.title_components || dbData.title_components.length === 0) && dbData.title) {
+    axios
+      .post('/api/utils/parse_title', { title: dbData.title })
+      .then((res) => {
+        if (res.data.success) torrentData.value.title_components = res.data.components
+      })
+      .catch(console.warn)
+  }
 
-    taskId.value = tId
-    isDataFromDatabase.value = true
-    activeStep.value = 0
-    nextTick(() => { checkScreenshotValidity() })
-    isLoading.value = false
+  taskId.value = tId
+  isDataFromDatabase.value = true
+  activeStep.value = 0
+  nextTick(() => {
+    checkScreenshotValidity()
+  })
+  isLoading.value = false
 }
 
 const fetchSitesStatus = async () => {
@@ -3545,6 +3555,16 @@ const filterUploadedParam = (url: string): string => {
   if (!url) return url
 
   try {
+    // 处理包含 |DIRECT_DOWNLOAD: 的复合链接
+    if (url.includes('|DIRECT_DOWNLOAD:')) {
+      // 分割链接，只保留前半部分的查看链接
+      const viewUrl = url.split('|DIRECT_DOWNLOAD:')[0]
+      const urlObj = new URL(viewUrl)
+      urlObj.searchParams.delete('uploaded')
+      return urlObj.toString()
+    }
+
+    // 处理普通链接
     const urlObj = new URL(url)
     urlObj.searchParams.delete('uploaded')
     return urlObj.toString()
@@ -4369,6 +4389,7 @@ const filterUploadedParam = (url: string): string => {
     box-shadow 0.2s ease;
   background: #fff;
   flex-shrink: 0;
+  position: relative;
 }
 
 .result-card:hover {

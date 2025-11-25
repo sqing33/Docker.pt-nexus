@@ -1,0 +1,72 @@
+# 雀雀站点的配置文件
+# 基于三层解耦模型重构，包含source_parsers和标准化的mappings
+
+site_name: "zhuque"
+
+# 表单字段定义 - 定义站点上传表单中各字段的标识符
+form_fields:
+  category: "type"
+  medium: "medium"
+  video_codec: "video_codec"
+  resolution: "resolution"
+  tags[]: "tags[]"
+
+# 标准化键映射 - 定义源文本到标准化键的映射规则
+# source_parsers部分：定义如何从原始数据解析出标准化参数
+source_parsers:
+  source_params:
+    type:
+      source_key: "类型"
+    medium:
+      source_key: "媒介"
+    video_codec:
+      source_key: "视频编码"
+    audio_codec:
+      source_key: "音频编码"
+    resolution:
+      source_key: "分辨率"
+    team:
+      source_key: "制作组"
+    tags[]:
+      source_key: "标签"
+
+mappings:
+  type:
+    "category.movie": "501"
+    "category.tv_series": "502"
+    "category.animation": "503"
+    "category.tv_shows": "504"
+    "category.other": "599"
+
+  medium:
+    "medium.uhd_bluray": "301"
+    "medium.bluray": "303"
+    "medium.remux": "305"
+    "medium.encode": "306"
+    "medium.hdtv": "308"
+    "medium.webdl": "309"
+    "medium.other": "399"
+
+  video_codec:
+    "video.h265": "101"
+    "video.h264": "102"
+    "video.x265": "103"
+    "video.x264": "104"
+    "default": "199"
+
+  resolution:
+    "resolution.r720p": "401"
+    "resolution.r1080i": "402"
+    "resolution.r1080p": "403"
+    "resolution.r2160p": "404"
+    "default": "499"
+
+  tag:
+    "tag.国语": "603"
+    "tag.中字": "604"
+    "tag.Dolby_Vision": "611"
+    "tag.hdr10": "613"
+    "tag.特效字幕": "614"
+    "tag.完结": "621"
+    "tag.分集": "622"
+    "default": null
