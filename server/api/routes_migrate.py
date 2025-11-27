@@ -17,7 +17,7 @@ from models.seed_parameter import SeedParameter
 
 # --- [新增] 导入 config_manager ---
 # 确保能够访问到全局的 config_manager 实例
-from config import config_manager
+from config import config_manager, GLOBAL_MAPPINGS
 
 # --- [新增] 导入日志流管理器 ---
 from utils.log_streamer import log_streamer
@@ -193,13 +193,11 @@ def generate_reverse_mappings():
         import os
 
         # 首先尝试从global_mappings.yaml读取
-        global_mappings_path = os.path.join(os.path.dirname(__file__),
-                                            '../configs/global_mappings.yaml')
         global_mappings = {}
 
-        if os.path.exists(global_mappings_path):
+        if os.path.exists(GLOBAL_MAPPINGS):
             try:
-                with open(global_mappings_path, 'r', encoding='utf-8') as f:
+                with open(GLOBAL_MAPPINGS, 'r', encoding='utf-8') as f:
                     config_data = yaml.safe_load(f)
                     global_mappings = config_data.get('global_standard_keys',
                                                       {})
@@ -663,11 +661,8 @@ def update_db_seed_info():
 
             # 2. 从 global_mappings.yaml 读取拼接顺序
             import yaml
-            import os
 
-            global_mappings_path = os.path.join(
-                os.path.dirname(os.path.dirname(__file__)), 'configs',
-                'global_mappings.yaml')
+            global_mappings_path = GLOBAL_MAPPINGS
 
             # 默认顺序（如果读取配置失败时使用）
             order = [
@@ -1323,6 +1318,8 @@ def migrate_publish():
                         print(
                             f"[下载器添加] 准备同步添加到下载器: URL={result['url']}, Path={save_path}, DownloaderID={downloader_id}"
                         )
+                        print(f"[下载器添加] 结果详情: {result}")
+                        print(f"[下载器添加] 直接下载链接: {result.get('direct_download_url', 'None')}")
 
                         # 同步调用 add_torrent_to_downloader 函数
                         success, message = add_torrent_to_downloader(
@@ -1760,7 +1757,7 @@ def get_sites_status():
 
         # 从数据库查询所有站点的关键信息，包括英文站点名
         cursor.execute(
-            "SELECT nickname, site, cookie, migration FROM sites WHERE nickname IS NOT NULL AND nickname != ''"
+            "SELECT nickname, site, cookie, passkey, migration FROM sites WHERE nickname IS NOT NULL AND nickname != ''"
         )
         sites_from_db = cursor.fetchall()
 
@@ -1778,6 +1775,7 @@ def get_sites_status():
                 "name": nickname,
                 "site": row.get("site"),  # 添加英文站点名
                 "has_cookie": bool(row.get("cookie")),
+                "has_passkey": bool(row.get("passkey")),
                 "is_source": migration_status in [1, 3],
                 "is_target": migration_status in [2, 3]
             }

@@ -9,25 +9,27 @@ import urllib.parse
 
 # 导入自定义工具函数
 from utils.douban import handle_incomplete_links, search_by_subtitle
-
-CONFIG_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "configs")
+from utils.content_filter import get_content_filter, get_unwanted_image_urls
+from config import GLOBAL_MAPPINGS
 from .sites.audiences import AudiencesSpecialExtractor
 
+# 站点配置目录路径
+CONFIG_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "configs")
+
 # 加载全局映射配置
-GLOBAL_MAPPINGS = {}
+GLOBAL_STANDARD_KEYS = {}
 DEFAULT_TITLE_COMPONENTS = {}
-CONTENT_FILTERING_CONFIG = {}
 try:
-    global_mappings_path = os.path.join(CONFIG_DIR, "global_mappings.yaml")
-    if os.path.exists(global_mappings_path):
-        with open(global_mappings_path, 'r', encoding='utf-8') as f:
+    if os.path.exists(GLOBAL_MAPPINGS):
+        with open(GLOBAL_MAPPINGS, 'r', encoding='utf-8') as f:
             global_config = yaml.safe_load(f)
-            GLOBAL_MAPPINGS = global_config.get("global_standard_keys", {})
+            GLOBAL_STANDARD_KEYS = global_config.get("global_standard_keys",
+                                                     {})
             DEFAULT_TITLE_COMPONENTS = global_config.get(
                 "default_title_components", {})
-            CONTENT_FILTERING_CONFIG = global_config.get(
-                "content_filtering", {})
+    else:
+        print(f"警告：配置文件不存在: {GLOBAL_MAPPINGS}")
 except Exception as e:
     print(f"警告：无法加载全局映射配置: {e}")
 from .sites.ssd import SSDSpecialExtractor
@@ -81,6 +83,9 @@ class Extractor:
                           dict) and extracted_data.get("error") == True:
                 # Return the error as-is so it propagates up to the calling code
                 return extracted_data
+
+            # Apply content filtering to special extractor results
+            extracted_data = self._apply_content_filtering(extracted_data)
         else:
             # Use public extractor for general sites
             extracted_data = self._extract_with_public_extractor(soup)
@@ -90,59 +95,56 @@ class Extractor:
     def _is_unwanted_content(self, text: str) -> bool:
         """
         检查文本是否包含不需要的内容模式（使用配置文件中的规则）
-        
+
         Args:
             text: 要检查的文本
-            
+
         Returns:
             如果文本包含不需要的模式则返回True
         """
-        if not CONTENT_FILTERING_CONFIG.get("enabled", False):
-            return False
-
-        unwanted_patterns = CONTENT_FILTERING_CONFIG.get(
-            "unwanted_patterns", [])
-        return any(pattern in text for pattern in unwanted_patterns)
+        content_filter = get_content_filter()
+        return content_filter.is_unwanted_pattern(text)
 
     def _clean_subtitle(self, subtitle: str) -> str:
         """
         清理副标题，移除制作组信息和不需要的内容
-        
+
         Args:
             subtitle: 原始副标题
-            
+
         Returns:
             清理后的副标题
         """
-        if not subtitle:
-            return subtitle
+        content_filter = get_content_filter()
+        return content_filter.clean_subtitle(subtitle)
 
-        # 首先使用硬编码的规则（兼容性）
-        subtitle = re.sub(r"\s*\|\s*[Aa][Bb]y\s+\w+.*$", "", subtitle)
-        subtitle = re.sub(r"\s*\|\s*[Bb]y\s+\w+.*$", "", subtitle)
-        subtitle = re.sub(r"\s*\|\s*[Aa]\s+\w+.*$", "", subtitle)
-        subtitle = re.sub(r"\s*\|\s*[Aa]\s*\|.*$", "", subtitle)
-        subtitle = re.sub(r"\s*\|\s*[Aa][Tt][Uu]\s*$", "", subtitle)
-        subtitle = re.sub(r"\s*\|\s*[Dd][Tt][Uu]\s*$", "", subtitle)
-        subtitle = re.sub(r"\s*\|\s*[Pp][Tt][Ee][Rr]\s*$", "", subtitle)
+    def _apply_content_filtering(self, extracted_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Apply content filtering to extracted data from special extractors
 
-        # 然后使用配置文件中的规则
-        # 对于副标题：删除匹配到的模式及其之后的所有内容
-        if CONTENT_FILTERING_CONFIG.get("enabled", False):
-            unwanted_patterns = CONTENT_FILTERING_CONFIG.get(
-                "unwanted_patterns", [])
+        Args:
+            extracted_data: Data extracted from special extractors
 
-            for pattern in unwanted_patterns:
-                if pattern in subtitle:
-                    # 找到模式的位置，删除该模式及其之后的内容
-                    pattern_index = subtitle.find(pattern)
-                    if pattern_index != -1:
-                        subtitle = subtitle[:pattern_index].strip()
-                        # 如果删除后没有内容了，返回空字符串
-                        if not subtitle:
-                            return ""
+        Returns:
+            Filtered data with unwanted content removed
+        """
+        content_filter = get_content_filter()
 
-        return subtitle.strip()
+        # Filter subtitle if it exists
+        if extracted_data.get("subtitle"):
+            extracted_data["subtitle"] = content_filter.clean_subtitle(extracted_data["subtitle"])
+
+        # Filter intro content if it exists
+        if extracted_data.get("intro"):
+            intro = extracted_data["intro"]
+
+            # Process statement section for ARDTU declarations and technical parameters
+            if intro.get("statement"):
+                result = content_filter.filter_quotes_in_statement(intro["statement"])
+                intro["statement"] = result["filtered_statement"]
+                intro["removed_ardtudeclarations"] = result["removed_declarations"]
+
+        return extracted_data
 
     def _extract_with_public_extractor(self,
                                        soup: BeautifulSoup) -> Dict[str, Any]:
@@ -300,8 +302,7 @@ class Extractor:
             print(f"[调试extractor] 添加转换后的图片: {url_img[:80]}")
 
         # [新增] 从配置文件读取并过滤掉指定的不需要的图片URL
-        unwanted_image_urls = CONTENT_FILTERING_CONFIG.get(
-            "unwanted_image_urls", [])
+        unwanted_image_urls = get_unwanted_image_urls()
 
         if unwanted_image_urls:
             filtered_images = []
@@ -369,50 +370,8 @@ class Extractor:
                     else:
                         quotes_after_poster.append(quote_content)
 
-            # 辅助函数：检查是否为包含技术参数的quote（这些既不是mediainfo也不应该出现在正文中）
-            def is_technical_params_quote(quote_text):
-                """
-                使用配置文件中的 technical_params_detection 规则检查是否为技术参数 quote
-                """
-                if not CONTENT_FILTERING_CONFIG.get("enabled", False):
-                    return False
-
-                # 转换为大写进行不区分大小写的匹配
-                quote_upper = quote_text.upper()
-
-                # 从配置文件读取技术参数检测规则
-                tech_params_config = CONTENT_FILTERING_CONFIG.get(
-                    "technical_params_detection", {})
-                patterns = tech_params_config.get("patterns", [])
-
-                for pattern in patterns:
-                    keywords = pattern.get("keywords", [])
-                    min_dots = pattern.get("min_dots", 0)
-                    has_underscores = pattern.get("has_underscores", False)
-
-                    # 检查是否所有关键词都存在（不区分大小写）
-                    if keywords:
-                        all_keywords_present = all(
-                            keyword in quote_text
-                            or keyword.upper() in quote_upper
-                            for keyword in keywords)
-
-                        if all_keywords_present:
-                            # 检查额外条件
-                            if min_dots > 0 and quote_text.count(
-                                    ".") < min_dots:
-                                continue
-                            if has_underscores and ("___" not in quote_text and
-                                                    "____" not in quote_text):
-                                continue
-
-                            # 所有条件都满足
-                            logging.info(
-                                f"根据配置规则 '{pattern.get('description', '')}' 识别为技术参数quote"
-                            )
-                            return True
-
-                return False
+            # 获取内容过滤器实例
+            content_filter = get_content_filter()
 
             # Process quotes
             final_statement_quotes = []
@@ -465,7 +424,7 @@ class Extractor:
                 elif "ARDTU" in quote:
                     clean_content = re.sub(r"\[\/?quote\]", "", quote).strip()
                     ardtu_declarations.append(clean_content)
-                elif is_technical_params_quote(quote):
+                elif content_filter.is_technical_params_quote(quote):
                     # 将技术参数quote添加到ARDTU声明中，这样它们会被过滤掉不会出现在正文中
                     clean_content = re.sub(r"\[\/?quote\]", "", quote).strip()
                     ardtu_declarations.append(clean_content)
@@ -505,7 +464,8 @@ class Extractor:
                 is_bdinfo_after = ("DISC INFO" in quote
                                    and "PLAYLIST REPORT" in quote)
                 is_release_info_after = ".Release.Info" in quote and "ENCODER" in quote
-                is_technical_after = is_technical_params_quote(quote)
+                is_technical_after = content_filter.is_technical_params_quote(quote)
+                is_unwanted_pattern = content_filter.is_unwanted_pattern(quote)
 
                 if is_mediainfo_after or is_bdinfo_after or is_release_info_after:
                     # MediaInfo/BDInfo是技术信息，不应该被过滤掉，需要提取
@@ -515,8 +475,8 @@ class Extractor:
                             flags=re.IGNORECASE).strip()
                         found_mediainfo_in_quote = True
                     continue
-                elif is_technical_after:
-                    # 只有技术参数quote才被过滤掉
+                elif is_technical_after or is_unwanted_pattern:
+                    # 技术参数quote或不需要的模式被过滤掉
                     clean_content = re.sub(r"\[\/?quote\]", "", quote).strip()
                     ardtu_declarations.append(clean_content)
                 elif is_movie_intro_quote(quote):
@@ -855,7 +815,7 @@ class ParameterMapper:
                                                 {}).get("tag", {})
 
         # 确保我们总是有全局映射作为后备
-        global_tag_mappings = GLOBAL_MAPPINGS.get("tag", {})
+        global_tag_mappings = GLOBAL_STANDARD_KEYS.get("tag", {})
 
         mapped_tags = []
         unmapped_tags = []
@@ -957,7 +917,7 @@ class ParameterMapper:
                     )
 
             # 优先级 1: 尝试在全局映射中查找
-            global_mappings = GLOBAL_MAPPINGS.get(param_key, {})
+            global_mappings = GLOBAL_STANDARD_KEYS.get(param_key, {})
             for source_text, standard_key in global_mappings.items():
                 # 使用精确匹配优先，然后是部分匹配
                 if source_text.lower() == value_str.lower():
@@ -1074,7 +1034,7 @@ class ParameterMapper:
 
             # 获取动漫的标准键
             anime_standard_key = None
-            global_type_mappings = GLOBAL_MAPPINGS.get("type", {})
+            global_type_mappings = GLOBAL_STANDARD_KEYS.get("type", {})
             for source_text, standard_key in global_type_mappings.items():
                 if source_text in ["动漫", "Anime"]:
                     anime_standard_key = standard_key

@@ -563,7 +563,7 @@
               >点击尝试使用iyuu获取链接</el-tag
             >
             <el-tag type="error" size="large" style="margin-right: 5px; opacity: 0.5"
-              >未配置Cookie</el-tag
+              >缺少配置参数</el-tag
             >
           </p>
 
@@ -605,7 +605,11 @@
                 :key="site.name"
                 :type="getSiteTagType(site, isSourceSiteSelectable(site.name))"
                 :class="{ 'is-selectable': isSourceSiteSelectable(site.name) }"
-                :style="!site.has_cookie ? 'opacity: 0.5' : ''"
+                :style="
+                  !site.has_cookie || (site.name === '杜比' && !site.has_passkey)
+                    ? 'opacity: 0.5'
+                    : ''
+                "
                 class="site-tag"
                 size="large"
                 @click="
@@ -675,6 +679,7 @@ interface SiteStatus {
   name: string
   site: string // IYUU中的站点标识符，例如 'tjupt'
   has_cookie: boolean
+  has_passkey: boolean
   is_source: boolean
   is_target: boolean
 }
@@ -1140,7 +1145,16 @@ const isSourceSiteSelectable = (siteName: string): boolean => {
 
   // 然后检查站点是否已配置Cookie
   const siteStatus = allSourceSitesStatus.value.find((s) => s.name === siteName)
-  return !!(siteStatus && siteStatus.has_cookie)
+  if (!siteStatus || !siteStatus.has_cookie) {
+    return false
+  }
+
+  // 对于杜比(hddolby)站点，还需要检查passkey
+  if (siteName === '杜比' || siteName === 'HDtime') {
+    return !!siteStatus.has_passkey
+  }
+
+  return true
 }
 
 const closeCrossSeedDialog = () => {
@@ -1499,10 +1513,6 @@ const shortenPath = (path: string, maxLength: number = 50) => {
   return `${start}...${end}`
 }
 
-const getDisabledDownloaderIds = () => {
-  return allDownloadersList.value.filter((d) => d.enabled === false).map((d) => d.id)
-}
-
 // 根据站点配置和可选性返回标签类型
 const getSiteTagType = (site: SiteStatus, isSelectable: boolean) => {
   // 检查站点是否存在于当前种子中
@@ -1518,14 +1528,14 @@ const getSiteTagType = (site: SiteStatus, isSelectable: boolean) => {
   // 获取站点数据以检查是否有comment
   const siteData = selectedTorrentForMigration.value!.sites[site.name]
 
+  // 如果站点未配置Cookie，显示为红色错误样式
+  if (!site.has_cookie || (site.name === '杜比' && !site.has_passkey)) {
+    return 'error'
+  }
+
   // 如果站点存在于种子中且已配置Cookie且有comment，显示为绿色（可点击）
   if (site.has_cookie && siteData.comment) {
     return 'success'
-  }
-
-  // 如果站点未配置Cookie，显示为红色错误样式
-  if (!site.has_cookie) {
-    return 'error'
   }
 
   // 如果站点存在于种子中但没有comment，显示为蓝色（不可点击，可尝试IYUU）

@@ -6,19 +6,18 @@ import uuid
 from bs4 import BeautifulSoup
 from utils import extract_tags_from_mediainfo, extract_origin_from_description, validate_media_info_format
 from utils.torrent_list_fetcher import TorrentListFetcher
+from config import GLOBAL_MAPPINGS
 
-# 加载内容过滤配置 (保持不变)
-CONFIG_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(
-        os.path.dirname(__file__)))), "configs")
+# 加载内容过滤配置
 CONTENT_FILTERING_CONFIG = {}
 try:
-    global_mappings_path = os.path.join(CONFIG_DIR, "global_mappings.yaml")
-    if os.path.exists(global_mappings_path):
-        with open(global_mappings_path, 'r', encoding='utf-8') as f:
+    if os.path.exists(GLOBAL_MAPPINGS):
+        with open(GLOBAL_MAPPINGS, 'r', encoding='utf-8') as f:
             global_config = yaml.safe_load(f)
             CONTENT_FILTERING_CONFIG = global_config.get(
                 "content_filtering", {})
+    else:
+        print(f"警告：配置文件不存在: {GLOBAL_MAPPINGS}")
 except Exception as e:
     print(f"警告：无法加载内容过滤配置: {e}")
 
@@ -381,7 +380,5 @@ class PTerClubSpecialExtractor:
             "intro": intro,
             "mediainfo": mediainfo,
         }
-
-        print("2333333", extracted_data)
 
         return extracted_data

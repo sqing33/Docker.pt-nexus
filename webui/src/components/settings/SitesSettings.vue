@@ -92,6 +92,17 @@
             </el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="Passkey" width="100" align="center">
+          <template #default="scope">
+            <el-tag
+              v-if="['hddolby', 'm-team', 'hdtime'].includes(scope.row.site)"
+              :type="scope.row.has_passkey ? 'success' : 'danger'"
+            >
+              {{ scope.row.has_passkey ? '已配置' : '未配置' }}
+            </el-tag>
+            <el-tag v-else type="success"> 自动获取 </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column label="操作" width="180" align="center" fixed="right">
           <template #default="scope">
             <el-button type="primary" :icon="Edit" link @click="handleOpenDialog(scope.row)">
@@ -158,6 +169,16 @@
             placeholder="从浏览器获取的Cookie字符串"
           ></el-input>
         </el-form-item>
+        <el-form-item label="Passkey" prop="passkey">
+          <el-input v-model="siteForm.passkey" placeholder="站点的Passkey"></el-input>
+          <div
+            v-if="siteForm.site === 'hddolby'"
+            class="form-tip"
+            style="color: #409eff; font-weight: bold"
+          >
+            杜比的passkey为种子详情页复制种子链接时downhash=后的部分
+          </div>
+        </el-form-item>
         <el-form-item label="上传限速 (MB/s)" prop="speed_limit">
           <el-input-number
             v-model="siteForm.speed_limit"
@@ -217,6 +238,7 @@ const siteForm = ref({
   special_tracker_domain: '',
   group: '',
   cookie: '',
+  passkey: '',
   speed_limit: 0, // 前端显示和输入使用 MB/s 单位
 })
 

@@ -17,7 +17,7 @@ import yaml
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
 from pymediainfo import MediaInfo
-from config import TEMP_DIR, config_manager
+from config import TEMP_DIR, config_manager, GLOBAL_MAPPINGS
 from qbittorrentapi import Client as qbClient
 from transmission_rpc import Client as TrClient
 from utils import ensure_scheme
@@ -506,9 +506,7 @@ def validate_media_info_format(mediaInfo: str):
     """
     # 从配置文件加载关键字配置
     try:
-        config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)),
-                                   'configs', 'global_mappings.yaml')
-        with open(config_path, 'r', encoding='utf-8') as f:
+        with open(GLOBAL_MAPPINGS, 'r', encoding='utf-8') as f:
             config = yaml.safe_load(f)
 
         mediainfo_keywords = config.get('content_filtering',
@@ -1529,7 +1527,7 @@ def upload_data_screenshot(source_info,
 
 
 def add_torrent_to_downloader(detail_page_url: str, save_path: str,
-                              downloader_id: str, db_manager, config_manager, direct_download_url: str = None):
+                              downloader_id: str, db_manager, config_manager, direct_download_url: str = ""):
     """
     从种子详情页下载 .torrent 文件并添加到指定的下载器。
     [最终修复版] 修正了向 Transmission 发送数据时的双重编码问题。
@@ -1567,39 +1565,75 @@ def add_torrent_to_downloader(detail_page_url: str, save_path: str,
 
         # 站点级别的代理已不使用全局代理配置
         proxies = None
+        torrent_content = None
 
-        # Add retry logic for network requests
-        max_retries = 3
-        for attempt in range(max_retries):
-            try:
-                details_response = scraper.get(detail_page_url,
-                                               headers=common_headers,
-                                               timeout=180,
-                                               proxies=proxies)
-                break  # Success, exit retry loop
-            except Exception as e:
-                if attempt < max_retries - 1:
-                    logging.warning(
-                        f"Attempt {attempt + 1} failed to fetch details page: {e}. Retrying..."
-                    )
-                    time.sleep(2**attempt)  # Exponential backoff
-                else:
-                    raise  # Re-raise the exception if all retries failed
-        details_response.raise_for_status()
-
-        soup = BeautifulSoup(details_response.text, "html.parser")
-
-        # 检查是否需要使用特殊下载器
-        site_base_url = ensure_scheme(site_info['base_url'])
-        full_download_url = None  # 初始化full_download_url
-
-        print(f"站点基础URL: {site_base_url}")
-
-        # 如果提供了直接下载链接（如朱雀站点），优先使用
+        # 如果提供了直接下载链接，优先使用直接下载，避免请求详情页
         if direct_download_url:
-            full_download_url = direct_download_url
-            print(f"使用直接下载链接: {full_download_url}")
-        else:
+            try:
+                logging.info(f"使用直接下载链接: {direct_download_url}")
+
+                # 使用直接下载链接下载种子文件
+                direct_headers = common_headers.copy()
+                scraper = cloudscraper.create_scraper()
+
+                # Add retry logic for direct torrent download
+                max_retries = 3
+                for attempt in range(max_retries):
+                    try:
+                        torrent_response = scraper.get(direct_download_url,
+                                                       headers=direct_headers,
+                                                       timeout=180,
+                                                       proxies=proxies)
+                        torrent_response.raise_for_status()
+                        break  # Success, exit retry loop
+                    except Exception as e:
+                        if attempt < max_retries - 1:
+                            logging.warning(
+                                f"Attempt {attempt + 1} failed to download torrent directly: {e}. Retrying..."
+                            )
+                            time.sleep(2**attempt)  # Exponential backoff
+                        else:
+                            raise  # Re-raise the exception if all retries failed
+
+                torrent_content = torrent_response.content
+                logging.info("已通过直接下载链接成功下载种子文件内容。")
+
+            except Exception as e:
+                msg = f"使用直接下载链接下载种子文件失败: {e}"
+                logging.warning(msg)
+                # 如果直接下载失败，继续走详情页逻辑
+
+        # 如果没有直接下载链接或直接下载失败，则请求详情页
+        if not torrent_content:
+            logging.info("未提供直接下载链接或直接下载失败，开始请求详情页")
+
+            # Add retry logic for network requests
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    details_response = scraper.get(detail_page_url,
+                                                   headers=common_headers,
+                                                   timeout=180,
+                                                   proxies=proxies)
+                    break  # Success, exit retry loop
+                except Exception as e:
+                    if attempt < max_retries - 1:
+                        logging.warning(
+                            f"Attempt {attempt + 1} failed to fetch details page: {e}. Retrying..."
+                        )
+                        time.sleep(2**attempt)  # Exponential backoff
+                    else:
+                        raise  # Re-raise the exception if all retries failed
+            details_response.raise_for_status()
+
+            soup = BeautifulSoup(details_response.text, "html.parser")
+
+            # 检查是否需要使用特殊下载器
+            site_base_url = ensure_scheme(site_info['base_url'])
+            full_download_url = None  # 初始化full_download_url
+
+            print(f"站点基础URL: {site_base_url}")
+
             # 检查是否为haidan站点
             if 'haidan' in site_base_url:
                 # Haidan站点需要提取torrent_id而不是id
@@ -1633,33 +1667,33 @@ def add_torrent_to_downloader(detail_page_url: str, save_path: str,
                 download_url_part = str(download_link_tag['href'])  # 显式转换为str
                 full_download_url = f"{site_base_url}/{download_url_part}"
 
-        # 确保full_download_url已被赋值
-        if not full_download_url:
-            raise RuntimeError("未能成功构建种子下载链接！")
+            # 确保full_download_url已被赋值
+            if not full_download_url:
+                raise RuntimeError("未能成功构建种子下载链接！")
 
-        print(f"种子下载链接: {full_download_url}")
+            print(f"种子下载链接: {full_download_url}")
 
-        common_headers["Referer"] = detail_page_url
-        # Add retry logic for torrent download
-        for attempt in range(max_retries):
-            try:
-                torrent_response = scraper.get(full_download_url,
-                                               headers=common_headers,
-                                               timeout=180,
-                                               proxies=proxies)
-                torrent_response.raise_for_status()
-                break  # Success, exit retry loop
-            except Exception as e:
-                if attempt < max_retries - 1:
-                    logging.warning(
-                        f"Attempt {attempt + 1} failed to download torrent: {e}. Retrying..."
-                    )
-                    time.sleep(2**attempt)  # Exponential backoff
-                else:
-                    raise  # Re-raise the exception if all retries failed
+            common_headers["Referer"] = detail_page_url
+            # Add retry logic for torrent download
+            for attempt in range(max_retries):
+                try:
+                    torrent_response = scraper.get(full_download_url,
+                                                   headers=common_headers,
+                                                   timeout=180,
+                                                   proxies=proxies)
+                    torrent_response.raise_for_status()
+                    break  # Success, exit retry loop
+                except Exception as e:
+                    if attempt < max_retries - 1:
+                        logging.warning(
+                            f"Attempt {attempt + 1} failed to download torrent: {e}. Retrying..."
+                        )
+                        time.sleep(2**attempt)  # Exponential backoff
+                    else:
+                        raise  # Re-raise the exception if all retries failed
 
-        torrent_content = torrent_response.content
-        logging.info("已成功下载有效的种子文件内容。")
+            torrent_content = torrent_response.content
+            logging.info("已通过详情页成功下载种子文件内容。")
 
     except Exception as e:
         msg = f"在下载种子文件步骤发生错误: {e}"
@@ -2340,9 +2374,7 @@ def _check_origin_mapping(origin: str) -> bool:
     """
     try:
         # 读取 global_mappings.yaml 文件
-        config_path = os.path.join(os.path.dirname(__file__), '..', 'configs',
-                                   'global_mappings.yaml')
-        with open(config_path, 'r', encoding='utf-8') as f:
+        with open(GLOBAL_MAPPINGS, 'r', encoding='utf-8') as f:
             config = yaml.safe_load(f)
 
         # 获取 source 映射

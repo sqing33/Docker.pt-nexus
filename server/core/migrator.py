@@ -17,7 +17,7 @@ import yaml
 import urllib.parse
 from io import StringIO
 from typing import Dict, Any, Optional, List
-from config import TEMP_DIR, DATA_DIR
+from config import TEMP_DIR, DATA_DIR, GLOBAL_MAPPINGS
 from utils import ensure_scheme, upload_data_mediaInfo, upload_data_title, extract_tags_from_mediainfo, extract_origin_from_description, upload_data_movie_info
 from utils.douban import _process_poster_url
 from utils.image_validator import is_image_url_valid_robust
@@ -163,14 +163,8 @@ class TorrentMigrator:
         从 global_mappings.yaml 中读取 team_acknowledgment 配置节点
         """
         try:
-            # 修正路径：configs 目录在 server 下，而不是 DATA_DIR 下
-            config_dir = os.path.join(
-                os.path.dirname(os.path.dirname(__file__)), "configs")
-            global_mappings_path = os.path.join(config_dir,
-                                                "global_mappings.yaml")
-
-            if os.path.exists(global_mappings_path):
-                with open(global_mappings_path, 'r', encoding='utf-8') as f:
+            if os.path.exists(GLOBAL_MAPPINGS):
+                with open(GLOBAL_MAPPINGS, 'r', encoding='utf-8') as f:
                     global_config = yaml.safe_load(f)
                     acknowledgment_config = global_config.get(
                         "team_acknowledgment", {})
@@ -195,14 +189,8 @@ class TorrentMigrator:
             原始制作组名称，如 "FRDS"
         """
         try:
-            # 修正路径：configs 目录在 server 下
-            config_dir = os.path.join(
-                os.path.dirname(os.path.dirname(__file__)), "configs")
-            global_mappings_path = os.path.join(config_dir,
-                                                "global_mappings.yaml")
-
-            if os.path.exists(global_mappings_path):
-                with open(global_mappings_path, 'r', encoding='utf-8') as f:
+            if os.path.exists(GLOBAL_MAPPINGS):
+                with open(GLOBAL_MAPPINGS, 'r', encoding='utf-8') as f:
                     global_config = yaml.safe_load(f)
                     team_mappings = global_config.get("global_standard_keys",
                                                       {}).get("team", {})
@@ -516,6 +504,44 @@ class TorrentMigrator:
         except Exception as e:
             self.logger.error(f"下载种子文件时出错: {e}")
             self.logger.debug(traceback.format_exc())
+            return ""
+
+    def _get_site_passkey(self, site_name: str) -> str:
+        """
+        从数据库获取指定站点的 passkey
+
+        Args:
+            site_name: 站点名称（如 'hddolby'）
+
+        Returns:
+            str: 站点的 passkey，如果未找到则返回空字符串
+        """
+        if not self.db_manager:
+            self.logger.warning(f"数据库管理器未初始化，无法获取 {site_name} 站点的 passkey")
+            return ""
+
+        try:
+            conn = self.db_manager._get_connection()
+            cursor = self.db_manager._get_cursor(conn)
+            ph = self.db_manager.get_placeholder()
+
+            cursor.execute(
+                f"SELECT passkey FROM sites WHERE site = {ph}",
+                (site_name, ))
+            site_row = cursor.fetchone()
+            self.logger.info(f"查询到的站点信息: {site_row}")
+            if site_row and site_row.get("passkey"):
+                passkey = site_row["passkey"]
+                self.logger.info(f"成功获取 {site_name} 站点 passkey: {passkey[:10]}...")
+                return passkey
+            else:
+                self.logger.warning(f"未找到 {site_name} 站点的 passkey")
+                return ""
+
+            cursor.close()
+            conn.close()
+        except Exception as e:
+            self.logger.error(f"获取 {site_name} 站点 passkey 失败: {e}")
             return ""
 
     def cleanup(self):
@@ -935,7 +961,61 @@ class TorrentMigrator:
                 if intro_data.get("poster"):
                     images.append(intro_data.get("poster"))
                 if intro_data.get("screenshots"):
-                    images.extend(intro_data.get("screenshots").split('\n'))
+                    screenshots_raw = intro_data.get("screenshots")
+                    screenshots_list = screenshots_raw.split(
+                        '\n') if screenshots_raw else []
+
+                    # [新增] 从配置文件读取并过滤掉指定的不需要的图片URL
+                    # 加载内容过滤配置（使用config.py中的统一路径配置）
+                    CONTENT_FILTERING_CONFIG = {}
+                    try:
+                        if os.path.exists(GLOBAL_MAPPINGS):
+                            import yaml
+                            with open(GLOBAL_MAPPINGS, 'r',
+                                      encoding='utf-8') as f:
+                                global_config = yaml.safe_load(f)
+                                CONTENT_FILTERING_CONFIG = global_config.get(
+                                    "content_filtering", {})
+                        else:
+                            self.logger.warning(f"配置文件不存在: {GLOBAL_MAPPINGS}")
+                    except Exception as e:
+                        self.logger.warning(f"加载内容过滤配置时出错: {e}")
+
+                    # 应用图片过滤
+                    unwanted_image_urls = CONTENT_FILTERING_CONFIG.get(
+                        "unwanted_image_urls", [])
+
+                    if unwanted_image_urls:
+                        filtered_screenshots = []
+                        for img_tag in screenshots_list:
+                            img_tag = img_tag.strip()
+                            if not img_tag:
+                                continue
+                            # 从[img]标签中提取URL
+                            url_match = re.search(r'\[img\](.*?)\[/img\]',
+                                                  img_tag, re.IGNORECASE)
+                            if url_match:
+                                img_url = url_match.group(1)
+                                # 检查是否在过滤列表中
+                                if img_url not in unwanted_image_urls:
+                                    filtered_screenshots.append(img_tag)
+                                else:
+                                    self.logger.info(f"过滤掉不需要的截图: {img_url}")
+                                    print(f"[过滤] 移除截图: {img_url}")
+                            else:
+                                # 如果无法提取URL，保留原图片标签
+                                filtered_screenshots.append(img_tag)
+
+                        screenshots_list = filtered_screenshots
+                        self.logger.info(
+                            f"[调试migrator] 过滤后剩余截图数量: {len(screenshots_list)}")
+                        print(
+                            f"[调试migrator] 过滤后剩余截图数量: {len(screenshots_list)}")
+                    else:
+                        self.logger.info(f"[调试migrator] 未配置图片过滤列表，跳过过滤")
+                        print(f"[调试migrator] 未配置图片过滤列表，跳过过滤")
+
+                    images.extend(screenshots_list)
                 body = intro_data.get("body", "")
                 ardtu_declarations = intro_data.get(
                     "removed_ardtudeclarations", [])
@@ -1172,12 +1252,15 @@ class TorrentMigrator:
                     }
 
                     # 立即调用截图函数
-                    from utils import upload_data_screenshot
-                    new_screenshots = upload_data_screenshot(
-                        source_info=source_info_for_screenshot,
-                        save_path=self.save_path,
-                        torrent_name=processed_torrent_name,
-                        downloader_id=self.downloader_id)
+                    if os.getenv("SCREENSHOTS") == "false":
+                        new_screenshots = "https://example.com/placeholder.jpg"
+                    else:
+                        from utils import upload_data_screenshot
+                        new_screenshots = upload_data_screenshot(
+                            source_info=source_info_for_screenshot,
+                            save_path=self.save_path,
+                            torrent_name=processed_torrent_name,
+                            downloader_id=self.downloader_id)
 
                     if new_screenshots:
                         # 更新 intro 字典中的截图
@@ -1442,11 +1525,12 @@ class TorrentMigrator:
                 standardized_params = self._standardize_parameters(
                     extracted_data, title_components)
 
-                if is_mediainfo and (
-                        'blu' in str(standardized_params.get(
-                            "medium", "")).lower() or "unk1"
-                        in str(standardized_params.get("medium", "")).upper()):
+                medium_value = str(standardized_params.get("medium",
+                                                           "")).lower()
+                if is_mediainfo and ('blu' in medium_value
+                                     or 'unk1' in medium_value):
                     standardized_params["medium"] = "medium.encode"
+                    print("更正媒介为 encode")
 
                 # [调试] 打印标准化后的制作组信息
                 self.logger.info(
@@ -1855,13 +1939,49 @@ class TorrentMigrator:
 
             # 提取详情页URL
             if not final_url and "hddolby.com" in str(message):
+                # 检查 offers.php 格式
                 if offers_match := re.search(
                         r"https?://www\.hddolby\.com/offers\.php\?id=(\d+)",
                         str(message)):
                     offers_id = offers_match.group(1)
                     final_url = f"https://www.hddolby.com/details.php?id={offers_id}"
+
+                    # 从数据库获取 hddolby 站点的 passkey
+                    downhash = self._get_site_passkey("hddolby")
+
+                    direct_download_url = f"https://www.hddolby.com/download.php?id={offers_id}&downhash={downhash}"
                     self.logger.info(
                         f"检测到 hddolby 站点 offers.php 格式，已转换为详情页: {final_url}")
+
+                # 检查直接的 details.php 格式
+                elif details_match := re.search(
+                        r"https?://www\.hddolby\.com/details\.php\?id=(\d+)",
+                        str(message)):
+                    details_id = details_match.group(1)
+                    final_url = f"https://www.hddolby.com/details.php?id={details_id}"
+
+                    # 从数据库获取 hddolby 站点的 passkey
+                    downhash = self._get_site_passkey("hddolby")
+
+                    direct_download_url = f"https://www.hddolby.com/download.php?id={details_id}&downhash={downhash}"
+                    self.logger.info(
+                        f"检测到 hddolby 站点 details.php 格式，已构建直接下载链接: {direct_download_url}")
+                    
+            if "hdtime.org" in str(message):
+                # 检查 hdtime.org 的详情页链接
+                if hdtime_match := re.search(
+                        r"https?://hdtime\.org/details\.php\?id=(\d+)",
+                        str(message)):
+                    details_id = hdtime_match.group(1)
+                    final_url = f"https://hdtime.org/details.php?id={details_id}"
+
+                    # 从数据库获取 hdtime 站点的 passkey
+                    passkey = self._get_site_passkey("hdtime")
+
+                    # 拼接直接下载链接
+                    direct_download_url = f"https://hdtime.org/download.php?id={details_id}&passkey={passkey}&https=1"
+                    self.logger.info(
+                        f"检测到 hdtime.org 站点 details.php 格式，已构建直接下载链接: {direct_download_url}")
 
             if url_match := re.search(
                     r"(https?://[^\s|]+(?:details\.php\?[^\s|]+|/torrent/info/\d+))",
@@ -1879,6 +1999,7 @@ class TorrentMigrator:
                     r"DIRECT_DOWNLOAD:(https?://[^\s]+)", str(message)):
                 direct_download_url = direct_download_match.group(1)
 
+            self.logger.info(f"返回结果: final_url={final_url}, direct_download_url={direct_download_url}")
             return {
                 "success": result,
                 "logs": self.log_handler.get_logs(),

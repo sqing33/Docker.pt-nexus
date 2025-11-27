@@ -113,9 +113,9 @@ def get_sites_list():
         # --- 修改后的逻辑 ---
         # 获取源站点 (migration 为 1 或 3，且必须有 cookie)
         cursor.execute("""
-            SELECT nickname FROM sites 
-            WHERE (migration = 1 OR migration = 3) 
-            AND cookie IS NOT NULL AND cookie != '' 
+            SELECT nickname FROM sites
+            WHERE (migration = 1 OR migration = 3)
+            AND cookie IS NOT NULL AND cookie != ''
             ORDER BY nickname
             """)
         source_sites = [row["nickname"] for row in cursor.fetchall()]
@@ -156,13 +156,15 @@ def get_sites():
             select_fields = """
                 s.id, s.nickname, s.site, s.base_url, s.special_tracker_domain, s."group", s.speed_limit,
                 CASE WHEN s.cookie IS NOT NULL AND s.cookie != '' THEN 1 ELSE 0 END as has_cookie,
-                s.cookie
+                CASE WHEN s.passkey IS NOT NULL AND s.passkey != '' THEN 1 ELSE 0 END as has_passkey,
+                s.cookie, s.passkey
             """
         else:
             select_fields = """
                 s.id, s.nickname, s.site, s.base_url, s.special_tracker_domain, s.`group`, s.speed_limit,
                 CASE WHEN s.cookie IS NOT NULL AND s.cookie != '' THEN 1 ELSE 0 END as has_cookie,
-                s.cookie
+                CASE WHEN s.passkey IS NOT NULL AND s.passkey != '' THEN 1 ELSE 0 END as has_passkey,
+                s.cookie, s.passkey
             """
         if filter_by_torrents == "active":
             # 修改后的逻辑：现有站点 = 在数据库中有做种记录的站点 OR 有cookie配置的站点

@@ -527,7 +527,7 @@
     "group": "-UBits,-UBWEB,-UBTV",
     "description": "UBits",
     "migration": 3,
-    "speed_limit": 50
+    "speed_limit": 100
   },
   {
     "site": "pandapt",
@@ -677,7 +677,7 @@
     "special_tracker_domain": null,
     "group": "-QHstudIo,-Dream,-DBTV,-CornerMV",
     "description": "HDDolby",
-    "migration": 1,
+    "migration": 3,
     "speed_limit": 90
   },
   {
@@ -1260,6 +1260,15 @@
     "site": "hdvideo",
     "nickname": "HDvideo",
     "base_url": "hdvideo.top",
+    "special_tracker_domain": null,
+    "group": null,
+    "migration": 0,
+    "speed_limit": 10
+  },
+  {
+    "site": "mooko",
+    "nickname": "MooKo",
+    "base_url": "mooko.org",
     "special_tracker_domain": null,
     "group": null,
     "migration": 0,

@@ -174,9 +174,9 @@ class DatabaseManager:
         try:
             # 根据数据库类型使用正确的标识符引用符
             if self.db_type == "postgresql":
-                sql = f"INSERT INTO sites (site, nickname, base_url, special_tracker_domain, \"group\", description, cookie, speed_limit) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})"
+                sql = f"INSERT INTO sites (site, nickname, base_url, special_tracker_domain, \"group\", description, cookie, passkey, speed_limit) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})"
             else:
-                sql = f"INSERT INTO sites (site, nickname, base_url, special_tracker_domain, `group`, description, cookie, speed_limit) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})"
+                sql = f"INSERT INTO sites (site, nickname, base_url, special_tracker_domain, `group`, description, cookie, passkey, speed_limit) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})"
             # 去除cookie字符串首尾的换行符和多余空白字符
             cookie = site_data.get("cookie")
             if cookie:
@@ -190,6 +190,7 @@ class DatabaseManager:
                 site_data.get("group"),
                 site_data.get("description"),
                 cookie,
+                site_data.get("passkey"),
                 int(site_data.get("speed_limit", 0)),
             )
             cursor.execute(sql, params)
@@ -216,9 +217,9 @@ class DatabaseManager:
         try:
             # 根据数据库类型使用正确的标识符引用符
             if self.db_type == "postgresql":
-                sql = f"UPDATE sites SET nickname = {ph}, base_url = {ph}, special_tracker_domain = {ph}, \"group\" = {ph}, description = {ph}, cookie = {ph}, speed_limit = {ph} WHERE id = {ph}"
+                sql = f"UPDATE sites SET nickname = {ph}, base_url = {ph}, special_tracker_domain = {ph}, \"group\" = {ph}, description = {ph}, cookie = {ph}, passkey = {ph}, speed_limit = {ph} WHERE id = {ph}"
             else:
-                sql = f"UPDATE sites SET nickname = {ph}, base_url = {ph}, special_tracker_domain = {ph}, `group` = {ph}, description = {ph}, cookie = {ph}, speed_limit = {ph} WHERE id = {ph}"
+                sql = f"UPDATE sites SET nickname = {ph}, base_url = {ph}, special_tracker_domain = {ph}, `group` = {ph}, description = {ph}, cookie = {ph}, passkey = {ph}, speed_limit = {ph} WHERE id = {ph}"
             # 去除cookie字符串首尾的换行符和多余空白字符
             cookie = site_data.get("cookie")
             if cookie:
@@ -231,6 +232,7 @@ class DatabaseManager:
                 site_data.get("group"),
                 site_data.get("description"),
                 cookie,
+                site_data.get("passkey"),
                 int(site_data.get("speed_limit", 0)),
                 site_data.get("id"),
             )
@@ -334,9 +336,9 @@ class DatabaseManager:
             cursor = self._get_cursor(conn)
 
             try:
-                # [修改] 查询时额外获取 speed_limit 字段，用于后续逻辑判断
+                # [修改] 查询时额外获取 speed_limit 和 passkey 字段，用于后续逻辑判断
                 cursor.execute(
-                    "SELECT id, site, nickname, base_url, speed_limit FROM sites"
+                    "SELECT id, site, nickname, base_url, speed_limit, passkey FROM sites"
                 )
                 existing_sites = {}
                 for row in cursor.fetchall():
@@ -384,32 +386,47 @@ class DatabaseManager:
                         # 如果数据库值为0，且JSON值不为0，则采纳JSON的值
                         if db_speed_limit == 0 and json_speed_limit != 0:
                             final_speed_limit = json_speed_limit
+
+                        # 获取数据库中当前的 passkey
+                        db_passkey = existing_site.get('passkey', '')
+                        # 获取 JSON 文件中的 passkey
+                        json_passkey = site_info.get('passkey', '')
+
+                        # 默认使用数据库中现有的值，保护已设置的 passkey
+                        final_passkey = db_passkey
+
+                        # 只有当数据库中为空且JSON中有值时，才使用JSON的值
+                        if not db_passkey and json_passkey:
+                            final_passkey = json_passkey
+                            logging.debug(f"为站点 '{site_name}' 设置新的 passkey")
+                        elif db_passkey:
+                            logging.debug(f"保护站点 '{site_name}' 的现有 passkey")
                         # --- [核心修改逻辑结束] ---
 
-                        # 构建更新语句，不包含 cookie
+                        # 构建更新语句，不包含 cookie，使用保护后的 passkey
                         if self.db_type == "postgresql":
                             update_sql = """
                                 UPDATE sites
                                 SET site = %s, nickname = %s, base_url = %s, special_tracker_domain = %s,
-                                    "group" = %s, description = %s, migration = %s, speed_limit = %s
+                                    "group" = %s, description = %s, passkey = %s, migration = %s, speed_limit = %s
                                 WHERE id = %s
                             """
                         elif self.db_type == "mysql":
                             update_sql = """
                                 UPDATE sites
                                 SET site = %s, nickname = %s, base_url = %s, special_tracker_domain = %s,
-                                    `group` = %s, description = %s, migration = %s, speed_limit = %s
+                                    `group` = %s, description = %s, passkey = %s, migration = %s, speed_limit = %s
                                 WHERE id = %s
                             """
                         else:  # SQLite
                             update_sql = """
                                 UPDATE sites
                                 SET site = ?, nickname = ?, base_url = ?, special_tracker_domain = ?,
-                                    "group" = ?, description = ?, migration = ?, speed_limit = ?
+                                    "group" = ?, description = ?, passkey = ?, migration = ?, speed_limit = ?
                                 WHERE id = ?
                             """
 
-                        # 执行更新，传入经过逻辑判断后的 final_speed_limit
+                        # 执行更新，传入经过逻辑判断后的 final_speed_limit 和 final_passkey
                         cursor.execute(
                             update_sql,
                             (
@@ -419,6 +436,7 @@ class DatabaseManager:
                                 site_info.get('special_tracker_domain'),
                                 site_info.get('group'),
                                 site_info.get('description'),
+                                final_passkey,  # 使用保护后的 passkey 值
                                 site_info.get('migration', 0),
                                 final_speed_limit,  # 使用条件判断后的最终值
                                 existing_site['id']))
@@ -431,14 +449,15 @@ class DatabaseManager:
                             cursor.execute(
                                 """
                                 INSERT INTO sites
-                                (site, nickname, base_url, special_tracker_domain, "group", description, migration, speed_limit)
-                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                                (site, nickname, base_url, special_tracker_domain, "group", description, passkey, migration, speed_limit)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                             """, (site_info.get('site'),
                                   site_info.get('nickname'),
                                   site_info.get('base_url'),
                                   site_info.get('special_tracker_domain'),
                                   site_info.get('group'),
                                   site_info.get('description'),
+                                  site_info.get('passkey'),
                                   site_info.get('migration', 0),
                                   site_info.get('speed_limit', 0)))
                         elif self.db_type == "mysql":
@@ -446,14 +465,15 @@ class DatabaseManager:
                             cursor.execute(
                                 """
                                 INSERT INTO sites
-                                (site, nickname, base_url, special_tracker_domain, `group`, description, migration, speed_limit)
-                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                                (site, nickname, base_url, special_tracker_domain, `group`, description, passkey, migration, speed_limit)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                             """, (site_info.get('site'),
                                   site_info.get('nickname'),
                                   site_info.get('base_url'),
                                   site_info.get('special_tracker_domain'),
                                   site_info.get('group'),
                                   site_info.get('description'),
+                                  site_info.get('passkey'),
                                   site_info.get('migration', 0),
                                   site_info.get('speed_limit', 0)))
                         else:  # SQLite
@@ -461,14 +481,15 @@ class DatabaseManager:
                             cursor.execute(
                                 """
                                 INSERT INTO sites
-                                (site, nickname, base_url, special_tracker_domain, "group", description, migration, speed_limit)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                                (site, nickname, base_url, special_tracker_domain, "group", description, passkey, migration, speed_limit)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                             """, (site_info.get('site'),
                                   site_info.get('nickname'),
                                   site_info.get('base_url'),
                                   site_info.get('special_tracker_domain'),
                                   site_info.get('group'),
                                   site_info.get('description'),
+                                  site_info.get('passkey'),
                                   site_info.get('migration', 0),
                                   site_info.get('speed_limit', 0)))
                         added_count += 1
@@ -514,7 +535,7 @@ class DatabaseManager:
                 "CREATE TABLE IF NOT EXISTS torrent_upload_stats (hash VARCHAR(40) NOT NULL, downloader_id VARCHAR(36) NOT NULL, uploaded BIGINT DEFAULT 0, PRIMARY KEY (hash, downloader_id)) ENGINE=InnoDB ROW_FORMAT=Dynamic"
             )
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS `sites` (`id` mediumint NOT NULL AUTO_INCREMENT, `site` varchar(255) UNIQUE DEFAULT NULL, `nickname` varchar(255) DEFAULT NULL, `base_url` varchar(255) DEFAULT NULL, `special_tracker_domain` varchar(255) DEFAULT NULL, `group` varchar(255) DEFAULT NULL, `description` varchar(255) DEFAULT NULL, `cookie` TEXT DEFAULT NULL, `migration` int(11) NOT NULL DEFAULT 1, `speed_limit` int(11) NOT NULL DEFAULT 0, PRIMARY KEY (`id`)) ENGINE=InnoDB ROW_FORMAT=DYNAMIC"
+                "CREATE TABLE IF NOT EXISTS `sites` (`id` mediumint NOT NULL AUTO_INCREMENT, `site` varchar(255) UNIQUE DEFAULT NULL, `nickname` varchar(255) DEFAULT NULL, `base_url` varchar(255) DEFAULT NULL, `special_tracker_domain` varchar(255) DEFAULT NULL, `group` varchar(255) DEFAULT NULL, `description` varchar(255) DEFAULT NULL, `cookie` TEXT DEFAULT NULL, `passkey` TEXT DEFAULT NULL, `migration` int(11) NOT NULL DEFAULT 1, `speed_limit` int(11) NOT NULL DEFAULT 0, PRIMARY KEY (`id`)) ENGINE=InnoDB ROW_FORMAT=DYNAMIC"
             )
             # 创建种子参数表，用于存储从源站点提取的种子参数
             cursor.execute(
@@ -540,7 +561,7 @@ class DatabaseManager:
                 "CREATE TABLE IF NOT EXISTS torrent_upload_stats (hash VARCHAR(40) NOT NULL, downloader_id VARCHAR(36) NOT NULL, uploaded BIGINT DEFAULT 0, PRIMARY KEY (hash, downloader_id))"
             )
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS sites (id SERIAL PRIMARY KEY, site VARCHAR(255) UNIQUE, nickname VARCHAR(255), base_url VARCHAR(255), special_tracker_domain VARCHAR(255), \"group\" VARCHAR(255), description VARCHAR(255), cookie TEXT, migration INTEGER NOT NULL DEFAULT 1, speed_limit INTEGER NOT NULL DEFAULT 0)"
+                "CREATE TABLE IF NOT EXISTS sites (id SERIAL PRIMARY KEY, site VARCHAR(255) UNIQUE, nickname VARCHAR(255), base_url VARCHAR(255), special_tracker_domain VARCHAR(255), \"group\" VARCHAR(255), description VARCHAR(255), cookie TEXT, passkey TEXT, migration INTEGER NOT NULL DEFAULT 1, speed_limit INTEGER NOT NULL DEFAULT 0)"
             )
             # 创建种子参数表，用于存储从源站点提取的种子参数
             cursor.execute(
@@ -578,7 +599,7 @@ class DatabaseManager:
                 "CREATE TABLE IF NOT EXISTS torrent_upload_stats (hash TEXT NOT NULL, downloader_id TEXT NOT NULL, uploaded INTEGER DEFAULT 0, PRIMARY KEY (hash, downloader_id))"
             )
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS sites (id INTEGER PRIMARY KEY AUTOINCREMENT, site TEXT UNIQUE, nickname TEXT, base_url TEXT, special_tracker_domain TEXT, `group` TEXT, description TEXT, cookie TEXT, migration INTEGER NOT NULL DEFAULT 1, speed_limit INTEGER NOT NULL DEFAULT 0)"
+                "CREATE TABLE IF NOT EXISTS sites (id INTEGER PRIMARY KEY AUTOINCREMENT, site TEXT UNIQUE, nickname TEXT, base_url TEXT, special_tracker_domain TEXT, `group` TEXT, description TEXT, cookie TEXT, passkey TEXT, migration INTEGER NOT NULL DEFAULT 1, speed_limit INTEGER NOT NULL DEFAULT 0)"
             )
             # 创建种子参数表，用于存储从源站点提取的种子参数
             cursor.execute(
@@ -605,6 +626,9 @@ class DatabaseManager:
 
         # 执行数据库迁移：删除 proxy 列
         self._migrate_remove_proxy_column(conn, cursor)
+
+        # 执行数据库迁移：添加 passkey 列
+        self._migrate_add_passkey_column(conn, cursor)
 
         # 同步站点数据
         self.sync_sites_from_json()
@@ -854,43 +878,43 @@ class DatabaseManager:
         """数据库迁移：删除 sites 表中的 proxy 列"""
         try:
             logging.info("检查是否需要删除 sites 表中的 proxy 列...")
-            
+
             # 检查 proxy 列是否存在
             column_exists = False
-            
+
             if self.db_type == "mysql":
                 cursor.execute("SHOW COLUMNS FROM sites LIKE 'proxy'")
                 column_exists = cursor.fetchone() is not None
-                
+
                 if column_exists:
                     logging.info("检测到 proxy 列，正在删除...")
                     cursor.execute("ALTER TABLE sites DROP COLUMN proxy")
                     conn.commit()
                     logging.info("✓ 成功删除 sites 表中的 proxy 列 (MySQL)")
-                    
+
             elif self.db_type == "postgresql":
                 cursor.execute("""
-                    SELECT column_name 
-                    FROM information_schema.columns 
+                    SELECT column_name
+                    FROM information_schema.columns
                     WHERE table_name='sites' AND column_name='proxy'
                 """)
                 column_exists = cursor.fetchone() is not None
-                
+
                 if column_exists:
                     logging.info("检测到 proxy 列，正在删除...")
                     cursor.execute('ALTER TABLE sites DROP COLUMN proxy')
                     conn.commit()
                     logging.info("✓ 成功删除 sites 表中的 proxy 列 (PostgreSQL)")
-                    
+
             else:  # SQLite
                 # SQLite 不支持 DROP COLUMN（旧版本），需要重建表
                 cursor.execute("PRAGMA table_info(sites)")
                 columns = cursor.fetchall()
                 column_exists = any(col[1] == 'proxy' for col in columns)
-                
+
                 if column_exists:
                     logging.info("检测到 proxy 列，正在重建表以删除该列...")
-                    
+
                     # 创建新表（不包含 proxy 列）
                     cursor.execute("""
                         CREATE TABLE sites_new (
@@ -902,35 +926,121 @@ class DatabaseManager:
                             `group` TEXT,
                             description TEXT,
                             cookie TEXT,
+                            passkey TEXT,
                             migration INTEGER NOT NULL DEFAULT 1,
                             speed_limit INTEGER NOT NULL DEFAULT 0
                         )
                     """)
-                    
-                    # 复制数据（排除 proxy 列）
+
+                    # 复制数据（排除 proxy 列，包含 passkey 列）
                     cursor.execute("""
-                        INSERT INTO sites_new 
-                        (id, site, nickname, base_url, special_tracker_domain, `group`, 
-                         description, cookie, migration, speed_limit)
+                        INSERT INTO sites_new
+                        (id, site, nickname, base_url, special_tracker_domain, `group`,
+                         description, cookie, passkey, migration, speed_limit)
                         SELECT id, site, nickname, base_url, special_tracker_domain, `group`,
-                               description, cookie, migration, speed_limit
+                               description, cookie, passkey, migration, speed_limit
                         FROM sites
                     """)
-                    
+
                     # 删除旧表
                     cursor.execute("DROP TABLE sites")
-                    
+
                     # 重命名新表
                     cursor.execute("ALTER TABLE sites_new RENAME TO sites")
-                    
+
                     conn.commit()
                     logging.info("✓ 成功删除 sites 表中的 proxy 列 (SQLite)")
-            
+
             if not column_exists:
                 logging.info("proxy 列不存在，无需迁移")
-                
+
         except Exception as e:
             logging.warning(f"迁移删除 proxy 列时出错（可能已经删除）: {e}")
+            # 不要因为迁移失败而中断初始化
+            conn.rollback()
+
+    def _migrate_add_passkey_column(self, conn, cursor):
+        """数据库迁移：添加 sites 表中的 passkey 列"""
+        try:
+            logging.info("检查是否需要添加 sites 表中的 passkey 列...")
+
+            # 检查 passkey 列是否存在
+            column_exists = False
+
+            if self.db_type == "mysql":
+                cursor.execute("SHOW COLUMNS FROM sites LIKE 'passkey'")
+                column_exists = cursor.fetchone() is not None
+
+                if not column_exists:
+                    logging.info("检测到缺少 passkey 列，正在添加...")
+                    cursor.execute("ALTER TABLE sites ADD COLUMN passkey TEXT DEFAULT NULL")
+                    conn.commit()
+                    logging.info("✓ 成功添加 sites 表中的 passkey 列 (MySQL)")
+
+            elif self.db_type == "postgresql":
+                cursor.execute("""
+                    SELECT column_name
+                    FROM information_schema.columns
+                    WHERE table_name='sites' AND column_name='passkey'
+                """)
+                column_exists = cursor.fetchone() is not None
+
+                if not column_exists:
+                    logging.info("检测到缺少 passkey 列，正在添加...")
+                    cursor.execute('ALTER TABLE sites ADD COLUMN passkey TEXT')
+                    conn.commit()
+                    logging.info("✓ 成功添加 sites 表中的 passkey 列 (PostgreSQL)")
+
+            else:  # SQLite
+                # SQLite 不支持 ADD COLUMN（某些版本），需要重建表
+                cursor.execute("PRAGMA table_info(sites)")
+                columns = cursor.fetchall()
+                column_exists = any(col[1] == 'passkey' for col in columns)
+
+                if not column_exists:
+                    logging.info("检测到缺少 passkey 列，正在重建表以添加该列...")
+
+                    # 创建新表（包含 passkey 列）
+                    cursor.execute("""
+                        CREATE TABLE sites_new (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            site TEXT UNIQUE,
+                            nickname TEXT,
+                            base_url TEXT,
+                            special_tracker_domain TEXT,
+                            `group` TEXT,
+                            description TEXT,
+                            cookie TEXT,
+                            passkey TEXT,
+                            migration INTEGER NOT NULL DEFAULT 1,
+                            speed_limit INTEGER NOT NULL DEFAULT 0
+                        )
+                    """)
+
+                    # 复制数据（添加 passkey 列，设为 NULL）
+                    cursor.execute("""
+                        INSERT INTO sites_new
+                        (id, site, nickname, base_url, special_tracker_domain, `group`,
+                         description, cookie, passkey, migration, speed_limit)
+                        SELECT id, site, nickname, base_url, special_tracker_domain, `group`,
+                               description, cookie, NULL, migration, speed_limit
+                        FROM sites
+                    """)
+
+                    # 删除旧表
+                    cursor.execute("DROP TABLE sites")
+
+                    # 重命名新表
+                    cursor.execute("ALTER TABLE sites_new RENAME TO sites")
+
+                    conn.commit()
+                    logging.info("✓ 成功添加 sites 表中的 passkey 列 (SQLite)")
+
+            if column_exists:
+                logging.info("passkey 列已存在，无需迁移")
+
+        except Exception as e:
+            logging.warning(f"迁移添加 passkey 列时出错（可能已经添加）: {e}")
             # 不要因为迁移失败而中断初始化
             conn.rollback()
 

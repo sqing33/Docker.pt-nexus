@@ -14,10 +14,12 @@ if os.getenv("DEV_ENV") == "true":
     # 开发环境
     DATA_DIR = "/root/Code/Docker.pt-nexus-dev/server/data"
     SITES_DATA_FILE = "/root/Code/Docker.pt-nexus-dev/server/sites_data.json"
+    GLOBAL_MAPPINGS = "/root/Code/Docker.pt-nexus-dev/server/configs/global_mappings.yaml"
 else:
     # 生产环境
     DATA_DIR = "/app/data"
     SITES_DATA_FILE = "/app/sites_data.json"
+    GLOBAL_MAPPINGS = "/app/configs/global_mappings.yaml"
 
 os.makedirs(DATA_DIR, exist_ok=True)
 
@@ -156,7 +158,8 @@ class ConfigManager:
 
                 # --- [新增] IYUU 功能设置兼容 ---
                 if "iyuu_settings" not in self._config:
-                    self._config["iyuu_settings"] = default_conf["iyuu_settings"]
+                    self._config["iyuu_settings"] = default_conf[
+                        "iyuu_settings"]
                 else:
                     # 如果已有 iyuu_settings，检查是否缺少新字段
                     if "query_interval_hours" not in self._config[
@@ -167,7 +170,9 @@ class ConfigManager:
                             "iyuu_settings"]:
                         self._config["iyuu_settings"][
                             "auto_query_enabled"] = True
-                    if "tmp_dir" not in self._config["iyuu_settings"] or not self._config["iyuu_settings"]["tmp_dir"]:
+                    if "tmp_dir" not in self._config[
+                            "iyuu_settings"] or not self._config[
+                                "iyuu_settings"]["tmp_dir"]:
                         self._config["iyuu_settings"]["tmp_dir"] = TEMP_DIR
 
                 # --- [新增] 认证配置兼容 ---
@@ -199,11 +204,14 @@ class ConfigManager:
 
                 # --- [新增] 上传设置配置兼容 ---
                 if "upload_settings" not in self._config:
-                    self._config["upload_settings"] = default_conf["upload_settings"]
+                    self._config["upload_settings"] = default_conf[
+                        "upload_settings"]
                 else:
                     # 如果已有 upload_settings，检查是否缺少新字段
-                    if "anonymous_upload" not in self._config["upload_settings"]:
-                        self._config["upload_settings"]["anonymous_upload"] = True
+                    if "anonymous_upload" not in self._config[
+                            "upload_settings"]:
+                        self._config["upload_settings"][
+                            "anonymous_upload"] = True
 
             except (json.JSONDecodeError, IOError) as e:
                 logging.error(f"无法读取或解析 {CONFIG_FILE}: {e}。将加载一个安全的默认配置。")

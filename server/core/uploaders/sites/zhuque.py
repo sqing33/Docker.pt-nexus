@@ -268,7 +268,24 @@ class ZhuqueUploader(SpecialUploader):
                 **mapped_params
             }
 
-            # 4. 构造 File
+            # 3.1 验证必需参数
+            required_fields = ["title", "category", "medium", "videoCoding", "resolution"]
+            missing_fields = []
+            for field in required_fields:
+                if field not in data or not data[field]:
+                    missing_fields.append(field)
+
+            if missing_fields:
+                logger.error(f"缺少必需参数: {missing_fields}")
+                logger.error(f"当前数据: {json.dumps(data, ensure_ascii=False, indent=2)}")
+                return False, f"缺少必需参数: {', '.join(missing_fields)}", None
+
+            # 4. 保存参数用于调试
+            if os.getenv("DEV_ENV") == "true":
+                self._save_upload_parameters(data, mapped_params,
+                                             final_main_title)
+
+            # 5. 构造 File
             torrent_path = self.upload_data.get("modified_torrent_path")
             if not torrent_path or not os.path.exists(torrent_path):
                 return False, "种子文件路径不存在", None
@@ -281,8 +298,8 @@ class ZhuqueUploader(SpecialUploader):
                                             'rb'), 'application/octet-stream')
             }
 
-            # 5. 发送请求
-            logger.info(f"正在向 {self.site_name} 提交发布请求 (Direct POST)...")
+            # 7. 发送请求
+            logger.info(f"正在向 {self.site_name} 提交发布请求...")
 
             response = self.session.post(self.post_url,
                                          data=data,
@@ -292,9 +309,26 @@ class ZhuqueUploader(SpecialUploader):
             # 关闭文件
             files['torrent'][1].close()
 
-            # 6. 响应处理 (增强 500 错误处理)
-            if response.status_code == 500:
-                logger.error(f"服务器返回内容(前500字符): {response.text[:500]}")
+            # 8. 响应处理
+            if response.status_code == 400:
+                # 尝试解析JSON响应以获取具体错误码
+                try:
+                    error_json = response.json()
+                    error_code = error_json.get("code", "")
+
+                    if error_code == "TORRENT_ALREADY_UPLOAD":
+                        logger.success("种子已存在！该资源已经在站点上发布过。")
+                        return True, "发布成功！种子已存在，该资源可能已经在站点上发布过", None
+                    elif error_code:
+                        logger.error(f"站点返回错误码: {error_code}")
+                        return False, f"站点错误: {error_code}", None
+
+                except json.JSONDecodeError:
+                    logger.error("无法解析错误响应JSON")
+
+                return False, f"参数错误 (400)，请查看详细信息", None
+            elif response.status_code == 500:
+                logger.error(f"服务器返回内容: {response.text[:500]}")
                 return False, "站点内部错误 (500)，请查看日志详情", None
 
             response.raise_for_status()
@@ -366,6 +400,69 @@ class ZhuqueUploader(SpecialUploader):
             import traceback
             logger.error(traceback.format_exc())
             return False, f"请求异常: {e}", None
+
+    def _save_upload_parameters(self, data, mapped_params, final_main_title):
+        """
+        保存上传参数到tmp目录，用于调试和测试
+        """
+        try:
+            from datetime import datetime
+            from config import DATA_DIR
+
+            # 使用统一的 torrents 目录
+            torrent_dir = os.path.join(DATA_DIR, "tmp", "torrents")
+            os.makedirs(torrent_dir, exist_ok=True)
+
+            # 从 upload_data 中获取种子ID和源站点代码
+            torrent_id = "unknown"
+            source_site_code = "unknown"
+
+            modified_torrent_path = self.upload_data.get(
+                "modified_torrent_path", "")
+            if modified_torrent_path:
+                torrent_filename = os.path.basename(modified_torrent_path)
+                # 尝试从文件名中提取站点代码和种子ID（格式: 站点代码-种子ID-xxx.torrent）
+                match = re.match(r"^([^-]+)-(\d+)-", torrent_filename)
+                if match:
+                    source_site_code = match.group(1)
+                    torrent_id = match.group(2)
+
+            # 生成可读的时间戳格式: YYYY-MM-DD-HH:MM:SS
+            timestamp = datetime.now().strftime("%Y-%m-%d-%H:%M:%S")
+
+            # 格式: {站点代码}-{种子ID}-{目标站点self.site_name}-{时间戳}
+            filename = f"{source_site_code}-{torrent_id}-{self.site_name}-{timestamp}.json"
+            filepath = os.path.join(torrent_dir, filename)
+
+            # 准备要保存的数据
+            save_data = {
+                "site_name": self.site_name,
+                "timestamp": timestamp,
+                "form_data": data,
+                "mapped_params": mapped_params,
+                "final_main_title": final_main_title,
+                "upload_data_summary": {
+                    "subtitle":
+                    self.upload_data.get("subtitle", ""),
+                    "douban_link":
+                    self.upload_data.get("douban_link", ""),
+                    "imdb_link":
+                    self.upload_data.get("imdb_link", ""),
+                    "tmdb_link":
+                    self.upload_data.get("tmdb_link", ""),
+                    "mediainfo_length":
+                    len(self.upload_data.get("mediainfo", "")),
+                    "modified_torrent_path":
+                    self.upload_data.get("modified_torrent_path", ""),
+                }
+            }
+
+            # 保存到文件
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(save_data, f, ensure_ascii=False, indent=2)
+            logger.info(f"朱雀上传参数已保存到: {filepath}")
+        except Exception as save_error:
+            logger.error(f"保存参数到文件失败: {save_error}")
 
 
 def ensure_scheme(url: str) -> str:

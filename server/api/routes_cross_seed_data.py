@@ -15,16 +15,14 @@ def generate_reverse_mappings():
     """Generate reverse mappings from standard keys to Chinese display names"""
     try:
         # Import config_manager
-        from config import config_manager
+        from config import config_manager, GLOBAL_MAPPINGS
 
         # First try to read from global_mappings.yaml
-        global_mappings_path = os.path.join(os.path.dirname(__file__),
-                                            '../configs/global_mappings.yaml')
         global_mappings = {}
 
-        if os.path.exists(global_mappings_path):
+        if os.path.exists(GLOBAL_MAPPINGS):
             try:
-                with open(global_mappings_path, 'r', encoding='utf-8') as f:
+                with open(GLOBAL_MAPPINGS, 'r', encoding='utf-8') as f:
                     config_data = yaml.safe_load(f)
                     global_mappings = config_data.get('global_standard_keys',
                                                       {})

@@ -702,7 +702,7 @@
       <!-- 步骤 2: 选择发布站点 -->
       <div v-if="activeStep === 2" class="step-container site-selection-container">
         <h3 class="selection-title">请选择要发布的目标站点</h3>
-        <p class="selection-subtitle">已存在的站点已被自动禁用。红色站点表示未配置Cookie。</p>
+        <p class="selection-subtitle">已存在的站点已被自动禁用。红色站点表示配置不完整。</p>
 
         <!-- 禁止转载警告 -->
         <el-alert
@@ -1204,6 +1204,7 @@ interface SiteStatus {
   name: string
   site: string
   has_cookie: boolean
+  has_passkey: boolean
   is_source: boolean
   is_target: boolean
 }
@@ -1404,6 +1405,11 @@ const isTargetSiteSelectable = (siteName: string): boolean => {
     return false
   }
 
+  // 对于杜比(hddolby)和HDTime站点，还需要检查passkey
+  if ((siteName === '杜比' || siteName === 'HDtime') && !siteStatus.has_passkey) {
+    return false
+  }
+
   // 条件 2: 如果种子已经存在于该站点，则不可选
   if (torrent.value?.sites?.[siteName]) {
     return false
@@ -1444,6 +1450,10 @@ const getButtonType = (site: SiteStatus) => {
   }
   // 如果站点没有Cookie，显示为红色 (danger)
   if (!site.has_cookie) {
+    return 'danger'
+  }
+  // 对于杜比站点，如果已配置Cookie但未配置Passkey，也显示为红色
+  if ((site.name === '杜比' || site.name === 'HDtime') && !site.has_passkey) {
     return 'danger'
   }
   // 其他情况（可选但未选中），显示为默认样式

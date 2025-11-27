@@ -106,6 +106,7 @@ def update_site_comment():
 @sites_bp.route("/status")
 def get_sites_status():
     """获取所有站点的状态信息（是否配置Cookie、是否为源站点/目标站点）"""
+    print("=== API /sites/status 被调用 ===")
     db_manager = sites_bp.db_manager
     config_manager = sites_bp.config_manager
     try:
@@ -115,17 +116,21 @@ def get_sites_status():
             cursor = db_manager._get_cursor(conn)
             
             # 从数据库获取所有站点信息
-            cursor.execute("SELECT nickname, site, cookie, migration FROM sites")
+            cursor.execute("SELECT nickname, site, cookie, passkey, migration FROM sites")
             sites_data = cursor.fetchall()
             
             # 构建站点状态列表
             sites_status = []
             for row in sites_data:
                 site_dict = dict(row)
+                site_name = site_dict.get("nickname")
+                if site_name == "杜比":
+                    logging.info(f"杜比站点数据: nickname={site_name}, cookie={site_dict.get('cookie')}, passkey={site_dict.get('passkey')}")
                 sites_status.append({
                     "name": site_dict.get("nickname"),
                     "site": site_dict.get("site"),
                     "has_cookie": bool(site_dict.get("cookie")),
+                    "has_passkey": bool(site_dict.get("passkey")),
                     "is_source": site_dict.get("migration", 0) in [1, 3],
                     "is_target": site_dict.get("migration", 0) in [2, 3]
                 })

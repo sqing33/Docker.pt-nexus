@@ -139,6 +139,7 @@ import axios from 'axios'
 interface SiteStatus {
   name: string
   has_cookie: boolean
+  has_passkey: boolean
   is_source: boolean
   is_target: boolean
 }
@@ -215,50 +216,23 @@ const getSiteClass = (site: SiteStatus) => {
   // 检查配置状态
   let isConfigured = false
   if (site.is_source && !site.is_target) {
-    // 仅源站点，检查Cookie
-    isConfigured = site.has_cookie
+    // 仅源站点，检查Cookie，hddolby和hdtime站点还需要passkey
+    isConfigured =
+      site.has_cookie && ((site.name !== '杜比' && site.name !== 'HDtime') || site.has_passkey)
   } else if (!site.is_source && site.is_target) {
-    // 仅目标站点，检查Cookie
-    isConfigured = site.has_cookie
+    // 仅目标站点，检查Cookie，hddolby和hdtime站点还需要passkey
+    isConfigured =
+      site.has_cookie && ((site.name !== '杜比' && site.name !== 'HDtime') || site.has_passkey)
   } else if (site.is_source && site.is_target) {
-    // 同时是源和目标，需要Cookie
-    isConfigured = site.has_cookie
+    // 同时是源和目标，需要Cookie，hddolby和hdtime站点还需要passkey
+    isConfigured =
+      site.has_cookie && ((site.name !== '杜比' && site.name !== 'HDtime') || site.has_passkey)
   }
 
   return {
     'site-configured': isConfigured,
     'site-unconfigured': !isConfigured,
   }
-}
-
-// 获取站点的提示信息
-const getSiteTooltip = (site: SiteStatus) => {
-  let configStatus = ''
-  if (site.is_source && !site.is_target) {
-    // 仅源站点
-    configStatus = site.has_cookie ? '已配置Cookie' : '未配置Cookie'
-  } else if (!site.is_source && site.is_target) {
-    // 仅目标站点
-    configStatus = site.has_cookie ? '已配置Cookie' : '未配置Cookie'
-  } else if (site.is_source && site.is_target) {
-    // 同时是源和目标
-    if (site.has_cookie) {
-      configStatus = '已配置Cookie'
-    } else {
-      configStatus = '未配置Cookie'
-    }
-  }
-
-  let roleStatus = ''
-  if (site.is_source && site.is_target) {
-    roleStatus = '（源/目标）'
-  } else if (site.is_source) {
-    roleStatus = '（源）'
-  } else if (site.is_target) {
-    roleStatus = '（目标）'
-  }
-
-  return `${configStatus}${roleStatus}`
 }
 
 const fetchSitesStatus = async () => {

@@ -8,19 +8,19 @@ import yaml
 from loguru import logger
 from abc import ABC, abstractmethod
 from utils import cookies_raw2jar, ensure_scheme, extract_tags_from_mediainfo, extract_origin_from_description
+from config import GLOBAL_MAPPINGS
 from .fallback_manager import FallbackManager
 
 # 加载全局默认 title_components 配置
 DEFAULT_TITLE_COMPONENTS = {}
 try:
-    config_dir = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "configs")
-    global_mappings_path = os.path.join(config_dir, "global_mappings.yaml")
-    if os.path.exists(global_mappings_path):
-        with open(global_mappings_path, 'r', encoding='utf-8') as f:
+    if os.path.exists(GLOBAL_MAPPINGS):
+        with open(GLOBAL_MAPPINGS, 'r', encoding='utf-8') as f:
             global_config = yaml.safe_load(f)
             DEFAULT_TITLE_COMPONENTS = global_config.get(
                 "default_title_components", {})
+    else:
+        logger.warning(f"配置文件不存在: {GLOBAL_MAPPINGS}")
 except Exception as e:
     logger.warning(f"警告：无法加载全局默认 title_components 配置: {e}")
 
@@ -63,11 +63,7 @@ class BaseUploader(ABC):
         self.mappings = self.config.get("mappings", {})
 
         # [新增] 初始化降级管理器
-        config_dir = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-            "configs")
-        global_mappings_path = os.path.join(config_dir, "global_mappings.yaml")
-        self.fallback_manager = FallbackManager(global_mappings_path)
+        self.fallback_manager = FallbackManager(GLOBAL_MAPPINGS)
 
     def _load_site_config(self, site_name: str) -> dict:
         """加载站点的YAML配置文件"""
@@ -698,6 +694,24 @@ class BaseUploader(ABC):
             elif "该种子已存在" in response.text:
                 # 处理页面内容中包含已存在提示但没有跳转的情况
                 logger.success("种子已存在！在页面内容中检测到已存在提示。")
+                # 尝试从响应内容中提取详情页URL
+                import re
+                # 匹配模式：url=domain/details.php?id=数字&其他参数
+                url_pattern = r'url=([^&\s]+/details\.php\?id=\d+[^&\s]*)'
+                url_match = re.search(url_pattern, response.text)
+                if url_match:
+                    extracted_url = url_match.group(1)
+                    # 确保URL包含协议
+                    if not extracted_url.startswith(('http://', 'https://')):
+                        extracted_url = f"https://{extracted_url}"
+                    logger.info(f"从响应内容中提取到详情页URL: {extracted_url}")
+                    return True, f"发布成功！种子已存在，详情页: {extracted_url}"
+                else:
+                    logger.info("未能从响应内容中提取到详情页URL")
+                    return True, "发布成功！种子已存在，但未能获取详情页链接。"
+            elif "你的种子文件已经被人上传过了" in response.text:
+                # HDDolby站点的种子已存在提示
+                logger.success("种子已存在！HDDolby站点检测到种子已被上传。")
                 # 尝试从响应内容中提取详情页URL
                 import re
                 # 匹配模式：url=domain/details.php?id=数字&其他参数
