@@ -96,16 +96,36 @@ class IYUUThread(Thread):
                 log_iyuu_message("IYUU自动查询已禁用，跳过本次查询任务", "INFO")
                 return
 
+        # 获取路径过滤设置
+        config = self.config_manager.get()
+        iyuu_settings = config.get("iyuu_settings", {})
+        path_filter_enabled = iyuu_settings.get("path_filter_enabled", False)
+        selected_paths = iyuu_settings.get("selected_paths", [])
+
         log_iyuu_message(f"[{current_time}] 开始执行IYUU种子聚合任务", "INFO")
         conn = None
         try:
             conn = self.db_manager._get_connection()
             cursor = self.db_manager._get_cursor(conn)
 
-            # 查询所有种子数据，只筛选体积大于1GB的种子（1GB = 1073741824字节）
-            cursor.execute(
-                "SELECT hash, name, sites, size FROM torrents WHERE name IS NOT NULL AND name != '' AND size > 207374182"
-            )
+            # 构建查询条件
+            query_conditions = [
+                "name IS NOT NULL AND name != ''",
+                "size > 207374182"  # 只筛选体积大于200MB的种子
+            ]
+            query_params = []
+
+            # 如果启用路径过滤，添加路径条件
+            if path_filter_enabled and selected_paths:
+                placeholders = ','.join([self.db_manager.get_placeholder()] * len(selected_paths))
+                query_conditions.append(f"save_path IN ({placeholders})")
+                query_params.extend(selected_paths)
+                log_iyuu_message(f"启用路径过滤，限定路径: {', '.join(selected_paths)}", "INFO")
+
+            # 构建完整的SQL查询
+            sql_query = f"SELECT hash, name, sites, size, save_path FROM torrents WHERE {' AND '.join(query_conditions)}"
+
+            cursor.execute(sql_query, tuple(query_params))
             torrents_raw = [dict(row) for row in cursor.fetchall()]
 
             # 获取配置的站点列表（用于过滤支持的站点）
@@ -764,7 +784,7 @@ class IYUUThread(Thread):
                         (
                             new_hash,  # 使用新生成的唯一hash
                             torrent_name,
-                            '',  # 路径留空
+                            existing_torrent.get('save_path', ''),  # 使用已存在种子的保存路径
                             existing_torrent.get('size', 0),
                             0.0,  # 进度设为0，表示未下载
                             '未做种',  # 状态设为未做种，表示未在客户端中
@@ -818,12 +838,12 @@ class IYUUThread(Thread):
                                 torrent_size,
                                 force_query=True):
         """处理单个种子的IYUU查询
-        
+
         Args:
             torrent_name: 种子名称
             torrent_size: 种子大小（字节）
             force_query: 是否强制查询，忽略时间间隔限制（默认True）
-            
+
         Returns:
             dict: 查询结果统计信息
         """
@@ -835,6 +855,12 @@ class IYUUThread(Thread):
             "INFO")
         if force_query:
             log_iyuu_message("强制查询模式：忽略时间间隔限制", "INFO")
+
+        # 获取路径过滤设置
+        config = self.config_manager.get()
+        iyuu_settings = config.get("iyuu_settings", {})
+        path_filter_enabled = iyuu_settings.get("path_filter_enabled", False)
+        selected_paths = iyuu_settings.get("selected_paths", [])
 
         # 初始化结果统计
         result_stats = {
@@ -850,10 +876,25 @@ class IYUUThread(Thread):
             cursor = self.db_manager._get_cursor(conn)
             ph = self.db_manager.get_placeholder()
 
-            # 查询指定名称和大小的种子数据，只筛选体积大于200MB的种子
-            cursor.execute(
-                f"SELECT hash, name, sites, size, save_path FROM torrents WHERE name = {ph} AND size = {ph} AND size > 207374182",
-                (torrent_name, torrent_size))
+            # 构建查询条件
+            query_conditions = [
+                f"name = {ph}",
+                f"size = {ph}",
+                "size > 207374182"  # 只筛选体积大于200MB的种子
+            ]
+            query_params = [torrent_name, torrent_size]
+
+            # 如果启用路径过滤，添加路径条件
+            if path_filter_enabled and selected_paths:
+                placeholders = ','.join([ph] * len(selected_paths))
+                query_conditions.append(f"save_path IN ({placeholders})")
+                query_params.extend(selected_paths)
+                log_iyuu_message(f"启用路径过滤，限定路径: {', '.join(selected_paths)}", "INFO")
+
+            # 构建完整的SQL查询
+            sql_query = f"SELECT hash, name, sites, size, save_path FROM torrents WHERE {' AND '.join(query_conditions)}"
+
+            cursor.execute(sql_query, tuple(query_params))
             torrents_raw = [dict(row) for row in cursor.fetchall()]
 
             if not torrents_raw:

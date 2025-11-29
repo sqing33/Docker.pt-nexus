@@ -153,6 +153,9 @@ def get_data_api():
                     "save_path": t.get("save_path", ""),
                     "size": t.get("size", 0),
                 })
+            # 如果当前save_path为空，但新记录有非空的save_path，则更新它
+            elif not agg["save_path"] and t.get("save_path"):
+                agg["save_path"] = t.get("save_path", "")
             # 添加下载器ID到数组中（去重）
             downloader_id = t.get("downloader_id")
             if downloader_id and downloader_id not in agg["downloader_ids"]:
@@ -410,6 +413,40 @@ def iyuu_query_api():
     except Exception as e:
         logging.error(f"iyuu_query_api 出错: {e}", exc_info=True)
         return jsonify({"error": "触发IYUU查询失败", "success": False}), 500
+
+
+@torrents_bp.route("/paths", methods=["GET"])
+def get_all_paths_api():
+    """获取所有种子保存路径列表"""
+    db_manager = torrents_bp.db_manager
+
+    try:
+        conn = db_manager._get_connection()
+        cursor = db_manager._get_cursor(conn)
+
+        # 查询所有非空的保存路径
+        if db_manager.db_type == "postgresql":
+            cursor.execute(
+                'SELECT DISTINCT save_path FROM torrents WHERE save_path IS NOT NULL AND save_path != \'\' ORDER BY save_path'
+            )
+        else:
+            cursor.execute(
+                "SELECT DISTINCT save_path FROM torrents WHERE save_path IS NOT NULL AND save_path != '' ORDER BY save_path"
+            )
+
+        paths = [row['save_path'] for row in cursor.fetchall()]
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            "success": True,
+            "paths": paths
+        })
+
+    except Exception as e:
+        logging.error(f"get_all_paths_api 出错: {e}", exc_info=True)
+        return jsonify({"error": "获取路径列表失败", "success": False}), 500
 
 
 @torrents_bp.route("/cached_sites", methods=["GET"])

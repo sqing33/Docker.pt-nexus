@@ -18,7 +18,7 @@
               </el-icon>
               临时密码-请立即修改
             </el-tag>
-          </div>
+          </div> 
           <el-button type="primary" :loading="loading" @click="onSubmit" size="small">
             保存
           </el-button>
@@ -171,6 +171,25 @@
                   </el-icon>
                 </template>
               </el-input>
+            </el-form-item>
+
+            <el-form-item label="查询路径限制" class="form-item">
+              <div style="display: flex; align-items: center; gap: 15px">
+                <el-switch
+                  v-model="iyuuForm.path_filter_enabled"
+                  active-text="启用路径过滤"
+                  inactive-text="禁用路径过滤"
+                  @change="handlePathFilterToggle"
+                />
+                <el-button
+                  v-if="iyuuForm.path_filter_enabled"
+                  type="primary"
+                  size="small"
+                  @click="openPathSelector"
+                >
+                  选择路径 ({{ iyuuForm.selected_paths.length }})
+                </el-button>
+              </div>
             </el-form-item>
 
             <div style="flex: 1; display: flex; flex-direction: column; justify-content: center">
@@ -533,10 +552,70 @@
       </div>
     </div>
   </div>
+<!-- 路径选择弹窗 -->
+ <div><div>
+      <el-dialog
+        v-model="pathSelectorVisible"
+        title="选择IYUU查询路径"
+        width="600px"
+        top="50px"
+      >
+        <div v-loading="loadingPaths" style="min-height: 300px;">
+          <div v-if="!loadingPaths && availablePaths.length === 0" style="text-align: center; padding: 40px; color: var(--el-text-color-secondary);">
+            <el-icon style="font-size: 48px; margin-bottom: 16px; opacity: 0.5;">
+              <FolderOpened />
+            </el-icon>
+            <p>暂无可用的保存路径</p>
+            <el-button type="primary" @click="refreshPaths" style="margin-top: 16px;">
+              刷新路径列表
+            </el-button>
+          </div>
+
+          <div v-else-if="availablePaths.length > 0">
+            <div style="margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
+              <span style="color: var(--el-text-color-regular);">
+                已选择 {{ getSelectedLeafPaths().length }} / {{ availablePaths.length }} 个路径
+              </span>
+              <div>
+                <el-button size="small" @click="selectAllPaths">全选</el-button>
+                <el-button size="small" @click="clearAllPaths">清空</el-button>
+                <el-button size="small" @click="refreshPaths" :loading="loadingPaths">刷新</el-button>
+              </div>
+            </div>
+
+            <div class="path-tree-container">
+              <el-tree
+                ref="pathTreeRef"
+                :data="pathTreeData"
+                show-checkbox
+                node-key="path"
+                default-expand-all
+                :expand-on-click-node="false"
+                check-on-click-node
+                :check-strictly="true"
+                :props="{ class: 'path-tree-node' }"
+                @check="handlePathCheck"
+              />
+            </div>
+          </div>
+        </div>
+
+        <template #footer>
+          <div style="text-align: right;">
+            <el-button @click="pathSelectorVisible = false">取消</el-button>
+            <el-button type="primary" @click="saveSelectedPaths" :disabled="tempSelectedPaths.length === 0">
+              确定选择 ({{ tempSelectedPaths.length }})
+            </el-button>
+          </div>
+        </template>
+        
+      </el-dialog>
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, reactive } from 'vue'
+import { ref, onMounted, reactive, nextTick } from 'vue'
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import {
@@ -552,6 +631,8 @@ import {
   Link,
   View,
   Hide,
+  Folder,
+  FolderOpened,
 } from '@element-plus/icons-vue'
 
 // 用户设置相关
@@ -567,7 +648,24 @@ const iyuuForm = reactive({
   query_interval_hours: 72,
   query_interval_days: 3, // 以天为单位显示
   auto_query_enabled: true,
+  path_filter_enabled: false,
+  selected_paths: [] as string[],
 })
+
+// 路径选择相关
+const availablePaths = ref<string[]>([])
+const loadingPaths = ref(false)
+const pathSelectorVisible = ref(false)
+const tempSelectedPaths = ref<string[]>([])
+const pathTreeRef = ref()
+const pathTreeData = ref<any[]>([])
+
+// 路径树节点接口
+interface PathNode {
+  path: string
+  label: string
+  children?: PathNode[]
+}
 
 // IYUU日志接口
 interface IYUULog {
@@ -689,6 +787,8 @@ const fetchSettings = async () => {
       // 将小时转换为天数显示（向上取整）
       iyuuForm.query_interval_days = Math.ceil(iyuuForm.query_interval_hours / 24)
       iyuuForm.auto_query_enabled = config.iyuu_settings.auto_query_enabled !== false // 默认为true
+      iyuuForm.path_filter_enabled = config.iyuu_settings.path_filter_enabled || false
+      iyuuForm.selected_paths = config.iyuu_settings.selected_paths || []
     }
 
     // 获取转种设置
@@ -712,6 +812,11 @@ const fetchSettings = async () => {
     // 获取下载器列表
     const downloaderResponse = await axios.get('/api/downloaders_list')
     downloaderOptions.value = downloaderResponse.data
+
+    // 如果启用了路径过滤，则加载可用路径
+    if (iyuuForm.path_filter_enabled) {
+      await refreshPaths()
+    }
   } catch (error) {
     ElMessage.error('无法加载设置。')
   }
@@ -722,17 +827,91 @@ const resetForm = () => {
   form.value = { old_password: '', username: currentUsername.value, password: '' }
 }
 
+// 构建路径树
+const buildPathTree = (paths: string[]): PathNode[] => {
+  const root: PathNode[] = []
+  const nodeMap = new Map<string, PathNode>()
+  paths.sort().forEach((fullPath) => {
+    const parts = fullPath.replace(/^\/|\/$/g, '').split('/')
+    let currentPath = ''
+    let parentChildren = root
+    parts.forEach((part, index) => {
+      currentPath = index === 0 ? `/${part}` : `${currentPath}/${part}`
+      if (!nodeMap.has(currentPath)) {
+        const newNode: PathNode = {
+          path: index === parts.length - 1 ? fullPath : currentPath,
+          label: part,
+          children: [],
+        }
+        nodeMap.set(currentPath, newNode)
+        parentChildren.push(newNode)
+      }
+      const currentNode = nodeMap.get(currentPath)!
+      parentChildren = currentNode.children!
+    })
+  })
+  nodeMap.forEach((node) => {
+    if (node.children && node.children.length === 0) {
+      delete node.children
+    }
+  })
+  return root
+}
+
+// 刷新路径列表
+const refreshPaths = async () => {
+  loadingPaths.value = true
+  try {
+    const response = await axios.get('/api/paths')
+    if (response.data.success) {
+      availablePaths.value = response.data.paths || []
+      pathTreeData.value = buildPathTree(availablePaths.value)
+    } else {
+      ElMessage.error(response.data.error || '获取路径列表失败')
+      availablePaths.value = []
+      pathTreeData.value = []
+    }
+  } catch (error: any) {
+    const errorMessage = error.response?.data?.error || '获取路径列表失败'
+    ElMessage.error(errorMessage)
+    availablePaths.value = []
+    pathTreeData.value = []
+  } finally {
+    loadingPaths.value = false
+  }
+}
+
 // 保存IYUU设置
 const saveIyuuSettings = async () => {
+  // 防止重复调用，如果正在保存则直接返回
+  if (savingIyuu.value) return
+
   savingIyuu.value = true
   try {
-    // 保存 iyuu token 设置
-    // 如果实际token值有变化，则保存
+    // 保存IYUU其他设置（包括路径过滤设置）
+    // 将天数转换为小时保存到后端
+    const iyuuSettings = {
+      query_interval_hours: iyuuForm.query_interval_days * 24,
+      auto_query_enabled: iyuuForm.auto_query_enabled,
+      path_filter_enabled: iyuuForm.path_filter_enabled,
+      selected_paths: iyuuForm.selected_paths,
+    }
+
+    await axios.post('/api/iyuu/settings', iyuuSettings)
+    // 更新本地的小时值，以便下次加载时正确显示
+    iyuuForm.query_interval_hours = iyuuSettings.query_interval_hours
+
+    // 保存 iyuu token 设置（如果需要）
     if (actualIyuuToken.value && iyuuForm.token !== '********') {
       const tokenSettings = {
         iyuu_token: actualIyuuToken.value,
       }
       await axios.post('/api/settings', tokenSettings)
+      // 保存成功后，重置显示状态
+      showIyuuToken.value = false
+      const maskedToken = actualIyuuToken.value ? '*'.repeat(actualIyuuToken.value.length) : ''
+      displayIyuuToken.value = maskedToken
+      iyuuForm.token = maskedToken
     } else if (!actualIyuuToken.value && iyuuForm.token) {
       // 如果之前没有token，现在添加了
       const tokenSettings = {
@@ -741,23 +920,7 @@ const saveIyuuSettings = async () => {
       await axios.post('/api/settings', tokenSettings)
       actualIyuuToken.value = iyuuForm.token
     }
-    
-    // 保存成功后，重置显示状态
-    showIyuuToken.value = false
-    const maskedToken = actualIyuuToken.value ? '*'.repeat(actualIyuuToken.value.length) : ''
-    displayIyuuToken.value = maskedToken
-    iyuuForm.token = maskedToken
 
-    // 保存IYUU其他设置
-    // 将天数转换为小时保存到后端
-    const iyuuSettings = {
-      query_interval_hours: iyuuForm.query_interval_days * 24,
-      auto_query_enabled: iyuuForm.auto_query_enabled,
-    }
-
-    await axios.post('/api/iyuu/settings', iyuuSettings)
-    // 更新本地的小时值，以便下次加载时正确显示
-    iyuuForm.query_interval_hours = iyuuSettings.query_interval_hours
     ElMessage.success('IYUU 设置已保存！')
   } catch (error: any) {
     const errorMessage = error.response?.data?.error || '保存失败。'
@@ -921,6 +1084,83 @@ const saveUploadSettings = async () => {
   } finally {
     savingUpload.value = false
   }
+}
+
+// 监听路径过滤开关变化
+const handlePathFilterToggle = async (enabled: boolean) => {
+  if (enabled && availablePaths.value.length === 0) {
+    await refreshPaths()
+  }
+}
+
+// 获取选中的叶子节点路径
+const getSelectedLeafPaths = (): string[] => {
+  if (!pathTreeRef.value) return []
+
+  const checkedNodes = pathTreeRef.value.getCheckedNodes()
+  return checkedNodes
+    .filter((node: any) => !node.children || node.children.length === 0)
+    .map((node: any) => node.path)
+}
+
+// 处理路径树选择变化
+const handlePathCheck = () => {
+  tempSelectedPaths.value = getSelectedLeafPaths()
+}
+
+// 打开路径选择弹窗
+const openPathSelector = async () => {
+  if (availablePaths.value.length === 0) {
+    await refreshPaths()
+  }
+  pathSelectorVisible.value = true
+
+  // 等待DOM更新后设置选中状态
+  await nextTick()
+  if (pathTreeRef.value) {
+    // 清除所有选中状态
+    pathTreeRef.value.setCheckedKeys([])
+    // 设置当前选中的路径
+    pathTreeRef.value.setCheckedKeys(iyuuForm.selected_paths)
+  }
+}
+
+// 全选路径
+const selectAllPaths = () => {
+  if (pathTreeRef.value) {
+    // 只选择叶子节点（完整路径）
+    const leafPaths: string[] = []
+    const traverse = (nodes: any[]) => {
+      nodes.forEach(node => {
+        if (!node.children || node.children.length === 0) {
+          leafPaths.push(node.path)
+        } else {
+          traverse(node.children)
+        }
+      })
+    }
+    traverse(pathTreeData.value)
+    pathTreeRef.value.setCheckedKeys(leafPaths)
+    tempSelectedPaths.value = leafPaths
+  }
+}
+
+// 清空选择
+const clearAllPaths = () => {
+  if (pathTreeRef.value) {
+    pathTreeRef.value.setCheckedKeys([])
+    tempSelectedPaths.value = []
+  }
+}
+
+// 保存选中的路径
+const saveSelectedPaths = () => {
+  iyuuForm.selected_paths = getSelectedLeafPaths()
+  pathSelectorVisible.value = false
+  ElMessage.success(`已选择 ${iyuuForm.selected_paths.length} 个路径`)
+
+  // 立即保存设置
+  saveIyuuSettings()
 }
 
 onMounted(() => {
@@ -1144,6 +1384,25 @@ onMounted(() => {
 
 .temp-password-highlight .card-header {
   background: linear-gradient(135deg, rgba(255, 107, 107, 0.1), rgba(255, 135, 135, 0.05));
+}
+
+/* 路径树样式 */
+.path-tree-container {
+  max-height: 400px;
+  overflow-y: auto;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 6px;
+  padding: 8px;
+}
+
+:deep(.path-tree-node .el-tree-node__content) {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+:deep(.path-tree-node .el-tree-node__content:hover) {
+  background-color: var(--el-fill-color-light);
 }
 
 :deep(.el-input__inner),
