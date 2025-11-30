@@ -107,11 +107,16 @@
 
 # 更新日志
 
+### v3.2.1（2025.11.30）
+
+- 修复：刷新下载器获取的种子数据出现异常长时间等待的问题
+- 修复：主标题拼接时地区码出现['']包裹的问题
+
 ### v3.2.0（2025.11.30）
 
 > **注：QB下载器使用api现成的方法推送种子到下载器，TR下载器需要映射本地种子目录
-下载器列表里从左到右排序，第一个tr映射到/data/tr_torrents/tr1，第二个/data/tr_torrents/tr2
-例：/vol1/1000/Docker/transmission/torrents:/data/tr_torrents/tr1**
+下载器设置里从左到右排序，在docker compose映射第一个tr到/data/tr_torrents/tr1，第二个映射到/data/tr_torrents/tr2
+例：- /vol1/1000/Docker/transmission/torrents:/data/tr_torrents/tr1**
 
 - 新增：暂停本地种子，然添加到盒子进行下载，用于多站转种。（一站多种-转种-上盒）
 

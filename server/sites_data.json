@@ -733,7 +733,7 @@
     "special_tracker_domain": "ilovelemonhd.me",
     "group": "-LHD,-LeagueWEB",
     "description": "LemonHD",
-    "migration": 0,
+    "migration": 2,
     "speed_limit": 10
   },
   {

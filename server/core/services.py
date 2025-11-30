@@ -763,15 +763,20 @@ class DataTracker(Thread):
             # 先清理启用下载器中已删除的种子
             print(f"【刷新线程】开始清理启用下载器中已删除的种子...")
             enabled_downloader_ids = {d["id"] for d in enabled_downloaders}
+
+            # 优化：预先构建下载器到种子的映射，避免每次都遍历所有复合键
+            downloader_to_hashes = {}
+            for composite_key, torrent_data in torrents_to_upsert.items():
+                downloader_id = torrent_data["downloader_id"]
+                hash_value = composite_key.rsplit("_", 1)[0]  # 从 "hash_downloader_id" 提取 hash
+
+                if downloader_id not in downloader_to_hashes:
+                    downloader_to_hashes[downloader_id] = set()
+                downloader_to_hashes[downloader_id].add(hash_value)
+
             for downloader_id in enabled_downloader_ids:
-                # 获取该下载器当前的种子哈希
-                downloader_current_hashes = {
-                    h
-                    for h in all_current_hashes
-                    if any(torrents_to_upsert.get(key, {}).get("downloader_id") == downloader_id
-                           for key in torrents_to_upsert
-                           if key.startswith(f"{h}_"))
-                }
+                # 直接使用预构建的映射，避免O(n²)复杂度
+                downloader_current_hashes = downloader_to_hashes.get(downloader_id, set())
 
                 # 获取数据库中该下载器的历史种子哈希
                 placeholder = "%s" if self.db_manager.db_type in [

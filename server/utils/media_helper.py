@@ -1201,17 +1201,17 @@ def upload_data_title(title: str, torrent_filename: str = ""):
                 english_params[key] = params[key]
 
     if "source_platform" in english_params and "audio" in english_params:
-        is_sp_list = isinstance(english_params["source_platform"], list)
-        sp_values = (english_params["source_platform"]
-                     if is_sp_list else [english_params["source_platform"]])
-        if "MA" in sp_values and "MA" in str(english_params["audio"]):
-            sp_values.remove("MA")
-            if not sp_values:
-                del english_params["source_platform"]
-            elif len(sp_values) == 1 and not is_sp_list:
-                english_params["source_platform"] = sp_values[0]
-            elif is_sp_list:
-                english_params["source_platform"] = sp_values
+        # 始终将 source_platform 作为字符串处理，和其他参数保持一致
+        sp_value = english_params["source_platform"]
+        if isinstance(sp_value, list):
+            # 如果是列表，取第一个值
+            sp_value = sp_value[0] if sp_value else ""
+
+        # 移除 MA（如果存在）
+        if sp_value == "MA" and "MA" in str(english_params["audio"]):
+            del english_params["source_platform"]
+        else:
+            english_params["source_platform"] = sp_value
 
     # 6. 有效性质检
     is_valid = bool(english_params.get("title"))
