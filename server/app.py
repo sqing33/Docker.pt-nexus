@@ -225,6 +225,7 @@ def create_app():
     from api.routes_config import bp_config
     from api.routes_local_query import local_query_bp
     from api.routes_go_proxy import go_proxy_bp
+    from api.routes_torrent_transfer import torrent_transfer_bp
 
     # 将核心服务实例注入到每个蓝图中，以便路由函数可以访问
     # 使用 setattr 避免类型检查器报错
@@ -238,6 +239,8 @@ def create_app():
     setattr(migrate_bp, "config_manager", config_manager)  # 迁移模块也可能需要配置信息
     setattr(sites_bp, "db_manager", db_manager)
     setattr(local_query_bp, "db_manager", db_manager)
+    setattr(torrent_transfer_bp, "db_manager", db_manager)
+    setattr(torrent_transfer_bp, "config_manager", config_manager)
 
     # 将数据库管理器添加到应用配置中，以便在其他地方可以通过current_app访问
     app.config['DB_MANAGER'] = db_manager
@@ -376,6 +379,7 @@ def create_app():
     app.register_blueprint(bp_config)
     app.register_blueprint(local_query_bp)
     app.register_blueprint(go_proxy_bp, url_prefix="/api/go-api")
+    app.register_blueprint(torrent_transfer_bp)
 
     # --- 健康检查端点 ---
     @app.route("/health", methods=["GET"])

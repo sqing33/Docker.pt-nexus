@@ -116,11 +116,11 @@ def get_data_api():
         placeholder = "%s" if db_manager.db_type in ["mysql", "postgresql"] else "?"
         if db_manager.db_type == "postgresql":
             cursor.execute(
-                "SELECT hash, name, save_path, size, progress, state, sites, \"group\", details, downloader_id, last_seen, iyuu_last_check FROM torrents WHERE state != " + placeholder,
+                "SELECT hash, name, save_path, size, progress, state, sites, \"group\", details, downloader_id, last_seen, iyuu_last_check, seeders FROM torrents WHERE state != " + placeholder,
                 ("不存在", ))
         else:
             cursor.execute(
-                "SELECT hash, name, save_path, size, progress, state, sites, `group`, details, downloader_id, last_seen, iyuu_last_check FROM torrents WHERE state != " + placeholder,
+                "SELECT hash, name, save_path, size, progress, state, sites, `group`, details, downloader_id, last_seen, iyuu_last_check, seeders FROM torrents WHERE state != " + placeholder,
                 ("不存在", ))
         torrents_raw = [dict(row) for row in cursor.fetchall()]
 
@@ -139,8 +139,9 @@ def get_data_api():
                 "size": 0,
                 "progress": 0,
                 "state": set(),
-                "sites": defaultdict(dict),
+                "sites": defaultdict(lambda: {"uploaded": 0, "comment": "", "migration": 0, "state": "N/A", "seeders": 0}),
                 "total_uploaded": 0,
+                "seeders": 0,  # 添加做种人数字段
                 "downloader_ids": [],  # 修改为数组以支持多个下载器
             })
         for t in torrents_raw:
@@ -164,6 +165,8 @@ def get_data_api():
             agg["state"].add(t.get("state", "N/A"))
             upload_for_this_hash = uploads_by_hash.get(t["hash"], 0)
             agg["total_uploaded"] += upload_for_this_hash
+            # 更新做种人数：取所有记录中的最大值
+            agg["seeders"] = max(agg.get("seeders", 0), t.get("seeders", 0))
             if t.get("sites"):
                 site_name = t.get("sites")
                 agg["sites"][site_name]["uploaded"] = (
@@ -172,6 +175,10 @@ def get_data_api():
                 agg["sites"][site_name]["comment"] = t.get("details")
                 # 添加站点状态
                 agg["sites"][site_name]["state"] = t.get("state", "N/A")
+                # 添加做种人数
+                agg["sites"][site_name]["seeders"] = max(
+                    agg["sites"][site_name].get("seeders", 0),
+                    t.get("seeders", 0))
 
                 # --- [修改] 开始: 附加 migration 状态 ---
                 # 从预加载的配置中获取 migration 值，如果站点不存在则默认为 0
@@ -202,6 +209,7 @@ def get_data_api():
                 len(all_discovered_sites),
                 "target_sites_count":
                 target_sites_count,
+                "seeders": data.get("seeders", 0),  # 添加做种人数
                 "downloaderIds":
                 data.get("downloader_ids", []),
                 "downloaderId":

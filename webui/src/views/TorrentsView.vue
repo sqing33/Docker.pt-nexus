@@ -160,7 +160,7 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column label="下载器" width="120" align="center" header-align="center">
+      <el-table-column label="下载器" width="130" align="center" header-align="center">
         <template #default="scope">
           <div
             style="
@@ -629,10 +629,16 @@
           <el-button type="warning" @click="triggerIYUUQuery" :loading="iyuuQueryLoading" plain
             >IYUU查询</el-button
           >
+          <el-button type="success" @click="openSiteDataViewer(selectedTorrentForMigration)" plain
+            >上盒</el-button
+          >
           <el-button @click="sourceSelectionDialogVisible = false">取消</el-button>
         </div>
       </el-card>
     </div>
+
+    <!-- 站点数据查看器 -->
+    <SiteDataViewer @refresh="handleTorrentRefresh" />
   </div>
 </template>
 
@@ -643,37 +649,16 @@ import type { TableInstance, Sort } from 'element-plus'
 import type { ElTree } from 'element-plus'
 import axios from 'axios'
 import CrossSeedPanel from '../components/CrossSeedPanel.vue'
+import SiteDataViewer from '../components/SiteDataViewer.vue'
 import { useCrossSeedStore } from '@/stores/crossSeed'
-import type { ISourceInfo } from '@/types'
+import { useSiteDataStore } from '@/stores/siteData'
+import type { ISourceInfo, Torrent, SiteData } from '@/types'
 
 const emits = defineEmits(['ready'])
-
-interface SiteData {
-  uploaded: number
-  comment: string
-  migration: number
-  state: string
-}
 
 interface OtherSite {
   name: string
   data: SiteData
-}
-
-interface Torrent {
-  unique_id: string
-  name: string
-  save_path: string
-  size: number
-  size_formatted: string
-  progress: number
-  state: string
-  sites: Record<string, SiteData>
-  total_uploaded: number
-  total_uploaded_formatted: string
-  downloaderId?: string
-  downloaderIds?: string[]
-  target_sites_count?: number
 }
 interface SiteStatus {
   name: string
@@ -765,6 +750,7 @@ const cachedSites = ref<string[]>([]) // 存储已缓存的站点列表
 const cachedSitesLoading = ref<boolean>(false) // 查询缓存站点的加载状态
 
 const crossSeedStore = useCrossSeedStore()
+const siteDataStore = useSiteDataStore()
 
 // 控制转种弹窗的显示，当 taskId 存在时显示
 const crossSeedDialogVisible = computed(() => !!crossSeedStore.taskId)
@@ -1040,6 +1026,18 @@ const startCrossSeed = async (row: Torrent) => {
   }
 
   sourceSelectionDialogVisible.value = true
+}
+
+// 打开站点数据查看器
+const openSiteDataViewer = (row: Torrent) => {
+  siteDataStore.openDialog(row, allDownloadersList.value)
+}
+
+// 处理种子数据刷新
+const handleTorrentRefresh = () => {
+  console.log('触发种子数据刷新')
+  // 重新加载种子数据
+  fetchData()
 }
 
 // 查询缓存站点

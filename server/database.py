@@ -529,7 +529,7 @@ class DatabaseManager:
                 "CREATE TABLE IF NOT EXISTS traffic_stats_hourly (stat_datetime DATETIME NOT NULL, downloader_id VARCHAR(36) NOT NULL, uploaded BIGINT DEFAULT 0, downloaded BIGINT DEFAULT 0, avg_upload_speed BIGINT DEFAULT 0, avg_download_speed BIGINT DEFAULT 0, samples INTEGER DEFAULT 0, cumulative_uploaded BIGINT NOT NULL DEFAULT 0, cumulative_downloaded BIGINT NOT NULL DEFAULT 0, PRIMARY KEY (stat_datetime, downloader_id)) ENGINE=InnoDB ROW_FORMAT=Dynamic"
             )
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS torrents (hash VARCHAR(40) PRIMARY KEY, name TEXT NOT NULL, save_path TEXT, size BIGINT, progress FLOAT, state VARCHAR(50), sites VARCHAR(255), `group` VARCHAR(255), details TEXT, downloader_id VARCHAR(36) NULL, last_seen DATETIME NOT NULL, iyuu_last_check DATETIME NULL) ENGINE=InnoDB ROW_FORMAT=Dynamic"
+                "CREATE TABLE IF NOT EXISTS torrents (hash VARCHAR(40) NOT NULL, name TEXT NOT NULL, save_path TEXT, size BIGINT, progress FLOAT, state VARCHAR(50), sites VARCHAR(255), `group` VARCHAR(255), details TEXT, downloader_id VARCHAR(36) NOT NULL, last_seen DATETIME NOT NULL, iyuu_last_check DATETIME NULL, seeders INT DEFAULT 0, PRIMARY KEY (hash, downloader_id)) ENGINE=InnoDB ROW_FORMAT=Dynamic"
             )
             cursor.execute(
                 "CREATE TABLE IF NOT EXISTS torrent_upload_stats (hash VARCHAR(40) NOT NULL, downloader_id VARCHAR(36) NOT NULL, uploaded BIGINT DEFAULT 0, PRIMARY KEY (hash, downloader_id)) ENGINE=InnoDB ROW_FORMAT=Dynamic"
@@ -555,7 +555,7 @@ class DatabaseManager:
                 "CREATE TABLE IF NOT EXISTS traffic_stats_hourly (stat_datetime TIMESTAMP NOT NULL, downloader_id VARCHAR(36) NOT NULL, uploaded BIGINT DEFAULT 0, downloaded BIGINT DEFAULT 0, avg_upload_speed BIGINT DEFAULT 0, avg_download_speed BIGINT DEFAULT 0, samples INTEGER DEFAULT 0, cumulative_uploaded BIGINT NOT NULL DEFAULT 0, cumulative_downloaded BIGINT NOT NULL DEFAULT 0, PRIMARY KEY (stat_datetime, downloader_id))"
             )
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS torrents (hash VARCHAR(40) PRIMARY KEY, name TEXT NOT NULL, save_path TEXT, size BIGINT, progress REAL, state VARCHAR(50), sites VARCHAR(255), \"group\" VARCHAR(255), details TEXT, downloader_id VARCHAR(36), last_seen TIMESTAMP NOT NULL, iyuu_last_check TIMESTAMP NULL)"
+                "CREATE TABLE IF NOT EXISTS torrents (hash VARCHAR(40) NOT NULL, name TEXT NOT NULL, save_path TEXT, size BIGINT, progress REAL, state VARCHAR(50), sites VARCHAR(255), \"group\" VARCHAR(255), details TEXT, downloader_id VARCHAR(36) NOT NULL, last_seen TIMESTAMP NOT NULL, iyuu_last_check TIMESTAMP NULL, seeders INTEGER DEFAULT 0, PRIMARY KEY (hash, downloader_id))"
             )
             cursor.execute(
                 "CREATE TABLE IF NOT EXISTS torrent_upload_stats (hash VARCHAR(40) NOT NULL, downloader_id VARCHAR(36) NOT NULL, uploaded BIGINT DEFAULT 0, PRIMARY KEY (hash, downloader_id))"
@@ -593,7 +593,7 @@ class DatabaseManager:
                 "CREATE TABLE IF NOT EXISTS traffic_stats_hourly (stat_datetime TEXT NOT NULL, downloader_id TEXT NOT NULL, uploaded INTEGER DEFAULT 0, downloaded INTEGER DEFAULT 0, avg_upload_speed INTEGER DEFAULT 0, avg_download_speed INTEGER DEFAULT 0, samples INTEGER DEFAULT 0, cumulative_uploaded INTEGER NOT NULL DEFAULT 0, cumulative_downloaded INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (stat_datetime, downloader_id))"
             )
             cursor.execute(
-                "CREATE TABLE IF NOT EXISTS torrents (hash TEXT PRIMARY KEY, name TEXT NOT NULL, save_path TEXT, size INTEGER, progress REAL, state TEXT, sites TEXT, `group` TEXT, details TEXT, downloader_id TEXT, last_seen TEXT NOT NULL, iyuu_last_check TEXT NULL)"
+                "CREATE TABLE IF NOT EXISTS torrents (hash TEXT NOT NULL, name TEXT NOT NULL, save_path TEXT, size INTEGER, progress REAL, state TEXT, sites TEXT, `group` TEXT, details TEXT, downloader_id TEXT NOT NULL, last_seen TEXT NOT NULL, iyuu_last_check TEXT NULL, seeders INTEGER DEFAULT 0, PRIMARY KEY (hash, downloader_id))"
             )
             cursor.execute(
                 "CREATE TABLE IF NOT EXISTS torrent_upload_stats (hash TEXT NOT NULL, downloader_id TEXT NOT NULL, uploaded INTEGER DEFAULT 0, PRIMARY KEY (hash, downloader_id))"
@@ -629,6 +629,9 @@ class DatabaseManager:
 
         # 执行数据库迁移：添加 passkey 列
         self._migrate_add_passkey_column(conn, cursor)
+
+        # 执行数据库迁移：添加 seeders 列
+        self._migrate_add_seeders_column(conn, cursor)
 
         # 同步站点数据
         self.sync_sites_from_json()
@@ -1044,6 +1047,253 @@ class DatabaseManager:
             # 不要因为迁移失败而中断初始化
             conn.rollback()
 
+    def _migrate_add_seeders_column(self, conn, cursor):
+        """数据库迁移：添加 torrents 表中的 seeders 列"""
+        try:
+            logging.info("检查是否需要添加 torrents 表中的 seeders 列...")
+
+            # 检查 seeders 列是否存在
+            column_exists = False
+
+            if self.db_type == "mysql":
+                cursor.execute("SHOW COLUMNS FROM torrents LIKE 'seeders'")
+                column_exists = cursor.fetchone() is not None
+
+                if not column_exists:
+                    logging.info("检测到缺少 seeders 列，正在添加...")
+                    cursor.execute("ALTER TABLE torrents ADD COLUMN seeders INT DEFAULT 0")
+                    conn.commit()
+                    logging.info("✓ 成功添加 torrents 表中的 seeders 列 (MySQL)")
+
+            elif self.db_type == "postgresql":
+                cursor.execute("""
+                    SELECT column_name
+                    FROM information_schema.columns
+                    WHERE table_name='torrents' AND column_name='seeders'
+                """)
+                column_exists = cursor.fetchone() is not None
+
+                if not column_exists:
+                    logging.info("检测到缺少 seeders 列，正在添加...")
+                    cursor.execute('ALTER TABLE torrents ADD COLUMN seeders INTEGER DEFAULT 0')
+                    conn.commit()
+                    logging.info("✓ 成功添加 torrents 表中的 seeders 列 (PostgreSQL)")
+
+            else:  # SQLite
+                # SQLite 不支持 ADD COLUMN（某些版本），需要重建表
+                cursor.execute("PRAGMA table_info(torrents)")
+                columns = cursor.fetchall()
+                column_exists = any(col[1] == 'seeders' for col in columns)
+
+                if not column_exists:
+                    logging.info("检测到缺少 seeders 列，正在重建表以添加该列...")
+
+                    # 创建新表（包含 seeders 列和复合主键）
+                    cursor.execute("""
+                        CREATE TABLE torrents_new (
+                            hash TEXT NOT NULL,
+                            name TEXT NOT NULL,
+                            save_path TEXT,
+                            size INTEGER,
+                            progress REAL,
+                            state TEXT,
+                            sites TEXT,
+                            `group` TEXT,
+                            details TEXT,
+                            downloader_id TEXT NOT NULL,
+                            last_seen TEXT NOT NULL,
+                            iyuu_last_check TEXT NULL,
+                            seeders INTEGER DEFAULT 0,
+                            PRIMARY KEY (hash, downloader_id)
+                        )
+                    """)
+
+                    # 复制数据（添加 seeders 列，设为 0）
+                    cursor.execute("""
+                        INSERT INTO torrents_new
+                        (hash, name, save_path, size, progress, state, sites, `group`,
+                         details, downloader_id, last_seen, iyuu_last_check, seeders)
+                        SELECT hash, name, save_path, size, progress, state, sites, `group`,
+                               details, downloader_id, last_seen, iyuu_last_check, 0
+                        FROM torrents
+                    """)
+
+                    # 删除旧表
+                    cursor.execute("DROP TABLE torrents")
+
+                    # 重命名新表
+                    cursor.execute("ALTER TABLE torrents_new RENAME TO torrents")
+
+                    conn.commit()
+                    logging.info("✓ 成功添加 torrents 表中的 seeders 列 (SQLite)")
+
+            if column_exists:
+                logging.info("seeders 列已存在，无需迁移")
+
+        except Exception as e:
+            logging.warning(f"迁移添加 seeders 列时出错（可能已经添加）: {e}")
+            # 不要因为迁移失败而中断初始化
+            conn.rollback()
+        finally:
+            if conn:
+                cursor.close()
+                conn.close()
+
+        # 执行复合主键迁移
+        try:
+            self.migrate_to_composite_primary_key()
+        except Exception as e:
+            logging.error(f"复合主键迁移失败: {e}", exc_info=True)
+            # 不要因为迁移失败而中断初始化
+
+    def migrate_to_composite_primary_key(self):
+        """将torrents表从单一主键(hash)迁移到复合主键(hash, downloader_id)"""
+        logging.info("开始迁移torrents表到复合主键结构...")
+        conn = None
+        try:
+            conn = self._get_connection()
+            cursor = self._get_cursor(conn)
+
+            # 检查是否已经是复合主键
+            if self.db_type == "sqlite":
+                cursor.execute("PRAGMA table_info(torrents)")
+            elif self.db_type == "postgresql":
+                cursor.execute("""
+                    SELECT a.attname
+                    FROM pg_index i
+                    JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
+                    WHERE i.indrelid = 'torrents'::regclass AND i.indisprimary
+                """)
+            else:  # MySQL
+                cursor.execute("SHOW INDEX FROM torrents WHERE Key_name = 'PRIMARY'")
+
+            indexes = cursor.fetchall()
+
+            # 对于SQLite，检查是否已经有多个主键列（复合主键）
+            if self.db_type == "sqlite":
+                pk_columns = [idx for idx in indexes if idx[5] > 0]  # pk列的序号大于0表示是主键的一部分
+                is_composite = len(pk_columns) > 1
+            elif self.db_type == "postgresql":
+                # 对于PostgreSQL，检查主键列数（返回的是RealDictRow对象）
+                is_composite = len(indexes) > 1
+            else:
+                # 对于MySQL，检查主键索引的列数
+                is_composite = len(indexes) > 1
+
+            if is_composite:
+                logging.info("torrents表已经是复合主键，无需迁移")
+                return
+
+            logging.info("检测到需要迁移到复合主键，开始迁移...")
+
+            # 创建临时表，使用时间戳避免冲突
+            import time
+            temp_table = f"torrents_temp_{int(time.time())}"
+            if self.db_type == "sqlite":
+                cursor.execute(f"""
+                    CREATE TABLE {temp_table} (
+                        hash TEXT NOT NULL,
+                        name TEXT NOT NULL,
+                        save_path TEXT,
+                        size INTEGER,
+                        progress REAL,
+                        state TEXT,
+                        sites TEXT,
+                        `group` TEXT,
+                        details TEXT,
+                        downloader_id TEXT NOT NULL,
+                        last_seen TEXT NOT NULL,
+                        iyuu_last_check TEXT NULL,
+                        seeders INTEGER DEFAULT 0,
+                        PRIMARY KEY (hash, downloader_id)
+                    )
+                """)
+
+                # 复制数据，处理可能缺少downloader_id的记录
+                cursor.execute(f"""
+                    INSERT INTO {temp_table}
+                    (hash, name, save_path, size, progress, state, sites, `group`,
+                     details, downloader_id, last_seen, iyuu_last_check, seeders)
+                    SELECT hash, name, save_path, size, progress, state, sites, `group`,
+                           COALESCE(downloader_id, 'unknown'), last_seen, iyuu_last_check, seeders
+                    FROM torrents
+                """)
+
+            elif self.db_type == "mysql":
+                cursor.execute(f"""
+                    CREATE TABLE {temp_table} (
+                        hash VARCHAR(40) NOT NULL,
+                        name TEXT NOT NULL,
+                        save_path TEXT,
+                        size BIGINT,
+                        progress FLOAT,
+                        state VARCHAR(50),
+                        sites VARCHAR(255),
+                        `group` VARCHAR(255),
+                        details TEXT,
+                        downloader_id VARCHAR(36) NOT NULL,
+                        last_seen DATETIME NOT NULL,
+                        iyuu_last_check DATETIME NULL,
+                        seeders INT DEFAULT 0,
+                        PRIMARY KEY (hash, downloader_id)
+                    ) ENGINE=InnoDB ROW_FORMAT=Dynamic
+                """)
+
+                cursor.execute(f"""
+                    INSERT INTO {temp_table}
+                    (hash, name, save_path, size, progress, state, sites, `group`,
+                     details, downloader_id, last_seen, iyuu_last_check, seeders)
+                    SELECT hash, name, save_path, size, progress, state, sites, `group`,
+                           COALESCE(downloader_id, 'unknown'), last_seen, iyuu_last_check,
+                           COALESCE(seeders, 0)
+                    FROM torrents
+                """)
+
+            elif self.db_type == "postgresql":
+                cursor.execute(f"""
+                    CREATE TABLE {temp_table} (
+                        hash VARCHAR(40) NOT NULL,
+                        name TEXT NOT NULL,
+                        save_path TEXT,
+                        size BIGINT,
+                        progress REAL,
+                        state VARCHAR(50),
+                        sites VARCHAR(255),
+                        "group" VARCHAR(255),
+                        details TEXT,
+                        downloader_id VARCHAR(36) NOT NULL,
+                        last_seen TIMESTAMP NOT NULL,
+                        iyuu_last_check TIMESTAMP NULL,
+                        seeders INTEGER DEFAULT 0,
+                        PRIMARY KEY (hash, downloader_id)
+                    )
+                """)
+
+                cursor.execute(f"""
+                    INSERT INTO {temp_table}
+                    (hash, name, save_path, size, progress, state, sites, "group",
+                     details, downloader_id, last_seen, iyuu_last_check, seeders)
+                    SELECT hash, name, save_path, size, progress, state, sites, "group",
+                           details, COALESCE(downloader_id, 'unknown'), last_seen, iyuu_last_check,
+                           COALESCE(seeders, 0)
+                    FROM torrents
+                """)
+
+            # 删除旧表，重命名新表
+            cursor.execute(f"DROP TABLE torrents")
+            cursor.execute(f"ALTER TABLE {temp_table} RENAME TO torrents")
+
+            conn.commit()
+            logging.info("✓ 成功迁移torrents表到复合主键结构")
+
+        except Exception as e:
+            logging.error(f"迁移到复合主键时出错: {e}", exc_info=True)
+            if conn:
+                conn.rollback()
+        finally:
+            if conn:
+                cursor.close()
+                conn.close()
 
 
 def reconcile_historical_data(db_manager, config):

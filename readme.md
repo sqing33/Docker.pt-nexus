@@ -45,6 +45,10 @@ services:
     volumes:
       - ./data:/app/data
       - /vol3/1000/pt:/pt # 视频文件存放路径
+      # 如要使用转种上盒功能，tr需要种子文件存放路径，qb使用api无需设置
+      # 设置页面第一个tr映射到/data/tr_torrents/tr1，第二个tr映射到/data/tr_torrents/tr2
+      - /vol1/1000/Docker/transmission/torrents:/data/tr_torrents/tr1
+      - /vol1/1000/Docker/transmission2/torrents:/data/tr_torrents/tr2
     environment:
       - TZ=Asia/Shanghai
       - http_proxy=http://192.168.1.100:7890 # 代理服务器
@@ -64,6 +68,10 @@ services:
     volumes:
       - ./data:/app/data
       - /vol3/1000/pt:/pt # 视频文件存放路径
+      # 如要使用转种上盒功能，tr需要种子文件存放路径，qb使用api无需设置
+      # 设置页面第一个tr映射到/data/tr_torrents/tr1，第二个tr映射到/data/tr_torrents/tr2
+      - /vol1/1000/Docker/transmission/torrents:/data/tr_torrents/tr1
+      - /vol1/1000/Docker/transmission2/torrents:/data/tr_torrents/tr2
     environment:
       - TZ=Asia/Shanghai
       - http_proxy=http://192.168.1.100:7890 # 代理服务器
@@ -88,6 +96,10 @@ services:
     volumes:
       - ./data:/app/data
       - /vol3/1000/pt:/pt # 视频文件存放路径
+      # 如要使用转种上盒功能，tr需要种子文件存放路径，qb使用api无需设置
+      # 设置页面第一个tr映射到/data/tr_torrents/tr1，第二个tr映射到/data/tr_torrents/tr2
+      - /vol1/1000/Docker/transmission/torrents:/data/tr_torrents/tr1
+      - /vol1/1000/Docker/transmission2/torrents:/data/tr_torrents/tr2
     environment:
       - TZ=Asia/Shanghai
       - http_proxy=http://192.168.1.100:7890 # 代理服务器
@@ -112,6 +124,14 @@ services:
 ![热更新](https://img1.pixhost.to/images/10201/661470654_79517501-6fc3-4d37-9f44-440ef15b7ac7.png)
 
 # 更新日志
+
+### v3.2.0（2025.11.30）
+
+> **注：QB下载器使用api现成的方法推送种子到下载器，TR下载器需要映射本地种子目录
+下载器列表里从左到右排序，第一个tr映射到/data/tr_torrents/tr1，第二个/data/tr_torrents/tr2
+例：/vol1/1000/Docker/transmission/torrents:/data/tr_torrents/tr1**
+
+- 新增：暂停本地种子，然添加到盒子进行下载，用于多站转种。（一站多种-转种-上盒）
 
 ### v3.1.6（2025.11.29）
 

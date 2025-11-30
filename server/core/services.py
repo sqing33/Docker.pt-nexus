@@ -690,7 +690,8 @@ class DataTracker(Thread):
                         fields = [
                             "id", "name", "hashString", "downloadDir",
                             "totalSize", "status", "comment", "trackers",
-                            "percentDone", "uploadedEver"
+                            "percentDone", "uploadedEver", "peersGettingFromUs",
+                            "trackerStats", "peers", "peersConnected"
                         ]
                         torrents_list = client_instance.get_torrents(
                             arguments=fields)
@@ -710,12 +711,15 @@ class DataTracker(Thread):
                 t_info = self._normalize_torrent_info(t, downloader["type"],
                                                       client_instance)
                 all_current_hashes.add(t_info["hash"])
-                if (t_info["hash"] not in torrents_to_upsert
+
+                # 使用复合主键 (hash, downloader_id) 作为唯一标识
+                composite_key = f"{t_info['hash']}_{downloader['id']}"
+                if (composite_key not in torrents_to_upsert
                         or t_info["progress"]
-                        > torrents_to_upsert[t_info["hash"]]["progress"]):
+                        > torrents_to_upsert[composite_key]["progress"]):
                     site_name = self._find_site_nickname(
                         t_info["trackers"], core_domain_map, t_info["comment"])
-                    torrents_to_upsert[t_info["hash"]] = {
+                    torrents_to_upsert[composite_key] = {
                         "hash":
                         t_info["hash"],
                         "name":
@@ -737,6 +741,8 @@ class DataTracker(Thread):
                                                  group_to_site_map_lower),
                         "downloader_id":
                         downloader["id"],
+                        "seeders":
+                        t_info.get("seeders", 0),
                     }
                 if t_info["uploaded"] > 0:
                     upload_stats_to_upsert.append(
@@ -761,8 +767,10 @@ class DataTracker(Thread):
                 # 获取该下载器当前的种子哈希
                 downloader_current_hashes = {
                     h
-                    for h in all_current_hashes if torrents_to_upsert.get(
-                        h, {}).get("downloader_id") == downloader_id
+                    for h in all_current_hashes
+                    if any(torrents_to_upsert.get(key, {}).get("downloader_id") == downloader_id
+                           for key in torrents_to_upsert
+                           if key.startswith(f"{h}_"))
                 }
 
                 # 获取数据库中该下载器的历史种子哈希
@@ -793,7 +801,7 @@ class DataTracker(Thread):
                     current_seeding_names = set()
 
                     # 添加当前正在处理的种子中正在做种的名称
-                    for hash_value, torrent_data in torrents_to_upsert.items():
+                    for torrent_data in torrents_to_upsert.values():
                         if torrent_data["state"] not in [
                                 "未做种", "已暂停", "已停止", "错误", "等待", "队列"
                         ]:
@@ -920,17 +928,25 @@ class DataTracker(Thread):
                     f"已更新 {len(hashes_not_in_torrents)} 个种子的is_deleted字段为1")
 
             if torrents_to_upsert:
-                params = [(*d.values(), now_str)
-                          for d in torrents_to_upsert.values()]
+                # 确保参数顺序与 SQL 语句完全匹配
+                params = [
+                    (
+                        d["hash"], d["name"], d["save_path"], d["size"],
+                        d["progress"], d["state"], d["sites"], d["details"],
+                        d["group"], d["downloader_id"], now_str, d["seeders"]
+                    )
+                    for d in torrents_to_upsert.values()
+                ]
                 print(f"【刷新线程】准备写入 {len(params)} 条种子主信息到数据库")
                 # 根据数据库类型使用正确的引号和冲突处理语法
                 # save_path 强制覆盖，其他字段保持原有的覆盖/保留逻辑
+                # 注意：现在使用复合主键(hash, downloader_id)，所以冲突条件也要相应调整
                 if self.db_manager.db_type == "mysql":
-                    sql = """INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, `group`, downloader_id, last_seen) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE name=VALUES(name), save_path=VALUES(save_path), size=VALUES(size), progress=VALUES(progress), state=VALUES(state), sites=COALESCE(NULLIF(VALUES(sites), ''), sites), details=IF(VALUES(details) != '', VALUES(details), details), `group`=COALESCE(NULLIF(VALUES(`group`), ''), `group`), downloader_id=VALUES(downloader_id), last_seen=VALUES(last_seen)"""
+                    sql = """INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, `group`, downloader_id, last_seen, seeders) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE name=VALUES(name), save_path=VALUES(save_path), size=VALUES(size), progress=VALUES(progress), state=VALUES(state), sites=COALESCE(NULLIF(VALUES(sites), ''), sites), details=IF(VALUES(details) != '', VALUES(details), details), `group`=COALESCE(NULLIF(VALUES(`group`), ''), `group`), downloader_id=VALUES(downloader_id), last_seen=VALUES(last_seen), seeders=VALUES(seeders)"""
                 elif self.db_manager.db_type == "postgresql":
-                    sql = """INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, "group", downloader_id, last_seen) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT(hash) DO UPDATE SET name=excluded.name, save_path=excluded.save_path, size=excluded.size, progress=excluded.progress, state=excluded.state, sites=COALESCE(NULLIF(excluded.sites, ''), torrents.sites), details=CASE WHEN excluded.details != '' THEN excluded.details ELSE torrents.details END, "group"=COALESCE(NULLIF(excluded."group", ''), torrents."group"), downloader_id=excluded.downloader_id, last_seen=excluded.last_seen"""
+                    sql = """INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, "group", downloader_id, last_seen, seeders) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT(hash, downloader_id) DO UPDATE SET name=excluded.name, save_path=excluded.save_path, size=excluded.size, progress=excluded.progress, state=excluded.state, sites=COALESCE(NULLIF(excluded.sites, ''), torrents.sites), details=CASE WHEN excluded.details != '' THEN excluded.details ELSE torrents.details END, "group"=COALESCE(NULLIF(excluded."group", ''), torrents."group"), downloader_id=excluded.downloader_id, last_seen=excluded.last_seen, seeders=excluded.seeders"""
                 else:  # sqlite
-                    sql = """INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, "group", downloader_id, last_seen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(hash) DO UPDATE SET name=excluded.name, save_path=excluded.save_path, size=excluded.size, progress=excluded.progress, state=excluded.state, sites=COALESCE(NULLIF(excluded.sites, ''), torrents.sites), details=CASE WHEN excluded.details != '' THEN excluded.details ELSE torrents.details END, "group"=COALESCE(NULLIF(excluded."group", ''), torrents."group"), downloader_id=excluded.downloader_id, last_seen=excluded.last_seen"""
+                    sql = """INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, "group", downloader_id, last_seen, seeders) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(hash, downloader_id) DO UPDATE SET name=excluded.name, save_path=excluded.save_path, size=excluded.size, progress=excluded.progress, state=excluded.state, sites=COALESCE(NULLIF(excluded.sites, ''), torrents.sites), details=CASE WHEN excluded.details != '' THEN excluded.details ELSE torrents.details END, "group"=COALESCE(NULLIF(excluded."group", ''), torrents."group"), downloader_id=excluded.downloader_id, last_seen=excluded.last_seen, seeders=excluded.seeders"""
                 cursor.executemany(sql, params)
                 print(f"【刷新线程】已批量处理 {len(params)} 条种子主信息。")
                 logging.info(f"已批量处理 {len(params)} 条种子主信息。")
@@ -1023,6 +1039,7 @@ class DataTracker(Thread):
                     "comment": t.get("comment", ""),
                     "trackers": trackers_list,
                     "uploaded": t.get("uploaded", 0),
+                    "seeders": t.get("num_complete", 0),  # 完成下载的总客户端数，即我们作为种子的上传对象
                 }
             else:
                 # 从客户端获取的数据是对象格式
@@ -1054,6 +1071,7 @@ class DataTracker(Thread):
                     "comment": t.get("comment", ""),
                     "trackers": trackers_data,
                     "uploaded": t.uploaded,
+                    "seeders": getattr(t, 'num_complete', 0),  # 完成下载的总客户端数，即我们作为种子的上传对象
                 }
 
                 # --- [核心修正] ---
@@ -1102,6 +1120,15 @@ class DataTracker(Thread):
             # 检查数据是从代理获取的还是从客户端获取的
             if isinstance(t, dict):
                 # 从代理获取的数据是字典格式
+                # 获取做种人数：tracker 统计中的网络种子数
+                seeders = 0
+                if t.get("trackerStats"):
+                    # 从tracker统计中获取种子数，使用最大的有效值
+                    valid_seeds = [tracker.get("seederCount", 0) for tracker in t.get("trackerStats", [])
+                                 if tracker.get("seederCount", 0) > 0]
+                    if valid_seeds:
+                        seeders = max(valid_seeds)  # 使用最大的有效种子数
+
                 return {
                     "name": t.get("name", ""),
                     "hash": t.get("hashString", ""),
@@ -1112,9 +1139,25 @@ class DataTracker(Thread):
                     "comment": t.get("comment", ""),
                     "trackers": t.get("trackers", []),
                     "uploaded": t.get("uploadedEver", 0),
+                    "seeders": seeders,
                 }
             else:
                 # 从客户端获取的数据是对象格式
+                # 获取做种人数：tracker 统计中的网络种子数
+                seeders = 0
+                try:
+                    # 从 tracker_stats 获取种子数
+                    if hasattr(t, 'fields') and 'trackerStats' in t.fields:
+                        tracker_stats = t.fields.get('trackerStats', [])
+                        if tracker_stats:
+                            # 获取所有有效的种子数，使用最大的有效值
+                            valid_seeds = [tracker.get('seederCount', 0) for tracker in tracker_stats
+                                         if tracker.get('seederCount', 0) > 0]
+                            if valid_seeds:
+                                seeders = max(valid_seeds)
+                except Exception as e:
+                    logging.debug(f"Failed to get tracker_stats: {e}")
+
                 return {
                     "name":
                     t.name,
@@ -1135,6 +1178,8 @@ class DataTracker(Thread):
                     } for tracker in t.trackers],
                     "uploaded":
                     t.uploaded_ever,
+                    "seeders":
+                    seeders,
                 }
         return {}
 
