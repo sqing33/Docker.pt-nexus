@@ -1522,8 +1522,16 @@ class TorrentMigrator:
                 )
 
                 # 使用三层解耦模型标准化参数
+                print(f"[调试-migrator] 调用_standardize_parameters前:")
+                print(f"  - extracted_data['source_params']: {extracted_data.get('source_params', {})}")
+                print(f"  - title_components: {title_components}")
+
                 standardized_params = self._standardize_parameters(
                     extracted_data, title_components)
+
+                print(f"[调试-migrator] 调用_standardize_parameters后:")
+                print(f"  - standardized_params: {standardized_params}")
+                print(f"  - audio_codec: {standardized_params.get('audio_codec')}")
 
                 medium_value = str(standardized_params.get("medium",
                                                            "")).lower()
@@ -1540,44 +1548,7 @@ class TorrentMigrator:
                     f"[调试] 标准化后 - standardized_params['team']: {standardized_params.get('team')}"
                 )
 
-                # [新增] 音频编码择优逻辑
-                try:
-                    # 1. 单独为标题组件中的音频编码进行一次标准化
-                    audio_from_title_raw = next(
-                        (item['value'] for item in title_components
-                         if item.get('key') == '音频编码'), None)
-                    if audio_from_title_raw:
-                        # 借用 ParameterMapper 的能力来标准化这个单独的值
-                        temp_extracted = {
-                            'source_params': {
-                                '音频编码': audio_from_title_raw
-                            }
-                        }
-                        temp_standardized = self.parameter_mapper.map_parameters(
-                            self.SOURCE_NAME, self.SOURCE_SITE_CODE,
-                            temp_extracted)
-                        audio_from_title_standard = temp_standardized.get(
-                            'audio_codec')
-
-                        # 2. 对比层级并覆盖
-                        if audio_from_title_standard:
-                            audio_from_params_standard = standardized_params.get(
-                                'audio_codec')
-
-                            title_rank = AUDIO_CODEC_HIERARCHY.get(
-                                audio_from_title_standard, 0)
-                            params_rank = AUDIO_CODEC_HIERARCHY.get(
-                                audio_from_params_standard, -1)
-
-                            if title_rank > params_rank:
-                                self.logger.info(
-                                    f"音频编码优化：使用标题中的 '{audio_from_title_standard}' (层级 {title_rank}) 覆盖了参数中的 '{audio_from_params_standard}' (层级 {params_rank})。"
-                                )
-                                standardized_params[
-                                    'audio_codec'] = audio_from_title_standard
-                except Exception as e:
-                    self.logger.warning(f"音频编码择优处理时发生错误: {e}")
-                # [新增结束]
+                # [简化] 音频编码择优逻辑已在 ParameterMapper 中处理，此处移除冗余代码
 
                 # [新增] 添加官组致谢声明
                 try:

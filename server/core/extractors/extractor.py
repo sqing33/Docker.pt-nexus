@@ -118,7 +118,8 @@ class Extractor:
         content_filter = get_content_filter()
         return content_filter.clean_subtitle(subtitle)
 
-    def _apply_content_filtering(self, extracted_data: Dict[str, Any]) -> Dict[str, Any]:
+    def _apply_content_filtering(
+            self, extracted_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Apply content filtering to extracted data from special extractors
 
@@ -132,7 +133,8 @@ class Extractor:
 
         # Filter subtitle if it exists
         if extracted_data.get("subtitle"):
-            extracted_data["subtitle"] = content_filter.clean_subtitle(extracted_data["subtitle"])
+            extracted_data["subtitle"] = content_filter.clean_subtitle(
+                extracted_data["subtitle"])
 
         # Filter intro content if it exists
         if extracted_data.get("intro"):
@@ -140,9 +142,11 @@ class Extractor:
 
             # Process statement section for ARDTU declarations and technical parameters
             if intro.get("statement"):
-                result = content_filter.filter_quotes_in_statement(intro["statement"])
+                result = content_filter.filter_quotes_in_statement(
+                    intro["statement"])
                 intro["statement"] = result["filtered_statement"]
-                intro["removed_ardtudeclarations"] = result["removed_declarations"]
+                intro["removed_ardtudeclarations"] = result[
+                    "removed_declarations"]
 
         return extracted_data
 
@@ -464,7 +468,8 @@ class Extractor:
                 is_bdinfo_after = ("DISC INFO" in quote
                                    and "PLAYLIST REPORT" in quote)
                 is_release_info_after = ".Release.Info" in quote and "ENCODER" in quote
-                is_technical_after = content_filter.is_technical_params_quote(quote)
+                is_technical_after = content_filter.is_technical_params_quote(
+                    quote)
                 is_unwanted_pattern = content_filter.is_unwanted_pattern(quote)
 
                 if is_mediainfo_after or is_bdinfo_after or is_release_info_after:
@@ -916,27 +921,62 @@ class ParameterMapper:
                         f"检测到合作制作组 '{raw_value}'，使用 '@' 后的制作组 '{value_str}' 进行映射"
                     )
 
+            # 媒介特殊预处理：确保 BluRay Remux 能正确映射
+            if param_key == "medium":
+                # 将 BluRay Remux 映射为 BD Remux，以便匹配全局映射
+                if re.match(r'^BluRay\s*Remux$', value_str, re.IGNORECASE):
+                    value_str = "BD Remux"
+                    print(
+                        f"[调试-标题解析参数] 媒介预处理: '{original_value_str}' -> '{value_str}'"
+                    )
+                # 将 Blu-ray Remux 保持原样，匹配全局映射
+                elif re.match(r'^Blu-?ray\s*Remux$', value_str, re.IGNORECASE):
+                    value_str = "Blu-ray Remux"
+                    print(
+                        f"[调试-标题解析参数] 媒介预处理: '{original_value_str}' -> '{value_str}'"
+                    )
+
             # 优先级 1: 尝试在全局映射中查找
             global_mappings = GLOBAL_STANDARD_KEYS.get(param_key, {})
             for source_text, standard_key in global_mappings.items():
                 # 使用精确匹配优先，然后是部分匹配
                 if source_text.lower() == value_str.lower():
+                    print(
+                        f"[调试-标题解析参数] {param_key} 精确匹配: '{value_str}' -> '{standard_key}'"
+                    )
                     return standard_key
-            # 如果没有精确匹配，再尝试部分匹配（防止WiKi匹配到WiKibbs等）
-            for source_text, standard_key in global_mappings.items():
+            # 如果没有精确匹配，尝试部分匹配，但优先匹配更长的键
+            # 按键长度降序排列，确保更具体的匹配优先
+            sorted_mappings = sorted(global_mappings.items(),
+                                     key=lambda x: len(x[0]),
+                                     reverse=True)
+            for source_text, standard_key in sorted_mappings:
                 if source_text.lower() in value_str.lower():
+                    print(
+                        f"[调试-标题解析参数] {param_key} 部分匹配: '{value_str}' 包含 '{source_text}' -> '{standard_key}'"
+                    )
                     return standard_key
 
             # 优先级 2: 尝试在源站点特定的映射中查找
             site_mappings = site_standard_keys.get(param_key, {})
-            for source_text, standard_key in site_mappings.items():
+            # 同样按键长度降序排列，确保更具体的匹配优先
+            sorted_site_mappings = sorted(site_mappings.items(),
+                                          key=lambda x: len(x[0]),
+                                          reverse=True)
+            for source_text, standard_key in sorted_site_mappings:
                 if source_text.lower() in value_str.lower():
+                    print(
+                        f"[调试-标题解析参数] {param_key} 站点映射匹配: '{value_str}' -> '{standard_key}'"
+                    )
                     return standard_key
 
             # 如果都找不到，返回一个默认值或处理过的原始值
             if param_key == "team":
                 # [修改] 无论原始值是什么，只要无法映射就返回 team.other
+                print(f"[调试-标题解析参数] {param_key} 无法映射，返回 team.other")
                 return "team.other"
+
+            print(f"[调试-标题解析参数] {param_key} 无法映射，返回原始值: '{value_str}'")
             return value_str  # 其他参数返回原始值
 
         # 1. 分别从 source_params 和 title_components 提取并标准化
@@ -948,6 +988,8 @@ class ParameterMapper:
                 source_standard_values[param_key] = get_standard_key_for_value(
                     raw_value, param_key)
 
+        print(f"[调试-ParameterMapper] 源站点标准化参数: {source_standard_values}")
+
         title_standard_values = {}
         # 使用默认的 title_components 配置，如果站点配置中没有定义
         title_components_config = source_parsers.get("title_components",
@@ -956,35 +998,40 @@ class ParameterMapper:
             item["key"]: item["value"]
             for item in title_components
         }
+        print(f"[调试-ParameterMapper] 标题组件原始参数: {title_params}")
+
         for param_key, config in title_components_config.items():
             raw_value = title_params.get(config.get("source_key"))
             if raw_value:
                 title_standard_values[param_key] = get_standard_key_for_value(
                     raw_value, param_key)
 
-        # 2. 合并决策
-        final_standardized_params = source_standard_values.copy()
+        print(f"[调试-ParameterMapper] 标题拆解标准化参数: {title_standard_values}")
 
-        for key, title_value in title_standard_values.items():
-            if not title_value: continue
+        # 2. 合并决策 - 优先使用标题拆解参数
+        final_standardized_params = title_standard_values.copy()
+        print(
+            f"[调试-ParameterMapper] 初始最终参数（来自标题）: {final_standardized_params}")
 
-            # [核心修正] 制作组（team）总是优先使用标题中的信息
-            if key == 'team':
-                final_standardized_params[key] = title_value
-                continue
+        for key, source_value in source_standard_values.items():
+            if not source_value: continue
 
-            # 音频编码使用择优逻辑
+            # [修改] 音频编码也优先使用标题拆解参数，不再进行择优比较
             if key == 'audio_codec':
-                source_value = final_standardized_params.get(key)
-                title_rank = AUDIO_CODEC_HIERARCHY.get(title_value, 0)
-                source_rank = AUDIO_CODEC_HIERARCHY.get(source_value, -1)
-                if title_rank > source_rank:
-                    final_standardized_params[key] = title_value
+                title_value = final_standardized_params.get(key)
+                print(
+                    f"[调试-ParameterMapper] 音频编码优先使用标题: {title_value} (忽略源站点: {source_value})"
+                )
                 continue
 
-            # 其他参数作为补充
+            # 其他参数：如果标题中没有，才从源站点补充
             if key not in final_standardized_params:
-                final_standardized_params[key] = title_value
+                final_standardized_params[key] = source_value
+                print(f"[调试-ParameterMapper] 从源站点补充参数 {key}: {source_value}")
+            else:
+                print(f"[调试-ParameterMapper] 跳过源站点参数 {key}（标题中已存在）")
+
+        print(f"[调试-ParameterMapper] 最终标准化参数: {final_standardized_params}")
 
         # 如果source参数不存在，尝试从原始参数中获取
         # 注意：现在统一使用source映射，不再有单独的processing映射

@@ -921,7 +921,7 @@ def upload_data_title(title: str, torrent_filename: str = ""):
         "medium":
         r"UHDTV|UHD\s*Blu-?ray|Blu-?ray\s+DIY|Blu-ray|BluRay\s+DIY|BluRay|BDrip|BD-?rip|WEB-DL|WEBrip|TVrip|DVDRip|HDTV",
         "audio":
-        r"DTS-HD(?:\s*MA)?(?:\s*\d\.\d)?|(?:Dolby\s*)?TrueHD(?:\s*Atmos)?(?:\s*\d\.\d)?|Atmos(?:\s*TrueHD)?(?:\s*\d\.\d)?|DTS(?:\s*\d\.\d)?|DDP(?:\s*\d\.\d)?|DD\+(?:\s*\d\.\d)?|DD(?:\s*\d\.\d)?|AC3(?:\s*\d\.\d)?|FLAC(?:\s*\d\.\d)?|AAC(?:\s*\d\.\d)?|LPCM(?:\s*\d\.\d)?|AV3A\s*\d\.\d|\d+\s*Audios?|MP2|DUAL",
+        r"DTS-?HD\s*MA(?:\s*\d\.\d)?(?:\s*X)?|DTS-?HD\s*HR(?:\s*\d\.\d)?|DTS-?HD(?:\s*\d\.\d)?|DTS-?X(?:\s*\d\.\d)?|DTS\s*X(?:\s*\d\.\d)?|(?:Dolby\s*)?TrueHD(?:\s*Atmos)?(?:\s*\d\.\d)?|Atmos(?:\s*TrueHD)?(?:\s*\d\.\d)?|DDP\s*Atmos(?:\s*\d\.\d)?|DDP(?:\s*\d\.\d)?|E-?AC-?3(?:\s*\d\.\d)?|DD\+(?:\s*\d\.\d)?|DD(?:\s*\d\.\d)?|AC3(?:\s*\d\.\d)?|FLAC(?:\s*\d\.\d)?|AAC(?:\s*\d\.\d)?|LPCM(?:\s*/\s*PCM)?(?:\s*\d\.\d)?|PCM(?:\s*\d\.\d)?|AV3A\s*\d\.\d|\d+\s*Audios?|MP2|DUAL",
         "hdr_format":
         r"Dolby Vision|DoVi|HDR10\+|HDRVivid|HDR10|HLG|HDR|SDR|DV|Vivid",
         "resolution": r"\d{3,4}[pi]|4K",
@@ -1018,6 +1018,27 @@ def upload_data_title(title: str, torrent_filename: str = ""):
                        val,
                        flags=re.I) for val in processed_values
             ]
+            # 音频编码格式标准化处理
+            audio_standardization_rules = [
+                # DTS系列标准化
+                (r"DTS-?HD\s*MA", r"DTS-HD MA"),  # DTS-HDMA -> DTS-HD MA
+                (r"DTS-?HD\s*HR", r"DTS-HD HR"),  # DTS-HDHR -> DTS-HD HR
+
+                # TrueHD系列标准化
+                (r"True-?HD\s*Atmos", r"TrueHD Atmos"),  # True-HDAtmos -> TrueHD Atmos
+                (r"True[-\s]?HD", r"TrueHD"),             # True-HD -> TrueHD
+
+                # DDP系列标准化
+                (r"DDP\s*Atmos", r"DDP Atmos"),           # DDPAtmos -> DDP Atmos
+            ]
+
+            for pattern, replacement in audio_standardization_rules:
+                processed_values = [
+                    re.sub(pattern, replacement, val, flags=re.I)
+                    for val in processed_values
+                ]
+
+        # 媒介格式标准化处理 - 移除到正确的位置
 
         unique_processed = sorted(
             list(set(processed_values)),
@@ -1063,21 +1084,50 @@ def upload_data_title(title: str, torrent_filename: str = ""):
                 ] if key == "audio" else raw_values)
                 if key == "audio":
                     processed_values = [
-                        # 先处理缺少点的情况，如 FLAC 20 -> FLAC 2.0, FLAC 2 0 -> FLAC 2.0
+                        # 先处理缺少点的情况，如 FLAC 20 -> FLAC 2.0, FLAC 2 0 -> FLAC 2.0, DTS 51 -> DTS 5.1
                         re.sub(
-                            r"((?:FLAC|DDP|AV3A|AAC|LPCM|AC3|DD))\s*(\d)\s*(\d)",
+                            r"((?:DTS|FLAC|DDP|AV3A|AAC|LPCM|AC3|DD))\s*(\d)\s*(\d)",
                             r"\1 \2.\3",
                             val,
                             flags=re.I) for val in processed_values
                     ]
                     processed_values = [
-                        # 再处理没有空格的情况，如 FLAC2.0 -> FLAC 2.0
+                        # 再处理没有空格的情况，如 FLAC2.0 -> FLAC 2.0, DTS5.1 -> DTS 5.1
                         re.sub(
-                            r"((?:FLAC|DDP|AV3A|AAC|LPCM|AC3|DD))(\d(?:\.\d)?)",
+                            r"((?:DTS|FLAC|DDP|AV3A|AAC|LPCM|AC3|DD))(\d(?:\.\d)?)",
                             r"\1 \2",
                             val,
                             flags=re.I) for val in processed_values
                     ]
+                    # 音频编码格式标准化处理
+                    audio_standardization_rules = [
+                        # DTS系列标准化
+                        (r"DTS-?HD\s*MA", r"DTS-HD MA"),  # DTS-HDMA -> DTS-HD MA
+                        (r"DTS-?HD\s*HR", r"DTS-HD HR"),  # DTS-HDHR -> DTS-HD HR
+                        (r"DTS-?X", r"DTS:X"),           # DTSX -> DTS:X
+                        (r"DTS\s*X", r"DTS:X"),          # DTS X -> DTS:X
+
+                        # TrueHD系列标准化
+                        (r"True-?HD\s*Atmos", r"TrueHD Atmos"),  # True-HDAtmos -> TrueHD Atmos
+                        (r"True[-\s]?HD", r"TrueHD"),             # True-HD -> TrueHD
+
+                        # DDP系列标准化
+                        (r"DDP\s*Atmos", r"DDP Atmos"),           # DDPAtmos -> DDP Atmos
+                        (r"E[-\s]?AC[-\s]?3", r"E-AC-3"),        # EAC3 -> E-AC-3
+                        (r"DD\+", r"DD+"),                        # DD+ 格式保持
+
+                        # LPCM系列标准化
+                        (r"LPCM\s*/\s*PCM", r"LPCM"),            # LPCM/PCM -> LPCM
+                        (r"PCM", r"PCM"),                         # PCM 保持
+                    ]
+
+                    for pattern, replacement in audio_standardization_rules:
+                        processed_values = [
+                            re.sub(pattern, replacement, val, flags=re.I)
+                            for val in processed_values
+                        ]
+
+                    # 媒介格式标准化处理 - 移除到正确的位置
 
                 # 取独一无二的值并按出现顺序排序
                 unique_processed = sorted(
@@ -1283,6 +1333,14 @@ def upload_data_title(title: str, torrent_filename: str = ""):
         })
 
     print(f"主标题解析成功。")
+
+    # 调试输出：检查音频编码提取结果
+    audio_component = next((comp for comp in final_components_list if comp.get("key") == "音频编码"), None)
+    if audio_component:
+        print(f"[调试-upload_data_title] 音频编码提取结果: '{audio_component.get('value')}'")
+    else:
+        print(f"[调试-upload_data_title] 未提取到音频编码")
+
     return final_components_list
 
 
