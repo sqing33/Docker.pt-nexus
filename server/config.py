@@ -12,9 +12,9 @@ load_dotenv()
 # 根据 DEV_ENV 环境变量设置配置文件路径
 if os.getenv("DEV_ENV") == "true":
     # 开发环境
-    DATA_DIR = "/root/Code/Docker.pt-nexus-dev/server/data"
-    SITES_DATA_FILE = "/root/Code/Docker.pt-nexus-dev/server/sites_data.json"
-    GLOBAL_MAPPINGS = "/root/Code/Docker.pt-nexus-dev/server/configs/global_mappings.yaml"
+    DATA_DIR = "/home/sqing/Codes/Docker.pt-nexus-dev/server/data"
+    SITES_DATA_FILE = "/home/sqing/Codes/Docker.pt-nexus-dev/server/sites_data.json"
+    GLOBAL_MAPPINGS = "/home/sqing/Codes/Docker.pt-nexus-dev/server/configs/global_mappings.yaml"
 else:
     # 生产环境
     DATA_DIR = "/app/data"

@@ -86,7 +86,7 @@ def _upload_to_pixhost(image_path: str):
     :param image_path: 本地图片文件的路径。
     :return: 成功时返回图片的展示URL，失败时返回None。
     """
-    api_url = 'https://api.pixhost.to/images'
+    api_url = 'http://ptn-proxy.sqing33.dpdns.org/https://api.pixhost.to/images'
     params = {'content_type': 0}
     headers = {
         'User-Agent':
@@ -699,7 +699,7 @@ def _extract_bdinfo(bluray_path: str) -> str:
             return "bdinfo提取失败：指定的路径不存在。"
 
         # 检查BDInfo工具是否存在
-        bdinfo_path = "/root/Code/Docker.pt-nexus-dev/bdinfo/BDInfo"
+        bdinfo_path = "/home/sqing/Codes/Docker.pt-nexus-dev/bdinfo/BDInfo"
         if not os.path.exists(bdinfo_path):
             print(f"错误：BDInfo工具不存在: {bdinfo_path}")
             return "bdinfo提取失败：BDInfo工具未找到。"
@@ -1025,11 +1025,12 @@ def upload_data_title(title: str, torrent_filename: str = ""):
                 (r"DTS-?HD\s*HR", r"DTS-HD HR"),  # DTS-HDHR -> DTS-HD HR
 
                 # TrueHD系列标准化
-                (r"True-?HD\s*Atmos", r"TrueHD Atmos"),  # True-HDAtmos -> TrueHD Atmos
-                (r"True[-\s]?HD", r"TrueHD"),             # True-HD -> TrueHD
+                (r"True-?HD\s*Atmos", r"TrueHD Atmos"
+                 ),  # True-HDAtmos -> TrueHD Atmos
+                (r"True[-\s]?HD", r"TrueHD"),  # True-HD -> TrueHD
 
                 # DDP系列标准化
-                (r"DDP\s*Atmos", r"DDP Atmos"),           # DDPAtmos -> DDP Atmos
+                (r"DDP\s*Atmos", r"DDP Atmos"),  # DDPAtmos -> DDP Atmos
             ]
 
             for pattern, replacement in audio_standardization_rules:
@@ -1102,23 +1103,27 @@ def upload_data_title(title: str, torrent_filename: str = ""):
                     # 音频编码格式标准化处理
                     audio_standardization_rules = [
                         # DTS系列标准化
-                        (r"DTS-?HD\s*MA", r"DTS-HD MA"),  # DTS-HDMA -> DTS-HD MA
-                        (r"DTS-?HD\s*HR", r"DTS-HD HR"),  # DTS-HDHR -> DTS-HD HR
-                        (r"DTS-?X", r"DTS:X"),           # DTSX -> DTS:X
-                        (r"DTS\s*X", r"DTS:X"),          # DTS X -> DTS:X
+                        (r"DTS-?HD\s*MA", r"DTS-HD MA"
+                         ),  # DTS-HDMA -> DTS-HD MA
+                        (r"DTS-?HD\s*HR",
+                         r"DTS-HD HR"),  # DTS-HDHR -> DTS-HD HR
+                        (r"DTS-?X", r"DTS:X"),  # DTSX -> DTS:X
+                        (r"DTS\s*X", r"DTS:X"),  # DTS X -> DTS:X
 
                         # TrueHD系列标准化
-                        (r"True-?HD\s*Atmos", r"TrueHD Atmos"),  # True-HDAtmos -> TrueHD Atmos
-                        (r"True[-\s]?HD", r"TrueHD"),             # True-HD -> TrueHD
+                        (r"True-?HD\s*Atmos", r"TrueHD Atmos"
+                         ),  # True-HDAtmos -> TrueHD Atmos
+                        (r"True[-\s]?HD", r"TrueHD"),  # True-HD -> TrueHD
 
                         # DDP系列标准化
-                        (r"DDP\s*Atmos", r"DDP Atmos"),           # DDPAtmos -> DDP Atmos
-                        (r"E[-\s]?AC[-\s]?3", r"E-AC-3"),        # EAC3 -> E-AC-3
-                        (r"DD\+", r"DD+"),                        # DD+ 格式保持
+                        (r"DDP\s*Atmos", r"DDP Atmos"
+                         ),  # DDPAtmos -> DDP Atmos
+                        (r"E[-\s]?AC[-\s]?3", r"E-AC-3"),  # EAC3 -> E-AC-3
+                        (r"DD\+", r"DD+"),  # DD+ 格式保持
 
                         # LPCM系列标准化
-                        (r"LPCM\s*/\s*PCM", r"LPCM"),            # LPCM/PCM -> LPCM
-                        (r"PCM", r"PCM"),                         # PCM 保持
+                        (r"LPCM\s*/\s*PCM", r"LPCM"),  # LPCM/PCM -> LPCM
+                        (r"PCM", r"PCM"),  # PCM 保持
                     ]
 
                     for pattern, replacement in audio_standardization_rules:
@@ -1335,9 +1340,13 @@ def upload_data_title(title: str, torrent_filename: str = ""):
     print(f"主标题解析成功。")
 
     # 调试输出：检查音频编码提取结果
-    audio_component = next((comp for comp in final_components_list if comp.get("key") == "音频编码"), None)
+    audio_component = next(
+        (comp for comp in final_components_list if comp.get("key") == "音频编码"),
+        None)
     if audio_component:
-        print(f"[调试-upload_data_title] 音频编码提取结果: '{audio_component.get('value')}'")
+        print(
+            f"[调试-upload_data_title] 音频编码提取结果: '{audio_component.get('value')}'"
+        )
     else:
         print(f"[调试-upload_data_title] 未提取到音频编码")
 
@@ -1584,8 +1593,12 @@ def upload_data_screenshot(source_info,
     return screenshots
 
 
-def add_torrent_to_downloader(detail_page_url: str, save_path: str,
-                              downloader_id: str, db_manager, config_manager, direct_download_url: str = ""):
+def add_torrent_to_downloader(detail_page_url: str,
+                              save_path: str,
+                              downloader_id: str,
+                              db_manager,
+                              config_manager,
+                              direct_download_url: str = ""):
     """
     从种子详情页下载 .torrent 文件并添加到指定的下载器。
     [最终修复版] 修正了向 Transmission 发送数据时的双重编码问题。
@@ -1695,7 +1708,8 @@ def add_torrent_to_downloader(detail_page_url: str, save_path: str,
             # 检查是否为haidan站点
             if 'haidan' in site_base_url:
                 # Haidan站点需要提取torrent_id而不是id
-                torrent_id_match = re.search(r"torrent_id=(\d+)", detail_page_url)
+                torrent_id_match = re.search(r"torrent_id=(\d+)",
+                                             detail_page_url)
                 if not torrent_id_match:
                     raise ValueError("无法从详情页URL中提取种子ID（torrent_id）。")
                 torrent_id = torrent_id_match.group(1)
@@ -1703,7 +1717,8 @@ def add_torrent_to_downloader(detail_page_url: str, save_path: str,
                 download_link_tag = soup.find(
                     'a', href=re.compile(r"download.php\?id="))
 
-                if not download_link_tag: raise RuntimeError("在详情页HTML中未能找到下载链接！")
+                if not download_link_tag:
+                    raise RuntimeError("在详情页HTML中未能找到下载链接！")
 
                 download_url_part = str(download_link_tag['href'])  # 显式转换为str
 
@@ -1720,7 +1735,8 @@ def add_torrent_to_downloader(detail_page_url: str, save_path: str,
 
                 download_link_tag = soup.select_one(
                     f'a.index[href^="download.php?id={torrent_id}"]')
-                if not download_link_tag: raise RuntimeError("在详情页HTML中未能找到下载链接！")
+                if not download_link_tag:
+                    raise RuntimeError("在详情页HTML中未能找到下载链接！")
 
                 download_url_part = str(download_link_tag['href'])  # 显式转换为str
                 full_download_url = f"{site_base_url}/{download_url_part}"
@@ -2823,7 +2839,7 @@ def _transfer_poster_to_pixhost(poster_url: str) -> str:
             print(f"   临时文件已保存: {temp_file}")
 
             # 3. 上传到pixhost
-            api_url = 'https://api.pixhost.to/images'
+            api_url = 'http://ptn-proxy.sqing33.dpdns.org/https://api.pixhost.to/images'
             params = {'content_type': 0, 'max_th_size': 420}
             upload_headers = {
                 'User-Agent':

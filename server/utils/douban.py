@@ -930,7 +930,7 @@ def _transfer_poster_to_pixhost(poster_url: str) -> str:
             print(f"   临时文件已保存: {temp_file}")
 
             # 3. 上传到pixhost
-            api_url = 'https://api.pixhost.to/images'
+            api_url = 'http://ptn-proxy.sqing33.dpdns.org/https://api.pixhost.to/images'
             params = {'content_type': 0, 'max_th_size': 420}
             upload_headers = {
                 'User-Agent':

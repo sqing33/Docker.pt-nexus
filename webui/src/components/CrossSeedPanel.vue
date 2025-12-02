@@ -25,7 +25,7 @@
       </div>
     </header>
 
-    <!-- 2. 中间内容区 (自适应高度、可滚动) -->
+    <!-- 2. 中间内容区 -->
     <main class="panel-content">
       <!-- 步骤 0: 核对种子详情 -->
       <div v-if="activeStep === 0" class="step-container details-container">
@@ -324,10 +324,10 @@
                           <img
                             v-for="(url, index) in posterImages"
                             :key="'poster-' + index"
-                            :src="url"
+                            :src="getProxyImageUrl(url)"
                             alt="海报预览"
                             class="preview-image"
-                            @error="handleImageError(url, 'poster', index)"
+                            @error="handleImageErrorWithProxy(url, 'poster', index)"
                           />
                         </template>
                         <div v-else class="preview-placeholder">暂无海报预览</div>
@@ -372,10 +372,10 @@
                       >
                         <div class="carousel-image-wrapper">
                           <img
-                            :src="url"
+                            :src="getProxyImageUrl(url)"
                             alt="截图预览"
                             class="carousel-image"
-                            @error="handleImageError(url, 'screenshot', index)"
+                            @error="handleImageErrorWithProxy(url, 'screenshot', index)"
                           />
                         </div>
                       </el-carousel-item>
@@ -663,11 +663,11 @@
                   <img
                     v-for="(url, index) in posterImages"
                     :key="'poster-preview-' + index"
-                    :src="url"
+                    :src="getProxyImageUrl(url)"
                     :alt="'海报 ' + (index + 1)"
                     class="preview-image-inline"
                     style="width: 300px"
-                    @error="handleImageError(url, 'poster', index)"
+                    @error="handleImageErrorWithProxy(url, 'poster', index)"
                   />
                 </div>
               </div>
@@ -687,10 +687,10 @@
                   <img
                     v-for="(url, index) in screenshotImages"
                     :key="'screenshot-preview-' + index"
-                    :src="url"
+                    :src="getProxyImageUrl(url)"
                     :alt="'截图 ' + (index + 1)"
                     class="preview-image-inline"
-                    @error="handleImageError(url, 'screenshot', index)"
+                    @error="handleImageErrorWithProxy(url, 'screenshot', index)"
                   />
                 </div>
               </div>
@@ -1265,6 +1265,42 @@ const parseImageUrls = (text: string) => {
   const regex = /\[img\](https?:\/\/[^\s[\]]+)\[\/img\]/gi
   const matches = [...text.matchAll(regex)]
   return matches.map((match) => match[1])
+}
+
+// 图片代理URL处理
+const imageProxyMap = ref(new Map<string, string>())
+
+const getProxyImageUrl = (originalUrl: string): string => {
+  // 如果已经尝试过代理URL，直接返回
+  if (imageProxyMap.value.has(originalUrl)) {
+    return imageProxyMap.value.get(originalUrl)!
+  }
+
+  // 首次尝试原始URL
+  imageProxyMap.value.set(originalUrl, originalUrl)
+  return originalUrl
+}
+
+const handleImageErrorWithProxy = (url: string, type: 'poster' | 'screenshot', index: number) => {
+  // 检查是否已经尝试过代理
+  const currentUrl = imageProxyMap.value.get(url)
+  if (currentUrl && !currentUrl.startsWith('http://ptn-proxy.sqing33.dpdns.org/')) {
+    // 尝试使用代理URL
+    const proxyUrl = `http://ptn-proxy.sqing33.dpdns.org/${url}`
+    imageProxyMap.value.set(url, proxyUrl)
+
+    // 强制更新图片显示
+    const imgElements = document.querySelectorAll(`img[src="${currentUrl}"]`)
+    imgElements.forEach((img) => {
+      img.setAttribute('src', proxyUrl)
+    })
+
+    console.log(`图片加载失败，尝试使用代理URL: ${proxyUrl}`)
+    return // 不调用原有的错误处理，给代理URL一次机会
+  }
+
+  // 如果代理URL也失败了，调用原有的错误处理
+  handleImageError(url, type, index)
 }
 
 const activeStep = ref(0)
@@ -4643,7 +4679,7 @@ const filterUploadedParam = (url: string): string => {
   border-color: var(--el-color-danger-light-8);
 }
 
-/* --- 2. (可选但推荐) 为所有无效的 el-select 添加外层红框作为额外提示 --- */
+/* --- 2. 为所有无效的 el-select 添加外层红框作为额外提示 --- */
 .el-select.is-invalid :deep(.el-input__wrapper) {
   box-shadow: 0 0 0 1px var(--el-color-danger) inset !important;
 }

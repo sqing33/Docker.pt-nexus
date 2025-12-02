@@ -14,6 +14,9 @@ import zhCn from 'element-plus/es/locale/lang/zh-cn'
 // 引入公共毛玻璃样式
 import './assets/styles/glass-morphism.scss'
 
+// 引入全局字体设置
+import './assets/styles/typography.scss'
+
 // 如果需要，可以引入 ECharts
 import * as echarts from 'echarts'
 
@@ -58,15 +61,15 @@ axios.interceptors.request.use((config) => {
     config.headers = config.headers || {}
     config.headers['Authorization'] = `Bearer ${token}`
   }
-  
+
   // 修复cookie泄露问题：确保不发送不必要的cookie
   config.withCredentials = false
-  
+
   // 设置更严格的请求头，避免携带其他应用的cookie
   if (config.headers) {
     config.headers['X-Requested-With'] = 'XMLHttpRequest'
   }
-  
+
   return config
 })
 

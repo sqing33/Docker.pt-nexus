@@ -27,7 +27,7 @@ def extract_imdb_id(imdb_url: str) -> str:
     return ""
 
 
-def imdb_to_tmdb(imdb_url: str, api_key: str = None) -> str:
+def imdb_to_tmdb(imdb_url: str, api_key: str = None) -> tuple[str, str] | str:
     """
     通过IMDb链接获取TMDB链接
 
@@ -49,31 +49,59 @@ def imdb_to_tmdb(imdb_url: str, api_key: str = None) -> str:
         api_key = "0f79586eb9d92afa2b7266f7928b055c"
         logger.debug("使用默认TMDB API Key")
 
-    # 构造TMDB API请求
-    api_url = f"https://api.themoviedb.org/3/find/{imdb_id}?external_source=imdb_id&api_key={api_key}"
+    # 构造TMDB API基础URL列表，优先使用直接API，失败时使用代理
+    api_bases = [
+        ("直连API", "https://api.tmdb.org"),
+        ("代理API",
+         "http://ptn-proxy.sqing33.dpdns.org/https://api.themoviedb.org")
+    ]
 
     try:
-        logger.info(f"正在通过TMDB API查询IMDb ID: {imdb_id}")
+        logger.info(f"正在通过{api_bases}查询IMDb ID: {imdb_id}")
 
-        # 发送API请求，增加重试机制
+        # 构造API路径和查询参数
+        api_path = f"/3/find/{imdb_id}?external_source=imdb_id&api_key={api_key}"
+
+        # 依次尝试不同的API端点
+        data = None
         max_retries = 3
-        for attempt in range(max_retries):
-            try:
-                response = requests.get(api_url, timeout=30)
-                response.raise_for_status()
-                break
-            except (requests.exceptions.RequestException,
-                    requests.exceptions.SSLError) as e:
-                if attempt < max_retries - 1:
-                    logger.warning(
-                        f"TMDB API请求失败 (尝试 {attempt + 1}/{max_retries}): {e}")
-                    import time
-                    time.sleep(2**attempt)  # 指数退避
-                    continue
-                else:
-                    raise e
 
-        data = response.json()
+        for url_name, api_base in api_bases:
+            # 拼接完整的API URL
+            api_url = f"{api_base}{api_path}"
+            logger.info(f"尝试使用{url_name}: {api_base}")
+
+            # 发送API请求，增加重试机制
+            for attempt in range(max_retries):
+                try:
+                    response = requests.get(api_url, timeout=30)
+                    response.raise_for_status()
+                    data = response.json()
+                    logger.info(f"{url_name}请求成功")
+                    break
+                except (requests.exceptions.RequestException,
+                        requests.exceptions.SSLError) as e:
+                    if attempt < max_retries - 1:
+                        logger.warning(
+                            f"{url_name}请求失败 (尝试 {attempt + 1}/{max_retries}): {e}"
+                        )
+                        import time
+                        time.sleep(2**attempt)  # 指数退避
+                        continue
+                    else:
+                        logger.error(f"{url_name}所有重试均失败: {e}")
+                        break
+
+            # 如果当前API成功获取数据，跳出循环
+            if data is not None:
+                break
+            else:
+                logger.warning(f"{url_name}失败，尝试下一个API端点")
+
+        # 如果所有API都失败
+        if data is None:
+            logger.error("所有API端点均无法访问")
+            return ""
 
         # 检查电影结果
         movie_results = data.get("movie_results", [])
@@ -143,13 +171,17 @@ def get_tmdb_url_from_any_source(imdb_link: str = "",
     # 2. 尝试通过IMDb链接转换
     if imdb_link and "imdb.com" in imdb_link:
         logger.debug("尝试通过IMDb链接转换获取TMDB链接")
-        tmdb_url = imdb_to_tmdb(imdb_link, api_key)
-        if tmdb_url:
-            return tmdb_url
+        result = imdb_to_tmdb(imdb_link, api_key)
+        if result:
+            # 如果返回的是tuple，取第一个元素（URL）
+            if isinstance(result, tuple):
+                return result[0]
+            else:
+                return result
 
     # 3. 如果都没有，返回空字符串
     logger.warning("无法获取TMDB链接")
-    return ValueError("无法获取TMDB链接")
+    return ""
 
 
 # 测试函数
@@ -160,10 +192,5 @@ if __name__ == "__main__":
     print(f"提取的IMDb ID: {imdb_id}")
 
     # 测试IMDb到TMDB转换
-    tmdb_url = imdb_to_tmdb(test_imdb_url)
-    print(f"转换的TMDB链接: {tmdb_url}")
-
-    # 测试综合获取
-    result, type = get_tmdb_url_from_any_source(imdb_link=test_imdb_url,
-                                                tmdb_link="")
-    print(f"最终TMDB链接: {type},{result}")
+    tmdb_result = imdb_to_tmdb(test_imdb_url)
+    print(f"转换的TMDB结果: {tmdb_result}")

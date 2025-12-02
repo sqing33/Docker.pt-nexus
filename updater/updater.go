@@ -34,7 +34,7 @@ var (
 func init() {
 	if os.Getenv("DEV_ENV") == "true" {
 		// 开发环境
-		localConfigFile = getEnv("LOCAL_CONFIG_FILE", "/root/Code/Docker.pt-nexus-dev/CHANGELOG.json")
+		localConfigFile = getEnv("LOCAL_CONFIG_FILE", "/home/sqing/Codes/Docker.pt-nexus-dev/CHANGELOG.json")
 	} else {
 		// 生产环境
 		localConfigFile = getEnv("LOCAL_CONFIG_FILE", "/app/CHANGELOG.json")

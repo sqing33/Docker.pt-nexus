@@ -1,0 +1,219 @@
+/* 全局字体设置 */
+
+/*
+ * 字体层级策略：
+ * 1. 优先使用系统字体 (性能最佳，加载最快)
+ * 2. 其次使用高质量的开源字体
+ * 3. 最后使用通用字体作为后备
+ */
+
+/* CSS变量定义 - Element Plus兼容 */
+:root {
+  /* 主要字体族 - 用于正文、段落等大部分文本 */
+  --el-font-family:
+    -apple-system,           /* macOS/iOS 系统字体 */
+    BlinkMacSystemFont,      /* macOS/iOS Safari 系统字体 */
+    'Segoe UI',              /* Windows 系统字体 */
+    'PingFang SC',           /* macOS 中文字体 */
+    'Hiragino Sans GB',      /* macOS 日文字体 */
+    'Microsoft YaHei',       /* Windows 中文字体 */
+    '微软雅黑',               /* Windows 中文字体备用 */
+    'Source Han Sans CN',    /* 思源黑体 (Adobe开源中文字体) */
+    'Noto Sans CJK SC',      /* Google开源中日韩字体 */
+    Roboto,                  /* Android/Google 字体 */
+    'Helvetica Neue',        /* 经典字体 */
+    Arial,                   /* 通用无衬线字体 */
+    sans-serif;              /* 系统默认无衬线字体 */
+
+  /* 等宽字体族 - 用于代码、数据显示等 */
+  --font-family-mono:
+    'SF Mono',               /* macOS 等宽字体 */
+    'Monaco',                /* macOS 经典等宽字体 */
+    'Menlo',                 /* macOS 开发者字体 */
+    'Consolas',              /* Windows 等宽字体 */
+    'Source Code Pro',       /* Adobe开源等宽字体 */
+    'Roboto Mono',           /* Google开源等宽字体 */
+    'Courier New',           /* 经典等宽字体 */
+    Courier,                 /* 通用等宽字体 */
+    monospace;               /* 系统默认等宽字体 */
+
+  /* 英文衬线字体 - 用于标题、引用等特殊场景 */
+  --font-family-serif:
+    Georgia,                 /* 经典衬线字体 */
+    'Times New Roman',       /* 经典衬线字体 */
+    Times,                   /* 通用衬线字体 */
+    serif;                   /* 系统默认衬线字体 */
+}
+
+/* 全局字体设置 */
+body {
+  font-family: var(--el-font-family);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--el-text-color-primary);
+  -webkit-font-smoothing: antialiased;  /* macOS字体平滑 */
+  -moz-osx-font-smoothing: grayscale;   /* Firefox字体平滑 */
+}
+
+/* HTML元素字体重置和优化 */
+html {
+  font-family: var(--el-font-family);
+  font-size: 14px; /* 基准字体大小 */
+}
+
+/* 标题字体优化 */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--el-font-family);
+  font-weight: 600;
+  line-height: 1.2;
+  margin-bottom: 0.5em;
+}
+
+/* 代码和等宽文本字体 */
+code, pre, kbd, samp {
+  font-family: var(--font-family-mono);
+  font-size: 0.9em;
+  background-color: var(--el-fill-color-light);
+  border-radius: 4px;
+  padding: 2px 4px;
+}
+
+pre {
+  padding: 1em;
+  overflow-x: auto;
+}
+
+/* 引用文字字体 */
+blockquote {
+  font-family: var(--font-family-serif);
+  font-style: italic;
+  color: var(--el-text-color-regular);
+  border-left: 4px solid var(--el-border-color);
+  padding-left: 1em;
+  margin: 1em 0;
+}
+
+/* 表格字体优化 */
+table {
+  font-family: var(--el-font-family);
+  font-size: 13px;
+}
+
+th, td {
+  font-family: var(--el-font-family);
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+/* 输入框字体优化 */
+input, textarea, select {
+  font-family: var(--el-font-family);
+  font-size: 14px;
+}
+
+/* 按钮字体优化 */
+button {
+  font-family: var(--el-font-family);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* 小号文本字体 */
+.small-text {
+  font-family: var(--el-font-family);
+  font-size: 12px;
+  color: var(--el-text-color-regular);
+}
+
+/* 大号文本字体 */
+.large-text {
+  font-family: var(--el-font-family);
+  font-size: 16px;
+  font-weight: 500;
+}
+
+/* 强调文本 */
+.emphasized-text {
+  font-family: var(--el-font-family);
+  font-weight: 600;
+  color: var(--el-color-primary);
+}
+
+/* 辅助文本 */
+.helper-text {
+  font-family: var(--el-font-family);
+  font-size: 12px;
+  color: var(--el-text-color-placeholder);
+}
+
+/* 错误文本 */
+.error-text {
+  font-family: var(--el-font-family);
+  font-size: 13px;
+  color: var(--el-color-danger);
+  font-weight: 500;
+}
+
+/* 成功文本 */
+.success-text {
+  font-family: var(--el-font-family);
+  font-size: 13px;
+  color: var(--el-color-success);
+  font-weight: 500;
+}
+
+/* 警告文本 */
+.warning-text {
+  font-family: var(--el-font-family);
+  font-size: 13px;
+  color: var(--el-color-warning);
+  font-weight: 500;
+}
+
+/* 信息文本 */
+.info-text {
+  font-family: var(--el-font-family);
+  font-size: 13px;
+  color: var(--el-color-info);
+  font-weight: 500;
+}
+
+/* 响应式字体大小调整 */
+@media (max-width: 768px) {
+  html {
+    font-size: 13px;
+  }
+
+  h1 { font-size: 1.5em; }
+  h2 { font-size: 1.3em; }
+  h3 { font-size: 1.2em; }
+}
+
+@media (max-width: 480px) {
+  html {
+    font-size: 12px;
+  }
+
+  h1 { font-size: 1.4em; }
+  h2 { font-size: 1.25em; }
+  h3 { font-size: 1.15em; }
+}
+
+/* 高分辨率屏幕字体优化 */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* 打印样式 */
+@media print {
+  body {
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 12pt;
+    line-height: 1.4;
+    color: #000;
+  }
+}
