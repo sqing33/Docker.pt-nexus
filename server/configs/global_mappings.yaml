@@ -671,6 +671,10 @@ global_standard_keys:
     "HSWEB": "team.hsweb"
     "jsum@U2": "team.jsum"
     "Kylin": "team.kylin"
+    "LuckWeb": "team.luckweb"
+    "LuckMusic": "team.luckmusic"
+    "LuckAni": "team.luckani"
+    "LuckDIY": "team.luckdiy"
     "LemonHD": "team.lemonhd"
     "LHD": "team.lhd"
     "LittleBakas!": "team.littlebakas"
@@ -727,9 +731,9 @@ global_standard_keys:
     "CHDHKTV": "team.chdhktv"
     "OneHD": "team.onehd"
     "blucook": "team.blucook"
-    "KAN": "team.kan"
     "JKCT": "team.jkct"
     "Destiny": "team.destiny"
+
 
   # 标签映射
   tag:
@@ -738,6 +742,7 @@ global_standard_keys:
     "禁转": "tag.禁转"
     "限转": "tag.限转"
     "限时禁转": "tag.限转"
+    "驻站": "tag.驻站"
     "去头尾广告纯净版": "tag.去头尾广告纯净版"
 
     # 内容相关标签

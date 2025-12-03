@@ -2615,16 +2615,17 @@ def _process_batch_fetch(task_id, torrent_names, source_sites_priority,
                         try:
                             site_name = site_attempt["site_name"]
 
-                            # 检查站点请求间隔
-                            if site_name in site_last_request_time:
-                                elapsed = time.time(
-                                ) - site_last_request_time[site_name]
-                                if elapsed < REQUEST_INTERVAL:
-                                    wait_time = REQUEST_INTERVAL - elapsed
-                                    logging.info(
-                                        f"⏰ 站点 {site_name} 请求间隔控制，等待 {wait_time:.1f} 秒"
-                                    )
-                                    time.sleep(wait_time)
+                            # 检查站点请求间隔（批量模式下跳过）
+                            if not os.getenv("BATCH_MODE") == "true":
+                                if site_name in site_last_request_time:
+                                    elapsed = time.time(
+                                    ) - site_last_request_time[site_name]
+                                    if elapsed < REQUEST_INTERVAL:
+                                        wait_time = REQUEST_INTERVAL - elapsed
+                                        logging.info(
+                                            f"⏰ 站点 {site_name} 请求间隔控制，等待 {wait_time:.1f} 秒"
+                                        )
+                                        time.sleep(wait_time)
 
                             site_last_request_time[site_name] = time.time()
 

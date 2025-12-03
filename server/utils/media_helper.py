@@ -779,7 +779,6 @@ def _extract_bdinfo(bluray_path: str) -> str:
         traceback.print_exc()
         return f"bdinfo提取失败: {str(e)}"
 
-
 def upload_data_title(title: str, torrent_filename: str = ""):
     """
     从种子主标题中提取所有参数，并可选地从种子文件名中补充缺失参数。
@@ -790,16 +789,6 @@ def upload_data_title(title: str, torrent_filename: str = ""):
     original_title_str = title.strip()
     params = {}
     unrecognized_parts = []
-
-    # 注释掉原有的粗暴截断逻辑，因为它会错误地移除制作组名称中的中文部分
-    # 例如 "-FFans@ws林小凡" 会被错误截断
-    # 现在只在标题中存在独立的中文片段（不与制作组相连）时才标记为无法识别
-    # chinese_junk_match = re.search(r"([\u4e00-\u9fa5].*)$", original_title_str)
-    # if chinese_junk_match:
-    #     unrecognized_parts.append(chinese_junk_match.group(1).strip())
-    #     title = original_title_str[:chinese_junk_match.start()].strip()
-    # else:
-    #     title = original_title_str
 
     # 保持原始标题，让后续的制作组提取逻辑来处理
     title = original_title_str
@@ -829,8 +818,6 @@ def upload_data_title(title: str, torrent_filename: str = ""):
 
     # 如果不是特殊制作组，先尝试匹配 VCB-Studio 变体
     if not found_special_group:
-        # 匹配类似 -Nekomoe kissaten&VCB-Studio, -LoliHouse&VCB-Studio 等格式
-        # 这个正则会匹配 - 开头，中间可能有多个单词（包含空格）、&符号，最后以 VCB-Studio 结尾
         vcb_variant_pattern = re.compile(
             r"^(?P<main_part>.+?)[-](?P<release_group>[\w\s]+&VCB-Studio)$",
             re.IGNORECASE)
@@ -843,8 +830,6 @@ def upload_data_title(title: str, torrent_filename: str = ""):
 
     # 如果还不是特殊制作组，使用通用模式匹配
     if not found_special_group:
-        # 修复：改用贪婪匹配，直接提取最后一个 - 或 @ 之后的所有内容作为制作组
-        # 这样可以正确处理包含中文、@、- 等复杂字符的制作组名称
         general_regex = re.compile(
             r"^(?P<main_part>.+?)[-@](?P<release_group>[^\s]+)$",
             re.IGNORECASE,
@@ -859,7 +844,6 @@ def upload_data_title(title: str, torrent_filename: str = ""):
             print(f"[调试]   - release_group: {release_group}")
             print(f"[调试] 最终制作组: {release_group}")
         else:
-            # 检查是否以-NOGROUP结尾
             if title.upper().endswith("-NOGROUP"):
                 release_group = "NOGROUP"
                 main_part = title[:-8].strip()
@@ -885,31 +869,26 @@ def upload_data_title(title: str, torrent_filename: str = ""):
 
     # 4.1 提取剪辑版本并拼接到年份
     cut_version_pattern = re.compile(
-        r"(?<!\w)(Theatrical[\s\.]?Cut|Directors?[\s\.]?Cut|DC|Extended[\s\.]?(?:Cut|Edition)|Special[\s\.]?Edition|SE|Final[\s\.]?Cut|Anniversary[\s\.]?Edition|Restored|Remastered|Criterion[\s\.]?(?:Edition|Collection)|Ultimate[\s\.]?Cut|IMAX[\s\.]?Edition|Open[\s\.]?Matte|Unrated[\s\.]?Cut)(?!\w)",
+        r"(?<!\w)(Theatrical[\s\.]?Cut|Directors?[\s\.]?Cut|DC|Extended[\s\.]?(?:Cut|Edition)|Final[\s\.]?Cut|Anniversary[\s\.]?Edition|Restored|Remastered|Criterion[\s\.]?(?:Edition|Collection)|Ultimate[\s\.]?Cut|IMAX[\s\.]?Edition|Open[\s\.]?Matte|Unrated[\s\.]?Cut)(?!\w)",
         re.IGNORECASE)
     cut_version_match = cut_version_pattern.search(title_part)
     if cut_version_match:
         cut_version = re.sub(r'[\s\.]+', ' ',
                              cut_version_match.group(1).strip())
-        # 将剪辑版本拼接到年份
         if "year" in params:
             params["year"] = f"{params['year']} {cut_version}"
         else:
-            # 如果没有年份，单独作为年份字段
             params["year"] = cut_version
-        # 从标题部分移除剪辑版本
         title_part = title_part.replace(cut_version_match.group(0), " ",
                                         1).strip()
         print(f"检测到剪辑版本: {cut_version}，已拼接到年份")
 
     # 4. 预处理标题：修复音频参数格式
-    # 先处理缺少点的情况，如 FLAC 20 -> FLAC 2.0, FLAC 2 0 -> FLAC 2.0
     title_part = re.sub(
         r"((?:DTS|FLAC|DDP|AV3A|AAC|LPCM|AC3|DD))\s*(\d)\s*(\d)",
         r"\1 \2.\3",
         title_part,
         flags=re.I)
-    # 再处理没有空格的情况，如 FLAC2.0 -> FLAC 2.0, DTS5.1 -> DTS 5.1
     title_part = re.sub(
         r"((?:DTS|FLAC|DDP|AV3A|AAC|LPCM|AC3|DD))(\d(?:\.\d)?)",
         r"\1 \2",
@@ -921,7 +900,7 @@ def upload_data_title(title: str, torrent_filename: str = ""):
         "medium":
         r"UHDTV|UHD\s*Blu-?ray|Blu-?ray\s+DIY|Blu-ray|BluRay\s+DIY|BluRay|BDrip|BD-?rip|WEB-DL|WEBrip|TVrip|DVDRip|HDTV",
         "audio":
-        r"DTS-?HD\s*MA(?:\s*\d\.\d)?(?:\s*X)?|DTS-?HD\s*HR(?:\s*\d\.\d)?|DTS-?HD(?:\s*\d\.\d)?|DTS-?X(?:\s*\d\.\d)?|DTS\s*X(?:\s*\d\.\d)?|(?:Dolby\s*)?TrueHD(?:\s*Atmos)?(?:\s*\d\.\d)?|Atmos(?:\s*TrueHD)?(?:\s*\d\.\d)?|DDP\s*Atmos(?:\s*\d\.\d)?|DDP(?:\s*\d\.\d)?|E-?AC-?3(?:\s*\d\.\d)?|DD\+(?:\s*\d\.\d)?|DD(?:\s*\d\.\d)?|AC3(?:\s*\d\.\d)?|FLAC(?:\s*\d\.\d)?|AAC(?:\s*\d\.\d)?|LPCM(?:\s*/\s*PCM)?(?:\s*\d\.\d)?|PCM(?:\s*\d\.\d)?|AV3A\s*\d\.\d|\d+\s*Audios?|MP2|DUAL",
+        r"DTS-?HD\s*MA(?:\s*\d\.\d)?(?:\s*X)?|DTS-?HD\s*HR(?:\s*\d\.\d)?|DTS-?HD(?:\s*\d\.\d)?|DTS-?X(?:\s*\d\.\d)?|DTS\s*X(?:\s*\d\.\d)?|DTS(?:\s*\d\.\d)?|(?:Dolby\s*)?TrueHD(?:\s*Atmos)?(?:\s*\d\.\d)?|Atmos(?:\s*TrueHD)?(?:\s*\d\.\d)?|DDP\s*Atmos(?:\s*\d\.\d)?|DDP(?:\s*\d\.\d)?|E-?AC-?3(?:\s*\d\.\d)?|DD\+(?:\s*\d\.\d)?|DD(?:\s*\d\.\d)?|AC3(?:\s*\d\.\d)?|FLAC(?:\s*\d\.\d)?|AAC(?:\s*\d\.\d)?|LPCM(?:\s*/\s*PCM)?(?:\s*\d\.\d)?|PCM(?:\s*\d\.\d)?|AV3A\s*\d\.\d|\d+\s*Audios?|MP2|DUAL",
         "hdr_format":
         r"Dolby Vision|DoVi|HDR10\+|HDRVivid|HDR10|HLG|HDR|SDR|DV|Vivid",
         "resolution": r"\d{3,4}[pi]|4K",
@@ -935,7 +914,7 @@ def upload_data_title(title: str, torrent_filename: str = ""):
         "video_format": r"3D|HSBS",
         "release_version": r"REMASTERED|REPACK|RERIP|PROPER|REPOST|V\d+",
         "cut_version":
-        r"Theatrical[\s\.]?Cut|Directors?[\s\.]?Cut|DC|Extended[\s\.]?(?:Cut|Edition)|Special[\s\.]?Edition|SE|Final[\s\.]?Cut|Anniversary[\s\.]?Edition|Restored|Remastered|Criterion[\s\.]?(?:Edition|Collection)|Ultimate[\s\.]?Cut|IMAX[\s\.]?Edition|Open[\s\.]?Matte|Unrated[\s\.]?Cut",
+        r"Theatrical[\s\.]?Cut|Directors?[\s\.]?Cut|DC|Extended[\s\.]?(?:Cut|Edition)|Final[\s\.]?Cut|Anniversary[\s\.]?Edition|Restored|Remastered|Criterion[\s\.]?(?:Edition|Collection)|Ultimate[\s\.]?Cut|IMAX[\s\.]?Edition|Open[\s\.]?Matte|Unrated[\s\.]?Cut",
         "quality_modifier": r"MAXPLUS|HQ|EXTENDED|REMUX|EE|MiniBD",
     }
     priority_order = [
@@ -958,11 +937,8 @@ def upload_data_title(title: str, torrent_filename: str = ""):
     first_tech_tag_pos = len(title_candidate)
     all_found_tags = []
 
-    # 构建制作组的关键词列表，用于后续过滤
     release_group_keywords = []
     if release_group and release_group != "N/A (无发布组)":
-        # 将制作组名称按@和其他分隔符拆分，获取所有组成部分
-        # 例如 "DIY@Audies" -> ["DIY", "Audies"]
         release_group_keywords = re.split(r'[@\-\s]+', release_group)
         release_group_keywords = [
             kw.strip() for kw in release_group_keywords if kw.strip()
@@ -984,10 +960,8 @@ def upload_data_title(title: str, torrent_filename: str = ""):
             for m in matches
         ]
 
-        # 过滤掉属于制作组名称的部分
         filtered_values = []
         for val in raw_values:
-            # 检查这个值是否是制作组关键词之一
             is_release_group_part = any(val.upper() == kw.upper()
                                         for kw in release_group_keywords)
             if is_release_group_part:
@@ -998,13 +972,16 @@ def upload_data_title(title: str, torrent_filename: str = ""):
         all_found_tags.extend(filtered_values)
         if filtered_values:
             print(f"[调试] '{key}' 字段提取到技术标签: {filtered_values}")
+        
         raw_values = filtered_values
-        processed_values = (
-            [re.sub(r"(DD)\+", r"\1+", val, flags=re.I)
-             for val in raw_values] if key == "audio" else raw_values)
+        
+        # --- 修改开始：统一处理逻辑 ---
+        processed_values = raw_values
+
+        # 1. 音频特殊处理
         if key == "audio":
+            processed_values = [re.sub(r"(DD)\+", r"\1+", val, flags=re.I) for val in raw_values]
             processed_values = [
-                # 先处理缺少点的情况，如 FLAC 20 -> FLAC 2.0, FLAC 2 0 -> FLAC 2.0, DTS 51 -> DTS 5.1
                 re.sub(
                     r"((?:DTS|FLAC|DDP|AV3A|AAC|LPCM|AC3|DD))\s*(\d)\s*(\d)",
                     r"\1 \2.\3",
@@ -1012,34 +989,37 @@ def upload_data_title(title: str, torrent_filename: str = ""):
                     flags=re.I) for val in processed_values
             ]
             processed_values = [
-                # 再处理没有空格的情况，如 FLAC2.0 -> FLAC 2.0, DTS5.1 -> DTS 5.1
                 re.sub(r"((?:DTS|FLAC|DDP|AV3A|AAC|LPCM|AC3|DD))(\d(?:\.\d)?)",
                        r"\1 \2",
                        val,
                        flags=re.I) for val in processed_values
             ]
-            # 音频编码格式标准化处理
             audio_standardization_rules = [
-                # DTS系列标准化
-                (r"DTS-?HD\s*MA", r"DTS-HD MA"),  # DTS-HDMA -> DTS-HD MA
-                (r"DTS-?HD\s*HR", r"DTS-HD HR"),  # DTS-HDHR -> DTS-HD HR
-
-                # TrueHD系列标准化
-                (r"True-?HD\s*Atmos", r"TrueHD Atmos"
-                 ),  # True-HDAtmos -> TrueHD Atmos
-                (r"True[-\s]?HD", r"TrueHD"),  # True-HD -> TrueHD
-
-                # DDP系列标准化
-                (r"DDP\s*Atmos", r"DDP Atmos"),  # DDPAtmos -> DDP Atmos
+                (r"DTS-?HD\s*MA", r"DTS-HD MA"),
+                (r"DTS-?HD\s*HR", r"DTS-HD HR"),
+                (r"True-?HD\s*Atmos", r"TrueHD Atmos"),
+                (r"True[-\s]?HD", r"TrueHD"),
+                (r"DDP\s*Atmos", r"DDP Atmos"),
             ]
-
-            for pattern, replacement in audio_standardization_rules:
+            for pattern_rgx, replacement in audio_standardization_rules:
                 processed_values = [
-                    re.sub(pattern, replacement, val, flags=re.I)
+                    re.sub(pattern_rgx, replacement, val, flags=re.I)
                     for val in processed_values
                 ]
-
-        # 媒介格式标准化处理 - 移除到正确的位置
+        
+        # 2. 视频编码特殊处理（补充缺失的点）
+        elif key == "video_codec":
+            # 修复 H 265 / H265 -> H.265
+            processed_values = [
+                re.sub(r"H\s*[\s\.]?\s*265", r"H.265", val, flags=re.I) 
+                for val in processed_values
+            ]
+            # 修复 H 264 / H264 -> H.264
+            processed_values = [
+                re.sub(r"H\s*[\s\.]?\s*264", r"H.264", val, flags=re.I) 
+                for val in processed_values
+            ]
+        # --- 修改结束 ---
 
         unique_processed = sorted(
             list(set(processed_values)),
@@ -1051,16 +1031,13 @@ def upload_data_title(title: str, torrent_filename: str = ""):
     # --- [新增] 开始: 从种子文件名补充缺失的参数 ---
     if torrent_filename:
         print(f"开始从种子文件名补充参数: {torrent_filename}")
-        # 预处理文件名：移除后缀，用空格替换点和其他常用分隔符
         filename_base = re.sub(r'(\.original)?\.torrent',
                                '',
                                torrent_filename,
                                flags=re.IGNORECASE)
         filename_candidate = re.sub(r'[\._\[\]\(\)]', ' ', filename_base)
 
-        # 再次遍历所有技术标签定义，以补充信息
         for key in priority_order:
-            # 如果主标题中已解析出此参数，则跳过，优先使用主标题的结果
             if key in params and params.get(key):
                 continue
 
@@ -1071,21 +1048,18 @@ def upload_data_title(title: str, torrent_filename: str = ""):
 
             matches = list(search_pattern.finditer(filename_candidate))
             if matches:
-                # 提取所有匹配到的值
                 raw_values = [
                     m.group(0).strip()
                     if r"\b" in pattern else m.group(1).strip()
                     for m in matches
                 ]
 
-                # (复制主解析逻辑中的 audio 特殊处理)
-                processed_values = ([
-                    re.sub(r"(DD)\\+", r"\1+", val, flags=re.I)
-                    for val in raw_values
-                ] if key == "audio" else raw_values)
+                # --- 修改开始：文件名补充逻辑中也添加 video_codec 标准化 ---
+                processed_values = raw_values
+
                 if key == "audio":
+                    processed_values = [re.sub(r"(DD)\\+", r"\1+", val, flags=re.I) for val in raw_values]
                     processed_values = [
-                        # 先处理缺少点的情况，如 FLAC 20 -> FLAC 2.0, FLAC 2 0 -> FLAC 2.0, DTS 51 -> DTS 5.1
                         re.sub(
                             r"((?:DTS|FLAC|DDP|AV3A|AAC|LPCM|AC3|DD))\s*(\d)\s*(\d)",
                             r"\1 \2.\3",
@@ -1093,58 +1067,52 @@ def upload_data_title(title: str, torrent_filename: str = ""):
                             flags=re.I) for val in processed_values
                     ]
                     processed_values = [
-                        # 再处理没有空格的情况，如 FLAC2.0 -> FLAC 2.0, DTS5.1 -> DTS 5.1
                         re.sub(
                             r"((?:DTS|FLAC|DDP|AV3A|AAC|LPCM|AC3|DD))(\d(?:\.\d)?)",
                             r"\1 \2",
                             val,
                             flags=re.I) for val in processed_values
                     ]
-                    # 音频编码格式标准化处理
                     audio_standardization_rules = [
-                        # DTS系列标准化
-                        (r"DTS-?HD\s*MA", r"DTS-HD MA"
-                         ),  # DTS-HDMA -> DTS-HD MA
-                        (r"DTS-?HD\s*HR",
-                         r"DTS-HD HR"),  # DTS-HDHR -> DTS-HD HR
-                        (r"DTS-?X", r"DTS:X"),  # DTSX -> DTS:X
-                        (r"DTS\s*X", r"DTS:X"),  # DTS X -> DTS:X
-
-                        # TrueHD系列标准化
-                        (r"True-?HD\s*Atmos", r"TrueHD Atmos"
-                         ),  # True-HDAtmos -> TrueHD Atmos
-                        (r"True[-\s]?HD", r"TrueHD"),  # True-HD -> TrueHD
-
-                        # DDP系列标准化
-                        (r"DDP\s*Atmos", r"DDP Atmos"
-                         ),  # DDPAtmos -> DDP Atmos
-                        (r"E[-\s]?AC[-\s]?3", r"E-AC-3"),  # EAC3 -> E-AC-3
-                        (r"DD\+", r"DD+"),  # DD+ 格式保持
-
-                        # LPCM系列标准化
-                        (r"LPCM\s*/\s*PCM", r"LPCM"),  # LPCM/PCM -> LPCM
-                        (r"PCM", r"PCM"),  # PCM 保持
+                        (r"DTS-?HD\s*MA", r"DTS-HD MA"),
+                        (r"DTS-?HD\s*HR", r"DTS-HD HR"),
+                        (r"DTS-?X", r"DTS:X"),
+                        (r"DTS\s*X", r"DTS:X"),
+                        (r"True-?HD\s*Atmos", r"TrueHD Atmos"),
+                        (r"True[-\s]?HD", r"TrueHD"),
+                        (r"DDP\s*Atmos", r"DDP Atmos"),
+                        (r"E[-\s]?AC[-\s]?3", r"E-AC-3"),
+                        (r"DD\+", r"DD+"),
+                        (r"LPCM\s*/\s*PCM", r"LPCM"),
+                        (r"PCM", r"PCM"),
                     ]
-
-                    for pattern, replacement in audio_standardization_rules:
+                    for pattern_rgx, replacement in audio_standardization_rules:
                         processed_values = [
-                            re.sub(pattern, replacement, val, flags=re.I)
+                            re.sub(pattern_rgx, replacement, val, flags=re.I)
                             for val in processed_values
                         ]
+                
+                elif key == "video_codec":
+                    # 修复 H 265 / H265 -> H.265
+                    processed_values = [
+                        re.sub(r"H\s*[\s\.]?\s*265", r"H.265", val, flags=re.I) 
+                        for val in processed_values
+                    ]
+                    # 修复 H 264 / H264 -> H.264
+                    processed_values = [
+                        re.sub(r"H\s*[\s\.]?\s*264", r"H.264", val, flags=re.I) 
+                        for val in processed_values
+                    ]
+                # --- 修改结束 ---
 
-                    # 媒介格式标准化处理 - 移除到正确的位置
-
-                # 取独一无二的值并按出现顺序排序
                 unique_processed = sorted(
                     list(set(processed_values)),
                     key=lambda x: filename_candidate.find(x.replace(" ", "")))
 
                 if unique_processed:
                     print(f"   [文件名补充] 找到缺失参数 '{key}': {unique_processed}")
-                    # 将补充的参数存入 params 字典
                     params[key] = unique_processed[0] if len(
                         unique_processed) == 1 else unique_processed
-                    # 将新找到的标签也加入 all_found_tags，以便后续正确计算"无法识别"部分
                     all_found_tags.extend(unique_processed)
     # --- [新增] 结束 ---
 
@@ -1170,30 +1138,19 @@ def upload_data_title(title: str, torrent_filename: str = ""):
 
     cleaned_tech_zone = tech_zone
     for tag in sorted(all_found_tags, key=len, reverse=True):
-        # 对于包含中文的标签，不使用 \b 词边界
-        # 使用更通用的模式：(?<!\w) 和 (?!\w) 来匹配非字母数字边界
-        # 但中文字符不被 \w 匹配，所以需要特殊处理
         if re.search(r'[\u4e00-\u9fa5]', tag):
-            # 包含中文，直接使用字面匹配
             pattern_to_remove = re.escape(tag)
-            print(f"[调试] 清理中文标签: '{tag}' (使用字面匹配)")
         else:
-            # 纯英文/数字，使用词边界
             pattern_to_remove = r"\b" + re.escape(tag) + r"(?!\w)"
-            print(f"[调试] 清理英文标签: '{tag}' (使用词边界)")
 
         before = cleaned_tech_zone
         cleaned_tech_zone = re.sub(pattern_to_remove,
                                    " ",
                                    cleaned_tech_zone,
                                    flags=re.IGNORECASE)
-        if before != cleaned_tech_zone:
-            print(f"[调试]   已从技术区移除: '{tag}'")
-
-    print(f"[调试] 清理后的技术区: '{cleaned_tech_zone}'")
+    
     remains = re.split(r"[\s\.]+", cleaned_tech_zone)
     unrecognized_parts.extend([part for part in remains if part])
-    print(f"[调试] 最终无法识别部分: {unrecognized_parts}")
     if unrecognized_parts:
         params["unrecognized"] = " ".join(sorted(list(
             set(unrecognized_parts))))
@@ -1220,32 +1177,18 @@ def upload_data_title(title: str, torrent_filename: str = ""):
     for key in key_order:
         if key in params and params[key]:
             if key == "audio" and isinstance(params[key], list):
-                # 处理音频编码列表，将 "数字Audio" 格式移到编码格式后面
                 processed_audio = []
                 for audio_item in params[key]:
-                    # 检查是否包含 "数字Audio" 模式（如 "3Audio DTS" 或 "DTS 3Audio"）
-                    # 匹配模式：(\d+)\s*(Audio[s]?)\s+(.+) 或 (.+)\s+(\d+)\s*(Audio[s]?)
                     match = re.match(r'^(\d+)\s*(Audio[s]?)\s+(.+)$',
                                      audio_item, re.IGNORECASE)
                     if match:
-                        # 如果是 "3Audio DTS" 格式，重排为 "DTS 3Audio"
                         number = match.group(1)
                         audio_word = match.group(2)
                         codec = match.group(3)
                         processed_audio.append(f"{codec} {number}{audio_word}")
                     else:
-                        # 检查是否已经是正确格式 "DTS 3Audio"
-                        match_correct = re.match(
-                            r'^(.+?)\s+(\d+)\s*(Audio[s]?)$', audio_item,
-                            re.IGNORECASE)
-                        if match_correct:
-                            # 已经是正确格式，直接使用
-                            processed_audio.append(audio_item)
-                        else:
-                            # 其他格式不变
-                            processed_audio.append(audio_item)
+                        processed_audio.append(audio_item)
 
-                # 排序：先按是否以数字Audio结尾，再按长度
                 sorted_audio = sorted(
                     processed_audio,
                     key=lambda s:
@@ -1256,13 +1199,9 @@ def upload_data_title(title: str, torrent_filename: str = ""):
                 english_params[key] = params[key]
 
     if "source_platform" in english_params and "audio" in english_params:
-        # 始终将 source_platform 作为字符串处理，和其他参数保持一致
         sp_value = english_params["source_platform"]
         if isinstance(sp_value, list):
-            # 如果是列表，取第一个值
             sp_value = sp_value[0] if sp_value else ""
-
-        # 移除 MA（如果存在）
         if sp_value == "MA" and "MA" in str(english_params["audio"]):
             del english_params["source_platform"]
         else:
@@ -1310,7 +1249,6 @@ def upload_data_title(title: str, torrent_filename: str = ""):
         if chinese_key:
             chinese_keyed_params[chinese_key] = value
 
-    # 定义前端显示的完整参数列表和固定顺序
     all_possible_keys_ordered = [
         "主标题",
         "年份",
@@ -1338,21 +1276,7 @@ def upload_data_title(title: str, torrent_filename: str = ""):
         })
 
     print(f"主标题解析成功。")
-
-    # 调试输出：检查音频编码提取结果
-    audio_component = next(
-        (comp for comp in final_components_list if comp.get("key") == "音频编码"),
-        None)
-    if audio_component:
-        print(
-            f"[调试-upload_data_title] 音频编码提取结果: '{audio_component.get('value')}'"
-        )
-    else:
-        print(f"[调试-upload_data_title] 未提取到音频编码")
-
     return final_components_list
-
-
 def upload_data_screenshot(source_info,
                            save_path,
                            torrent_name=None,
@@ -1606,6 +1530,12 @@ def add_torrent_to_downloader(detail_page_url: str,
     logging.info(
         f"开始自动添加任务: URL='{detail_page_url}', Path='{save_path}', DownloaderID='{downloader_id}'"
     )
+
+    # 检查环境变量，如果设置为false则跳过种子下载和添加
+    if os.getenv("ADD_DOWNLOADS_TORRENTS") == "false":
+        msg = f"模拟成功: 环境变量ADD_DOWNLOADS_TORRENTS=false，跳过种子下载和添加"
+        logging.info(msg)
+        return True, msg
 
     # 1. 查找对应的站点配置
     conn = db_manager._get_connection()

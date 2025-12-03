@@ -139,9 +139,18 @@ class HddolbyUploader(SpecialUploader):
         douban_link = self.upload_data.get("douban_link", "") or ""
 
         # 使用转换工具获取TMDB链接
-        tmdb_url, _ = get_tmdb_url_from_any_source(imdb_link=imdb_link,
+        tmdb_result = get_tmdb_url_from_any_source(imdb_link=imdb_link,
                                                    douban_link=douban_link,
                                                    tmdb_link=tmdb_link)
+
+        # Handle different return types from get_tmdb_url_from_any_source
+        if tmdb_result:
+            if isinstance(tmdb_result, tuple):
+                tmdb_url, _ = tmdb_result
+            else:
+                tmdb_url = tmdb_result
+        else:
+            tmdb_url = ""
 
         if tmdb_url:
             logger.info(f"成功获取TMDB链接: {tmdb_url}")

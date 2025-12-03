@@ -20,6 +20,9 @@ from transmission_rpc import Client as TrClient
 # 直接从 core.services 导入正确的函数，移除了会导致错误的 try-except 占位符
 from core.services import _prepare_api_config
 
+# 导入数据库迁移管理模块
+from database_migrations import DatabaseMigrationManager
+
 
 class DatabaseManager:
     """处理与配置的数据库（MySQL、PostgreSQL 或 SQLite）的所有交互。"""
@@ -42,6 +45,9 @@ class DatabaseManager:
             logging.info(f"数据库后端设置为 SQLite。路径: {self.sqlite_path}")
             # SQLite 会自动创建文件，无需额外处理
 
+        # 初始化迁移管理器
+        self.migration_manager = DatabaseMigrationManager(self)
+
     def _ensure_database_exists(self):
         """确保数据库存在，如果不存在则自动创建。"""
         if self.db_type == "mysql":
@@ -49,69 +55,69 @@ class DatabaseManager:
             if not database_name:
                 logging.error("MySQL 配置中缺少 database 参数")
                 return
-            
+
             try:
                 # 连接到 MySQL 服务器（不指定数据库）
                 conn_config = self.mysql_config.copy()
                 target_db = conn_config.pop("database")
-                
+
                 conn = mysql.connector.connect(**conn_config, autocommit=True)
                 cursor = conn.cursor()
-                
+
                 # 检查数据库是否存在
                 cursor.execute(
                     "SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = %s",
-                    (target_db,)
-                )
-                
+                    (target_db, ))
+
                 if cursor.fetchone() is None:
                     # 数据库不存在，创建它
                     logging.info(f"数据库 '{target_db}' 不存在，正在创建...")
-                    cursor.execute(f"CREATE DATABASE `{target_db}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
+                    cursor.execute(
+                        f"CREATE DATABASE `{target_db}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+                    )
                     logging.info(f"✓ 成功创建数据库 '{target_db}'")
                 else:
                     logging.info(f"数据库 '{target_db}' 已存在")
-                
+
                 cursor.close()
                 conn.close()
-                
+
             except Exception as e:
                 logging.error(f"创建 MySQL 数据库时出错: {e}", exc_info=True)
                 raise
-                
+
         elif self.db_type == "postgresql":
             database_name = self.postgresql_config.get("database")
             if not database_name:
                 logging.error("PostgreSQL 配置中缺少 database 参数")
                 return
-            
+
             try:
                 # 连接到 PostgreSQL 服务器的 postgres 默认数据库
                 conn_config = self.postgresql_config.copy()
                 target_db = conn_config.pop("database")
                 conn_config["database"] = "postgres"
-                
+
                 conn = psycopg2.connect(**conn_config)
                 conn.autocommit = True
                 cursor = conn.cursor()
-                
+
                 # 检查数据库是否存在
-                cursor.execute(
-                    "SELECT 1 FROM pg_database WHERE datname = %s",
-                    (target_db,)
-                )
-                
+                cursor.execute("SELECT 1 FROM pg_database WHERE datname = %s",
+                               (target_db, ))
+
                 if cursor.fetchone() is None:
                     # 数据库不存在，创建它
                     logging.info(f"数据库 '{target_db}' 不存在，正在创建...")
-                    cursor.execute(f'CREATE DATABASE "{target_db}" ENCODING \'UTF8\'')
+                    cursor.execute(
+                        f'CREATE DATABASE "{target_db}" ENCODING \'UTF8\'')
                     logging.info(f"✓ 成功创建数据库 '{target_db}'")
                 else:
                     logging.info(f"数据库 '{target_db}' 已存在")
-                
+
                 cursor.close()
                 conn.close()
-                
+
             except Exception as e:
                 logging.error(f"创建 PostgreSQL 数据库时出错: {e}", exc_info=True)
                 raise
@@ -119,7 +125,11 @@ class DatabaseManager:
     def _get_connection(self):
         """返回一个新的数据库连接。"""
         if self.db_type == "mysql":
-            return mysql.connector.connect(**self.mysql_config,
+            # 添加字符集配置以避免字符集冲突
+            mysql_config = self.mysql_config.copy()
+            mysql_config['charset'] = 'utf8mb4'
+            mysql_config['collation'] = 'utf8mb4_unicode_ci'
+            return mysql.connector.connect(**mysql_config,
                                            autocommit=False)
         elif self.db_type == "postgresql":
             return psycopg2.connect(**self.postgresql_config)
@@ -258,31 +268,32 @@ class DatabaseManager:
                 f"SELECT site FROM sites WHERE id = {self.get_placeholder()}",
                 (site_id, ))
             site_row = cursor.fetchone()
-            
+
             if not site_row:
                 return False
-            
-            site_identifier = site_row["site"] if isinstance(site_row, dict) else site_row[0]
-            
+
+            site_identifier = site_row["site"] if isinstance(
+                site_row, dict) else site_row[0]
+
             # 删除站点
             cursor.execute(
                 f"DELETE FROM sites WHERE id = {self.get_placeholder()}",
                 (site_id, ))
             conn.commit()
-            
+
             if cursor.rowcount > 0 and site_identifier:
                 # 将站点标识符添加到配置文件的 deleted_sites 列表中
                 current_config = config_manager.get()
                 deleted_sites = current_config.get("deleted_sites", [])
-                
+
                 if site_identifier not in deleted_sites:
                     deleted_sites.append(site_identifier)
                     current_config["deleted_sites"] = deleted_sites
                     config_manager.save(current_config)
                     logging.info(f"已将站点 '{site_identifier}' 添加到已删除列表")
-                
+
                 return True
-            
+
             return cursor.rowcount > 0
         except Exception as e:
             logging.error(f"删除站点ID '{site_id}' 失败: {e}", exc_info=True)
@@ -322,13 +333,17 @@ class DatabaseManager:
                 sites_data = json.load(f)
 
             logging.info(f"从 {SITES_DATA_FILE} 加载了 {len(sites_data)} 个站点")
-            
+
             # 获取已删除的站点列表
             deleted_sites = config_manager.get().get("deleted_sites", [])
             if deleted_sites:
-                logging.info(f"过滤 {len(deleted_sites)} 个已删除的站点: {deleted_sites}")
+                logging.info(
+                    f"过滤 {len(deleted_sites)} 个已删除的站点: {deleted_sites}")
                 # 过滤掉已删除的站点
-                sites_data = [site for site in sites_data if site.get('site') not in deleted_sites]
+                sites_data = [
+                    site for site in sites_data
+                    if site.get('site') not in deleted_sites
+                ]
                 logging.info(f"过滤后剩余 {len(sites_data)} 个站点")
 
             # 获取数据库连接
@@ -624,14 +639,14 @@ class DatabaseManager:
 
         conn.commit()
 
-        # 执行数据库迁移：删除 proxy 列
-        self._migrate_remove_proxy_column(conn, cursor)
+        # 使用统一的迁移管理器执行所有迁移检查
+        logging.info("开始执行数据库迁移检查...")
+        migration_success = self.migration_manager.run_all_migrations(conn, cursor)
 
-        # 执行数据库迁移：添加 passkey 列
-        self._migrate_add_passkey_column(conn, cursor)
-
-        # 执行数据库迁移：添加 seeders 列
-        self._migrate_add_seeders_column(conn, cursor)
+        if migration_success:
+            logging.info("✓ 所有数据库迁移检查完成")
+        else:
+            logging.warning("数据库迁移过程中出现警告，但系统仍可继续运行")
 
         # 同步站点数据
         self.sync_sites_from_json()
@@ -877,427 +892,11 @@ class DatabaseManager:
             if conn:
                 conn.close()
 
-    def _migrate_remove_proxy_column(self, conn, cursor):
-        """数据库迁移：删除 sites 表中的 proxy 列"""
-        try:
-            logging.info("检查是否需要删除 sites 表中的 proxy 列...")
-
-            # 检查 proxy 列是否存在
-            column_exists = False
-
-            if self.db_type == "mysql":
-                cursor.execute("SHOW COLUMNS FROM sites LIKE 'proxy'")
-                column_exists = cursor.fetchone() is not None
-
-                if column_exists:
-                    logging.info("检测到 proxy 列，正在删除...")
-                    cursor.execute("ALTER TABLE sites DROP COLUMN proxy")
-                    conn.commit()
-                    logging.info("✓ 成功删除 sites 表中的 proxy 列 (MySQL)")
-
-            elif self.db_type == "postgresql":
-                cursor.execute("""
-                    SELECT column_name
-                    FROM information_schema.columns
-                    WHERE table_name='sites' AND column_name='proxy'
-                """)
-                column_exists = cursor.fetchone() is not None
-
-                if column_exists:
-                    logging.info("检测到 proxy 列，正在删除...")
-                    cursor.execute('ALTER TABLE sites DROP COLUMN proxy')
-                    conn.commit()
-                    logging.info("✓ 成功删除 sites 表中的 proxy 列 (PostgreSQL)")
-
-            else:  # SQLite
-                # SQLite 不支持 DROP COLUMN（旧版本），需要重建表
-                cursor.execute("PRAGMA table_info(sites)")
-                columns = cursor.fetchall()
-                column_exists = any(col[1] == 'proxy' for col in columns)
-
-                if column_exists:
-                    logging.info("检测到 proxy 列，正在重建表以删除该列...")
-
-                    # 创建新表（不包含 proxy 列）
-                    cursor.execute("""
-                        CREATE TABLE sites_new (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            site TEXT UNIQUE,
-                            nickname TEXT,
-                            base_url TEXT,
-                            special_tracker_domain TEXT,
-                            `group` TEXT,
-                            description TEXT,
-                            cookie TEXT,
-                            passkey TEXT,
-                            migration INTEGER NOT NULL DEFAULT 1,
-                            speed_limit INTEGER NOT NULL DEFAULT 0
-                        )
-                    """)
-
-                    # 复制数据（排除 proxy 列，包含 passkey 列）
-                    cursor.execute("""
-                        INSERT INTO sites_new
-                        (id, site, nickname, base_url, special_tracker_domain, `group`,
-                         description, cookie, passkey, migration, speed_limit)
-                        SELECT id, site, nickname, base_url, special_tracker_domain, `group`,
-                               description, cookie, passkey, migration, speed_limit
-                        FROM sites
-                    """)
-
-                    # 删除旧表
-                    cursor.execute("DROP TABLE sites")
-
-                    # 重命名新表
-                    cursor.execute("ALTER TABLE sites_new RENAME TO sites")
-
-                    conn.commit()
-                    logging.info("✓ 成功删除 sites 表中的 proxy 列 (SQLite)")
-
-            if not column_exists:
-                logging.info("proxy 列不存在，无需迁移")
-
-        except Exception as e:
-            logging.warning(f"迁移删除 proxy 列时出错（可能已经删除）: {e}")
-            # 不要因为迁移失败而中断初始化
-            conn.rollback()
-
-    def _migrate_add_passkey_column(self, conn, cursor):
-        """数据库迁移：添加 sites 表中的 passkey 列"""
-        try:
-            logging.info("检查是否需要添加 sites 表中的 passkey 列...")
-
-            # 检查 passkey 列是否存在
-            column_exists = False
-
-            if self.db_type == "mysql":
-                cursor.execute("SHOW COLUMNS FROM sites LIKE 'passkey'")
-                column_exists = cursor.fetchone() is not None
-
-                if not column_exists:
-                    logging.info("检测到缺少 passkey 列，正在添加...")
-                    cursor.execute("ALTER TABLE sites ADD COLUMN passkey TEXT DEFAULT NULL")
-                    conn.commit()
-                    logging.info("✓ 成功添加 sites 表中的 passkey 列 (MySQL)")
-
-            elif self.db_type == "postgresql":
-                cursor.execute("""
-                    SELECT column_name
-                    FROM information_schema.columns
-                    WHERE table_name='sites' AND column_name='passkey'
-                """)
-                column_exists = cursor.fetchone() is not None
-
-                if not column_exists:
-                    logging.info("检测到缺少 passkey 列，正在添加...")
-                    cursor.execute('ALTER TABLE sites ADD COLUMN passkey TEXT')
-                    conn.commit()
-                    logging.info("✓ 成功添加 sites 表中的 passkey 列 (PostgreSQL)")
-
-            else:  # SQLite
-                # SQLite 不支持 ADD COLUMN（某些版本），需要重建表
-                cursor.execute("PRAGMA table_info(sites)")
-                columns = cursor.fetchall()
-                column_exists = any(col[1] == 'passkey' for col in columns)
-
-                if not column_exists:
-                    logging.info("检测到缺少 passkey 列，正在重建表以添加该列...")
-
-                    # 创建新表（包含 passkey 列）
-                    cursor.execute("""
-                        CREATE TABLE sites_new (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            site TEXT UNIQUE,
-                            nickname TEXT,
-                            base_url TEXT,
-                            special_tracker_domain TEXT,
-                            `group` TEXT,
-                            description TEXT,
-                            cookie TEXT,
-                            passkey TEXT,
-                            migration INTEGER NOT NULL DEFAULT 1,
-                            speed_limit INTEGER NOT NULL DEFAULT 0
-                        )
-                    """)
-
-                    # 复制数据（添加 passkey 列，设为 NULL）
-                    cursor.execute("""
-                        INSERT INTO sites_new
-                        (id, site, nickname, base_url, special_tracker_domain, `group`,
-                         description, cookie, passkey, migration, speed_limit)
-                        SELECT id, site, nickname, base_url, special_tracker_domain, `group`,
-                               description, cookie, NULL, migration, speed_limit
-                        FROM sites
-                    """)
-
-                    # 删除旧表
-                    cursor.execute("DROP TABLE sites")
-
-                    # 重命名新表
-                    cursor.execute("ALTER TABLE sites_new RENAME TO sites")
-
-                    conn.commit()
-                    logging.info("✓ 成功添加 sites 表中的 passkey 列 (SQLite)")
-
-            if column_exists:
-                logging.info("passkey 列已存在，无需迁移")
-
-        except Exception as e:
-            logging.warning(f"迁移添加 passkey 列时出错（可能已经添加）: {e}")
-            # 不要因为迁移失败而中断初始化
-            conn.rollback()
-
-    def _migrate_add_seeders_column(self, conn, cursor):
-        """数据库迁移：添加 torrents 表中的 seeders 列"""
-        try:
-            logging.info("检查是否需要添加 torrents 表中的 seeders 列...")
-
-            # 检查 seeders 列是否存在
-            column_exists = False
-
-            if self.db_type == "mysql":
-                cursor.execute("SHOW COLUMNS FROM torrents LIKE 'seeders'")
-                column_exists = cursor.fetchone() is not None
-
-                if not column_exists:
-                    logging.info("检测到缺少 seeders 列，正在添加...")
-                    cursor.execute("ALTER TABLE torrents ADD COLUMN seeders INT DEFAULT 0")
-                    conn.commit()
-                    logging.info("✓ 成功添加 torrents 表中的 seeders 列 (MySQL)")
-
-            elif self.db_type == "postgresql":
-                cursor.execute("""
-                    SELECT column_name
-                    FROM information_schema.columns
-                    WHERE table_name='torrents' AND column_name='seeders'
-                """)
-                column_exists = cursor.fetchone() is not None
-
-                if not column_exists:
-                    logging.info("检测到缺少 seeders 列，正在添加...")
-                    cursor.execute('ALTER TABLE torrents ADD COLUMN seeders INTEGER DEFAULT 0')
-                    conn.commit()
-                    logging.info("✓ 成功添加 torrents 表中的 seeders 列 (PostgreSQL)")
-
-            else:  # SQLite
-                # SQLite 不支持 ADD COLUMN（某些版本），需要重建表
-                cursor.execute("PRAGMA table_info(torrents)")
-                columns = cursor.fetchall()
-                column_exists = any(col[1] == 'seeders' for col in columns)
-
-                if not column_exists:
-                    logging.info("检测到缺少 seeders 列，正在重建表以添加该列...")
-
-                    # 创建新表（包含 seeders 列和复合主键）
-                    cursor.execute("""
-                        CREATE TABLE torrents_new (
-                            hash TEXT NOT NULL,
-                            name TEXT NOT NULL,
-                            save_path TEXT,
-                            size INTEGER,
-                            progress REAL,
-                            state TEXT,
-                            sites TEXT,
-                            `group` TEXT,
-                            details TEXT,
-                            downloader_id TEXT NOT NULL,
-                            last_seen TEXT NOT NULL,
-                            iyuu_last_check TEXT NULL,
-                            seeders INTEGER DEFAULT 0,
-                            PRIMARY KEY (hash, downloader_id)
-                        )
-                    """)
-
-                    # 复制数据（添加 seeders 列，设为 0）
-                    cursor.execute("""
-                        INSERT INTO torrents_new
-                        (hash, name, save_path, size, progress, state, sites, `group`,
-                         details, downloader_id, last_seen, iyuu_last_check, seeders)
-                        SELECT hash, name, save_path, size, progress, state, sites, `group`,
-                               details, downloader_id, last_seen, iyuu_last_check, 0
-                        FROM torrents
-                    """)
-
-                    # 删除旧表
-                    cursor.execute("DROP TABLE torrents")
-
-                    # 重命名新表
-                    cursor.execute("ALTER TABLE torrents_new RENAME TO torrents")
-
-                    conn.commit()
-                    logging.info("✓ 成功添加 torrents 表中的 seeders 列 (SQLite)")
-
-            if column_exists:
-                logging.info("seeders 列已存在，无需迁移")
-
-        except Exception as e:
-            logging.warning(f"迁移添加 seeders 列时出错（可能已经添加）: {e}")
-            # 不要因为迁移失败而中断初始化
-            conn.rollback()
-        finally:
-            if conn:
-                cursor.close()
-                conn.close()
-
-        # 执行复合主键迁移
-        try:
-            self.migrate_to_composite_primary_key()
-        except Exception as e:
-            logging.error(f"复合主键迁移失败: {e}", exc_info=True)
-            # 不要因为迁移失败而中断初始化
-
-    def migrate_to_composite_primary_key(self):
-        """将torrents表从单一主键(hash)迁移到复合主键(hash, downloader_id)"""
-        logging.info("开始迁移torrents表到复合主键结构...")
-        conn = None
-        try:
-            conn = self._get_connection()
-            cursor = self._get_cursor(conn)
-
-            # 检查是否已经是复合主键
-            if self.db_type == "sqlite":
-                cursor.execute("PRAGMA table_info(torrents)")
-            elif self.db_type == "postgresql":
-                cursor.execute("""
-                    SELECT a.attname
-                    FROM pg_index i
-                    JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
-                    WHERE i.indrelid = 'torrents'::regclass AND i.indisprimary
-                """)
-            else:  # MySQL
-                cursor.execute("SHOW INDEX FROM torrents WHERE Key_name = 'PRIMARY'")
-
-            indexes = cursor.fetchall()
-
-            # 对于SQLite，检查是否已经有多个主键列（复合主键）
-            if self.db_type == "sqlite":
-                pk_columns = [idx for idx in indexes if idx[5] > 0]  # pk列的序号大于0表示是主键的一部分
-                is_composite = len(pk_columns) > 1
-            elif self.db_type == "postgresql":
-                # 对于PostgreSQL，检查主键列数（返回的是RealDictRow对象）
-                is_composite = len(indexes) > 1
-            else:
-                # 对于MySQL，检查主键索引的列数
-                is_composite = len(indexes) > 1
-
-            if is_composite:
-                logging.info("torrents表已经是复合主键，无需迁移")
-                return
-
-            logging.info("检测到需要迁移到复合主键，开始迁移...")
-
-            # 创建临时表，使用时间戳避免冲突
-            import time
-            temp_table = f"torrents_temp_{int(time.time())}"
-            if self.db_type == "sqlite":
-                cursor.execute(f"""
-                    CREATE TABLE {temp_table} (
-                        hash TEXT NOT NULL,
-                        name TEXT NOT NULL,
-                        save_path TEXT,
-                        size INTEGER,
-                        progress REAL,
-                        state TEXT,
-                        sites TEXT,
-                        `group` TEXT,
-                        details TEXT,
-                        downloader_id TEXT NOT NULL,
-                        last_seen TEXT NOT NULL,
-                        iyuu_last_check TEXT NULL,
-                        seeders INTEGER DEFAULT 0,
-                        PRIMARY KEY (hash, downloader_id)
-                    )
-                """)
-
-                # 复制数据，处理可能缺少downloader_id的记录
-                cursor.execute(f"""
-                    INSERT INTO {temp_table}
-                    (hash, name, save_path, size, progress, state, sites, `group`,
-                     details, downloader_id, last_seen, iyuu_last_check, seeders)
-                    SELECT hash, name, save_path, size, progress, state, sites, `group`,
-                           COALESCE(downloader_id, 'unknown'), last_seen, iyuu_last_check, seeders
-                    FROM torrents
-                """)
-
-            elif self.db_type == "mysql":
-                cursor.execute(f"""
-                    CREATE TABLE {temp_table} (
-                        hash VARCHAR(40) NOT NULL,
-                        name TEXT NOT NULL,
-                        save_path TEXT,
-                        size BIGINT,
-                        progress FLOAT,
-                        state VARCHAR(50),
-                        sites VARCHAR(255),
-                        `group` VARCHAR(255),
-                        details TEXT,
-                        downloader_id VARCHAR(36) NOT NULL,
-                        last_seen DATETIME NOT NULL,
-                        iyuu_last_check DATETIME NULL,
-                        seeders INT DEFAULT 0,
-                        PRIMARY KEY (hash, downloader_id)
-                    ) ENGINE=InnoDB ROW_FORMAT=Dynamic
-                """)
-
-                cursor.execute(f"""
-                    INSERT INTO {temp_table}
-                    (hash, name, save_path, size, progress, state, sites, `group`,
-                     details, downloader_id, last_seen, iyuu_last_check, seeders)
-                    SELECT hash, name, save_path, size, progress, state, sites, `group`,
-                           COALESCE(downloader_id, 'unknown'), last_seen, iyuu_last_check,
-                           COALESCE(seeders, 0)
-                    FROM torrents
-                """)
-
-            elif self.db_type == "postgresql":
-                cursor.execute(f"""
-                    CREATE TABLE {temp_table} (
-                        hash VARCHAR(40) NOT NULL,
-                        name TEXT NOT NULL,
-                        save_path TEXT,
-                        size BIGINT,
-                        progress REAL,
-                        state VARCHAR(50),
-                        sites VARCHAR(255),
-                        "group" VARCHAR(255),
-                        details TEXT,
-                        downloader_id VARCHAR(36) NOT NULL,
-                        last_seen TIMESTAMP NOT NULL,
-                        iyuu_last_check TIMESTAMP NULL,
-                        seeders INTEGER DEFAULT 0,
-                        PRIMARY KEY (hash, downloader_id)
-                    )
-                """)
-
-                cursor.execute(f"""
-                    INSERT INTO {temp_table}
-                    (hash, name, save_path, size, progress, state, sites, "group",
-                     details, downloader_id, last_seen, iyuu_last_check, seeders)
-                    SELECT hash, name, save_path, size, progress, state, sites, "group",
-                           details, COALESCE(downloader_id, 'unknown'), last_seen, iyuu_last_check,
-                           COALESCE(seeders, 0)
-                    FROM torrents
-                """)
-
-            # 删除旧表，重命名新表
-            cursor.execute(f"DROP TABLE torrents")
-            cursor.execute(f"ALTER TABLE {temp_table} RENAME TO torrents")
-
-            conn.commit()
-            logging.info("✓ 成功迁移torrents表到复合主键结构")
-
-        except Exception as e:
-            logging.error(f"迁移到复合主键时出错: {e}", exc_info=True)
-            if conn:
-                conn.rollback()
-        finally:
-            if conn:
-                cursor.close()
-                conn.close()
-
-
 def reconcile_historical_data(db_manager, config):
     """在启动时同步下载器状态到数据库。"""
+    # MySQL BIGINT 有符号最大值
+    MAX_BIGINT = 9223372036854775807
+
     logging.info("正在同步下载器状态...")
     conn = db_manager._get_connection()
     cursor = db_manager._get_cursor(conn)
@@ -1325,6 +924,20 @@ def reconcile_historical_data(db_manager, config):
                 stats = client.session_stats()
                 total_dl = int(stats.cumulative_stats.downloaded_bytes)
                 total_ul = int(stats.cumulative_stats.uploaded_bytes)
+
+            # --- 修复溢出问题的逻辑 ---
+            # 确保数值不超过 MySQL BIGINT 的最大值，且不为负数
+            if total_dl > MAX_BIGINT:
+                logging.warning(f"下载器 {client_config['name']} 的累计下载量过大 ({total_dl})，已截断为最大允许值。")
+                total_dl = MAX_BIGINT
+            if total_ul > MAX_BIGINT:
+                logging.warning(f"下载器 {client_config['name']} 的累计上传量过大 ({total_ul})，已截断为最大允许值。")
+                total_ul = MAX_BIGINT
+
+            # 确保不为负数（防止某些客户端 API 返回负值）
+            total_dl = max(0, total_dl)
+            total_ul = max(0, total_ul)
+            # ------------------------
 
             records.append((current_timestamp_str, client_id, 0, 0, 0, 0,
                             total_ul, total_dl))

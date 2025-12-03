@@ -10,10 +10,9 @@ form_fields:
   audio_codec: "audiocodec_sel[4]"
   resolution: "standard_sel[4]"
   team: "team_sel[4]"
-  category: "type"  # 类别字段映射到type参数
+  category: "type"      # 类别字段映射到type参数
 
 # 标准化键映射 - 定义源文本到标准化键的映射规则
-# source_parsers部分：定义如何从原始数据解析出标准化参数
 source_parsers:
   source_params:
     type:
@@ -102,8 +101,30 @@ source_parsers:
       "StarfallWeb": "team.starfallweb"
       "AGSVWEB": "team.agsvweb"
       "Starfall": "team.starfall"
+      "NatureWeb": "team.natureweb"
+      "Pure@StarfallWeb": "team.pure_starfallweb"
 
-# 参数映射规则 - 定义如何将标准化键映射到站点特定参数
+    tag:
+      "国语": "tag.国语"
+      "中字": "tag.中字"
+      "去头尾广告纯净版": "tag.去头尾广告纯净版"
+      "补帧": "tag.补帧"
+      "超分": "tag.超分"
+      "特效": "tag.特效"
+      "大包": "tag.大包"
+      "英字": "tag.英字"
+      "韩剧": "tag.韩剧"
+      "美剧": "tag.美剧"
+      "粤语": "tag.粤语"
+      "特效字幕": "tag.特效"
+      "杜比视界": "tag.Dolby_Vision"
+      "禁转": "tag.禁转"
+      "DIY": "tag.DIY"
+      "HDR": "tag.HDR"
+      "原生": "tag.原生"
+      "完结": "tag.完结"
+      "分集": "tag.分集"
+
 mappings:
   type:
     "category.other": "409"
@@ -181,11 +202,13 @@ mappings:
     "team.starfallweb": "8"
     "team.agsvweb": "9"
     "team.starfall": "10"
+    "team.natureweb": "11"
     "default": "5"
 
   tag:
     "tag.国语": 5
     "tag.中字": 6
+    "tag.去头尾广告纯净版": 25
     "tag.补帧": 20
     "tag.超分": 19
     "tag.特效": 18

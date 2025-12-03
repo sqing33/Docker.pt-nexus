@@ -188,8 +188,23 @@ class ZhuqueUploader(SpecialUploader):
         imdb_link = self.upload_data.get("imdb_link", "") or ""
         douban_link = self.upload_data.get("douban_link", "") or ""
 
-        tmdb_url, media_type = get_tmdb_url_from_any_source(
+        tmdb_result = get_tmdb_url_from_any_source(
             imdb_link, douban_link, tmdb_link)
+
+        # Handle different return types from get_tmdb_url_from_any_source
+        if tmdb_result:
+            if isinstance(tmdb_result, tuple):
+                tmdb_url, media_type = tmdb_result
+            else:
+                tmdb_url = tmdb_result
+                # Extract media type from the URL
+                if "/tv/" in tmdb_url:
+                    media_type = "tv"
+                else:
+                    media_type = "movie"
+        else:
+            tmdb_url = ""
+            media_type = "movie"
 
         if tmdb_url:
             match = re.search(r'themoviedb\.org/(?:movie|tv)/(\d+)', tmdb_url)

@@ -926,7 +926,7 @@
     "nickname": "幸运",
     "base_url": "pt.luckpt.de",
     "special_tracker_domain": null,
-    "group": null,
+    "group": "-LuckDIY,-LuckAni",
     "migration": 3,
     "speed_limit": 10
   },
@@ -1272,6 +1272,16 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 0,
+    "speed_limit": 10
+  },
+  {
+    "site": "xyg",
+    "nickname": "星陨阁2",
+    "base_url": "devnew.xingyungept.org",
+    "special_tracker_domain": "xyg",
+    "group": "-StarfallWeb",
+    "description": "星陨阁2",
+    "migration": 3,
     "speed_limit": 10
   }
 ]

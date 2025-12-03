@@ -168,17 +168,32 @@ def get_sites():
             """
         if filter_by_torrents == "active":
             # 修改后的逻辑：现有站点 = 在数据库中有做种记录的站点 OR 有cookie配置的站点
-            sql = f"""
-                SELECT DISTINCT {select_fields}
-                FROM sites s
-                WHERE EXISTS (
-                    SELECT 1 FROM torrents t WHERE LOWER(s.nickname) = LOWER(t.sites)
-                )
-                OR (s.cookie IS NOT NULL AND s.cookie != '')
-                ORDER BY s.nickname
-            """
+            # 添加COLLATE以避免字符集冲突
+            if db_manager.db_type == "mysql":
+                sql = f"""
+                    SELECT DISTINCT {select_fields}
+                    FROM sites s
+                    WHERE EXISTS (
+                        SELECT 1 FROM torrents t WHERE LOWER(s.nickname) COLLATE utf8mb4_unicode_ci = LOWER(t.sites) COLLATE utf8mb4_unicode_ci
+                    )
+                    OR (s.cookie IS NOT NULL AND s.cookie != '')
+                    ORDER BY s.nickname COLLATE utf8mb4_unicode_ci
+                """
+            else:
+                sql = f"""
+                    SELECT DISTINCT {select_fields}
+                    FROM sites s
+                    WHERE EXISTS (
+                        SELECT 1 FROM torrents t WHERE LOWER(s.nickname) = LOWER(t.sites)
+                    )
+                    OR (s.cookie IS NOT NULL AND s.cookie != '')
+                    ORDER BY s.nickname
+                """
         else:
-            sql = f"SELECT {select_fields} FROM sites s ORDER BY s.nickname"
+            if db_manager.db_type == "mysql":
+                sql = f"SELECT {select_fields} FROM sites s ORDER BY s.nickname COLLATE utf8mb4_unicode_ci"
+            else:
+                sql = f"SELECT {select_fields} FROM sites s ORDER BY s.nickname"
         cursor.execute(sql)
         sites = [dict(row) for row in cursor.fetchall()]
         return jsonify(sites)

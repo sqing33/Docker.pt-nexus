@@ -97,10 +97,12 @@ source_parsers:
 
     team:
       "Other": "team.other"
-      "LUCKWEB": "team.luckweb"
-      "LUCKMUSIC": "team.luckmusic"
+      "LuckWeb": "team.luckweb"
+      "LuckMusic": "team.luckmusic"
       "FRDS": "team.frds"
       "StarfallWeb": "team.starfallweb"
+      "LuckAni": "team.luckani"
+      "LuckDIY": "team.luckdiy"
 
     tag:
       "禁转": "tag.禁转"
@@ -193,6 +195,8 @@ mappings:
     "team.luckmusic": "8"
     "team.frds": "9"
     "team.starfallweb": "10"
+    "team.luckani": "11"
+    "team.luckdiy": "12"
     "default": "5"
 
   tag:

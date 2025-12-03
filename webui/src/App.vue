@@ -115,7 +115,7 @@ const route = useRoute()
 // 背景图片
 const backgroundUrl = ref('https://pic.pting.club/i/2025/10/07/68e4fbfe9be93.jpg')
 
-// 版本信息（由子组件管理）
+// 版本信息
 const currentVersion = ref('加载中...')
 
 const isLoginPage = computed(() => route.path === '/login')
