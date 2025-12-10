@@ -366,21 +366,97 @@ def _get_smart_screenshot_points(video_path: str,
         print("   -> 黄金字幕数量不足，将从所有字幕事件中随机选择。")
         target_events = subtitle_events
 
-    chosen_events = random.sample(target_events,
-                                  min(num_screenshots, len(target_events)))
+    # 按时间先后排序事件
+    target_events_sorted = sorted(target_events, key=lambda e: e["start"])
+
+    # 智能选择分布均匀的时间段
+    chosen_events = _select_well_distributed_events(target_events_sorted, num_screenshots)
 
     screenshot_points = []
-    for event in chosen_events:
+    for i, event in enumerate(chosen_events):
         event_duration = event["end"] - event["start"]
+        # 在时间段的前10%-90%之间随机选择一个点
         random_offset = event_duration * 0.1 + random.random() * (
             event_duration * 0.8)
         random_point = event["start"] + random_offset
         screenshot_points.append(random_point)
         print(
-            f"   -> 选中时间段 [{(event['start']):.2f}s - {(event['end']):.2f}s], 随机截图点: {(random_point):.2f}s"
+            f"   -> 选中时间段 [{(event['start']):.2f}s - {(event['end']):.2f}s], 截图点: {(random_point):.2f}s (第{i+1}张)"
         )
 
     return sorted(screenshot_points)
+
+
+def _select_well_distributed_events(sorted_events, num_to_select):
+    """
+    从已排序的字幕事件中选择分布均匀的时间段，确保：
+    1. 时间按先后顺序排列
+    2. 避免选择重复或相近的时间段
+    3. 时间间隔尽可能均匀分布
+    """
+    if len(sorted_events) <= num_to_select:
+        # 如果事件数量不超过需要的数量，全部选择
+        return sorted_events
+
+    n = len(sorted_events)
+    selected = []
+
+    if num_to_select == 1:
+        # 只需要一张截图，选择中间位置
+        mid_index = n // 2
+        selected = [sorted_events[mid_index]]
+    elif num_to_select <= 3:
+        # 少量截图时，选择前、中、后位置
+        indices = [0, n // 2, n - 1]
+        selected = [sorted_events[i] for i in indices[:num_to_select]]
+    else:
+        # 多张截图时，使用均匀分布算法
+        # 计算大致的间隔
+        interval = n // (num_to_select + 1)
+
+        # 从第一个间隔开始选择
+        for i in range(num_to_select):
+            index = min(interval * (i + 1), n - 1)
+            selected.append(sorted_events[index])
+
+    # 确保选择的事件在时间上有足够间隔（至少30秒）
+    filtered_selected = []
+    min_interval = 30.0  # 最小时间间隔（秒）
+
+    for event in selected:
+        should_add = True
+        for existing in filtered_selected:
+            # 检查时间间隔
+            if abs(event["start"] - existing["start"]) < min_interval:
+                should_add = False
+                break
+
+        if should_add:
+            filtered_selected.append(event)
+        else:
+            # 如果间隔太小，尝试找一个替代的位置
+            for alt_event in sorted_events:
+                if alt_event not in filtered_selected + selected:
+                    # 检查与已选择事件的时间间隔
+                    all_good = True
+                    for existing in filtered_selected:
+                        if abs(alt_event["start"] - existing["start"]) < min_interval:
+                            all_good = False
+                            break
+                    if all_good:
+                        filtered_selected.append(alt_event)
+                        break
+
+    # 如果过滤后数量不够，用剩余的随机事件补充
+    if len(filtered_selected) < num_to_select:
+        remaining = [e for e in sorted_events if e not in filtered_selected]
+        needed = num_to_select - len(filtered_selected)
+        if remaining and needed > 0:
+            additional = random.sample(remaining, min(needed, len(remaining)))
+            filtered_selected.extend(additional)
+
+    # 按时间顺序返回
+    return sorted(filtered_selected[:num_to_select], key=lambda e: e["start"])
 
 
 def _find_target_video_file(path: str) -> tuple[str | None, bool]:
@@ -1524,8 +1600,9 @@ def upload_data_screenshot(source_info,
                            torrent_name=None,
                            downloader_id=None):
     """
-    [最终HDR优化版] 使用 mpv 从视频文件中截取多张图片，并上传到图床。
+    [最终PNG压缩优化版] 使用 mpv 从视频文件中截取多张图片，并上传到图床。
     - 新增HDR色调映射参数，确保HDR视频截图颜色正常。
+    - 使用ffmpeg进行PNG压缩，保持高质量的同时减小文件大小。
     - 按顺序一张一张处理，简化流程。
     - 采用智能时间点分析。
     """
@@ -1533,7 +1610,7 @@ def upload_data_screenshot(source_info,
         print("错误：Pillow 库未安装，无法执行截图任务。")
         return ""
 
-    print("开始执行截图和上传任务 (引擎: mpv, 输出格式: JPEG, 模式: 顺序执行)...")
+    print("开始执行截图和上传任务 (引擎: mpv, 输出格式: PNG压缩, 模式: 顺序执行)...")
     config = config_manager.get()
     hoster = config.get("cross_seed", {}).get("image_hoster", "pixhost")
     num_screenshots = 5
@@ -1650,9 +1727,9 @@ def upload_data_screenshot(source_info,
         timestamp = f"{int(time.time()) % 1000000}"  # 更短的时间戳
         intermediate_png_path = os.path.join(
             TEMP_DIR, f"s_{i+1}_{timestamp}.png")  # 更短的文件名
-        final_jpeg_path = os.path.join(TEMP_DIR,
-                                       f"s_{i+1}_{timestamp}.jpg")  # 更短的文件名
-        temp_files_to_cleanup.extend([intermediate_png_path, final_jpeg_path])
+        final_png_path = os.path.join(TEMP_DIR,
+                                      f"s_{i+1}_{timestamp}_opt.png")  # 压缩后的PNG
+        temp_files_to_cleanup.extend([intermediate_png_path, final_png_path])
 
         # --- [核心修改] ---
         # 为 mpv 命令添加 HDR 色调映射参数
@@ -1689,14 +1766,34 @@ def upload_data_screenshot(source_info,
             )
 
             try:
-                with Image.open(intermediate_png_path) as img:
-                    rgb_img = img.convert('RGB')
-                    rgb_img.save(final_jpeg_path, 'jpeg', quality=85)
+                # 使用ffmpeg进行PNG压缩，直接输出到最终文件
+                cmd_compress = [
+                    "ffmpeg",
+                    "-i", intermediate_png_path,      # 输入文件
+                    "-pix_fmt", "rgb24",             # 像素格式
+                    "-compression_level", "9",       # 最高压缩级别
+                    "-pred", "mixed",                # 混合预测模式
+                    "-color_range", "pc",            # 完整色彩范围
+                    "-y",                             # 覆盖输出文件
+                    final_png_path                   # 直接输出到最终文件
+                ]
+
+                result = subprocess.run(cmd_compress,
+                                       capture_output=True,
+                                       text=True,
+                                       check=True,
+                                       timeout=120)
+
+                # 获取压缩后的文件大小进行对比
+                source_size = os.path.getsize(intermediate_png_path)
+                dest_size = os.path.getsize(final_png_path)
+                compression_ratio = (dest_size / source_size) * 100
+
                 print(
-                    f"   -> JPEG压缩成功 (质量: 85) -> {os.path.basename(final_jpeg_path)}"
+                    f"   -> PNG压缩成功 ({compression_ratio:.2f}% 原始大小) -> {os.path.basename(final_png_path)}"
                 )
             except Exception as e:
-                print(f"   ❌ 错误: 图片从PNG转换为JPEG失败: {e}")
+                print(f"   ❌ 错误: PNG压缩失败: {e}")
                 continue
 
             max_retries = 3
@@ -1705,10 +1802,10 @@ def upload_data_screenshot(source_info,
                 print(f"   -> 正在上传 (第 {attempt+1}/{max_retries} 次尝试)...")
                 try:
                     if hoster == "agsv":
-                        image_url = _upload_to_agsv(final_jpeg_path,
+                        image_url = _upload_to_agsv(final_png_path,
                                                     auth_token)
                     else:
-                        image_url = _upload_to_pixhost(final_jpeg_path)
+                        image_url = _upload_to_pixhost(final_png_path)
                     if image_url:
                         uploaded_urls.append(image_url)
                         break

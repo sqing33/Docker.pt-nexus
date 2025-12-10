@@ -15,6 +15,7 @@
 | **通用**   | TZ                | 设置容器时区，确保时间与日志准确。           | Asia/Shanghai             |
 |            | http_proxy        | 设置容器代理，确保能正常访问站点与各种服务。 | http://192.168.1.100:7890 |
 |            | https_proxy       | 设置容器代理，确保能正常访问站点与各种服务。 | http://192.168.1.100:7890 |
+|            | UPDATE_SOURCE     | 选择更新源，github 或 gitee，不设置默认 gitee。       | gitee                     |
 | **数据库** | DB_TYPE           | 选择数据库类型。sqlite、mysql 或 postgres。  | sqlite                    |
 |            | MYSQL_HOST        | **(MySQL 专用)** 数据库主机地址。            | 192.168.1.100             |
 |            | MYSQL_PORT        | **(MySQL 专用)** 数据库端口。                | 3306                      |
@@ -53,6 +54,7 @@ services:
       - TZ=Asia/Shanghai
       - http_proxy=http://192.168.1.100:7890 # 代理服务器
       - https_proxy=http://192.168.1.100:7890 # 代理服务器
+      - UPDATE_SOURCE=gitee # 更新源，可选: gitee 或 github，不设置默认gitee
       - DB_TYPE=sqlite
 ```
 
@@ -76,6 +78,7 @@ services:
       - TZ=Asia/Shanghai
       - http_proxy=http://192.168.1.100:7890 # 代理服务器
       - https_proxy=http://192.168.1.100:7890 # 代理服务器
+      - UPDATE_SOURCE=gitee # 更新源，可选: gitee 或 github，不设置默认gitee
       - DB_TYPE=mysql
       - MYSQL_HOST=192.168.1.100
       - MYSQL_PORT=3306
@@ -104,6 +107,7 @@ services:
       - TZ=Asia/Shanghai
       - http_proxy=http://192.168.1.100:7890 # 代理服务器
       - https_proxy=http://192.168.1.100:7890 # 代理服务器
+      - UPDATE_SOURCE=gitee # 更新源，可选: gitee 或 github，不设置默认gitee
       - DB_TYPE=postgresql
       - POSTGRES_HOST=192.168.1.100
       - POSTGRES_PORT=5433
@@ -117,21 +121,23 @@ services:
 
 3.  服务启动后，通过 `http://<你的服务器IP>:5274` 访问 PT Nexus 界面。
 
-# 热更新
+# 更新
 
-> 通过 Docker 部署的 PT Nexus 支持热更新功能，您可以在不重新下载镜像的情况下，直接从 GitHub 拉取最新代码并应用更新。
+> 通过 Docker 部署的 PT Nexus 支持更新功能，您可以在不重新下载镜像的情况下，直接从 GitHub 拉取最新代码并应用更新。
 
-![热更新](https://img1.pixhost.to/images/10201/661470654_79517501-6fc3-4d37-9f44-440ef15b7ac7.png)
+![更新](https://img1.pixhost.to/images/10201/661470654_79517501-6fc3-4d37-9f44-440ef15b7ac7.png)
 
 # 更新日志
 
 ### v3.2.3（2025.12.11）
 
-> **注：新增环境变量 UPDATE_SOURCE，可选值 github 或 gitee，默认为 gitee，用于选择更新的源**
+> **注：（需要更新 docker 镜像）新增环境变量 UPDATE_SOURCE，可选值 github 或 gitee，默认为 gitee，用于选择更新的源。
+盒子截图 png 需要重新执行 curl -sL https://github.com/sqing33/Docker.pt-nexus/releases/download/latest/install-pt-nexus-box-proxy.sh | sudo bash 以更新盒子端脚本。**
 
 - 修复：数据库迁移错误
 - 修复：标题参数 DTS 无法正确识别
 - 修复：杜比、朱雀发种报错
+- 修改：截图图片使用 png 格式上传
 - 优化：使用中转优化 pixhost 上传图片与 tmdb 链接获取
 - 优化：种子数据获取与写入数据库的性能
 - 优化：cf worker 新增备用 url 解决无法访问的问题
@@ -191,7 +197,7 @@ services:
 
 > **注：v3.1.2 之前的版本需要重新拉取镜像以应用 gitee 更新的功能**
 
-- 修改：使用 gitee 与 github 仓库共同进行热更新
+- 修改：使用 gitee 与 github 仓库共同进行更新
 
 ### v3.1.1（2025.11.16）
 
@@ -199,7 +205,7 @@ services:
 
 ### v3.1.0（2025.11.16）
 
-- 新增：在线热更新功能
+- 新增：在线更新功能
 - 新增：财神 PTGen API
 - 新增：从副标题提取音轨、字幕，批量转种停止按钮
 

@@ -6,7 +6,7 @@ on:
       tags:
         description: "Tags to push (comma-separated, e.g., latest,v1.0.0)"
         required: true
-        default: "latest,v3.1.0"
+        default: "latest,v3.2.0"
 
 env:
   IMAGE_NAME: pt-nexus

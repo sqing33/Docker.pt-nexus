@@ -6,11 +6,6 @@ import (
 	"compress/gzip"
 	"encoding/json"
 	"fmt"
-	"image"
-	"image/jpeg"
-
-	// [核心修复] 导入PNG解码器，解决 "unknown format" 问题
-	_ "image/png"
 	"io"
 	"log"
 	"math"
@@ -585,30 +580,37 @@ func takeScreenshot(videoPath, outputPath string, timePoint float64, subtitleStr
 	log.Printf("   ✅ mpv 截图成功 -> %s", outputPath)
 	return nil
 }
-func convertPngToJpeg(sourcePath, destPath string) error {
-	pngFile, err := os.Open(sourcePath)
+func convertPngToOptimizedPng(sourcePath, destPath string) error {
+	// 使用ffmpeg进行PNG压缩，优化处理流程
+	log.Printf("正在使用ffmpeg压缩PNG: %s -> %s", sourcePath, destPath)
+
+	// 使用ffmpeg命令进行压缩，直接输出到最终文件
+	args := []string{
+		"-i", sourcePath,           // 输入文件
+		"-pix_fmt", "rgb24",        // 像素格式
+		"-compression_level", "9",  // 最高压缩级别
+		"-pred", "mixed",           // 混合预测模式
+		"-color_range", "pc",       // 完整色彩范围
+		"-y",                        // 覆盖输出文件
+		destPath,                   // 输出文件
+	}
+
+	cmd := exec.Command("ffmpeg", args...)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
 	if err != nil {
-		return fmt.Errorf("无法打开中间PNG文件 '%s': %v", filepath.Base(sourcePath), err)
-	}
-	defer pngFile.Close()
-
-	img, _, err := image.Decode(pngFile)
-	if err != nil {
-		return fmt.Errorf("无法解码PNG文件 '%s': %v", filepath.Base(sourcePath), err)
+		return fmt.Errorf("ffmpeg PNG压缩失败: %v, 错误输出: %s", err, stderr.String())
 	}
 
-	jpegFile, err := os.Create(destPath)
-	if err != nil {
-		return fmt.Errorf("无法创建最终JPEG文件 '%s': %v", filepath.Base(destPath), err)
-	}
-	defer jpegFile.Close()
+	// 获取压缩后的文件大小进行对比
+	sourceInfo, _ := os.Stat(sourcePath)
+	destInfo, _ := os.Stat(destPath)
+	compressionRatio := float64(destInfo.Size()) / float64(sourceInfo.Size()) * 100
 
-	options := &jpeg.Options{Quality: 85}
-	if err := jpeg.Encode(jpegFile, img, options); err != nil {
-		return fmt.Errorf("无法将图片编码为JPEG格式: %v", err)
-	}
-
-	log.Printf("   -> JPEG 转换和压缩成功 (质量: %d) -> %s", options.Quality, filepath.Base(destPath))
+	log.Printf("   -> PNG压缩成功 (%.2f%% 原始大小) -> %s", compressionRatio, filepath.Base(destPath))
 	return nil
 }
 func uploadToPixhost(imagePath string) (string, error) {
@@ -875,6 +877,129 @@ func findTargetVideoFile(path string) (string, error) {
 	return largestFile, nil
 }
 
+// selectWellDistributedEvents 从已排序的字幕事件中选择分布均匀的时间段
+func selectWellDistributedEvents(sortedEvents []SubtitleEvent, numToSelect int) []SubtitleEvent {
+	if len(sortedEvents) <= numToSelect {
+		// 如果事件数量不超过需要的数量，全部选择
+		return sortedEvents
+	}
+
+	n := len(sortedEvents)
+	selected := make([]SubtitleEvent, 0, numToSelect)
+
+	if numToSelect == 1 {
+		// 只需要一张截图，选择中间位置
+		midIndex := n / 2
+		selected = append(selected, sortedEvents[midIndex])
+	} else if numToSelect <= 3 {
+		// 少量截图时，选择前、中、后位置
+		indices := []int{0, n / 2, n - 1}
+		for i := 0; i < numToSelect && i < len(indices); i++ {
+			selected = append(selected, sortedEvents[indices[i]])
+		}
+	} else {
+		// 多张截图时，使用均匀分布算法
+		interval := n / (numToSelect + 1)
+
+		// 从第一个间隔开始选择
+		for i := 0; i < numToSelect; i++ {
+			index := interval * (i + 1)
+			if index >= n {
+				index = n - 1
+			}
+			selected = append(selected, sortedEvents[index])
+		}
+	}
+
+	// 确保选择的事件在时间上有足够间隔（至少30秒）
+	filteredSelected := make([]SubtitleEvent, 0, numToSelect)
+	minInterval := 30.0 // 最小时间间隔（秒）
+
+	for _, event := range selected {
+		shouldAdd := true
+		for _, existing := range filteredSelected {
+			// 检查时间间隔
+			if math.Abs(event.StartTime-existing.StartTime) < minInterval {
+				shouldAdd = false
+				break
+			}
+		}
+
+		if shouldAdd {
+			filteredSelected = append(filteredSelected, event)
+		} else {
+			// 如果间隔太小，尝试找一个替代的位置
+			for _, altEvent := range sortedEvents {
+				// 检查是否已经在选择列表中
+				alreadySelected := false
+				for _, s := range selected {
+					if s.StartTime == altEvent.StartTime && s.EndTime == altEvent.EndTime {
+						alreadySelected = true
+						break
+					}
+				}
+				if alreadySelected {
+					continue
+				}
+
+				// 检查与已选择事件的时间间隔
+				allGood := true
+				for _, existing := range filteredSelected {
+					if math.Abs(altEvent.StartTime-existing.StartTime) < minInterval {
+						allGood = false
+						break
+					}
+				}
+				if allGood {
+					filteredSelected = append(filteredSelected, altEvent)
+					break
+				}
+			}
+		}
+	}
+
+	// 如果过滤后数量不够，用剩余的随机事件补充
+	if len(filteredSelected) < numToSelect {
+		remaining := make([]SubtitleEvent, 0)
+		for _, e := range sortedEvents {
+			found := false
+			for _, s := range filteredSelected {
+				if s.StartTime == e.StartTime && s.EndTime == e.EndTime {
+					found = true
+					break
+				}
+			}
+			if !found {
+				remaining = append(remaining, e)
+			}
+		}
+
+		needed := numToSelect - len(filteredSelected)
+		if len(remaining) > 0 && needed > 0 {
+			// 随机选择剩余需要的事件
+			rand.Shuffle(len(remaining), func(i, j int) {
+				remaining[i], remaining[j] = remaining[j], remaining[i]
+			})
+
+			for i := 0; i < needed && i < len(remaining); i++ {
+				filteredSelected = append(filteredSelected, remaining[i])
+			}
+		}
+	}
+
+	// 按时间顺序返回
+	if len(filteredSelected) > numToSelect {
+		filteredSelected = filteredSelected[:numToSelect]
+	}
+
+	// 对结果进行排序
+	sort.Slice(filteredSelected, func(i, j int) bool {
+		return filteredSelected[i].StartTime < filteredSelected[j].StartTime
+	})
+
+	return filteredSelected
+}
+
 // ======================= HTTP 处理器 (核心修改在这里) =======================
 
 func allTorrentsHandler(w http.ResponseWriter, r *http.Request) {
@@ -1014,19 +1139,21 @@ func screenshotHandler(w http.ResponseWriter, r *http.Request) {
 			targetEvents = subtitleEvents
 		}
 		if len(targetEvents) > 0 {
-			randomIndices := rand.Perm(len(targetEvents))
-			count := 0
-			for _, idx := range randomIndices {
-				if count >= numScreenshots {
-					break
-				}
-				event := targetEvents[idx]
+			// 按时间先后排序事件
+			sort.Slice(targetEvents, func(i, j int) bool {
+				return targetEvents[i].StartTime < targetEvents[j].StartTime
+			})
+
+			// 智能选择分布均匀的时间段
+			chosenEvents := selectWellDistributedEvents(targetEvents, numScreenshots)
+
+			for i, event := range chosenEvents {
 				durationOfEvent := event.EndTime - event.StartTime
+				// 在时间段的前10%-90%之间随机选择一个点
 				randomOffset := durationOfEvent*0.1 + rand.Float64()*(durationOfEvent*0.8)
 				randomPoint := event.StartTime + randomOffset
 				screenshotPoints = append(screenshotPoints, randomPoint)
-				log.Printf("   -> 选中时间段 [%.2fs - %.2fs], 随机截图点: %.2fs", event.StartTime, event.EndTime, randomPoint)
-				count++
+				log.Printf("   -> 选中时间段 [%.2fs - %.2fs], 截图点: %.2fs (第%d张)", event.StartTime, event.EndTime, randomPoint, i+1)
 			}
 		}
 	}
@@ -1058,7 +1185,7 @@ func screenshotHandler(w http.ResponseWriter, r *http.Request) {
 
 		timestamp := time.Now().UnixNano()
 		intermediatePngPath := filepath.Join(tempDir, fmt.Sprintf("s%d_%d.png", i+1, timestamp%1000000)) // 更短的文件名
-		finalJpegPath := filepath.Join(tempDir, fmt.Sprintf("s%d_%d.jpg", i+1, timestamp%1000000))       // 更短的文件名
+		finalPngPath := filepath.Join(tempDir, fmt.Sprintf("s%d_%d_opt.png", i+1, timestamp%1000000))    // 压缩后的PNG
 
 		// 步骤1: 截图
 		if err := takeScreenshot(videoPath, intermediatePngPath, point, subtitleIndex); err != nil {
@@ -1068,16 +1195,16 @@ func screenshotHandler(w http.ResponseWriter, r *http.Request) {
 			return // 失败则立即停止并返回错误
 		}
 
-		// 步骤2: 转换格式
-		if err := convertPngToJpeg(intermediatePngPath, finalJpegPath); err != nil {
-			errMsg := fmt.Sprintf("第 %d 张图转换格式失败: %v", i+1, err)
+		// 步骤2: PNG压缩
+		if err := convertPngToOptimizedPng(intermediatePngPath, finalPngPath); err != nil {
+			errMsg := fmt.Sprintf("第 %d 张图PNG压缩失败: %v", i+1, err)
 			log.Println(errMsg)
 			writeJSONResponse(w, r, http.StatusInternalServerError, ScreenshotResponse{Success: false, Message: errMsg})
 			return // 失败则立即停止并返回错误
 		}
 
 		// 步骤3: 上传
-		showURL, err := uploadToPixhost(finalJpegPath)
+		showURL, err := uploadToPixhost(finalPngPath)
 		if err != nil {
 			errMsg := fmt.Sprintf("第 %d 张图上传失败: %v", i+1, err)
 			log.Println(errMsg)

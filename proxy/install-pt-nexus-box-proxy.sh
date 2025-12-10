@@ -89,22 +89,36 @@ download_proxy() {
 
     # 尝试使用curl下载
     if command -v curl >/dev/null 2>&1; then
-        curl -L -o "pt-nexus-box-proxy" "$PROXY_URL"
+        if ! curl -L -f -o "pt-nexus-box-proxy" "$PROXY_URL"; then
+            error "curl下载失败"
+            return 1
+        fi
     # 如果curl不可用，尝试使用wget
     elif command -v wget >/dev/null 2>&1; then
-        wget -O "pt-nexus-box-proxy" "$PROXY_URL"
+        if ! wget -O "pt-nexus-box-proxy" "$PROXY_URL"; then
+            error "wget下载失败"
+            return 1
+        fi
     else
         error "未找到curl或wget，请先安装其中一个"
-        exit 1
+        return 1
     fi
 
     # 检查下载是否成功
     if [ ! -f "pt-nexus-box-proxy" ]; then
         error "下载代理程序失败"
-        exit 1
+        return 1
+    fi
+
+    # 检查文件大小，确保不是空文件
+    if [ ! -s "pt-nexus-box-proxy" ]; then
+        error "下载的文件为空"
+        rm -f "pt-nexus-box-proxy"
+        return 1
     fi
 
     log "代理程序下载成功"
+    return 0
 }
 
 # 设置权限
@@ -198,8 +212,19 @@ if [ -f "$PID_FILE" ]; then
     PID=$(cat "$PID_FILE")
     if ps -p "$PID" > /dev/null; then
         echo "警告: 代理程序似乎已在运行 (PID: $PID)。"
-        echo "如果需要重启，请先运行 ./stop.sh"
-        exit 1
+        echo "这可能是更新过程中的正常情况。"
+        echo "将继续启动新版本，旧进程将被替换。"
+        echo "如需手动停止，请运行 ./stop.sh"
+        echo ""
+        # 停止旧进程
+        kill "$PID" 2>/dev/null || true
+        sleep 2
+        if ps -p "$PID" > /dev/null; then
+            kill -9 "$PID" 2>/dev/null || true
+            sleep 1
+        fi
+        rm -f "$PID_FILE"
+        echo "旧进程已停止"
     else
         echo "检测到残留的 PID 文件，正在清理..."
         rm "$PID_FILE"
@@ -301,6 +326,73 @@ exit 0
 EOF
 }
 
+# 检查并停止正在运行的代理
+stop_running_proxy() {
+    local PID_FILE="/var/run/pt-nexus-box-proxy.pid"
+
+    if [ -f "$PID_FILE" ]; then
+        local PID=$(cat "$PID_FILE")
+        if ps -p "$PID" > /dev/null 2>&1; then
+            log "检测到代理程序正在运行 (PID: $PID)，正在停止..."
+            # 优雅停止
+            kill "$PID" 2>/dev/null || true
+            sleep 2
+
+            # 检查是否已停止
+            if ps -p "$PID" > /dev/null 2>&1; then
+                warn "优雅停止失败，强制停止进程..."
+                kill -9 "$PID" 2>/dev/null || true
+                sleep 1
+            fi
+
+            # 清理PID文件
+            rm -f "$PID_FILE"
+            log "代理程序已停止"
+        else
+            log "检测到残留的PID文件，正在清理..."
+            rm -f "$PID_FILE"
+        fi
+    else
+        log "未检测到正在运行的代理程序"
+    fi
+}
+
+# 备份当前版本
+backup_current_version() {
+    if [ -f "$INSTALL_DIR/pt-nexus-box-proxy" ]; then
+        local BACKUP_DIR="$INSTALL_DIR/backup"
+        local TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+
+        log "备份当前版本到 $BACKUP_DIR..."
+        mkdir -p "$BACKUP_DIR"
+        cp "$INSTALL_DIR/pt-nexus-box-proxy" "$BACKUP_DIR/pt-nexus-box-proxy_$TIMESTAMP"
+
+        if [ $? -eq 0 ]; then
+            log "备份成功: pt-nexus-box-proxy_$TIMESTAMP"
+        else
+            warn "备份失败，继续更新..."
+        fi
+    fi
+}
+
+# 恢复备份版本
+restore_backup() {
+    local BACKUP_DIR="$INSTALL_DIR/backup"
+
+    if [ -d "$BACKUP_DIR" ]; then
+        local LATEST_BACKUP=$(ls -t "$BACKUP_DIR"/pt-nexus-box-proxy_* 2>/dev/null | head -1)
+
+        if [ -n "$LATEST_BACKUP" ]; then
+            error "更新失败，正在恢复备份版本..."
+            cp "$LATEST_BACKUP" "$INSTALL_DIR/pt-nexus-box-proxy"
+            chmod +x "$INSTALL_DIR/pt-nexus-box-proxy"
+
+            log "已恢复备份版本，请检查日志后手动启动服务"
+            exit 1
+        fi
+    fi
+}
+
 # 启动代理程序
 start_proxy() {
     log "启动代理程序..."
@@ -309,23 +401,49 @@ start_proxy() {
 
 # 主函数
 main() {
-    log "开始安装 PT Nexus Proxy..."
+    log "开始安装/更新 PT Nexus Proxy..."
 
     check_root
     detect_os
     detect_architecture
+
+    # 检查是否为更新安装
+    if [ -f "$INSTALL_DIR/pt-nexus-box-proxy" ]; then
+        log "检测到已存在的安装，正在更新..."
+        backup_current_version
+        stop_running_proxy
+    fi
+
     create_install_dir
     create_start_script
     create_stop_script
-    download_proxy
+
+    # 下载新版本，如果失败则恢复备份
+    if ! download_proxy; then
+        restore_backup
+        exit 1
+    fi
+
     set_permissions
+
+    # 验证新版本
+    if [ ! -x "$INSTALL_DIR/pt-nexus-box-proxy" ]; then
+        error "下载的二进制文件不可执行，正在恢复备份..."
+        restore_backup
+        exit 1
+    fi
+
     start_proxy
 
-    log "PT Nexus Proxy 安装完成！"
+    log "PT Nexus Proxy 安装/更新完成！"
     echo ""
     echo "安装目录: $INSTALL_DIR"
-    echo "要查看日志，请运行: tail -f $INSTALL_DIR/proxy.log"
+    if [ -d "$INSTALL_DIR/backup" ]; then
+        echo "备份目录: $INSTALL_DIR/backup"
+    fi
+    echo "要查看日志，请运行: tail -f /var/run/pt-nexus-box-proxy.log"
     echo "要停止代理，请运行: $INSTALL_DIR/stop.sh"
+    echo "要重启代理，请运行: $INSTALL_DIR/stop.sh && $INSTALL_DIR/start.sh"
 }
 
 # 执行主函数
