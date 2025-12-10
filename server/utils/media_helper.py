@@ -88,8 +88,9 @@ def _upload_to_pixhost(image_path: str):
     """
     # 主备域名配置 - 替换子域名部分
     api_urls = [
-        'http://ptn-proxy.sqing33.dpdns.org/https://api.pixhost.to/images',
-        'http://ptn-proxy.1395251710.workers.dev/https://api.pixhost.to/images'
+        'http://pt-nexus-proxy.sqing33.dpdns.org/https://api.pixhost.to/images',
+        'http://pt-nexus-proxy.1395251710.workers.dev/https://api.pixhost.to/images',
+        'https://api.pixhost.to/images',
     ]
 
     params = {'content_type': 0}
@@ -2789,8 +2790,9 @@ def _transfer_poster_to_pixhost(poster_url: str) -> str:
 
             # 3. 上传到pixhost，支持主备域名切换
             api_urls = [
-                'http://ptn-proxy.sqing33.dpdns.org/https://api.pixhost.to/images',
-                'http://ptn-proxy.1395251710.workers.dev/https://api.pixhost.to/images'
+                'http://pt-nexus-proxy.sqing33.dpdns.org/https://api.pixhost.to/images',
+                'http://pt-nexus-proxy.1395251710.workers.dev/https://api.pixhost.to/images',
+                'https://api.pixhost.to/images',
             ]
             params = {'content_type': 0, 'max_th_size': 420}
             upload_headers = {

@@ -1284,9 +1284,9 @@ const getProxyImageUrl = (originalUrl: string): string => {
 const handleImageErrorWithProxy = (url: string, type: 'poster' | 'screenshot', index: number) => {
   // 检查是否已经尝试过代理
   const currentUrl = imageProxyMap.value.get(url)
-  if (currentUrl && !currentUrl.startsWith('http://ptn-proxy.sqing33.dpdns.org/')) {
+  if (currentUrl && !currentUrl.startsWith('http://pt-nexus-proxy.sqing33.dpdns.org/')) {
     // 尝试使用代理URL
-    const proxyUrl = `http://ptn-proxy.sqing33.dpdns.org/${url}`
+    const proxyUrl = `http://pt-nexus-proxy.sqing33.dpdns.org/${url}`
     imageProxyMap.value.set(url, proxyUrl)
 
     // 强制更新图片显示

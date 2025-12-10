@@ -7,11 +7,11 @@
 本 API 用于通过豆瓣资源链接获取电影、电视剧等视频的详细信息。
 
 - 原项目地址：https://github.com/Rhilip/pt-gen-cfworker
-- 本项目部署 pt-gen 网页：https://ptn-ptgen.sqing33.dpdns.org
+- 本项目部署 pt-gen 网页：https://pt-nexus-ptgen.sqing33.dpdns.org
 
 #### API 地址
 
-`https://ptn-ptgen.sqing33.dpdns.org/`
+`https://pt-nexus-ptgen.sqing33.dpdns.org/`
 
 #### 请求方法
 
@@ -26,7 +26,7 @@ GET
 #### 完整的请求示例
 
 ```
-GET https://ptn-ptgen.sqing33.dpdns.org/?url=https://movie.douban.com/subject/36670979/
+GET https://pt-nexus-ptgen.sqing33.dpdns.org/?url=https://movie.douban.com/subject/36670979/
 ```
 
 #### 返回结果
@@ -88,7 +88,7 @@ GET https://ptn-ptgen.sqing33.dpdns.org/?url=https://movie.douban.com/subject/36
 
 #### API 地址
 
-`https://ptn-douban.sqing33.dpdns.org/`
+`https://pt-nexus-imdb2douban.sqing33.dpdns.org/`
 
 #### 请求方法
 
@@ -108,13 +108,13 @@ GET
 #### 完整请求示例
 
 1. 通过`doubanid`查询：  
-   `GET https://ptn-douban.sqing33.dpdns.org/?doubanid=36670979`
+   `GET https://pt-nexus-imdb2douban.sqing33.dpdns.org/?doubanid=36670979`
 
 2. 通过`imdbid`查询：  
-   `GET https://ptn-douban.sqing33.dpdns.org/?imdbid=tt33060122`
+   `GET https://pt-nexus-imdb2douban.sqing33.dpdns.org/?imdbid=tt33060122`
 
 3. 通过`name`和`year`联合查询：  
-   `GET https://ptn-douban.sqing33.dpdns.org/?name=青春猪头少年不会梦到圣诞服女郎&year=2025`
+   `GET https://pt-nexus-imdb2douban.sqing33.dpdns.org/?name=青春猪头少年不会梦到圣诞服女郎&year=2025`
 
 #### 返回结果
 

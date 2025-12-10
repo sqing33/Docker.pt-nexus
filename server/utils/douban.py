@@ -22,8 +22,8 @@ def call_api_with_fallback(api_path, params=None, method='GET', timeout=10):
         tuple: (success, response_data, error_message)
     """
     # 主备域名配置 - 替换子域名部分
-    primary_domain = "https://ptn-douban.sqing33.dpdns.org"
-    fallback_domain = "https://ptn-douban.1395251710.workers.dev"
+    primary_domain = "https://pt-nexus-imdb2douban.sqing33.dpdns.org"
+    fallback_domain = "https://pt-nexus-imdb2douban.1395251710.workers.dev"
 
     # 构建完整的URL列表
     urls = [f"{primary_domain}{api_path}", f"{fallback_domain}{api_path}"]
@@ -32,6 +32,7 @@ def call_api_with_fallback(api_path, params=None, method='GET', timeout=10):
         domain_name = "主域名" if i == 0 else "备用域名"
         try:
             logging.info(f"尝试使用{domain_name}: {url}")
+            print(f"[*] 尝试使用{domain_name}: {url}")
 
             if method.upper() == 'GET':
                 response = requests.get(url, params=params, timeout=timeout)
@@ -44,32 +45,42 @@ def call_api_with_fallback(api_path, params=None, method='GET', timeout=10):
                 try:
                     data = response.json()
                     logging.info(f"{domain_name}调用成功")
+                    print(f"[*] {domain_name}调用成功")
                     return True, data, ""
                 except ValueError:
                     # 如果不是JSON，返回文本内容
+                    logging.info(f"{domain_name}调用成功（返回文本）")
+                    print(f"[*] {domain_name}调用成功（返回文本）")
                     return True, response.text, ""
             else:
                 error_msg = f"HTTP {response.status_code}"
                 logging.warning(f"{domain_name}返回错误: {error_msg}")
+                print(f"  [-] {domain_name}返回错误: {error_msg}")
 
         except requests.exceptions.SSLError as e:
             error_msg = f"SSL错误: {str(e)}"
             logging.error(f"{domain_name}SSL错误: {e}")
+            print(f"  [!] {domain_name}SSL错误: {e}")
             if i == 0:  # 主域名失败，尝试备用域名
+                print(f"[*] 主域名失败，尝试备用域名...")
                 continue
             else:
                 return False, None, error_msg
         except requests.exceptions.RequestException as e:
             error_msg = f"网络错误: {str(e)}"
             logging.error(f"{domain_name}网络错误: {e}")
+            print(f"  [!] {domain_name}网络错误: {e}")
             if i == 0:  # 主域名失败，尝试备用域名
+                print(f"[*] 主域名失败，尝试备用域名...")
                 continue
             else:
                 return False, None, error_msg
         except Exception as e:
             error_msg = f"未知错误: {str(e)}"
             logging.error(f"{domain_name}未知错误: {e}")
+            print(f"  [!] {domain_name}未知错误: {e}")
             if i == 0:  # 主域名失败，尝试备用域名
+                print(f"[*] 主域名失败，尝试备用域名...")
                 continue
             else:
                 return False, None, error_msg
@@ -284,8 +295,8 @@ def upload_data_movie_info(media_type: str,
     # API配置列表，按优先级排序
     api_configs = [
         {
-            'name': 'ptn-ptgen.sqing33.dpdns.org',
-            'base_url': 'https://ptn-ptgen.sqing33.dpdns.org',
+            'name': 'pt-nexus-ptgen.sqing33.dpdns.org',
+            'base_url': 'https://pt-nexus-ptgen.sqing33.dpdns.org',
             'type': 'refactor_url_format'
         },
         {
@@ -339,7 +350,7 @@ def upload_data_movie_info(media_type: str,
                 success, poster, description, imdb_link_result = _call_tju_format_api(
                     api_config, douban_link, imdb_link, media_type)
             elif api_config['type'] == 'refactor_url_format':
-                # 新的URL格式API (ptn-ptgen.sqing33.dpdns.org)
+                # 新的URL格式API (pt-nexus-ptgen.sqing33.dpdns.org)
                 success, poster, description, imdb_link_result = _call_refactor_url_format_api(
                     api_config, douban_link, imdb_link, media_type)
             elif api_config['type'] == 'url_format':
@@ -516,7 +527,7 @@ def _call_url_format_api(api_config: dict, douban_link: str, imdb_link: str,
             return False, "", "未提供豆瓣或IMDb链接", ""
 
         # 对于特定API，尝试使用不同的参数方式
-        if 'ptn-ptgen.sqing33.dpdns.org' in api_name or 'ptn-ptgen' in api_name:
+        if 'pt-nexus-ptgen.sqing33.dpdns.org' in api_name or 'pt-nexus-ptgen' in api_name:
             # 使用 /api?url= 格式
             if base_url.endswith('/api'):
                 url = f"{base_url}?url={resource_url}"
@@ -580,9 +591,9 @@ def call_ptgen_api_with_fallback(base_url: str, resource_url: str, method='POST'
         tuple: (success, response_data, error_message)
     """
     # 主备域名配置 - 替换子域名部分
-    if 'ptn-ptgen.sqing33.dpdns.org' in base_url:
-        primary_base = 'https://ptn-ptgen.sqing33.dpdns.org'
-        fallback_base = 'https://ptn-ptgen.1395251710.workers.dev'
+    if 'pt-nexus-ptgen.sqing33.dpdns.org' in base_url:
+        primary_base = 'https://pt-nexus-ptgen.sqing33.dpdns.org'
+        fallback_base = 'https://pt-nexus-ptgen.1395251710.workers.dev'
     else:
         # 其他API不使用备用域名
         primary_base = base_url
@@ -659,7 +670,7 @@ def call_ptgen_api_with_fallback(base_url: str, resource_url: str, method='POST'
 def _call_refactor_url_format_api(api_config: dict, douban_link: str,
                                   imdb_link: str, media_type: str):
     """
-    调用新的URL格式API (ptn-ptgen.sqing33.dpdns.org)
+    调用新的URL格式API (pt-nexus-ptgen.sqing33.dpdns.org)
     只使用URL 参数方式（前后端一起部署）:
     /api?url=https://movie.douban.com/subject/123456/
     /api?url=https://www.imdb.com/title/tt123456/
@@ -1081,8 +1092,11 @@ def _transfer_poster_to_pixhost(poster_url: str) -> str:
 
             print(f"   临时文件已保存: {temp_file}")
 
-            # 3. 上传到pixhost
-            api_url = 'http://ptn-proxy.sqing33.dpdns.org/https://api.pixhost.to/images'
+            # 3. 上传到pixhost，支持主备域名切换
+            api_urls = [
+                'http://pt-nexus-proxy.sqing33.dpdns.org/https://api.pixhost.to/images',
+                'http://pt-nexus-proxy.1395251710.workers.dev/https://api.pixhost.to/images'
+            ]
             params = {'content_type': 0, 'max_th_size': 420}
             upload_headers = {
                 'User-Agent':
@@ -1090,13 +1104,36 @@ def _transfer_poster_to_pixhost(poster_url: str) -> str:
                 'Accept': 'application/json'
             }
 
-            with open(temp_file, 'rb') as f:
-                files = {'img': ('poster.jpg', f, 'image/jpeg')}
-                upload_response = requests.post(api_url,
-                                                data=params,
-                                                files=files,
-                                                headers=upload_headers,
-                                                timeout=30)
+            upload_response = None
+            # 尝试不同的API URL
+            for i, api_url in enumerate(api_urls):
+                domain_name = "主域名" if i == 0 else "备用域名"
+                print(f"   尝试使用{domain_name}上传: {api_url}")
+
+                try:
+                    with open(temp_file, 'rb') as f:
+                        files = {'img': ('poster.jpg', f, 'image/jpeg')}
+                        upload_response = requests.post(api_url,
+                                                       data=params,
+                                                       files=files,
+                                                       headers=upload_headers,
+                                                       timeout=30)
+
+                    if upload_response.status_code == 200:
+                        print(f"   {domain_name}上传成功")
+                        break
+                    else:
+                        print(f"   {domain_name}上传失败，状态码: {upload_response.status_code}")
+                        upload_response = None
+
+                except Exception as e:
+                    print(f"   {domain_name}上传异常: {e}")
+                    upload_response = None
+                    continue
+
+            if not upload_response:
+                print("   所有API域名都上传失败")
+                return ""
 
             if upload_response.status_code == 200:
                 data = upload_response.json()
