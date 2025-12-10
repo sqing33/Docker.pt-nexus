@@ -81,12 +81,17 @@ def translate_path(downloader_id: str, remote_path: str) -> str:
 
 def _upload_to_pixhost(image_path: str):
     """
-    将单个图片文件上传到 Pixhost.to。
+    将单个图片文件上传到 Pixhost.to，支持主备域名切换。
 
     :param image_path: 本地图片文件的路径。
     :return: 成功时返回图片的展示URL，失败时返回None。
     """
-    api_url = 'http://ptn-proxy.sqing33.dpdns.org/https://api.pixhost.to/images'
+    # 主备域名配置 - 替换子域名部分
+    api_urls = [
+        'http://ptn-proxy.sqing33.dpdns.org/https://api.pixhost.to/images',
+        'http://ptn-proxy.1395251710.workers.dev/https://api.pixhost.to/images'
+    ]
+
     params = {'content_type': 0}
     headers = {
         'User-Agent':
@@ -99,8 +104,20 @@ def _upload_to_pixhost(image_path: str):
         print(f"错误：文件不存在 {image_path}")
         return None
 
-    # 直接上传，不使用全局代理
-    return _upload_to_pixhost_direct(image_path, api_url, params, headers)
+    # 尝试使用不同的API URL
+    for i, api_url in enumerate(api_urls):
+        domain_name = "主域名" if i == 0 else "备用域名"
+        print(f"尝试使用{domain_name}: {api_url}")
+
+        result = _upload_to_pixhost_direct(image_path, api_url, params, headers)
+        if result:
+            print(f"{domain_name}上传成功")
+            return result
+        else:
+            print(f"{domain_name}上传失败，尝试下一个")
+
+    print("所有API域名都上传失败")
+    return None
 
 
 def _get_agsv_auth_token():
@@ -1990,6 +2007,8 @@ def extract_tags_from_description(description_text: str) -> list:
         category_tag_map = {
             '喜剧': 'tag.喜剧',
             'Comedy': 'tag.喜剧',
+            '儿童': 'tag.儿童',
+            'Children': 'tag.儿童',
             '动画': 'tag.动画',
             'Animation': 'tag.动画',
             '动作': 'tag.动作',
@@ -2768,8 +2787,11 @@ def _transfer_poster_to_pixhost(poster_url: str) -> str:
 
             print(f"   临时文件已保存: {temp_file}")
 
-            # 3. 上传到pixhost
-            api_url = 'http://ptn-proxy.sqing33.dpdns.org/https://api.pixhost.to/images'
+            # 3. 上传到pixhost，支持主备域名切换
+            api_urls = [
+                'http://ptn-proxy.sqing33.dpdns.org/https://api.pixhost.to/images',
+                'http://ptn-proxy.1395251710.workers.dev/https://api.pixhost.to/images'
+            ]
             params = {'content_type': 0, 'max_th_size': 420}
             upload_headers = {
                 'User-Agent':
@@ -2777,13 +2799,36 @@ def _transfer_poster_to_pixhost(poster_url: str) -> str:
                 'Accept': 'application/json'
             }
 
-            with open(temp_file, 'rb') as f:
-                files = {'img': ('poster.jpg', f, 'image/jpeg')}
-                upload_response = requests.post(api_url,
-                                                data=params,
-                                                files=files,
-                                                headers=upload_headers,
-                                                timeout=30)
+            upload_response = None
+            # 尝试不同的API URL
+            for i, api_url in enumerate(api_urls):
+                domain_name = "主域名" if i == 0 else "备用域名"
+                print(f"   尝试使用{domain_name}上传: {api_url}")
+
+                try:
+                    with open(temp_file, 'rb') as f:
+                        files = {'img': ('poster.jpg', f, 'image/jpeg')}
+                        upload_response = requests.post(api_url,
+                                                       data=params,
+                                                       files=files,
+                                                       headers=upload_headers,
+                                                       timeout=30)
+
+                    if upload_response.status_code == 200:
+                        print(f"   {domain_name}上传成功")
+                        break
+                    else:
+                        print(f"   {domain_name}上传失败，状态码: {upload_response.status_code}")
+                        upload_response = None
+
+                except Exception as e:
+                    print(f"   {domain_name}上传异常: {e}")
+                    upload_response = None
+                    continue
+
+            if not upload_response:
+                print("   所有API域名都上传失败")
+                return ""
 
             if upload_response.status_code == 200:
                 data = upload_response.json()

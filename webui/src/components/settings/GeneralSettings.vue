@@ -193,33 +193,6 @@
             </el-form-item>
 
             <div style="flex: 1; display: flex; flex-direction: column; justify-content: center">
-              <el-form-item label="自动查询与间隔" class="form-item">
-                <div
-                  style="
-                    display: flex;
-                    margin: auto;
-                    align-items: center;
-                    gap: 20px;
-                    justify-content: center;
-                    padding: 15px 0;
-                  "
-                >
-                  <el-switch
-                    v-model="iyuuForm.auto_query_enabled"
-                    active-text="启用"
-                    inactive-text="禁用"
-                  />
-                  <el-input-number
-                    v-model="iyuuForm.query_interval_days"
-                    :min="1"
-                    placeholder="天数"
-                    controls-position="right"
-                    style="width: 120px"
-                  />
-                  <span>天</span>
-                </div>
-              </el-form-item>
-
               <el-form-item label class="form-item">
                 <div
                   style="
@@ -645,9 +618,6 @@ const form = ref({ old_password: '', username: '', password: '' })
 // IYUU设置相关
 const iyuuForm = reactive({
   token: '',
-  query_interval_hours: 72,
-  query_interval_days: 3, // 以天为单位显示
-  auto_query_enabled: true,
   path_filter_enabled: false,
   selected_paths: [] as string[],
 })
@@ -783,10 +753,6 @@ const fetchSettings = async () => {
 
     // 获取IYUU设置
     if (config.iyuu_settings) {
-      iyuuForm.query_interval_hours = config.iyuu_settings.query_interval_hours || 72
-      // 将小时转换为天数显示（向上取整）
-      iyuuForm.query_interval_days = Math.ceil(iyuuForm.query_interval_hours / 24)
-      iyuuForm.auto_query_enabled = config.iyuu_settings.auto_query_enabled !== false // 默认为true
       iyuuForm.path_filter_enabled = config.iyuu_settings.path_filter_enabled || false
       iyuuForm.selected_paths = config.iyuu_settings.selected_paths || []
     }
@@ -888,18 +854,13 @@ const saveIyuuSettings = async () => {
 
   savingIyuu.value = true
   try {
-    // 保存IYUU其他设置（包括路径过滤设置）
-    // 将天数转换为小时保存到后端
+    // 保存IYUU设置（路径过滤设置）
     const iyuuSettings = {
-      query_interval_hours: iyuuForm.query_interval_days * 24,
-      auto_query_enabled: iyuuForm.auto_query_enabled,
       path_filter_enabled: iyuuForm.path_filter_enabled,
       selected_paths: iyuuForm.selected_paths,
     }
 
     await axios.post('/api/iyuu/settings', iyuuSettings)
-    // 更新本地的小时值，以便下次加载时正确显示
-    iyuuForm.query_interval_hours = iyuuSettings.query_interval_hours
 
     // 保存 iyuu token 设置（如果需要）
     if (actualIyuuToken.value && iyuuForm.token !== '********') {

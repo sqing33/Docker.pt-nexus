@@ -24,25 +24,33 @@ class IYUUThread(Thread):
         self.shutdown_event = Event()
 
     def run(self):
-        print("IYUUThread 线程已启动，每6小时执行一次查询任务。")
+        print("IYUUThread 线程已启动，改为手动触发模式。")
         # 等待5秒再开始执行，避免与主程序启动冲突
         time.sleep(5)
 
-        while self._is_running:
-            start_time = time.monotonic()
-            try:
-                self._process_torrents()
-            except Exception as e:
-                logging.error(f"IYUUThread 执行出错: {e}", exc_info=True)
+        # 注释掉定时循环逻辑，改为手动触发
+        # while self._is_running:
+        #     start_time = time.monotonic()
+        #     try:
+        #         self.process_torrents()
+        #     except Exception as e:
+        #         logging.error(f"IYUUThread 执行出错: {e}", exc_info=True)
 
-            # 等待下次执行，可以被shutdown_event中断
-            elapsed = time.monotonic() - start_time
-            remaining_time = max(0, self.interval - elapsed)
-            if remaining_time > 0:
-                # 使用Event.wait来等待，可以被中断
-                if self.shutdown_event.wait(timeout=remaining_time):
-                    # 如果被事件唤醒，说明要停止
-                    break
+        #     # 等待下次执行，可以被shutdown_event中断
+        #     elapsed = time.monotonic() - start_time
+        #     remaining_time = max(0, self.interval - elapsed)
+        #     if remaining_time > 0:
+        #         # 使用Event.wait来等待，可以被中断
+        #         if self.shutdown_event.wait(timeout=remaining_time):
+        #             # 如果被事件唤醒，说明要停止
+        #             break
+
+        print("IYUUThread 线程进入等待状态，等待手动触发。")
+        # 线程保持运行，但不执行定时任务，等待手动触发
+        while self._is_running:
+            # 简单等待，可以被停止事件中断
+            if self.shutdown_event.wait(timeout=60):  # 每分钟检查一次是否需要停止
+                break
 
     def _get_configured_sites(self):
         """获取torrents表中已存在的站点列表"""
@@ -80,7 +88,7 @@ class IYUUThread(Thread):
             logging.error(f"获取torrents表中的站点信息时出错: {e}", exc_info=True)
             return []
 
-    def _process_torrents(self, is_manual_trigger=False):
+    def process_torrents(self, is_manual_trigger=False):
         """处理种子数据，按name列进行聚合"""
         from datetime import datetime
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")

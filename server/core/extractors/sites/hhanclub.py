@@ -1,7 +1,9 @@
 import re
 from bs4 import BeautifulSoup
 from utils import extract_tags_from_mediainfo, extract_origin_from_description
-
+import os
+from config import TEMP_DIR, GLOBAL_MAPPINGS
+import yaml
 
 # 加载内容过滤配置
 CONTENT_FILTERING_CONFIG = {}

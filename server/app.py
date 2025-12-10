@@ -407,9 +407,22 @@ def create_app():
         start_data_tracker(db_manager, config_manager)
 
         # # --- 启动IYUU后台线程 ---
-        logging.info("正在启动IYUU后台线程...")
+        # 注释掉IYUU线程的自动启动，改为手动触发
+        logging.info("IYUU线程已改为手动触发模式，跳过自动启动。")
         # if os.getenv("DEV_ENV") != "true":
-        start_iyuu_thread(db_manager, config_manager)
+        # start_iyuu_thread(db_manager, config_manager)
+
+        # --- 启动时执行一次种子数据刷新 ---
+        logging.info("应用启动完成，执行一次种子数据刷新...")
+        try:
+            from core.manual_tasks import update_torrents_data
+            result = update_torrents_data(db_manager, config_manager)
+            if result["success"]:
+                logging.info("启动时种子数据刷新完成")
+            else:
+                logging.warning(f"启动时种子数据刷新失败: {result['message']}")
+        except Exception as e:
+            logging.error(f"启动时种子数据刷新出错: {e}", exc_info=True)
     else:
         logging.info("检测到调试监控进程，跳过后台线程启动。")
 
@@ -444,11 +457,12 @@ if __name__ == "__main__":
         except Exception as e:
             logging.error(f"停止数据追踪线程失败: {e}", exc_info=True)
 
-        try:
-            from core.iyuu import stop_iyuu_thread
-            stop_iyuu_thread()
-        except Exception as e:
-            logging.error(f"停止IYUU线程失败: {e}", exc_info=True)
+        # 注释掉IYUU线程的停止，因为不再自动启动
+        # try:
+        #     from core.iyuu import stop_iyuu_thread
+        #     stop_iyuu_thread()
+        # except Exception as e:
+        #     logging.error(f"停止IYUU线程失败: {e}", exc_info=True)
 
         logging.info("后台线程清理完成。")
 

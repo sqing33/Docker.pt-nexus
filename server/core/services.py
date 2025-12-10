@@ -296,25 +296,27 @@ class DataTracker(Thread):
             f"DataTracker 线程已启动。流量更新间隔: {self.interval}秒, 种子列表更新间隔: {self.TORRENT_UPDATE_INTERVAL}秒。"
         )
         time.sleep(5)
+        # 注释掉初始化时的种子更新，改为手动触发
         try:
             config = self.config_manager.get()
             if any(d.get("enabled") for d in config.get("downloaders", [])):
-                self._update_torrents_in_db()
+                logging.info("种子数据更新已改为手动触发模式，跳过初始种子更新。")
             else:
                 logging.info("所有下载器均未启用，跳过初始种子更新。")
         except Exception as e:
-            logging.error(f"初始种子数据库更新失败: {e}", exc_info=True)
+            logging.error(f"检查下载器状态时出错: {e}", exc_info=True)
 
         while self._is_running:
             start_time = time.monotonic()
             try:
                 self._fetch_and_buffer_stats()
-                self.torrent_update_counter += self.interval
-                if self.torrent_update_counter >= self.TORRENT_UPDATE_INTERVAL:
-                    self.clients.clear()
-                    logging.info("客户端连接缓存已清空，将为种子更新任务重建连接。")
-                    self._update_torrents_in_db()
-                    self.torrent_update_counter = 0
+                # 注释掉定时更新种子数据的逻辑，改为手动触发
+                # self.torrent_update_counter += self.interval
+                # if self.torrent_update_counter >= self.TORRENT_UPDATE_INTERVAL:
+                #     self.clients.clear()
+                #     logging.info("客户端连接缓存已清空，将为种子更新任务重建连接。")
+                #     self._update_torrents_in_db()
+                #     self.torrent_update_counter = 0
 
                 # 累加计数器并检查是否达到执行条件
                 self.aggregation_counter += self.interval
@@ -624,7 +626,572 @@ class DataTracker(Thread):
                 cursor.close()
                 conn.close()
 
-    def _update_torrents_in_db(self):
+    def update_torrents_in_db(self):
+        """优化版本：使用增量同步策略，只处理变化的种子"""
+        from datetime import datetime
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        logging.info("=== 开始增量更新数据库中的种子 ===")
+        print(f"【刷新线程】[{current_time}] 开始增量更新数据库中的种子...")
+        config = self.config_manager.get()
+        enabled_downloaders = [
+            d for d in config.get("downloaders", []) if d.get("enabled")
+        ]
+        print(f"【刷新线程】找到 {len(enabled_downloaders)} 个启用的下载器")
+        logging.info(f"找到 {len(enabled_downloaders)} 个启用的下载器")
+        if not enabled_downloaders:
+            logging.info("没有启用的下载器，跳过种子更新。")
+            print("【刷新线程】没有启用的下载器，跳过种子更新。")
+            return
+
+        core_domain_map, _, group_to_site_map_lower = load_site_maps_from_db(
+            self.db_manager)
+
+        # 增量同步：按下载器单独处理，减少内存占用
+        total_new = 0
+        total_updated = 0
+        total_deleted = 0
+
+        for downloader in enabled_downloaders:
+            print(
+                f"【刷新线程】正在处理下载器: {downloader['name']} (类型: {downloader['type']})"
+            )
+            try:
+                new_count, updated_count, deleted_count = self._update_downloader_torrents_incremental(
+                    downloader, core_domain_map, group_to_site_map_lower
+                )
+                total_new += new_count
+                total_updated += updated_count
+                total_deleted += deleted_count
+
+                print(
+                    f"【刷新线程】下载器 {downloader['name']} 处理完成: "
+                    f"新增 {new_count}, 更新 {updated_count}, 删除 {deleted_count}"
+                )
+            except Exception as e:
+                print(f"【刷新线程】处理下载器 {downloader['name']} 时出错: {e}")
+                logging.error(f"处理下载器 {downloader['name']} 时出错: {e}", exc_info=True)
+                continue
+
+        # 更新 seed_parameters 表的 is_deleted 字段
+        self._update_seed_parameters_deleted_status()
+
+        # 清理已删除下载器的数据
+        self._cleanup_deleted_downloaders(config)
+
+        print(
+            f"【刷新线程】=== 增量更新完成: 总新增 {total_new}, 总更新 {total_updated}, 总删除 {total_deleted} ==="
+        )
+        logging.info(
+            f"增量更新完成: 总新增 {total_new}, 总更新 {total_updated}, 总删除 {total_deleted}"
+        )
+
+    def _update_downloader_torrents_incremental(self, downloader, core_domain_map, group_to_site_map_lower):
+        """增量同步单个下载器的种子数据"""
+        from datetime import datetime
+        new_count = 0
+        updated_count = 0
+        deleted_count = 0
+
+        # 1. 获取下载器中的种子列表
+        torrents_list = []
+        client_instance = None
+
+        try:
+            # 检查是否需要使用代理
+            use_proxy = downloader.get("use_proxy", False)
+
+            if use_proxy and downloader["type"] == "qbittorrent":
+                # 使用代理获取种子信息
+                logging.info(f"通过代理获取 '{downloader['name']}' 的种子信息...")
+                proxy_torrents = self._get_proxy_torrents(downloader)
+
+                if proxy_torrents is not None:
+                    torrents_list = proxy_torrents
+                    print(
+                        f"【刷新线程】通过代理从 '{downloader['name']}' 成功获取到 {len(torrents_list)} 个种子。"
+                    )
+                else:
+                    print(f"【刷新线程】通过代理获取 '{downloader['name']} 种子信息失败")
+                    return 0, 0, 0
+            else:
+                # 使用常规方式获取种子信息
+                client_instance = self._get_client(downloader)
+                if not client_instance:
+                    print(f"【刷新线程】无法连接到下载器 {downloader['name']}")
+                    return 0, 0, 0
+
+                print(f"【刷新线程】正在从 {downloader['name']} 获取种子列表...")
+                if downloader["type"] == "qbittorrent":
+                    torrents_list = client_instance.torrents_info(status_filter="all")
+                elif downloader["type"] == "transmission":
+                    fields = [
+                        "id", "name", "hashString", "downloadDir",
+                        "totalSize", "status", "comment", "trackers",
+                        "percentDone", "uploadedEver", "peersGettingFromUs",
+                        "trackerStats", "peers", "peersConnected"
+                    ]
+                    torrents_list = client_instance.get_torrents(arguments=fields)
+
+                print(
+                    f"【刷新线程】从 '{downloader['name']}' 成功获取到 {len(torrents_list)} 个种子。"
+                )
+        except Exception as e:
+            print(f"【刷新线程】未能从 '{downloader['name']}' 获取数据: {e}")
+            logging.error(f"未能从 '{downloader['name']}' 获取数据: {e}")
+            return 0, 0, 0
+
+        # 2. 构建当前种子的内存快照
+        current_torrents = {}
+        for t in torrents_list:
+            t_info = self._normalize_torrent_info(t, downloader["type"], client_instance)
+            current_torrents[t_info["hash"]] = t_info
+
+        # 3. 查询数据库中该下载器的现有种子
+        db_torrents = self._get_downloader_torrents_from_db(downloader["id"])
+
+        # 4. 对比找出变化的种子
+        new_torrents, updated_torrents, deleted_hashes = self._compare_torrent_changes(
+            current_torrents, db_torrents, downloader, core_domain_map, group_to_site_map_lower
+        )
+
+        print(
+            f"【刷新线程】下载器 {downloader['name']} 变化分析: "
+            f"新增 {len(new_torrents)}, 更新 {len(updated_torrents)}, 删除 {len(deleted_hashes)}"
+        )
+
+        # 5. 分批处理变化的数据
+        if new_torrents or updated_torrents or deleted_hashes:
+            new_count, updated_count, deleted_count = self._process_torrent_changes(
+                downloader["id"], new_torrents, updated_torrents, deleted_hashes, current_torrents
+            )
+
+        return new_count, updated_count, deleted_count
+
+    def _get_downloader_torrents_from_db(self, downloader_id):
+        """从数据库获取指定下载器的所有种子信息"""
+        conn = None
+        try:
+            conn = self.db_manager._get_connection()
+            cursor = self.db_manager._get_cursor(conn)
+
+            placeholder = "%s" if self.db_manager.db_type in ["mysql", "postgresql"] else "?"
+            # 根据数据库类型使用正确的引号包围group字段
+            if self.db_manager.db_type == "postgresql":
+                group_field = '"group"'
+            else:
+                group_field = "`group`"
+
+            cursor.execute(
+                f"SELECT hash, name, save_path, size, progress, state, sites, details, "
+                f"{group_field}, downloader_id, last_seen, seeders FROM torrents "
+                f"WHERE downloader_id = {placeholder}",
+                (downloader_id,)
+            )
+
+            db_torrents = {}
+            for row in cursor.fetchall():
+                # 处理不同数据库类型返回的字段名差异
+                row_dict = dict(row)
+
+                # PostgreSQL返回的字段名可能包含引号，需要处理
+                group_key = "group" if "group" in row_dict else '"group"'
+
+                db_torrents[row_dict["hash"]] = {
+                    "name": row_dict["name"],
+                    "save_path": row_dict["save_path"],
+                    "size": row_dict["size"],
+                    "progress": row_dict["progress"],
+                    "state": row_dict["state"],
+                    "sites": row_dict["sites"],
+                    "details": row_dict["details"],
+                    "group": row_dict.get(group_key),  # 处理可能的字段名差异
+                    "downloader_id": row_dict["downloader_id"],
+                    "last_seen": row_dict["last_seen"],
+                    "seeders": row_dict["seeders"]
+                }
+
+            return db_torrents
+        except Exception as e:
+            logging.error(f"查询下载器 {downloader_id} 的种子数据失败: {e}")
+            return {}
+        finally:
+            if conn:
+                cursor.close()
+                conn.close()
+
+    def _compare_torrent_changes(self, current_torrents, db_torrents, downloader,
+                                core_domain_map, group_to_site_map_lower):
+        """对比当前种子和数据库种子，找出变化的部分"""
+        new_torrents = {}
+        updated_torrents = {}
+        deleted_hashes = set()
+
+        current_hashes = set(current_torrents.keys())
+        db_hashes = set(db_torrents.keys())
+
+        # 找出新增和需要更新的种子
+        for hash_value, current_info in current_torrents.items():
+            if hash_value not in db_hashes:
+                # 新增的种子
+                new_torrents[hash_value] = current_info
+            else:
+                # 检查是否需要更新
+                db_info = db_torrents[hash_value]
+                if self._should_update_torrent(current_info, db_info):
+                    updated_torrents[hash_value] = current_info
+
+        # 找出删除的种子
+        deleted_hashes = db_hashes - current_hashes
+
+        # 为种子添加站点和发布组信息
+        all_to_process = {**new_torrents, **updated_torrents}
+        for hash_value, torrent_info in all_to_process.items():
+            site_name = self._find_site_nickname(
+                torrent_info["trackers"], core_domain_map, torrent_info["comment"]
+            )
+            torrent_info["sites"] = site_name
+            torrent_info["details"] = _extract_url_from_comment(torrent_info["comment"])
+            torrent_info["group"] = self._find_torrent_group(
+                torrent_info["name"], group_to_site_map_lower
+            )
+            torrent_info["downloader_id"] = downloader["id"]
+
+        return new_torrents, updated_torrents, deleted_hashes
+
+    def _should_update_torrent(self, current_info, db_info):
+        """判断种子是否需要更新"""
+        # 检查关键字段是否有变化
+        current_progress = round(current_info["progress"] * 100, 1)
+        current_state = format_state(current_info["state"])
+
+        # 如果进度有变化，需要更新
+        if abs(current_progress - db_info["progress"]) > 0.1:
+            return True
+
+        # 如果状态有变化，需要更新
+        if current_state != db_info["state"]:
+            return True
+
+        # 如果大小有变化，需要更新
+        if current_info["size"] != db_info["size"]:
+            return True
+
+        # 如果保存路径有变化，需要更新
+        if current_info["save_path"] != db_info["save_path"]:
+            return True
+
+        # 做种人数变化也需要更新
+        current_seeders = current_info.get("seeders", 0)
+        if current_seeders != db_info.get("seeders", 0):
+            return True
+
+        return False
+
+    def _process_torrent_changes(self, downloader_id, new_torrents, updated_torrents, deleted_hashes, current_torrents):
+        """处理种子的增删改操作"""
+        from datetime import datetime
+        new_count = 0
+        updated_count = 0
+        deleted_count = 0
+        upload_count = 0
+
+        conn = None
+        try:
+            conn = self.db_manager._get_connection()
+            cursor = self.db_manager._get_cursor(conn)
+            now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            placeholder = "%s" if self.db_manager.db_type in ["mysql", "postgresql"] else "?"
+
+            # 1. 处理删除的种子
+            if deleted_hashes:
+                deleted_count = self._delete_torrents_batch(cursor, downloader_id, deleted_hashes, placeholder)
+                print(f"【刷新线程】批量删除了 {deleted_count} 个种子")
+
+            # 2. 处理新增和更新的种子
+            all_to_insert = {**new_torrents, **updated_torrents}
+            if all_to_insert:
+                insert_count, update_count = self._upsert_torrents_batch(
+                    cursor, all_to_insert, new_torrents.keys(), now_str, placeholder
+                )
+                new_count = insert_count
+                updated_count = update_count
+                print(f"【刷新线程】批量新增 {insert_count} 个，更新 {update_count} 个种子")
+
+            # 3. 处理上传统计
+            upload_stats = self._collect_upload_stats(current_torrents, downloader_id)
+            if upload_stats:
+                upload_count = self._upsert_upload_stats_batch(cursor, upload_stats, placeholder)
+                print(f"【刷新线程】批量处理了 {upload_count} 条上传统计")
+
+            conn.commit()
+            return new_count, updated_count, deleted_count
+
+        except Exception as e:
+            logging.error(f"处理种子变化时出错: {e}", exc_info=True)
+            if conn:
+                conn.rollback()
+            return 0, 0, 0
+        finally:
+            if conn:
+                cursor.close()
+                conn.close()
+
+    def _collect_upload_stats(self, current_torrents, downloader_id):
+        """收集有上传量的种子统计"""
+        upload_stats = []
+        for hash_value, torrent_info in current_torrents.items():
+            if torrent_info.get("uploaded", 0) > 0:
+                upload_stats.append((hash_value, downloader_id, torrent_info["uploaded"]))
+        return upload_stats
+
+    def _upsert_upload_stats_batch(self, cursor, upload_stats, placeholder):
+        """批量更新上传统计"""
+        if not upload_stats:
+            return 0
+
+        # 分批处理，每批500条
+        batch_size = 500
+        total_count = 0
+
+        for i in range(0, len(upload_stats), batch_size):
+            batch_stats = upload_stats[i:i + batch_size]
+
+            # 根据数据库类型使用正确的语法
+            if self.db_manager.db_type == "mysql":
+                sql_upload = """INSERT INTO torrent_upload_stats (hash, downloader_id, uploaded)
+                                 VALUES (%s, %s, %s)
+                                 ON DUPLICATE KEY UPDATE uploaded=VALUES(uploaded)"""
+            elif self.db_manager.db_type == "postgresql":
+                sql_upload = """INSERT INTO torrent_upload_stats (hash, downloader_id, uploaded)
+                                 VALUES (%s, %s, %s)
+                                 ON CONFLICT(hash, downloader_id) DO UPDATE SET uploaded=EXCLUDED.uploaded"""
+            else:  # sqlite
+                sql_upload = """INSERT INTO torrent_upload_stats (hash, downloader_id, uploaded)
+                                 VALUES (?, ?, ?)
+                                 ON CONFLICT(hash, downloader_id) DO UPDATE SET uploaded=excluded.uploaded"""
+
+            cursor.executemany(sql_upload, batch_stats)
+            total_count += len(batch_stats)
+
+        return total_count
+
+    def _delete_torrents_batch(self, cursor, downloader_id, deleted_hashes, placeholder):
+        """批量删除种子"""
+        if not deleted_hashes:
+            return 0
+
+        # 分类删除：非未做种的直接删除，未做种的检查是否有同名种子在做种
+        # 先查询要删除种子的状态和名称
+        placeholders = ",".join([placeholder] * len(deleted_hashes))
+        cursor.execute(
+            f"SELECT hash, name, state FROM torrents WHERE hash IN ({placeholders}) AND downloader_id = {placeholder}",
+            tuple(list(deleted_hashes) + [downloader_id])
+        )
+        torrents_to_check = cursor.fetchall()
+
+        # 获取当前正在做种的种子名称
+        cursor.execute(
+            "SELECT DISTINCT name FROM torrents WHERE state NOT IN ('未做种', '已暂停', '已停止', '错误', '等待', '队列')"
+        )
+        seeding_names = {row["name"] for row in cursor.fetchall()}
+
+        # 分类处理
+        hashes_to_delete = []
+        for torrent in torrents_to_check:
+            if torrent["state"] != "未做种":
+                hashes_to_delete.append(torrent["hash"])
+            else:
+                # 未做种的种子，检查是否有其他同名种子在做种
+                if torrent["name"] not in seeding_names:
+                    hashes_to_delete.append(torrent["hash"])
+
+        # 执行删除
+        if hashes_to_delete:
+            delete_placeholders = ",".join([placeholder] * len(hashes_to_delete))
+            cursor.execute(
+                f"DELETE FROM torrents WHERE hash IN ({delete_placeholders}) AND downloader_id = {placeholder}",
+                tuple(hashes_to_delete + [downloader_id])
+            )
+            return cursor.rowcount
+
+        return 0
+
+    def _upsert_torrents_batch(self, cursor, torrents_to_process, new_hashes, now_str, placeholder):
+        """批量新增或更新种子"""
+        if not torrents_to_process:
+            return 0, 0
+
+        # 准备数据
+        params = []
+        new_count = 0
+        update_count = 0
+
+        for hash_value, torrent_info in torrents_to_process.items():
+            param = (
+                torrent_info["hash"],
+                torrent_info["name"],
+                torrent_info["save_path"],
+                torrent_info["size"],
+                round(torrent_info["progress"] * 100, 1),
+                format_state(torrent_info["state"]),
+                torrent_info.get("sites", ""),
+                torrent_info.get("details", ""),
+                torrent_info.get("group", ""),
+                torrent_info["downloader_id"],
+                now_str,
+                torrent_info.get("seeders", 0)
+            )
+            params.append(param)
+
+        # 分批处理，每批500条
+        batch_size = 500
+        for i in range(0, len(params), batch_size):
+            batch_params = params[i:i + batch_size]
+
+            # 根据数据库类型使用正确的语法
+            if self.db_manager.db_type == "mysql":
+                sql = """INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, `group`, downloader_id, last_seen, seeders)
+                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                         ON DUPLICATE KEY UPDATE
+                         name=VALUES(name), save_path=VALUES(save_path), size=VALUES(size),
+                         progress=VALUES(progress), state=VALUES(state),
+                         sites=COALESCE(NULLIF(VALUES(sites), ''), sites),
+                         details=IF(VALUES(details) != '', VALUES(details), details),
+                         `group`=COALESCE(NULLIF(VALUES(`group`), ''), `group`),
+                         downloader_id=VALUES(downloader_id), last_seen=VALUES(last_seen),
+                         seeders=VALUES(seeders)"""
+            elif self.db_manager.db_type == "postgresql":
+                sql = """INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, "group", downloader_id, last_seen, seeders)
+                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                         ON CONFLICT(hash, downloader_id) DO UPDATE SET
+                         name=excluded.name, save_path=excluded.save_path, size=excluded.size,
+                         progress=excluded.progress, state=excluded.state,
+                         sites=COALESCE(NULLIF(excluded.sites, ''), torrents.sites),
+                         details=CASE WHEN excluded.details != '' THEN excluded.details ELSE torrents.details END,
+                         "group"=COALESCE(NULLIF(excluded."group", ''), torrents."group"),
+                         downloader_id=excluded.downloader_id, last_seen=excluded.last_seen,
+                         seeders=excluded.seeders"""
+            else:  # sqlite
+                sql = """INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, "group", downloader_id, last_seen, seeders)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         ON CONFLICT(hash, downloader_id) DO UPDATE SET
+                         name=excluded.name, save_path=excluded.save_path, size=excluded.size,
+                         progress=excluded.progress, state=excluded.state,
+                         sites=COALESCE(NULLIF(excluded.sites, ''), torrents.sites),
+                         details=CASE WHEN excluded.details != '' THEN excluded.details ELSE torrents.details END,
+                         "group"=COALESCE(NULLIF(excluded."group", ''), torrents."group"),
+                         downloader_id=excluded.downloader_id, last_seen=excluded.last_seen,
+                         seeders=excluded.seeders"""
+
+            cursor.executemany(sql, batch_params)
+
+            # 统计新增和更新数量（简化统计）
+            batch_new_hashes = set()
+            for j, param in enumerate(batch_params):
+                hash_val = param[0]
+                if hash_val in new_hashes:
+                    batch_new_hashes.add(hash_val)
+
+            new_count += len(batch_new_hashes)
+            update_count += len(batch_params) - len(batch_new_hashes)
+
+        return new_count, update_count
+
+    def _update_seed_parameters_deleted_status(self):
+        """更新 seed_parameters 表的 is_deleted 字段"""
+        conn = None
+        try:
+            conn = self.db_manager._get_connection()
+            cursor = self.db_manager._get_cursor(conn)
+            placeholder = "%s" if self.db_manager.db_type in ["mysql", "postgresql"] else "?"
+
+            # 获取所有seed_parameters表中的hash值
+            cursor.execute("SELECT DISTINCT hash FROM seed_parameters")
+            seed_hashes = {row["hash"] for row in cursor.fetchall()}
+
+            # 获取所有torrents表中的hash值
+            cursor.execute("SELECT DISTINCT hash FROM torrents")
+            torrent_hashes = {row["hash"] for row in cursor.fetchall()}
+
+            # 找出在torrents表中存在的hash值和不存在的hash值
+            hashes_in_torrents = seed_hashes & torrent_hashes
+            hashes_not_in_torrents = seed_hashes - torrent_hashes
+
+            # 更新在torrents表中存在的hash值的is_deleted字段为0
+            if hashes_in_torrents:
+                update_placeholders = ",".join([placeholder] * len(hashes_in_torrents))
+                if self.db_manager.db_type == 'postgresql':
+                    update_query = f"UPDATE seed_parameters SET is_deleted = FALSE WHERE hash IN ({update_placeholders})"
+                else:
+                    update_query = f"UPDATE seed_parameters SET is_deleted = 0 WHERE hash IN ({update_placeholders})"
+                cursor.execute(update_query, tuple(hashes_in_torrents))
+                print(f"【刷新线程】已更新 {len(hashes_in_torrents)} 个种子的is_deleted字段为0")
+
+            # 更新在torrents表中不存在的hash值的is_deleted字段为1
+            if hashes_not_in_torrents:
+                update_placeholders = ",".join([placeholder] * len(hashes_not_in_torrents))
+                if self.db_manager.db_type == 'postgresql':
+                    update_query = f"UPDATE seed_parameters SET is_deleted = TRUE WHERE hash IN ({update_placeholders})"
+                else:
+                    update_query = f"UPDATE seed_parameters SET is_deleted = 1 WHERE hash IN ({update_placeholders})"
+                cursor.execute(update_query, tuple(hashes_not_in_torrents))
+                print(f"【刷新线程】已更新 {len(hashes_not_in_torrents)} 个种子的is_deleted字段为1")
+
+            conn.commit()
+        except Exception as e:
+            logging.error(f"更新seed_parameters表失败: {e}", exc_info=True)
+            if conn:
+                conn.rollback()
+        finally:
+            if conn:
+                cursor.close()
+                conn.close()
+
+    def _cleanup_deleted_downloaders(self, config):
+        """清理已删除下载器的种子数据"""
+        conn = None
+        try:
+            conn = self.db_manager._get_connection()
+            cursor = self.db_manager._get_cursor(conn)
+            placeholder = "%s" if self.db_manager.db_type in ["mysql", "postgresql"] else "?"
+
+            # 获取配置中所有下载器的ID（包括启用和禁用的）
+            all_configured_downloaders = {
+                d["id"] for d in config.get("downloaders", [])
+            }
+
+            # 获取当前数据库中存在的所有下载器ID
+            cursor.execute(
+                "SELECT DISTINCT downloader_id FROM torrents WHERE downloader_id IS NOT NULL"
+            )
+            existing_downloader_ids = {
+                row["downloader_id"] for row in cursor.fetchall()
+            }
+
+            # 计算应该删除种子数据的下载器ID（已从配置中删除的下载器）
+            deleted_downloader_ids = existing_downloader_ids - all_configured_downloaders
+
+            # 只删除已从配置中删除的下载器的种子数据
+            if deleted_downloader_ids:
+                downloader_placeholders = ",".join([placeholder] * len(deleted_downloader_ids))
+                delete_query = f"DELETE FROM torrents WHERE downloader_id IN ({downloader_placeholders})"
+                cursor.execute(delete_query, tuple(deleted_downloader_ids))
+                deleted_count = cursor.rowcount
+                print(f"【刷新线程】从 torrents 表中移除了 {deleted_count} 个已删除下载器的种子。")
+                logging.info(f"从 torrents 表中移除了 {deleted_count} 个已删除下载器的种子。")
+
+            conn.commit()
+        except Exception as e:
+            logging.error(f"清理已删除下载器数据失败: {e}", exc_info=True)
+            if conn:
+                conn.rollback()
+        finally:
+            if conn:
+                cursor.close()
+                conn.close()
+
+    def _update_torrents_in_db_original(self):
+        """原始版本：保留作为备份"""
         from datetime import datetime
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         logging.info("=== 开始更新数据库中的种子 ===")

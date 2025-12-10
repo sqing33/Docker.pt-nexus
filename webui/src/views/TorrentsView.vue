@@ -1562,7 +1562,18 @@ onMounted(async () => {
   // 2. loadUiSettings 会设置 settingsLoaded=true，此时表格才会被渲染
   // 3. 使用加载好的设置去获取数据
   fetchData()
-  // 4. 执行其他初始化
+  // 4. 页面打开时触发一次种子数据刷新
+  try {
+    console.log('页面加载完成，触发种子数据刷新...')
+    await axios.post('/api/refresh_data')
+    console.log('种子数据刷新完成，重新获取数据...')
+    // 刷新完成后重新获取数据
+    await fetchData()
+  } catch (error) {
+    console.warn('页面加载时种子数据刷新失败:', error)
+    // 刷新失败不影响正常显示
+  }
+  // 5. 执行其他初始化
   fetchDownloadersList()
   fetchAllSitesStatus()
   emits('ready', fetchData)

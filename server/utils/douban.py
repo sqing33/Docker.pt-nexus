@@ -8,6 +8,76 @@ from config import config_manager
 from utils import _convert_pixhost_url_to_direct
 
 
+def call_api_with_fallback(api_path, params=None, method='GET', timeout=10):
+    """
+    调用API时支持主备域名切换的通用函数
+
+    Args:
+        api_path (str): API路径，如 '/?imdbid=tt123456'
+        params (dict): 额外的请求参数
+        method (str): HTTP方法，默认 'GET'
+        timeout (int): 超时时间，默认 10 秒
+
+    Returns:
+        tuple: (success, response_data, error_message)
+    """
+    # 主备域名配置 - 替换子域名部分
+    primary_domain = "https://ptn-douban.sqing33.dpdns.org"
+    fallback_domain = "https://ptn-douban.1395251710.workers.dev"
+
+    # 构建完整的URL列表
+    urls = [f"{primary_domain}{api_path}", f"{fallback_domain}{api_path}"]
+
+    for i, url in enumerate(urls):
+        domain_name = "主域名" if i == 0 else "备用域名"
+        try:
+            logging.info(f"尝试使用{domain_name}: {url}")
+
+            if method.upper() == 'GET':
+                response = requests.get(url, params=params, timeout=timeout)
+            elif method.upper() == 'POST':
+                response = requests.post(url, params=params, timeout=timeout)
+            else:
+                raise ValueError(f"不支持的HTTP方法: {method}")
+
+            if response.status_code == 200:
+                try:
+                    data = response.json()
+                    logging.info(f"{domain_name}调用成功")
+                    return True, data, ""
+                except ValueError:
+                    # 如果不是JSON，返回文本内容
+                    return True, response.text, ""
+            else:
+                error_msg = f"HTTP {response.status_code}"
+                logging.warning(f"{domain_name}返回错误: {error_msg}")
+
+        except requests.exceptions.SSLError as e:
+            error_msg = f"SSL错误: {str(e)}"
+            logging.error(f"{domain_name}SSL错误: {e}")
+            if i == 0:  # 主域名失败，尝试备用域名
+                continue
+            else:
+                return False, None, error_msg
+        except requests.exceptions.RequestException as e:
+            error_msg = f"网络错误: {str(e)}"
+            logging.error(f"{domain_name}网络错误: {e}")
+            if i == 0:  # 主域名失败，尝试备用域名
+                continue
+            else:
+                return False, None, error_msg
+        except Exception as e:
+            error_msg = f"未知错误: {str(e)}"
+            logging.error(f"{domain_name}未知错误: {e}")
+            if i == 0:  # 主域名失败，尝试备用域名
+                continue
+            else:
+                return False, None, error_msg
+
+    # 所有域名都失败
+    return False, None, "所有API域名都无法访问"
+
+
 def search_by_subtitle(subtitle):
     """
     根据副标题搜索IMDb或豆瓣链接
@@ -42,12 +112,15 @@ def search_by_subtitle(subtitle):
                     print(f"[*] 未找到链接，尝试使用副标题 '{search_name}' 进行名称搜索...")
                     try:
                         encoded_name = urllib.parse.quote_plus(search_name)
-                        api_base_url = "https://ptn-douban.sqing33.dpdns.org/"
-                        api_url = f"{api_base_url}?name={encoded_name}"
+                        api_path = f"/?name={encoded_name}"
 
-                        response = requests.get(api_url, timeout=10)
-                        if response.status_code == 200:
-                            data = response.json().get('data', [])
+                        success, data, error_msg = call_api_with_fallback(api_path, timeout=10)
+                        if success:
+                            # data 可能是 dict 或 list
+                            if isinstance(data, dict):
+                                data = data.get('data', [])
+                            elif isinstance(data, list):
+                                data = data
                             if data and data[0]:
                                 found_record = data[0]
                                 found_imdb_id = found_record.get('imdbid')
@@ -76,15 +149,9 @@ def search_by_subtitle(subtitle):
                                     return imdb_link, douban_link
 
                         else:
-                            logging.warning(
-                                f"名称搜索 API 查询失败, 状态码: {response.status_code}")
-                            print(
-                                f"  [-] 名称搜索 API 查询失败, 状态码: {response.status_code}"
-                            )
+                            logging.warning(f"名称搜索 API 查询失败: {error_msg}")
+                            print(f"  [-] 名称搜索 API 查询失败: {error_msg}")
 
-                    except requests.exceptions.RequestException as e:
-                        logging.error(f"使用名称搜索 API 时发生网络错误: {e}")
-                        print(f"  [!] 使用名称搜索 API 时发生网络错误: {e}")
                     except Exception as e:
                         logging.error(f"使用名称搜索时发生错误: {e}")
                         print(f"  [!] 使用名称搜索时发生错误: {e}")
@@ -112,20 +179,22 @@ def handle_incomplete_links(imdb_link, douban_link, subtitle):
         logging.info("检测到 IMDb/豆瓣 链接不完整，尝试使用远程 API 补充...")
         print("检测到 IMDb/豆瓣 链接不完整，尝试使用远程 API 补充...")
 
-        api_base_url = "https://ptn-douban.sqing33.dpdns.org/"
-
         try:
             if imdb_link and not douban_link:
                 print("[DEBUG] 尝试从IMDb链接获取豆瓣链接")
                 if imdb_id_match := re.search(r'(tt\d+)', imdb_link):
                     imdb_id = imdb_id_match.group(1)
-                    api_url = f"{api_base_url}?imdbid={imdb_id}"
-                    logging.info(f"使用 IMDb ID 查询远程 API: {api_url}")
-                    print(f"[*] 正在使用 IMDb ID 查询 API: {api_url}")
+                    api_path = f"/?imdbid={imdb_id}"
+                    logging.info(f"使用 IMDb ID 查询远程 API")
+                    print(f"[*] 正在使用 IMDb ID 查询 API")
 
-                    response = requests.get(api_url, timeout=10)
-                    if response.status_code == 200:
-                        data = response.json().get('data', [])
+                    success, data, error_msg = call_api_with_fallback(api_path, timeout=10)
+                    if success:
+                        # data 可能是 dict 或 list
+                        if isinstance(data, dict):
+                            data = data.get('data', [])
+                        elif isinstance(data, list):
+                            data = data
                         if data and data[0].get('doubanid'):
                             douban_id = data[0]['doubanid']
                             douban_link = f"https://movie.douban.com/subject/{douban_id}/"
@@ -135,22 +204,24 @@ def handle_incomplete_links(imdb_link, douban_link, subtitle):
                             logging.warning(f"API 响应中未找到与 {imdb_id} 匹配的豆瓣ID")
                             print(f"  [-] API 响应中未找到与 {imdb_id} 匹配的豆瓣ID")
                     else:
-                        logging.warning(
-                            f"API 查询失败, 状态码: {response.status_code}, 响应: {response.text}"
-                        )
-                        print(f"  [-] API 查询失败, 状态码: {response.status_code}")
+                        logging.warning(f"API 查询失败: {error_msg}")
+                        print(f"  [-] API 查询失败: {error_msg}")
 
             elif douban_link and not imdb_link:
                 print("[DEBUG] 尝试从豆瓣链接获取IMDb链接")
                 if douban_id_match := re.search(r'subject/(\d+)', douban_link):
                     douban_id = douban_id_match.group(1)
-                    api_url = f"{api_base_url}?doubanid={douban_id}"
-                    logging.info(f"使用 Douban ID 查询远程 API: {api_url}")
-                    print(f"[*] 正在使用 Douban ID 查询 API: {api_url}")
+                    api_path = f"/?doubanid={douban_id}"
+                    logging.info(f"使用 Douban ID 查询远程 API")
+                    print(f"[*] 正在使用 Douban ID 查询 API")
 
-                    response = requests.get(api_url, timeout=10)
-                    if response.status_code == 200:
-                        data = response.json().get('data', [])
+                    success, data, error_msg = call_api_with_fallback(api_path, timeout=10)
+                    if success:
+                        # data 可能是 dict 或 list
+                        if isinstance(data, dict):
+                            data = data.get('data', [])
+                        elif isinstance(data, list):
+                            data = data
                         if data and data[0].get('imdbid'):
                             imdb_id = data[0]['imdbid']
                             imdb_link = f"https://www.imdb.com/title/{imdb_id}/"
@@ -161,17 +232,12 @@ def handle_incomplete_links(imdb_link, douban_link, subtitle):
                                 f"API 响应中未找到与 {douban_id} 匹配的IMDb ID")
                             print(f"  [-] API 响应中未找到与 {douban_id} 匹配的IMDb ID")
                     else:
-                        logging.warning(
-                            f"API 查询失败, 状态码: {response.status_code}, 响应: {response.text}"
-                        )
-                        print(f"  [-] API 查询失败, 状态码: {response.status_code}")
+                        logging.warning(f"API 查询失败: {error_msg}")
+                        print(f"  [-] API 查询失败: {error_msg}")
 
-        except requests.exceptions.RequestException as e:
-            logging.error(f"访问远程链接补充 API 时发生网络错误: {e}")
-            print(f"  [!] 访问远程链接补充 API 时发生网络错误: {e}")
         except Exception as e:
-            logging.error(f"处理远程链接补充 API 响应时发生错误: {e}", exc_info=True)
-            print(f"  [!] 处理远程链接补充 API 响应时发生错误: {e}")
+            logging.error(f"处理链接补充时发生错误: {e}", exc_info=True)
+            print(f"  [!] 处理链接补充时发生错误: {e}")
 
     print(
         f"[DEBUG] handle_incomplete_links returning: imdb_link={imdb_link}, douban_link={douban_link}"
@@ -500,6 +566,96 @@ def _call_url_format_api(api_config: dict, douban_link: str, imdb_link: str,
         return False, "", f"URL格式API调用失败: {e}", ""
 
 
+def call_ptgen_api_with_fallback(base_url: str, resource_url: str, method='POST', timeout=30):
+    """
+    调用PTGen API时支持主备域名切换的通用函数
+
+    Args:
+        base_url (str): API基础URL
+        resource_url (str): 资源URL
+        method (str): HTTP方法，默认 'POST'
+        timeout (int): 超时时间，默认 30 秒
+
+    Returns:
+        tuple: (success, response_data, error_message)
+    """
+    # 主备域名配置 - 替换子域名部分
+    if 'ptn-ptgen.sqing33.dpdns.org' in base_url:
+        primary_base = 'https://ptn-ptgen.sqing33.dpdns.org'
+        fallback_base = 'https://ptn-ptgen.1395251710.workers.dev'
+    else:
+        # 其他API不使用备用域名
+        primary_base = base_url
+        fallback_base = None
+
+    # 构造API URL
+    if not primary_base.endswith('/api'):
+        primary_url = f"{primary_base}/api?url={resource_url}"
+    else:
+        primary_url = f"{primary_base}?url={resource_url}"
+
+    urls_to_try = [primary_url]
+
+    # 如果有备用域名，添加备用URL
+    if fallback_base:
+        if not fallback_base.endswith('/api'):
+            fallback_url = f"{fallback_base}/api?url={resource_url}"
+        else:
+            fallback_url = f"{fallback_base}?url={resource_url}"
+        urls_to_try.append(fallback_url)
+
+    for i, url in enumerate(urls_to_try):
+        domain_name = "主域名" if i == 0 else "备用域名"
+        try:
+            print(f"[*] 尝试使用{domain_name}: {url}")
+
+            if method.upper() == 'POST':
+                response = requests.post(url, timeout=timeout)
+            else:
+                response = requests.get(url, timeout=timeout)
+
+            print(f"[*] API响应状态码: {response.status_code}")
+
+            if response.status_code == 200:
+                try:
+                    data = response.json()
+                    print(f"{domain_name}调用成功")
+                    return True, data, ""
+                except ValueError:
+                    # 如果不是JSON，返回文本内容
+                    text_content = response.text.strip()
+                    print(f"{domain_name}返回文本内容")
+                    return True, text_content, ""
+            else:
+                error_msg = f"HTTP {response.status_code}"
+                print(f"{domain_name}返回错误: {error_msg}")
+
+        except requests.exceptions.SSLError as e:
+            error_msg = f"SSL错误: {str(e)}"
+            print(f"[!] {domain_name}SSL错误: {e}")
+            if i == 0 and fallback_base:  # 主域名失败，尝试备用域名
+                continue
+            else:
+                return False, None, error_msg
+        except requests.exceptions.RequestException as e:
+            error_msg = f"网络错误: {str(e)}"
+            print(f"[!] {domain_name}网络错误: {e}")
+            if i == 0 and fallback_base:  # 主域名失败，尝试备用域名
+                continue
+            else:
+                return False, None, error_msg
+        except Exception as e:
+            error_msg = f"未知错误: {str(e)}"
+            print(f"[!] {domain_name}未知错误: {e}")
+            if i == 0 and fallback_base:  # 主域名失败，尝试备用域名
+                continue
+            else:
+                return False, None, error_msg
+
+    # 所有域名都失败
+    return False, None, "所有PTGen API域名都无法访问"
+
+
 def _call_refactor_url_format_api(api_config: dict, douban_link: str,
                                   imdb_link: str, media_type: str):
     """
@@ -521,24 +677,17 @@ def _call_refactor_url_format_api(api_config: dict, douban_link: str,
         else:
             return False, "", "未提供豆瓣或IMDb链接", ""
 
-        # 构造API URL，只使用/api?url=这种方式
-        if not base_url.endswith('/api'):
-            url = f"{base_url}/api?url={resource_url}"
-        else:
-            url = f"{base_url}?url={resource_url}"
+        # 使用备用域名机制调用API
+        success, data, error_msg = call_ptgen_api_with_fallback(base_url, resource_url, method='POST', timeout=30)
 
-        print(f"[*] 正在调用URL格式API: {url}")
-        response = requests.post(url, timeout=30)
-        response.raise_for_status()
+        if not success:
+            print(f"[!] 新的URL格式API调用失败: {error_msg}")
+            return False, "", f"新的URL格式API调用失败: {error_msg}", ""
 
-        print(f"[*] API响应状态码: {response.status_code}")
-
-        # 尝试解析为JSON
-        try:
-            data = response.json()
-        except:
-            # 如果不是JSON，可能是直接返回的文本格式
-            text_content = response.text.strip()
+        # 尝试解析响应
+        if isinstance(data, str):
+            # 文本格式响应
+            text_content = data.strip()
             print(f"[*] API返回文本内容: {text_content}")
             if text_content and ('[img]' in text_content or '◎' in text_content
                                  or '❁' in text_content):
@@ -549,6 +698,9 @@ def _call_refactor_url_format_api(api_config: dict, douban_link: str,
             else:
                 print("[!] API返回了无效的内容格式")
                 return False, "", "API返回了无效的内容格式", ""
+        else:
+            # JSON格式响应
+            print("[*] 解析JSON响应成功")
 
         # JSON格式处理
         if isinstance(data, dict):

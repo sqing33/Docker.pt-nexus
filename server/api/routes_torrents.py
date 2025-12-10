@@ -356,18 +356,24 @@ def get_data_api():
 
 @torrents_bp.route("/refresh_data", methods=["POST"])
 def refresh_data_api():
-    """触发后台任务，立即刷新所有下载器的种子列表。"""
+    """手动触发种子数据刷新。"""
     print("【API】收到刷新种子数据的请求")
     try:
-        if services.data_tracker_thread and services.data_tracker_thread.is_alive(
-        ):
-            print("【API】数据追踪服务正在运行，启动刷新线程")
-            services.data_tracker_thread._update_torrents_in_db()
+        # 导入手动任务模块
+        from core.manual_tasks import update_torrents_data
+        db_manager = torrents_bp.db_manager
+        config_manager = torrents_bp.config_manager
+
+        # 调用手动更新函数
+        result = update_torrents_data(db_manager, config_manager)
+
+        if result["success"]:
             print("【API】数据刷新完成")
-            return jsonify({"message": "数据刷新完成"}), 200
+            return jsonify({"message": result["message"]}), 200
         else:
-            print("【API】数据追踪服务未运行，无法刷新")
-            return jsonify({"message": "数据追踪服务未运行，无法刷新。"}), 400
+            print(f"【API】数据刷新失败: {result['message']}")
+            return jsonify({"error": result["message"]}), 400
+
     except Exception as e:
         print(f"【API】触发刷新失败: {e}")
         logging.error(f"触发刷新失败: {e}")
@@ -379,45 +385,33 @@ def iyuu_query_api():
     """手动触发指定种子的IYUU查询（同步执行）"""
     db_manager = torrents_bp.db_manager
     config_manager = torrents_bp.config_manager
-    
+
     try:
         data = request.get_json()
         torrent_name = data.get("name")
         torrent_size = data.get("size")
-        
+
         if not torrent_name:
             return jsonify({"error": "缺少种子名称参数"}), 400
-        
+
         if not torrent_size:
             return jsonify({"error": "缺少种子大小参数"}), 400
-        
-        # 从 core.iyuu 导入必要的函数
-        from core.iyuu import iyuu_thread
-        
-        if not iyuu_thread or not iyuu_thread.is_alive():
-            return jsonify({"error": "IYUU线程未运行"}), 400
-        
+
+        # 导入手动任务模块
+        from core.manual_tasks import trigger_iyuu_query_sync
+
         # 同步执行IYUU查询，等待完成后返回
-        try:
-            result_stats = iyuu_thread._process_single_torrent(torrent_name, torrent_size)
-            
-            # 根据查询结果生成更详细的消息
-            if result_stats['total_found'] > 0:
-                message = f"种子 '{torrent_name}' 的IYUU查询已完成，找到 {result_stats['total_found']} 条记录"
-                if result_stats['new_records'] > 0:
-                    message += f"，新增 {result_stats['new_records']} 条种子记录"
-            else:
-                message = f"种子 '{torrent_name}' 的IYUU查询已完成，未找到可辅种记录"
-            
+        result = trigger_iyuu_query_sync(db_manager, config_manager, torrent_name, torrent_size)
+
+        if result["success"]:
             return jsonify({
-                "message": message, 
+                "message": result["message"],
                 "success": True,
-                "stats": result_stats
+                "stats": result.get("stats", {})
             }), 200
-        except Exception as e:
-            logging.error(f"手动IYUU查询执行失败: {e}", exc_info=True)
-            return jsonify({"error": f"IYUU查询失败: {str(e)}", "success": False}), 500
-        
+        else:
+            return jsonify({"error": result["message"], "success": False}), 500
+
     except Exception as e:
         logging.error(f"iyuu_query_api 出错: {e}", exc_info=True)
         return jsonify({"error": "触发IYUU查询失败", "success": False}), 500

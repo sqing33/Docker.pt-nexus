@@ -373,12 +373,13 @@ class BaseUploader(ABC):
 
         logger.debug(f"用于构建标题的原始值查找表: {original_values}")
 
-        # 2. 从 DEFAULT_TITLE_COMPONENTS 或配置中读取拼接顺序
+        # 2. 从 DEFAULT_TITLE_COMPONENTS 或站点配置中读取拼接顺序
         # 键是标准参数名，值是原始值查找表中的键
         order_map = {}
 
-        # 获取站点特定的 title_components 配置（如果有）
-        site_title_components = self.config.get("title_components", {})
+        # 优先获取站点特定的 title_components 配置（从 source_parsers 中获取）
+        site_source_parsers = self.config.get("source_parsers", {})
+        site_title_components = site_source_parsers.get("title_components", {})
 
         # 使用站点配置或全局配置
         title_components_config = site_title_components if site_title_components else DEFAULT_TITLE_COMPONENTS

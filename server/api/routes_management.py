@@ -89,12 +89,12 @@ def reconcile_and_start_tracker():
     config_manager = management_bp.config_manager
     reconcile_historical_data(db_manager, config_manager.get())
     services.start_data_tracker(db_manager, config_manager)
-    # 启动IYUU线程
-    try:
-        from core.iyuu import start_iyuu_thread
-        start_iyuu_thread(db_manager, config_manager)
-    except Exception as e:
-        logging.error(f"启动IYUU线程失败: {e}", exc_info=True)
+    # 注释掉自动启动IYUU线程，改为手动触发
+    # try:
+    #     from core.iyuu import start_iyuu_thread
+    #     start_iyuu_thread(db_manager, config_manager)
+    # except Exception as e:
+    #     logging.error(f"启动IYUU线程失败: {e}", exc_info=True)
 
 
 # --- 站点管理 ---
@@ -558,12 +558,12 @@ def update_settings():
         if restart_needed:
             logging.info("配置已更新，将重启数据追踪服务...")
             services.stop_data_tracker()
-            # 停止IYUU线程
-            try:
-                from core.iyuu import stop_iyuu_thread
-                stop_iyuu_thread()
-            except Exception as e:
-                logging.error(f"停止IYUU线程失败: {e}", exc_info=True)
+            # 注释掉IYUU线程的停止和重启，因为不再自动启动
+            # try:
+            #     from core.iyuu import stop_iyuu_thread
+            #     stop_iyuu_thread()
+            # except Exception as e:
+            #     logging.error(f"停止IYUU线程失败: {e}", exc_info=True)
             management_bp.db_manager.init_db()
             reconcile_and_start_tracker()
             return jsonify({"message": "配置已成功保存和应用。"}), 200
@@ -891,8 +891,8 @@ def save_upload_settings():
 def get_iyuu_settings():
     """获取IYUU相关设置。"""
     config_manager = management_bp.config_manager
-    # 提供一个安全的默认值
-    default_settings = {"query_interval_hours": 72, "auto_query_enabled": True}
+    # 提供一个安全的默认值（移除自动查询相关字段）
+    default_settings = {"path_filter_enabled": False, "selected_paths": []}
     # 从配置中获取IYUU设置，如果不存在则使用默认值
     settings = config_manager.get().get("iyuu_settings", default_settings)
     return jsonify(settings)
@@ -910,13 +910,13 @@ def save_iyuu_settings():
     current_config["iyuu_settings"] = new_settings
 
     if config_manager.save(current_config):
-        # 重启IYUU线程以应用新设置
-        try:
-            from core.iyuu import stop_iyuu_thread, start_iyuu_thread
-            stop_iyuu_thread()
-            start_iyuu_thread(management_bp.db_manager, config_manager)
-        except Exception as e:
-            logging.error(f"重启IYUU线程失败: {e}", exc_info=True)
+        # 注释掉IYUU线程的重启，因为改为手动触发
+        # try:
+        #     from core.iyuu import stop_iyuu_thread, start_iyuu_thread
+        #     stop_iyuu_thread()
+        #     start_iyuu_thread(management_bp.db_manager, config_manager)
+        # except Exception as e:
+        #     logging.error(f"重启IYUU线程失败: {e}", exc_info=True)
 
         return jsonify({"success": True, "message": "IYUU 设置已成功保存。"})
     else:
@@ -930,14 +930,20 @@ def trigger_iyuu_query():
     config_manager = management_bp.config_manager
 
     try:
-        # 导入并启动IYUU查询
-        from core.iyuu import IYUUThread, log_iyuu_message
-        log_iyuu_message("手动触发IYUU查询", "INFO")
-        iyuu_thread = IYUUThread(db_manager, config_manager)
-        # 手动触发查询，绕过自动查询检查
-        iyuu_thread._process_torrents(is_manual_trigger=True)
+        # 导入手动任务模块
+        from core.manual_tasks import trigger_iyuu_query_all
 
-        return jsonify({"success": True, "message": "IYUU 查询已成功触发。"})
+        # 调用手动触发函数
+        result = trigger_iyuu_query_all(db_manager, config_manager)
+
+        if result["success"]:
+            return jsonify({"success": True, "message": result["message"]})
+        else:
+            return jsonify({
+                "success": False,
+                "message": result["message"]
+            }), 500
+
     except Exception as e:
         logging.error(f"手动触发IYUU查询失败: {e}", exc_info=True)
         return jsonify({
@@ -1003,12 +1009,13 @@ def execute_migration_api():
             # 迁移成功后重启服务
             logging.info("迁移完成，重启数据追踪服务...")
             services.stop_data_tracker()
-            try:
-                from core.iyuu import stop_iyuu_thread
-                stop_iyuu_thread()
-            except Exception as e:
-                logging.error(f"停止IYUU线程失败: {e}", exc_info=True)
-            
+            # 注释掉IYUU线程的停止，因为不再自动启动
+            # try:
+            #     from core.iyuu import stop_iyuu_thread
+            #     stop_iyuu_thread()
+            # except Exception as e:
+            #     logging.error(f"停止IYUU线程失败: {e}", exc_info=True)
+
             db_manager.init_db()
             reconcile_and_start_tracker()
         
