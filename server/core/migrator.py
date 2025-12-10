@@ -846,6 +846,12 @@ class TorrentMigrator:
 
                 self.logger.info(f"获取到原始主标题: {original_main_title}")
 
+                # 从提取的数据中获取其他信息
+                subtitle = extracted_data.get("subtitle", "")
+                intro = extracted_data.get("intro", {})
+                mediainfo_text = extracted_data.get("mediainfo", "")
+                source_params = extracted_data.get("source_params", {})
+
                 # 使用统一的种子目录，不再为每个种子创建单独文件夹
                 torrent_dir = os.path.join(TEMP_DIR, "torrents")
                 os.makedirs(torrent_dir, exist_ok=True)
@@ -867,10 +873,11 @@ class TorrentMigrator:
                     log_streamer.emit_log(self.task_id, "解析参数", "正在解析标题组件...",
                                           "processing")
 
-                # 调用 upload_data_title 时，传入主标题和种子文件名
+                # 调用 upload_data_title 时，传入主标题、种子文件名和mediainfo
                 title_components = upload_data_title(original_main_title,
-                                                     torrent_filename)
-                # --- [核心修改 1] 结束 ---
+                                                     torrent_filename,
+                                                     mediainfo_text)
+                # --- [核心修改 1] 结束 --
 
                 if not title_components:
                     self.logger.warning("主标题解析失败，将使用原始标题作为回退。")
@@ -886,12 +893,6 @@ class TorrentMigrator:
                     if self.task_id:
                         log_streamer.emit_log(self.task_id, "解析参数", "标题解析完成",
                                               "success")
-
-                # 从提取的数据中获取其他信息
-                subtitle = extracted_data.get("subtitle", "")
-                intro = extracted_data.get("intro", {})
-                mediainfo_text = extracted_data.get("mediainfo", "")
-                source_params = extracted_data.get("source_params", {})
 
                 # [调试] 打印提取器返回的原始制作组信息
                 self.logger.info(
@@ -1539,6 +1540,8 @@ class TorrentMigrator:
                                      or 'unk1' in medium_value):
                     standardized_params["medium"] = "medium.encode"
                     print("更正媒介为 encode")
+
+                # [移除] Blu-ray/BluRay 修正功能已迁移到 media_helper.py 的 upload_data_title 函数
 
                 # [调试] 打印标准化后的制作组信息
                 self.logger.info(

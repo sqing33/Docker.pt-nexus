@@ -797,11 +797,31 @@ def _extract_bdinfo(bluray_path: str) -> str:
         traceback.print_exc()
         return f"bdinfo提取失败: {str(e)}"
 
-def upload_data_title(title: str, torrent_filename: str = ""):
+def upload_data_title(title: str, torrent_filename: str = "", mediaInfo: str = ""):
     """
     从种子主标题中提取所有参数，并可选地从种子文件名中补充缺失参数。
+    【新增】根据 MediaInfo/BDInfo 格式修正标题中的 Blu-ray/BluRay 格式
     """
     print(f"开始从主标题解析参数: {title}")
+
+    # [新增] 根据MediaInfo/BDInfo类型修正标题中的Blu-ray/BluRay格式
+    if mediaInfo and mediaInfo.strip():  # 确保不是空字符串
+        # 使用验证函数判断格式
+        is_mediainfo, is_bdinfo, _, _, _, _ = validate_media_info_format(mediaInfo)
+
+        if is_mediainfo or is_bdinfo:
+            print(f"检测到{'MediaInfo' if is_mediainfo else 'BDInfo'}格式，开始修正标题中的Blu-ray格式...")
+
+            # 修正主标题
+            if title:
+                if is_mediainfo:
+                    # MediaInfo格式使用BluRay
+                    title = re.sub(r'(?i)blu-?ray', 'BluRay', title)
+                elif is_bdinfo:
+                    # BDInfo格式使用Blu-ray
+                    title = re.sub(r'(?i)blu-?ray', 'Blu-ray', title)
+
+            print(f"已根据{'MediaInfo' if is_mediainfo else 'BDInfo'}修正标题格式")
 
     # 1. 预处理
     original_title_str = title.strip()
@@ -916,7 +936,7 @@ def upload_data_title(title: str, torrent_filename: str = ""):
     # 技术标签提取（排除已识别的制作组名称）
     tech_patterns_definitions = {
         "medium":
-        r"UHDTV|UHD\s*Blu-?ray|Blu-?ray\s+DIY|Blu-ray|BluRay\s+DIY|BluRay|BDrip|BD-?rip|WEB-DL|WEBrip|TVrip|DVDRip|HDTV",
+        r"UHDTV|UHD\s*Blu-?ray|Blu-?ray\s+DIY|Blu-ray|BluRay\s+DIY|BluRay|BDrip|BD-?rip|WEB-DL|WEBrip|TVrip|DVDRip|HDTV|\bUHD\b",
         "audio":
         r"DTS-?HD\s*MA(?:\s*\d\.\d)?(?:\s*X)?|DTS-?HD\s*HR(?:\s*\d\.\d)?|DTS-?HD(?:\s*\d\.\d)?|DTS-?X(?:\s*\d\.\d)?|DTS\s*X(?:\s*\d\.\d)?|DTS(?:\s*\d\.\d)?|(?:Dolby\s*)?TrueHD(?:\s*Atmos)?(?:\s*\d\.\d)?|Atmos(?:\s*TrueHD)?(?:\s*\d\.\d)?|DDP\s*Atmos(?:\s*\d\.\d)?|DDP(?:\s*\d\.\d)?|E-?AC-?3(?:\s*\d\.\d)?|DD\+(?:\s*\d\.\d)?|DD(?:\s*\d\.\d)?|AC3(?:\s*\d\.\d)?|FLAC(?:\s*\d\.\d)?|AAC(?:\s*\d\.\d)?|LPCM(?:\s*/\s*PCM)?(?:\s*\d\.\d)?|PCM(?:\s*\d\.\d)?|AV3A\s*\d\.\d|\d+\s*Audios?|MP2|DUAL",
         "hdr_format":
@@ -1046,6 +1066,56 @@ def upload_data_title(title: str, torrent_filename: str = ""):
             params[key] = unique_processed[0] if len(
                 unique_processed) == 1 else unique_processed
 
+    # --- [新增] UHD 媒介后处理：判断 UHD 是否为媒介 ---
+    if "medium" in params:
+        medium_value = params["medium"]
+        uhd_in_title = False
+
+        # 处理列表形式的媒介
+        if isinstance(medium_value, list):
+            # 如果同时有 UHD 和 Blu-ray，需要判断 UHD 是否为媒介
+            if "UHD" in medium_value and ("Blu-ray" in medium_value or "BluRay" in medium_value):
+                # 检查 UHD 是否在合适的位置（作为媒介而不是电影名）
+                if is_uhd_as_medium(title):
+                    params["medium"] = "UHD Blu-ray"
+                    print(f"[调试] UHD 确认为媒介，与 Blu-ray 合并为: {params['medium']}")
+                else:
+                    # UHD 是电影名的一部分，只保留 Blu-ray
+                    params["medium"] = "Blu-ray"
+                    print(f"[调试] UHD 是电影名称的一部分，只保留媒介: {params['medium']}")
+                    uhd_in_title = True
+            # 如果只有单独的 UHD，需要判断是否为媒介
+            elif "UHD" in medium_value:
+                if is_uhd_as_medium(title):
+                    params["medium"] = "UHD Blu-ray"
+                    print(f"[调试] UHD 确认为媒介，补充为: {params['medium']}")
+                else:
+                    # UHD 不是媒介，移除它
+                    params.pop("medium")
+                    print(f"[调试] UHD 是电影名称的一部分，已移除媒介字段")
+                    uhd_in_title = True
+
+        # 处理字符串形式的媒介
+        elif medium_value == "UHD":
+            if is_uhd_as_medium(title):
+                params["medium"] = "UHD Blu-ray"
+                print(f"[调试] UHD 确认为媒介，补充为: {params['medium']}")
+            else:
+                # UHD 不是媒介，移除它
+                params.pop("medium")
+                print(f"[调试] UHD 是电影名称的一部分，已移除媒介字段")
+                uhd_in_title = True
+
+        # 如果 UHD 是电影名的一部分，需要从已识别标签中移除 UHD
+        if uhd_in_title:
+            # 从 all_found_tags 中移除 UHD，这样它就不会被从技术区域清理掉
+            if 'UHD' in all_found_tags:
+                all_found_tags.remove('UHD')
+                print(f"[调试] 从已识别标签中移除 UHD，保留在标题中")
+
+            # 标记需要重新计算标题区域
+            params['_uhd_in_title'] = True
+
     # --- [新增] 开始: 从种子文件名补充缺失的参数 ---
     if torrent_filename:
         print(f"开始从种子文件名补充参数: {torrent_filename}")
@@ -1134,6 +1204,113 @@ def upload_data_title(title: str, torrent_filename: str = ""):
                     all_found_tags.extend(unique_processed)
     # --- [新增] 结束 ---
 
+    # --- [新增] UHD 媒介后处理（再次检查，包括从文件名补充的参数） ---
+    if "medium" in params:
+        medium_value = params["medium"]
+        # 检查是否是单独的 UHD（没有跟随 Blu-ray）
+        if medium_value == "UHD" or (isinstance(medium_value, list) and "UHD" in medium_value):
+            # 验证 UHD 出现在合适的位置（技术标签区域，而不是电影名称中）
+            # 使用完整的标题信息（包括文件名）进行验证
+            full_title_for_check = f"{title} {torrent_filename}" if torrent_filename else title
+            title_upper = full_title_for_check.upper()
+
+            # 先提取标题部分（排除制作组等信息）
+            # 找到第一个技术标签的位置
+            first_tech_pos = len(title_upper)
+            tech_patterns = [r'\d{3,4}PI?', r'\d{3,4}X?', r'X26[45]', r'HEVC', r'H\.?26[45]',
+                            r'X264', r'AVC', r'VC-?1', r'VP9', r'AV1', r'WEB-DL', r'WEBRIP',
+                            r'BDRIP', r'DVDRIP', r'HDTV', r'TVRIP', r'BLU-?RAY', r'BLURAY',
+                            r'DTS', r'DD', r'TRUEHD', r'FLAC', r'AAC', r'LPCM', r'HDR', r'SDR']
+
+            for pattern in tech_patterns:
+                match = re.search(pattern, title_upper, re.IGNORECASE)
+                if match:
+                    first_tech_pos = min(first_tech_pos, match.start())
+
+            # 查找所有 UHD 的位置
+            uhd_positions = [m.start() for m in re.finditer(r'\bUHD\b', title_upper)]
+
+            # 定义分辨率标签，UHD 应该和分辨率一起出现才可能是媒介
+            resolution_patterns = [r'\b2160P\b', r'\b4K\b', r'\b1080P\b', r'\b720P\b']
+
+            is_valid_uhd_medium = False
+            for uhd_pos in uhd_positions:
+                # 如果 UHD 出现在第一个技术标签之前，可能是在标题中
+                if uhd_pos < first_tech_pos - 20:  # 给一些容错空间
+                    # 检查是否紧跟着分辨率标签
+                    context_after = title_upper[uhd_pos + 3:uhd_pos + 20]
+                    has_resolution = any(re.search(rp, context_after, re.IGNORECASE) for rp in resolution_patterns)
+
+                    # 如果没有分辨率，很可能是标题的一部分
+                    if not has_resolution:
+                        print(f"[调试] UHD 出现在标题区域且无分辨率标签，跳过")
+                        continue
+
+                    # 检查 UHD 前面是否是冠词或介词，表明可能是标题的一部分
+                    context_before_uhd = title_upper[max(0, uhd_pos - 10):uhd_pos]
+                    title_indicators = [r'\bTHE\b', r'\bA\b', r'\bAN\b', r'\bMY\b', r'\bOUR\b']
+                    is_title_part = any(re.search(indicator, context_before_uhd, re.IGNORECASE) for indicator in title_indicators)
+
+                    # 如果是标题的一部分，跳过
+                    if is_title_part:
+                        print(f"[调试] UHD 前面有标题冠词，可能是电影名称的一部分，跳过")
+                        continue
+
+                    # 检查 UHD 后面是否跟着名词性词汇（如 Adventure, Life, Story 等），表明可能是标题的一部分
+                    context_after_uhd = title_upper[uhd_pos + 3:uhd_pos + 30]
+                    title_nouns = [r'\bADVENTURE\b', r'\bLIFE\b', r'\bSTORY\b', r'\bCHRONICLES\b',
+                                  r'\bTALE\b', r'\bLEGEND\b', r'\bQUEST\b', r'\bJOURNEY\b']
+                    is_title_noun = any(re.search(noun, context_after_uhd, re.IGNORECASE) for noun in title_nouns)
+
+                    # 如果后面跟着标题性名词，很可能是标题的一部分
+                    if is_title_noun:
+                        print(f"[调试] UHD 后面发现标题性名词，可能是电影名称的一部分，跳过")
+                        continue
+
+                # 检查 UHD 后面是否紧跟着标题性名词（即使有分辨率）
+                # 这个检查在所有情况下都执行
+                context_after_uhd = title_upper[uhd_pos + 3:uhd_pos + 30]
+                title_nouns = [r'\bADVENTURE\b', r'\bLIFE\b', r'\bSTORY\b', r'\bCHRONICLES\b',
+                              r'\bTALE\b', r'\bLEGEND\b', r'\bQUEST\b', r'\bJOURNEY\b']
+                is_title_noun = any(re.search(noun, context_after_uhd, re.IGNORECASE) for noun in title_nouns)
+
+                # 如果后面跟着标题性名词，很可能是标题的一部分
+                if is_title_noun:
+                    print(f"[调试] UHD 后面发现标题性名词，可能是电影名称的一部分，跳过")
+                    continue
+
+                # 检查 UHD 周围的技术标签密度
+                context_before = title_upper[:uhd_pos]
+                context_after = title_upper[uhd_pos + 3:]
+
+                # 在前后30个字符内查找技术标签
+                search_context = context_before[-30:] + " UHD " + context_after[:30]
+
+                # 计算技术标签的数量
+                tech_count = 0
+                for indicator in tech_patterns:
+                    matches = re.findall(indicator, search_context, re.IGNORECASE)
+                    tech_count += len(matches)
+
+                # 如果周围有足够多的技术标签（至少2个），才认为是媒介信息
+                # 但是如果 UHD 在标题区域，需要更高的技术标签要求（至少4个）
+                min_tech_required = 4 if uhd_pos < first_tech_pos - 20 else 2
+
+                if tech_count >= min_tech_required:
+                    is_valid_uhd_medium = True
+                    print(f"[调试] UHD 周围发现 {tech_count} 个技术标签，确认为媒介")
+                    break
+
+            # 如果验证通过，将 UHD 补充为 UHD Blu-ray
+            if is_valid_uhd_medium:
+                if medium_value == "UHD":
+                    params["medium"] = "UHD Blu-ray"
+                elif isinstance(medium_value, list):
+                    params["medium"] = ["UHD Blu-ray" if v == "UHD" else v for v in medium_value]
+                print(f"[调试] 检测到单独的 UHD 媒介，已补充为: {params['medium']}")
+            else:
+                print(f"[调试] UHD 出现在非技术标签区域或周围技术标签不足，保持原样: {medium_value}")
+
     # 将制作组信息添加到最后的参数中
     params["release_info"] = release_group
 
@@ -1147,9 +1324,36 @@ def upload_data_title(title: str, torrent_filename: str = ""):
             params["medium"] = f"{medium_str} {' '.join(sorted(modifiers))}"
 
     # 5. 最终标题和未识别内容确定
-    title_zone = title_part[:first_tech_tag_pos].strip()
-    tech_zone = title_part[first_tech_tag_pos:].strip()
-    params["title"] = re.sub(r"[\s\.]+", " ", title_zone).strip()
+    # 如果 UHD 在标题中，需要重新计算标题区域
+    if params.get('_uhd_in_title'):
+        # 找到年份位置
+        year_match = re.search(r'\b(19|20)\d{2}\b', title_part)
+        if year_match:
+            # 标题到年份为止
+            title_zone = title_part[:year_match.end()].strip()
+            # 移除年份后的技术标签
+            title_zone = re.sub(r'\s+(Blu-ray|2160p|x265|10bit|HDR|FLAC|[\d.]+|DTS|DDP|AAC|MP2|LPCM|PCM|Audios?).*$', '', title_zone, flags=re.IGNORECASE)
+            # 技术区域从年份后开始
+            tech_zone = title_part[year_match.end():].strip()
+        else:
+            # 如果没有年份，保持原逻辑但排除 UHD 的影响
+            # 找到第一个真正的技术标签（排除 UHD）
+            first_real_tech_pos = len(title_part)
+            for tag in all_found_tags:
+                if tag != 'UHD':
+                    pos = title_part.find(tag)
+                    if pos != -1:
+                        first_real_tech_pos = min(first_real_tech_pos, pos)
+            title_zone = title_part[:first_real_tech_pos].strip()
+            tech_zone = title_part[first_real_tech_pos:].strip()
+
+        params["title"] = re.sub(r"[\s\.]+", " ", title_zone).strip()
+        # 清理临时标记
+        params.pop('_uhd_in_title', None)
+    else:
+        title_zone = title_part[:first_tech_tag_pos].strip()
+        params["title"] = re.sub(r"[\s\.]+", " ", title_zone).strip()
+        tech_zone = title_part[first_tech_tag_pos:].strip()
 
     print(f"[调试] 开始清理技术区域，原始技术区: '{tech_zone}'")
     print(f"[调试] 所有已识别标签: {all_found_tags}")
@@ -1292,6 +1496,26 @@ def upload_data_title(title: str, torrent_filename: str = ""):
             "key": key,
             "value": chinese_keyed_params.get(key, "")
         })
+
+    # [新增] 再次根据MediaInfo/BDInfo类型修正标题组件中的Blu-ray/BluRay格式
+    if mediaInfo and mediaInfo.strip():  # 确保不是空字符串
+        # 使用验证函数判断格式
+        is_mediainfo, is_bdinfo, _, _, _, _ = validate_media_info_format(mediaInfo)
+
+        if is_mediainfo or is_bdinfo:
+            # 修正标题组件中的值
+            for component in final_components_list:
+                if isinstance(component, dict) and 'value' in component:
+                    value = component['value']
+                    if value and isinstance(value, str):
+                        if is_mediainfo:
+                            # MediaInfo格式使用BluRay
+                            component['value'] = re.sub(r'(?i)blu-?ray', 'BluRay', value)
+                        elif is_bdinfo:
+                            # BDInfo格式使用Blu-ray
+                            component['value'] = re.sub(r'(?i)blu-?ray', 'Blu-ray', value)
+
+            print(f"已根据{'MediaInfo' if is_mediainfo else 'BDInfo'}修正标题组件格式")
 
     print(f"主标题解析成功。")
     return final_components_list
@@ -2906,3 +3130,52 @@ def _convert_pixhost_url_to_direct(show_url: str) -> str:
     except Exception as e:
         print(f"   URL转换异常: {e}")
         return ""
+
+
+def is_uhd_as_medium(title_str):
+    """
+    判断 UHD 是否作为媒介而不是电影名称的一部分
+    返回 True 表示 UHD 是媒介，False 表示是电影名
+    """
+    title_upper = title_str.upper()
+
+    # 查找所有 UHD 的位置
+    uhd_positions = [m.start() for m in re.finditer(r'\bUHD\b', title_upper)]
+
+    if not uhd_positions:
+        return False
+
+    # 查找年份位置，年份通常是标题和技术标签的分界点
+    year_match = re.search(r'\b(19|20)\d{2}\b', title_upper)
+
+    for uhd_pos in uhd_positions:
+        # 如果找到年份
+        if year_match:
+            # 如果 UHD 在年份之前，很可能是电影名的一部分
+            if uhd_pos < year_match.start():
+                print(f"[调试] UHD 在年份之前，判断为电影名称")
+                return False
+
+        # 检查 UHD 周围的上下文
+        context_before = title_upper[max(0, uhd_pos - 10):uhd_pos]
+        context_after = title_upper[uhd_pos + 3:uhd_pos + 10]
+
+        # 如果前后都有字母（不是数字或标点），很可能是标题的一部分
+        has_letter_before = bool(re.search(r'[A-Z]$', context_before))
+        has_letter_after = bool(re.search(r'^[A-Z]', context_after))
+
+        # 检查后面是否跟着分辨率（这是媒介的标志）
+        has_resolution_after = bool(re.search(r'\b(2160P|4K|1080P|720P)\b', context_after))
+
+        # 如果前后有字母且没有跟着分辨率，很可能是电影名
+        if (has_letter_before or has_letter_after) and not has_resolution_after:
+            print(f"[调试] UHD 周围有字母且无分辨率，判断为电影名称")
+            return False
+
+        # 如果跟着分辨率，肯定是媒介
+        if has_resolution_after:
+            print(f"[调试] UHD 后面跟着分辨率，判断为媒介")
+            return True
+
+    # 默认情况下，认为 UHD 是媒介（保守策略）
+    return True

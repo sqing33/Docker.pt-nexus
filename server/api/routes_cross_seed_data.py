@@ -312,21 +312,39 @@ def get_cross_seed_data():
                 else:
                     # MySQL 和 SQLite - 直接在WHERE子句中嵌入子查询
                     placeholder = '%s' if db_manager.db_type == "mysql" else '?'
-                    where_conditions.append(f"""
-                        seed_parameters.hash NOT IN (
-                            SELECT DISTINCT sp.hash
-                            FROM seed_parameters sp
-                            WHERE sp.hash IN (
-                                SELECT DISTINCT t1.hash
-                                FROM torrents t1
-                                WHERE t1.name IN (
-                                    SELECT DISTINCT t2.name
-                                    FROM torrents t2
-                                    WHERE t2.sites = {placeholder}
+                    # 为MySQL添加COLLATE子句以解决字符集冲突
+                    if db_manager.db_type == "mysql":
+                        where_conditions.append(f"""
+                            seed_parameters.hash NOT IN (
+                                SELECT DISTINCT sp.hash
+                                FROM seed_parameters sp
+                                WHERE sp.hash IN (
+                                    SELECT DISTINCT t1.hash COLLATE utf8mb4_unicode_ci
+                                    FROM torrents t1
+                                    WHERE t1.name COLLATE utf8mb4_unicode_ci IN (
+                                        SELECT DISTINCT t2.name COLLATE utf8mb4_unicode_ci
+                                        FROM torrents t2
+                                        WHERE t2.sites = {placeholder}
+                                    )
                                 )
                             )
-                        )
-                    """)
+                        """)
+                    else:
+                        where_conditions.append(f"""
+                            seed_parameters.hash NOT IN (
+                                SELECT DISTINCT sp.hash
+                                FROM seed_parameters sp
+                                WHERE sp.hash IN (
+                                    SELECT DISTINCT t1.hash
+                                    FROM torrents t1
+                                    WHERE t1.name IN (
+                                        SELECT DISTINCT t2.name
+                                        FROM torrents t2
+                                        WHERE t2.sites = {placeholder}
+                                    )
+                                )
+                            )
+                        """)
                     params.append(exclude_site)
 
                 logging.info(f"排除站点参数: {exclude_site}")

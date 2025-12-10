@@ -1753,6 +1753,7 @@ const reparseTitle = async () => {
   try {
     const response = await axios.post('/api/utils/parse_title', {
       title: torrentData.value.original_main_title,
+      mediainfo: torrentData.value.mediainfo || '',  // 传递 mediainfo 以便修正 Blu-ray/BluRay 格式
     })
     if (response.data.success) {
       torrentData.value.title_components = response.data.components

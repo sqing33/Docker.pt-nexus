@@ -1564,12 +1564,14 @@ def parse_title_utility():
     """接收一个标题字符串，返回解析后的参数字典。"""
     data = request.json
     title_to_parse = data.get("title")
+    mediainfo = data.get("mediainfo", "")  # 可选的 mediaInfo 参数
 
     if not title_to_parse:
         return jsonify({"success": False, "error": "标题不能为空。"}), 400
 
     try:
-        parsed_components = upload_data_title(title_to_parse)
+        # 传递 mediaInfo 参数以便修正 Blu-ray/BluRay 格式
+        parsed_components = upload_data_title(title_to_parse, mediaInfo=mediainfo)
 
         if not parsed_components:
             return jsonify({
@@ -1844,8 +1846,11 @@ def update_preview_data():
             # 1. 重新解析标题组件
             title_components = review_data.get("title_components", [])
             if not title_components:
+                # 传入mediainfo以便修正Blu-ray/BluRay格式
+                mediainfo = review_data.get("mediainfo", "")
                 title_components = upload_data_title(
-                    review_data["original_main_title"])
+                    review_data["original_main_title"],
+                    mediaInfo=mediainfo)
 
             # 2. 重新构建标题参数字典
             title_params = {

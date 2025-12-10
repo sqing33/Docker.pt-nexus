@@ -41,6 +41,26 @@ func init() {
 	}
 }
 
+// 获取更新源配置
+func getUpdateSource() string {
+	source := strings.ToLower(getEnv("UPDATE_SOURCE", "gitee"))
+	if source != "gitee" && source != "github" {
+		log.Printf("无效的 UPDATE_SOURCE 值: %s，使用默认值 gitee", source)
+		return "gitee"
+	}
+	return source
+}
+
+// 获取仓库 URL
+func getRepoURL() string {
+	switch getUpdateSource() {
+	case "github":
+		return GITHUB_REPO_URL
+	default:
+		return GITEE_REPO_URL
+	}
+}
+
 func getEnv(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
@@ -163,27 +183,40 @@ func execGitWithTimeout(timeout time.Duration, args ...string) error {
 
 // 克隆仓库，带超时和自动切换
 func cloneRepoWithFallback() error {
-	log.Printf("尝试从 Gitee 克隆仓库 (超时时间: %v)...", REPO_TIMEOUT)
-	err := execGitWithTimeout(REPO_TIMEOUT, "clone", "--depth=1", GITEE_REPO_URL, REPO_DIR)
-	
+	primarySource := getUpdateSource()
+	var primaryURL, fallbackURL, fallbackSource string
+
+	if primarySource == "github" {
+		primaryURL = GITHUB_REPO_URL
+		fallbackURL = GITEE_REPO_URL
+		fallbackSource = "Gitee"
+	} else {
+		primaryURL = GITEE_REPO_URL
+		fallbackURL = GITHUB_REPO_URL
+		fallbackSource = "GitHub"
+	}
+
+	log.Printf("尝试从 %s 克隆仓库 (超时时间: %v)...", primarySource, REPO_TIMEOUT)
+	err := execGitWithTimeout(REPO_TIMEOUT, "clone", "--depth=1", primaryURL, REPO_DIR)
+
 	if err != nil {
-		log.Printf("Gitee 克隆失败: %v", err)
-		log.Printf("切换到 GitHub 仓库...")
-		
+		log.Printf("%s 克隆失败: %v", primarySource, err)
+		log.Printf("切换到 %s 仓库...", fallbackSource)
+
 		// 清理可能创建的不完整目录
 		os.RemoveAll(REPO_DIR)
-		
-		// 尝试从 GitHub 克隆
-		err = execGitWithTimeout(REPO_TIMEOUT, "clone", "--depth=1", GITHUB_REPO_URL, REPO_DIR)
+
+		// 尝试从备用仓库克隆
+		err = execGitWithTimeout(REPO_TIMEOUT, "clone", "--depth=1", fallbackURL, REPO_DIR)
 		if err != nil {
-			return fmt.Errorf("GitHub 克隆也失败: %v", err)
+			return fmt.Errorf("%s 克隆也失败: %v", fallbackSource, err)
 		}
-		
-		log.Println("已成功从 GitHub 克隆仓库")
+
+		log.Printf("已成功从 %s 克隆仓库", fallbackSource)
 		return nil
 	}
-	
-	log.Println("已成功从 Gitee 克隆仓库")
+
+	log.Printf("已成功从 %s 克隆仓库", primarySource)
 	return nil
 }
 
@@ -252,25 +285,52 @@ func switchRemoteRepo() error {
 	if err != nil {
 		return fmt.Errorf("获取远程 URL 失败: %v", err)
 	}
-	
+
 	currentURL := strings.TrimSpace(string(output))
-	var newURL string
-	
+	var newURL, newSource string
+
+	// 根据当前使用的源和配置的优先源来决定切换
+	preferredSource := getUpdateSource()
+
 	if strings.Contains(currentURL, "gitee.com") {
-		log.Println("当前使用 Gitee，切换到 GitHub...")
-		newURL = GITHUB_REPO_URL
+		if preferredSource == "gitee" {
+			log.Println("当前使用 Gitee，但需要切换到 GitHub...")
+			newURL = GITHUB_REPO_URL
+			newSource = "GitHub"
+		} else {
+			log.Println("当前使用 Gitee，按配置切换到 GitHub...")
+			newURL = GITHUB_REPO_URL
+			newSource = "GitHub"
+		}
+	} else if strings.Contains(currentURL, "github.com") {
+		if preferredSource == "github" {
+			log.Println("当前使用 GitHub，但需要切换到 Gitee...")
+			newURL = GITEE_REPO_URL
+			newSource = "Gitee"
+		} else {
+			log.Println("当前使用 GitHub，按配置切换到 Gitee...")
+			newURL = GITEE_REPO_URL
+			newSource = "Gitee"
+		}
 	} else {
-		log.Println("当前使用 GitHub，切换到 Gitee...")
-		newURL = GITEE_REPO_URL
+		// 未知源，使用配置的首选源
+		log.Printf("当前使用未知源，切换到配置的首选源: %s", preferredSource)
+		if preferredSource == "github" {
+			newURL = GITHUB_REPO_URL
+			newSource = "GitHub"
+		} else {
+			newURL = GITEE_REPO_URL
+			newSource = "Gitee"
+		}
 	}
-	
+
 	// 设置新的远程 URL
 	cmd = exec.Command("git", "-C", REPO_DIR, "remote", "set-url", "origin", newURL)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("设置远程 URL 失败: %v", err)
 	}
-	
-	log.Printf("已切换到新的远程仓库: %s", newURL)
+
+	log.Printf("已切换到新的远程仓库: %s (%s)", newURL, newSource)
 	return nil
 }
 
@@ -630,8 +690,16 @@ func getLocalVersion() string {
 
 // 获取远程版本
 func getRemoteVersion() string {
-	url := "https://gitee.com/sqing33/Docker.pt-nexus/raw/main/CHANGELOG.json"
-	resp, err := http.Get(url)
+	var baseURL string
+	switch getUpdateSource() {
+	case "github":
+		baseURL = "https://github.com/sqing33/Docker.pt-nexus/raw/main/CHANGELOG.json"
+	default:
+		baseURL = "https://gitee.com/sqing33/Docker.pt-nexus/raw/main/CHANGELOG.json"
+	}
+
+	log.Printf("从 %s 获取远程版本信息", getUpdateSource())
+	resp, err := http.Get(baseURL)
 	if err != nil {
 		log.Printf("获取远程配置失败: %v", err)
 		return ""
@@ -675,11 +743,18 @@ func getChangelogHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 从远程 CHANGELOG.json 获取 changelog
-	url := "https://gitee.com/sqing33/Docker.pt-nexus/raw/main/CHANGELOG.json"
-	log.Printf("正在获取更新日志: %s", url)
+	// 根据环境变量选择更新源
+	var baseURL string
+	switch getUpdateSource() {
+	case "github":
+		baseURL = "https://github.com/sqing33/Docker.pt-nexus/raw/main/CHANGELOG.json"
+	default:
+		baseURL = "https://gitee.com/sqing33/Docker.pt-nexus/raw/main/CHANGELOG.json"
+	}
 
-	resp, err := http.Get(url)
+	log.Printf("正在从 %s 获取更新日志", getUpdateSource())
+
+	resp, err := http.Get(baseURL)
 	if err != nil {
 		log.Printf("获取远程配置失败: %v", err)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -793,6 +868,7 @@ func main() {
 	log.Println("PT Nexus 更新器启动...")
 	log.Println("监听端口:", PORT)
 	log.Println("更新方式: 手动触发")
+	log.Printf("配置的更新源: %s", getUpdateSource())
 
 	// 注册路由
 	http.HandleFunc("/health", healthHandler)

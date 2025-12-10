@@ -470,13 +470,17 @@ class DatabaseMigrationManager:
             # 3. 执行列添加迁移（seeders列）
             self._migrate_add_seeders_column(conn, cursor)
 
-            # 4. 执行完整的Schema完整性检查
+            # 4. 执行MySQL字符集统一迁移
+            if self.db_type == "mysql":
+                self._migrate_mysql_collation_unification(conn, cursor)
+
+            # 5. 执行完整的Schema完整性检查
             self._ensure_schema_integrity(conn, cursor)
 
-            # 5. 执行复合主键迁移
+            # 6. 执行复合主键迁移
             self._migrate_composite_primary_key(conn, cursor)
 
-            # 6. 执行片源平台格式修复迁移
+            # 7. 执行片源平台格式修复迁移
             self._migrate_source_platform_format(conn, cursor)
 
             conn.commit()
@@ -1354,4 +1358,73 @@ class DatabaseMigrationManager:
 
         except Exception as e:
             logging.error(f"创建torrents表失败: {e}")
+            raise
+
+    def _migrate_mysql_collation_unification(self, conn, cursor):
+        """统一MySQL数据库中所有表的字符集排序规则为 utf8mb4_unicode_ci
+
+        这个方法会：
+        1. 检查所有表的当前排序规则
+        2. 将表和字段的排序规则统一为 utf8mb4_unicode_ci
+        3. 不影响现有数据，只修改字符集设置
+
+        Args:
+            conn: 数据库连接
+            cursor: 数据库游标
+        """
+        try:
+            logging.info("开始执行MySQL字符集统一迁移...")
+
+            # 目标排序规则
+            target_collation = 'utf8mb4_unicode_ci'
+
+            # 获取所有表名
+            cursor.execute("""
+                SELECT TABLE_NAME
+                FROM INFORMATION_SCHEMA.TABLES
+                WHERE TABLE_SCHEMA = DATABASE()
+            """)
+            tables = cursor.fetchall()
+
+            migrated_tables = []
+
+            for table in tables:
+                # MySQL返回字典列表，使用字典键访问
+                table_name = table['TABLE_NAME'] if isinstance(table, dict) else table[0]
+
+                # 检查表的当前排序规则
+                cursor.execute("""
+                    SELECT TABLE_COLLATION
+                    FROM INFORMATION_SCHEMA.TABLES
+                    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s
+                """, (table_name,))
+                table_collation_info = cursor.fetchone()
+
+                # 获取当前排序规则，支持字典和元组格式
+                current_collation = None
+                if table_collation_info:
+                    if isinstance(table_collation_info, dict):
+                        current_collation = table_collation_info['TABLE_COLLATION']
+                    else:
+                        current_collation = table_collation_info[0]
+
+                if current_collation and current_collation != target_collation:
+                    logging.info(f"正在修改表 {table_name} 的排序规则: {current_collation} -> {target_collation}")
+
+                    # 修改表的默认排序规则
+                    cursor.execute(f"""
+                        ALTER TABLE `{table_name}`
+                        CONVERT TO CHARACTER SET utf8mb4 COLLATE {target_collation}
+                    """)
+
+                    migrated_tables.append(table_name)
+                    logging.info(f"✓ 表 {table_name} 排序规则已统一为 {target_collation}")
+
+            if migrated_tables:
+                logging.info(f"✓ 成功统一 {len(migrated_tables)} 个表的字符集排序规则: {', '.join(migrated_tables)}")
+            else:
+                logging.info("✓ 所有表的字符集排序规则已统一，无需修改")
+
+        except Exception as e:
+            logging.error(f"MySQL字符集统一迁移失败: {e}")
             raise

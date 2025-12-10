@@ -529,6 +529,7 @@ class BaseUploader(ABC):
                 "small_descr": self.upload_data.get("subtitle", ""),
                 "url": self.upload_data.get("imdb_link", "") or "",
                 "dburl": self.upload_data.get("douban_link", "") or "",
+                "pt_gen": self.upload_data.get("douban_link", "") or "",
                 "descr": description,
                 "technical_info": self.upload_data.get("mediainfo", ""),
                 "uplver": uplver_value,  # 根据配置设置匿名上传

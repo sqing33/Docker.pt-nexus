@@ -1,0 +1,111 @@
+#!/bin/bash
+
+# ==============================================================================
+# Git pre-commit hook: 智能检测变更，按需构建并包含产物
+#
+# 工作流程:
+# 1. 在 `git commit` 时自动触发。
+# 2. 获取所有已暂存（staged）的文件列表。
+# 3. 对每一个项目目录，检查是否有文件被暂存。
+# 4. 只构建那些检测到有文件变更的项目。
+# 5. 将新生成的构建产物添加到本次提交中。
+#
+# 优点: 极大地提升了提交速度，只在必要时才执行构建。
+# ==============================================================================
+
+# 颜色定义
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+# 统一的错误处理函数
+handle_error() {
+    echo -e "${RED}❌ 构建失败: $1${NC}"
+    echo -e "${RED}   提交已被中止。请修复构建错误后重试。${NC}"
+    exit 1
+}
+
+echo "🔨 [pre-commit] 开始智能检测与构建流程..."
+
+# 获取所有已暂存的文件列表
+STAGED_FILES=$(git diff --cached --name-only)
+
+# 如果没有任何文件被暂存 (例如 git commit --amend 时)，则直接退出
+if [ -z "$STAGED_FILES" ]; then
+    echo -e "${GREEN}ℹ️  没有文件被暂存，跳过构建。${NC}"
+    exit 0
+fi
+
+# 定义一个标志，用于判断是否执行了任何构建
+BUILDS_TRIGGERED=false
+
+# --- 1. 检测并构建 Vue 前端项目 (webui) ---
+# 使用 grep -q 来安静地检查 STAGED_FILES 变量中是否包含以 "webui/" 开头的行
+if echo "$STAGED_FILES" | grep -q "^webui/"; then
+    BUILDS_TRIGGERED=true
+    echo -e "${YELLOW}📦 检测到 'webui' 目录有变更，开始构建...${NC}"
+    (cd webui && pnpm install --silent && pnpm build) || handle_error "Vue 前端构建失败"
+    echo -e "${GREEN}✓ Vue 前端构建成功。正在暂存产物...${NC}"
+    git add webui/dist/
+else
+    echo -e "${CYAN}⏭️  'webui' 目录无变更，跳过构建。${NC}"
+fi
+
+# --- 2. 检测并构建 Go updater ---
+if echo "$STAGED_FILES" | grep -q "^updater/"; then
+    BUILDS_TRIGGERED=true
+    echo -e "${YELLOW}📦 检测到 'updater' 目录有变更，开始构建...${NC}"
+    (cd updater && go build -o updater updater.go) || handle_error "Go updater 构建失败"
+    echo -e "${GREEN}✓ Go updater 构建成功。正在暂存产物...${NC}"
+    git add updater/updater
+else
+    echo -e "${CYAN}⏭️  'updater' 目录无变更，跳过构建。${NC}"
+fi
+
+# --- 3. 检测并构建 Go batch ---
+if echo "$STAGED_FILES" | grep -q "^batch/"; then
+    BUILDS_TRIGGERED=true
+    echo -e "${YELLOW}📦 检测到 'batch' 目录有变更，开始构建...${NC}"
+    (cd batch && go build -o batch batch.go) || handle_error "Go batch 构建失败"
+    echo -e "${GREEN}✓ Go batch 构建成功。正在暂存产物...${NC}"
+    git add batch/batch
+else
+    echo -e "${CYAN}⏭️  'batch' 目录无变更，跳过构建。${NC}"
+fi
+
+# --- 4. 检测并构建 Go proxy ---
+if echo "$STAGED_FILES" | grep -q "^proxy/"; then
+    BUILDS_TRIGGERED=true
+    echo -e "${YELLOW}📦 检测到 'proxy' 目录有变更，开始构建...${NC}"
+    (cd proxy && go build -o pt-nexus-box-proxy proxy.go) || handle_error "Go proxy 构建失败"
+    echo -e "${GREEN}✓ Go proxy 构建成功。正在暂存产物...${NC}"
+    git add proxy/pt-nexus-box-proxy
+else
+    echo -e "${CYAN}⏭️  'proxy' 目录无变更，跳过构建。${NC}"
+fi
+
+# --- 5. 检测 CHANGELOG.json 变更并更新文档 ---
+if echo "$STAGED_FILES" | grep -q "^CHANGELOG.json"; then
+    echo -e "${YELLOW}📝 检测到 'CHANGELOG.json' 有变更，开始更新文档...${NC}"
+
+    # 执行现有的同步脚本
+    (cd /home/sqing/Codes/Docker.pt-nexus-dev && python3 sync_changelog.py) || handle_error "更新文档失败"
+
+    # 暂存更新后的文档
+    git add readme.md wiki/docs/index.md
+
+    echo -e "${GREEN}✓ 文档更新日志已自动更新并暂存。${NC}"
+else
+    echo -e "${CYAN}⏭️  'CHANGELOG.json' 无变更，跳过文档更新。${NC}"
+fi
+
+# --- 最终总结 ---
+if [ "$BUILDS_TRIGGERED" = true ]; then
+    echo -e "${GREEN}✓ 所有必要的构建已完成并暂存。Git 将继续创建提交...${NC}"
+else
+    echo -e "${GREEN}✓ 无需构建。Git 将继续创建提交...${NC}"
+fi
+
+exit 0

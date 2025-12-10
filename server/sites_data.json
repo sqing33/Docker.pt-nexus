@@ -1281,7 +1281,7 @@
     "special_tracker_domain": "xyg",
     "group": "-StarfallWeb",
     "description": "星陨阁2",
-    "migration": 0,
+    "migration": 3,
     "speed_limit": 10
   }
 ]
