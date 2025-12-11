@@ -919,7 +919,7 @@
     "group": "-13City",
     "description": "13City",
     "migration": 2,
-    "speed_limit": 20
+    "speed_limit": 10
   },
   {
     "site": "luckpt",

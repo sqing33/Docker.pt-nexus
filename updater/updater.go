@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -105,9 +106,13 @@ func checkUpdateHandler(w http.ResponseWriter, r *http.Request) {
 
 	hasUpdate := false
 	if remoteVersion != "" && localVersion != "" {
-		localVer := strings.TrimPrefix(localVersion, "v")
-		remoteVer := strings.TrimPrefix(remoteVersion, "v")
-		hasUpdate = remoteVer != localVer
+		// 修复逻辑：只有当远程版本 大于 本地版本时，才提示有更新
+		hasUpdate = isNewerVersion(remoteVersion, localVersion)
+	}
+	
+	// 为了调试方便，可以打印一下比较结果
+	if hasUpdate {
+		log.Printf("检测到新版本: 本地 %s -> 远程 %s", localVersion, remoteVersion)
 	}
 
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -116,6 +121,50 @@ func checkUpdateHandler(w http.ResponseWriter, r *http.Request) {
 		"local_version":  localVersion,
 		"remote_version": remoteVersion,
 	})
+}
+
+// compareVersions 比较两个版本号
+// 如果 remote > local 返回 true，否则返回 false
+func isNewerVersion(remote, local string) bool {
+	// 去除前缀 v 或 V，并去除空格
+	remote = strings.TrimSpace(strings.TrimPrefix(strings.ToLower(remote), "v"))
+	local = strings.TrimSpace(strings.TrimPrefix(strings.ToLower(local), "v"))
+
+	// 按点分割
+	remoteParts := strings.Split(remote, ".")
+	localParts := strings.Split(local, ".")
+
+	// 获取最大长度
+	maxLen := len(remoteParts)
+	if len(localParts) > maxLen {
+		maxLen = len(localParts)
+	}
+
+	for i := 0; i < maxLen; i++ {
+		rVal := 0
+		lVal := 0
+
+		// 解析远程版本当前位
+		if i < len(remoteParts) {
+			rVal, _ = strconv.Atoi(remoteParts[i])
+		}
+
+		// 解析本地版本当前位
+		if i < len(localParts) {
+			lVal, _ = strconv.Atoi(localParts[i])
+		}
+
+		// 逐位比较
+		if rVal > lVal {
+			return true // 远程版本更大
+		}
+		if rVal < lVal {
+			return false // 本地版本更大或已确定不需要更新
+		}
+		// 如果相等，继续比较下一位
+	}
+
+	return false // 版本完全相同
 }
 
 // 拉取代码

@@ -107,6 +107,13 @@
 
 # 更新日志
 
+### v3.2.5（2025.12.12）
+
+> **注:若报错“ModuleNotFoundError: No module named 'PIL'”则需要重新下载镜像进行更新。
+13City限速12.5MB/s，代码不会修改非0的限速，需要手动修改**
+
+- 修复：“ModuleNotFoundError: No module named 'PIL'”报错
+
 ### v3.2.5（2025.12.11）
 
 - 修复：藏宝阁标题丢失的问题
