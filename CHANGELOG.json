@@ -1,6 +1,15 @@
 {
   "history": [
     {
+      "version": "v3.2.4",
+      "date": "2025.12.11",
+      "note": "注：盒子优化截图速度需要重新执行 curl -sL https://github.com/sqing33/Docker.pt-nexus/releases/download/latest/install-pt-nexus-box-proxy.sh | sudo bash 以更新盒子端脚本。",
+      "changes": [
+        "优化：截图速度，截图名称用时间点命名",
+        "新增：转种目标站点-PTSkit"
+      ]
+    },
+    {
       "version": "v3.2.3",
       "date": "2025.12.11",
       "note": "注：（需要更新 docker 镜像）新增环境变量 UPDATE_SOURCE，可选值 github 或 gitee，默认为 gitee，用于选择更新的源。\n盒子截图 png 需要重新执行 curl -sL https://github.com/sqing33/Docker.pt-nexus/releases/download/latest/install-pt-nexus-box-proxy.sh | sudo bash 以更新盒子端脚本。",

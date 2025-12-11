@@ -107,6 +107,13 @@
 
 # 更新日志
 
+### v3.2.4（2025.12.11）
+
+> **注：盒子优化截图速度需要重新执行 curl -sL https://github.com/sqing33/Docker.pt-nexus/releases/download/latest/install-pt-nexus-box-proxy.sh | sudo bash 以更新盒子端脚本。**
+
+- 优化：截图速度，截图名称用时间点命名
+- 新增：转种目标站点-PTSkit
+
 ### v3.2.3（2025.12.11）
 
 > **注：（需要更新 docker 镜像）新增环境变量 UPDATE_SOURCE，可选值 github 或 gitee，默认为 gitee，用于选择更新的源。
