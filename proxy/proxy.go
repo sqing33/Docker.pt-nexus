@@ -547,6 +547,7 @@ func findFirstSubtitleStream(videoPath string) (int, string, error) {
 	log.Printf("   ⚠️ 未找到任何“正常”字幕流，将使用第一个字幕流 (索引: %d, 格式: %s)", firstStream.Index, firstStream.CodecName)
 	return firstStream.Index, firstStream.CodecName, nil
 }
+
 func takeScreenshot(videoPath, outputPath string, timePoint float64, subtitleStreamIndex int) error {
 	log.Printf("正在使用 mpv 截图 (时间点: %.2fs) -> %s", timePoint, outputPath)
 	args := []string{
@@ -554,19 +555,20 @@ func takeScreenshot(videoPath, outputPath string, timePoint float64, subtitleStr
 		fmt.Sprintf("--start=%.2f", timePoint),
 		"--frames=1",
 
-		// --- HDR 色调映射参数 ---
-		// 指定输出为标准的sRGB色彩空间，这是所有SDR图片的基础
-		"--target-trc=srgb",
-		// 使用 'hable' 算法进行色调映射，它能在保留高光和阴影细节方面取得良好平衡
-		"--tone-mapping=hable",
+		// --- 关键修改：移除 mpv 的色调映射，保留原始 HDR 信息 ---
+		// 我们移除了 --target-trc=srgb 和 --tone-mapping=hable
+		// 让 mpv 输出最原始的画面，后续交给 ffmpeg 的 zscale 滤镜处理
+		
+		// 开启高位深截图，确保 HDR 信息不丢失
+		"--screenshot-high-bit-depth=yes",
+		// 关闭 mpv 的 PNG 压缩 (0-9)，设为0最快，反正后面 ffmpeg 会压
+		"--screenshot-png-compression=0",
+		// 确保写入正确的色彩标签
+		"--screenshot-tag-colorspace=yes",
 
-		// --- 字体配置参数 ---
-		// 使用 fontconfig 来查找系统字体，确保能找到中文字体
+		// --- 字体配置参数 (保持不变) ---
 		"--sub-font-provider=fontconfig",
-		// 优先使用 Noto Sans CJK SC 简体中文字体
 		"--sub-font=Noto Sans CJK SC",
-		// 如果找不到指定字体，fontconfig 会自动查找其他可用的 CJK 字体
-		// 设置字体大小，确保字幕清晰可见
 		"--sub-font-size=52",
 
 		fmt.Sprintf("--o=%s", outputPath),
@@ -577,42 +579,72 @@ func takeScreenshot(videoPath, outputPath string, timePoint float64, subtitleStr
 		log.Printf("mpv 截图失败，最终执行的命令: mpv %s", strings.Join(args, " "))
 		return fmt.Errorf("mpv 截图失败: %v", err)
 	}
-	log.Printf("   ✅ mpv 截图成功 -> %s", outputPath)
+	log.Printf("   ✅ mpv 原始截图成功 (等待优化) -> %s", outputPath)
 	return nil
 }
-func convertPngToOptimizedPng(sourcePath, destPath string) error {
-	// 使用ffmpeg进行PNG压缩，优化处理流程
-	log.Printf("正在使用ffmpeg压缩PNG: %s -> %s", sourcePath, destPath)
 
-	// 使用ffmpeg命令进行压缩，直接输出到最终文件
+func convertPngToOptimizedPng(sourcePath, destPath string) error {
+	// 步骤 1: 检测图片是否为 HDR (通过 ffprobe 查找 smpte2084 或 bt2020)
+	// 对应 Shell: IS_HDR=$(ffprobe ... | grep ...)
+	checkCmd := exec.Command("ffprobe", "-v", "error", "-show_streams", sourcePath)
+	output, err := checkCmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("ffprobe 检测失败: %v", err)
+	}
+	outputStr := string(output)
+	isHDR := strings.Contains(outputStr, "smpte2084") || strings.Contains(outputStr, "bt2020")
+
+	// 步骤 2: 构建 FFmpeg 命令
+	var vfFilter string
+	if isHDR {
+		log.Printf("   🎨 检测到 HDR 图片，正在应用 zscale 色调映射...")
+		// 对应 HDR 情况的滤镜链
+		vfFilter = "zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=pc,format=rgb24"
+	} else {
+		log.Printf("   🎨 检测到 SDR 图片，应用标准 RGB24 转换...")
+		// 对应 SDR 情况
+		vfFilter = "format=rgb24"
+	}
+
+	log.Printf("正在优化 PNG: %s -> %s (HDR: %v)", sourcePath, destPath, isHDR)
+
 	args := []string{
-		"-i", sourcePath,           // 输入文件
-		"-pix_fmt", "rgb24",        // 像素格式
-		"-compression_level", "9",  // 最高压缩级别
-		"-pred", "mixed",           // 混合预测模式
-		"-color_range", "pc",       // 完整色彩范围
-		"-y",                        // 覆盖输出文件
-		destPath,                   // 输出文件
+		"-y",                   // 覆盖输出
+		"-v", "error",          // 减少日志噪音
+		"-i", sourcePath,       // 输入
+		"-frames:v", "1",       // 仅一帧
+		"-vf", vfFilter,        // 动态滤镜
+		
+		// 核心压缩参数：平衡体积(<10MB)与速度
+		"-compression_level", "4", 
+		"-pred", "mixed",
+		
+		destPath, // 输出
 	}
 
 	cmd := exec.Command("ffmpeg", args...)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
+	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 
-	err := cmd.Run()
+	start := time.Now()
+	err = cmd.Run()
 	if err != nil {
-		return fmt.Errorf("ffmpeg PNG压缩失败: %v, 错误输出: %s", err, stderr.String())
+		return fmt.Errorf("ffmpeg 优化失败: %v, 错误: %s", err, stderr.String())
 	}
 
-	// 获取压缩后的文件大小进行对比
+	// 统计结果
+	duration := time.Since(start)
 	sourceInfo, _ := os.Stat(sourcePath)
 	destInfo, _ := os.Stat(destPath)
+	destSizeMB := float64(destInfo.Size()) / 1024 / 1024
 	compressionRatio := float64(destInfo.Size()) / float64(sourceInfo.Size()) * 100
 
-	log.Printf("   -> PNG压缩成功 (%.2f%% 原始大小) -> %s", compressionRatio, filepath.Base(destPath))
+	log.Printf("   ✅ 优化完成 (耗时: %.2fs) | 大小: %.2f MB (%.2f%%) | HDR处理: %v", 
+		duration.Seconds(), destSizeMB, compressionRatio, isHDR)
+	
 	return nil
 }
+
 func uploadToPixhost(imagePath string) (string, error) {
 	const maxRetries = 3
 	var lastErr error
@@ -1183,24 +1215,39 @@ func screenshotHandler(w http.ResponseWriter, r *http.Request) {
 	for i, point := range screenshotPoints {
 		log.Printf("开始处理第 %d/%d 张截图...", i+1, len(screenshotPoints))
 
-		timestamp := time.Now().UnixNano()
-		intermediatePngPath := filepath.Join(tempDir, fmt.Sprintf("s%d_%d.png", i+1, timestamp%1000000)) // 更短的文件名
-		finalPngPath := filepath.Join(tempDir, fmt.Sprintf("s%d_%d_opt.png", i+1, timestamp%1000000))    // 压缩后的PNG
+		// --- 1. 计算时分秒格式 ---
+		totalSeconds := int(point)
+		hours := totalSeconds / 3600
+		minutes := (totalSeconds % 3600) / 60
+		seconds := totalSeconds % 60
+		
+		// 格式化时间: 00h12m45s
+		timeStr := fmt.Sprintf("%02dh%02dm%02ds", hours, minutes, seconds)
+		
+		// 构造文件名: s1_00h12m45s.png
+		// s%d 对应 s1, s2... (不补零，保持简洁)
+		fileName := fmt.Sprintf("s%d_%s.png", i+1, timeStr)
+		
+		// 定义路径
+		// 中间文件加 raw_ 前缀
+		intermediatePngPath := filepath.Join(tempDir, "raw_"+fileName) 
+		// 最终文件就是 s1_00h12m45s.png
+		finalPngPath := filepath.Join(tempDir, fileName)
 
-		// 步骤1: 截图
+		// 步骤1: 截图 (使用修改后的 takeScreenshot)
 		if err := takeScreenshot(videoPath, intermediatePngPath, point, subtitleIndex); err != nil {
 			errMsg := fmt.Sprintf("第 %d 张图截图失败: %v", i+1, err)
 			log.Println(errMsg)
 			writeJSONResponse(w, r, http.StatusInternalServerError, ScreenshotResponse{Success: false, Message: errMsg})
-			return // 失败则立即停止并返回错误
+			return 
 		}
 
-		// 步骤2: PNG压缩
+		// 步骤2: PNG压缩 (使用修改后的 convertPngToOptimizedPng)
 		if err := convertPngToOptimizedPng(intermediatePngPath, finalPngPath); err != nil {
 			errMsg := fmt.Sprintf("第 %d 张图PNG压缩失败: %v", i+1, err)
 			log.Println(errMsg)
 			writeJSONResponse(w, r, http.StatusInternalServerError, ScreenshotResponse{Success: false, Message: errMsg})
-			return // 失败则立即停止并返回错误
+			return 
 		}
 
 		// 步骤3: 上传
@@ -1209,12 +1256,13 @@ func screenshotHandler(w http.ResponseWriter, r *http.Request) {
 			errMsg := fmt.Sprintf("第 %d 张图上传失败: %v", i+1, err)
 			log.Println(errMsg)
 			writeJSONResponse(w, r, http.StatusInternalServerError, ScreenshotResponse{Success: false, Message: errMsg})
-			return // 失败则立即停止并返回错误
+			return 
 		}
 
+		// 转换直链
 		directURL := strings.Replace(showURL, "https://pixhost.to/show/", "https://img1.pixhost.to/images/", 1)
 		uploadedURLs = append(uploadedURLs, directURL)
-		log.Printf("第 %d/%d 张截图处理成功。", i+1, len(screenshotPoints))
+		log.Printf("第 %d/%d 张截图处理成功: %s", i+1, len(screenshotPoints), fileName)
 	}
 
 	if len(uploadedURLs) < numScreenshots {

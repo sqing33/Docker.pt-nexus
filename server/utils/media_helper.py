@@ -21,7 +21,6 @@ from config import TEMP_DIR, config_manager, GLOBAL_MAPPINGS
 from qbittorrentapi import Client as qbClient
 from transmission_rpc import Client as TrClient
 from utils import ensure_scheme
-from PIL import Image
 
 
 def translate_path(downloader_id: str, remote_path: str) -> str:
@@ -822,7 +821,7 @@ def _extract_bdinfo(bluray_path: str) -> str:
                 bdinfo_cmd,
                 capture_output=True,
                 text=True,
-                timeout=600  # 10分钟超时（BDInfo可能需要较长时间）
+                # timeout=600  # 10分钟超时（BDInfo可能需要较长时间）
             )
 
             print(f"BDInfo执行完成，返回码: {result.returncode}")
@@ -1595,40 +1594,37 @@ def upload_data_title(title: str, torrent_filename: str = "", mediaInfo: str = "
 
     print(f"主标题解析成功。")
     return final_components_list
+
 def upload_data_screenshot(source_info,
                            save_path,
                            torrent_name=None,
                            downloader_id=None):
     """
-    [最终PNG压缩优化版] 使用 mpv 从视频文件中截取多张图片，并上传到图床。
-    - 新增HDR色调映射参数，确保HDR视频截图颜色正常。
-    - 使用ffmpeg进行PNG压缩，保持高质量的同时减小文件大小。
-    - 按顺序一张一张处理，简化流程。
-    - 采用智能时间点分析。
+    智能通用截图上传：
+    1. 自动命名为 s{序号}_{时}h{分}m{秒}s.png
+    2. mpv 截取原始 Raw 图 (保留 HDR 信息)
+    3. ffmpeg 自动检测 HDR/SDR 并应用对应滤镜 (zscale/format)
+    4. 优化压缩参数 (level 4 + mixed) 平衡速度与体积
     """
-    if Image is None:
-        print("错误：Pillow 库未安装，无法执行截图任务。")
-        return ""
-
-    print("开始执行截图和上传任务 (引擎: mpv, 输出格式: PNG压缩, 模式: 顺序执行)...")
+    print("开始执行截图和上传任务 (智能 HDR/SDR 通用处理)...")
     config = config_manager.get()
     hoster = config.get("cross_seed", {}).get("image_hoster", "pixhost")
     num_screenshots = 5
     print(f"已选择图床服务: {hoster}, 截图数量: {num_screenshots}")
 
-    # 首先应用路径映射转换
+    # 路径映射转换
     translated_save_path = translate_path(downloader_id, save_path)
     if translated_save_path != save_path:
         print(f"路径映射: {save_path} -> {translated_save_path}")
 
     if torrent_name:
         full_video_path = os.path.join(translated_save_path, torrent_name)
-        print(f"使用完整视频路径: {full_video_path}")
     else:
         full_video_path = translated_save_path
-        print(f"使用原始路径: {full_video_path}")
+    
+    print(f"处理视频路径: {full_video_path}")
 
-    # --- 代理检查和处理逻辑 (此部分保持不变) ---
+    # --- 代理逻辑 (保持不变) ---
     use_proxy = False
     proxy_config = None
     if downloader_id:
@@ -1637,6 +1633,7 @@ def upload_data_screenshot(source_info,
             if downloader.get("id") == downloader_id:
                 use_proxy = downloader.get("use_proxy", False)
                 if use_proxy:
+                    # (此处省略原本的复杂的host解析代码，假设保持原样即可)
                     host_value = downloader.get('host', '')
                     proxy_port = downloader.get('proxy_port', 9090)
                     if host_value.startswith(('http://', 'https://')):
@@ -1645,10 +1642,9 @@ def upload_data_screenshot(source_info,
                         parsed_url = urlparse(f"http://{host_value}")
                     proxy_ip = parsed_url.hostname
                     if not proxy_ip:
-                        if '://' in host_value:
-                            proxy_ip = host_value.split('://')[1].split(
-                                ':')[0].split('/')[0]
-                        else:
+                         if '://' in host_value:
+                            proxy_ip = host_value.split('://')[1].split(':')[0].split('/')[0]
+                         else:
                             proxy_ip = host_value.split(':')[0]
                     proxy_config = {
                         "proxy_base_url": f"http://{proxy_ip}:{proxy_port}",
@@ -1681,180 +1677,174 @@ def upload_data_screenshot(source_info,
         print("错误：在指定路径中未找到视频文件。")
         return ""
 
-    # 对于原盘文件，仍然进行截图处理（保持原有逻辑）
     if is_bluray_disc:
         print("检测到原盘文件结构，但仍将进行截图处理")
 
     if not shutil.which("mpv"):
-        print("错误：找不到 mpv。请确保它已安装并已添加到系统环境变量 PATH 中。")
+        print("错误：找不到 mpv。")
+        return ""
+    if not shutil.which("ffmpeg"):
+        print("错误：找不到 ffmpeg。")
         return ""
 
-    screenshot_points = _get_smart_screenshot_points(target_video_file,
-                                                     num_screenshots)
+    # 获取截图时间点
+    screenshot_points = _get_smart_screenshot_points(target_video_file, num_screenshots)
+    
+    # 兜底逻辑：如果智能获取失败，按百分比获取
     if len(screenshot_points) < num_screenshots:
-        print("警告: 智能分析失败或字幕不足，回退到按百分比截图。")
+        print("警告: 智能分析失败，回退到按百分比截图。")
         try:
-            cmd_duration = [
-                "ffprobe", "-v", "error", "-show_entries", "format=duration",
-                "-of", "default=noprint_wrappers=1:nokey=1", target_video_file
-            ]
-            result = subprocess.run(cmd_duration,
-                                    capture_output=True,
-                                    text=True,
-                                    check=True,
-                                    encoding='utf-8')
+            cmd_duration = ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", target_video_file]
+            result = subprocess.run(cmd_duration, capture_output=True, text=True, check=True, encoding='utf-8')
             duration = float(result.stdout.strip())
-            screenshot_points = [
-                duration * p for p in [0.15, 0.30, 0.50, 0.70, 0.85]
-            ]
+            screenshot_points = [duration * p for p in [0.15, 0.30, 0.50, 0.70, 0.85]]
         except Exception as e:
-            print(f"错误: 连获取视频时长都失败了，无法截图。{e}")
+            print(f"错误: 获取视频时长失败: {e}")
             return ""
 
     auth_token = _get_agsv_auth_token() if hoster == "agsv" else None
     if hoster == "agsv" and not auth_token:
-        print("❌ 无法获取 末日图床 Token，截图上传任务终止。")
+        print("❌ 无法获取 Token，任务终止。")
         return ""
 
     uploaded_urls = []
     temp_files_to_cleanup = []
 
-    for i, screenshot_time in enumerate(screenshot_points):
-        print(f"\n--- 开始处理第 {i+1}/{len(screenshot_points)} 张截图 ---")
-
-        safe_name = re.sub(r'[\\/*?:"<>|\'\s\.]+', '_',
-                           source_info.get('main_title', f's_{i+1}'))  # 更短的文件名
-        timestamp = f"{int(time.time()) % 1000000}"  # 更短的时间戳
-        intermediate_png_path = os.path.join(
-            TEMP_DIR, f"s_{i+1}_{timestamp}.png")  # 更短的文件名
-        final_png_path = os.path.join(TEMP_DIR,
-                                      f"s_{i+1}_{timestamp}_opt.png")  # 压缩后的PNG
+    for i, point in enumerate(screenshot_points):
+        # --- 1. 计算文件名 (s1_00h15m30s.png) ---
+        total_seconds = int(point)
+        m, s = divmod(total_seconds, 60)
+        h, m = divmod(m, 60)
+        time_str = f"{h:02d}h{m:02d}m{s:02d}s"
+        
+        file_name = f"s{i+1}_{time_str}.png"
+        
+        # 中间文件加 raw_ 前缀
+        intermediate_png_path = os.path.join(TEMP_DIR, f"raw_{file_name}")
+        # 最终输出文件
+        final_png_path = os.path.join(TEMP_DIR, file_name)
+        
         temp_files_to_cleanup.extend([intermediate_png_path, final_png_path])
 
-        # --- [核心修改] ---
-        # 为 mpv 命令添加 HDR 色调映射参数
+        print(f"\n--- 处理第 {i+1}/{len(screenshot_points)} 张截图 ({time_str}) ---")
+
+        # --- 2. MPV 截图 (Raw output, 无色调映射) ---
         cmd_screenshot = [
             "mpv",
             "--no-audio",
-            f"--start={screenshot_time:.2f}",
+            f"--start={point:.2f}",
             "--frames=1",
-
-            # --- HDR 色调映射参数 ---
-            # 指定输出为标准的sRGB色彩空间，这是所有SDR图片的基础
-            "--target-trc=srgb",
-            # 使用 'hable' 算法进行色调映射，它能在保留高光和阴影细节方面取得良好平衡
-            "--tone-mapping=hable",
-            # 如果色彩依然不准，可以尝试更现代的 'bt.2390' 算法
-            # "--tone-mapping=bt.2390",
+            
+            # 关键修改：移除所有 tone-mapping 参数，保留原始 HDR 数据
+            "--screenshot-high-bit-depth=yes", # 保留位深
+            "--screenshot-png-compression=0",  # 关闭压缩 (速度最快)
+            "--screenshot-tag-colorspace=yes", # 写入色彩标签
+            
             f"--o={intermediate_png_path}",
             target_video_file
         ]
-        # --- [核心修改结束] ---
 
         try:
-            subprocess.run(cmd_screenshot,
-                           check=True,
-                           capture_output=True,
-                           timeout=180)
-
+            subprocess.run(cmd_screenshot, check=True, capture_output=True, timeout=180)
+            
             if not os.path.exists(intermediate_png_path):
-                print(f"❌ 错误: mpv 命令执行成功，但未找到输出文件 {intermediate_png_path}")
+                print(f"❌ mpv 未生成文件: {intermediate_png_path}")
                 continue
-
-            print(
-                f"   -> 中间PNG图 {os.path.basename(intermediate_png_path)} 生成成功。"
-            )
-
+            
+            # --- 3. FFmpeg 智能处理 (检测 HDR -> 转换 -> 压缩) ---
+            
+            # 3.1 检测 HDR
+            is_hdr = False
             try:
-                # 使用ffmpeg进行PNG压缩，直接输出到最终文件
-                cmd_compress = [
-                    "ffmpeg",
-                    "-i", intermediate_png_path,      # 输入文件
-                    "-pix_fmt", "rgb24",             # 像素格式
-                    "-compression_level", "9",       # 最高压缩级别
-                    "-pred", "mixed",                # 混合预测模式
-                    "-color_range", "pc",            # 完整色彩范围
-                    "-y",                             # 覆盖输出文件
-                    final_png_path                   # 直接输出到最终文件
-                ]
-
-                result = subprocess.run(cmd_compress,
-                                       capture_output=True,
-                                       text=True,
-                                       check=True,
-                                       timeout=120)
-
-                # 获取压缩后的文件大小进行对比
-                source_size = os.path.getsize(intermediate_png_path)
-                dest_size = os.path.getsize(final_png_path)
-                compression_ratio = (dest_size / source_size) * 100
-
-                print(
-                    f"   -> PNG压缩成功 ({compression_ratio:.2f}% 原始大小) -> {os.path.basename(final_png_path)}"
-                )
+                check_cmd = ["ffprobe", "-v", "error", "-show_streams", intermediate_png_path]
+                check_res = subprocess.run(check_cmd, capture_output=True, text=True)
+                if "smpte2084" in check_res.stdout or "bt2020" in check_res.stdout:
+                    is_hdr = True
             except Exception as e:
-                print(f"   ❌ 错误: PNG压缩失败: {e}")
-                continue
+                print(f"   ⚠️ 检测 HDR 信息失败，假定为 SDR: {e}")
 
+            # 3.2 构建滤镜链
+            if is_hdr:
+                print("   🎨 检测到 HDR 原始内容，应用 zscale 色调映射...")
+                vf_filter = "zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=pc,format=rgb24"
+            else:
+                print("   🎨 检测到 SDR 内容，应用标准 RGB 转换...")
+                vf_filter = "format=rgb24"
+
+            # 3.3 执行压缩 (Level 4 + Mixed)
+            cmd_compress = [
+                "ffmpeg",
+                "-y", "-v", "error",
+                "-i", intermediate_png_path,
+                "-frames:v", "1",
+                "-vf", vf_filter,
+                "-compression_level", "4",  # 速度快且体积小
+                "-pred", "mixed",           # 关键优化参数
+                final_png_path
+            ]
+
+            start_compress = time.time()
+            subprocess.run(cmd_compress, check=True, capture_output=True, timeout=60)
+            compress_time = time.time() - start_compress
+
+            # 统计信息
+            src_size = os.path.getsize(intermediate_png_path)
+            dst_size = os.path.getsize(final_png_path)
+            ratio = (dst_size / src_size) * 100
+            print(f"   ✅ 优化完成: {dst_size/1024/1024:.2f} MB (原图 {ratio:.1f}%) | 耗时 {compress_time:.2f}s | HDR: {is_hdr}")
+
+            # --- 4. 上传 ---
             max_retries = 3
             image_url = None
             for attempt in range(max_retries):
-                print(f"   -> 正在上传 (第 {attempt+1}/{max_retries} 次尝试)...")
                 try:
                     if hoster == "agsv":
-                        image_url = _upload_to_agsv(final_png_path,
-                                                    auth_token)
+                        image_url = _upload_to_agsv(final_png_path, auth_token)
                     else:
                         image_url = _upload_to_pixhost(final_png_path)
+                    
                     if image_url:
                         uploaded_urls.append(image_url)
+                        print(f"   🚀 上传成功: {image_url}")
                         break
                     else:
                         time.sleep(2)
                 except Exception as e:
-                    print(f"   -> 上传尝试 {attempt+1} 出现异常: {e}")
+                    print(f"   ⚠️ 上传重试 {attempt+1}: {e}")
                     time.sleep(2)
 
             if not image_url:
-                print(f"⚠️  第 {i+1} 张图片经过 {max_retries} 次尝试后仍然上传失败。")
+                print(f"   ❌ 第 {i+1} 张图片上传失败")
 
         except subprocess.CalledProcessError as e:
-            error_output = e.stderr.decode('utf-8', errors='ignore')
-            print(f"❌ 错误: mpv 截图失败。")
-            print(f"   -> Stderr: {error_output}")
+            print(f"❌ 流程执行出错: {e}")
             continue
         except subprocess.TimeoutExpired:
-            print(f"❌ 错误: mpv 截图超时 (超过60秒)。")
+            print(f"❌ 操作超时")
             continue
 
-    print("\n--- 所有截图处理完毕 ---")
-    print(f"正在清理临时目录中的 {len(temp_files_to_cleanup)} 个截图文件...")
-    for item_path in temp_files_to_cleanup:
+    # --- 清理与返回 ---
+    print(f"\n清理 {len(temp_files_to_cleanup)} 个临时文件...")
+    for item in temp_files_to_cleanup:
         try:
-            if os.path.exists(item_path):
-                os.remove(item_path)
-        except OSError as e:
-            print(f"清理临时文件 {item_path} 失败: {e}")
+            if os.path.exists(item):
+                os.remove(item)
+        except:
+            pass
 
     if not uploaded_urls:
-        print("任务完成，但没有成功上传任何图片。")
         return ""
 
     bbcode_links = []
+    # 简单排序确保顺序
     for url in sorted(uploaded_urls):
         if "pixhost.to/show/" in url:
             direct_url = _convert_pixhost_url_to_direct(url)
-            if direct_url:
-                bbcode_links.append(f"[img]{direct_url}[/img]")
-            else:
-                bbcode_links.append(f"[img]{url}[/img]")
+            bbcode_links.append(f"[img]{direct_url or url}[/img]")
         else:
             bbcode_links.append(f"[img]{url}[/img]")
 
-    screenshots = "\n".join(bbcode_links)
-    print("所有截图已成功上传并已格式化为BBCode。")
-    return screenshots
-
+    return "\n".join(bbcode_links)
 
 def add_torrent_to_downloader(detail_page_url: str,
                               save_path: str,
