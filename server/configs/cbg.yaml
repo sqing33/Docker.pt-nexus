@@ -31,11 +31,6 @@ source_parsers:
     source:
       source_key: "产地"
 
-  title_components:
-    # 只覆盖需要差异化的字段，其他字段使用全局默认配置
-    medium:
-      source_key: "媒体" # cbg站点使用"媒体"而不是"媒介"
-
   # 标准化键映射规则（从原始文本到标准化键）
   standard_keys:
     type:

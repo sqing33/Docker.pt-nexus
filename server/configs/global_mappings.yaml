@@ -849,8 +849,8 @@ default_title_components:
     source_key: "季集"
   year:
     source_key: "年份"
-  # status:
-  #   source_key: "剧集状态"
+  status:
+    source_key: "剧集状态"
   edition:
     source_key: "发布版本"
   resolution:

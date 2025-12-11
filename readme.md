@@ -129,6 +129,10 @@ services:
 
 # 更新日志
 
+### v3.2.5（2025.12.11）
+
+- 修复：藏宝阁标题丢失的问题
+
 ### v3.2.4（2025.12.11）
 
 > **注：盒子优化截图速度需要重新执行 curl -sL https://github.com/sqing33/Docker.pt-nexus/releases/download/latest/install-pt-nexus-box-proxy.sh | sudo bash 以更新盒子端脚本。**
