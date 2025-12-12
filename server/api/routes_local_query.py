@@ -5,7 +5,7 @@ from pathlib import Path
 from flask import Blueprint, jsonify
 from collections import defaultdict
 from config import config_manager, DATA_DIR
-from utils.media_helper import _get_downloader_proxy_config
+from utils import _get_downloader_proxy_config
 import requests
 
 logger = logging.getLogger(__name__)

@@ -11,7 +11,64 @@ from .formatters import (
     format_state,
     cookies_raw2jar,
     ensure_scheme,
+    process_bbcode_images_and_cleanup,
 )
-from .media_helper import upload_data_mediaInfo, upload_data_title, upload_data_screenshot, add_torrent_to_downloader, extract_tags_from_mediainfo, extract_tags_from_title, extract_origin_from_description, extract_resolution_from_mediainfo, check_intro_completeness, extract_audio_codec_from_mediainfo, _convert_pixhost_url_to_direct, validate_media_info_format
-from .image_validator import is_image_url_valid_robust
-from .douban import handle_incomplete_links, search_by_subtitle, upload_data_movie_info, _get_smart_poster_url
+from .media_helper import (
+    upload_data_title,
+    add_torrent_to_downloader,
+    extract_tags_from_title,
+    extract_origin_from_description,
+    check_intro_completeness,
+    extract_tags_from_description,
+    check_animation_type_from_description,
+    extract_tags_from_subtitle,
+    _get_downloader_proxy_config,
+    translate_path,
+    _convert_pixhost_url_to_direct,
+    _find_target_video_file,
+)
+from .screenshot import (
+    upload_data_screenshot,
+    _upload_to_pixhost,
+    _get_agsv_auth_token,
+    _upload_to_agsv,
+    is_image_url_valid_robust,
+    _get_smart_screenshot_points,
+    _select_well_distributed_events,
+)
+from .mediainfo import (
+    upload_data_mediaInfo,
+    upload_data_mediaInfo_async,
+    validate_media_info_format,
+    _extract_bdinfo,
+    extract_tags_from_mediainfo,
+    extract_resolution_from_mediainfo,
+    extract_audio_codec_from_mediainfo,
+    check_bdinfo_task_status,
+    refresh_bdinfo_for_seed,
+)
+from .douban import (
+    handle_incomplete_links,
+    search_by_subtitle,
+    upload_data_movie_info,
+    _get_smart_poster_url,
+    _process_poster_url,
+)
+from .log_streamer import log_streamer
+from .downloader_id_helper import (
+    generate_downloader_id_from_host,
+    validate_downloader_id,
+    generate_migration_mapping,
+)
+from .completion_checker import (
+    check_completion_status,
+    add_completion_tag_if_needed,
+)
+from .content_filter import (
+    get_content_filter,
+    get_unwanted_image_urls,
+)
+from .description_enhancer import enhance_description_if_needed
+from .torrent_manager import TorrentManager
+from .torrent_list_fetcher import TorrentListFetcher
+from .imdb2tmdb import get_tmdb_url_from_any_source

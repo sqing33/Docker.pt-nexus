@@ -262,7 +262,7 @@ def _count_local_episodes(local_path: str,
 
     # 步骤4: 本地统计 - 应用路径映射
     try:
-        from utils.media_helper import translate_path
+        from utils import translate_path
         translated_path = translate_path(downloader_id, local_path)
         if translated_path != local_path:
             print(f"路径映射: {local_path} -> {translated_path}")

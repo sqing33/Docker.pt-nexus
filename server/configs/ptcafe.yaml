@@ -149,7 +149,7 @@ source_parsers:
       "粤语": "tag.粤语"
       "中字": "tag.中字"
       "备胎": "tag.备胎"
-      "杜比视界": "tag.杜比视界"
+      "杜比视界": "tag.Dolby_Vision"
       "HDR": "tag.HDR"
       "DIY": "tag.DIY"
       "高码高帧": "tag.高码高帧"
@@ -279,7 +279,7 @@ mappings:
     "tag.粤语": 8
     "tag.中字": 9
     "tag.备胎": 10
-    "tag.杜比视界": 11
+    "tag.Dolby_Vision": 11
     "tag.HDR": 12
     "tag.DIY": 13
     "tag.高码高帧": 15

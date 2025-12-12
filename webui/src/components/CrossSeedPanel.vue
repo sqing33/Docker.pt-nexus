@@ -430,12 +430,62 @@
                     </el-button>
                   </div>
                 </template>
-                <el-input
-                  type="textarea"
-                  class="code-font"
-                  v-model="torrentData.mediainfo"
-                  :rows="26"
-                />
+
+                <div class="mediainfo-container">
+                  <!-- BDInfo 进度条 -->
+                  <div v-if="bdinfoProgress.visible" class="bdinfo-progress-inline">
+                    <el-card class="bdinfo-progress-card-inline" shadow="never">
+                      <template #header>
+                        <div class="progress-header">
+                          <span>BDInfo 获取中...</span>
+                          <div class="header-buttons">
+                            <span class="background-hint">可在后台继续获取</span>
+                            <el-button
+                              :icon="Monitor"
+                              @click="runInBackground"
+                              size="small"
+                              text
+                              type="primary"
+                            >
+                              放置后台
+                            </el-button>
+                            <el-button
+                              :icon="Close"
+                              @click="stopBDInfoSSE"
+                              size="small"
+                              text
+                              type="info"
+                            >
+                              取消获取
+                            </el-button>
+                          </div>
+                        </div>
+                      </template>
+                      <el-progress
+                        :percentage="bdinfoProgress.percent"
+                        :status="bdinfoProgress.percent === 100 ? 'success' : ''"
+                      />
+
+                      <div class="progress-details-inline">
+                        <div class="progress-info-row">
+                          <div class="progress-item">原盘体积: {{ formatFileSize(discSize) }}</div>
+                          <div class="progress-item">已用时: {{ bdinfoProgress.elapsedTime }}</div>
+                          <div class="progress-item">
+                            剩余时间: {{ bdinfoProgress.remainingTime }}
+                          </div>
+                        </div>
+                      </div>
+                    </el-card>
+                  </div>
+
+                  <!-- Mediainfo 文本框 -->
+                  <el-input
+                    type="textarea"
+                    class="code-font"
+                    v-model="torrentData.mediainfo"
+                    :rows="bdinfoProgress.visible ? 18 : 26"
+                  />
+                </div>
               </el-form-item>
             </el-form>
           </el-tab-pane>
@@ -1033,7 +1083,7 @@
 
 <script setup lang="ts">
 // ... 你的 <script setup> 部分完全保持不变 ...
-import { ref, onMounted, computed, nextTick, watch } from 'vue'
+import { ref, onMounted, onUnmounted, computed, nextTick, watch } from 'vue'
 import { ElNotification, ElMessageBox } from 'element-plus'
 import { ElTooltip } from 'element-plus'
 import axios from 'axios'
@@ -1044,6 +1094,7 @@ import {
   Close,
   InfoFilled,
   Warning,
+  Monitor,
 } from '@element-plus/icons-vue'
 import { useCrossSeedStore } from '@/stores/crossSeed'
 import LogProgress from './LogProgress.vue'
@@ -1237,6 +1288,7 @@ const torrent = computed(() => crossSeedStore.workingParams as Torrent)
 const sourceSite = computed(() => crossSeedStore.sourceInfo?.name || '')
 
 const getInitialTorrentData = () => ({
+  seed_id: null,
   title_components: [] as { key: string; value: string }[],
   original_main_title: '',
   subtitle: '',
@@ -1399,6 +1451,37 @@ const logContent = ref('')
 const showLogCard = ref(false)
 const downloaderList = ref<{ id: string; name: string }[]>([])
 const isDataFromDatabase = ref(false) // Flag to track if data was loaded from database
+
+// BDInfo SSE相关变量
+const bdinfoEventSource = ref<EventSource | null>(null)
+
+// BDInfo 进度相关变量
+const bdinfoProgress = ref({
+  visible: false,
+  percent: 0,
+  currentFile: '',
+  elapsedTime: '',
+  remainingTime: '',
+})
+
+// BDInfo 碟片大小
+const discSize = ref(0)
+
+// 格式化文件大小
+const formatFileSize = (bytes: number) => {
+  if (!bytes) return ''
+
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  let size = bytes
+  let unitIndex = 0
+
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024
+    unitIndex++
+  }
+
+  return `${size.toFixed(2)} ${units[unitIndex]}`
+}
 
 // --- [新增] 错误弹窗相关的状态 ---
 const showErrorDialog = ref(false)
@@ -1639,39 +1722,58 @@ const refreshMediainfo = async () => {
     duration: 0,
   })
 
-  const payload = {
-    type: 'mediainfo',
-    source_info: {
-      main_title: torrentData.value.original_main_title,
-      source_site: sourceSite.value,
-      imdb_link: torrentData.value.imdb_link,
-      douban_link: torrentData.value.douban_link,
-    },
-    current_mediainfo: torrentData.value.mediainfo, // 传递当前mediainfo，但后端会强制重新获取
-    savePath: torrent.value.save_path,
-    torrentName: torrent.value.name,
-    downloaderId: torrent.value.downloaderId, // 添加下载器ID
-  }
-
   try {
-    const response = await axios.post('/api/media/validate', payload)
+    // 使用新的异步 API
+    const response = await axios.post('/api/migrate/refresh_mediainfo_async', {
+      seed_id: torrentData.value.seed_id,
+      save_path: torrent.value.save_path,
+      content_name: torrentData.value.original_main_title,
+      downloader_id: torrent.value.downloaderId,
+      torrent_name: torrent.value.name,
+      current_mediainfo: torrentData.value.mediainfo,
+      force_refresh: true,
+      priority: 1, // 单个种子使用高优先级
+    })
+
     ElNotification.closeAll()
 
-    if (response.data.success && response.data.mediainfo) {
-      torrentData.value.mediainfo = response.data.mediainfo
-      ElNotification.success({
-        title: '重新获取成功',
-        message: '已成功生成并加载了新的媒体信息。',
-      })
+    if (response.data.success) {
+      // 如果有 MediaInfo 内容，先更新
+      if (response.data.mediainfo) {
+        torrentData.value.mediainfo = response.data.mediainfo
+      }
+
+      // 如果 BDInfo 在后台处理中，开始SSE连接
+      if (response.data.bdinfo_async && response.data.bdinfo_async.bdinfo_status === 'processing') {
+        ElNotification.info({
+          title: 'MediaInfo 已更新',
+          message: 'BDInfo 正在后台处理中，完成后将自动更新...',
+          duration: 5000,
+        })
+        startBDInfoSSE()
+      } else if (response.data.mediainfo) {
+        ElNotification.success({
+          title: '重新获取成功',
+          message: response.data.message || '已成功生成并加载了新的媒体信息。',
+        })
+      } else {
+        ElNotification.info({
+          title: '任务已启动',
+          message: response.data.message || 'BDInfo 正在后台处理中...',
+        })
+      }
     } else {
       ElNotification.error({
         title: '重新获取失败',
-        message: response.data.error || '无法从后端获取新的媒体信息，请查看后台日志。',
+        message: response.data.message || '无法从后端获取新的媒体信息，请查看后台日志。',
       })
     }
   } catch (error: any) {
     ElNotification.closeAll()
-    const errorMsg = error.response?.data?.error || '未能重新获取媒体信息，请查看后台日志。'
+    const errorMsg =
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      '未能重新获取媒体信息，请查看后台日志。'
     ElNotification.error({
       title: '操作失败',
       message: errorMsg,
@@ -1680,6 +1782,159 @@ const refreshMediainfo = async () => {
     isRefreshingMediainfo.value = false
   }
 }
+
+// BDInfo SSE相关函数
+const startBDInfoSSE = () => {
+  // 关闭之前的连接
+  stopBDInfoSSE()
+
+  // 显示进度条
+  bdinfoProgress.value = {
+    visible: true,
+    percent: 0,
+    currentFile: '准备中...',
+    elapsedTime: '',
+    remainingTime: '',
+  }
+
+  // 创建EventSource连接
+  const url = `/api/migrate/bdinfo_sse/${torrentData.value.seed_id}`
+  bdinfoEventSource.value = new EventSource(url)
+
+  // 处理连接成功
+  bdinfoEventSource.value.onopen = () => {
+    console.log('BDInfo SSE连接已建立')
+  }
+
+  // 处理消息
+  bdinfoEventSource.value.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data)
+
+      switch (data.type) {
+        case 'connected':
+          console.log('SSE连接成功:', data.connection_id)
+          break
+
+        case 'progress_update':
+          // 更新进度条
+          const { progress_percent, current_file, elapsed_time, remaining_time, disc_size } =
+            data.data
+          bdinfoProgress.value = {
+            visible: true,
+            percent: Math.round(progress_percent),
+            currentFile: current_file,
+            elapsedTime: elapsed_time,
+            remainingTime: remaining_time,
+          }
+          // 更新disc size
+          if (disc_size) {
+            discSize.value = disc_size
+          }
+          console.log(`BDInfo 进度: ${progress_percent}%`)
+          break
+
+        case 'completion':
+          // BDInfo 完成
+          torrentData.value.mediainfo = data.data.mediainfo
+          ElNotification.success({
+            title: 'BDInfo 获取完成',
+            message: 'BDInfo 已成功获取并更新',
+          })
+          bdinfoProgress.value.visible = false
+          stopBDInfoSSE()
+          break
+
+        case 'error':
+          // BDInfo 失败
+          ElNotification.warning({
+            title: 'BDInfo 获取失败',
+            message: data.data.error || 'BDInfo 获取失败，可手动重试',
+          })
+          bdinfoProgress.value.visible = false
+          stopBDInfoSSE()
+          break
+
+        case 'heartbeat':
+          // 心跳包，保持连接，不更新进度
+          return
+
+        default:
+          console.log('未知SSE消息类型:', data.type)
+      }
+    } catch (error) {
+      console.error('解析SSE消息失败:', error)
+    }
+  }
+
+  // 处理错误
+  bdinfoEventSource.value.onerror = (error) => {
+    console.error('SSE连接错误:', error)
+    ElNotification.error({
+      title: '连接错误',
+      message: 'BDInfo 进度更新连接中断，请刷新页面重试',
+    })
+    bdinfoProgress.value.visible = false
+    stopBDInfoSSE()
+  }
+}
+
+// 停止 BDInfo SSE
+const stopBDInfoSSE = () => {
+  if (bdinfoEventSource.value) {
+    bdinfoEventSource.value.close()
+    bdinfoEventSource.value = null
+  }
+  // 隐藏进度条
+  bdinfoProgress.value.visible = false
+  ElNotification.info({
+    title: '已取消',
+    message: 'BDInfo 获取已取消',
+  })
+}
+
+// 后台运行
+const runInBackground = () => {
+  // 停止SSE连接但保持任务运行
+  if (bdinfoEventSource.value) {
+    bdinfoEventSource.value.close()
+    bdinfoEventSource.value = null
+  }
+  handleCancelClick()
+}
+
+// 手动刷新 BDInfo
+const refreshBDInfo = async () => {
+  try {
+    const response = await axios.post(`/api/migrate/refresh_bdinfo/${torrentData.value.seed_id}`)
+
+    if (response.data.success) {
+      ElNotification.success({
+        title: '任务已启动',
+        message: 'BDInfo 重新获取任务已启动',
+      })
+      startBDInfoSSE()
+    } else {
+      ElNotification.error({
+        title: '启动失败',
+        message: response.data.error || 'BDInfo 重新获取失败',
+      })
+    }
+  } catch (error: any) {
+    console.error('刷新 BDInfo 失败:', error)
+    ElNotification.error({
+      title: '操作失败',
+      message: 'BDInfo 重新获取失败',
+    })
+  }
+}
+
+// 在组件卸载时清理轮询
+onUnmounted(() => {
+  if (bdinfoPollingTimer.value) {
+    clearInterval(bdinfoPollingTimer.value)
+  }
+})
 
 const refreshPosters = async () => {
   if (!torrentData.value.original_main_title) {
@@ -1753,7 +2008,7 @@ const reparseTitle = async () => {
   try {
     const response = await axios.post('/api/utils/parse_title', {
       title: torrentData.value.original_main_title,
-      mediainfo: torrentData.value.mediainfo || '',  // 传递 mediainfo 以便修正 Blu-ray/BluRay 格式
+      mediainfo: torrentData.value.mediainfo || '', // 传递 mediainfo 以便修正 Blu-ray/BluRay 格式
     })
     if (response.data.success) {
       torrentData.value.title_components = response.data.components
@@ -1899,6 +2154,7 @@ const processDbData = (dataRes: any, tId: string) => {
   }
 
   torrentData.value = {
+    seed_id: tId,
     original_main_title: dbData.title || '',
     title_components: dbData.title_components || [],
     subtitle: dbData.subtitle,
@@ -2083,7 +2339,11 @@ const fetchTorrentInfo = async () => {
           reverseMappings.value = finalDbResponse.data.reverse_mappings
         }
 
+        // 构建复合主键作为seed_id
+        const compositeSeedId = `${dbData.hash || torrentId}_${torrentId}_${englishSiteName}`
+
         torrentData.value = {
+          seed_id: compositeSeedId,
           original_main_title: dbData.title || '',
           title_components: dbData.title_components || [],
           subtitle: dbData.subtitle,
@@ -2157,8 +2417,12 @@ const fetchTorrentInfo = async () => {
         console.warn('后端未返回反向映射表，将使用空的默认映射')
       }
 
+      // 构建复合主键作为seed_id
+      const compositeSeedId = `${dbData.hash || torrentId}_${torrentId}_${englishSiteName}`
+
       // 从数据库返回的数据中提取相关信息
       torrentData.value = {
+        seed_id: compositeSeedId,
         original_main_title: dbData.title || '',
         title_components: dbData.title_components || [],
         subtitle: dbData.subtitle,
@@ -2392,7 +2656,11 @@ const fetchTorrentInfo = async () => {
             : '种子信息已成功抓取并存储到数据库，请核对。',
         })
 
+        // 构建复合主键作为seed_id
+        const compositeSeedId = `${dbData.hash || torrentId}_${torrentId}_${englishSiteName}`
+
         torrentData.value = {
+          seed_id: compositeSeedId,
           original_main_title: dbData.title || '',
           title_components: dbData.title_components || [],
           subtitle: dbData.subtitle,
@@ -3627,6 +3895,75 @@ const filterUploadedParam = (url: string): string => {
 /* ======================================= */
 /*        [核心布局样式 - 最终版]        */
 /* ======================================= */
+
+/* Mediainfo 容器样式 */
+.mediainfo-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+/* BDInfo 进度条样式 */
+.bdinfo-progress-inline {
+  margin-bottom: 12px;
+  width: 100%;
+  flex-shrink: 0;
+}
+
+.bdinfo-progress-card-inline {
+  border: 1px solid #e4e7ed;
+  background-color: #f9f9f9;
+  width: 100%;
+}
+
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.header-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.background-hint {
+  font-size: 13px;
+  color: #909399;
+  margin-right: 12px;
+}
+
+.progress-details-inline {
+  margin-top: 8px;
+  width: 100%;
+}
+
+.progress-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  color: #606266;
+  width: 100%;
+}
+
+.progress-item {
+  flex: 1;
+  text-align: center;
+  white-space: nowrap;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  line-height: 1.5;
+}
+
+.progress-item strong {
+  display: inline;
+  margin-right: 4px;
+}
 
 /* 1. 主面板容器：使用 Flexbox 布局 */
 .cross-seed-panel {

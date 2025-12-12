@@ -3,7 +3,7 @@ import os
 import yaml
 from bs4 import BeautifulSoup
 from utils import extract_tags_from_mediainfo, extract_origin_from_description
-from utils.media_helper import validate_media_info_format
+from utils import validate_media_info_format
 from config import GLOBAL_MAPPINGS
 
 # 加载内容过滤配置

@@ -4,7 +4,7 @@
 """
 import logging
 from datetime import datetime
-from utils.downloader_id_helper import generate_migration_mapping
+from utils import generate_migration_mapping
 
 
 def create_migration_table(db_manager):

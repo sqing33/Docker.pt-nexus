@@ -4,7 +4,7 @@ import yaml
 import datetime
 from bs4 import BeautifulSoup
 from utils import extract_tags_from_mediainfo, extract_origin_from_description, validate_media_info_format
-from utils.torrent_list_fetcher import TorrentListFetcher
+from utils import TorrentListFetcher
 from config import GLOBAL_MAPPINGS
 
 # 加载内容过滤配置

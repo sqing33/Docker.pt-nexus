@@ -20,7 +20,10 @@ from models.seed_parameter import SeedParameter
 from config import config_manager, GLOBAL_MAPPINGS
 
 # --- [新增] 导入日志流管理器 ---
-from utils.log_streamer import log_streamer
+from utils import log_streamer
+
+# --- [新增] 导入SSE管理器 ---
+from utils.sse_manager import sse_manager
 
 migrate_bp = Blueprint("migrate_api", __name__, url_prefix="/api")
 
@@ -1641,7 +1644,7 @@ def validate_media():
             return jsonify({"success": False, "error": description}), 400
     elif media_type == "mediainfo":
         # 处理媒体信息重新获取请求
-        from utils.media_helper import upload_data_mediaInfo
+        from utils import upload_data_mediaInfo
         # 获取当前的mediainfo（如果有的话）
         current_mediainfo = data.get("current_mediainfo", "")
         # 调用upload_data_mediaInfo函数重新生成mediainfo，设置force_refresh=True强制重新获取
@@ -2885,3 +2888,251 @@ def stream_logs(task_id):
             'X-Accel-Buffering': 'no',  # 禁用 Nginx 缓冲
             'Connection': 'keep-alive'
         })
+
+
+@migrate_bp.route("/migrate/bdinfo_status/<seed_id>")
+def get_bdinfo_status(seed_id):
+    """获取 BDInfo 处理状态"""
+    try:
+        from core.bdinfo.bdinfo_manager import get_bdinfo_manager
+        
+        # 从数据库查询基本信息
+        conn = migrate_bp.db_manager._get_connection()
+        cursor = migrate_bp.db_manager._get_cursor(conn)
+        
+        # seed_id 格式为 "hash_torrentId_siteName"，需要解析
+        if '_' in seed_id:
+            # 解析复合 seed_id
+            parts = seed_id.split('_')
+            if len(parts) >= 3:
+                # 最后一个部分是 site_name，中间是 torrent_id，前面是 hash
+                site_name_val = parts[-1]
+                torrent_id_val = parts[-2]
+                hash_val = '_'.join(parts[:-2])  # hash 可能包含下划线
+                
+                # 使用复合主键查询
+                if migrate_bp.db_manager.db_type == "sqlite":
+                    cursor.execute("""
+                        SELECT mediainfo_status, bdinfo_task_id, bdinfo_started_at, 
+                               bdinfo_completed_at, mediainfo, bdinfo_error 
+                        FROM seed_parameters 
+                        WHERE hash = ? AND torrent_id = ? AND site_name = ?
+                    """, (hash_val, torrent_id_val, site_name_val))
+                else:
+                    cursor.execute("""
+                        SELECT mediainfo_status, bdinfo_task_id, bdinfo_started_at, 
+                               bdinfo_completed_at, mediainfo, bdinfo_error 
+                        FROM seed_parameters 
+                        WHERE hash = %s AND torrent_id = %s AND site_name = %s
+                    """, (hash_val, torrent_id_val, site_name_val))
+            else:
+                # 如果格式不对，尝试使用 CONCAT 查询
+                if migrate_bp.db_manager.db_type == "sqlite":
+                    cursor.execute("""
+                        SELECT mediainfo_status, bdinfo_task_id, bdinfo_started_at, 
+                               bdinfo_completed_at, mediainfo, bdinfo_error 
+                        FROM seed_parameters 
+                        WHERE hash || '_' || torrent_id || '_' || site_name = ?
+                    """, (seed_id,))
+                else:
+                    cursor.execute("""
+                        SELECT mediainfo_status, bdinfo_task_id, bdinfo_started_at, 
+                               bdinfo_completed_at, mediainfo, bdinfo_error 
+                        FROM seed_parameters 
+                        WHERE CONCAT(hash, '_', torrent_id, '_', site_name) = %s
+                    """, (seed_id,))
+        else:
+            # 如果没有下划线，说明格式不对，返回错误
+            return jsonify({'error': f'无效的种子ID格式: {seed_id}'}), 400
+            
+        result = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        
+        if not result:
+            return jsonify({'error': '种子数据不存在'}), 404
+            
+        # 如果有任务ID，从任务管理器获取详细状态
+        task_status = None
+        progress_info = None
+        if result['bdinfo_task_id']:
+            bdinfo_manager = get_bdinfo_manager()
+            task_status = bdinfo_manager.get_task_status(result['bdinfo_task_id'])
+            
+            # 如果任务正在处理中，获取进度信息
+            if task_status and task_status.get('status') in ['processing_bdinfo', 'processing']:
+                progress_info = {
+                    'progress_percent': task_status.get('progress_percent', 0.0),
+                    'current_file': task_status.get('current_file', ''),
+                    'elapsed_time': task_status.get('elapsed_time', ''),
+                    'remaining_time': task_status.get('remaining_time', '')
+                }
+        
+        # 判断是否为BDInfo内容
+        is_bdinfo = False
+        if result['mediainfo']:
+            from utils.mediainfo import validate_media_info_format
+            _, is_bdinfo, _, _, _, _ = validate_media_info_format(result['mediainfo'])
+            
+        response_data = {
+            'seed_id': seed_id,
+            'mediainfo_status': result['mediainfo_status'],
+            'bdinfo_task_id': result['bdinfo_task_id'],
+            'bdinfo_started_at': result['bdinfo_started_at'],
+            'bdinfo_completed_at': result['bdinfo_completed_at'],
+            'bdinfo_error': result['bdinfo_error'],
+            'mediainfo': result['mediainfo'] if result['mediainfo_status'] == 'completed' else None,
+            'is_bdinfo': is_bdinfo,
+            'task_status': task_status
+        }
+        
+        # 添加进度信息
+        if progress_info:
+            response_data['progress_info'] = progress_info
+            
+        return jsonify(response_data)
+        
+    except Exception as e:
+        logging.error(f"获取 BDInfo 状态失败: {e}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+
+@migrate_bp.route("/migrate/refresh_bdinfo/<seed_id>", methods=["POST"])
+def refresh_bdinfo(seed_id):
+    """手动触发 BDInfo 重新获取"""
+    try:
+        # 获取种子数据
+        conn = migrate_bp.db_manager._get_connection()
+        cursor = migrate_bp.db_manager._get_cursor(conn)
+        
+        if migrate_bp.db_manager.db_type == "sqlite":
+            cursor.execute("SELECT save_path FROM seed_parameters WHERE id = ?", (seed_id,))
+        else:
+            cursor.execute("SELECT save_path FROM seed_parameters WHERE id = %s", (seed_id,))
+            
+        result = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        
+        if not result:
+            return jsonify({'error': '种子数据不存在'}), 404
+            
+        # 调用刷新函数
+        from utils.mediainfo import refresh_bdinfo_for_seed
+        refresh_result = refresh_bdinfo_for_seed(seed_id, result['save_path'], priority=1)
+        
+        if refresh_result['success']:
+            return jsonify(refresh_result)
+        else:
+            return jsonify(refresh_result), 500
+        
+    except Exception as e:
+        logging.error(f"刷新 BDInfo 失败: {e}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+
+@migrate_bp.route("/migrate/bdinfo_tasks")
+def get_bdinfo_tasks():
+    """获取所有 BDInfo 任务状态（管理员接口）"""
+    try:
+        from core.bdinfo.bdinfo_manager import get_bdinfo_manager
+        
+        bdinfo_manager = get_bdinfo_manager()
+        tasks = bdinfo_manager.get_all_tasks()
+        stats = bdinfo_manager.get_stats()
+        
+        return jsonify({
+            'tasks': tasks,
+            'stats': stats
+        })
+        
+    except Exception as e:
+        logging.error(f"获取 BDInfo 任务列表失败: {e}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+
+@migrate_bp.route("/migrate/refresh_mediainfo_async", methods=["POST"])
+def refresh_mediainfo_async():
+    """异步版本的 MediaInfo 刷新接口"""
+    try:
+        data = request.json
+        current_mediainfo = data.get("current_mediainfo", "")
+        seed_id = data.get("seed_id")
+        save_path = data.get("save_path")
+        content_name = data.get("content_name")
+        downloader_id = data.get("downloader_id")
+        torrent_name = data.get("torrent_name")
+        force_refresh = data.get("force_refresh", True)
+        priority = data.get("priority", 1)  # 默认高优先级
+        
+        if not seed_id or not save_path or seed_id == "" or seed_id == None:
+            return jsonify({
+                "success": False,
+                "message": "缺少必要参数: seed_id 或 save_path"
+            }), 400
+        
+        # 调用异步版本的 MediaInfo 处理函数
+        from utils.mediainfo import upload_data_mediaInfo_async
+        
+        new_mediainfo, is_mediainfo, is_bdinfo, bdinfo_info = upload_data_mediaInfo_async(
+            mediaInfo=current_mediainfo,
+            save_path=save_path,
+            seed_id=seed_id,
+            content_name=content_name,
+            downloader_id=downloader_id,
+            torrent_name=torrent_name,
+            force_refresh=force_refresh,
+            priority=priority
+        )
+        
+        # 即使 MediaInfo 提取失败，如果 BDInfo 任务已添加，也返回成功
+        if bdinfo_info['bdinfo_status'] == 'processing' and bdinfo_info['bdinfo_task_id']:
+            response_data = {
+                "success": True,
+                "mediainfo": new_mediainfo or '',
+                "is_mediainfo": is_mediainfo,
+                "is_bdinfo": is_bdinfo,
+                "bdinfo_async": bdinfo_info,
+                "message": "BDInfo 正在后台处理中"
+            }
+            return jsonify(response_data), 200
+        elif new_mediainfo:
+            response_data = {
+                "success": True,
+                "mediainfo": new_mediainfo,
+                "is_mediainfo": is_mediainfo,
+                "is_bdinfo": is_bdinfo,
+                "bdinfo_async": bdinfo_info,
+                "message": "MediaInfo 更新完成"
+            }
+            return jsonify(response_data), 200
+        else:
+            return jsonify({
+                "success": False,
+                "message": "MediaInfo 提取失败"
+            }), 500
+            
+    except Exception as e:
+        logging.error(f"异步 MediaInfo 刷新失败: {e}", exc_info=True)
+        return jsonify({
+            "success": False,
+            "message": f"服务器内部错误: {str(e)}"
+        }), 500
+
+
+@migrate_bp.route("/migrate/bdinfo_sse/<seed_id>")
+def bdinfo_sse(seed_id):
+    """BDInfo进度更新的SSE端点"""
+    try:
+        # 生成唯一的连接ID
+        connection_id = str(uuid.uuid4())
+        
+        # 导入SSE响应生成器
+        from utils.sse_manager import generate_sse_response
+        
+        # 返回SSE响应流
+        return generate_sse_response(connection_id, seed_id)
+        
+    except Exception as e:
+        logging.error(f"创建SSE连接失败: {e}", exc_info=True)
+        return jsonify({'error': str(e)}), 500

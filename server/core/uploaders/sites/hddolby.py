@@ -7,7 +7,7 @@ sys.path.append(
     os.path.join(
         os.path.dirname(
             os.path.dirname(os.path.dirname(os.path.dirname(__file__))))))
-from utils.imdb2tmdb import get_tmdb_url_from_any_source
+from utils import get_tmdb_url_from_any_source
 
 
 class HddolbyUploader(SpecialUploader):

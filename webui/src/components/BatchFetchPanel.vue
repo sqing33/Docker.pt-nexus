@@ -346,6 +346,22 @@
               </el-descriptions-item>
             </el-descriptions>
 
+            <!-- BDInfo 处理状态 -->
+            <div v-if="progress.bdinfo_stats" class="bdinfo-stats">
+              <h4 style="margin: 15px 0 10px 0; font-size: 14px; color: #606266;">BDInfo 处理状态</h4>
+              <el-descriptions :column="3" border size="small">
+                <el-descriptions-item label="处理中">
+                  <el-tag type="warning" size="small">{{ progress.bdinfo_stats.processing }}</el-tag>
+                </el-descriptions-item>
+                <el-descriptions-item label="已完成">
+                  <el-tag type="success" size="small">{{ progress.bdinfo_stats.completed }}</el-tag>
+                </el-descriptions-item>
+                <el-descriptions-item label="失败">
+                  <el-tag type="danger" size="small">{{ progress.bdinfo_stats.failed }}</el-tag>
+                </el-descriptions-item>
+              </el-descriptions>
+            </div>
+
             <el-progress
               :percentage="progressPercentage"
               :status="progressStatus"
@@ -965,6 +981,27 @@ const refreshProgress = async () => {
     if (result.success) {
       const wasRunning = progress.value.isRunning
       progress.value = result.progress
+
+      // 添加 BDInfo 处理统计
+      if (progress.value.results && progress.value.results.length > 0) {
+        const bdinfoStats = {
+          processing: progress.value.results.filter(r => 
+            r.bdinfo_status === 'processing_bdinfo' || 
+            (r.mediainfo && r.mediainfo.includes('正在处理 BDInfo'))
+          ).length,
+          completed: progress.value.results.filter(r => 
+            r.bdinfo_status === 'completed' || 
+            (r.mediainfo && r.mediainfo.includes('DISC INFO'))
+          ).length,
+          failed: progress.value.results.filter(r => 
+            r.bdinfo_status === 'failed' || 
+            (r.mediainfo && r.mediainfo.includes('bdinfo提取失败'))
+          ).length
+        }
+        
+        // 更新进度对象中的 BDInfo 统计
+        progress.value.bdinfo_stats = bdinfoStats
+      }
 
       // 如果任务从运行中变为已完成，触发完成事件
       if (wasRunning && !progress.value.isRunning) {

@@ -11,7 +11,8 @@ from pathlib import Path
 from qbittorrentapi import Client as QbClient, exceptions as QbExceptions
 from transmission_rpc import Client as TrClient, TransmissionError
 
-from core.services import _prepare_api_config
+# 延迟导入以避免循环依赖
+# from core.services import _prepare_api_config
 
 
 class TorrentManager:
@@ -36,7 +37,8 @@ class TorrentManager:
         if not downloader_config:
             raise ValueError(f"未找到启用状态的下载数器配置: {downloader_id}")
 
-        # 准备API配置
+        # 准备API配置（延迟导入以避免循环依赖）
+        from core.services import _prepare_api_config
         api_config = _prepare_api_config(downloader_config)
 
         # 创建客户端实例

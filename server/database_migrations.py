@@ -147,6 +147,11 @@ class DatabaseMigrationManager:
                             'downloader_id': 'VARCHAR(36)',
                             'is_deleted': 'TINYINT(1) NOT NULL DEFAULT 0',
                             'is_reviewed': 'TINYINT(1) NOT NULL DEFAULT 0',
+                            'mediainfo_status': 'VARCHAR(20) DEFAULT "pending"',
+                            'bdinfo_task_id': 'VARCHAR(36)',
+                            'bdinfo_started_at': 'DATETIME',
+                            'bdinfo_completed_at': 'DATETIME',
+                            'bdinfo_error': 'TEXT',
                             'created_at': 'DATETIME NOT NULL',
                             'updated_at': 'DATETIME NOT NULL'
                         },
@@ -283,6 +288,11 @@ class DatabaseMigrationManager:
                             'downloader_id': 'VARCHAR(36)',
                             'is_deleted': 'BOOLEAN NOT NULL DEFAULT FALSE',
                             'is_reviewed': 'BOOLEAN NOT NULL DEFAULT FALSE',
+                            'mediainfo_status': 'VARCHAR(20) DEFAULT "pending"',
+                            'bdinfo_task_id': 'VARCHAR(36)',
+                            'bdinfo_started_at': 'TIMESTAMP',
+                            'bdinfo_completed_at': 'TIMESTAMP',
+                            'bdinfo_error': 'TEXT',
                             'created_at': 'TIMESTAMP NOT NULL',
                             'updated_at': 'TIMESTAMP NOT NULL'
                         },
@@ -387,6 +397,7 @@ class DatabaseMigrationManager:
                     },
                     'seed_parameters': {
                         'columns': {
+                            'id': 'INTEGER PRIMARY KEY AUTOINCREMENT',
                             'hash': 'TEXT NOT NULL',
                             'torrent_id': 'TEXT NOT NULL',
                             'site_name': 'TEXT NOT NULL',
@@ -415,10 +426,16 @@ class DatabaseMigrationManager:
                             'downloader_id': 'TEXT',
                             'is_deleted': 'INTEGER NOT NULL DEFAULT 0',
                             'is_reviewed': 'INTEGER NOT NULL DEFAULT 0',
+                            'mediainfo_status': 'TEXT DEFAULT "pending"',
+                            'bdinfo_task_id': 'TEXT',
+                            'bdinfo_started_at': 'TEXT',
+                            'bdinfo_completed_at': 'TEXT',
+                            'bdinfo_error': 'TEXT',
                             'created_at': 'TEXT NOT NULL',
                             'updated_at': 'TEXT NOT NULL'
                         },
-                        'primary_key': ['hash', 'torrent_id', 'site_name']
+                        'primary_key': ['id'],
+                        'unique_key': ['hash', 'torrent_id', 'site_name']
                     },
                     'batch_enhance_records': {
                         'columns': {
@@ -544,6 +561,10 @@ class DatabaseMigrationManager:
             # 检查并创建索引
             if 'indexes' in table_config:
                 self._ensure_indexes(conn, cursor, table_name, table_config['indexes'])
+
+            # 特殊处理：检查是否有重复索引
+            if self.db_type == 'mysql':
+                self._check_and_fix_duplicate_indexes(conn, cursor, table_name)
 
         except Exception as e:
             logging.error(f"检查表 {table_name} Schema时出错: {e}")
@@ -757,7 +778,12 @@ class DatabaseMigrationManager:
                 if self.db_type == 'mysql':
                     # 从SQL中提取索引名
                     if 'CREATE INDEX' in index_sql:
-                        index_name = index_sql.split()[2]
+                        # 更准确地提取索引名，处理带反引号的情况
+                        parts = index_sql.split()
+                        if len(parts) >= 4 and parts[2].upper() == 'INDEX':
+                            index_name = parts[3].strip('`"')
+                        else:
+                            continue
 
                         cursor.execute("""
                             SELECT COUNT(*) as count FROM information_schema.statistics
@@ -780,6 +806,11 @@ class DatabaseMigrationManager:
                             logging.debug(f"索引 {index_name} 已存在，跳过创建")
                             continue
 
+                # 对于PostgreSQL，使用IF NOT EXISTS语法
+                elif self.db_type == 'postgresql':
+                    if 'CREATE INDEX' in index_sql and 'IF NOT EXISTS' not in index_sql:
+                        index_sql = index_sql.replace('CREATE INDEX', 'CREATE INDEX IF NOT EXISTS')
+
                 cursor.execute(index_sql)
                 logging.debug(f"已创建索引: {index_sql}")
 
@@ -787,6 +818,125 @@ class DatabaseMigrationManager:
                 error_msg = str(e).lower()
                 if "already exists" not in error_msg and "duplicate key name" not in error_msg:
                     logging.warning(f"创建索引失败 - 表: {table_name}, SQL: {index_sql}, 错误: {e}")
+
+    def _check_and_fix_duplicate_indexes(self, conn, cursor, table_name):
+        """检查并修复表中重复的索引"""
+        try:
+            # 首先检查并清理临时表
+            self._clean_temp_tables(conn, cursor, table_name)
+            
+            if self.db_type == 'mysql':
+                self._check_mysql_indexes(conn, cursor, table_name)
+            elif self.db_type == 'postgresql':
+                self._check_postgresql_indexes(conn, cursor, table_name)
+            else:  # SQLite
+                self._check_sqlite_indexes(conn, cursor, table_name)
+                
+        except Exception as e:
+            logging.warning(f"检查表 {table_name} 重复索引时出错: {e}")
+    
+    def _clean_temp_tables(self, conn, cursor, table_name):
+        """清理临时表"""
+        # 检查是否是临时表
+        if '_temp_' in table_name:
+            try:
+                if self.db_type == 'mysql':
+                    cursor.execute(f"DROP TABLE IF EXISTS `{table_name}`")
+                elif self.db_type == 'postgresql':
+                    cursor.execute(f'DROP TABLE IF EXISTS "{table_name}"')
+                else:  # SQLite
+                    cursor.execute(f"DROP TABLE IF EXISTS '{table_name}'")
+                logging.info(f"已清理临时表: {table_name}")
+            except Exception as e:
+                logging.warning(f"清理临时表 {table_name} 失败: {e}")
+    
+    def _check_mysql_indexes(self, conn, cursor, table_name):
+        """检查MySQL重复索引"""
+        cursor.execute(f"""
+            SELECT INDEX_NAME, GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX) as columns
+            FROM information_schema.statistics 
+            WHERE table_schema = DATABASE() 
+            AND table_name = '{table_name}'
+            GROUP BY INDEX_NAME
+            ORDER BY INDEX_NAME
+        """)
+        
+        indexes = cursor.fetchall()
+        
+        # 按列组合分组，找出重复的索引
+        column_groups = {}
+        for idx in indexes:
+            columns = idx['columns']
+            index_name = idx['INDEX_NAME']
+            
+            if columns not in column_groups:
+                column_groups[columns] = []
+            column_groups[columns].append(index_name)
+        
+        # 检查并清理重复索引
+        duplicates_found = False
+        for columns, index_names in column_groups.items():
+            if len(index_names) > 1:
+                duplicates_found = True
+                logging.info(f"检测到表 {table_name} 有重复索引，列组合: {columns}")
+                
+                # 保留第一个索引（通常是PRIMARY或创建较早的），删除其他的
+                for index_name in index_names[1:]:
+                    try:
+                        cursor.execute(f"DROP INDEX `{index_name}` ON `{table_name}`")
+                        logging.info(f"已删除重复索引: {index_name}")
+                    except Exception as e:
+                        logging.warning(f"删除索引 {index_name} 失败: {e}")
+        
+        if duplicates_found:
+            logging.info(f"✓ 已清理表 {table_name} 中的重复索引")
+    
+    def _check_postgresql_indexes(self, conn, cursor, table_name):
+        """检查PostgreSQL重复索引"""
+        cursor.execute("""
+            SELECT indexname, indexdef 
+            FROM pg_indexes 
+            WHERE schemaname = 'public' AND tablename = %s
+        """, (table_name,))
+        
+        indexes = cursor.fetchall()
+        
+        # 分离主键索引和普通索引
+        primary_key = None
+        regular_indexes = []
+        
+        for idx in indexes:
+            index_name = idx[0]
+            if index_name.endswith('_pkey'):
+                primary_key = index_name
+            else:
+                regular_indexes.append(idx)
+        
+        # 检查是否有临时索引或重复索引
+        indexes_to_drop = []
+        for idx in regular_indexes:
+            index_name = idx[0]
+            # 检查是否是临时索引
+            if '_temp_' in index_name:
+                indexes_to_drop.append(index_name)
+        
+        # 删除临时索引
+        for index_name in indexes_to_drop:
+            try:
+                cursor.execute(f'DROP INDEX IF EXISTS "{index_name}"')
+                logging.info(f"已删除临时索引: {index_name}")
+            except Exception as e:
+                logging.warning(f"删除索引 {index_name} 失败: {e}")
+    
+    def _check_sqlite_indexes(self, conn, cursor, table_name):
+        """检查SQLite重复索引"""
+        # SQLite通常不会产生重复索引，但需要清理临时表
+        if '_temp_' in table_name:
+            try:
+                cursor.execute(f"DROP TABLE IF EXISTS '{table_name}'")
+                logging.info(f"已清理临时表: {table_name}")
+            except Exception as e:
+                logging.warning(f"清理临时表 {table_name} 失败: {e}")
 
     def _migrate_remove_proxy_column(self, conn, cursor):
         """迁移：删除sites表中的proxy列"""
@@ -1427,4 +1577,172 @@ class DatabaseMigrationManager:
 
         except Exception as e:
             logging.error(f"MySQL字符集统一迁移失败: {e}")
+
+    def migrate_bdinfo_fields(self):
+        """迁移 BDInfo 相关字段到 seed_parameters 表"""
+        try:
+            logging.info("开始 BDInfo 字段迁移...")
+            
+            conn = self.db_manager._get_connection()
+            cursor = self.db_manager._get_cursor(conn)
+            
+            # 检查表是否存在
+            if not self._table_exists(cursor, 'seed_parameters'):
+                logging.warning("seed_parameters 表不存在，跳过 BDInfo 字段迁移")
+                return
+            
+            # 获取当前表结构
+            current_columns = self._get_table_columns(cursor, 'seed_parameters')
+            
+            # 需要添加的 BDInfo 字段
+            bdinfo_fields = {
+                'mediainfo_status': {
+                    'mysql': "VARCHAR(20) DEFAULT 'pending'",
+                    'postgresql': "VARCHAR(20) DEFAULT 'pending'",
+                    'sqlite': "TEXT DEFAULT 'pending'"
+                },
+                'bdinfo_task_id': {
+                    'mysql': 'VARCHAR(36)',
+                    'postgresql': 'VARCHAR(36)',
+                    'sqlite': 'TEXT'
+                },
+                'bdinfo_started_at': {
+                    'mysql': 'DATETIME',
+                    'postgresql': 'TIMESTAMP',
+                    'sqlite': 'TEXT'
+                },
+                'bdinfo_completed_at': {
+                    'mysql': 'DATETIME',
+                    'postgresql': 'TIMESTAMP',
+                    'sqlite': 'TEXT'
+                },
+                'bdinfo_error': {
+                    'mysql': 'TEXT',
+                    'postgresql': 'TEXT',
+                    'sqlite': 'TEXT'
+                }
+            }
+            
+            added_fields = []
+            
+            # 检查并添加缺失的字段
+            for field_name, field_definitions in bdinfo_fields.items():
+                if field_name not in current_columns:
+                    field_definition = field_definitions[self.db_type]
+                    
+                    if self.db_type == 'mysql':
+                        cursor.execute(f"ALTER TABLE seed_parameters ADD COLUMN {field_name} {field_definition}")
+                    elif self.db_type == 'postgresql':
+                        cursor.execute(f"ALTER TABLE seed_parameters ADD COLUMN {field_name} {field_definition}")
+                    else:  # sqlite
+                        # SQLite 不支持直接添加列，需要重建表
+                        logging.warning("SQLite 需要重建表以添加 BDInfo 字段")
+                        self._recreate_sqlite_table_with_bdinfo_fields(cursor)
+                        conn.commit()
+                        cursor.close()
+                        conn.close()
+                        logging.info("✓ BDInfo 字段迁移完成 (SQLite)")
+                        return
+                    
+                    added_fields.append(field_name)
+                    logging.info(f"✓ 已添加 BDInfo 字段: {field_name}")
+            
+            # seed_parameters 表已经有复合主键 (hash, torrent_id, site_name)，不需要添加额外的 id 字段
+            logging.info("✓ seed_parameters 表已有复合主键，跳过 id 字段添加")
+            
+            conn.commit()
+            cursor.close()
+            conn.close()
+            
+            if added_fields:
+                logging.info(f"✓ BDInfo 字段迁移完成，已添加字段: {', '.join(added_fields)}")
+            else:
+                logging.info("✓ BDInfo 字段已存在，无需迁移")
+                
+        except Exception as e:
+            logging.error(f"BDInfo 字段迁移失败: {e}", exc_info=True)
+            raise
+    
+    def _recreate_sqlite_table_with_bdinfo_fields(self, cursor):
+        """重建 SQLite 表以添加 BDInfo 字段"""
+        try:
+            # 1. 重命名原表
+            cursor.execute("ALTER TABLE seed_parameters RENAME TO seed_parameters_old")
+            
+            # 2. 创建新表结构
+            cursor.execute("""
+                CREATE TABLE seed_parameters (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    hash TEXT NOT NULL,
+                    torrent_id TEXT NOT NULL,
+                    site_name TEXT NOT NULL,
+                    nickname TEXT,
+                    save_path TEXT,
+                    name TEXT,
+                    title TEXT,
+                    subtitle TEXT,
+                    imdb_link TEXT,
+                    douban_link TEXT,
+                    type TEXT,
+                    medium TEXT,
+                    video_codec TEXT,
+                    audio_codec TEXT,
+                    resolution TEXT,
+                    team TEXT,
+                    source TEXT,
+                    tags TEXT,
+                    poster TEXT,
+                    screenshots TEXT,
+                    statement TEXT,
+                    body TEXT,
+                    mediainfo TEXT,
+                    title_components TEXT,
+                    removed_ardtudeclarations TEXT,
+                    downloader_id TEXT,
+                    is_deleted INTEGER NOT NULL DEFAULT 0,
+                    is_reviewed INTEGER NOT NULL DEFAULT 0,
+                    mediainfo_status TEXT DEFAULT 'pending',
+                    bdinfo_task_id TEXT,
+                    bdinfo_started_at TEXT,
+                    bdinfo_completed_at TEXT,
+                    bdinfo_error TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    UNIQUE(hash, torrent_id, site_name)
+                )
+            """)
+            
+            # 3. 迁移数据
+            cursor.execute("""
+                INSERT INTO seed_parameters (
+                    hash, torrent_id, site_name, nickname, save_path, name, title, subtitle,
+                    imdb_link, douban_link, type, medium, video_codec, audio_codec, resolution,
+                    team, source, tags, poster, screenshots, statement, body, mediainfo,
+                    title_components, removed_ardtudeclarations, downloader_id, is_deleted,
+                    is_reviewed, created_at, updated_at
+                )
+                SELECT 
+                    hash, torrent_id, site_name, nickname, save_path, name, title, subtitle,
+                    imdb_link, douban_link, type, medium, video_codec, audio_codec, resolution,
+                    team, source, tags, poster, screenshots, statement, body, mediainfo,
+                    title_components, removed_ardtudeclarations, downloader_id, is_deleted,
+                    is_reviewed, created_at, updated_at
+                FROM seed_parameters_old
+            """)
+            
+            # 4. 删除旧表
+            cursor.execute("DROP TABLE seed_parameters_old")
+            
+            logging.info("✓ SQLite 表重建完成，已添加 BDInfo 字段")
+            
+        except Exception as e:
+            logging.error(f"SQLite 表重建失败: {e}", exc_info=True)
+            # 尝试恢复原表
+            try:
+                cursor.execute("DROP TABLE seed_parameters")
+                cursor.execute("ALTER TABLE seed_parameters_old RENAME TO seed_parameters")
+                logging.info("✓ 已恢复原表结构")
+            except:
+                pass
+            raise
             raise

@@ -100,7 +100,7 @@ RUN chmod +x ./updater
 COPY ./CHANGELOG.json ./CHANGELOG.json
 
 # 复制 BDInfo 工具
-COPY ./bdinfo /app/bdinfo
+COPY ./server/core/bdinfo /app/bdinfo
 RUN chmod +x /app/bdinfo/BDInfo /app/bdinfo/BDInfoDataSubstractor
 
 # 复制启动脚本

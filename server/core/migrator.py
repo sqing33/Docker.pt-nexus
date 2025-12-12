@@ -18,16 +18,16 @@ import urllib.parse
 from io import StringIO
 from typing import Dict, Any, Optional, List
 from config import TEMP_DIR, DATA_DIR, GLOBAL_MAPPINGS
-from utils import ensure_scheme, upload_data_mediaInfo, upload_data_title, extract_tags_from_mediainfo, extract_origin_from_description, upload_data_movie_info
-from utils.douban import _process_poster_url
-from utils.image_validator import is_image_url_valid_robust
-from utils.completion_checker import check_completion_status, add_completion_tag_if_needed
+from utils import ensure_scheme, upload_data_mediaInfo, upload_data_title, extract_tags_from_mediainfo, extract_origin_from_description, upload_data_movie_info, upload_data_mediaInfo_async
+from utils import _process_poster_url
+from utils import is_image_url_valid_robust
+from utils import check_completion_status, add_completion_tag_if_needed
 
 # 导入种子参数模型
 from models.seed_parameter import SeedParameter
 
 # 导入日志流管理器
-from utils.log_streamer import log_streamer
+from utils import log_streamer
 
 # 导入新的Extractor和ParameterMapper
 from core.extractors.extractor import Extractor, ParameterMapper
@@ -588,7 +588,7 @@ class TorrentMigrator:
                 content.append(self._html_to_bbcode(child))
 
         # [新增] 处理BBCode中的图片链接格式和清理不需要的标签
-        from utils.formatters import process_bbcode_images_and_cleanup
+        from utils import process_bbcode_images_and_cleanup
         bbcode_result = "".join(content)
         return process_bbcode_images_and_cleanup(bbcode_result)
 
@@ -1286,22 +1286,36 @@ class TorrentMigrator:
                         intro["screenshots"] = ""
                         images = [images[0]] if images and images[0] else []
 
-                # 使用upload_data_mediaInfo处理mediainfo
+                # 使用upload_data_mediaInfo_async处理mediainfo（支持异步BDInfo）
                 if self.task_id:
                     log_streamer.emit_log(self.task_id, "提取媒体信息",
                                           "正在提取 MediaInfo...", "processing")
 
-                mediainfo, is_mediainfo, is_bdinfo = upload_data_mediaInfo(
+                # 生成种子ID用于BDInfo任务跟踪
+                import uuid
+                temp_seed_id = str(uuid.uuid4())
+                
+                # 使用异步版本的MediaInfo处理
+                mediainfo, is_mediainfo, is_bdinfo, bdinfo_async = upload_data_mediaInfo_async(
                     mediaInfo=mediainfo_text
                     if mediainfo_text else "未找到 Mediainfo 或 BDInfo",
                     save_path=self.save_path,
+                    seed_id=temp_seed_id,
                     torrent_name=processed_torrent_name,
-                    downloader_id=self.downloader_id)
+                    downloader_id=self.downloader_id,
+                    priority=2  # 批量获取使用普通优先级
+                )
 
                 if self.task_id:
                     if mediainfo and mediainfo != "未找到 Mediainfo 或 BDInfo":
                         log_streamer.emit_log(self.task_id, "提取媒体信息",
                                               "MediaInfo 提取成功", "success")
+                        
+                        # 如果BDInfo在后台处理中，添加提示
+                        if bdinfo_async and bdinfo_async.get('bdinfo_status') == 'processing':
+                            log_streamer.emit_log(self.task_id, "BDInfo处理",
+                                                  f"BDInfo 正在后台处理中 (任务ID: {bdinfo_async.get('bdinfo_task_id')})", 
+                                                  "info")
                     else:
                         log_streamer.emit_log(self.task_id, "提取媒体信息",
                                               "MediaInfo 提取失败或不存在", "warning")

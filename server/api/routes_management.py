@@ -10,7 +10,7 @@ from urllib.parse import urlparse
 # 从项目根目录导入核心模块
 from core import services
 from database import reconcile_historical_data
-from utils.downloader_id_helper import generate_downloader_id_from_host, validate_downloader_id
+from utils import generate_downloader_id_from_host, validate_downloader_id
 
 # 导入下载器客户端 API
 from qbittorrentapi import Client, APIConnectionError
@@ -971,7 +971,7 @@ def get_iyuu_logs():
 def check_migration_needed():
     """检查是否需要迁移下载器ID"""
     config_manager = management_bp.config_manager
-    from utils.downloader_id_helper import generate_migration_mapping
+    from utils import generate_migration_mapping
     
     try:
         config = config_manager.get()
@@ -1063,7 +1063,7 @@ def get_migration_history():
 from werkzeug.utils import secure_filename
 import os
 import tempfile
-from utils.media_helper import _upload_to_pixhost
+from utils import _upload_to_pixhost
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 

@@ -5,7 +5,7 @@ import json
 from flask import Blueprint, jsonify, request
 
 # 从项目根目录导入核心模块
-from utils.torrent_manager import TorrentManager
+from utils import TorrentManager
 
 # --- Blueprint Setup ---
 torrent_transfer_bp = Blueprint("torrent_transfer_api", __name__, url_prefix="/api")

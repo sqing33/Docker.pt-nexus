@@ -8,7 +8,7 @@ import requests
 import urllib.parse
 
 # 导入自定义工具函数
-from utils.douban import handle_incomplete_links, search_by_subtitle
+from utils import handle_incomplete_links, search_by_subtitle
 from utils.content_filter import get_content_filter, get_unwanted_image_urls
 from config import GLOBAL_MAPPINGS
 from .sites.audiences import AudiencesSpecialExtractor
@@ -162,9 +162,7 @@ class Extractor:
             Dict with extracted data in standardized format
         """
         # [新增] 图片链接验证辅助函数
-        from utils import extract_origin_from_description, check_intro_completeness, upload_data_movie_info
-        from utils.image_validator import is_image_url_valid_robust
-        from utils.media_helper import extract_audio_codec_from_mediainfo
+        from utils import extract_origin_from_description, check_intro_completeness, upload_data_movie_info, is_image_url_valid_robust, extract_audio_codec_from_mediainfo
         # Initialize default data structure
         extracted_data = {
             "title": "",
@@ -332,7 +330,7 @@ class Extractor:
             print(f"[调试extractor] 未配置图片过滤列表，跳过过滤")
 
         # [新增] 应用BBCode清理函数到bbcode，移除[url]格式的图片和其他需要清理的标签
-        from utils.formatters import process_bbcode_images_and_cleanup
+        from utils import process_bbcode_images_and_cleanup
         bbcode = process_bbcode_images_and_cleanup(bbcode)
 
         # 注意：海报验证和转存逻辑已移至 _parse_format_content 函数中统一处理
@@ -498,7 +496,7 @@ class Extractor:
                            flags=re.DOTALL).replace("\r", "").strip())
 
             # [新增] 在构建body后，应用BBCode清理函数处理残留的空标签和列表标记
-            from utils.formatters import process_bbcode_images_and_cleanup
+            from utils import process_bbcode_images_and_cleanup
             body = process_bbcode_images_and_cleanup(body)
 
             # [新增] 在BBCode层面过滤对比说明（包含BBCode标签的情况）
@@ -549,7 +547,7 @@ class Extractor:
             body = '\n'.join(filtered_lines)
 
             # [合并] 统一检查简介完整性和缺失信息（集数/IMDb/豆瓣链接）
-            from utils.description_enhancer import enhance_description_if_needed
+            from utils import enhance_description_if_needed
             logging.info("开始简介完整性和缺失信息检测...")
 
             enhanced_body, enhanced_poster, enhanced_imdb, description_changed = enhance_description_if_needed(
@@ -1042,7 +1040,7 @@ class ParameterMapper:
             source_params.get("标签", []), site_name)
 
         # [新增] 从简介和副标题中提取标签和进行类型修正
-        from utils.media_helper import extract_tags_from_description, check_animation_type_from_description, extract_tags_from_subtitle
+        from utils import extract_tags_from_description, check_animation_type_from_description, extract_tags_from_subtitle
 
         intro_statement = extracted_params.get("intro",
                                                {}).get("statement", "")

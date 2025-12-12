@@ -1,6 +1,6 @@
 from bs4 import BeautifulSoup
 from typing import Dict, Any
-from utils.torrent_list_fetcher import TorrentListFetcher
+from utils import TorrentListFetcher
 
 
 class CHDBitsSpecialExtractor:

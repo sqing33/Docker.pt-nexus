@@ -19,8 +19,8 @@ from core.iyuu import start_iyuu_thread, stop_iyuu_thread
 
 # --- 日志基础配置 ---
 logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s - [PID:%(process)d] - %(levelname)s - %(message)s")
+    level=logging.DEBUG, format="%(asctime)s - [PID:%(process)d] - %(levelname)s - %(message)s"
+)
 logging.info("=== Flask 应用日志系统已初始化 ===")
 
 
@@ -30,7 +30,7 @@ def cleanup_old_tmp_structure():
     - server/data/tmp/torrents/ 目录（并清理其中的 JSON 文件）
     - server/data/tmp/batch.log 文件
     删除其他所有文件和目录（包括 extracted_data）
-    
+
     注意：开发环境下不执行清理
     """
     # 检查是否为开发环境
@@ -85,7 +85,7 @@ def cleanup_old_tmp_structure():
         print("开始清理 torrents 目录中的 JSON 文件...")
         json_removed = 0
         for filename in os.listdir(torrents_dir):
-            if filename.endswith('.json'):
+            if filename.endswith(".json"):
                 json_path = os.path.join(torrents_dir, filename)
                 try:
                     os.remove(json_path)
@@ -128,15 +128,13 @@ def create_app():
         app,
         resources={
             r"/api/*": {
-                "origins":
-                allowed_origins,
-                "supports_credentials":
-                True,  # 支持凭证
+                "origins": allowed_origins,
+                "supports_credentials": True,  # 支持凭证
                 "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-                "allow_headers":
-                ["Content-Type", "Authorization", "X-Requested-With"],
+                "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
             }
-        })
+        },
+    )
 
     # --- 步骤 0: 清理旧的 tmp 目录结构 ---
     cleanup_old_tmp_structure()
@@ -159,9 +157,7 @@ def create_app():
         if migration_mapping:
             logging.info(f"检测到 {len(migration_mapping)} 个下载器需要迁移ID，开始自动迁移...")
             for mapping in migration_mapping:
-                logging.info(
-                    f"  - {mapping['name']}: {mapping['old_id']} -> {mapping['new_id']}"
-                )
+                logging.info(f"  - {mapping['name']}: {mapping['old_id']} -> {mapping['new_id']}")
 
             # 执行迁移
             result = execute_migration(db_manager, config_manager, backup=True)
@@ -184,8 +180,7 @@ def create_app():
     def validate_internal_token(token):
         """验证动态生成的内部认证token，支持更大的时间窗口容错"""
         try:
-            internal_secret = os.getenv("INTERNAL_SECRET",
-                                        "pt-nexus-2024-secret-key")
+            internal_secret = os.getenv("INTERNAL_SECRET", "pt-nexus-2024-secret-key")
             current_timestamp = int(time.time()) // 3600  # 当前小时
 
             # 扩大时间窗口：检查前后2小时的token（容错机制）
@@ -195,13 +190,15 @@ def create_app():
                 expected_signature = hmac.new(
                     internal_secret.encode(),
                     f"pt-nexus-internal-{timestamp}".encode(),
-                    hashlib.sha256).hexdigest()[:16]
+                    hashlib.sha256,
+                ).hexdigest()[:16]
 
                 if hmac.compare_digest(token, expected_signature):
                     # 记录验证成功的时间偏移，用于监控时钟同步问题
                     if time_offset != 0:
                         logging.warning(
-                            f"内部认证token验证成功，但存在时间偏移: {time_offset}小时")
+                            f"内部认证token验证成功，但存在时间偏移: {time_offset}小时"
+                        )
                     return True
 
             # 如果所有时间窗口都验证失败，记录详细信息用于调试
@@ -243,7 +240,7 @@ def create_app():
     setattr(torrent_transfer_bp, "config_manager", config_manager)
 
     # 将数据库管理器添加到应用配置中，以便在其他地方可以通过current_app访问
-    app.config['DB_MANAGER'] = db_manager
+    app.config["DB_MANAGER"] = db_manager
 
     # 认证中间件：默认开启，校验所有 /api/* 请求（排除 /api/auth/*）
 
@@ -255,15 +252,14 @@ def create_app():
         # 如果没有设置JWT_SECRET，使用基于用户名和密码的动态密钥
         # 这样每次重启后密钥会变化，强制重新登录
         auth_conf = (config_manager.get() or {}).get("auth", {})
-        username = auth_conf.get("username") or os.getenv(
-            "AUTH_USERNAME", "admin")
-        password_hash = auth_conf.get("password_hash") or os.getenv(
-            "AUTH_PASSWORD_HASH", "")
+        username = auth_conf.get("username") or os.getenv("AUTH_USERNAME", "admin")
+        password_hash = auth_conf.get("password_hash") or os.getenv("AUTH_PASSWORD_HASH", "")
         password_plain = os.getenv("AUTH_PASSWORD", "")
 
         # 创建基于认证信息的动态密钥
         auth_info = f"{username}:{password_hash or password_plain}"
         import hashlib
+
         dynamic_secret = hashlib.sha256(auth_info.encode()).hexdigest()
 
         logging.info("使用基于认证信息的动态JWT密钥（重启后需要重新登录）")
@@ -285,8 +281,8 @@ def create_app():
 
         # 内部服务认证跳过逻辑
         # 注意：仅跳过真正的localhost请求，不跳过内网IP
-        remote_addr = request.environ.get('REMOTE_ADDR', '')
-        if remote_addr in ['127.0.0.1', '::1']:
+        remote_addr = request.environ.get("REMOTE_ADDR", "")
+        if remote_addr in ["127.0.0.1", "::1"]:
             return None
 
         # 2. 内部API Key认证：使用动态token验证
@@ -295,10 +291,12 @@ def create_app():
             return None
 
         # 3. 原有的特定端点跳过（保留兼容性）
-        if request.path.startswith("/api/migrate/get_db_seed_info") or \
-           request.path.startswith("/api/cross-seed-data/batch-cross-seed-core") or \
-           request.path.startswith("/api/cross-seed-data/batch-cross-seed-internal") or \
-           request.path.startswith("/api/cross-seed-data/test-no-auth"):
+        if (
+            request.path.startswith("/api/migrate/get_db_seed_info")
+            or request.path.startswith("/api/cross-seed-data/batch-cross-seed-core")
+            or request.path.startswith("/api/cross-seed-data/batch-cross-seed-internal")
+            or request.path.startswith("/api/cross-seed-data/test-no-auth")
+        ):
             return None
 
         # 4. SSE日志流端点：不需要认证（只是进度日志，不涉及敏感信息）
@@ -324,9 +322,7 @@ def create_app():
 
         try:
             # 验证JWT token
-            payload = jwt.decode(token,
-                                 _get_jwt_secret(),
-                                 algorithms=["HS256"])
+            payload = jwt.decode(token, _get_jwt_secret(), algorithms=["HS256"])
 
             # 额外验证：检查用户是否仍然存在且有效
             username = payload.get("sub")
@@ -335,28 +331,24 @@ def create_app():
 
             # 验证用户是否仍然存在于配置中
             auth_conf = (config_manager.get() or {}).get("auth", {})
-            current_user = auth_conf.get("username") or os.getenv(
-                "AUTH_USERNAME", "admin")
+            current_user = auth_conf.get("username") or os.getenv("AUTH_USERNAME", "admin")
 
             if username != current_user:
                 logging.warning(
-                    f"Token中的用户 '{username}' 与当前配置用户 '{current_user}' 不匹配")
-                return jsonify({
-                    "success": False,
-                    "message": "用户已失效，请重新登录"
-                }), 401
+                    f"Token中的用户 '{username}' 与当前配置用户 '{current_user}' 不匹配"
+                )
+                return jsonify({"success": False, "message": "用户已失效，请重新登录"}), 401
 
             # 验证配置是否仍然有效（检查是否有密码配置）
-            has_valid_auth = (auth_conf.get("password_hash")
-                              or os.getenv("AUTH_PASSWORD_HASH")
-                              or os.getenv("AUTH_PASSWORD"))
+            has_valid_auth = (
+                auth_conf.get("password_hash")
+                or os.getenv("AUTH_PASSWORD_HASH")
+                or os.getenv("AUTH_PASSWORD")
+            )
 
             if not has_valid_auth:
                 logging.warning(f"用户 '{username}' 的认证配置已失效")
-                return jsonify({
-                    "success": False,
-                    "message": "认证配置已更改，请重新登录"
-                }), 401
+                return jsonify({"success": False, "message": "认证配置已更改，请重新登录"}), 401
 
         except jwt.ExpiredSignatureError:
             return jsonify({"success": False, "message": "登录已过期"}), 401
@@ -385,11 +377,16 @@ def create_app():
     @app.route("/health", methods=["GET"])
     def health_check():
         """健康检查端点，用于服务状态监控"""
-        return jsonify({
-            "status": "healthy",
-            "service": "pt-nexus-core",
-            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
-        }), 200
+        return (
+            jsonify(
+                {
+                    "status": "healthy",
+                    "service": "pt-nexus-core",
+                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                }
+            ),
+            200,
+        )
 
     # --- 步骤 5: 执行初始数据聚合 ---
     logging.info("正在执行初始数据聚合...")
@@ -402,7 +399,7 @@ def create_app():
     # --- 步骤 6: 启动后台数据追踪服务 ---
     logging.info("正在启动后台数据追踪服务...")
     # 检查是否在调试模式下运行
-    if os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
+    if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
         logging.info("正在启动数据追踪线程...")
         start_data_tracker(db_manager, config_manager)
 
@@ -416,6 +413,7 @@ def create_app():
         logging.info("应用启动完成，执行一次种子数据刷新...")
         try:
             from core.manual_tasks import update_torrents_data
+
             result = update_torrents_data(db_manager, config_manager)
             if result["success"]:
                 logging.info("启动时种子数据刷新完成")
@@ -453,6 +451,7 @@ if __name__ == "__main__":
         logging.info("正在清理后台线程...")
         try:
             from core.services import stop_data_tracker
+
             stop_data_tracker()
         except Exception as e:
             logging.error(f"停止数据追踪线程失败: {e}", exc_info=True)
@@ -470,6 +469,43 @@ if __name__ == "__main__":
 
     logging.info(f"以开发模式启动 Flask 服务器，监听端口 http://0.0.0.0:5275 ...")
 
-    # 运行 Flask 应用
-    # debug=False 是生产环境推荐的设置
+if __name__ == "__main__":
+    # 注册关闭函数
+    def cleanup_bdinfo_manager():
+        """清理 BDInfo 管理器"""
+        try:
+            from core.bdinfo.bdinfo_manager import get_bdinfo_manager
+
+            bdinfo_manager = get_bdinfo_manager()
+            bdinfo_manager.stop()
+            logging.info("BDInfo 管理器已停止")
+        except Exception as e:
+            logging.error(f"BDInfo 管理器停止失败: {e}")
+
+    import atexit
+
+    atexit.register(cleanup_bdinfo_manager)
+
+    # 创建 Flask 应用
+    flask_app = create_app()
+
+    # 运行数据库迁移
+    try:
+        db_config = get_db_config()
+        db_manager = DatabaseManager(db_config)
+        db_manager.migration_manager.migrate_bdinfo_fields()
+        logging.info("BDInfo 字段迁移完成")
+    except Exception as e:
+        logging.error(f"BDInfo 字段迁移失败: {e}", exc_info=True)
+
+    # 初始化 BDInfo 管理器（在数据库迁移之后）
+    try:
+        from core.bdinfo.bdinfo_manager import get_bdinfo_manager
+
+        bdinfo_manager = get_bdinfo_manager()
+        bdinfo_manager.start()
+        logging.info("BDInfo 管理器初始化成功")
+    except Exception as e:
+        logging.error(f"BDInfo 管理器初始化失败: {e}", exc_info=True)
+
     flask_app.run(host="0.0.0.0", port=5275, debug=True)
