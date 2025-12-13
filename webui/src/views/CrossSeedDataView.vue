@@ -405,17 +405,37 @@
     <!-- 处理记录查看弹窗 -->
     <div v-if="recordDialogVisible" class="modal-overlay">
       <el-card class="record-view-card" shadow="always">
-        <template #header>
-          <div class="modal-header">
-            <span>日志记录</span>
-            <div class="record-header-controls">
+        <div class="record-view-content">
+          <!-- 自定义标签导航 -->
+          <div class="record-tabs-header">
+            <div class="record-tabs-nav">
+              <div
+                class="tab-item"
+                :class="{ active: activeRecordTab === 'cross-seed' }"
+                @click="activeRecordTab = 'cross-seed'"
+              >
+                批量转种记录
+              </div>
+              <div
+                class="tab-item"
+                :class="{ active: activeRecordTab === 'bdinfo' }"
+                @click="activeRecordTab = 'bdinfo'"
+              >
+                BDInfo获取记录
+              </div>
+            </div>
+            <div class="record-close-btn">
               <el-button type="danger" circle @click="closeRecordViewDialog" plain>X</el-button>
             </div>
           </div>
-        </template>
-        <div class="record-view-content">
-          <!-- 标签页切换 -->
-          <el-tabs v-model="activeRecordTab" type="border-card" class="record-tabs">
+
+          <!-- 隐藏默认头部的标签页 -->
+          <el-tabs
+            v-model="activeRecordTab"
+            type="border-card"
+            class="record-tabs"
+            :show-header="false"
+          >
             <!-- 批量转种记录标签页 -->
             <el-tab-pane label="批量转种记录" name="cross-seed">
               <template #label>
@@ -424,6 +444,9 @@
               <div class="tab-header">
                 <div class="record-warning-text">批量转种需要等待种子文件验证，每个种子大概3s</div>
                 <div class="tab-controls">
+                  <el-button type="warning" size="small" @click="clearRecordsLocal">
+                    清空记录
+                  </el-button>
                   <el-button
                     type="danger"
                     size="small"
@@ -619,7 +642,7 @@
                     size="small"
                   >
                     <el-radio-button label="">全部</el-radio-button>
-                    <el-radio-button label="processing">处理中</el-radio-button>
+                    <el-radio-button label="processing">获取中</el-radio-button>
                     <el-radio-button label="completed">已完成</el-radio-button>
                     <el-radio-button label="failed">失败</el-radio-button>
                   </el-radio-group>
@@ -770,15 +793,6 @@
               </div>
             </el-tab-pane>
           </el-tabs>
-        </div>
-        <div class="record-view-footer">
-          <el-button
-            @click="clearRecordsLocal"
-            type="warning"
-            v-if="activeRecordTab === 'cross-seed'"
-            >清空记录</el-button
-          >
-          <el-button @click="closeRecordViewDialog">关闭</el-button>
         </div>
       </el-card>
     </div>
@@ -1042,7 +1056,7 @@ const retryingSeeds = ref<Set<string>>(new Set()) // 正在重试的种子ID集�
 
 // 定时刷新相关
 const refreshTimer = ref<ReturnType<typeof setInterval> | null>(null)
-const REFRESH_INTERVAL = 5000 // 5秒刷新一次
+const REFRESH_INTERVAL = 1000 // 5秒刷新一次
 const additionalRefreshCount = ref<number>(0) // 额外刷新次数计数器
 const ADDITIONAL_REFRESH_LIMIT = 3 // 完成后额外刷新3次
 
@@ -2065,9 +2079,7 @@ const openRecordViewDialog = () => {
     startAutoRefresh() // 打开时启动自动刷新
   } else if (activeRecordTab.value === 'bdinfo') {
     refreshBDInfoRecords() // 打开时加载BDInfo记录
-    if (hasProcessingBDInfo.value) {
-      startBDInfoAutoRefresh() // 如果有处理中的任务，启动自动刷新
-    }
+    startBDInfoAutoRefresh() // 默认启动自动刷新
   }
 }
 
@@ -2145,7 +2157,7 @@ const getRecordStatusTextLocal = (status: string) => {
     case 'filtered':
       return '已过滤'
     case 'processing':
-      return '处理中'
+      return '获取中'
     case 'pending':
       return '等待中'
     default:
@@ -2167,7 +2179,7 @@ const refreshBDInfoRecords = async () => {
       status_filter: bdinfoStatusFilter.value,
     })
 
-    // 保存当前处理中任务的进度信息
+    // 保存当前获取中任务的进度信息
     const existingProgressInfo = new Map()
     for (const record of bdinfoRecords.value) {
       if (record.mediainfo_status === 'processing_bdinfo' && record.progress_info) {
@@ -2182,7 +2194,7 @@ const refreshBDInfoRecords = async () => {
       // 先更新基本记录数据，保留进度信息
       const newRecords = result.data || []
       for (const newRecord of newRecords) {
-        // 如果是处理中的任务，先使用之前的进度信息
+        // 如果是获取中的任务，先使用之前的进度信息
         if (
           newRecord.mediainfo_status === 'processing_bdinfo' &&
           existingProgressInfo.has(newRecord.seed_id)
@@ -2192,7 +2204,7 @@ const refreshBDInfoRecords = async () => {
       }
       bdinfoRecords.value = newRecords
 
-      // 为处理中的任务获取实时进度
+      // 为获取中的任务获取实时进度
       const progressPromises = []
       for (const record of bdinfoRecords.value) {
         if (record.mediainfo_status === 'processing_bdinfo' && record.bdinfo_task_id) {
@@ -2233,7 +2245,7 @@ const startBDInfoAutoRefresh = () => {
     if (recordDialogVisible.value && activeRecordTab.value === 'bdinfo') {
       await refreshBDInfoRecords()
 
-      // 如果没有处理中的任务，停止自动刷新
+      // 如果没有获取中的任务，停止自动刷新
       if (!hasProcessingBDInfo.value) {
         setTimeout(() => {
           if (!hasProcessingBDInfo.value) {
@@ -2279,7 +2291,7 @@ const getBDInfoStatusText = (status: string) => {
       return '等待中'
     case 'processing_bdinfo':
     case 'processing':
-      return '处理中'
+      return '获取中'
     case 'completed':
       return '已完成'
     case 'failed':
@@ -2369,7 +2381,7 @@ const shouldShowRetryButton = (record: BDInfoRecord) => {
     return true
   }
 
-  // 处理中状态，检查是否卡死
+  // 获取中状态，检查是否卡死
   if (record.mediainfo_status === 'processing_bdinfo') {
     return isTaskStuck(record)
   }
@@ -2401,7 +2413,7 @@ const retryBDInfo = async (record: BDInfoRecord) => {
       ElMessage.success('BDInfo重新获取任务已启动')
       await refreshBDInfoRecords()
 
-      // 如果有处理中的任务，启动自动刷新
+      // 如果有获取中的任务，启动自动刷新
       if (hasProcessingBDInfo.value) {
         startBDInfoAutoRefresh()
       }
@@ -2997,12 +3009,6 @@ onUnmounted(() => {
   min-height: 0;
 }
 
-.record-header-controls {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
 .record-warning-text {
   color: #f56c6c;
   font-size: 13px;
@@ -3062,13 +3068,6 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.record-view-footer {
-  padding: 10px 20px;
-  border-top: 1px solid var(--el-border-color-lighter);
-  display: flex;
-  justify-content: space-between;
 }
 
 /* ✨ CHANGE START: Modified progress cell CSS for vertical layout */
@@ -3180,5 +3179,45 @@ onUnmounted(() => {
 .tab-controls {
   display: flex;
   gap: 10px;
+}
+
+/* 记录对话框的自定义标签头部样式 */
+.record-tabs-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #dcdfe6;
+}
+
+.record-tabs-nav {
+  display: flex;
+  gap: 20px;
+}
+
+.tab-item {
+  padding: 8px 16px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  color: #606266;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.tab-item:hover {
+  color: #409eff;
+}
+
+.tab-item.active {
+  color: #409eff;
+  border-bottom-color: #409eff;
+}
+
+.record-close-btn {
+  flex-shrink: 0;
+}
+
+/* 隐藏 el-tabs 的默认头部 */
+.record-tabs :deep(.el-tabs__header) {
+  display: none;
 }
 </style>

@@ -201,7 +201,7 @@
     "special_tracker_domain": null,
     "group": "-HDArea,-EPiC,-HDATV,-HDApad",
     "description": "HDArea",
-    "migration": 2,
+    "migration": 0,
     "speed_limit": 10
   },
   {

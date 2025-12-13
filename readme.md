@@ -131,7 +131,7 @@ services:
 
 ### v3.2.5（2025.12.12）
 
-> **注:若报错“ModuleNotFoundError: No module named 'PIL'”则需要重新下载镜像进行更新。
+> **注:若报错“ModuleNotFoundError: No module named 'PIL'”则需要重新下载镜像进行更新，如仍然报错则删除 data 目录下的 updates 文件夹。
 13City限速12.5MB/s，代码不会修改非0的限速，需要手动修改**
 
 - 修复：“ModuleNotFoundError: No module named 'PIL'”报错

@@ -42,6 +42,7 @@ class BDInfoTask:
         self.last_progress_update: Optional[datetime] = None  # 最后进度更新时间
         self.last_progress_percent: float = 0.0  # 最后进度百分比
         self.temp_file_path: Optional[str] = None  # 临时文件路径
+        self.last_progress_data: Optional[Dict] = None  # 缓存的最新进度数据
 
     def __lt__(self, other):
         """优先级队列排序：优先级数字越小越优先"""
@@ -407,19 +408,22 @@ class BDInfoManager:
                     task.last_progress_update = datetime.now()
                     task.last_progress_percent = progress_percent
 
+                # 缓存最新进度数据
+                task.last_progress_data = {
+                    "progress_percent": progress_percent,
+                    "current_file": current_file,
+                    "elapsed_time": elapsed_time,
+                    "remaining_time": remaining_time,
+                    "disc_size": disc_size,
+                }
+
                 # 发送SSE进度更新
                 try:
                     from utils.sse_manager import sse_manager
 
                     sse_manager.send_progress_update(
                         task.seed_id,
-                        {
-                            "progress_percent": progress_percent,
-                            "current_file": current_file,
-                            "elapsed_time": elapsed_time,
-                            "remaining_time": remaining_time,
-                            "disc_size": disc_size,
-                        },
+                        task.last_progress_data,
                     )
                 except Exception as e:
                     logging.error(f"发送SSE进度更新失败: {e}")
@@ -436,108 +440,182 @@ class BDInfoManager:
                 del self.running_tasks[task_id]
 
     def _update_task_status(self, seed_id: str, status: str, task_id: str, **kwargs):
-        """更新数据库中的任务状态"""
-        try:
-            print(
-                f"[DEBUG] _update_task_status 被调用: seed_id={seed_id}, status={status}, task_id={task_id}"
-            )
+        """更新数据库中的任务状态，支持重试机制"""
+        import time
+        
+        max_retries = 3
+        retry_delay = 1  # 秒
+        
+        for attempt in range(max_retries):
+            conn = None
+            cursor = None
+            try:
+                print(
+                    f"[DEBUG] _update_task_status 被调用 (尝试 {attempt + 1}/{max_retries}): seed_id={seed_id}, status={status}, task_id={task_id}"
+                )
 
-            # 导入数据库管理器
-            from database import DatabaseManager
-            from config import get_db_config
+                # 导入数据库管理器
+                from database import DatabaseManager
+                from config import get_db_config
 
-            # 获取数据库配置并创建数据库管理器
-            config = get_db_config()
-            print(f"[DEBUG] 数据库配置: {config}")
-            db_manager = DatabaseManager(config)
+                # 获取数据库配置并创建数据库管理器
+                config = get_db_config()
+                print(f"[DEBUG] 数据库配置: {config}")
+                db_manager = DatabaseManager(config)
 
-            updates = {
-                "mediainfo_status": status,
-                "updated_at": datetime.now(),
-            }
-            
-            # 只有当 task_id 不为空时才更新
-            if task_id:
-                updates["bdinfo_task_id"] = task_id
+                updates = {
+                    "mediainfo_status": status,
+                    "updated_at": datetime.now(),
+                }
+                
+                # 只有当 task_id 不为空时才更新
+                if task_id:
+                    updates["bdinfo_task_id"] = task_id
 
-            if kwargs.get("started_at"):
-                updates["bdinfo_started_at"] = kwargs["started_at"]
-            if kwargs.get("completed_at"):
-                updates["bdinfo_completed_at"] = kwargs["completed_at"]
-            if kwargs.get("error_message"):
-                updates["bdinfo_error"] = kwargs["error_message"]
+                # 对于datetime字段，只有当值存在且不为空时才更新
+                started_at = kwargs.get("started_at")
+                if started_at:
+                    updates["bdinfo_started_at"] = started_at
+                
+                completed_at = kwargs.get("completed_at")
+                if completed_at:
+                    updates["bdinfo_completed_at"] = completed_at
+                
+                error_message = kwargs.get("error_message")
+                if error_message:
+                    updates["bdinfo_error"] = error_message
 
-            # 更新数据库 - 使用 id 字段而不是 seed_id
-            conn = db_manager._get_connection()
-            cursor = db_manager._get_cursor(conn)
+                # 更新数据库 - 使用 id 字段而不是 seed_id
+                conn = db_manager._get_connection()
+                cursor = db_manager._get_cursor(conn)
 
-            # seed_id 格式为 "hash_torrentId_siteName"，需要解析
-            if "_" in seed_id:
-                # 解析复合 seed_id
-                parts = seed_id.split("_")
-                print(f"[DEBUG] seed_id 解析结果: parts={parts}")
-                if len(parts) >= 3:
-                    # 最后一个部分是 site_name，中间是 torrent_id，前面是 hash
-                    site_name_val = parts[-1]
-                    torrent_id_val = parts[-2]
-                    hash_val = "_".join(parts[:-2])  # hash 可能包含下划线
-                    print(
-                        f"[DEBUG] 解析出复合主键: hash={hash_val}, torrent_id={torrent_id_val}, site_name={site_name_val}"
-                    )
+                # seed_id 格式为 "hash_torrentId_siteName"，需要解析
+                if "_" in seed_id:
+                    # 解析复合 seed_id
+                    parts = seed_id.split("_")
+                    print(f"[DEBUG] seed_id 解析结果: parts={parts}")
+                    if len(parts) >= 3:
+                        # 最后一个部分是 site_name，中间是 torrent_id，前面是 hash
+                        site_name_val = parts[-1]
+                        torrent_id_val = parts[-2]
+                        hash_val = "_".join(parts[:-2])  # hash 可能包含下划线
+                        print(
+                            f"[DEBUG] 解析出复合主键: hash={hash_val}, torrent_id={torrent_id_val}, site_name={site_name_val}"
+                        )
 
-                    # 直接使用解析出的复合主键更新
-                    if db_manager.db_type == "sqlite":
-                        set_clause = ", ".join([f"{k} = ?" for k in updates.keys()])
-                        values = list(updates.values()) + [hash_val, torrent_id_val, site_name_val]
-                        sql = f"UPDATE seed_parameters SET {set_clause} WHERE hash = ? AND torrent_id = ? AND site_name = ?"
-                        print(f"[DEBUG] 执行 SQL: {sql}")
-                        print(f"[DEBUG] 参数: {values}")
-                        cursor.execute(sql, values)
+                        # 仅使用hash作为主键更新
+                        if db_manager.db_type == "sqlite":
+                            set_clause = ", ".join([f"{k} = ?" for k in updates.keys()])
+                            values = list(updates.values()) + [hash_val]
+                            sql = f"UPDATE seed_parameters SET {set_clause} WHERE hash = ?"
+                            print(f"[DEBUG] 执行 SQL: {sql}")
+                            print(f"[DEBUG] 参数: {values}")
+                            cursor.execute(sql, values)
+                        else:
+                            set_clause = ", ".join([f"{k} = %s" for k in updates.keys()])
+                            values = list(updates.values()) + [hash_val]
+                            sql = f"UPDATE seed_parameters SET {set_clause} WHERE hash = %s"
+                            print(f"[DEBUG] 执行 SQL: {sql}")
+                            print(f"[DEBUG] 参数: {values}")
+                            cursor.execute(sql, values)
                     else:
-                        set_clause = ", ".join([f"{k} = %s" for k in updates.keys()])
-                        values = list(updates.values()) + [hash_val, torrent_id_val, site_name_val]
-                        sql = f"UPDATE seed_parameters SET {set_clause} WHERE hash = %s AND torrent_id = %s AND site_name = %s"
-                        print(f"[DEBUG] 执行 SQL: {sql}")
-                        print(f"[DEBUG] 参数: {values}")
-                        cursor.execute(sql, values)
+                        # 如果格式不对，尝试使用 CONCAT 查询，但只提取hash部分
+                        if db_manager.db_type == "sqlite":
+                            cursor.execute(
+                                "SELECT hash FROM seed_parameters WHERE hash || '_' || torrent_id || '_' || site_name = ?",
+                                (seed_id,),
+                            )
+                        else:
+                            cursor.execute(
+                                "SELECT hash FROM seed_parameters WHERE CONCAT(hash, '_', torrent_id, '_', site_name) = %s",
+                                (seed_id,),
+                            )
+
+                        result = cursor.fetchone()
+                        if result:
+                            hash_val = result[0]
+                            # 仅使用hash作为主键更新
+                            if db_manager.db_type == "sqlite":
+                                set_clause = ", ".join([f"{k} = ?" for k in updates.keys()])
+                                values = list(updates.values()) + [hash_val]
+                                sql = f"UPDATE seed_parameters SET {set_clause} WHERE hash = ?"
+                            else:
+                                set_clause = ", ".join([f"{k} = %s" for k in updates.keys()])
+                                values = list(updates.values()) + [hash_val]
+                                sql = f"UPDATE seed_parameters SET {set_clause} WHERE hash = %s"
                 else:
-                    # 如果格式不对，尝试使用 CONCAT 查询
-                    if db_manager.db_type == "sqlite":
-                        cursor.execute(
-                            "SELECT hash, torrent_id, site_name FROM seed_parameters WHERE hash || '_' || torrent_id || '_' || site_name = ?",
-                            (seed_id,),
-                        )
-                    else:
-                        cursor.execute(
-                            "SELECT hash, torrent_id, site_name FROM seed_parameters WHERE CONCAT(hash, '_', torrent_id, '_', site_name) = %s",
-                            (seed_id,),
-                        )
+                    # 如果没有下划线，说明格式不对，记录错误
+                    logging.error(f"无效的 seed_id 格式: {seed_id}")
+                    raise ValueError(f"Invalid seed_id format: {seed_id}")
 
-                    result = cursor.fetchone()
-                    if result:
-                        hash_val, torrent_id_val, site_name_val = result[0], result[1], result[2]
-                        set_clause = ", ".join([f"{k} = %s" for k in updates.keys()])
-                        values = list(updates.values()) + [hash_val, torrent_id_val, site_name_val]
-                        cursor.execute(
-                            f"UPDATE seed_parameters SET {set_clause} WHERE hash = %s AND torrent_id = %s AND site_name = %s",
-                            values,
-                        )
-            else:
-                # 如果没有下划线，说明格式不对，记录错误
-                logging.error(f"无效的 seed_id 格式: {seed_id}")
-                raise ValueError(f"Invalid seed_id format: {seed_id}")
+                print(f"[DEBUG] 准备提交事务...")
+                conn.commit()
+                print(f"[DEBUG] 事务已提交")
+                
+                # 检查是否实际更新了记录
+                if cursor.rowcount == 0:
+                    print(f"[DEBUG] 警告：没有找到匹配的记录进行更新 (seed_id={seed_id})")
+                    # 如果是第一次尝试且没有找到记录，可能是时机问题，等待一段时间后重试
+                    if attempt < max_retries - 1:
+                        print(f"[DEBUG] 等待 {retry_delay} 秒后重试...")
+                        time.sleep(retry_delay)
+                        retry_delay *= 2  # 指数退避
+                        continue
+                
+                cursor.close()
+                conn.close()
 
-            print(f"[DEBUG] 准备提交事务...")
-            conn.commit()
-            print(f"[DEBUG] 事务已提交")
-            cursor.close()
-            conn.close()
+                logging.info(f"已更新 BDInfo 任务状态: seed_id={seed_id}, status={status}")
+                print(f"[DEBUG] BDInfo 任务状态更新完成")
+                
+                # 如果更新成功，跳出循环
+                break
 
-            logging.info(f"已更新 BDInfo 任务状态: seed_id={seed_id}, status={status}")
-            print(f"[DEBUG] BDInfo 任务状态更新完成")
+            except Exception as e:
+                logging.error(f"更新 BDInfo 任务状态失败 (尝试 {attempt + 1}/{max_retries}): {e}", exc_info=True)
+                
+                # 清理资源
+                if cursor:
+                    try:
+                        cursor.close()
+                    except:
+                        pass
+                if conn:
+                    try:
+                        conn.rollback()
+                        conn.close()
+                    except:
+                        pass
+                
+                # 如果是最后一次尝试，添加到重试队列
+                if attempt == max_retries - 1:
+                    print(f"[DEBUG] 所有重试均失败，添加到重试队列: {seed_id}")
+                    self._add_to_retry_queue(seed_id, status, task_id, **kwargs)
+                else:
+                    # 等待一段时间后重试
+                    print(f"[DEBUG] 等待 {retry_delay} 秒后重试...")
+                    time.sleep(retry_delay)
+                    retry_delay *= 2  # 指数退避
 
-        except Exception as e:
-            logging.error(f"更新 BDInfo 任务状态失败: {e}", exc_info=True)
+    def _add_to_retry_queue(self, seed_id: str, status: str, task_id: str, **kwargs):
+        """添加到重试队列"""
+        retry_data = {
+            "seed_id": seed_id,
+            "status": status,
+            "task_id": task_id,
+            "kwargs": kwargs,
+            "timestamp": datetime.now(),
+        }
+        # 这里可以存储到内存队列或临时文件
+        # 为了简单起见，我们先记录到日志
+        logging.warning(f"BDInfo 状态更新失败，已添加到重试队列: {seed_id}")
+        print(f"[DEBUG] 重试队列数据: {retry_data}")
+        
+        # TODO: 实现真正的重试队列机制
+        # 可以考虑以下选项：
+        # 1. 存储到内存中的队列（重启会丢失）
+        # 2. 存储到临时文件或数据库表
+        # 3. 使用消息队列系统
 
     def _update_seed_mediainfo(self, seed_id: str, bdinfo_content: str):
         """更新种子数据中的 mediainfo 字段"""
@@ -557,7 +635,7 @@ class BDInfoManager:
 
             # seed_id 格式为 "hash_torrentId_siteName"，需要解析
             if "_" in seed_id:
-                # 解析复合 seed_id
+                # 解析复合 seed_id，但现在只使用hash作为主键
                 parts = seed_id.split("_")
                 if len(parts) >= 3:
                     # 最后一个部分是 site_name，中间是 torrent_id，前面是 hash
@@ -565,29 +643,27 @@ class BDInfoManager:
                     torrent_id_val = parts[-2]
                     hash_val = "_".join(parts[:-2])  # hash 可能包含下划线
 
-                    # 直接使用解析出的复合主键更新
+                    # 仅使用hash作为主键更新记录
                     if db_manager.db_type == "sqlite":
-                        sql = "UPDATE seed_parameters SET mediainfo = ?, updated_at = ? WHERE hash = ? AND torrent_id = ? AND site_name = ?"
+                        sql = "UPDATE seed_parameters SET mediainfo = ?, updated_at = ?, bdinfo_completed_at = ?, mediainfo_status = 'completed' WHERE hash = ?"
                         values = (
                             bdinfo_content,
                             datetime.now(),
+                            datetime.now(),
                             hash_val,
-                            torrent_id_val,
-                            site_name_val,
                         )
                         print(f"[DEBUG] 执行 SQL: {sql}")
                         print(
-                            f"[DEBUG] 参数: mediainfo长度={len(bdinfo_content)}, hash={hash_val}, torrent_id={torrent_id_val}, site_name={site_name_val}"
+                            f"[DEBUG] 参数: mediainfo长度={len(bdinfo_content)}, hash={hash_val}"
                         )
                         cursor.execute(sql, values)
                     else:
-                        sql = "UPDATE seed_parameters SET mediainfo = %s, updated_at = %s WHERE hash = %s AND torrent_id = %s AND site_name = %s"
+                        sql = "UPDATE seed_parameters SET mediainfo = %s, updated_at = %s, bdinfo_completed_at = %s, mediainfo_status = 'completed' WHERE hash = %s"
                         values = (
                             bdinfo_content,
                             datetime.now(),
+                            datetime.now(),
                             hash_val,
-                            torrent_id_val,
-                            site_name_val,
                         )
                         print(f"[DEBUG] 执行 SQL: {sql}")
                         print(
@@ -595,31 +671,42 @@ class BDInfoManager:
                         )
                         cursor.execute(sql, values)
                 else:
-                    # 如果格式不对，尝试使用 CONCAT 查询
+                    # 如果格式不对，尝试使用 CONCAT 查询，但只提取hash部分
                     if db_manager.db_type == "sqlite":
                         cursor.execute(
-                            "SELECT hash, torrent_id, site_name FROM seed_parameters WHERE hash || '_' || torrent_id || '_' || site_name = ?",
+                            "SELECT hash FROM seed_parameters WHERE hash || '_' || torrent_id || '_' || site_name = ?",
                             (seed_id,),
                         )
                     else:
                         cursor.execute(
-                            "SELECT hash, torrent_id, site_name FROM seed_parameters WHERE CONCAT(hash, '_', torrent_id, '_', site_name) = %s",
+                            "SELECT hash FROM seed_parameters WHERE CONCAT(hash, '_', torrent_id, '_', site_name) = %s",
                             (seed_id,),
                         )
 
                     result = cursor.fetchone()
                     if result:
-                        hash_val, torrent_id_val, site_name_val = result[0], result[1], result[2]
-                        cursor.execute(
-                            "UPDATE seed_parameters SET mediainfo = %s, updated_at = %s WHERE hash = %s AND torrent_id = %s AND site_name = %s",
-                            (
-                                bdinfo_content,
-                                datetime.now(),
-                                hash_val,
-                                torrent_id_val,
-                                site_name_val,
-                            ),
-                        )
+                        hash_val = result[0]
+                        # 仅使用hash作为主键更新
+                        if db_manager.db_type == "sqlite":
+                            cursor.execute(
+                                "UPDATE seed_parameters SET mediainfo = ?, updated_at = ?, bdinfo_completed_at = ?, mediainfo_status = 'completed' WHERE hash = ?",
+                                (
+                                    bdinfo_content,
+                                    datetime.now(),
+                                    datetime.now(),
+                                    hash_val,
+                                ),
+                            )
+                        else:
+                            cursor.execute(
+                                "UPDATE seed_parameters SET mediainfo = %s, updated_at = %s, bdinfo_completed_at = %s, mediainfo_status = 'completed' WHERE hash = %s",
+                                (
+                                    bdinfo_content,
+                                    datetime.now(),
+                                    datetime.now(),
+                                    hash_val,
+                                ),
+                            )
             else:
                 # 如果没有下划线，说明格式不对，记录错误
                 logging.error(f"无效的 seed_id 格式: {seed_id}")
@@ -986,20 +1073,26 @@ class BDInfoManager:
         """判断任务是否真的卡死"""
         
         try:
-            # 1. 检查运行时间是否过长
+            # 1. 检查运行时间是否过长（降低门槛到1分钟）
             running_time = (datetime.now() - started_at).total_seconds()
-            if running_time < 300:  # 5分钟内不算卡死
+            if running_time < 60:  # 1分钟内不算卡死
                 return False
+            
+            print(f"[DEBUG] 检查任务卡死状态: task_id={task_id}, 运行时间={running_time:.1f}秒")
             
             # 2. 检查系统中是否有相关进程
-            if self._find_bdinfo_process_for_task(task_id):
-                return False
+            has_process = self._find_bdinfo_process_for_task(task_id)
+            print(f"[DEBUG] 检查进程状态: task_id={task_id}, 有进程={has_process}")
             
             # 3. 检查临时文件是否有更新
-            if self._is_temp_file_updating_for_task(task_id):
-                return False
+            is_file_updating = self._is_temp_file_updating_for_task(task_id)
+            print(f"[DEBUG] 检查文件更新: task_id={task_id}, 文件更新中={is_file_updating}")
             
-            return True
+            # 如果进程不存在且文件长时间未更新，则认为卡死
+            is_stuck = not has_process and not is_file_updating
+            print(f"[DEBUG] 任务卡死判断结果: task_id={task_id}, 是否卡死={is_stuck}")
+            
+            return is_stuck
             
         except Exception as e:
             logging.error(f"判断任务卡死状态失败: {e}", exc_info=True)
@@ -1009,18 +1102,33 @@ class BDInfoManager:
         """查找任务对应的 BDInfo 进程"""
         
         try:
+            found_matching_process = False
+            total_bdinfo_processes = 0
+            
             # 遍历所有进程，查找 BDInfo 相关进程
             for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
                 try:
                     cmdline = proc.info.get('cmdline', [])
-                    if cmdline and any('BDInfo' in str(arg) for arg in cmdline):
+                    name = proc.info.get('name', '')
+                    
+                    # 检查是否为 BDInfo 相关进程
+                    is_bdinfo_process = (cmdline and any('BDInfo' in str(arg) for arg in cmdline)) or (name and 'bdinfo' in name.lower())
+                    
+                    if is_bdinfo_process:
+                        total_bdinfo_processes += 1
                         # 检查命令行中是否包含任务ID
-                        if any(task_id in str(arg) for arg in cmdline):
-                            return True
+                        cmdline_str = ' '.join(cmdline) if cmdline else ""
+                        if task_id in cmdline_str:
+                            print(f"[DEBUG] 找到匹配的 BDInfo 进程: PID={proc.pid}, 命令行={cmdline_str}")
+                            found_matching_process = True
+                        
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
                     continue
             
-            return False
+            print(f"[DEBUG] 任务 {task_id} 进程查找结果: 找到匹配进程={found_matching_process}, 系统总BDInfo进程数={total_bdinfo_processes}")
+            
+            # 只有找到与任务ID匹配的进程时才返回 True
+            return found_matching_process
             
         except Exception as e:
             logging.error(f"查找进程失败: {e}", exc_info=True)
@@ -1034,18 +1142,31 @@ class BDInfoManager:
             from config import TEMP_DIR
             
             # 查找包含任务ID的临时文件
+            matching_files = []
             for filename in os.listdir(TEMP_DIR):
                 if task_id in filename and filename.startswith('bdinfo_'):
                     filepath = os.path.join(TEMP_DIR, filename)
                     if os.path.exists(filepath):
-                        # 检查文件最后修改时间
-                        file_mtime = os.path.getmtime(filepath)
-                        now = time.time()
-                        
-                        # 如果文件在10分钟内有更新，认为仍在处理
-                        if (now - file_mtime) < 600:
-                            return True
+                        matching_files.append(filepath)
             
+            if not matching_files:
+                print(f"[DEBUG] 没有找到任务 {task_id} 的临时文件")
+                return False
+            
+            # 检查所有匹配文件的修改时间
+            now = time.time()
+            for filepath in matching_files:
+                file_mtime = os.path.getmtime(filepath)
+                time_diff = now - file_mtime
+                
+                print(f"[DEBUG] 检查临时文件: {filepath}, 最后修改时间差: {time_diff:.1f}秒")
+                
+                # 如果任何文件在5分钟内有更新，认为仍在处理
+                if time_diff < 300:
+                    print(f"[DEBUG] 发现最近更新的文件: {filepath}")
+                    return True
+            
+            print(f"[DEBUG] 所有临时文件都已超过5分钟未更新")
             return False
             
         except Exception as e:
@@ -1120,6 +1241,19 @@ class BDInfoManager:
             logging.info(f"已重置种子 {seed_id} 的任务状态")
         except Exception as e:
             logging.error(f"重置任务状态失败: {e}", exc_info=True)
+    
+    def get_current_progress(self, seed_id: str) -> Optional[Dict]:
+        """获取指定 seed_id 的当前进度"""
+        with self.lock:
+            for task in self.tasks.values():
+                if task.seed_id == seed_id and task.status == "processing_bdinfo":
+                    return {
+                        "progress_percent": task.progress_percent,
+                        "current_file": task.current_file,
+                        "elapsed_time": task.elapsed_time,
+                        "remaining_time": task.remaining_time,
+                    }
+        return None
 
 
 # 全局 BDInfo 管理器实例

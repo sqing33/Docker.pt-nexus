@@ -813,8 +813,17 @@ def update_db_seed_info():
                 }
             }
 
-            update_result = seed_param_model.update_parameters(
-                torrent_id, english_site_name, final_parameters)
+            # 需要先获取hash值
+            hash_value = seed_param_model.search_torrent_hash(torrent_name, english_site_name)
+            if hash_value:
+                update_result = seed_param_model.update_parameters(hash_value, final_parameters)
+            else:
+                # 如果找不到hash，尝试插入新记录
+                final_parameters["hash"] = f"manual_{torrent_id}_{english_site_name}"  # 临时hash
+                final_parameters["torrent_id"] = torrent_id
+                final_parameters["site_name"] = english_site_name
+                # 确保传递正确的 torrent_id 和 site_name
+                update_result = seed_param_model.save_parameters(final_parameters["hash"], torrent_id, english_site_name, final_parameters)
 
             if update_result:
                 logging.info(
@@ -3074,6 +3083,18 @@ def refresh_mediainfo_async():
         # 调用异步版本的 MediaInfo 处理函数
         from utils.mediainfo import upload_data_mediaInfo_async
         
+        # 解析 seed_id 获取复合主键组件
+        hash_value = torrent_id = site_name = None
+        if "_" in seed_id:
+            parts = seed_id.split("_")
+            if len(parts) >= 3:
+                site_name = parts[-1]
+                torrent_id = parts[-2]
+                hash_value = "_".join(parts[:-2])
+        
+        # 获取站点中文名（如果需要的话）
+        nickname = data.get("nickname")  # 从请求中获取站点中文名
+        
         new_mediainfo, is_mediainfo, is_bdinfo, bdinfo_info = upload_data_mediaInfo_async(
             mediaInfo=current_mediainfo,
             save_path=save_path,
@@ -3082,7 +3103,12 @@ def refresh_mediainfo_async():
             downloader_id=downloader_id,
             torrent_name=torrent_name,
             force_refresh=force_refresh,
-            priority=priority
+            priority=priority,
+            # 新增参数：预写入所需的基本信息
+            hash_value=hash_value,
+            torrent_id=torrent_id,
+            site_name=site_name,
+            nickname=nickname,
         )
         
         # 即使 MediaInfo 提取失败，如果 BDInfo 任务已添加，也返回成功
@@ -3319,34 +3345,34 @@ def restart_bdinfo():
         conn = migrate_bp.db_manager._get_connection()
         cursor = migrate_bp.db_manager._get_cursor(conn)
         
-        # 解析复合 seed_id
+        # 解析复合 seed_id，但只使用hash作为主键
         if "_" in seed_id:
             parts = seed_id.split("_")
             if len(parts) >= 3:
-                site_name_val = parts[-1]
-                torrent_id_val = parts[-2]
+                # 最后一个部分是 site_name，中间是 torrent_id，前面是 hash
                 hash_val = "_".join(parts[:-2])
                 
+                # 仅使用hash作为主键查询
                 if migrate_bp.db_manager.db_type == "sqlite":
                     cursor.execute(
-                        "SELECT save_path FROM seed_parameters WHERE hash = ? AND torrent_id = ? AND site_name = ?",
-                        (hash_val, torrent_id_val, site_name_val)
+                        "SELECT save_path FROM seed_parameters WHERE hash = ?",
+                        (hash_val,)
                     )
                 else:
                     cursor.execute(
-                        "SELECT save_path FROM seed_parameters WHERE hash = %s AND torrent_id = %s AND site_name = %s",
-                        (hash_val, torrent_id_val, site_name_val)
+                        "SELECT save_path FROM seed_parameters WHERE hash = %s",
+                        (hash_val,)
                     )
             else:
-                # 如果格式不对，尝试使用 CONCAT 查询
+                # 如果格式不对，尝试使用 CONCAT 查询，但只提取hash部分
                 if migrate_bp.db_manager.db_type == "sqlite":
                     cursor.execute(
-                        "SELECT save_path FROM seed_parameters WHERE hash || '_' || torrent_id || '_' || site_name = ?",
+                        "SELECT hash, save_path FROM seed_parameters WHERE hash || '_' || torrent_id || '_' || site_name = ?",
                         (seed_id,)
                     )
                 else:
                     cursor.execute(
-                        "SELECT save_path FROM seed_parameters WHERE CONCAT(hash, '_', torrent_id, '_', site_name) = %s",
+                        "SELECT hash, save_path FROM seed_parameters WHERE CONCAT(hash, '_', torrent_id, '_', site_name) = %s",
                         (seed_id,)
                     )
         else:

@@ -1464,6 +1464,9 @@ const bdinfoProgress = ref({
   remainingTime: '',
 })
 
+// BDInfo 状态变量
+const bdinfoStatus = ref('')
+
 // BDInfo 碟片大小
 const discSize = ref(0)
 
@@ -1783,8 +1786,90 @@ const refreshMediainfo = async () => {
   }
 }
 
+// 检查 BDInfo 状态并自动启动进度显示
+const checkAndStartBDInfoProgress = async (seedId: string, isFromFetch: boolean = false) => {
+  const maxRetries = isFromFetch ? 5 : 3  // 从抓取流程调用时增加重试次数
+  const retryDelay = isFromFetch ? 2000 : 1000  // 从抓取流程调用时增加延迟
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await axios.get(`/api/migrate/bdinfo_status/${seedId}`)
+      
+      // 添加调试信息
+      console.log(`BDInfo 状态 API 响应 (尝试 ${attempt}/${maxRetries}):`, response.data)
+      
+      // 修复：直接检查响应数据，不依赖 success 字段
+      const data = response.data
+      if (data && !data.error) {
+        // 修复：从正确的字段获取状态
+        const status = data.mediainfo_status || data.task_status?.status
+        
+        if (status === 'processing_bdinfo' || status === 'queued') {
+          // 启动 BDInfo 进度显示
+          console.log(`检测到 BDInfo 任务正在进行中: ${status}`)
+          console.log('任务 ID:', data.bdinfo_task_id)
+          console.log('进度信息:', data.progress_info)
+          
+          startBDInfoSSE()
+          bdinfoStatus.value = status
+          return  // 成功检测到任务，退出重试循环
+        } else if (status === 'completed' || status === 'failed') {
+          console.log(`BDInfo 任务已结束: ${status}，无需启动进度显示`)
+          return  // 任务已结束，退出重试循环
+        } else {
+          console.log(`BDInfo 任务状态: ${status}，尝试 ${attempt}/${maxRetries}`)
+        }
+      } else {
+        console.warn('BDInfo 状态 API 返回错误:', data?.error)
+      }
+    } catch (error) {
+      // 增强错误处理
+      if (error.response) {
+        // HTTP 错误响应
+        const status = error.response.status
+        if (status === 404) {
+          console.warn(`种子记录不存在: ${seedId} (尝试 ${attempt}/${maxRetries})`)
+        } else if (status === 500) {
+          console.warn('服务器内部错误，检查 BDInfo 状态失败')
+        } else {
+          console.warn(`HTTP ${status}: 检查 BDInfo 状态失败`)
+        }
+      } else if (error.request) {
+        // 网络错误
+        console.warn('网络连接问题，无法检查 BDInfo 状态')
+      } else {
+        // 其他错误
+        console.warn('检查 BDInfo 状态失败:', error.message)
+      }
+    }
+    
+    // 如果不是最后一次尝试，等待后重试
+    if (attempt < maxRetries) {
+      console.log(`等待 ${retryDelay}ms 后重试检查 BDInfo 状态...`)
+      await new Promise(resolve => setTimeout(resolve, retryDelay))
+    }
+  }
+  
+  // 所有重试都失败了
+  console.warn(`经过 ${maxRetries} 次尝试，未能检测到 BDInfo 任务`)
+}
+
 // BDInfo SSE相关函数
 const startBDInfoSSE = () => {
+  console.log('启动 BDInfo SSE 连接...')
+  
+  // 验证 seed_id
+  if (!torrentData.value?.seed_id) {
+    console.error('seed_id 未设置，无法建立 SSE 连接')
+    ElNotification.error({
+      title: '连接错误',
+      message: '种子ID未设置，无法建立进度连接',
+    })
+    return
+  }
+  
+  console.log(`使用 seed_id 建立 SSE 连接: ${torrentData.value.seed_id}`)
+  
   // 关闭之前的连接
   stopBDInfoSSE(false)
 
@@ -1792,18 +1877,40 @@ const startBDInfoSSE = () => {
   bdinfoProgress.value = {
     visible: true,
     percent: 0,
-    currentFile: '准备中...',
+    currentFile: '正在连接...',
     elapsedTime: '',
     remainingTime: '',
   }
 
   // 创建EventSource连接
   const url = `/api/migrate/bdinfo_sse/${torrentData.value.seed_id}`
+  console.log(`SSE 连接 URL: ${url}`)
   bdinfoEventSource.value = new EventSource(url)
+  
+  // 添加连接超时处理
+  let connectionTimeout: NodeJS.Timeout | null = setTimeout(() => {
+    if (bdinfoEventSource.value?.readyState === EventSource.CONNECTING) {
+      console.warn('SSE 连接超时，尝试重新连接')
+      bdinfoEventSource.value?.close()
+      // 尝试重新连接一次
+      if (bdinfoProgress.value.visible) {
+        setTimeout(() => {
+          console.log('尝试重新建立 SSE 连接...')
+          startBDInfoSSE()
+        }, 2000)
+      }
+    }
+  }, 5000) // 5秒超时
 
   // 处理连接成功
   bdinfoEventSource.value.onopen = () => {
     console.log('BDInfo SSE连接已建立')
+    if (connectionTimeout) {
+      clearTimeout(connectionTimeout)
+      connectionTimeout = null
+    }
+    // 请求当前进度状态
+    requestCurrentProgress()
   }
 
   // 处理消息
@@ -1870,12 +1977,37 @@ const startBDInfoSSE = () => {
   // 处理错误
   bdinfoEventSource.value.onerror = (error) => {
     console.error('SSE连接错误:', error)
-    ElNotification.error({
-      title: '连接错误',
-      message: 'BDInfo 进度更新连接中断，请刷新页面重试',
-    })
-    bdinfoProgress.value.visible = false
-    stopBDInfoSSE(false)
+    if (connectionTimeout) {
+      clearTimeout(connectionTimeout)
+      connectionTimeout = null
+    }
+    
+    // 检查连接状态
+    const readyState = bdinfoEventSource.value?.readyState
+    console.log(`SSE 连接状态: ${readyState} (0=CONNECTING, 1=OPEN, 2=CLOSED)`)
+    
+    // 如果是连接中或已关闭，尝试重连
+    if (readyState === EventSource.CONNECTING || readyState === EventSource.CLOSED) {
+      if (bdinfoProgress.value.visible) {
+        console.log('尝试重新建立 SSE 连接...')
+        bdinfoProgress.value.currentFile = '连接中断，正在重连...'
+        
+        // 延迟2秒后重连
+        setTimeout(() => {
+          if (bdinfoProgress.value.visible) {
+            startBDInfoSSE()
+          }
+        }, 2000)
+      }
+    } else {
+      // 其他错误，显示错误通知
+      ElNotification.error({
+        title: '连接错误',
+        message: 'BDInfo 进度更新连接中断，请刷新页面重试',
+      })
+      bdinfoProgress.value.visible = false
+      stopBDInfoSSE(false)
+    }
   }
 }
 
@@ -1892,6 +2024,39 @@ const stopBDInfoSSE = (showNotification: boolean | Event = true) => {
       title: '已取消',
       message: 'BDInfo 获取已取消',
     })
+  }
+}
+
+// 请求当前进度
+const requestCurrentProgress = async () => {
+  if (!torrentData.value?.seed_id) {
+    console.warn('seed_id 未设置，无法请求当前进度')
+    return
+  }
+  
+  try {
+    console.log('请求当前 BDInfo 进度状态...')
+    const response = await axios.get(`/api/migrate/bdinfo_status/${torrentData.value.seed_id}`)
+    
+    if (response.data && response.data.task_status) {
+      const taskStatus = response.data.task_status
+      console.log('获取到当前进度状态:', taskStatus)
+      
+      // 如果任务正在进行中，更新进度显示
+      if (taskStatus.status === 'processing_bdinfo') {
+        bdinfoProgress.value = {
+          visible: true,
+          percent: Math.round(taskStatus.progress_percent || 0),
+          currentFile: taskStatus.current_file || '处理中...',
+          elapsedTime: taskStatus.elapsed_time || '',
+          remainingTime: taskStatus.remaining_time || '',
+        }
+        console.log(`更新进度显示: ${taskStatus.progress_percent || 0}%`)
+      }
+    }
+  } catch (error) {
+    console.error('请求当前进度失败:', error)
+    // 静默失败，不影响主要功能
   }
 }
 
@@ -2385,6 +2550,9 @@ const fetchTorrentInfo = async () => {
         isDataFromDatabase.value = true
         activeStep.value = 0
 
+        // 检查 BDInfo 进度状态（从抓取流程调用，增加重试次数和延迟）
+        checkAndStartBDInfoProgress(compositeSeedId, true)
+
         nextTick(() => {
           checkScreenshotValidity()
         })
@@ -2493,6 +2661,9 @@ const fetchTorrentInfo = async () => {
         console.warn('后端未返回taskId，使用标识符')
       }
       isDataFromDatabase.value = true // Mark that data was loaded from database
+
+      // 检查 BDInfo 进度状态（从数据库读取，使用默认重试设置）
+      checkAndStartBDInfoProgress(compositeSeedId, false)
 
       // 自动提取链接的逻辑保持不变
       if (

@@ -1292,18 +1292,41 @@ class TorrentMigrator:
                                           "正在提取 MediaInfo...", "processing")
 
                 # 生成种子ID用于BDInfo任务跟踪
-                import uuid
-                temp_seed_id = str(uuid.uuid4())
+                # 使用复合主键格式: hash_torrentId_siteName
+                # 从search_term中提取torrent_id（在批量处理中search_term就是torrent_id）
+                torrent_id = self.search_term if self.search_term else "unknown"
+                # 从source_site中获取site_name，使用英文站点名而不是中文名
+                site_name = self.SOURCE_SITE_CODE if hasattr(self, 'SOURCE_SITE_CODE') else "unknown"
+                
+                # 获取真实的hash值
+                seed_hash = "batch_seed"  # 默认值
+                try:
+                    # 使用与保存种子参数相同的方法获取hash
+                    temp_seed_param_model = SeedParameter(self.db_manager)
+                    real_hash = temp_seed_param_model.search_torrent_hash(
+                        self.torrent_name, self.SOURCE_NAME)
+                    if real_hash:
+                        seed_hash = real_hash
+                except Exception as e:
+                    print(f"获取hash失败，使用默认值: {e}")
+                
+                # 构建复合seed_id
+                composite_seed_id = f"{seed_hash}_{torrent_id}_{site_name}"
                 
                 # 使用异步版本的MediaInfo处理
                 mediainfo, is_mediainfo, is_bdinfo, bdinfo_async = upload_data_mediaInfo_async(
                     mediaInfo=mediainfo_text
                     if mediainfo_text else "未找到 Mediainfo 或 BDInfo",
                     save_path=self.save_path,
-                    seed_id=temp_seed_id,
+                    seed_id=composite_seed_id,
                     torrent_name=processed_torrent_name,
                     downloader_id=self.downloader_id,
-                    priority=2  # 批量获取使用普通优先级
+                    priority=2,  # 批量获取使用普通优先级
+                    # 新增参数：预写入所需的基本信息
+                    hash_value=seed_hash,
+                    torrent_id=torrent_id,
+                    site_name=site_name,
+                    nickname=self.SOURCE_NAME,  # 传递站点中文名
                 )
 
                 if self.task_id:
@@ -1842,7 +1865,11 @@ class TorrentMigrator:
                     log_streamer.emit_log(self.task_id, "成功获取参数",
                                           "正在保存参数到数据库...", "processing")
 
-                # 保存到数据库（优先）和JSON文件（后备），使用英文站点名作为标识
+                # 保存到数据库（优先）和JSON文件（后备），使用hash作为唯一主键
+                # 将torrent_id和site_name作为普通字段保存到parameters中
+                seed_parameters["torrent_id"] = torrent_id
+                seed_parameters["site_name"] = self.SOURCE_SITE_CODE
+                # 确保传递正确的 torrent_id 和 site_name
                 save_result = seed_param_model.save_parameters(
                     hash, torrent_id, self.SOURCE_SITE_CODE, seed_parameters)
                 if save_result:
