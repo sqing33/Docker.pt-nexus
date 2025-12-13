@@ -6,13 +6,14 @@ BDInfo 任务管理器
 
 import logging
 import os
+import psutil
 import subprocess
 import threading
 import time
 import uuid
 from datetime import datetime
 from queue import PriorityQueue, Empty
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Tuple
 
 
 class BDInfoTask:
@@ -35,6 +36,12 @@ class BDInfoTask:
         self.current_file: str = ""
         self.elapsed_time: str = ""
         self.remaining_time: str = ""
+        # 进程跟踪字段
+        self.process: Optional[subprocess.Popen] = None  # 子进程引用
+        self.process_pid: Optional[int] = None  # 进程PID
+        self.last_progress_update: Optional[datetime] = None  # 最后进度更新时间
+        self.last_progress_percent: float = 0.0  # 最后进度百分比
+        self.temp_file_path: Optional[str] = None  # 临时文件路径
 
     def __lt__(self, other):
         """优先级队列排序：优先级数字越小越优先"""
@@ -56,6 +63,9 @@ class BDInfoTask:
             "current_file": self.current_file,
             "elapsed_time": self.elapsed_time,
             "remaining_time": self.remaining_time,
+            "process_pid": self.process_pid,
+            "last_progress_update": self.last_progress_update.isoformat() if self.last_progress_update else None,
+            "last_progress_percent": self.last_progress_percent,
         }
 
 
@@ -89,6 +99,16 @@ class BDInfoManager:
                     target=self._worker_loop, name="BDInfoManager-Worker", daemon=True
                 )
                 self.worker_thread.start()
+                
+                # 启动健康监控线程
+                self.health_monitor_thread = threading.Thread(
+                    target=self._health_monitor_loop, name="BDInfoManager-HealthMonitor", daemon=True
+                )
+                self.health_monitor_thread.start()
+                
+                # 启动时恢复遗留任务
+                self.recover_orphaned_tasks()
+                
                 logging.info("BDInfo 管理器已启动")
 
     def stop(self):
@@ -122,8 +142,8 @@ class BDInfoManager:
             self.stats["total_tasks"] += 1
             self.stats["queued_tasks"] += 1
 
-            # 更新数据库状态
-            self._update_task_status(task.seed_id, "processing_bdinfo", task.id)
+            # 更新数据库状态 - 初始状态设为等待中
+            self._update_task_status(task.seed_id, "queued", task.id)
 
             logging.info(f"BDInfo 任务已添加: {task.id} (种子ID: {seed_id}, 优先级: {priority})")
             return task.id
@@ -256,7 +276,7 @@ class BDInfoManager:
 
             print(f"[DEBUG] 准备调用 _extract_bdinfo，路径: {actual_save_path}")
             # 调用 BDInfo 提取函数
-            from utils.mediainfo import _extract_bdinfo_with_progress
+            from utils import _extract_bdinfo_with_progress
 
             bdinfo_content = _extract_bdinfo_with_progress(actual_save_path, task.id, self)
             print(
@@ -370,10 +390,22 @@ class BDInfoManager:
         with self.lock:
             task = self.tasks.get(task_id)
             if task:
+                # 记录进度变化
+                old_percent = task.progress_percent
                 task.progress_percent = progress_percent
                 task.current_file = current_file
                 task.elapsed_time = elapsed_time
                 task.remaining_time = remaining_time
+                
+                # 只有进度真正变化时才更新时间戳
+                if abs(progress_percent - old_percent) > 0.01:  # 0.01% 的精度
+                    task.last_progress_update = datetime.now()
+                    task.last_progress_percent = progress_percent
+                
+                # 如果是第一次更新，设置初始时间戳
+                if task.last_progress_update is None:
+                    task.last_progress_update = datetime.now()
+                    task.last_progress_percent = progress_percent
 
                 # 发送SSE进度更新
                 try:
@@ -421,9 +453,12 @@ class BDInfoManager:
 
             updates = {
                 "mediainfo_status": status,
-                "bdinfo_task_id": task_id,
                 "updated_at": datetime.now(),
             }
+            
+            # 只有当 task_id 不为空时才更新
+            if task_id:
+                updates["bdinfo_task_id"] = task_id
 
             if kwargs.get("started_at"):
                 updates["bdinfo_started_at"] = kwargs["started_at"]
@@ -601,6 +636,490 @@ class BDInfoManager:
 
         except Exception as e:
             logging.error(f"更新种子 mediainfo 失败: {e}", exc_info=True)
+
+    def _health_monitor_loop(self):
+        """健康监控线程主循环"""
+        logging.info("BDInfo 健康监控线程已启动")
+        
+        while self.is_running:
+            try:
+                # 每30秒检查一次
+                time.sleep(30)
+                
+                # 检查所有运行中的任务
+                with self.lock:
+                    running_task_ids = list(self.running_tasks.keys())
+                
+                for task_id in running_task_ids:
+                    task = self.tasks.get(task_id)
+                    if task and task.status == "processing_bdinfo":
+                        healthy, reason = self._check_process_health(task)
+                        if not healthy:
+                            logging.warning(f"任务 {task_id} 不健康: {reason}")
+                            self._handle_unhealthy_task(task, reason)
+                            
+            except Exception as e:
+                logging.error(f"健康监控异常: {e}", exc_info=True)
+                time.sleep(60)  # 出错后等待更长时间
+        
+        logging.info("BDInfo 健康监控线程已退出")
+
+    def _check_process_health(self, task: BDInfoTask) -> Tuple[bool, str]:
+        """多维度检查进程健康状态"""
+        
+        # 1. 检查进程对象是否存在
+        if not task.process:
+            return False, "进程对象丢失"
+        
+        # 2. 检查进程是否仍在运行
+        if task.process.poll() is not None:
+            return False, f"进程已退出，返回码: {task.process.returncode}"
+        
+        # 3. 检查进程PID是否有效
+        if task.process_pid and not self._is_pid_alive(task.process_pid):
+            return False, "进程PID不存在"
+        
+        # 4. 检查进度是否停滞
+        if self._is_progress_stagnant(task):
+            return False, "进度停滞超过阈值"
+        
+        # 5. 检查临时文件是否有更新
+        if task.temp_file_path and not self._is_temp_file_updating(task):
+            return False, "临时文件长时间无更新"
+        
+        return True, "进程健康"
+
+    def _is_pid_alive(self, pid: int) -> bool:
+        """检查进程PID是否存活"""
+        try:
+            return psutil.pid_exists(pid)
+        except Exception:
+            return False
+
+    def _is_progress_stagnant(self, task: BDInfoTask) -> bool:
+        """检测进度是否停滞"""
+        
+        # 如果没有进度更新记录，不算停滞
+        if not task.last_progress_update:
+            return False
+        
+        now = datetime.now()
+        stagnant_time = (now - task.last_progress_update).total_seconds()
+        
+        # 根据进度阶段设置不同的停滞阈值
+        if task.progress_percent < 1:
+            # 初始阶段，可能需要更长时间扫描文件列表
+            threshold = 900  # 15分钟
+        elif task.progress_percent < 10:
+            # 早期阶段
+            threshold = 600  # 10分钟
+        elif task.progress_percent < 50:
+            # 中期阶段
+            threshold = 300  # 5分钟
+        else:
+            # 后期阶段
+            threshold = 180  # 3分钟
+        
+        # 只有超过阈值才认为停滞
+        if stagnant_time <= threshold:
+            return False
+            
+        print(f"[DEBUG] 任务 {task.id} 进度停滞: {stagnant_time:.0f}s > {threshold}s, 进度: {task.progress_percent}%")
+        return True
+
+    def _is_temp_file_updating(self, task: BDInfoTask) -> bool:
+        """检查临时文件是否有更新"""
+        if not task.temp_file_path or not os.path.exists(task.temp_file_path):
+            return True  # 文件不存在时不算停滞
+        
+        try:
+            # 检查文件最后修改时间
+            file_mtime = os.path.getmtime(task.temp_file_path)
+            now = time.time()
+            
+            # 如果文件超过10分钟没有更新，认为停滞
+            return (now - file_mtime) < 600
+        except Exception:
+            return True  # 出错时不认为停滞
+
+    def _handle_unhealthy_task(self, task: BDInfoTask, reason: str):
+        """处理不健康的任务"""
+        
+        try:
+            # 清理进程
+            self._cleanup_process(task)
+            
+            # 更新任务状态为失败
+            task.status = "failed"
+            task.error_message = f"进程不健康: {reason}"
+            task.completed_at = datetime.now()
+            
+            # 更新数据库状态
+            self._update_task_status(
+                task.seed_id,
+                "failed",
+                task.id,
+                completed_at=task.completed_at,
+                error_message=task.error_message,
+            )
+            
+            # 从运行任务中移除
+            if task.id in self.running_tasks:
+                del self.running_tasks[task.id]
+            
+            # 更新统计信息
+            self.stats["failed_tasks"] += 1
+            
+            # 发送SSE错误通知
+            try:
+                from utils.sse_manager import sse_manager
+                sse_manager.send_error(task.seed_id, task.error_message)
+            except Exception as e:
+                logging.error(f"发送SSE错误通知失败: {e}")
+            
+            logging.error(f"BDInfo 任务因不健康被终止: {task.id} - {reason}")
+            
+        except Exception as e:
+            logging.error(f"处理不健康任务失败: {e}", exc_info=True)
+
+    def _cleanup_process(self, task: BDInfoTask):
+        """清理进程和相关资源"""
+        
+        try:
+            # 终止进程
+            if task.process:
+                try:
+                    task.process.terminate()
+                    # 等待进程优雅退出
+                    try:
+                        task.process.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        # 如果5秒后仍未退出，强制杀死
+                        task.process.kill()
+                        task.process.wait()
+                except Exception as e:
+                    logging.warning(f"终止进程失败: {e}")
+                
+                task.process = None
+            
+            # 清理临时文件
+            if task.temp_file_path and os.path.exists(task.temp_file_path):
+                try:
+                    os.unlink(task.temp_file_path)
+                    logging.info(f"已清理临时文件: {task.temp_file_path}")
+                except Exception as e:
+                    logging.warning(f"清理临时文件失败: {e}")
+            
+            task.process_pid = None
+            
+        except Exception as e:
+            logging.error(f"清理进程资源失败: {e}", exc_info=True)
+
+    def recover_orphaned_tasks(self):
+        """启动时恢复遗留任务"""
+        
+        try:
+            logging.info("开始检查遗留的 BDInfo 任务...")
+            
+            # 从数据库查询所有 processing_bdinfo 状态的任务
+            orphaned_tasks = self._get_orphaned_tasks_from_db()
+            
+            if not orphaned_tasks:
+                logging.info("没有发现遗留的 BDInfo 任务")
+                return
+            
+            logging.info(f"发现 {len(orphaned_tasks)} 个遗留任务")
+            
+            for task_data in orphaned_tasks:
+                task_id = task_data.get('bdinfo_task_id')
+                seed_id = task_data.get('seed_id')
+                status = task_data.get('status')
+                
+                if not seed_id:
+                    continue
+                
+                try:
+                    if status == 'processing_bdinfo':
+                        # 处理正在进行的任务
+                        started_at = task_data.get('bdinfo_started_at')
+                        if not started_at:
+                            continue
+                        
+                        # 检查任务是否真的卡死
+                        if self._is_task_truly_stuck(task_id, started_at):
+                            # 标记为失败，允许重试
+                            self._mark_task_as_failed(seed_id, task_id, "进程异常终止，需要重试")
+                            logging.info(f"恢复卡死任务: {task_id}")
+                        else:
+                            # 任务可能仍在运行，尝试重新关联
+                            self._try_recover_running_task(task_data)
+                    
+                    elif status == 'queued':
+                        # 处理等待中的任务
+                        created_at = task_data.get('created_at')
+                        if not created_at:
+                            continue
+                        
+                        # 检查等待时间是否过长（超过30分钟）
+                        wait_time = (datetime.now() - created_at).total_seconds()
+                        if wait_time > 1800:  # 30分钟
+                            self._mark_task_as_failed(seed_id, task_id or "", "等待超时，需要手动重试")
+                            logging.info(f"恢复等待超时任务: {seed_id}，等待时间: {wait_time/60:.1f}分钟")
+                        else:
+                            logging.info(f"等待中的任务 {seed_id}，等待时间: {wait_time/60:.1f}分钟")
+                        
+                except Exception as e:
+                    logging.error(f"恢复任务 {task_id} 失败: {e}", exc_info=True)
+            
+            logging.info("遗留任务检查完成")
+            
+        except Exception as e:
+            logging.error(f"恢复遗留任务失败: {e}", exc_info=True)
+
+    def _get_orphaned_tasks_from_db(self) -> List[Dict]:
+        """从数据库获取遗留任务"""
+        
+        try:
+            from database import DatabaseManager
+            from config import get_db_config
+            
+            # 获取数据库配置并创建数据库管理器
+            config = get_db_config()
+            db_manager = DatabaseManager(config)
+            
+            conn = db_manager._get_connection()
+            cursor = db_manager._get_cursor(conn)
+            
+            # 首先检查表是否存在以及是否有必要的字段
+            if db_manager.db_type == "sqlite":
+                cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='seed_parameters'")
+                if not cursor.fetchone():
+                    print("[DEBUG] seed_parameters 表不存在")
+                    cursor.close()
+                    conn.close()
+                    return []
+            else:  # MySQL
+                cursor.execute("SHOW TABLES LIKE 'seed_parameters'")
+                if not cursor.fetchone():
+                    print("[DEBUG] seed_parameters 表不存在")
+                    cursor.close()
+                    conn.close()
+                    return []
+            
+            # 查询所有 processing_bdinfo 状态的任务
+            if db_manager.db_type == "sqlite":
+                cursor.execute("""
+                    SELECT hash, torrent_id, site_name, bdinfo_task_id, bdinfo_started_at, bdinfo_completed_at, bdinfo_error, created_at
+                    FROM seed_parameters 
+                    WHERE mediainfo_status IN ('processing_bdinfo', 'queued')
+                    AND (
+                        (mediainfo_status = 'processing_bdinfo' AND bdinfo_started_at IS NOT NULL)
+                        OR 
+                        (mediainfo_status = 'queued' AND created_at IS NOT NULL)
+                    )
+                """)
+            else:
+                cursor.execute("""
+                    SELECT hash, torrent_id, site_name, bdinfo_task_id, bdinfo_started_at, bdinfo_completed_at, bdinfo_error, created_at
+                    FROM seed_parameters 
+                    WHERE mediainfo_status IN ('processing_bdinfo', 'queued')
+                    AND (
+                        (mediainfo_status = 'processing_bdinfo' AND bdinfo_started_at IS NOT NULL)
+                        OR 
+                        (mediainfo_status = 'queued' AND created_at IS NOT NULL)
+                    )
+                """)
+            
+            results = cursor.fetchall()
+            print(f"[DEBUG] 查询到 {len(results)} 个 processing_bdinfo 状态的任务")
+            
+            # 转换为字典列表
+            orphaned_tasks = []
+            for i, row in enumerate(results):
+                try:
+                    # 处理字典格式的结果（MySQL 默认）
+                    if isinstance(row, dict):
+                        # 构造复合 seed_id
+                        seed_id = f"{row['hash']}_{row['torrent_id']}_{row['site_name']}"
+                        orphaned_tasks.append({
+                            'seed_id': seed_id,
+                            'bdinfo_task_id': row['bdinfo_task_id'],
+                            'bdinfo_started_at': row['bdinfo_started_at'],
+                            'bdinfo_completed_at': row['bdinfo_completed_at'],
+                            'bdinfo_error': row['bdinfo_error'],
+                            'created_at': row.get('created_at'),
+                            'status': 'processing_bdinfo' if row['bdinfo_started_at'] else 'queued'
+                        })
+                        print(f"[DEBUG] 找到遗留任务: {seed_id} (状态: {'processing_bdinfo' if row['bdinfo_started_at'] else 'queued'})")
+                    # 处理元组格式的结果（SQLite）
+                    elif isinstance(row, (tuple, list)) and len(row) >= 7:
+                        # 构造复合 seed_id
+                        seed_id = f"{row[0]}_{row[1]}_{row[2]}"
+                        orphaned_tasks.append({
+                            'seed_id': seed_id,
+                            'bdinfo_task_id': row[3],
+                            'bdinfo_started_at': row[4],
+                            'bdinfo_completed_at': row[5],
+                            'bdinfo_error': row[6],
+                            'created_at': row[7] if len(row) > 7 else None,
+                            'status': 'processing_bdinfo' if row[4] else 'queued'
+                        })
+                        print(f"[DEBUG] 找到遗留任务: {seed_id} (状态: {'processing_bdinfo' if row[4] else 'queued'})")
+                    else:
+                        print(f"[DEBUG] 跳过无效的行 {i}: {row}")
+                        
+                except Exception as e:
+                    print(f"[DEBUG] 处理行 {i} 时出错: {e}, row={row}")
+                    continue
+            
+            cursor.close()
+            conn.close()
+            
+            return orphaned_tasks
+            
+        except Exception as e:
+            logging.error(f"获取遗留任务失败: {e}", exc_info=True)
+            print(f"[DEBUG] 获取遗留任务时发生异常: {e}")
+            return []
+
+    def _is_task_truly_stuck(self, task_id: str, started_at: datetime) -> bool:
+        """判断任务是否真的卡死"""
+        
+        try:
+            # 1. 检查运行时间是否过长
+            running_time = (datetime.now() - started_at).total_seconds()
+            if running_time < 300:  # 5分钟内不算卡死
+                return False
+            
+            # 2. 检查系统中是否有相关进程
+            if self._find_bdinfo_process_for_task(task_id):
+                return False
+            
+            # 3. 检查临时文件是否有更新
+            if self._is_temp_file_updating_for_task(task_id):
+                return False
+            
+            return True
+            
+        except Exception as e:
+            logging.error(f"判断任务卡死状态失败: {e}", exc_info=True)
+            return True  # 出错时保守处理，认为卡死
+
+    def _find_bdinfo_process_for_task(self, task_id: str) -> bool:
+        """查找任务对应的 BDInfo 进程"""
+        
+        try:
+            # 遍历所有进程，查找 BDInfo 相关进程
+            for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+                try:
+                    cmdline = proc.info.get('cmdline', [])
+                    if cmdline and any('BDInfo' in str(arg) for arg in cmdline):
+                        # 检查命令行中是否包含任务ID
+                        if any(task_id in str(arg) for arg in cmdline):
+                            return True
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    continue
+            
+            return False
+            
+        except Exception as e:
+            logging.error(f"查找进程失败: {e}", exc_info=True)
+            return False
+
+    def _is_temp_file_updating_for_task(self, task_id: str) -> bool:
+        """检查任务的临时文件是否有更新"""
+        
+        try:
+            # 构建可能的临时文件路径
+            from config import TEMP_DIR
+            
+            # 查找包含任务ID的临时文件
+            for filename in os.listdir(TEMP_DIR):
+                if task_id in filename and filename.startswith('bdinfo_'):
+                    filepath = os.path.join(TEMP_DIR, filename)
+                    if os.path.exists(filepath):
+                        # 检查文件最后修改时间
+                        file_mtime = os.path.getmtime(filepath)
+                        now = time.time()
+                        
+                        # 如果文件在10分钟内有更新，认为仍在处理
+                        if (now - file_mtime) < 600:
+                            return True
+            
+            return False
+            
+        except Exception as e:
+            logging.error(f"检查临时文件更新失败: {e}", exc_info=True)
+            return False
+
+    def _mark_task_as_failed(self, seed_id: str, task_id: str, error_message: str):
+        """将任务标记为失败"""
+        
+        try:
+            self._update_task_status(
+                seed_id,
+                "failed",
+                task_id,
+                completed_at=datetime.now(),
+                error_message=error_message,
+            )
+            
+            logging.info(f"任务 {task_id} 已标记为失败: {error_message}")
+            
+        except Exception as e:
+            logging.error(f"标记任务失败状态失败: {e}", exc_info=True)
+
+    def _try_recover_running_task(self, task_data: Dict):
+        """尝试恢复仍在运行的任务"""
+        
+        try:
+            task_id = task_data.get('bdinfo_task_id')
+            seed_id = task_data.get('seed_id')
+            
+            # 创建虚拟任务对象用于跟踪
+            task = BDInfoTask(seed_id, "", priority=2)
+            task.id = task_id
+            task.status = "processing_bdinfo"
+            task.started_at = task_data.get('bdinfo_started_at')
+            
+            # 添加到内存中的任务列表
+            with self.lock:
+                self.tasks[task_id] = task
+            
+            logging.info(f"已恢复运行中的任务: {task_id}")
+            
+        except Exception as e:
+            logging.error(f"恢复运行任务失败: {e}", exc_info=True)
+
+    def cleanup_orphaned_process(self, seed_id: str):
+        """清理指定种子的孤立进程"""
+        
+        try:
+            with self.lock:
+                # 查找对应任务
+                for task_id, task in self.tasks.items():
+                    if task.seed_id == seed_id and task.status == "processing_bdinfo":
+                        self._cleanup_process(task)
+                        logging.info(f"已清理种子 {seed_id} 的孤立进程")
+                        break
+        except Exception as e:
+            logging.error(f"清理孤立进程失败: {e}", exc_info=True)
+
+    def reset_task_status(self, seed_id: str):
+        """重置任务状态"""
+        
+        try:
+            self._update_task_status(
+                seed_id,
+                "queued",
+                "",  # 清空 task_id
+                bdinfo_started_at=None,
+                bdinfo_completed_at=None,
+                bdinfo_error=None,
+            )
+            logging.info(f"已重置种子 {seed_id} 的任务状态")
+        except Exception as e:
+            logging.error(f"重置任务状态失败: {e}", exc_info=True)
 
 
 # 全局 BDInfo 管理器实例

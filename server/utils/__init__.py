@@ -46,6 +46,7 @@ from .mediainfo import (
     extract_audio_codec_from_mediainfo,
     check_bdinfo_task_status,
     refresh_bdinfo_for_seed,
+    _extract_bdinfo_with_progress,
 )
 from .douban import (
     handle_incomplete_links,

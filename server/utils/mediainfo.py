@@ -1,10 +1,3 @@
-"""
-MediaInfo and BDInfo related utility functions.
-
-This module contains functions for extracting and processing MediaInfo and BDInfo data
-from video files and Blu-ray discs.
-"""
-
 import logging
 import os
 import re
@@ -15,6 +8,18 @@ import yaml
 from pymediainfo import MediaInfo
 from config import GLOBAL_MAPPINGS
 from .media_helper import _find_target_video_file, _get_downloader_proxy_config, translate_path
+
+# 根据环境变量设置BDInfo相关路径
+if os.getenv("DEV_ENV") == "true":
+    # 开发环境
+    BDINFO_DIR = "/home/sqing/Codes/Docker.pt-nexus-dev/server/core/bdinfo"
+else:
+    # 生产环境（Docker容器内）
+    BDINFO_DIR = "/app/bdinfo"
+
+# BDInfo相关路径
+BDINFO_PATH = os.path.join(BDINFO_DIR, "BDInfo")
+BDINFO_SUBSTRACTOR_PATH = os.path.join(BDINFO_DIR, "BDInfoDataSubstractor")
 
 
 def upload_data_mediaInfo(
@@ -242,11 +247,11 @@ def _extract_bdinfo(bluray_path: str) -> str:
         # 根据环境变量区分开发环境和生产环境
         if os.getenv("DEV_ENV") == "true":
             # 开发环境路径
-            bdinfo_path = "/home/sqing/Codes/Docker.pt-nexus-dev/server/core/bdinfo/BDInfo"
+            bdinfo_path = BDINFO_PATH
         else:
             # 生产环境路径（Docker容器内）
             bdinfo_path = "/app/bdinfo/BDInfo"
-        
+
         if not os.path.exists(bdinfo_path):
             print(f"错误：BDInfo工具不存在: {bdinfo_path}")
             return "bdinfo提取失败：BDInfo工具未找到。"
@@ -266,7 +271,7 @@ def _extract_bdinfo(bluray_path: str) -> str:
                 bdinfo_cmd,
                 capture_output=True,
                 text=True,
-                timeout=600  # 10分钟超时（BDInfo可能需要较长时间）
+                timeout=600,  # 10分钟超时（BDInfo可能需要较长时间）
             )
 
             print(f"BDInfo执行完成，返回码: {result.returncode}")
@@ -707,7 +712,7 @@ def upload_data_mediaInfo_async(
     """
     异步版本的 MediaInfo/BDInfo 获取函数
     支持将 BDInfo 获取任务添加到后台队列，避免长时间阻塞
-    
+
     Args:
         mediaInfo: 现有的 MediaInfo 文本
         save_path: 保存路径
@@ -717,12 +722,12 @@ def upload_data_mediaInfo_async(
         torrent_name: 种子名称
         force_refresh: 是否强制刷新
         priority: 任务优先级 (1=高优先级, 2=普通优先级)
-        
+
     Returns:
         tuple: (mediainfo_text, is_mediainfo, is_bdinfo, bdinfo_async_info)
     """
     print("开始异步 MediaInfo/BDInfo 处理")
-    
+
     # 1. 先尝试快速获取 MediaInfo（跳过 BDInfo）
     mediainfo, is_mediainfo, is_bdinfo = upload_data_mediaInfo(
         mediaInfo=mediaInfo,
@@ -731,59 +736,60 @@ def upload_data_mediaInfo_async(
         downloader_id=downloader_id,
         torrent_name=torrent_name,
         force_refresh=force_refresh,
-        skip_bdinfo=True
+        skip_bdinfo=True,
     )
-    
+
     # 2. 检查是否为原盘文件
     is_bluray_disc = False
     if save_path:
         from .media_helper import _find_target_video_file
+
         translated_save_path = translate_path(downloader_id, save_path)
-        
+
         # 构建搜索路径
         path_to_search = translated_save_path
         if torrent_name:
             path_to_search = os.path.join(translated_save_path, torrent_name)
         elif content_name:
             path_to_search = os.path.join(translated_save_path, content_name)
-            
+
         target_video_file, is_bluray_disc = _find_target_video_file(path_to_search)
-    
+
     bdinfo_async_info = {
-        'bdinfo_status': 'skipped',
-        'bdinfo_task_id': None,
-        'is_bluray': is_bluray_disc
+        "bdinfo_status": "skipped",
+        "bdinfo_task_id": None,
+        "is_bluray": is_bluray_disc,
     }
-    
+
     # 3. 如果检测到是原盘且需要 BDInfo，则添加到后台队列
     if is_bluray_disc and (force_refresh or not is_bdinfo):
         if seed_id:
             try:
                 from core.bdinfo.bdinfo_manager import get_bdinfo_manager
+
                 bdinfo_manager = get_bdinfo_manager()
-                
+
                 # 添加 BDInfo 任务到后台队列，使用已经构建好的完整路径
                 task_id = bdinfo_manager.add_task(seed_id, path_to_search, priority, downloader_id)
-                
-                bdinfo_async_info.update({
-                    'bdinfo_status': 'processing',
-                    'bdinfo_task_id': task_id
-                })
-                
+
+                bdinfo_async_info.update(
+                    {"bdinfo_status": "processing", "bdinfo_task_id": task_id}
+                )
+
                 print(f"BDInfo 已添加到后台队列: {task_id} (优先级: {priority})")
-                
+
                 # 返回 MediaInfo，标记 BDInfo 为异步处理中，is_bdinfo设为True表示这是BDInfo任务
                 return mediainfo, is_mediainfo, True, bdinfo_async_info
-                
+
             except Exception as e:
                 print(f"添加 BDInfo 任务失败: {e}")
                 # 如果添加任务失败，继续使用同步方式
                 pass
-    
+
     # 4. 如果不是原盘或已有 BDInfo，直接返回
     if is_bdinfo:
-        bdinfo_async_info['bdinfo_status'] = 'completed'
-    
+        bdinfo_async_info["bdinfo_status"] = "completed"
+
     return mediainfo, is_mediainfo, is_bdinfo, bdinfo_async_info
 
 
@@ -799,7 +805,7 @@ def _extract_bdinfo_with_progress(bluray_path: str, task_id: str, bdinfo_manager
     import re
     import time
     import uuid
-    
+
     try:
         print(f"准备使用 BDInfo 工具从 '{bluray_path}' 提取 BDInfo 信息...")
 
@@ -809,19 +815,19 @@ def _extract_bdinfo_with_progress(bluray_path: str, task_id: str, bdinfo_manager
             return "bdinfo提取失败：指定的路径不存在。"
 
         # 检查BDInfo工具是否存在
-        bdinfo_path = "/home/sqing/Codes/Docker.pt-nexus-dev/server/core/bdinfo/BDInfo"
+        bdinfo_path = BDINFO_PATH
         if not os.path.exists(bdinfo_path):
             print(f"错误：BDInfo工具不存在: {bdinfo_path}")
             return "bdinfo提取失败：BDInfo工具未找到。"
 
         # 导入TEMP_DIR配置
         from config import TEMP_DIR
-        
+
         # 在server/data/tmp目录下创建临时文件
         unique_id = str(uuid.uuid4())[:8]
         timestamp = int(time.time())
         temp_filename = os.path.join(TEMP_DIR, f"bdinfo_{task_id}_{unique_id}_{timestamp}.txt")
-        
+
         print(f"创建临时文件: {temp_filename}")
 
         try:
@@ -836,28 +842,39 @@ def _extract_bdinfo_with_progress(bluray_path: str, task_id: str, bdinfo_manager
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
-                universal_newlines=True
+                universal_newlines=True,
             )
+            
+            # 将进程对象设置到任务中
+            with bdinfo_manager.lock:
+                task = bdinfo_manager.tasks.get(task_id)
+                if task:
+                    task.process = process
+                    task.process_pid = process.pid
+                    task.temp_file_path = temp_filename
+                    print(f"[DEBUG] 设置进程对象: PID={process.pid}, 临时文件={temp_filename}")
 
             # 实时解析输出
-            progress_pattern = re.compile(r'Scanning (.+?)\s+\|\s+Progress:\s+([\d.]+)%\s+\|\s+Elapsed:\s+([\d:]+)\s+\|\s+Remaining:\s+([\d:]+)')
-            disc_size_pattern = re.compile(r'Disc Size:\s+([\d,]+)\s+bytes')
+            progress_pattern = re.compile(
+                r"Scanning (.+?)\s+\|\s+Progress:\s+([\d.]+)%\s+\|\s+Elapsed:\s+([\d:]+)\s+\|\s+Remaining:\s+([\d:]+)"
+            )
+            disc_size_pattern = re.compile(r"Disc Size:\s+([\d,]+)\s+bytes")
             disc_size = 0
-            
+
             while True:
                 output = process.stdout.readline()
-                if output == '' and process.poll() is not None:
+                if output == "" and process.poll() is not None:
                     break
                 if output:
                     print(output.strip())
-                    
+
                     # 提取Disc Size
                     if not disc_size:
                         disc_match = disc_size_pattern.search(output.strip())
                         if disc_match:
-                            disc_size = int(disc_match.group(1).replace(',', ''))
+                            disc_size = int(disc_match.group(1).replace(",", ""))
                             print(f"[DEBUG] Disc Size: {disc_size} bytes")
-                    
+
                     # 解析进度信息
                     match = progress_pattern.search(output.strip())
                     if match:
@@ -865,14 +882,20 @@ def _extract_bdinfo_with_progress(bluray_path: str, task_id: str, bdinfo_manager
                         progress_percent = float(match.group(2))
                         elapsed_time = match.group(3)
                         remaining_time = match.group(4)
-                        
+
                         # 更新任务进度
                         bdinfo_manager.update_task_progress(
-                            task_id, progress_percent, current_file, 
-                            elapsed_time, remaining_time, disc_size
+                            task_id,
+                            progress_percent,
+                            current_file,
+                            elapsed_time,
+                            remaining_time,
+                            disc_size,
                         )
-                        
-                        print(f"[DEBUG] 进度更新: {progress_percent}%, 文件: {current_file}, 已用时: {elapsed_time}, 剩余: {remaining_time}")
+
+                        print(
+                            f"[DEBUG] 进度更新: {progress_percent}%, 文件: {current_file}, 已用时: {elapsed_time}, 剩余: {remaining_time}"
+                        )
 
             # 获取返回码
             return_code = process.poll()
@@ -888,7 +911,7 @@ def _extract_bdinfo_with_progress(bluray_path: str, task_id: str, bdinfo_manager
                 return "bdinfo提取失败：BDInfo未创建输出文件。"
 
             # 检查 BDInfoDataSubstractor 工具是否存在
-            substractor_path = "/home/sqing/Codes/Docker.pt-nexus-dev/server/core/bdinfo/BDInfoDataSubstractor"
+            substractor_path = BDINFO_SUBSTRACTOR_PATH
             if not os.path.exists(substractor_path):
                 print(f"错误：BDInfoDataSubstractor工具不存在: {substractor_path}")
                 return "bdinfo提取失败：BDInfoDataSubstractor工具未找到。"
@@ -909,25 +932,25 @@ def _extract_bdinfo_with_progress(bluray_path: str, task_id: str, bdinfo_manager
                 # 我们需要确保输出文件也保存在TEMP_DIR下
                 temp_dir = os.path.dirname(temp_filename)
                 temp_basename = os.path.basename(temp_filename)
-                
+
                 # 构建 BDInfoDataSubstractor 命令（使用绝对路径）
                 substractor_cmd = [substractor_path, temp_filename]
                 print(f"执行 BDInfoDataSubstractor 命令: {' '.join(substractor_cmd)}")
-                
+
                 # 执行命令（不需要切换工作目录）
                 process = subprocess.run(
                     substractor_cmd,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     text=True,
-                    universal_newlines=True
+                    universal_newlines=True,
                 )
 
                 # 计算输出文件名（BDInfoDataSubstractor 会生成 .bdinfo.txt 和 .quicksummary.txt 文件）
                 # 注意：输出文件名格式是 basename.bdinfo.txt，而不是 basename + .bdinfo.txt
                 base_without_ext = os.path.splitext(temp_basename)[0]
                 bdinfo_output_filename = os.path.join(temp_dir, base_without_ext + ".bdinfo.txt")
-                
+
                 if process.returncode != 0:
                     print(f"BDInfoDataSubstractor 执行失败，返回码: {process.returncode}")
                     print(f"标准错误输出: {process.stderr}")
@@ -938,19 +961,27 @@ def _extract_bdinfo_with_progress(bluray_path: str, task_id: str, bdinfo_manager
                     # 检查生成的 .bdinfo.txt 文件是否存在
                     if not os.path.exists(bdinfo_output_filename):
                         print(f"BDInfoDataSubstractor 未创建输出文件: {bdinfo_output_filename}")
-                        print("警告：BDInfoDataSubstractor 未创建 .bdinfo.txt 文件，使用原始 BDInfo 内容")
+                        print(
+                            "警告：BDInfoDataSubstractor 未创建 .bdinfo.txt 文件，使用原始 BDInfo 内容"
+                        )
                         bdinfo_content = bdinfo_content_raw
                     else:
                         # 读取处理后的 BDInfo 内容（.bdinfo.txt 文件）
                         with open(bdinfo_output_filename, "r", encoding="utf-8") as f:
                             bdinfo_content = f.read()
-                        
+
                         if not bdinfo_content:
                             print("BDInfoDataSubstractor 输出为空")
                             print("警告：BDInfoDataSubstractor 输出为空，使用原始 BDInfo 内容")
                             bdinfo_content = bdinfo_content_raw
                         else:
-                            print(f"BDInfoDataSubstractor 处理成功，读取 {bdinfo_output_filename} 文件")
+                            # 处理多余空行：将连续3个及以上的换行符替换为2个换行符
+                            bdinfo_content = re.sub(r"\n{3,}", "\n\n", bdinfo_content)
+                            bdinfo_content = bdinfo_content.strip()
+
+                            print(
+                                f"BDInfoDataSubstractor 处理成功，读取 {bdinfo_output_filename} 文件"
+                            )
             except Exception as e:
                 print(f"BDInfoDataSubstractor 处理异常: {e}")
                 print("警告：BDInfoDataSubstractor 处理异常，使用原始 BDInfo 内容")
@@ -962,13 +993,17 @@ def _extract_bdinfo_with_progress(bluray_path: str, task_id: str, bdinfo_manager
                     if os.path.exists(temp_filename):
                         os.unlink(temp_filename)
                         print(f"已清理文件: {temp_filename}")
-                    
+
                     # 清理 BDInfoDataSubstractor 生成的文件（TEMP_DIR下）
                     temp_dir = os.path.dirname(temp_filename)
                     base_without_ext = os.path.splitext(os.path.basename(temp_filename))[0]
-                    bdinfo_output_filename = os.path.join(temp_dir, base_without_ext + ".bdinfo.txt")
-                    quicksummary_filename = os.path.join(temp_dir, base_without_ext + ".quicksummary.txt")
-                    
+                    bdinfo_output_filename = os.path.join(
+                        temp_dir, base_without_ext + ".bdinfo.txt"
+                    )
+                    quicksummary_filename = os.path.join(
+                        temp_dir, base_without_ext + ".quicksummary.txt"
+                    )
+
                     if os.path.exists(bdinfo_output_filename):
                         os.unlink(bdinfo_output_filename)
                         print(f"已清理文件: {bdinfo_output_filename}")
@@ -1003,19 +1038,20 @@ def _extract_bdinfo_with_progress(bluray_path: str, task_id: str, bdinfo_manager
 
 def check_bdinfo_task_status(task_id: str):
     """检查 BDInfo 任务状态
-    
+
     Args:
         task_id: 任务ID
-        
+
     Returns:
         dict: 任务状态信息
     """
     try:
         from core.bdinfo.bdinfo_manager import get_bdinfo_manager
+
         bdinfo_manager = get_bdinfo_manager()
-        
+
         return bdinfo_manager.get_task_status(task_id)
-        
+
     except Exception as e:
         print(f"检查 BDInfo 任务状态失败: {e}")
         return None
@@ -1023,31 +1059,25 @@ def check_bdinfo_task_status(task_id: str):
 
 def refresh_bdinfo_for_seed(seed_id: str, save_path: str, priority: int = 1):
     """为指定种子重新获取 BDInfo
-    
+
     Args:
         seed_id: 种子ID
         save_path: 保存路径
         priority: 任务优先级
-        
+
     Returns:
         dict: 包含任务ID的结果
     """
     try:
         from core.bdinfo.bdinfo_manager import get_bdinfo_manager
+
         bdinfo_manager = get_bdinfo_manager()
-        
+
         # 添加新的 BDInfo 任务
         task_id = bdinfo_manager.add_task(seed_id, save_path, priority)
-        
-        return {
-            'success': True,
-            'task_id': task_id,
-            'message': 'BDInfo 重新获取任务已启动'
-        }
-        
+
+        return {"success": True, "task_id": task_id, "message": "BDInfo 重新获取任务已启动"}
+
     except Exception as e:
         print(f"刷新 BDInfo 失败: {e}")
-        return {
-            'success': False,
-            'error': str(e)
-        }
+        return {"success": False, "error": str(e)}

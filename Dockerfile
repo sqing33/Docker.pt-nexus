@@ -67,7 +67,7 @@ ENV PYTHONUNBUFFERED=1
 ENV no_proxy="localhost,127.0.0.1,::1"
 ENV NO_PROXY="localhost,127.0.0.1,::1"
 
-# 首先安装系统依赖（添加git工具）
+# 首先安装系统依赖（添加git工具和libicu）
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     ffmpeg \
@@ -75,6 +75,7 @@ RUN apt-get update && \
     mediainfo \
     fonts-noto-cjk \
     git \
+    libicu-dev \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 

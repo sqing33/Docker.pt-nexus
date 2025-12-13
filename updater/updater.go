@@ -463,6 +463,22 @@ func installUpdateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 生产环境：执行实际更新
+	
+	// 检查版本是否确实需要更新
+	localVersion := getLocalVersion()
+	remoteVersion := config.History[0].Version
+	
+	if !isNewerVersion(remoteVersion, localVersion) {
+		log.Printf("本地版本 %s 已是最新，无需更新", localVersion)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"message": fmt.Sprintf("当前版本 %s 已是最新", localVersion),
+		})
+		return
+	}
+	
+	log.Printf("开始更新: 本地 %s -> 远程 %s", localVersion, remoteVersion)
+	
 	// 停止主服务
 	log.Println("停止服务...")
 	stopServices()

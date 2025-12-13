@@ -30,9 +30,9 @@
         {{ batchCrossSeedButtonText }}
       </el-button>
 
-      <!-- 查看记录按钮 -->
+      <!-- 查看日志按钮 -->
       <el-button type="info" @click="openRecordViewDialog" plain style="margin-right: 15px">
-        转种记录
+        日志
       </el-button>
 
       <!-- 批量获取数据按钮 -->
@@ -407,187 +407,481 @@
       <el-card class="record-view-card" shadow="always">
         <template #header>
           <div class="modal-header">
-            <span>批量转种记录 {{ refreshTimer ? '(自动刷新中...)' : '' }}</span>
-            <div class="record-warning-text">批量转种需要等待种子文件验证，每个种子大概3s</div>
+            <span>日志记录</span>
             <div class="record-header-controls">
-              <el-button
-                type="danger"
-                size="small"
-                @click="stopBatchProcess"
-                :disabled="isStoppingBatch"
-              >
-                {{ isStoppingBatch ? '停止中...' : '停止转种' }}
-              </el-button>
-              <el-button
-                type="primary"
-                size="small"
-                @click="refreshRecords"
-                :loading="recordsLoading"
-              >
-                刷新
-              </el-button>
-              <el-button v-if="refreshTimer" type="warning" size="small" @click="stopAutoRefresh">
-                停止自动刷新
-              </el-button>
-              <!-- ✨ CHANGE START: Modified button logic -->
-              <el-button
-                v-else-if="isBatchRunning"
-                type="success"
-                size="small"
-                @click="startAutoRefresh"
-              >
-                开启自动刷新
-              </el-button>
-              <!-- ✨ CHANGE END -->
               <el-button type="danger" circle @click="closeRecordViewDialog" plain>X</el-button>
             </div>
           </div>
         </template>
         <div class="record-view-content">
-          <!-- 种子处理记录表格 -->
-          <div class="records-table-container" v-if="records.length > 0">
-            <el-table
-              :data="records"
-              style="width: 100%"
-              size="small"
-              v-loading="recordsLoading"
-              element-loading-text="加载记录中..."
-              stripe
-            >
-              <el-table-column prop="batch_id" label="批次ID" width="80" align="center">
-                <template #default="scope">
-                  <el-tag
+          <!-- 标签页切换 -->
+          <el-tabs v-model="activeRecordTab" type="border-card" class="record-tabs">
+            <!-- 批量转种记录标签页 -->
+            <el-tab-pane label="批量转种记录" name="cross-seed">
+              <template #label>
+                <span>批量转种记录</span>
+              </template>
+              <div class="tab-header">
+                <div class="record-warning-text">批量转种需要等待种子文件验证，每个种子大概3s</div>
+                <div class="tab-controls">
+                  <el-button
+                    type="danger"
                     size="small"
-                    :type="getBatchTagType(getBatchNumber(scope.row.batch_id))"
-                    effect="dark"
+                    @click="stopBatchProcess"
+                    :disabled="isStoppingBatch"
                   >
-                    {{ getBatchNumber(scope.row.batch_id) }}
-                  </el-tag>
-                </template>
-              </el-table-column>
-              <!-- <el-table-column
+                    {{ isStoppingBatch ? '停止中...' : '停止转种' }}
+                  </el-button>
+                  <el-button
+                    type="primary"
+                    size="small"
+                    @click="refreshRecords"
+                    :loading="recordsLoading"
+                  >
+                    刷新
+                  </el-button>
+                  <el-button
+                    v-if="refreshTimer"
+                    type="warning"
+                    size="small"
+                    @click="stopAutoRefresh"
+                  >
+                    停止自动刷新
+                  </el-button>
+                  <!-- ✨ CHANGE START: Modified button logic -->
+                  <el-button
+                    v-else-if="isBatchRunning"
+                    type="success"
+                    size="small"
+                    @click="startAutoRefresh"
+                  >
+                    开启自动刷新
+                  </el-button>
+                  <!-- ✨ CHANGE END -->
+                </div>
+              </div>
+              <!-- 种子处理记录表格 -->
+              <div class="records-table-container" v-if="records.length > 0">
+                <el-table
+                  :data="records"
+                  style="width: 100%"
+                  size="small"
+                  v-loading="recordsLoading"
+                  element-loading-text="加载记录中..."
+                  stripe
+                >
+                  <el-table-column prop="batch_id" label="批次ID" width="80" align="center">
+                    <template #default="scope">
+                      <el-tag
+                        size="small"
+                        :type="getBatchTagType(getBatchNumber(scope.row.batch_id))"
+                        effect="dark"
+                      >
+                        {{ getBatchNumber(scope.row.batch_id) }}
+                      </el-tag>
+                    </template>
+                  </el-table-column>
+                  <!-- <el-table-column
                 prop="torrent_id"
                 label="种子ID"
                 width="65"
                 align="center"
                 show-overflow-tooltip
               /> -->
-              <el-table-column
-                prop="title"
-                label="种子标题"
-                min-width="250"
-                align="center"
-                show-overflow-tooltip
-              >
-              </el-table-column>
-              <el-table-column prop="source_site" label="源站点" width="80" align="center" />
-              <el-table-column prop="target_site" label="目标站点" width="80" align="center" />
-              <el-table-column prop="video_size_gb" label="视频大小" width="80" align="center">
-                <template #default="scope">
-                  <span v-if="scope.row.video_size_gb">{{ scope.row.video_size_gb }}GB</span>
-                  <span v-else>-</span>
-                </template>
-              </el-table-column>
-              <el-table-column prop="status" label="状态" width="80" align="center">
-                <template #default="scope">
-                  <el-tag :type="getRecordStatusTypeLocal(scope.row.status)" size="small">
-                    {{ getRecordStatusTextLocal(scope.row.status) }}
-                  </el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column prop="progress" label="进度" width="100" align="center">
-                <template #default="scope">
-                  <div v-if="scope.row.progress" class="progress-cell">
-                    <el-progress
-                      :percentage="calculateProgress(scope.row.progress)"
-                      :color="getProgressColor(calculateProgress(scope.row.progress))"
-                      :stroke-width="8"
-                      :show-text="false"
-                      class="progress-bar"
-                    />
-                    <span class="progress-text">{{ scope.row.progress }}</span>
-                  </div>
-                  <span v-else>-</span>
-                </template>
-              </el-table-column>
-              <el-table-column
-                prop="error_detail"
-                label="详情"
-                width="110"
-                align="center"
-                show-overflow-tooltip
-              >
-                <template #default="scope">
-                  <span v-if="scope.row.status === 'success' && scope.row.success_url">
-                    <el-link type="primary" :href="cleanUrl(scope.row.success_url)" target="_blank"
-                      >查看详情页</el-link
-                    >
-                  </span>
-                  <span v-else-if="scope.row.error_detail">{{ scope.row.error_detail }}</span>
-                  <span v-else>-</span>
-                </template>
-              </el-table-column>
-              <el-table-column
-                prop="downloader_add_result"
-                label="下载器状态"
-                width="150"
-                align="center"
-              >
-                <template #default="scope">
-                  <!-- 检查是否有下载器结果 -->
-                  <template v-if="scope.row.downloader_add_result">
-                    <!-- ✨ 如果是失败状态 (以'失败'开头) -->
-                    <el-tooltip
-                      v-if="
-                        getDownloaderAddStatusType(scope.row.downloader_add_result) === 'danger'
-                      "
-                      effect="dark"
-                      placement="top"
-                    >
-                      <!-- Tooltip 的内容：显示格式化后的完整错误信息 -->
-                      <template #content>
-                        {{ formatDownloaderAddResult(scope.row.downloader_add_result) }}
+                  <el-table-column
+                    prop="title"
+                    label="种子标题"
+                    min-width="250"
+                    align="center"
+                    show-overflow-tooltip
+                  >
+                  </el-table-column>
+                  <el-table-column prop="source_site" label="源站点" width="80" align="center" />
+                  <el-table-column prop="target_site" label="目标站点" width="80" align="center" />
+                  <el-table-column prop="video_size_gb" label="视频大小" width="80" align="center">
+                    <template #default="scope">
+                      <span v-if="scope.row.video_size_gb">{{ scope.row.video_size_gb }}GB</span>
+                      <span v-else>-</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="status" label="状态" width="80" align="center">
+                    <template #default="scope">
+                      <el-tag :type="getRecordStatusTypeLocal(scope.row.status)" size="small">
+                        {{ getRecordStatusTextLocal(scope.row.status) }}
+                      </el-tag>
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="progress" label="进度" width="100" align="center">
+                    <template #default="scope">
+                      <div v-if="scope.row.progress" class="progress-cell">
+                        <el-progress
+                          :percentage="calculateProgress(scope.row.progress)"
+                          :color="getProgressColor(calculateProgress(scope.row.progress))"
+                          :stroke-width="8"
+                          :show-text="false"
+                          class="progress-bar"
+                        />
+                        <span class="progress-text">{{ scope.row.progress }}</span>
+                      </div>
+                      <span v-else>-</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column
+                    prop="error_detail"
+                    label="详情"
+                    width="110"
+                    align="center"
+                    show-overflow-tooltip
+                  >
+                    <template #default="scope">
+                      <span v-if="scope.row.status === 'success' && scope.row.success_url">
+                        <el-link
+                          type="primary"
+                          :href="cleanUrl(scope.row.success_url)"
+                          target="_blank"
+                          >查看详情页</el-link
+                        >
+                      </span>
+                      <span v-else-if="scope.row.error_detail">{{ scope.row.error_detail }}</span>
+                      <span v-else>-</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column
+                    prop="downloader_add_result"
+                    label="下载器状态"
+                    width="150"
+                    align="center"
+                  >
+                    <template #default="scope">
+                      <!-- 检查是否有下载器结果 -->
+                      <template v-if="scope.row.downloader_add_result">
+                        <!-- ✨ 如果是失败状态 (以'失败'开头) -->
+                        <el-tooltip
+                          v-if="
+                            getDownloaderAddStatusType(scope.row.downloader_add_result) === 'danger'
+                          "
+                          effect="dark"
+                          placement="top"
+                        >
+                          <!-- Tooltip 的内容：显示格式化后的完整错误信息 -->
+                          <template #content>
+                            {{ formatDownloaderAddResult(scope.row.downloader_add_result) }}
+                          </template>
+
+                          <!-- 表格中可见的内容：直接显示文本，不使用tag -->
+                          <span style="color: #f56c6c">错误</span>
+                        </el-tooltip>
+
+                        <!-- ✨ 如果是成功状态或其他非失败状态 -->
+                        <span
+                          v-else
+                          style="text-align: center"
+                          :style="{
+                            color: getDownloaderAddStatusColor(scope.row.downloader_add_result),
+                          }"
+                        >
+                          {{ formatDownloaderAddResult(scope.row.downloader_add_result) }}
+                        </span>
                       </template>
 
-                      <!-- 表格中可见的内容：直接显示文本，不使用tag -->
-                      <span style="color: #f56c6c">错误</span>
-                    </el-tooltip>
+                      <!-- 如果没有下载器结果，显示 - -->
+                      <span v-else>-</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="processed_at" label="处理时间" width="100" align="center">
+                    <template #default="scope">
+                      <!-- ✨ 改动点：添加 div 和样式类以支持换行显示 -->
+                      <div class="mapped-cell datetime-cell">
+                        {{ formatRecordTimeLocal(scope.row.processed_at) }}
+                      </div>
+                    </template>
+                  </el-table-column>
+                </el-table>
+              </div>
 
-                    <!-- ✨ 如果是成功状态或其他非失败状态 -->
-                    <span
-                      v-else
-                      style="text-align: center"
-                      :style="{
-                        color: getDownloaderAddStatusColor(scope.row.downloader_add_result),
-                      }"
-                    >
-                      {{ formatDownloaderAddResult(scope.row.downloader_add_result) }}
-                    </span>
-                  </template>
+              <!-- 无记录时的显示 -->
+              <div v-if="records.length === 0 && !recordsLoading" class="no-records">
+                <el-empty description="暂无批量转种记录" />
+              </div>
+            </el-tab-pane>
 
-                  <!-- 如果没有下载器结果，显示 - -->
-                  <span v-else>-</span>
-                </template>
-              </el-table-column>
-              <el-table-column prop="processed_at" label="处理时间" width="100" align="center">
-                <template #default="scope">
-                  <!-- ✨ 改动点：添加 div 和样式类以支持换行显示 -->
-                  <div class="mapped-cell datetime-cell">
-                    {{ formatRecordTimeLocal(scope.row.processed_at) }}
-                  </div>
-                </template>
-              </el-table-column>
-            </el-table>
-          </div>
+            <!-- BDInfo获取记录标签页 -->
+            <el-tab-pane label="BDInfo获取记录" name="bdinfo">
+              <template #label>
+                <span>BDInfo获取记录</span>
+              </template>
+              <div class="tab-header">
+                <div class="bdinfo-filter-controls">
+                  <!-- BDInfo状态筛选 -->
+                  <el-radio-group
+                    v-model="bdinfoStatusFilter"
+                    @change="handleBDInfoStatusChange"
+                    size="small"
+                  >
+                    <el-radio-button label="">全部</el-radio-button>
+                    <el-radio-button label="processing">处理中</el-radio-button>
+                    <el-radio-button label="completed">已完成</el-radio-button>
+                    <el-radio-button label="failed">失败</el-radio-button>
+                  </el-radio-group>
+                </div>
+                <div class="tab-controls">
+                  <el-button type="primary" size="small" @click="refreshBDInfoRecords">
+                    刷新
+                  </el-button>
+                  <el-button
+                    v-if="bdinfoRefreshTimer"
+                    type="warning"
+                    size="small"
+                    @click="stopBDInfoAutoRefresh"
+                  >
+                    停止自动刷新
+                  </el-button>
+                  <el-button
+                    v-else-if="hasProcessingBDInfo"
+                    type="success"
+                    size="small"
+                    @click="startBDInfoAutoRefresh"
+                  >
+                    开启自动刷新
+                  </el-button>
+                </div>
+              </div>
 
-          <!-- 无记录时的显示 -->
-          <div v-if="records.length === 0 && !recordsLoading" class="no-records">
-            <el-empty description="暂无批量转种记录" />
-          </div>
+              <!-- BDInfo记录表格 -->
+              <div class="bdinfo-records-table-container" v-if="bdinfoRecords.length > 0">
+                <el-table :data="bdinfoRecords" style="width: 100%" size="small" stripe>
+                  <el-table-column prop="title" label="种子标题" show-overflow-tooltip />
+                  <el-table-column prop="nickname" label="站点" width="100" align="center">
+                    <template #default="scope">
+                      <div class="mapped-cell">{{ scope.row.nickname }}</div>
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="seed_id" label="种子ID" width="60" align="center">
+                    <template #default="scope">
+                      <span>{{ scope.row.seed_id.split('_')[1] }}</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="mediainfo_status" label="状态" width="80" align="center">
+                    <template #default="scope">
+                      <el-tag :type="getBDInfoStatusType(scope.row.mediainfo_status)" size="small">
+                        {{ getBDInfoStatusText(scope.row.mediainfo_status) }}
+                      </el-tag>
+                    </template>
+                  </el-table-column>
+                  <el-table-column
+                    prop="bdinfo_started_at"
+                    label="开始时间"
+                    width="140"
+                    align="center"
+                  >
+                    <template #default="scope">
+                      <span v-if="scope.row.bdinfo_started_at">
+                        {{ formatDateTime(scope.row.bdinfo_started_at) }}
+                      </span>
+                      <span v-else>-</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="duration" label="耗时" width="80" align="center">
+                    <template #default="scope">
+                      <span
+                        v-if="
+                          scope.row.mediainfo_status === 'processing_bdinfo' &&
+                          scope.row.progress_info
+                        "
+                      >
+                        {{ scope.row.progress_info.elapsed_time }}
+                      </span>
+                      <span v-else>{{ calculateDuration(scope.row) }}</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="剩余时间" width="100" align="center">
+                    <template #default="scope">
+                      <span
+                        v-if="
+                          scope.row.mediainfo_status === 'processing_bdinfo' &&
+                          scope.row.progress_info &&
+                          scope.row.progress_info.remaining_time
+                        "
+                      >
+                        {{ scope.row.progress_info.remaining_time }}
+                      </span>
+                      <span v-else>-</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="进度" width="100" align="center">
+                    <template #default="scope">
+                      <div
+                        v-if="
+                          scope.row.mediainfo_status === 'processing_bdinfo' &&
+                          scope.row.progress_info
+                        "
+                        style="text-align: center"
+                      >
+                        <el-progress
+                          :percentage="scope.row.progress_info.progress_percent || 0"
+                          :status="
+                            scope.row.progress_info.progress_percent === 100 ? 'success' : ''
+                          "
+                          :stroke-width="6"
+                          :show-text="false"
+                        />
+                        <div style="font-size: 12px; margin-top: 4px; color: #606266">
+                          {{ scope.row.progress_info.progress_percent || 0 }}%
+                        </div>
+                      </div>
+                      <div
+                        v-else-if="scope.row.mediainfo_status === 'completed'"
+                        style="text-align: center"
+                      >
+                        <el-progress
+                          :percentage="100"
+                          status="success"
+                          :stroke-width="6"
+                          :show-text="false"
+                        />
+                        <div style="font-size: 12px; margin-top: 4px; color: #606266">100%</div>
+                      </div>
+                      <span v-else>-</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="操作" width="80" align="center">
+                    <template #default="scope">
+                      <el-button size="small" type="primary" @click="viewBDInfoDetails(scope.row)">
+                        详情
+                      </el-button>
+                      <el-button
+                        v-if="shouldShowRetryButton(scope.row)"
+                        size="small"
+                        type="warning"
+                        @click="retryBDInfo(scope.row)"
+                        style="margin-left: 0"
+                        :loading="retryingSeeds.has(scope.row.seed_id)"
+                      >
+                        重试
+                      </el-button>
+                    </template>
+                  </el-table-column>
+                </el-table>
+              </div>
+
+              <!-- 无BDInfo记录时的显示 -->
+              <div v-if="bdinfoRecords.length === 0 && !bdinfoRecordsLoading" class="no-records">
+                <el-empty description="暂无BDInfo获取记录" />
+              </div>
+            </el-tab-pane>
+          </el-tabs>
         </div>
         <div class="record-view-footer">
-          <el-button @click="clearRecordsLocal" type="warning">清空记录</el-button>
+          <el-button
+            @click="clearRecordsLocal"
+            type="warning"
+            v-if="activeRecordTab === 'cross-seed'"
+            >清空记录</el-button
+          >
           <el-button @click="closeRecordViewDialog">关闭</el-button>
+        </div>
+      </el-card>
+    </div>
+
+    <!-- BDInfo详情查看弹窗 -->
+    <div v-if="bdinfoDetailDialogVisible" class="modal-overlay">
+      <el-card class="bdinfo-detail-card" shadow="always">
+        <template #header>
+          <div class="modal-header">
+            <span>BDInfo详情 - {{ selectedBDInfoRecord?.title }}</span>
+            <el-button type="danger" circle @click="closeBDInfoDetailDialog" plain>X</el-button>
+          </div>
+        </template>
+        <div class="bdinfo-detail-content">
+          <el-descriptions :column="2" border>
+            <el-descriptions-item label="种子标题">
+              {{ selectedBDInfoRecord?.title }}
+            </el-descriptions-item>
+            <el-descriptions-item label="站点">
+              {{ selectedBDInfoRecord?.nickname }}
+            </el-descriptions-item>
+            <el-descriptions-item label="状态">
+              <el-tag
+                :type="getBDInfoStatusType(selectedBDInfoRecord?.mediainfo_status)"
+                size="small"
+              >
+                {{ getBDInfoStatusText(selectedBDInfoRecord?.mediainfo_status) }}
+              </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="任务ID">
+              <div v-if="selectedBDInfoRecord?.bdinfo_task_id" class="task-id-cell">
+                <span>{{ selectedBDInfoRecord.bdinfo_task_id }}</span>
+                <el-button
+                  type="text"
+                  size="small"
+                  @click="copyToClipboard(selectedBDInfoRecord.bdinfo_task_id)"
+                  style="margin-left: 5px; padding: 0"
+                >
+                  <el-icon><CopyDocument /></el-icon>
+                </el-button>
+              </div>
+              <span v-else>-</span>
+            </el-descriptions-item>
+            <el-descriptions-item label="开始时间">
+              {{
+                selectedBDInfoRecord?.bdinfo_started_at
+                  ? formatDateTime(selectedBDInfoRecord.bdinfo_started_at)
+                  : '-'
+              }}
+            </el-descriptions-item>
+            <el-descriptions-item label="完成时间">
+              {{
+                selectedBDInfoRecord?.bdinfo_completed_at
+                  ? formatDateTime(selectedBDInfoRecord.bdinfo_completed_at)
+                  : '-'
+              }}
+            </el-descriptions-item>
+            <el-descriptions-item label="耗时">
+              {{ calculateDuration(selectedBDInfoRecord) }}
+            </el-descriptions-item>
+            <el-descriptions-item label="是否为BDInfo">
+              <el-tag :type="selectedBDInfoRecord?.is_bdinfo ? 'success' : 'info'" size="small">
+                {{ selectedBDInfoRecord?.is_bdinfo ? '是' : '否' }}
+              </el-tag>
+            </el-descriptions-item>
+          </el-descriptions>
+
+          <!-- 错误信息 -->
+          <div v-if="selectedBDInfoRecord?.bdinfo_error" class="error-section">
+            <h4 style="margin: 15px 0 10px 0; color: #f56c6c">错误信息</h4>
+            <el-alert
+              :title="selectedBDInfoRecord.bdinfo_error"
+              type="error"
+              :closable="false"
+              show-icon
+            />
+          </div>
+
+          <!-- MediaInfo/BDInfo内容 -->
+          <div v-if="selectedBDInfoRecord?.mediainfo" class="mediainfo-section">
+            <h4 style="margin: 15px 0 10px 0; color: #606266">
+              {{ selectedBDInfoRecord?.is_bdinfo ? 'BDInfo' : 'MediaInfo' }} 内容
+            </h4>
+            <el-input
+              type="textarea"
+              :model-value="selectedBDInfoRecord.mediainfo"
+              :rows="15"
+              class="code-font"
+              readonly
+            />
+            <div style="margin-top: 10px; text-align: right">
+              <el-button
+                type="primary"
+                size="small"
+                @click="copyToClipboard(selectedBDInfoRecord.mediainfo)"
+              >
+                复制内容
+              </el-button>
+            </div>
+          </div>
+        </div>
+        <div class="bdinfo-detail-footer">
+          <el-button @click="closeBDInfoDetailDialog">关闭</el-button>
         </div>
       </el-card>
     </div>
@@ -615,6 +909,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { CopyDocument } from '@element-plus/icons-vue'
 import type { ElTree } from 'element-plus'
 import axios from 'axios'
 import CrossSeedPanel from '../components/CrossSeedPanel.vue'
@@ -736,11 +1031,24 @@ const records = ref<SeedRecord[]>([])
 const recordsLoading = ref<boolean>(false)
 const batchNumberMap = ref<Map<string, number>>(new Map()) // 批次ID到序号的映射
 
+// BDInfo记录相关
+const activeRecordTab = ref<string>('cross-seed') // 当前激活的记录标签页
+const bdinfoRecords = ref<BDInfoRecord[]>([])
+const bdinfoRecordsLoading = ref<boolean>(false)
+const bdinfoStatusFilter = ref<string>('') // BDInfo状态筛选
+const bdinfoDetailDialogVisible = ref<boolean>(false)
+const selectedBDInfoRecord = ref<BDInfoRecord | null>(null)
+const retryingSeeds = ref<Set<string>>(new Set()) // 正在重试的种子ID集合
+
 // 定时刷新相关
 const refreshTimer = ref<ReturnType<typeof setInterval> | null>(null)
 const REFRESH_INTERVAL = 5000 // 5秒刷新一次
 const additionalRefreshCount = ref<number>(0) // 额外刷新次数计数器
 const ADDITIONAL_REFRESH_LIMIT = 3 // 完成后额外刷新3次
+
+// BDInfo自动刷新相关
+const bdinfoRefreshTimer = ref<ReturnType<typeof setInterval> | null>(null)
+const BDINFO_REFRESH_INTERVAL = 5000 // 5秒刷新一次
 
 // 停止批量转种相关
 const isStoppingBatch = ref<boolean>(false)
@@ -759,6 +1067,19 @@ interface SeedRecord {
   error_detail?: string
   downloader_add_result?: string
   processed_at: string
+}
+
+interface BDInfoRecord {
+  seed_id: string
+  title: string
+  site_name: string
+  mediainfo_status: string
+  bdinfo_task_id?: string
+  bdinfo_started_at?: string
+  bdinfo_completed_at?: string
+  bdinfo_error?: string
+  mediainfo?: string
+  is_bdinfo: boolean
 }
 
 // 路径树相关
@@ -1469,7 +1790,9 @@ const hasRestrictedTag = (tags: string[] | string): boolean => {
   }
 
   // 检查是否包含"禁转"或"tag.禁转"
-  return tagList.some((tag) => tag === '禁转' || tag === 'tag.禁转'  || tag === '限转' || tag === 'tag.限转')
+  return tagList.some(
+    (tag) => tag === '禁转' || tag === 'tag.禁转' || tag === '限转' || tag === 'tag.限转',
+  )
 }
 
 // 控制表格行是否可选择
@@ -1695,6 +2018,14 @@ const isBatchRunning = computed(() => {
   return !hasDownloaderFinalStatus(latestRecord.downloader_add_result)
 })
 
+// BDInfo相关计算属性
+const hasProcessingBDInfo = computed(() => {
+  return bdinfoRecords.value.some(
+    (record) =>
+      record.mediainfo_status === 'processing_bdinfo' || record.mediainfo_status === 'processing',
+  )
+})
+
 // 启动定时刷新
 const startAutoRefresh = () => {
   // 先清除任何现有的定时器
@@ -1727,14 +2058,24 @@ const stopAutoRefresh = () => {
 // 打开记录查看对话框
 const openRecordViewDialog = () => {
   recordDialogVisible.value = true
-  refreshRecords() // 打开时加载一次记录
-  startAutoRefresh() // 打开时启动自动刷新
+
+  // 根据当前激活的标签页加载对应的记录
+  if (activeRecordTab.value === 'cross-seed') {
+    refreshRecords() // 打开时加载一次记录
+    startAutoRefresh() // 打开时启动自动刷新
+  } else if (activeRecordTab.value === 'bdinfo') {
+    refreshBDInfoRecords() // 打开时加载BDInfo记录
+    if (hasProcessingBDInfo.value) {
+      startBDInfoAutoRefresh() // 如果有处理中的任务，启动自动刷新
+    }
+  }
 }
 
 // 关闭记录查看对话框
 const closeRecordViewDialog = () => {
   recordDialogVisible.value = false
   stopAutoRefresh()
+  stopBDInfoAutoRefresh()
   // 关闭时刷新主表格数据
   fetchData()
 }
@@ -1809,6 +2150,268 @@ const getRecordStatusTextLocal = (status: string) => {
       return '等待中'
     default:
       return '未知'
+  }
+}
+
+// BDInfo相关方法
+// 处理BDInfo状态筛选变化
+const handleBDInfoStatusChange = async (value: string) => {
+  bdinfoStatusFilter.value = value
+  await refreshBDInfoRecords()
+}
+
+// 刷新BDInfo记录
+const refreshBDInfoRecords = async () => {
+  try {
+    const params = new URLSearchParams({
+      status_filter: bdinfoStatusFilter.value,
+    })
+
+    // 保存当前处理中任务的进度信息
+    const existingProgressInfo = new Map()
+    for (const record of bdinfoRecords.value) {
+      if (record.mediainfo_status === 'processing_bdinfo' && record.progress_info) {
+        existingProgressInfo.set(record.seed_id, record.progress_info)
+      }
+    }
+
+    const response = await axios.get(`/api/migrate/bdinfo_records?${params.toString()}`)
+    const result = response.data
+
+    if (result.success) {
+      // 先更新基本记录数据，保留进度信息
+      const newRecords = result.data || []
+      for (const newRecord of newRecords) {
+        // 如果是处理中的任务，先使用之前的进度信息
+        if (
+          newRecord.mediainfo_status === 'processing_bdinfo' &&
+          existingProgressInfo.has(newRecord.seed_id)
+        ) {
+          newRecord.progress_info = existingProgressInfo.get(newRecord.seed_id)
+        }
+      }
+      bdinfoRecords.value = newRecords
+
+      // 为处理中的任务获取实时进度
+      const progressPromises = []
+      for (const record of bdinfoRecords.value) {
+        if (record.mediainfo_status === 'processing_bdinfo' && record.bdinfo_task_id) {
+          const progressPromise = (async () => {
+            try {
+              const progressResponse = await axios.get(
+                `/api/migrate/bdinfo_status/${record.seed_id}`,
+              )
+              const progressResult = progressResponse.data
+
+              if (progressResult.task_status && progressResult.progress_info) {
+                // 更新进度信息
+                record.progress_info = progressResult.progress_info
+              }
+            } catch (error) {
+              console.error(`获取BDInfo进度失败: ${record.seed_id}`, error)
+            }
+          })()
+          progressPromises.push(progressPromise)
+        }
+      }
+
+      // 等待所有进度请求完成
+      await Promise.all(progressPromises)
+    } else {
+      ElMessage.error(result.message || '获取BDInfo记录失败')
+    }
+  } catch (error: any) {
+    console.error('获取BDInfo记录时出错:', error)
+    ElMessage.error(error.message || '网络错误')
+  }
+}
+
+// 启动BDInfo自动刷新
+const startBDInfoAutoRefresh = () => {
+  stopBDInfoAutoRefresh()
+  bdinfoRefreshTimer.value = setInterval(async () => {
+    if (recordDialogVisible.value && activeRecordTab.value === 'bdinfo') {
+      await refreshBDInfoRecords()
+
+      // 如果没有处理中的任务，停止自动刷新
+      if (!hasProcessingBDInfo.value) {
+        setTimeout(() => {
+          if (!hasProcessingBDInfo.value) {
+            stopBDInfoAutoRefresh()
+          }
+        }, 3000)
+      }
+    } else {
+      stopBDInfoAutoRefresh()
+    }
+  }, BDINFO_REFRESH_INTERVAL)
+}
+
+// 停止BDInfo自动刷新
+const stopBDInfoAutoRefresh = () => {
+  if (bdinfoRefreshTimer.value) {
+    clearInterval(bdinfoRefreshTimer.value)
+    bdinfoRefreshTimer.value = null
+  }
+}
+
+// 获取BDInfo状态对应的Element Plus标签类型
+const getBDInfoStatusType = (status: string) => {
+  switch (status) {
+    case 'queued':
+      return 'info'
+    case 'processing_bdinfo':
+    case 'processing':
+      return 'warning'
+    case 'completed':
+      return 'success'
+    case 'failed':
+      return 'danger'
+    default:
+      return 'info'
+  }
+}
+
+// 获取BDInfo状态文本
+const getBDInfoStatusText = (status: string) => {
+  switch (status) {
+    case 'queued':
+      return '等待中'
+    case 'processing_bdinfo':
+    case 'processing':
+      return '处理中'
+    case 'completed':
+      return '已完成'
+    case 'failed':
+      return '失败'
+    default:
+      return '未知'
+  }
+}
+
+// 计算处理耗时
+const calculateDuration = (record: BDInfoRecord) => {
+  if (!record.bdinfo_started_at) return '-'
+
+  const start = new Date(record.bdinfo_started_at)
+  const end = record.bdinfo_completed_at ? new Date(record.bdinfo_completed_at) : new Date()
+
+  const diff = end.getTime() - start.getTime()
+
+  // 如果是负数，返回"-"
+  if (diff < 0) return '-'
+
+  if (diff < 60000) return `${Math.floor(diff / 1000)}秒`
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}分钟`
+  return `${Math.floor(diff / 3600000)}小时`
+}
+
+// 复制到剪贴板
+const copyToClipboard = async (text: string) => {
+  try {
+    await navigator.clipboard.writeText(text)
+    ElMessage.success('已复制到剪贴板')
+  } catch (error) {
+    ElMessage.error('复制失败')
+  }
+}
+
+// 查看BDInfo详情
+const viewBDInfoDetails = (record: BDInfoRecord) => {
+  selectedBDInfoRecord.value = record
+  bdinfoDetailDialogVisible.value = true
+}
+
+// 关闭BDInfo详情弹窗
+const closeBDInfoDetailDialog = () => {
+  bdinfoDetailDialogVisible.value = false
+  selectedBDInfoRecord.value = null
+}
+
+// 判断任务是否卡死
+const isTaskStuck = (record: BDInfoRecord) => {
+  // 检查任务是否卡死
+  if (!record.bdinfo_started_at) return true
+
+  const startTime = new Date(record.bdinfo_started_at)
+  const now = new Date()
+  const runningMinutes = (now.getTime() - startTime.getTime()) / (1000 * 60)
+
+  // 超过30分钟且进度无变化认为卡死
+  if (runningMinutes > 30) {
+    if (!record.progress_info || record.progress_info.progress_percent === 0) {
+      return true
+    }
+
+    // 检查进度是否长时间无更新
+    if (record.progress_info.last_progress_update) {
+      const lastUpdateTime = new Date(record.progress_info.last_progress_update)
+      const stagnantMinutes = (now.getTime() - lastUpdateTime.getTime()) / (1000 * 60)
+
+      // 根据进度阶段设置不同的停滞阈值
+      if (record.progress_info.progress_percent < 10) {
+        return stagnantMinutes > 15 // 初始阶段15分钟
+      } else if (record.progress_info.progress_percent < 50) {
+        return stagnantMinutes > 10 // 中期阶段10分钟
+      } else {
+        return stagnantMinutes > 5 // 后期阶段5分钟
+      }
+    }
+  }
+
+  return false
+}
+
+// 判断是否应该显示重试按钮
+const shouldShowRetryButton = (record: BDInfoRecord) => {
+  // 失败状态总是显示重试按钮
+  if (record.mediainfo_status === 'failed') {
+    return true
+  }
+
+  // 处理中状态，检查是否卡死
+  if (record.mediainfo_status === 'processing_bdinfo') {
+    return isTaskStuck(record)
+  }
+
+  return false
+}
+
+// 重试BDInfo获取
+const retryBDInfo = async (record: BDInfoRecord) => {
+  try {
+    retryingSeeds.value.add(record.seed_id)
+
+    // 先清理可能存在的残留进程
+    try {
+      await axios.post('/api/migrate/cleanup_bdinfo_process', {
+        seed_id: record.seed_id,
+      })
+    } catch (error) {
+      console.warn('清理进程失败:', error)
+    }
+
+    // 重置状态并重新启动
+    const response = await axios.post(`/api/migrate/restart_bdinfo`, {
+      seed_id: record.seed_id,
+    })
+    const result = response.data
+
+    if (result.success) {
+      ElMessage.success('BDInfo重新获取任务已启动')
+      await refreshBDInfoRecords()
+
+      // 如果有处理中的任务，启动自动刷新
+      if (hasProcessingBDInfo.value) {
+        startBDInfoAutoRefresh()
+      }
+    } else {
+      ElMessage.error(result.message || '启动BDInfo重新获取失败')
+    }
+  } catch (error: any) {
+    ElMessage.error(error.message || '网络错误')
+  } finally {
+    retryingSeeds.value.delete(record.seed_id)
   }
 }
 
@@ -1939,9 +2542,34 @@ const stopBatchProcess = async () => {
   }
 }
 
+// 监听标签页切换
+watch(activeRecordTab, (newTab, oldTab) => {
+  if (newTab === 'cross-seed') {
+    // 切换到批量转种记录标签页
+    refreshRecords()
+    if (isBatchRunning.value) {
+      startAutoRefresh()
+    }
+  } else if (newTab === 'bdinfo') {
+    // 切换到BDInfo记录标签页
+    refreshBDInfoRecords()
+    if (hasProcessingBDInfo.value) {
+      startBDInfoAutoRefresh()
+    }
+  }
+
+  // 停止另一个标签页的自动刷新
+  if (oldTab === 'cross-seed') {
+    stopAutoRefresh()
+  } else if (oldTab === 'bdinfo') {
+    stopBDInfoAutoRefresh()
+  }
+})
+
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
   stopAutoRefresh() // 清理定时器
+  stopBDInfoAutoRefresh() // 清理BDInfo定时器
 })
 </script>
 
@@ -2352,8 +2980,7 @@ onUnmounted(() => {
 
 /* 记录查看弹窗样式 */
 .record-view-card {
-  width: 90vw;
-  max-width: 1200px;
+  width: 1200px;
   height: 800px; /* 固定高度 */
   max-height: 800px;
   display: flex;
@@ -2485,5 +3112,73 @@ onUnmounted(() => {
 
 :deep(.el-table__body-wrapper .el-table__body) .el-table_1_column_7 {
   width: 120px !important;
+}
+
+/* --- 新增/修改以下样式以修复滚动问题 --- */
+
+/* 1. 确保 Tabs 组件撑满整个内容区域，并使用 Flex 布局 */
+.record-tabs {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100%; /* 关键：撑满父容器高度 */
+  overflow: hidden;
+}
+
+/* 2. 穿透修改 Element Plus Tabs 的内容区域，使其也撑满高度 */
+:deep(.el-tabs__content) {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 15px; /* 保持原有的内边距 */
+  overflow: hidden; /* 防止溢出 */
+}
+
+/* 3. 确保每个 Tab 页签也是 Flex 列布局 */
+:deep(.el-tab-pane) {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 4. 定义 BDInfo 表格容器的样式 (之前缺失的部分) */
+.bdinfo-records-table-container {
+  flex: 1; /* 占据剩余空间 */
+  overflow-y: auto; /* 开启纵向滚动 */
+  width: 100%;
+  margin-top: 10px;
+
+  /* 自定义滚动条样式，保持与批量转种记录一致 */
+  &::-webkit-scrollbar {
+    width: 8px;
+  }
+  &::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+  }
+  &::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+  }
+}
+
+/* 修复表格头部的布局，防止挤压 */
+.bdinfo-filter-controls {
+  margin-bottom: 0;
+}
+
+.tab-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+}
+
+.tab-controls {
+  display: flex;
+  gap: 10px;
 }
 </style>

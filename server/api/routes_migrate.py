@@ -3120,6 +3120,130 @@ def refresh_mediainfo_async():
         }), 500
 
 
+@migrate_bp.route("/migrate/bdinfo_records", methods=["GET"])
+def get_bdinfo_records():
+    """获取BDInfo处理记录"""
+    try:
+        # 获取查询参数
+        status_filter = request.args.get("status_filter", "")
+        page = int(request.args.get("page", 1))
+        page_size = int(request.args.get("pageSize", 20))
+        
+        # 构建查询条件
+        where_conditions = ["bdinfo_task_id IS NOT NULL"]
+        params = []
+        
+        # 添加状态筛选
+        if status_filter:
+            if status_filter == "processing":
+                where_conditions.append("mediainfo_status IN ('processing_bdinfo', 'processing')")
+            elif status_filter == "completed":
+                where_conditions.append("mediainfo_status = 'completed'")
+            elif status_filter == "failed":
+                where_conditions.append("(mediainfo_status = 'failed' OR bdinfo_error IS NOT NULL)")
+        
+        where_clause = " AND ".join(where_conditions)
+        
+        # 获取数据库管理器
+        db_manager = migrate_bp.db_manager
+        conn = db_manager._get_connection()
+        cursor = db_manager._get_cursor(conn)
+        
+        # 获取总数
+        count_sql = f"SELECT COUNT(*) as total FROM seed_parameters WHERE {where_clause}"
+        cursor.execute(count_sql, params)
+        total = cursor.fetchone()["total"]
+        
+        # 计算偏移量
+        offset = (page - 1) * page_size
+        
+        # 获取记录
+        if db_manager.db_type == "sqlite":
+            records_sql = f"""
+                SELECT 
+                    sp.hash || '_' || sp.torrent_id || '_' || sp.site_name as seed_id,
+                    sp.title,
+                    sp.site_name,
+                    COALESCE(s.nickname, sp.site_name) as nickname,
+                    sp.mediainfo_status,
+                    sp.bdinfo_task_id,
+                    sp.bdinfo_started_at,
+                    sp.bdinfo_completed_at,
+                    sp.bdinfo_error,
+                    sp.mediainfo,
+                    sp.updated_at
+                FROM seed_parameters sp
+                LEFT JOIN sites s ON sp.site_name = s.site
+                WHERE {where_clause}
+                ORDER BY sp.bdinfo_started_at DESC
+                LIMIT ? OFFSET ?
+            """
+            params.extend([page_size, offset])
+        else:  # postgresql or mysql
+            records_sql = f"""
+                SELECT 
+                    CONCAT(sp.hash, '_', sp.torrent_id, '_', sp.site_name) as seed_id,
+                    sp.title,
+                    sp.site_name,
+                    COALESCE(s.nickname, sp.site_name) as nickname,
+                    sp.mediainfo_status,
+                    sp.bdinfo_task_id,
+                    sp.bdinfo_started_at,
+                    sp.bdinfo_completed_at,
+                    sp.bdinfo_error,
+                    sp.mediainfo,
+                    sp.updated_at
+                FROM seed_parameters sp
+                LEFT JOIN sites s ON sp.site_name = s.site
+                WHERE {where_clause}
+                ORDER BY sp.bdinfo_started_at DESC
+                LIMIT %s OFFSET %s
+            """
+            params.extend([page_size, offset])
+        
+        cursor.execute(records_sql, params)
+        records = []
+        
+        for row in cursor.fetchall():
+            # 判断是否为BDInfo内容
+            is_bdinfo = False
+            if row["mediainfo"]:
+                from utils.mediainfo import validate_media_info_format
+                _, is_bdinfo, _, _, _, _ = validate_media_info_format(row["mediainfo"])
+            
+            records.append({
+                "seed_id": row["seed_id"],
+                "title": row["title"] or "未知标题",
+                "site_name": row["site_name"] or "未知站点",
+                "nickname": row["nickname"] or row["site_name"] or "未知站点",
+                "mediainfo_status": row["mediainfo_status"] or "unknown",
+                "bdinfo_task_id": row["bdinfo_task_id"],
+                "bdinfo_started_at": row["bdinfo_started_at"],
+                "bdinfo_completed_at": row["bdinfo_completed_at"],
+                "bdinfo_error": row["bdinfo_error"],
+                "mediainfo": row["mediainfo"],
+                "is_bdinfo": is_bdinfo
+            })
+        
+        cursor.close()
+        conn.close()
+        
+        return jsonify({
+            "success": True,
+            "data": records,
+            "total": total,
+            "page": page,
+            "pageSize": page_size
+        })
+        
+    except Exception as e:
+        logging.error(f"获取BDInfo记录失败: {e}", exc_info=True)
+        return jsonify({
+            "success": False,
+            "message": f"服务器内部错误: {str(e)}"
+        }), 500
+
+
 @migrate_bp.route("/migrate/bdinfo_sse/<seed_id>")
 def bdinfo_sse(seed_id):
     """BDInfo进度更新的SSE端点"""
@@ -3135,4 +3259,127 @@ def bdinfo_sse(seed_id):
         
     except Exception as e:
         logging.error(f"创建SSE连接失败: {e}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+
+@migrate_bp.route("/migrate/cleanup_bdinfo_process", methods=["POST"])
+def cleanup_bdinfo_process():
+    """清理 BDInfo 残留进程"""
+    try:
+        data = request.json
+        seed_id = data.get('seed_id')
+        
+        if not seed_id:
+            return jsonify({'error': '缺少 seed_id 参数'}), 400
+        
+        from core.bdinfo.bdinfo_manager import get_bdinfo_manager
+        
+        bdinfo_manager = get_bdinfo_manager()
+        
+        # 查找并清理对应的任务
+        cleaned = False
+        with bdinfo_manager.lock:
+            for task_id, task in bdinfo_manager.tasks.items():
+                if task.seed_id == seed_id and task.status == "processing_bdinfo":
+                    bdinfo_manager._cleanup_process(task)
+                    cleaned = True
+                    break
+        
+        if cleaned:
+            return jsonify({
+                'success': True,
+                'message': '已清理残留进程'
+            })
+        else:
+            return jsonify({
+                'success': True,
+                'message': '未找到需要清理的进程'
+            })
+        
+    except Exception as e:
+        logging.error(f"清理 BDInfo 进程失败: {e}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+
+@migrate_bp.route("/migrate/restart_bdinfo", methods=["POST"])
+def restart_bdinfo():
+    """重启卡死的 BDInfo 任务"""
+    try:
+        data = request.json
+        seed_id = data.get('seed_id')
+        
+        if not seed_id:
+            return jsonify({'error': '缺少 seed_id 参数'}), 400
+        
+        from core.bdinfo.bdinfo_manager import get_bdinfo_manager
+        
+        bdinfo_manager = get_bdinfo_manager()
+        
+        # 获取种子数据
+        conn = migrate_bp.db_manager._get_connection()
+        cursor = migrate_bp.db_manager._get_cursor(conn)
+        
+        # 解析复合 seed_id
+        if "_" in seed_id:
+            parts = seed_id.split("_")
+            if len(parts) >= 3:
+                site_name_val = parts[-1]
+                torrent_id_val = parts[-2]
+                hash_val = "_".join(parts[:-2])
+                
+                if migrate_bp.db_manager.db_type == "sqlite":
+                    cursor.execute(
+                        "SELECT save_path FROM seed_parameters WHERE hash = ? AND torrent_id = ? AND site_name = ?",
+                        (hash_val, torrent_id_val, site_name_val)
+                    )
+                else:
+                    cursor.execute(
+                        "SELECT save_path FROM seed_parameters WHERE hash = %s AND torrent_id = %s AND site_name = %s",
+                        (hash_val, torrent_id_val, site_name_val)
+                    )
+            else:
+                # 如果格式不对，尝试使用 CONCAT 查询
+                if migrate_bp.db_manager.db_type == "sqlite":
+                    cursor.execute(
+                        "SELECT save_path FROM seed_parameters WHERE hash || '_' || torrent_id || '_' || site_name = ?",
+                        (seed_id,)
+                    )
+                else:
+                    cursor.execute(
+                        "SELECT save_path FROM seed_parameters WHERE CONCAT(hash, '_', torrent_id, '_', site_name) = %s",
+                        (seed_id,)
+                    )
+        else:
+            return jsonify({'error': '无效的 seed_id 格式'}), 400
+        
+        result = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        
+        if not result:
+            return jsonify({'error': '种子数据不存在'}), 404
+        
+        save_path = result[0]
+        
+        # 1. 清理可能的残留进程
+        bdinfo_manager.cleanup_orphaned_process(seed_id)
+        
+        # 2. 重置数据库状态
+        bdinfo_manager.reset_task_status(seed_id)
+        
+        # 3. 重新添加任务
+        task_id = bdinfo_manager.add_task(
+            seed_id=seed_id,
+            save_path=save_path,
+            priority=1  # 高优先级
+        )
+        
+        return jsonify({
+            'success': True,
+            'task_id': task_id,
+            'message': 'BDInfo 任务已重启'
+        })
+        
+    except Exception as e:
+        logging.error(f"重启 BDInfo 任务失败: {e}", exc_info=True)
         return jsonify({'error': str(e)}), 500
