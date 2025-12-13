@@ -1746,7 +1746,7 @@ const refreshMediainfo = async () => {
       // 如果 BDInfo 在后台处理中，开始SSE连接
       if (response.data.bdinfo_async && response.data.bdinfo_async.bdinfo_status === 'processing') {
         ElNotification.info({
-          title: 'MediaInfo 已更新',
+          title: 'BDInfo 处理中',
           message: 'BDInfo 正在后台处理中，完成后将自动更新...',
           duration: 5000,
         })
@@ -1786,7 +1786,7 @@ const refreshMediainfo = async () => {
 // BDInfo SSE相关函数
 const startBDInfoSSE = () => {
   // 关闭之前的连接
-  stopBDInfoSSE()
+  stopBDInfoSSE(false)
 
   // 显示进度条
   bdinfoProgress.value = {
@@ -1842,7 +1842,7 @@ const startBDInfoSSE = () => {
             message: 'BDInfo 已成功获取并更新',
           })
           bdinfoProgress.value.visible = false
-          stopBDInfoSSE()
+          stopBDInfoSSE(false)
           break
 
         case 'error':
@@ -1852,7 +1852,7 @@ const startBDInfoSSE = () => {
             message: data.data.error || 'BDInfo 获取失败，可手动重试',
           })
           bdinfoProgress.value.visible = false
-          stopBDInfoSSE()
+          stopBDInfoSSE(false)
           break
 
         case 'heartbeat':
@@ -1875,22 +1875,24 @@ const startBDInfoSSE = () => {
       message: 'BDInfo 进度更新连接中断，请刷新页面重试',
     })
     bdinfoProgress.value.visible = false
-    stopBDInfoSSE()
+    stopBDInfoSSE(false)
   }
 }
 
 // 停止 BDInfo SSE
-const stopBDInfoSSE = () => {
+const stopBDInfoSSE = (showNotification: boolean | Event = true) => {
   if (bdinfoEventSource.value) {
     bdinfoEventSource.value.close()
     bdinfoEventSource.value = null
   }
   // 隐藏进度条
   bdinfoProgress.value.visible = false
-  ElNotification.info({
-    title: '已取消',
-    message: 'BDInfo 获取已取消',
-  })
+  if (showNotification === true || (typeof showNotification === 'object' && showNotification)) {
+    ElNotification.info({
+      title: '已取消',
+      message: 'BDInfo 获取已取消',
+    })
+  }
 }
 
 // 后台运行
@@ -1931,8 +1933,9 @@ const refreshBDInfo = async () => {
 
 // 在组件卸载时清理轮询
 onUnmounted(() => {
-  if (bdinfoPollingTimer.value) {
-    clearInterval(bdinfoPollingTimer.value)
+  if (bdinfoEventSource.value) {
+    bdinfoEventSource.value.close()
+    bdinfoEventSource.value = null
   }
 })
 

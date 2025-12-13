@@ -30,76 +30,118 @@ def cleanup_old_tmp_structure():
     - server/data/tmp/torrents/ 目录（并清理其中的 JSON 文件）
     - server/data/tmp/batch.log 文件
     删除其他所有文件和目录（包括 extracted_data）
-
-    注意：开发环境下不执行清理
+    
+    清理 BDInfo 目录下的 .log 文件：
+    - 开发环境：/home/sqing/Codes/Docker.pt-nexus-dev/server/core/bdinfo/
+    - 生产环境：/app/bdinfo/
     """
     # 检查是否为开发环境
-    if os.getenv("DEV_ENV") == "true":
+    is_dev_env = os.getenv("DEV_ENV") == "true"
+    if is_dev_env:
         print("开发环境检测：跳过 tmp 目录清理")
-        return
+    else:
+        print("生产环境：开始清理旧的 tmp 目录结构...")
 
     from config import TEMP_DIR
     import shutil
 
-    print("开始清理旧的 tmp 目录结构...")
+    # 清理 tmp 目录结构（仅在生产环境）
+    if not is_dev_env:
+        # 要保留的项目
+        keep_items = {"torrents", "batch.log"}
 
-    # 要保留的项目
-    keep_items = {"torrents", "batch.log"}
+        try:
+            if not os.path.exists(TEMP_DIR):
+                print(f"tmp 目录不存在: {TEMP_DIR}")
+                return
 
+            # 确保 torrents 目录存在
+            torrents_dir = os.path.join(TEMP_DIR, "torrents")
+            os.makedirs(torrents_dir, exist_ok=True)
+
+            # 遍历 tmp 目录下的所有项目
+            items_to_remove = []
+            for item in os.listdir(TEMP_DIR):
+                if item not in keep_items:
+                    items_to_remove.append(item)
+
+            if not items_to_remove:
+                print("tmp 目录已是最新结构，无需清理")
+            else:
+                # 删除不需要的项目
+                removed_count = 0
+                for item in items_to_remove:
+                    item_path = os.path.join(TEMP_DIR, item)
+                    try:
+                        if os.path.isdir(item_path):
+                            shutil.rmtree(item_path)
+                            print(f"  已删除目录: {item}")
+                        else:
+                            os.remove(item_path)
+                            print(f"  已删除文件: {item}")
+                        removed_count += 1
+                    except Exception as e:
+                        print(f"  删除 {item} 时出错: {e}")
+
+                print(f"清理完成，共删除 {removed_count} 个项目")
+
+            # 清理 torrents 目录中的 JSON 文件
+            print("开始清理 torrents 目录中的 JSON 文件...")
+            json_removed = 0
+            for filename in os.listdir(torrents_dir):
+                if filename.endswith(".json"):
+                    json_path = os.path.join(torrents_dir, filename)
+                    try:
+                        os.remove(json_path)
+                        json_removed += 1
+                    except Exception as e:
+                        print(f"  删除 JSON 文件 {filename} 时出错: {e}")
+
+            if json_removed > 0:
+                print(f"已清理 {json_removed} 个 JSON 文件")
+            else:
+                print("torrents 目录中没有 JSON 文件需要清理")
+
+        except Exception as e:
+            print(f"清理 tmp 目录结构时出错: {e}")
+            import traceback
+            traceback.print_exc()
+
+    # 清理 BDInfo 目录下的 .log 文件（开发环境和生产环境都执行）
+    print("开始清理 BDInfo 目录下的 .log 文件...")
+    
+    # 根据环境变量设置BDInfo相关路径
+    if is_dev_env:
+        # 开发环境
+        bdinfo_dir = "/home/sqing/Codes/Docker.pt-nexus-dev/server/core/bdinfo"
+    else:
+        # 生产环境（Docker容器内）
+        bdinfo_dir = "/app/bdinfo"
+    
+    log_removed = 0
     try:
-        if not os.path.exists(TEMP_DIR):
-            print(f"tmp 目录不存在: {TEMP_DIR}")
-            return
-
-        # 确保 torrents 目录存在
-        torrents_dir = os.path.join(TEMP_DIR, "torrents")
-        os.makedirs(torrents_dir, exist_ok=True)
-
-        # 遍历 tmp 目录下的所有项目
-        items_to_remove = []
-        for item in os.listdir(TEMP_DIR):
-            if item not in keep_items:
-                items_to_remove.append(item)
-
-        if not items_to_remove:
-            print("tmp 目录已是最新结构，无需清理")
+        if os.path.exists(bdinfo_dir):
+            for filename in os.listdir(bdinfo_dir):
+                if filename.endswith(".log"):
+                    log_path = os.path.join(bdinfo_dir, filename)
+                    try:
+                        os.remove(log_path)
+                        log_removed += 1
+                        print(f"  已删除日志文件: {filename}")
+                    except Exception as e:
+                        print(f"  删除日志文件 {filename} 时出错: {e}")
         else:
-            # 删除不需要的项目
-            removed_count = 0
-            for item in items_to_remove:
-                item_path = os.path.join(TEMP_DIR, item)
-                try:
-                    if os.path.isdir(item_path):
-                        shutil.rmtree(item_path)
-                        print(f"  已删除目录: {item}")
-                    else:
-                        os.remove(item_path)
-                        print(f"  已删除文件: {item}")
-                    removed_count += 1
-                except Exception as e:
-                    print(f"  删除 {item} 时出错: {e}")
+            print(f"BDInfo 目录不存在: {bdinfo_dir}")
 
-            print(f"清理完成，共删除 {removed_count} 个项目")
-
-        # 清理 torrents 目录中的 JSON 文件
-        print("开始清理 torrents 目录中的 JSON 文件...")
-        json_removed = 0
-        for filename in os.listdir(torrents_dir):
-            if filename.endswith(".json"):
-                json_path = os.path.join(torrents_dir, filename)
-                try:
-                    os.remove(json_path)
-                    json_removed += 1
-                except Exception as e:
-                    print(f"  删除 JSON 文件 {filename} 时出错: {e}")
-
-        if json_removed > 0:
-            print(f"已清理 {json_removed} 个 JSON 文件")
+        if log_removed > 0:
+            print(f"已清理 {log_removed} 个 BDInfo 日志文件")
         else:
-            print("torrents 目录中没有 JSON 文件需要清理")
+            print("BDInfo 目录中没有 .log 文件需要清理")
 
     except Exception as e:
-        print(f"清理 tmp 目录时发生错误: {e}")
+        print(f"清理 BDInfo 日志文件时出错: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 def create_app():
@@ -137,7 +179,9 @@ def create_app():
     )
 
     # --- 步骤 0: 清理旧的 tmp 目录结构 ---
-    cleanup_old_tmp_structure()
+    # 只在主进程中执行，避免 reloader 重复执行
+    if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
+        cleanup_old_tmp_structure()
 
     # --- 步骤 1: 初始化核心依赖 (数据库和配置) ---
     logging.info("正在初始化数据库和配置...")
@@ -410,17 +454,19 @@ def create_app():
         # start_iyuu_thread(db_manager, config_manager)
 
         # --- 启动时执行一次种子数据刷新 ---
-        logging.info("应用启动完成，执行一次种子数据刷新...")
-        try:
-            from core.manual_tasks import update_torrents_data
+        # 只在主进程中执行，避免重复执行
+        if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
+            logging.info("应用启动完成，执行一次种子数据刷新...")
+            try:
+                from core.manual_tasks import update_torrents_data
 
-            result = update_torrents_data(db_manager, config_manager)
-            if result["success"]:
-                logging.info("启动时种子数据刷新完成")
-            else:
-                logging.warning(f"启动时种子数据刷新失败: {result['message']}")
-        except Exception as e:
-            logging.error(f"启动时种子数据刷新出错: {e}", exc_info=True)
+                result = update_torrents_data(db_manager, config_manager)
+                if result["success"]:
+                    logging.info("启动时种子数据刷新完成")
+                else:
+                    logging.warning(f"启动时种子数据刷新失败: {result['message']}")
+            except Exception as e:
+                logging.error(f"启动时种子数据刷新出错: {e}", exc_info=True)
     else:
         logging.info("检测到调试监控进程，跳过后台线程启动。")
 
@@ -443,33 +489,6 @@ def create_app():
 
 # --- 程序主入口 ---
 if __name__ == "__main__":
-    # 通过应用工厂创建 Flask 应用
-    flask_app = create_app()
-
-    # 注册应用退出时的清理函数
-    def cleanup():
-        logging.info("正在清理后台线程...")
-        try:
-            from core.services import stop_data_tracker
-
-            stop_data_tracker()
-        except Exception as e:
-            logging.error(f"停止数据追踪线程失败: {e}", exc_info=True)
-
-        # 注释掉IYUU线程的停止，因为不再自动启动
-        # try:
-        #     from core.iyuu import stop_iyuu_thread
-        #     stop_iyuu_thread()
-        # except Exception as e:
-        #     logging.error(f"停止IYUU线程失败: {e}", exc_info=True)
-
-        logging.info("后台线程清理完成。")
-
-    atexit.register(cleanup)
-
-    logging.info(f"以开发模式启动 Flask 服务器，监听端口 http://0.0.0.0:5275 ...")
-
-if __name__ == "__main__":
     # 注册关闭函数
     def cleanup_bdinfo_manager():
         """清理 BDInfo 管理器"""
@@ -482,9 +501,19 @@ if __name__ == "__main__":
         except Exception as e:
             logging.error(f"BDInfo 管理器停止失败: {e}")
 
-    import atexit
+    def cleanup():
+        """清理后台线程"""
+        logging.info("正在清理后台线程...")
+        try:
+            from core.services import stop_data_tracker
+            stop_data_tracker()
+        except Exception as e:
+            logging.error(f"停止数据追踪线程失败: {e}", exc_info=True)
+        logging.info("后台线程清理完成。")
 
+    import atexit
     atexit.register(cleanup_bdinfo_manager)
+    atexit.register(cleanup)
 
     # 创建 Flask 应用
     flask_app = create_app()
@@ -493,10 +522,21 @@ if __name__ == "__main__":
     try:
         db_config = get_db_config()
         db_manager = DatabaseManager(db_config)
-        db_manager.migration_manager.migrate_bdinfo_fields()
-        logging.info("BDInfo 字段迁移完成")
+
+        # 执行数据库迁移
+        conn = db_manager._get_connection()
+        cursor = db_manager._get_cursor(conn)
+        
+        success = db_manager.migration_manager.run_all_migrations(conn, cursor)
+        cursor.close()
+        conn.close()
+        
+        if success:
+            logging.info("数据库迁移完成")
+        else:
+            logging.error("数据库迁移失败")
     except Exception as e:
-        logging.error(f"BDInfo 字段迁移失败: {e}", exc_info=True)
+        logging.error(f"数据库迁移失败: {e}", exc_info=True)
 
     # 初始化 BDInfo 管理器（在数据库迁移之后）
     try:
@@ -504,8 +544,17 @@ if __name__ == "__main__":
 
         bdinfo_manager = get_bdinfo_manager()
         bdinfo_manager.start()
+        
+        # 等待一秒确保管理器完全启动
+        import time
+        time.sleep(1)
+        
+        # 启动时恢复遗留任务
+        bdinfo_manager.recover_orphaned_tasks()
+        
         logging.info("BDInfo 管理器初始化成功")
     except Exception as e:
         logging.error(f"BDInfo 管理器初始化失败: {e}", exc_info=True)
 
+    logging.info(f"以开发模式启动 Flask 服务器，监听端口 http://0.0.0.0:5275 ...")
     flask_app.run(host="0.0.0.0", port=5275, debug=True)

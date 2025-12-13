@@ -487,17 +487,20 @@ class DatabaseMigrationManager:
             # 3. 执行列添加迁移（seeders列）
             self._migrate_add_seeders_column(conn, cursor)
 
-            # 4. 执行MySQL字符集统一迁移
+            # 4. 执行BDInfo字段迁移
+            self.migrate_bdinfo_fields()
+
+            # 5. 执行MySQL字符集统一迁移
             if self.db_type == "mysql":
                 self._migrate_mysql_collation_unification(conn, cursor)
 
-            # 5. 执行完整的Schema完整性检查
+            # 6. 执行完整的Schema完整性检查
             self._ensure_schema_integrity(conn, cursor)
 
-            # 6. 执行复合主键迁移
+            # 7. 执行复合主键迁移
             self._migrate_composite_primary_key(conn, cursor)
 
-            # 7. 执行片源平台格式修复迁移
+            # 8. 执行片源平台格式修复迁移
             self._migrate_source_platform_format(conn, cursor)
 
             conn.commit()

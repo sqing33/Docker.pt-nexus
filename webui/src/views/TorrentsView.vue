@@ -1556,23 +1556,37 @@ const tableRowClassName = ({ row }: { row: Torrent }) => {
 }
 
 // --- [修改] onMounted 启动逻辑 ---
+// 添加会话存储键名，用于跟踪是否是首次加载
+const FIRST_LOAD_KEY = 'torrents_view_first_load'
+
 onMounted(async () => {
+  // 检查是否是首次加载（首次打开页面或刷新浏览器）
+  const isFirstLoad = !sessionStorage.getItem(FIRST_LOAD_KEY)
+  
   // 1. 先加载保存的UI设置
   await loadUiSettings()
   // 2. loadUiSettings 会设置 settingsLoaded=true，此时表格才会被渲染
   // 3. 使用加载好的设置去获取数据
   fetchData()
-  // 4. 页面打开时触发一次种子数据刷新
-  try {
-    console.log('页面加载完成，触发种子数据刷新...')
-    await axios.post('/api/refresh_data')
-    console.log('种子数据刷新完成，重新获取数据...')
-    // 刷新完成后重新获取数据
-    await fetchData()
-  } catch (error) {
-    console.warn('页面加载时种子数据刷新失败:', error)
-    // 刷新失败不影响正常显示
+  
+  // 4. 只在首次加载时触发种子数据刷新
+  if (isFirstLoad) {
+    try {
+      console.log('首次加载页面，触发种子数据刷新...')
+      await axios.post('/api/refresh_data')
+      console.log('种子数据刷新完成，重新获取数据...')
+      // 刷新完成后重新获取数据
+      await fetchData()
+    } catch (error) {
+      console.warn('页面加载时种子数据刷新失败:', error)
+      // 刷新失败不影响正常显示
+    }
+    // 标记已加载过，避免重复刷新
+    sessionStorage.setItem(FIRST_LOAD_KEY, 'loaded')
+  } else {
+    console.log('页面已加载过，跳过种子数据刷新')
   }
+  
   // 5. 执行其他初始化
   fetchDownloadersList()
   fetchAllSitesStatus()

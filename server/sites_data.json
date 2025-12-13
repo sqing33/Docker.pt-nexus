@@ -614,7 +614,7 @@
     "group": "-Kylin,-HDKWEB,-HDKylinWeb,-HDKTV",
     "description": "麒麟",
     "migration": 3,
-    "speed_limit": 50
+    "speed_limit": 90
   },
   {
     "site": "ilolicon",
