@@ -708,6 +708,11 @@ def upload_data_mediaInfo_async(
     torrent_name: str = None,
     force_refresh: bool = False,
     priority: int = 2,  # 1=单个种子高优先级, 2=批量普通优先级
+    # 新增参数：预写入所需的基本信息
+    hash_value: str = None,
+    torrent_id: str = None,
+    site_name: str = None,
+    nickname: str = None,  # 站点中文名
 ):
     """
     异步版本的 MediaInfo/BDInfo 获取函数
@@ -722,6 +727,9 @@ def upload_data_mediaInfo_async(
         torrent_name: 种子名称
         force_refresh: 是否强制刷新
         priority: 任务优先级 (1=高优先级, 2=普通优先级)
+        hash_value: 种子hash值（用于预写入占位记录）
+        torrent_id: 种子ID（用于预写入占位记录）
+        site_name: 站点名称（用于预写入占位记录）
 
     Returns:
         tuple: (mediainfo_text, is_mediainfo, is_bdinfo, bdinfo_async_info)
@@ -765,6 +773,46 @@ def upload_data_mediaInfo_async(
     if is_bluray_disc and (force_refresh or not is_bdinfo):
         if seed_id:
             try:
+                # 预写入占位记录到数据库（如果提供了必要的参数）
+                if hash_value:
+                    try:
+                        from database import DatabaseManager
+                        from config import get_db_config
+                        
+                        # 获取数据库配置并创建数据库管理器
+                        config = get_db_config()
+                        db_manager = DatabaseManager(config)
+                        
+                        # 创建最小化的占位记录
+                        placeholder_data = {
+                            "nickname": nickname,    # 站点中文名
+                            "mediainfo_status": "queued",
+                            "save_path": save_path,
+                            "downloader_id": downloader_id,
+                        }
+                        # 如果有torrent_id和正确的site_name也保存，但不作为主键
+                        if torrent_id:
+                            placeholder_data["torrent_id"] = torrent_id
+                        # site_name应该使用英文站点名，而不是中文名
+                        if site_name:
+                            placeholder_data["site_name"] = site_name
+                        
+                        # 先保存占位记录，仅使用hash作为主键
+                        from models.seed_parameter import SeedParameter
+                        seed_param = SeedParameter(db_manager)
+                        # 确保传递正确的 torrent_id 和 site_name
+                        actual_torrent_id = torrent_id if torrent_id else ""
+                        actual_site_name = site_name if site_name else ""
+                        success = seed_param.save_parameters(hash_value, actual_torrent_id, actual_site_name, placeholder_data)
+                        
+                        if success:
+                            print(f"已预写入占位记录到数据库: {hash_value}")
+                        else:
+                            print(f"预写入占位记录失败，但继续尝试添加 BDInfo 任务")
+                            
+                    except Exception as e:
+                        print(f"预写入占位记录失败: {e}，但继续尝试添加 BDInfo 任务")
+
                 from core.bdinfo.bdinfo_manager import get_bdinfo_manager
 
                 bdinfo_manager = get_bdinfo_manager()

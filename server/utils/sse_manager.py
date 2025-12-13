@@ -37,7 +37,43 @@ class SSEManager:
             self.seed_connections[seed_id].add(connection_id)
             
             logging.info(f"SSE连接已添加: {connection_id} (seed_id: {seed_id})")
+            
+            # 发送连接成功消息
+            connected_message = {
+                "type": "connected",
+                "connection_id": connection_id,
+                "seed_id": seed_id
+            }
+            message_queue.put(connected_message)
+            
+            # 发送当前进度状态（如果存在）
+            self._send_current_progress(seed_id, message_queue)
+            
             return message_queue
+    
+    def _send_current_progress(self, seed_id: str, message_queue: Queue):
+        """发送当前进度状态给新连接"""
+        try:
+            # 从 BDInfo 管理器获取当前进度
+            from core.bdinfo.bdinfo_manager import get_bdinfo_manager
+            bdinfo_manager = get_bdinfo_manager()
+            
+            current_progress = bdinfo_manager.get_current_progress(seed_id)
+            if current_progress:
+                progress_message = {
+                    "type": "progress_update",
+                    "data": current_progress
+                }
+                message_queue.put(progress_message)
+                logging.info(f"已发送当前进度给新连接: {seed_id}")
+        except Exception as e:
+            logging.error(f"发送当前进度失败: {e}")
+            # 发生错误时发送心跳，确保连接正常
+            heartbeat_message = {
+                "type": "heartbeat",
+                "timestamp": time.time()
+            }
+            message_queue.put(heartbeat_message)
             
     def remove_connection(self, connection_id: str):
         """移除SSE连接"""

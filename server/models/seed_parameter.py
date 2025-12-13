@@ -38,19 +38,43 @@ class SeedParameter:
             parameters["torrent_id"] = torrent_id
             parameters["site_name"] = site_name
 
-            # 保存到数据库
-            if self.db_manager:
-                db_success = self._save_to_database(hash, torrent_id,
-                                                    site_name, parameters)
-                if db_success:
-                    logging.info(f"种子参数已保存到数据库: {torrent_id} from {site_name}")
-                    return True
+            # 重新设计：仅使用hash作为主键，确保每个hash只有一条记录
+            # 先检查是否已存在该hash的记录
+            existing_record = self._find_by_hash(hash)
+            
+            if existing_record:
+                # 如果存在记录，更新现有记录
+                # 合并现有参数和新参数，新参数优先
+                merged_parameters = self._merge_parameters(existing_record, parameters)
+                merged_parameters["updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                
+                if self.db_manager:
+                    db_success = self._update_by_hash(hash, merged_parameters)
+                    if db_success:
+                        logging.info(f"种子参数已更新到数据库: {hash}")
+                        return True
+                    else:
+                        logging.error(f"更新种子参数到数据库失败: {hash}")
+                        return False
                 else:
-                    logging.error(f"保存种子参数到数据库失败: {torrent_id} from {site_name}")
+                    logging.error("数据库管理器未初始化")
                     return False
             else:
-                logging.error("数据库管理器未初始化")
-                return False
+                # 如果不存在记录，创建新记录
+                parameters["created_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                parameters["updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                
+                if self.db_manager:
+                    db_success = self._insert_by_hash(hash, parameters)
+                    if db_success:
+                        logging.info(f"种子参数已插入到数据库: {hash}")
+                        return True
+                    else:
+                        logging.error(f"插入种子参数到数据库失败: {hash}")
+                        return False
+                else:
+                    logging.error("数据库管理器未初始化")
+                    return False
 
         except Exception as e:
             logging.error(f"保存种子参数失败: {e}", exc_info=True)
@@ -91,6 +115,10 @@ class SeedParameter:
                 title_components = str(
                     title_components) if title_components else ""
 
+            # 检查是否是占位记录，如果是，需要在更新时修正 site_name
+            is_placeholder = site_name.startswith("PLACEHOLDER_")
+            correct_site_name = site_name[11:] if is_placeholder else site_name  # 移除 "PLACEHOLDER_" 前缀
+
             # 根据数据库类型构建UPSERT SQL
             if self.db_manager.db_type == "postgresql":
                 # PostgreSQL使用ON CONFLICT DO UPDATE
@@ -99,7 +127,7 @@ class SeedParameter:
                     (hash, torrent_id, site_name, nickname, save_path, name, title, subtitle, imdb_link, douban_link, type, medium,
                      video_codec, audio_codec, resolution, team, source, tags, poster, screenshots,
                      statement, body, mediainfo, title_components, removed_ardtudeclarations, downloader_id, is_reviewed, created_at, updated_at)
-                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
                     ON CONFLICT (hash, torrent_id, site_name)
                     DO UPDATE SET
                         nickname = EXCLUDED.nickname,
@@ -352,21 +380,19 @@ class SeedParameter:
             if conn:
                 conn.close()
 
-    def update_parameters(self, torrent_id: str, site_name: str,
-                          parameters: Dict[str, Any]) -> bool:
+    def update_parameters(self, hash: str, parameters: Dict[str, Any]) -> bool:
         """
-        更新种子参数
+        更新种子参数（基于hash）
 
         Args:
-            torrent_id: 种子ID
-            site_name: 站点名称
+            hash: 种子hash值
             parameters: 要更新的参数字典
 
         Returns:
             bool: 更新是否成功
         """
         # 先获取现有参数
-        existing_params = self.get_parameters(torrent_id, site_name) or {}
+        existing_params = self._find_by_hash(hash) or {}
 
         # 合并参数（新参数覆盖旧参数）
         updated_params = {**existing_params, **parameters}
@@ -375,10 +401,7 @@ class SeedParameter:
         updated_params["updated_at"] = datetime.now().strftime(
             "%Y-%m-%d %H:%M:%S")
 
-        # 从现有参数中获取hash值，如果不存在则使用空字符串
-        hash_value = existing_params.get("hash", "")
-
-        return self.save_parameters(hash_value, torrent_id, site_name, updated_params)
+        return self._update_by_hash(hash, updated_params)
 
     def delete_parameters(self, torrent_id: str, site_name: str) -> bool:
         """
@@ -426,6 +449,280 @@ class SeedParameter:
         except Exception as e:
             logging.error(f"删除种子参数失败: {e}", exc_info=True)
             return False
+
+    def _find_by_hash(self, hash: str) -> Optional[Dict[str, Any]]:
+        """
+        通过 hash 查找现有记录
+
+        Args:
+            hash: 种子hash值
+
+        Returns:
+            Dict[str, Any]: 找到的记录，如果未找到则返回None
+        """
+        try:
+            conn = self.db_manager._get_connection()
+            cursor = self.db_manager._get_cursor(conn)
+            ph = self.db_manager.get_placeholder()
+
+            # 统一使用参数化查询，避免 SQL 注入和参数绑定问题
+            cursor.execute(
+                f"SELECT * FROM seed_parameters WHERE hash = {ph} ORDER BY updated_at DESC LIMIT 1",
+                (hash,)
+            )
+
+            result = cursor.fetchone()
+            cursor.close()
+            conn.close()
+
+            if result:
+                return dict(result)
+            return None
+
+        except Exception as e:
+            logging.error(f"查找记录失败: {e}", exc_info=True)
+            return None
+
+    def _merge_parameters(self, existing_record: Dict[str, Any], new_parameters: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        合并现有参数和新参数，新参数优先
+        
+        Args:
+            existing_record: 现有记录
+            new_parameters: 新参数
+            
+        Returns:
+            Dict[str, Any]: 合并后的参数
+        """
+        merged = dict(existing_record)
+        
+        # 定义关键字段，即使为空字符串也要更新
+        KEY_FIELDS = ["torrent_id", "site_name"]
+        
+        # 更新新参数中的字段
+        for key, value in new_parameters.items():
+            if key in KEY_FIELDS:
+                # 对于关键字段，始终更新（即使为空字符串）
+                merged[key] = value
+            elif value is not None and value != "":
+                # 其他字段保持原有逻辑：非空才更新
+                # 如果新值是列表类型，直接替换（新参数优先）
+                if isinstance(value, list):
+                    merged[key] = value
+                # 如果新值是字符串但现有值是列表，保持现有列表
+                elif key in merged and isinstance(merged[key], list) and not isinstance(value, str):
+                    # 保持现有列表
+                    pass
+                else:
+                    merged[key] = value
+        
+        return merged
+
+    def _update_by_hash(self, hash: str, parameters: Dict[str, Any]) -> bool:
+        """
+        通过hash更新记录
+        
+        Args:
+            hash: 种子hash值
+            parameters: 参数字典
+            
+        Returns:
+            bool: 更新是否成功
+        """
+        try:
+            conn = self.db_manager._get_connection()
+            cursor = self.db_manager._get_cursor(conn)
+            ph = self.db_manager.get_placeholder()
+
+            # 构建更新语句
+            update_fields = []
+            update_values = []
+            
+            for key, value in parameters.items():
+                if key not in ["hash", "id"]:  # 排除主键和ID字段
+                    update_fields.append(f"{key} = {ph}")
+                    
+                    # 处理特殊字段的类型转换
+                    if key in ["tags", "title_components", "removed_ardtudeclarations"] and isinstance(value, list):
+                        # 将列表转换为JSON字符串
+                        update_values.append(json.dumps(value, ensure_ascii=False))
+                    elif key in ["tags", "title_components", "removed_ardtudeclarations"] and isinstance(value, str):
+                        # 如果已经是字符串，保持不变
+                        update_values.append(value)
+                    elif key == "mediainfo" and isinstance(value, dict):
+                        # 将字典转换为JSON字符串
+                        update_values.append(json.dumps(value, ensure_ascii=False))
+                    elif key == "is_reviewed" and isinstance(value, bool):
+                        # 布尔值转换为整数
+                        update_values.append(int(value))
+                    elif value is None:
+                        # 对于datetime字段，None应该转换为SQL NULL而不是空字符串
+                        # MySQL不接受datetime字段的空字符串
+                        if key.endswith('_at') or key in ['created_at', 'updated_at', 'bdinfo_started_at', 'bdinfo_completed_at']:
+                            update_values.append(None)  # SQL NULL
+                        else:
+                            update_values.append("")  # 其他字段用空字符串
+                    else:
+                        # 其他字段保持原样，但确保不是复杂对象
+                        if isinstance(value, (dict, list, tuple, set)):
+                            # 如果还有其他复杂类型，转换为JSON字符串
+                            update_values.append(json.dumps(value, ensure_ascii=False))
+                        else:
+                            update_values.append(value)
+            
+            if not update_fields:
+                return True  # 没有需要更新的字段
+            
+            update_values.append(hash)  # WHERE条件的值
+            
+            update_sql = f"UPDATE seed_parameters SET {', '.join(update_fields)} WHERE hash = {ph}"
+            
+            cursor.execute(update_sql, update_values)
+            conn.commit()
+            
+            cursor.close()
+            conn.close()
+            
+            return True
+
+        except Exception as e:
+            logging.error(f"更新记录失败: {e}", exc_info=True)
+            if conn:
+                conn.rollback()
+                conn.close()
+            return False
+
+    def _insert_by_hash(self, hash: str, parameters: Dict[str, Any]) -> bool:
+        """
+        通过hash插入新记录
+        
+        Args:
+            hash: 种子hash值
+            parameters: 参数字典
+            
+        Returns:
+            bool: 插入是否成功
+        """
+        try:
+            conn = self.db_manager._get_connection()
+            cursor = self.db_manager._get_cursor(conn)
+            ph = self.db_manager.get_placeholder()
+
+            # 构建插入语句
+            parameters["hash"] = hash  # 确保hash字段存在
+            
+            # 处理所有特殊字段，确保它们是SQL兼容的类型
+            processed_parameters = {}
+            for key, value in parameters.items():
+                if key in ["tags", "title_components", "removed_ardtudeclarations"] and isinstance(value, list):
+                    # 将列表转换为JSON字符串
+                    processed_parameters[key] = json.dumps(value, ensure_ascii=False)
+                elif key in ["tags", "title_components", "removed_ardtudeclarations"] and isinstance(value, str):
+                    # 如果已经是字符串，保持不变
+                    processed_parameters[key] = value
+                elif key == "mediainfo" and isinstance(value, dict):
+                    # 将字典转换为JSON字符串
+                    processed_parameters[key] = json.dumps(value, ensure_ascii=False)
+                elif key == "is_reviewed" and isinstance(value, bool):
+                    # 布尔值转换为整数
+                    processed_parameters[key] = int(value)
+                elif value is None:
+                    # 对于datetime字段，None应该转换为SQL NULL而不是空字符串
+                    if key.endswith('_at') or key in ['created_at', 'updated_at', 'bdinfo_started_at', 'bdinfo_completed_at']:
+                        processed_parameters[key] = None  # SQL NULL
+                    else:
+                        processed_parameters[key] = ""  # 其他字段用空字符串
+                else:
+                    # 其他字段保持原样，但确保不是复杂对象
+                    if isinstance(value, (dict, list, tuple, set)):
+                        # 如果还有其他复杂类型，转换为JSON字符串
+                        processed_parameters[key] = json.dumps(value, ensure_ascii=False)
+                    else:
+                        processed_parameters[key] = value
+            
+            # 构建字段名和占位符
+            fields = list(processed_parameters.keys())
+            placeholders = [ph] * len(fields)
+            values = list(processed_parameters.values())
+            
+            insert_sql = f"INSERT INTO seed_parameters ({', '.join(fields)}) VALUES ({', '.join(placeholders)})"
+            
+            cursor.execute(insert_sql, values)
+            conn.commit()
+            
+            cursor.close()
+            conn.close()
+            
+            return True
+
+        except Exception as e:
+            logging.error(f"插入记录失败: {e}", exc_info=True)
+            if conn:
+                conn.rollback()
+                conn.close()
+            return False
+
+    def _find_by_hash_torrent_nickname(self, hash: str, torrent_id: str, nickname: str) -> Optional[Dict[str, Any]]:
+        """
+        通过 hash、torrent_id 和 nickname 查找现有记录
+        支持查找 site_name 为空或具体的记录，优先返回有具体 site_name 的记录
+
+        Args:
+            hash: 种子hash值
+            torrent_id: 种子ID
+            nickname: 站点中文名
+
+        Returns:
+            Dict[str, Any]: 找到的记录，如果未找到则返回None
+        """
+        try:
+            conn = self.db_manager._get_connection()
+            cursor = self.db_manager._get_cursor(conn)
+            ph = self.db_manager.get_placeholder()
+
+            # 根据数据库类型构建查询，优先查找有具体 site_name 的记录，然后查找空 site_name 的记录
+            if self.db_manager.db_type == "postgresql":
+                # 先查找有具体 site_name 的记录
+                cursor.execute(
+                    f"SELECT * FROM seed_parameters WHERE hash = {ph} AND torrent_id = {ph} AND nickname = {ph} AND site_name != '' ORDER BY updated_at DESC LIMIT 1",
+                    (hash, torrent_id, nickname)
+                )
+                result = cursor.fetchone()
+                
+                # 如果没找到，再查找 site_name 为空的记录
+                if not result:
+                    cursor.execute(
+                        f"SELECT * FROM seed_parameters WHERE hash = {ph} AND torrent_id = {ph} AND nickname = {ph} AND site_name = '' ORDER BY updated_at DESC LIMIT 1",
+                        (hash, torrent_id, nickname)
+                    )
+                    result = cursor.fetchone()
+            else:
+                # 先查找有具体 site_name 的记录
+                cursor.execute(
+                    "SELECT * FROM seed_parameters WHERE hash = ? AND torrent_id = ? AND nickname = ? AND site_name != '' ORDER BY updated_at DESC LIMIT 1",
+                    (hash, torrent_id, nickname)
+                )
+                result = cursor.fetchone()
+                
+                # 如果没找到，再查找 site_name 为空的记录
+                if not result:
+                    cursor.execute(
+                        "SELECT * FROM seed_parameters WHERE hash = ? AND torrent_id = ? AND nickname = ? AND site_name = '' ORDER BY updated_at DESC LIMIT 1",
+                        (hash, torrent_id, nickname)
+                    )
+                    result = cursor.fetchone()
+
+            result = cursor.fetchone()
+            cursor.close()
+            conn.close()
+
+            if result:
+                return dict(result)
+            return None
+
+        except Exception as e:
+            logging.error(f"查找记录失败: {e}", exc_info=True)
+            return None
 
     def search_torrent_hash(self, name: str, sites: str = None) -> str:
         """
