@@ -1,4 +1,4 @@
-// proxy.go (最终修复和简化版)
+// proxy.go
 package main
 
 import (
@@ -102,6 +102,7 @@ type MediaInfoResponse struct {
 	Success   bool   `json:"success"`
 	Message   string `json:"message"`
 	MediaInfo string `json:"mediainfo,omitempty"`
+	IsBDMV    bool   `json:"is_bdmv,omitempty"` // 新增：标识是否为原盘
 }
 type FileCheckRequest struct {
 	RemotePath string `json:"remote_path"`
@@ -136,6 +137,7 @@ type EpisodeCountResponse struct {
 	EpisodeCount int    `json:"episode_count,omitempty"`
 	SeasonNumber int    `json:"season_number,omitempty"`
 }
+
 type SubtitleEvent struct {
 	StartTime float64
 	EndTime   float64
@@ -177,7 +179,7 @@ func (c *qbHTTPClient) Login(username, password string) error {
 		return fmt.Errorf("登录失败，响应不为 'Ok.': %s", string(body))
 	}
 	c.IsLoggedIn = true
-	log.Printf("为 %s 登录成功", c.BaseURL)
+	// log.Printf("为 %s 登录成功", c.BaseURL)
 	return nil
 }
 func (c *qbHTTPClient) Get(endpoint string, params url.Values) ([]byte, error) {
@@ -343,7 +345,7 @@ func fetchServerStatsForDownloader(wg *sync.WaitGroup, config DownloaderConfig, 
 		resultsChan <- ServerStats{DownloaderID: config.ID}
 		return
 	}
-	log.Printf("正在为下载器 '%s' 获取统计信息...", config.Host)
+	// log.Printf("正在为下载器 '%s' 获取统计信息...", config.Host)
 	httpClient, err := newQBHTTPClient(config.Host)
 	if err != nil {
 		errChan <- fmt.Errorf("[%s] 创建HTTP客户端失败: %v", config.Host, err)
@@ -396,12 +398,12 @@ func fetchServerStatsForDownloader(wg *sync.WaitGroup, config DownloaderConfig, 
 	}
 
 	// 显示获取到的上传量和下载量
-	log.Printf("下载器 '%s' 服务器统计: 版本: %s, 总上传量: %.2f GB, 总下载量: %.2f GB, 当前上传速度: %s/s, 当前下载速度: %s/s",
-		config.Host, version,
-		float64(mainData.ServerState.AlltimeUL)/1024/1024/1024,
-		float64(mainData.ServerState.AlltimeDL)/1024/1024/1024,
-		formatBytes(mainData.ServerState.UpInfoSpeed),
-		formatBytes(mainData.ServerState.DlInfoSpeed))
+	// log.Printf("下载器 '%s' 服务器统计: 版本: %s, 总上传量: %.2f GB, 总下载量: %.2f GB, 当前上传速度: %s/s, 当前下载速度: %s/s",
+	// 	config.Host, version,
+	// 	float64(mainData.ServerState.AlltimeUL)/1024/1024/1024,
+	// 	float64(mainData.ServerState.AlltimeDL)/1024/1024/1024,
+	// 	formatBytes(mainData.ServerState.UpInfoSpeed),
+	// 	formatBytes(mainData.ServerState.DlInfoSpeed))
 
 	resultsChan <- stats
 }
@@ -558,7 +560,7 @@ func takeScreenshot(videoPath, outputPath string, timePoint float64, subtitleStr
 		// --- 关键修改：移除 mpv 的色调映射，保留原始 HDR 信息 ---
 		// 我们移除了 --target-trc=srgb 和 --tone-mapping=hable
 		// 让 mpv 输出最原始的画面，后续交给 ffmpeg 的 zscale 滤镜处理
-		
+
 		// 开启高位深截图，确保 HDR 信息不丢失
 		"--screenshot-high-bit-depth=yes",
 		// 关闭 mpv 的 PNG 压缩 (0-9)，设为0最快，反正后面 ffmpeg 会压
@@ -609,16 +611,16 @@ func convertPngToOptimizedPng(sourcePath, destPath string) error {
 	log.Printf("正在优化 PNG: %s -> %s (HDR: %v)", sourcePath, destPath, isHDR)
 
 	args := []string{
-		"-y",                   // 覆盖输出
-		"-v", "error",          // 减少日志噪音
-		"-i", sourcePath,       // 输入
-		"-frames:v", "1",       // 仅一帧
-		"-vf", vfFilter,        // 动态滤镜
-		
+		"-y",          // 覆盖输出
+		"-v", "error", // 减少日志噪音
+		"-i", sourcePath, // 输入
+		"-frames:v", "1", // 仅一帧
+		"-vf", vfFilter, // 动态滤镜
+
 		// 核心压缩参数：平衡体积(<10MB)与速度
-		"-compression_level", "4", 
+		"-compression_level", "4",
 		"-pred", "mixed",
-		
+
 		destPath, // 输出
 	}
 
@@ -639,9 +641,9 @@ func convertPngToOptimizedPng(sourcePath, destPath string) error {
 	destSizeMB := float64(destInfo.Size()) / 1024 / 1024
 	compressionRatio := float64(destInfo.Size()) / float64(sourceInfo.Size()) * 100
 
-	log.Printf("   ✅ 优化完成 (耗时: %.2fs) | 大小: %.2f MB (%.2f%%) | HDR处理: %v", 
+	log.Printf("   ✅ 优化完成 (耗时: %.2fs) | 大小: %.2f MB (%.2f%%) | HDR处理: %v",
 		duration.Seconds(), destSizeMB, compressionRatio, isHDR)
-	
+
 	return nil
 }
 
@@ -1220,17 +1222,17 @@ func screenshotHandler(w http.ResponseWriter, r *http.Request) {
 		hours := totalSeconds / 3600
 		minutes := (totalSeconds % 3600) / 60
 		seconds := totalSeconds % 60
-		
+
 		// 格式化时间: 00h12m45s
 		timeStr := fmt.Sprintf("%02dh%02dm%02ds", hours, minutes, seconds)
-		
+
 		// 构造文件名: s1_00h12m45s.png
 		// s%d 对应 s1, s2... (不补零，保持简洁)
 		fileName := fmt.Sprintf("s%d_%s.png", i+1, timeStr)
-		
+
 		// 定义路径
 		// 中间文件加 raw_ 前缀
-		intermediatePngPath := filepath.Join(tempDir, "raw_"+fileName) 
+		intermediatePngPath := filepath.Join(tempDir, "raw_"+fileName)
 		// 最终文件就是 s1_00h12m45s.png
 		finalPngPath := filepath.Join(tempDir, fileName)
 
@@ -1239,7 +1241,7 @@ func screenshotHandler(w http.ResponseWriter, r *http.Request) {
 			errMsg := fmt.Sprintf("第 %d 张图截图失败: %v", i+1, err)
 			log.Println(errMsg)
 			writeJSONResponse(w, r, http.StatusInternalServerError, ScreenshotResponse{Success: false, Message: errMsg})
-			return 
+			return
 		}
 
 		// 步骤2: PNG压缩 (使用修改后的 convertPngToOptimizedPng)
@@ -1247,7 +1249,7 @@ func screenshotHandler(w http.ResponseWriter, r *http.Request) {
 			errMsg := fmt.Sprintf("第 %d 张图PNG压缩失败: %v", i+1, err)
 			log.Println(errMsg)
 			writeJSONResponse(w, r, http.StatusInternalServerError, ScreenshotResponse{Success: false, Message: errMsg})
-			return 
+			return
 		}
 
 		// 步骤3: 上传
@@ -1256,7 +1258,7 @@ func screenshotHandler(w http.ResponseWriter, r *http.Request) {
 			errMsg := fmt.Sprintf("第 %d 张图上传失败: %v", i+1, err)
 			log.Println(errMsg)
 			writeJSONResponse(w, r, http.StatusInternalServerError, ScreenshotResponse{Success: false, Message: errMsg})
-			return 
+			return
 		}
 
 		// 转换直链
@@ -1298,6 +1300,20 @@ func mediainfoHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Printf("MediaInfo请求: 开始处理路径 '%s'", initialPath)
 
+	// --- [核心修改] ---
+	// 检查是否是蓝光原盘目录，如果是，只返回状态，不执行提取
+	if isBlurayDisc(initialPath) {
+		log.Printf("MediaInfo请求: 检测到蓝光原盘目录，返回 is_bdmv=true 由控制端决定后续操作: %s", initialPath)
+		writeJSONResponse(w, r, http.StatusOK, MediaInfoResponse{
+			Success: true, 
+			Message: "检测到蓝光原盘", 
+			IsBDMV:  true, // 告诉 Python 端这是原盘
+		})
+		return
+	}
+	// ----------------
+
+	// 如果不是蓝光原盘，按常规方式处理
 	videoPath, err := findTargetVideoFile(initialPath)
 	if err != nil {
 		log.Printf("MediaInfo请求: 查找视频文件失败: %v", err)
@@ -1445,6 +1461,8 @@ func countExisting(results []FileCheckResult) int {
 	return count
 }
 
+// isBlurayDisc 检查给定路径是否是蓝光原盘目录
+
 // episodeCountHandler 处理远程目录集数统计
 func episodeCountHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -1587,6 +1605,7 @@ func main() {
 	})
 	http.HandleFunc("/api/media/screenshot", screenshotHandler)
 	http.HandleFunc("/api/media/mediainfo", mediainfoHandler)
+	RegisterBDInfoRoutes() // 注册 BDInfo 相关路由
 	http.HandleFunc("/api/file/check", fileCheckHandler)
 	http.HandleFunc("/api/file/batch-check", batchFileCheckHandler)
 	http.HandleFunc("/api/media/episode-count", episodeCountHandler)
@@ -1597,6 +1616,7 @@ func main() {
 	log.Println("  GET  /api/health      - 健康检查")
 	log.Println("  POST /api/media/screenshot - 远程截图并上传图床")
 	log.Println("  POST /api/media/mediainfo  - 远程获取MediaInfo")
+	log.Println("  POST /api/media/bdinfo    - 远程获取BDInfo (由 bdinfo 处理)")
 	log.Println("  POST /api/file/check       - 远程文件存在性检查")
 	log.Println("  POST /api/file/batch-check - 批量远程文件存在性检查")
 	log.Println("  POST /api/media/episode-count - 远程目录集数统计")

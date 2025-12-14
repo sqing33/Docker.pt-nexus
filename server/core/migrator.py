@@ -18,7 +18,15 @@ import urllib.parse
 from io import StringIO
 from typing import Dict, Any, Optional, List
 from config import TEMP_DIR, DATA_DIR, GLOBAL_MAPPINGS
-from utils import ensure_scheme, upload_data_mediaInfo, upload_data_title, extract_tags_from_mediainfo, extract_origin_from_description, upload_data_movie_info, upload_data_mediaInfo_async
+from utils import (
+    ensure_scheme,
+    upload_data_mediaInfo,
+    upload_data_title,
+    extract_tags_from_mediainfo,
+    extract_origin_from_description,
+    upload_data_movie_info,
+    upload_data_mediaInfo_async,
+)
 from utils import _process_poster_url
 from utils import is_image_url_valid_robust
 from utils import check_completion_status, add_completion_tag_if_needed
@@ -82,16 +90,18 @@ class LoguruHandler(StringIO):
 class TorrentMigrator:
     """重构后的TorrentMigrator类，使用三层解耦模型实现参数标准化。"""
 
-    def __init__(self,
-                 source_site_info,
-                 target_site_info,
-                 search_term="",
-                 save_path="",
-                 torrent_name="",
-                 config_manager=None,
-                 db_manager=None,
-                 downloader_id=None,
-                 task_id=None):
+    def __init__(
+        self,
+        source_site_info,
+        target_site_info,
+        search_term="",
+        save_path="",
+        torrent_name="",
+        config_manager=None,
+        db_manager=None,
+        downloader_id=None,
+        task_id=None,
+    ):
         self.source_site = source_site_info
         self.target_site = target_site_info
         self.search_term = search_term
@@ -109,8 +119,7 @@ class TorrentMigrator:
 
         # 只有在 target_site_info 存在时才初始化目标相关属性
         if self.target_site:
-            self.TARGET_BASE_URL = ensure_scheme(
-                self.target_site.get("base_url"))
+            self.TARGET_BASE_URL = ensure_scheme(self.target_site.get("base_url"))
             self.TARGET_COOKIE = self.target_site.get("cookie")
             self.TARGET_UPLOAD_MODULE = self.target_site["site"]
 
@@ -120,14 +129,13 @@ class TorrentMigrator:
         self.scraper = cloudscraper.create_scraper(sess=session)
 
         # Create a separate log handler for this instance with site name
-        site_name = self.target_site[
-            "nickname"] if self.target_site else self.SOURCE_NAME
+        site_name = self.target_site["nickname"] if self.target_site else self.SOURCE_NAME
         self.log_handler = LoguruHandler(site_name=site_name)
         self.logger = logger
         self.logger.remove()
-        self.logger.add(self.log_handler,
-                        format="{time:HH:mm:ss} - {level} - {message}",
-                        level="DEBUG")
+        self.logger.add(
+            self.log_handler, format="{time:HH:mm:ss} - {level} - {message}", level="DEBUG"
+        )
 
         self.temp_files = []
 
@@ -146,10 +154,10 @@ class TorrentMigrator:
             # 使用英文站点名构造配置文件名
             config_path = os.path.join(
                 DATA_DIR,
-                f"{self.SOURCE_SITE_CODE.lower().replace(' ', '_').replace('-', '_')}.yaml"
+                f"{self.SOURCE_SITE_CODE.lower().replace(' ', '_').replace('-', '_')}.yaml",
             )
             if os.path.exists(config_path):
-                with open(config_path, 'r', encoding='utf-8') as f:
+                with open(config_path, "r", encoding="utf-8") as f:
                     return yaml.safe_load(f) or {}
             else:
                 return {}
@@ -164,10 +172,9 @@ class TorrentMigrator:
         """
         try:
             if os.path.exists(GLOBAL_MAPPINGS):
-                with open(GLOBAL_MAPPINGS, 'r', encoding='utf-8') as f:
+                with open(GLOBAL_MAPPINGS, "r", encoding="utf-8") as f:
                     global_config = yaml.safe_load(f)
-                    acknowledgment_config = global_config.get(
-                        "team_acknowledgment", {})
+                    acknowledgment_config = global_config.get("team_acknowledgment", {})
                     self.logger.debug(f"成功加载官组致谢配置: {acknowledgment_config}")
                     return acknowledgment_config
             else:
@@ -190,23 +197,19 @@ class TorrentMigrator:
         """
         try:
             if os.path.exists(GLOBAL_MAPPINGS):
-                with open(GLOBAL_MAPPINGS, 'r', encoding='utf-8') as f:
+                with open(GLOBAL_MAPPINGS, "r", encoding="utf-8") as f:
                     global_config = yaml.safe_load(f)
-                    team_mappings = global_config.get("global_standard_keys",
-                                                      {}).get("team", {})
+                    team_mappings = global_config.get("global_standard_keys", {}).get("team", {})
 
                     # 遍历映射表，找到匹配的标准化键
                     for original_name, standard_key in team_mappings.items():
                         if standard_key == standard_team_key:
-                            self.logger.debug(
-                                f"反向映射: {standard_team_key} -> {original_name}"
-                            )
+                            self.logger.debug(f"反向映射: {standard_team_key} -> {original_name}")
                             return original_name
 
                     # 如果没找到，尝试从标准化键本身提取（如 team.frds -> FRDS）
                     if standard_team_key.startswith("team."):
-                        extracted_name = standard_team_key.split(".",
-                                                                 1)[1].upper()
+                        extracted_name = standard_team_key.split(".", 1)[1].upper()
                         self.logger.debug(
                             f"从标准化键提取: {standard_team_key} -> {extracted_name}"
                         )
@@ -232,7 +235,7 @@ class TorrentMigrator:
 
         # 移除开头的 - 或 @ 符号
         cleaned = group_name.strip()
-        if cleaned.startswith(('-', '@')):
+        if cleaned.startswith(("-", "@")):
             cleaned = cleaned[1:]
 
         return cleaned.strip()
@@ -287,17 +290,15 @@ class TorrentMigrator:
                         continue
 
                     # 分割 group 字段（逗号分隔）
-                    group_list = [g.strip() for g in group_field.split(',')]
+                    group_list = [g.strip() for g in group_field.split(",")]
 
                     # 清理每个 group 项并进行匹配
                     for group_item in group_list:
-                        clean_group_item = self._clean_group_name(
-                            group_item).lower()
+                        clean_group_item = self._clean_group_name(group_item).lower()
 
                         # 不区分大小写匹配
                         if clean_group_item == clean_team:
-                            self.logger.debug(
-                                f"数据库匹配成功: {team_name} -> {description}")
+                            self.logger.debug(f"数据库匹配成功: {team_name} -> {description}")
                             return description
 
                 # 没有找到匹配
@@ -312,8 +313,8 @@ class TorrentMigrator:
             return None
 
     def _get_team_display_name(
-            self, standard_team_key: str,
-            acknowledgment_config: Dict[str, Any]) -> Optional[str]:
+        self, standard_team_key: str, acknowledgment_config: Dict[str, Any]
+    ) -> Optional[str]:
         """
         获取制作组的显示名称
 
@@ -332,20 +333,18 @@ class TorrentMigrator:
         original_name = self._reverse_lookup_team_name(standard_team_key)
 
         # 优先级1: 从数据库查询显示名称
-        display_name_from_db = self._get_team_display_name_from_db(
-            original_name)
+        display_name_from_db = self._get_team_display_name_from_db(original_name)
 
         if display_name_from_db:
-            self.logger.debug(
-                f"使用数据库显示名称: {standard_team_key} -> {display_name_from_db}")
+            self.logger.debug(f"使用数据库显示名称: {standard_team_key} -> {display_name_from_db}")
             return display_name_from_db
 
         # 如果数据库中未找到，返回 None（不添加致谢声明）
         return None
 
     def _detect_official_statement(
-            self, statement: str, acknowledgment_config: Dict[str,
-                                                              Any]) -> bool:
+        self, statement: str, acknowledgment_config: Dict[str, Any]
+    ) -> bool:
         """
         使用结构化检测判断声明中是否已包含官组声明
 
@@ -368,15 +367,12 @@ class TorrentMigrator:
             return False
 
         # 策略1: 使用正则表达式模式检测
-        detection_patterns = acknowledgment_config.get("detection_patterns",
-                                                       [])
-        max_statement_length = acknowledgment_config.get(
-            "max_statement_length", 100)
+        detection_patterns = acknowledgment_config.get("detection_patterns", [])
+        max_statement_length = acknowledgment_config.get("max_statement_length", 100)
 
         if detection_patterns:
             # 按优先级排序
-            sorted_patterns = sorted(detection_patterns,
-                                     key=lambda x: x.get("priority", 999))
+            sorted_patterns = sorted(detection_patterns, key=lambda x: x.get("priority", 999))
 
             for pattern_config in sorted_patterns:
                 pattern = pattern_config.get("pattern", "")
@@ -389,8 +385,7 @@ class TorrentMigrator:
                     # 使用正则表达式匹配
                     # re.IGNORECASE: 忽略大小写
                     # re.DOTALL: 让 . 匹配包括换行符在内的所有字符
-                    match = re.search(pattern, statement,
-                                      re.IGNORECASE | re.DOTALL)
+                    match = re.search(pattern, statement, re.IGNORECASE | re.DOTALL)
 
                     if match:
                         # 获取匹配到的完整 quote 块
@@ -398,8 +393,10 @@ class TorrentMigrator:
 
                         # 验证长度：必须是简短的声明（避免误检长段落的 quote）
                         if len(matched_text) <= max_statement_length:
-                            self.logger.debug(f"通过正则模式检测到官组声明: {description}, "
-                                              f"长度: {len(matched_text)} 字符")
+                            self.logger.debug(
+                                f"通过正则模式检测到官组声明: {description}, "
+                                f"长度: {len(matched_text)} 字符"
+                            )
                             return True
                         else:
                             self.logger.debug(
@@ -412,10 +409,8 @@ class TorrentMigrator:
                     continue
 
         # 策略2: 关键词检测（兜底方案，只检查开头部分）
-        detection_keywords = acknowledgment_config.get("detection_keywords",
-                                                       [])
-        keyword_check_length = acknowledgment_config.get(
-            "keyword_check_length", 300)
+        detection_keywords = acknowledgment_config.get("detection_keywords", [])
+        keyword_check_length = acknowledgment_config.get("keyword_check_length", 300)
 
         if detection_keywords:
             # 只检查声明开头的部分（提高准确性）
@@ -440,8 +435,7 @@ class TorrentMigrator:
             str: 下载的种子文件路径
         """
         try:
-            self.logger.info(
-                f"正在从源站点 {self.SOURCE_NAME} 下载种子文件 (ID: {torrent_id})...")
+            self.logger.info(f"正在从源站点 {self.SOURCE_NAME} 下载种子文件 (ID: {torrent_id})...")
 
             # 构造下载链接
             download_url = f"{self.SOURCE_BASE_URL}/download.php?id={torrent_id}"
@@ -450,43 +444,39 @@ class TorrentMigrator:
             torrent_response = self.scraper.get(
                 download_url,
                 headers={
-                    "Cookie":
-                    self.SOURCE_COOKIE,
-                    "User-Agent":
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+                    "Cookie": self.SOURCE_COOKIE,
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
                 },
                 timeout=180,
             )
             torrent_response.raise_for_status()
 
             # 从响应头中尝试获取文件名，这是最准确的方式
-            content_disposition = torrent_response.headers.get(
-                'content-disposition')
+            content_disposition = torrent_response.headers.get("content-disposition")
             torrent_filename = f"{torrent_id}.torrent"  # 默认文件名
             if content_disposition:
                 # 尝试匹配filename*（支持UTF-8编码）和filename
-                filename_match = re.search(r'filename\*="?UTF-8\'\'([^"]+)"?',
-                                           content_disposition, re.IGNORECASE)
+                filename_match = re.search(
+                    r'filename\*="?UTF-8\'\'([^"]+)"?', content_disposition, re.IGNORECASE
+                )
                 if filename_match:
                     torrent_filename = filename_match.group(1)
                     # URL解码文件名（UTF-8编码）
-                    torrent_filename = urllib.parse.unquote(torrent_filename,
-                                                            encoding='utf-8')
+                    torrent_filename = urllib.parse.unquote(torrent_filename, encoding="utf-8")
                 else:
                     # 尝试匹配普通的filename
-                    filename_match = re.search(r'filename="?([^"]+)"?',
-                                               content_disposition)
+                    filename_match = re.search(r'filename="?([^"]+)"?', content_disposition)
                     if filename_match:
                         torrent_filename = filename_match.group(1)
                         # URL解码文件名，强制使用UTF-8编码
-                        torrent_filename = urllib.parse.unquote(
-                            torrent_filename, encoding='utf-8')
+                        torrent_filename = urllib.parse.unquote(torrent_filename, encoding="utf-8")
 
                         # =========== [新增修复代码开始] ===========
                         # 修复乱码：如果文件名被错误解析为 Latin-1，尝试还原为 UTF-8
                         try:
-                            torrent_filename_fixed = torrent_filename.encode(
-                                'iso-8859-1').decode('utf-8')
+                            torrent_filename_fixed = torrent_filename.encode("iso-8859-1").decode(
+                                "utf-8"
+                            )
                             torrent_filename = torrent_filename_fixed
                         except (UnicodeEncodeError, UnicodeDecodeError):
                             # 如果转换失败（例如已经是正确中文，或者包含无法在Latin-1表示的字符），则保持原样
@@ -525,9 +515,7 @@ class TorrentMigrator:
             cursor = self.db_manager._get_cursor(conn)
             ph = self.db_manager.get_placeholder()
 
-            cursor.execute(
-                f"SELECT passkey FROM sites WHERE site = {ph}",
-                (site_name, ))
+            cursor.execute(f"SELECT passkey FROM sites WHERE site = {ph}", (site_name,))
             site_row = cursor.fetchone()
             self.logger.info(f"查询到的站点信息: {site_row}")
             if site_row and site_row.get("passkey"):
@@ -563,8 +551,7 @@ class TorrentMigrator:
             elif child.name == "br":
                 content.append("\n")
             elif child.name == "fieldset":
-                content.append(
-                    f"[quote]{self._html_to_bbcode(child).strip()}[/quote]")
+                content.append(f"[quote]{self._html_to_bbcode(child).strip()}[/quote]")
             elif child.name == "legend":
                 continue
             elif child.name == "b":
@@ -572,23 +559,23 @@ class TorrentMigrator:
             elif child.name == "img" and child.get("src"):
                 content.append(f"[img]{child['src']}[/img]")
             elif child.name == "a" and child.get("href"):
-                content.append(
-                    f"[url={child['href']}]{self._html_to_bbcode(child)}[/url]"
-                )
-            elif (child.name == "span" and child.get("style") and
-                  (match := re.search(r"color:\s*([^;]+)", child["style"]))):
+                content.append(f"[url={child['href']}]{self._html_to_bbcode(child)}[/url]")
+            elif (
+                child.name == "span"
+                and child.get("style")
+                and (match := re.search(r"color:\s*([^;]+)", child["style"]))
+            ):
                 content.append(
                     f"[color={match.group(1).strip()}]{self._html_to_bbcode(child)}[/color]"
                 )
             elif child.name == "font" and child.get("size"):
-                content.append(
-                    f"[size={child['size']}]{self._html_to_bbcode(child)}[/size]"
-                )
+                content.append(f"[size={child['size']}]{self._html_to_bbcode(child)}[/size]")
             else:
                 content.append(self._html_to_bbcode(child))
 
         # [新增] 处理BBCode中的图片链接格式和清理不需要的标签
         from utils import process_bbcode_images_and_cleanup
+
         bbcode_result = "".join(content)
         return process_bbcode_images_and_cleanup(bbcode_result)
 
@@ -604,13 +591,13 @@ class TorrentMigrator:
             dict: 包含提取数据的字典
         """
         # 使用新的Extractor类来处理提取
-        return self.extractor.extract(soup, self.SOURCE_NAME,
-                                      self.SOURCE_BASE_URL, self.SOURCE_COOKIE,
-                                      torrent_id)
+        return self.extractor.extract(
+            soup, self.SOURCE_NAME, self.SOURCE_BASE_URL, self.SOURCE_COOKIE, torrent_id
+        )
 
     def _standardize_parameters(
-            self, extracted_data: Dict[str, Any],
-            title_components: List[Dict[str, Any]]) -> Dict[str, Any]:
+        self, extracted_data: Dict[str, Any], title_components: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
         """
         使用ParameterMapper将提取的数据映射为标准化参数
 
@@ -627,8 +614,8 @@ class TorrentMigrator:
 
         # 使用ParameterMapper进行参数映射
         standardized_params = self.parameter_mapper.map_parameters(
-            self.SOURCE_NAME, self.SOURCE_SITE_CODE,
-            extracted_data_with_components)
+            self.SOURCE_NAME, self.SOURCE_SITE_CODE, extracted_data_with_components
+        )
 
         return standardized_params
 
@@ -648,30 +635,36 @@ class TorrentMigrator:
                     self.logger.warning(f"第 {retry_count + 1} 次尝试获取种子信息...")
                     if self.task_id:
                         log_streamer.emit_log(
-                            self.task_id, "重试获取信息",
-                            f"正在进行第 {retry_count + 1} 次重试...", "processing")
+                            self.task_id,
+                            "重试获取信息",
+                            f"正在进行第 {retry_count + 1} 次重试...",
+                            "processing",
+                        )
 
-                self.logger.info(
-                    f"--- [步骤1] 开始获取种子信息 (源: {self.SOURCE_NAME}) ---")
+                self.logger.info(f"--- [步骤1] 开始获取种子信息 (源: {self.SOURCE_NAME}) ---")
                 print(f"开始获取种子信息，源站点: {self.SOURCE_NAME}")
 
                 # 发送日志：开始获取种子信息
                 if self.task_id:
-                    log_streamer.emit_log(self.task_id, "获取种子信息",
-                                          f"开始从 {self.SOURCE_NAME} 获取种子详情...",
-                                          "processing")
+                    log_streamer.emit_log(
+                        self.task_id,
+                        "获取种子信息",
+                        f"开始从 {self.SOURCE_NAME} 获取种子详情...",
+                        "processing",
+                    )
 
-                torrent_id = (self.search_term)
+                torrent_id = self.search_term
                 if not torrent_id:
                     if self.task_id:
-                        log_streamer.emit_log(self.task_id, "获取种子信息",
-                                              "未能获取到种子ID", "error")
+                        log_streamer.emit_log(
+                            self.task_id, "获取种子信息", "未能获取到种子ID", "error"
+                        )
                     raise Exception("未能获取到种子ID，请检查种子名称或ID是否正确。")
 
                 if self.task_id:
-                    log_streamer.emit_log(self.task_id, "获取种子信息",
-                                          f"成功获取种子 ID: {torrent_id}",
-                                          "success")
+                    log_streamer.emit_log(
+                        self.task_id, "获取种子信息", f"成功获取种子 ID: {torrent_id}", "success"
+                    )
 
                 # 初始化种子参数模型
                 # 使用构造函数传入的 db_manager
@@ -684,15 +677,10 @@ class TorrentMigrator:
                 response = self.scraper.get(
                     f"{self.SOURCE_BASE_URL}/details.php",
                     headers={
-                        "Cookie":
-                        self.SOURCE_COOKIE,
-                        "User-Agent":
-                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+                        "Cookie": self.SOURCE_COOKIE,
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
                     },
-                    params={
-                        "id": torrent_id,
-                        "hit": "1"
-                    },
+                    params={"id": torrent_id, "hit": "1"},
                     timeout=180,
                 )
                 response.raise_for_status()
@@ -711,31 +699,31 @@ class TorrentMigrator:
                 full_bbcode_descr_for_check = ""
                 if descr_container_for_check:
                     # Convert raw HTML description to BBCode for an accurate check
-                    full_bbcode_descr_for_check = self._html_to_bbcode(
-                        descr_container_for_check)
+                    full_bbcode_descr_for_check = self._html_to_bbcode(descr_container_for_check)
 
                 # 先下载种子文件，以便获取其准确的文件名
                 download_url = None
 
                 # 策略 1: 标准 NexusPHP 站点 (查找 a.index 标签)
                 download_link_tag = soup.select_one(
-                    f'a.index[href*="download.php?id={torrent_id}"]')
+                    f'a.index[href*="download.php?id={torrent_id}"]'
+                )
                 if download_link_tag:
-                    download_url = download_link_tag['href']
+                    download_url = download_link_tag["href"]
 
                 # 策略 2: HDSky 等使用 form 表单的站点
                 if not download_url:
                     download_form = soup.select_one(
-                        f'form[action*="download.php?id={torrent_id}"]')
+                        f'form[action*="download.php?id={torrent_id}"]'
+                    )
                     if download_form:
-                        download_url = download_form['action']
+                        download_url = download_form["action"]
 
                 # 策略 3: 尝试查找任何包含 download.php?id=xxx 的链接 (兜底)
                 if not download_url:
-                    generic_link = soup.select_one(
-                        f'a[href*="download.php?id={torrent_id}"]')
+                    generic_link = soup.select_one(f'a[href*="download.php?id={torrent_id}"]')
                     if generic_link:
-                        download_url = generic_link['href']
+                        download_url = generic_link["href"]
 
                 if not download_url:
                     # 打印页面HTML片段以便调试（可选）
@@ -747,8 +735,8 @@ class TorrentMigrator:
                     final_download_url = download_url
                 else:
                     # 确保 base_url 没有尾部斜杠，download_url 没有头部斜杠，避免双斜杠问题
-                    base = self.SOURCE_BASE_URL.rstrip('/')
-                    path = download_url.lstrip('/')
+                    base = self.SOURCE_BASE_URL.rstrip("/")
+                    path = download_url.lstrip("/")
                     final_download_url = f"{base}/{path}"
 
                 self.logger.info(f"找到下载链接: {final_download_url}")
@@ -756,44 +744,39 @@ class TorrentMigrator:
                 torrent_response = self.scraper.get(
                     final_download_url,
                     headers={
-                        "Cookie":
-                        self.SOURCE_COOKIE,
-                        "User-Agent":
-                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+                        "Cookie": self.SOURCE_COOKIE,
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
                     },
                     timeout=180,
                 )
                 torrent_response.raise_for_status()
 
                 # 从响应头中尝试获取文件名，这是最准确的方式
-                content_disposition = torrent_response.headers.get(
-                    'content-disposition')
+                content_disposition = torrent_response.headers.get("content-disposition")
                 torrent_filename = "default.torrent"  # 设置一个默认值
                 if content_disposition:
                     # 尝试匹配filename*（支持UTF-8编码）和filename
                     filename_match = re.search(
-                        r'filename\*="?UTF-8\'\'([^"]+)"?',
-                        content_disposition, re.IGNORECASE)
+                        r'filename\*="?UTF-8\'\'([^"]+)"?', content_disposition, re.IGNORECASE
+                    )
                     if filename_match:
                         torrent_filename = filename_match.group(1)
                         # URL解码文件名（UTF-8编码）
-                        torrent_filename = urllib.parse.unquote(
-                            torrent_filename, encoding='utf-8')
+                        torrent_filename = urllib.parse.unquote(torrent_filename, encoding="utf-8")
                     else:
                         # 尝试匹配普通的filename
-                        filename_match = re.search(r'filename="?([^"]+)"?',
-                                                   content_disposition)
+                        filename_match = re.search(r'filename="?([^"]+)"?', content_disposition)
                         if filename_match:
                             torrent_filename = filename_match.group(1)
                             # URL解码文件名
-                            torrent_filename = urllib.parse.unquote(
-                                torrent_filename)
+                            torrent_filename = urllib.parse.unquote(torrent_filename)
 
                             # =========== [新增修复代码开始] ===========
                             # 修复乱码：如果文件名被错误解析为 Latin-1，尝试还原为 UTF-8
                             try:
                                 torrent_filename_fixed = torrent_filename.encode(
-                                    'iso-8859-1').decode('utf-8')
+                                    "iso-8859-1"
+                                ).decode("utf-8")
                                 torrent_filename = torrent_filename_fixed
                             except (UnicodeEncodeError, UnicodeDecodeError):
                                 # 如果转换失败（例如已经是正确中文，或者包含无法在Latin-1表示的字符），则保持原样
@@ -801,21 +784,20 @@ class TorrentMigrator:
                             # =========== [新增修复代码结束] ===========
 
                 # 使用统一的数据提取方法
-                extracted_data = self._extract_data_by_site_type(
-                    soup, torrent_id)
+                extracted_data = self._extract_data_by_site_type(soup, torrent_id)
 
                 # 检查是否返回了错误
-                if isinstance(extracted_data,
-                              dict) and extracted_data.get("error") == True:
-                    error_message = extracted_data.get(
-                        "error_message") or extracted_data.get(
-                            "message", "未知错误")
+                if isinstance(extracted_data, dict) and extracted_data.get("error") == True:
+                    error_message = extracted_data.get("error_message") or extracted_data.get(
+                        "message", "未知错误"
+                    )
                     print(f"提取器返回错误: {error_message}")
                     raise Exception(error_message)
 
                 if os.getenv("DEV_ENV") == "true":
                     try:
                         import json
+
                         # TEMP_DIR 已在文件开头从 config 导入，这里无需重复导入
                         save_dir = os.path.join(TEMP_DIR, "extracted_data")
                         os.makedirs(save_dir, exist_ok=True)
@@ -823,10 +805,7 @@ class TorrentMigrator:
                         extracted_filename = f"{self.SOURCE_SITE_CODE}-{torrent_id}-{torrent_filename.replace('.torrent', '.json')}"
                         save_path = os.path.join(save_dir, extracted_filename)
                         with open(save_path, "w", encoding="utf-8") as f:
-                            json.dump(extracted_data,
-                                      f,
-                                      ensure_ascii=False,
-                                      indent=2)
+                            json.dump(extracted_data, f, ensure_ascii=False, indent=2)
                         print(f"提取的数据已保存到: {save_path}")
                     except Exception as e:
                         print(f"保存提取数据时出错: {e}")
@@ -836,13 +815,12 @@ class TorrentMigrator:
                 if not original_main_title:
                     # 如果提取器没有返回标题，则从h1#top获取
                     h1_top = soup.select_one("h1#top")
-                    original_main_title = list(
-                        h1_top.stripped_strings)[0] if h1_top else "未找到标题"
+                    original_main_title = (
+                        list(h1_top.stripped_strings)[0] if h1_top else "未找到标题"
+                    )
                     # 统一处理标题中的点号，将点(.)替换为空格，但保留小数点格式(如 7.1)
-                    original_main_title = re.sub(r'(?<!\d)\.|\.(?!\d\b)', ' ',
-                                                 original_main_title)
-                    original_main_title = re.sub(r'\s+', ' ',
-                                                 original_main_title).strip()
+                    original_main_title = re.sub(r"(?<!\d)\.|\.(?!\d\b)", " ", original_main_title)
+                    original_main_title = re.sub(r"\s+", " ", original_main_title).strip()
 
                 self.logger.info(f"获取到原始主标题: {original_main_title}")
 
@@ -858,9 +836,10 @@ class TorrentMigrator:
 
                 # [核心修改] 在文件名前添加站点标识符和种子ID，格式: 站点-ID-原文件名.torrent
                 # 例如: ssd-12345-abc.torrent
-                prefixed_torrent_filename = f"{self.SOURCE_SITE_CODE}-{torrent_id}-{torrent_filename}"
-                original_torrent_path = os.path.join(
-                    torrent_dir, prefixed_torrent_filename)
+                prefixed_torrent_filename = (
+                    f"{self.SOURCE_SITE_CODE}-{torrent_id}-{torrent_filename}"
+                )
+                original_torrent_path = os.path.join(torrent_dir, prefixed_torrent_filename)
 
                 with open(original_torrent_path, "wb") as f:
                     f.write(torrent_response.content)
@@ -870,29 +849,27 @@ class TorrentMigrator:
 
                 # 发送日志：开始解析标题
                 if self.task_id:
-                    log_streamer.emit_log(self.task_id, "解析参数", "正在解析标题组件...",
-                                          "processing")
+                    log_streamer.emit_log(
+                        self.task_id, "解析参数", "正在解析标题组件...", "processing"
+                    )
 
                 # 调用 upload_data_title 时，传入主标题、种子文件名和mediainfo
-                title_components = upload_data_title(original_main_title,
-                                                     torrent_filename,
-                                                     mediainfo_text)
+                title_components = upload_data_title(
+                    original_main_title, torrent_filename, mediainfo_text
+                )
                 # --- [核心修改 1] 结束 --
 
                 if not title_components:
                     self.logger.warning("主标题解析失败，将使用原始标题作为回退。")
-                    title_components = [{
-                        "key": "主标题",
-                        "value": original_main_title
-                    }]
+                    title_components = [{"key": "主标题", "value": original_main_title}]
                     if self.task_id:
-                        log_streamer.emit_log(self.task_id, "解析参数",
-                                              "标题解析失败，使用原始标题", "warning")
+                        log_streamer.emit_log(
+                            self.task_id, "解析参数", "标题解析失败，使用原始标题", "warning"
+                        )
                 else:
                     self.logger.success("主标题成功解析为参数。")
                     if self.task_id:
-                        log_streamer.emit_log(self.task_id, "解析参数", "标题解析完成",
-                                              "success")
+                        log_streamer.emit_log(self.task_id, "解析参数", "标题解析完成", "success")
 
                 # [调试] 打印提取器返回的原始制作组信息
                 self.logger.info(
@@ -920,8 +897,7 @@ class TorrentMigrator:
                             if team_value:
                                 current_team = source_params.get("制作组")
                                 # 如果制作组为空、为None、或为默认值"Other"，则使用标题中的制作组
-                                if not current_team or current_team.lower(
-                                ) == "other":
+                                if not current_team or current_team.lower() == "other":
                                     source_params["制作组"] = team_value
                                     self.logger.info(
                                         f"✓ 从标题组件中补充制作组信息: {team_value} (原值: {current_team})"
@@ -942,9 +918,7 @@ class TorrentMigrator:
                 self.logger.info(
                     f"[调试] 补充后的source_params['制作组']: {source_params.get('制作组')}"
                 )
-                print(
-                    f"[调试] 补充后的source_params['制作组']: {source_params.get('制作组')}"
-                )
+                print(f"[调试] 补充后的source_params['制作组']: {source_params.get('制作组')}")
 
                 # 提取IMDb和豆瓣链接
                 imdb_link = intro.get("imdb_link", "")
@@ -955,16 +929,17 @@ class TorrentMigrator:
 
                 # 从提取的数据中获取简介信息
                 intro_data = extracted_data.get("intro", {})
-                quotes = intro_data.get(
-                    "statement",
-                    "").split('\n') if intro_data.get("statement") else []
+                quotes = (
+                    intro_data.get("statement", "").split("\n")
+                    if intro_data.get("statement")
+                    else []
+                )
                 images = []
                 if intro_data.get("poster"):
                     images.append(intro_data.get("poster"))
                 if intro_data.get("screenshots"):
                     screenshots_raw = intro_data.get("screenshots")
-                    screenshots_list = screenshots_raw.split(
-                        '\n') if screenshots_raw else []
+                    screenshots_list = screenshots_raw.split("\n") if screenshots_raw else []
 
                     # [新增] 从配置文件读取并过滤掉指定的不需要的图片URL
                     # 加载内容过滤配置（使用config.py中的统一路径配置）
@@ -972,19 +947,19 @@ class TorrentMigrator:
                     try:
                         if os.path.exists(GLOBAL_MAPPINGS):
                             import yaml
-                            with open(GLOBAL_MAPPINGS, 'r',
-                                      encoding='utf-8') as f:
+
+                            with open(GLOBAL_MAPPINGS, "r", encoding="utf-8") as f:
                                 global_config = yaml.safe_load(f)
                                 CONTENT_FILTERING_CONFIG = global_config.get(
-                                    "content_filtering", {})
+                                    "content_filtering", {}
+                                )
                         else:
                             self.logger.warning(f"配置文件不存在: {GLOBAL_MAPPINGS}")
                     except Exception as e:
                         self.logger.warning(f"加载内容过滤配置时出错: {e}")
 
                     # 应用图片过滤
-                    unwanted_image_urls = CONTENT_FILTERING_CONFIG.get(
-                        "unwanted_image_urls", [])
+                    unwanted_image_urls = CONTENT_FILTERING_CONFIG.get("unwanted_image_urls", [])
 
                     if unwanted_image_urls:
                         filtered_screenshots = []
@@ -993,8 +968,7 @@ class TorrentMigrator:
                             if not img_tag:
                                 continue
                             # 从[img]标签中提取URL
-                            url_match = re.search(r'\[img\](.*?)\[/img\]',
-                                                  img_tag, re.IGNORECASE)
+                            url_match = re.search(r"\[img\](.*?)\[/img\]", img_tag, re.IGNORECASE)
                             if url_match:
                                 img_url = url_match.group(1)
                                 # 检查是否在过滤列表中
@@ -1009,17 +983,16 @@ class TorrentMigrator:
 
                         screenshots_list = filtered_screenshots
                         self.logger.info(
-                            f"[调试migrator] 过滤后剩余截图数量: {len(screenshots_list)}")
-                        print(
-                            f"[调试migrator] 过滤后剩余截图数量: {len(screenshots_list)}")
+                            f"[调试migrator] 过滤后剩余截图数量: {len(screenshots_list)}"
+                        )
+                        print(f"[调试migrator] 过滤后剩余截图数量: {len(screenshots_list)}")
                     else:
                         self.logger.info(f"[调试migrator] 未配置图片过滤列表，跳过过滤")
                         print(f"[调试migrator] 未配置图片过滤列表，跳过过滤")
 
                     images.extend(screenshots_list)
                 body = intro_data.get("body", "")
-                ardtu_declarations = intro_data.get(
-                    "removed_ardtudeclarations", [])
+                ardtu_declarations = intro_data.get("removed_ardtudeclarations", [])
 
                 # [统一海报处理] 所有提取器返回海报后，在此统一验证和转存
                 from utils import upload_data_movie_info
@@ -1031,16 +1004,16 @@ class TorrentMigrator:
                 poster_url = None
                 if images and images[0]:
                     # 从BBCode [img]...[/img] 中提取URL
-                    if poster_url_match := re.search(r'\[img\](.*?)\[/img\]',
-                                                     images[0], re.IGNORECASE):
+                    if poster_url_match := re.search(
+                        r"\[img\](.*?)\[/img\]", images[0], re.IGNORECASE
+                    ):
                         poster_url = poster_url_match.group(1)
                         self.logger.info(f"从ptgen提取到原始海报URL: {poster_url}")
 
                 # 使用新的海报处理函数统一处理海报
                 if poster_url:
                     # 调用 _process_poster_url 进行统一处理（包括pixhost检查、验证和转存）
-                    processed_poster = _process_poster_url(
-                        poster_url, imdb_link, douban_link)
+                    processed_poster = _process_poster_url(poster_url, imdb_link, douban_link)
                     if processed_poster:
                         images[0] = processed_poster
                         self.logger.success(f"海报已成功处理: {processed_poster}")
@@ -1060,11 +1033,18 @@ class TorrentMigrator:
                     self.logger.info("尝试从豆瓣或IMDb获取海报和补全链接...")
 
                     # 传递当前已有的链接，让函数自动判断和补全
-                    poster_status, poster_content, description_content, extracted_imdb, extracted_douban = upload_data_movie_info(
+                    (
+                        poster_status,
+                        poster_content,
+                        description_content,
+                        extracted_imdb,
+                        extracted_douban,
+                    ) = upload_data_movie_info(
                         media_type="",
                         douban_link=douban_link,
                         imdb_link=imdb_link,
-                        subtitle=subtitle)
+                        subtitle=subtitle,
+                    )
 
                     # 更新海报（如果获取成功）
                     if poster_status and poster_content:
@@ -1099,25 +1079,21 @@ class TorrentMigrator:
 
                 # 6. 提取产地信息并添加到source_params中
                 full_description_text = f"{intro.get('statement', '')}\n{intro.get('body', '')}"
-                origin_info = extract_origin_from_description(
-                    full_description_text)
+                origin_info = extract_origin_from_description(full_description_text)
 
                 # --- [核心修改结束] ---
 
                 # 处理torrent_filename，去除.torrent扩展名、URL解码并过滤站点信息，以便正确查找视频文件
                 processed_torrent_name = urllib.parse.unquote(torrent_filename)
-                if processed_torrent_name.endswith('.torrent'):
-                    processed_torrent_name = processed_torrent_name[:
-                                                                    -8]  # 去除.torrent扩展名
+                if processed_torrent_name.endswith(".torrent"):
+                    processed_torrent_name = processed_torrent_name[:-8]  # 去除.torrent扩展名
 
                 # 过滤掉文件名中的站点信息（如[HDHome]、[HDSpace]等）
                 # 修改为可以移除多个连续的方括号标识符，包括纯数字标识符
-                processed_torrent_name = re.sub(r'^(?:\[[^\]]+\]\.?)+', '',
-                                                processed_torrent_name)
+                processed_torrent_name = re.sub(r"^(?:\[[^\]]+\]\.?)+", "", processed_torrent_name)
 
                 # 过滤掉第二个文件名中的站点信息（如[OurBits].[230254]）
-                processed_torrent_name = re.sub(r'^\[[^\]]+\]\.', '',
-                                                processed_torrent_name)
+                processed_torrent_name = re.sub(r"^\[[^\]]+\]\.", "", processed_torrent_name)
 
                 # --- [核心修改] 在这里统一验证和重新生成截图 ---
                 screenshots_valid = True
@@ -1126,16 +1102,14 @@ class TorrentMigrator:
 
                 # 使用 intro_data 来检查，因为它包含了从 extractor 提取的原始截图
                 if intro_data.get("screenshots"):
-                    screenshot_links = intro_data["screenshots"].strip().split(
-                        '\n')
+                    screenshot_links = intro_data["screenshots"].strip().split("\n")
                     # 过滤掉空字符串
-                    screenshot_links = [
-                        link for link in screenshot_links if link.strip()
-                    ]
+                    screenshot_links = [link for link in screenshot_links if link.strip()]
 
                     if screenshot_links:
                         self.logger.info(
-                            f"[*] 开始验证 {len(screenshot_links)} 个截图链接的有效性...")
+                            f"[*] 开始验证 {len(screenshot_links)} 个截图链接的有效性..."
+                        )
                         print(f"[*] 开始验证 {len(screenshot_links)} 个截图链接的有效性...")
 
                         # 检查数量是否足够
@@ -1153,15 +1127,16 @@ class TorrentMigrator:
                         invalid_count = 0
                         for i, shot_tag in enumerate(screenshot_links):
                             if shot_url_match := re.search(
-                                    r'\[img\](.*?)\[/img\]', shot_tag,
-                                    re.IGNORECASE):
+                                r"\[img\](.*?)\[/img\]", shot_tag, re.IGNORECASE
+                            ):
                                 shot_url = shot_url_match.group(1)
                                 if is_image_url_valid_robust(shot_url):
                                     valid_count += 1
                                 else:
                                     invalid_count += 1
                                     self.logger.warning(
-                                        f"检测到第 {i+1} 个截图链接失效: {shot_url}")
+                                        f"检测到第 {i+1} 个截图链接失效: {shot_url}"
+                                    )
                                     # 如果超过5张图片失效，直接清空全部重新获取
                                     if invalid_count > 5:
                                         self.logger.warning(
@@ -1179,8 +1154,7 @@ class TorrentMigrator:
                             else:
                                 # 如果标签格式不正确，也视为无效
                                 invalid_count += 1
-                                self.logger.warning(
-                                    f"第 {i+1} 个截图标签格式不正确: {shot_tag}")
+                                self.logger.warning(f"第 {i+1} 个截图标签格式不正确: {shot_tag}")
                                 # 如果超过5张图片失效，直接清空全部重新获取
                                 if invalid_count > 5:
                                     self.logger.warning(
@@ -1211,14 +1185,16 @@ class TorrentMigrator:
                             screenshots_sufficient = False
 
                         if screenshots_valid and screenshots_sufficient:
-                            self.logger.info(
-                                f"[*] 验证完成，保留 {valid_count} 个有效截图链接。")
+                            self.logger.info(f"[*] 验证完成，保留 {valid_count} 个有效截图链接。")
                             print(f"[*] 验证完成，保留 {valid_count} 个有效截图链接。")
                             # 截图有效，发送验证成功日志
                             if self.task_id:
                                 log_streamer.emit_log(
-                                    self.task_id, "验证图片链接",
-                                    f"图片链接验证通过 ({valid_count}张)", "success")
+                                    self.task_id,
+                                    "验证图片链接",
+                                    f"图片链接验证通过 ({valid_count}张)",
+                                    "success",
+                                )
                     else:
                         # 如果 screenshots 字段存在但为空，视为需要生成
                         self.logger.info("未找到截图链接，将重新生成。")
@@ -1236,32 +1212,38 @@ class TorrentMigrator:
                         self.logger.warning("⚠️ 检测到截图失效，立即重新生成截图...")
                         print("⚠️ 检测到截图失效，立即重新生成截图...")
                         if self.task_id:
-                            log_streamer.emit_log(self.task_id, "验证图片链接",
-                                                  "检测到截图失效，开始重新生成...",
-                                                  "processing")
+                            log_streamer.emit_log(
+                                self.task_id,
+                                "验证图片链接",
+                                "检测到截图失效，开始重新生成...",
+                                "processing",
+                            )
                     else:
                         self.logger.warning(f"⚠️ 截图数量不足，立即重新生成截图...")
                         print(f"⚠️ 截图数量不足，立即重新生成截图...")
                         if self.task_id:
-                            log_streamer.emit_log(self.task_id, "验证图片链接",
-                                                  f"截图数量不足，开始重新生成...",
-                                                  "processing")
+                            log_streamer.emit_log(
+                                self.task_id,
+                                "验证图片链接",
+                                f"截图数量不足，开始重新生成...",
+                                "processing",
+                            )
 
                     # 准备调用截图函数所需参数
-                    source_info_for_screenshot = {
-                        'main_title': original_main_title
-                    }
+                    source_info_for_screenshot = {"main_title": original_main_title}
 
                     # 立即调用截图函数
                     if os.getenv("SCREENSHOTS") == "false":
                         new_screenshots = "https://example.com/placeholder.jpg"
                     else:
                         from utils import upload_data_screenshot
+
                         new_screenshots = upload_data_screenshot(
                             source_info=source_info_for_screenshot,
                             save_path=self.save_path,
                             torrent_name=processed_torrent_name,
-                            downloader_id=self.downloader_id)
+                            downloader_id=self.downloader_id,
+                        )
 
                     if new_screenshots:
                         # 更新 intro 字典中的截图
@@ -1269,54 +1251,59 @@ class TorrentMigrator:
                         self.logger.success("✅ 成功重新生成并上传截图。")
                         print("✅ 成功重新生成并上传截图。")
                         if self.task_id:
-                            log_streamer.emit_log(self.task_id, "验证图片链接",
-                                                  "截图重新生成并上传成功", "success")
+                            log_streamer.emit_log(
+                                self.task_id, "验证图片链接", "截图重新生成并上传成功", "success"
+                            )
 
                         # 更新 images 列表，保持数据同步
                         # 保留海报（第一个元素），然后添加新截图
                         images = [images[0]] if images and images[0] else []
-                        images.extend(new_screenshots.strip().split('\n'))
+                        images.extend(new_screenshots.strip().split("\n"))
                     else:
                         self.logger.error("❌ 重新生成截图失败。")
                         print("❌ 重新生成截图失败。")
                         if self.task_id:
-                            log_streamer.emit_log(self.task_id, "验证图片链接",
-                                                  "截图重新生成失败", "error")
+                            log_streamer.emit_log(
+                                self.task_id, "验证图片链接", "截图重新生成失败", "error"
+                            )
                         # 清空截图
                         intro["screenshots"] = ""
                         images = [images[0]] if images and images[0] else []
 
                 # 使用upload_data_mediaInfo_async处理mediainfo（支持异步BDInfo）
                 if self.task_id:
-                    log_streamer.emit_log(self.task_id, "提取媒体信息",
-                                          "正在提取 MediaInfo...", "processing")
+                    log_streamer.emit_log(
+                        self.task_id, "提取媒体信息", "正在提取 MediaInfo...", "processing"
+                    )
 
                 # 生成种子ID用于BDInfo任务跟踪
                 # 使用复合主键格式: hash_torrentId_siteName
                 # 从search_term中提取torrent_id（在批量处理中search_term就是torrent_id）
                 torrent_id = self.search_term if self.search_term else "unknown"
                 # 从source_site中获取site_name，使用英文站点名而不是中文名
-                site_name = self.SOURCE_SITE_CODE if hasattr(self, 'SOURCE_SITE_CODE') else "unknown"
-                
+                site_name = (
+                    self.SOURCE_SITE_CODE if hasattr(self, "SOURCE_SITE_CODE") else "unknown"
+                )
+
                 # 获取真实的hash值
                 seed_hash = "batch_seed"  # 默认值
                 try:
                     # 使用与保存种子参数相同的方法获取hash
                     temp_seed_param_model = SeedParameter(self.db_manager)
                     real_hash = temp_seed_param_model.search_torrent_hash(
-                        self.torrent_name, self.SOURCE_NAME)
+                        self.torrent_name, self.SOURCE_NAME
+                    )
                     if real_hash:
                         seed_hash = real_hash
                 except Exception as e:
                     print(f"获取hash失败，使用默认值: {e}")
-                
+
                 # 构建复合seed_id
                 composite_seed_id = f"{seed_hash}_{torrent_id}_{site_name}"
-                
+
                 # 使用异步版本的MediaInfo处理
                 mediainfo, is_mediainfo, is_bdinfo, bdinfo_async = upload_data_mediaInfo_async(
-                    mediaInfo=mediainfo_text
-                    if mediainfo_text else "未找到 Mediainfo 或 BDInfo",
+                    mediaInfo=mediainfo_text if mediainfo_text else "未找到 Mediainfo 或 BDInfo",
                     save_path=self.save_path,
                     seed_id=composite_seed_id,
                     torrent_name=processed_torrent_name,
@@ -1331,23 +1318,27 @@ class TorrentMigrator:
 
                 if self.task_id:
                     if mediainfo and mediainfo != "未找到 Mediainfo 或 BDInfo":
-                        log_streamer.emit_log(self.task_id, "提取媒体信息",
-                                              "MediaInfo 提取成功", "success")
-                        
+                        log_streamer.emit_log(
+                            self.task_id, "提取媒体信息", "MediaInfo 提取成功", "success"
+                        )
+
                         # 如果BDInfo在后台处理中，添加提示
-                        if bdinfo_async and bdinfo_async.get('bdinfo_status') == 'processing':
-                            log_streamer.emit_log(self.task_id, "BDInfo处理",
-                                                  f"BDInfo 正在后台处理中 (任务ID: {bdinfo_async.get('bdinfo_task_id')})", 
-                                                  "info")
+                        if bdinfo_async and bdinfo_async.get("bdinfo_status") == "processing":
+                            log_streamer.emit_log(
+                                self.task_id,
+                                "BDInfo处理",
+                                f"BDInfo 正在后台处理中 (任务ID: {bdinfo_async.get('bdinfo_task_id')})",
+                                "info",
+                            )
                     else:
-                        log_streamer.emit_log(self.task_id, "提取媒体信息",
-                                              "MediaInfo 提取失败或不存在", "warning")
+                        log_streamer.emit_log(
+                            self.task_id, "提取媒体信息", "MediaInfo 提取失败或不存在", "warning"
+                        )
 
                 # [新增] 从 MediaInfo 中提取标签并补充到 source_params
                 if mediainfo and mediainfo != "未找到 Mediainfo 或 BDInfo":
                     self.logger.info("开始从 MediaInfo 提取标签...")
-                    tags_from_mediainfo = extract_tags_from_mediainfo(
-                        mediainfo)
+                    tags_from_mediainfo = extract_tags_from_mediainfo(mediainfo)
                     if tags_from_mediainfo:
                         # 将从 MediaInfo 提取的标签与源站点的标签合并（去重）
                         existing_tags = source_params.get("标签", [])
@@ -1355,34 +1346,31 @@ class TorrentMigrator:
                         # [修复] 统一标签格式：移除 tag. 前缀以确保去重正常工作
                         # MediaInfo 提取的标签格式为 'tag.中字'，网页提取的为 '中字'
                         normalized_mediainfo_tags = [
-                            tag.replace('tag.', '')
-                            if tag.startswith('tag.') else tag
+                            tag.replace("tag.", "") if tag.startswith("tag.") else tag
                             for tag in tags_from_mediainfo
                         ]
 
                         # 合并标签并去重，保持顺序
                         merged_tags = list(
-                            dict.fromkeys(existing_tags +
-                                          normalized_mediainfo_tags))
+                            dict.fromkeys(existing_tags + normalized_mediainfo_tags)
+                        )
                         source_params["标签"] = merged_tags
-                        self.logger.info(
-                            f"从 MediaInfo 提取到标签: {tags_from_mediainfo}")
-                        self.logger.info(
-                            f"标准化后的标签: {normalized_mediainfo_tags}")
+                        self.logger.info(f"从 MediaInfo 提取到标签: {tags_from_mediainfo}")
+                        self.logger.info(f"标准化后的标签: {normalized_mediainfo_tags}")
                         self.logger.info(f"合并后的标签: {merged_tags}")
                     else:
                         self.logger.info("MediaInfo 中未提取到额外标签")
 
                 # [新增] 从标题参数中提取标签（DIY、VCB-Studio等）
                 from utils import extract_tags_from_title
+
                 self.logger.info("开始从标题参数提取标签...")
                 tags_from_title = extract_tags_from_title(title_components)
                 if tags_from_title:
                     # 将从标题提取的标签与现有标签合并（去重）
                     existing_tags = source_params.get("标签", [])
                     # 合并标签并去重，保持顺序
-                    merged_tags = list(
-                        dict.fromkeys(existing_tags + tags_from_title))
+                    merged_tags = list(dict.fromkeys(existing_tags + tags_from_title))
                     source_params["标签"] = merged_tags
                     self.logger.info(f"从标题参数提取到标签: {tags_from_title}")
                     self.logger.info(f"合并后的标签: {merged_tags}")
@@ -1391,7 +1379,9 @@ class TorrentMigrator:
 
                 # [新增] 检查电视剧/动漫是否完结
                 self.logger.info("开始检查电视剧/动漫完结状态...")
-                full_description_for_completion = f"{intro.get('statement', '')}\n{intro.get('body', '')}"
+                full_description_for_completion = (
+                    f"{intro.get('statement', '')}\n{intro.get('body', '')}"
+                )
 
                 completion_status = check_completion_status(
                     title=original_main_title,
@@ -1399,18 +1389,18 @@ class TorrentMigrator:
                     description=full_description_for_completion,
                     local_path=self.save_path,
                     downloader_id=self.downloader_id,
-                    torrent_name=processed_torrent_name  # 传入处理后的种子名称
+                    torrent_name=processed_torrent_name,  # 传入处理后的种子名称
                 )
 
                 if completion_status.get("is_complete"):
                     self.logger.info(
                         f"✓ 检测到完结状态: {completion_status['reason']} "
-                        f"(置信度: {completion_status['confidence']})")
+                        f"(置信度: {completion_status['confidence']})"
+                    )
 
                     # 添加完结标签
                     existing_tags = source_params.get("标签", [])
-                    updated_tags = add_completion_tag_if_needed(
-                        existing_tags, completion_status)
+                    updated_tags = add_completion_tag_if_needed(existing_tags, completion_status)
                     source_params["标签"] = updated_tags
 
                     # 记录详细信息
@@ -1420,70 +1410,88 @@ class TorrentMigrator:
                             ep_check = details["episode_check"]
                             self.logger.info(
                                 f"  集数信息: 简介总集数={ep_check.get('total_episodes')}, "
-                                f"本地集数={ep_check.get('local_episodes')}")
+                                f"本地集数={ep_check.get('local_episodes')}"
+                            )
                 else:
-                    self.logger.info(
-                        f"未检测到完结标识: {completion_status['reason']}")
+                    self.logger.info(f"未检测到完结标识: {completion_status['reason']}")
 
                 # 步骤5：验证简介格式
                 if self.task_id:
-                    log_streamer.emit_log(self.task_id, "验证简介格式",
-                                          "正在检查简介完整性...", "processing")
+                    log_streamer.emit_log(
+                        self.task_id, "验证简介格式", "正在检查简介完整性...", "processing"
+                    )
 
                 # 检查简介是否有效
-                intro_valid = bool(
-                    intro.get("body") and intro.get("body").strip())
+                intro_valid = bool(intro.get("body") and intro.get("body").strip())
 
                 if intro_valid:
                     if self.task_id:
-                        log_streamer.emit_log(self.task_id, "验证简介格式",
-                                              "简介格式验证通过", "success")
+                        log_streamer.emit_log(
+                            self.task_id, "验证简介格式", "简介格式验证通过", "success"
+                        )
                 else:
                     # 如果简介无效，尝试从豆瓣重新获取
                     if douban_link:
                         if self.task_id:
-                            log_streamer.emit_log(self.task_id, "验证简介格式",
-                                                  "简介缺失，尝试从豆瓣获取...", "warning")
+                            log_streamer.emit_log(
+                                self.task_id,
+                                "验证简介格式",
+                                "简介缺失，尝试从豆瓣获取...",
+                                "warning",
+                            )
 
                         try:
-                            status, posters, description, extracted_imdb, extracted_douban = upload_data_movie_info(
-                                "", douban_link, imdb_link, subtitle)
+                            status, posters, description, extracted_imdb, extracted_douban = (
+                                upload_data_movie_info("", douban_link, imdb_link, subtitle)
+                            )
 
                             if status and description:
                                 # 更新简介内容
                                 intro["body"] = description
                                 if self.task_id:
                                     log_streamer.emit_log(
-                                        self.task_id, "验证简介格式", "成功从豆瓣重新获取简介",
-                                        "success")
+                                        self.task_id,
+                                        "验证简介格式",
+                                        "成功从豆瓣重新获取简介",
+                                        "success",
+                                    )
                             else:
                                 if self.task_id:
                                     log_streamer.emit_log(
-                                        self.task_id, "验证简介格式", "从豆瓣获取简介失败",
-                                        "warning")
+                                        self.task_id,
+                                        "验证简介格式",
+                                        "从豆瓣获取简介失败",
+                                        "warning",
+                                    )
                         except Exception as e:
                             self.logger.warning(f"从豆瓣重新获取简介时出错: {e}")
                             if self.task_id:
-                                log_streamer.emit_log(self.task_id, "验证简介格式",
-                                                      f"获取简介失败: {str(e)}",
-                                                      "error")
+                                log_streamer.emit_log(
+                                    self.task_id,
+                                    "验证简介格式",
+                                    f"获取简介失败: {str(e)}",
+                                    "error",
+                                )
                     else:
                         if self.task_id:
-                            log_streamer.emit_log(self.task_id, "验证简介格式",
-                                                  "简介缺失且无豆瓣链接", "warning")
+                            log_streamer.emit_log(
+                                self.task_id, "验证简介格式", "简介缺失且无豆瓣链接", "warning"
+                            )
 
                 # 步骤6：检查声明感谢
                 if self.task_id:
-                    log_streamer.emit_log(self.task_id, "检查声明感谢",
-                                          "正在检查官组致谢声明...", "processing")
+                    log_streamer.emit_log(
+                        self.task_id, "检查声明感谢", "正在检查官组致谢声明...", "processing"
+                    )
 
                 # 参数标准化
 
                 # 提取产地信息并更新到source_params中（如果还没有）
                 if "产地" not in source_params or not source_params["产地"]:
-                    full_description_text = f"{intro.get('statement', '')}\n{intro.get('body', '')}"
-                    origin_info = extract_origin_from_description(
-                        full_description_text)
+                    full_description_text = (
+                        f"{intro.get('statement', '')}\n{intro.get('body', '')}"
+                    )
+                    origin_info = extract_origin_from_description(full_description_text)
                     source_params["产地"] = origin_info
 
                 # 如果source_params中缺少基本信息，从网页中提取
@@ -1491,9 +1499,7 @@ class TorrentMigrator:
                     basic_info_td = soup.find("td", string="基本信息")
                     basic_info_dict = {}
                     if basic_info_td and basic_info_td.find_next_sibling("td"):
-                        strings = list(
-                            basic_info_td.find_next_sibling(
-                                "td").stripped_strings)
+                        strings = list(basic_info_td.find_next_sibling("td").stripped_strings)
                         basic_info_dict = {
                             s.replace(":", "").strip(): strings[i + 1]
                             for i, s in enumerate(strings)
@@ -1501,10 +1507,14 @@ class TorrentMigrator:
                         }
 
                     tags_td = soup.find("td", string="标签")
-                    tags = ([
-                        s.get_text(strip=True) for s in
-                        tags_td.find_next_sibling("td").find_all("span")
-                    ] if tags_td and tags_td.find_next_sibling("td") else [])
+                    tags = (
+                        [
+                            s.get_text(strip=True)
+                            for s in tags_td.find_next_sibling("td").find_all("span")
+                        ]
+                        if tags_td and tags_td.find_next_sibling("td")
+                        else []
+                    )
 
                     # 过滤掉指定的标签
                     filtered_tags = []
@@ -1519,14 +1529,16 @@ class TorrentMigrator:
 
                     # 只更新缺失的字段
                     if not source_params.get("类型"):
-                        source_params["类型"] = type_match.group(
-                            1) if type_match else type_text.split("/")[-1]
+                        source_params["类型"] = (
+                            type_match.group(1) if type_match else type_text.split("/")[-1]
+                        )
                     if not source_params.get("媒介"):
                         source_params["媒介"] = basic_info_dict.get("媒介")
                     if not source_params.get("视频编码"):
                         # 优先获取"视频编码"，如果没有则获取"编码"
                         source_params["视频编码"] = basic_info_dict.get(
-                            "视频编码") or basic_info_dict.get("编码")
+                            "视频编码"
+                        ) or basic_info_dict.get("编码")
                     if not source_params.get("音频编码"):
                         source_params["音频编码"] = basic_info_dict.get("音频编码")
                     if not source_params.get("分辨率"):
@@ -1545,7 +1557,7 @@ class TorrentMigrator:
                         "分辨率": None,
                         "制作组": None,
                         "标签": [],
-                        "产地": ""
+                        "产地": "",
                     }
 
                 # 此处已提前下载种子文件，无需重复下载
@@ -1561,20 +1573,21 @@ class TorrentMigrator:
 
                 # 使用三层解耦模型标准化参数
                 print(f"[调试-migrator] 调用_standardize_parameters前:")
-                print(f"  - extracted_data['source_params']: {extracted_data.get('source_params', {})}")
+                print(
+                    f"  - extracted_data['source_params']: {extracted_data.get('source_params', {})}"
+                )
                 print(f"  - title_components: {title_components}")
 
                 standardized_params = self._standardize_parameters(
-                    extracted_data, title_components)
+                    extracted_data, title_components
+                )
 
                 print(f"[调试-migrator] 调用_standardize_parameters后:")
                 print(f"  - standardized_params: {standardized_params}")
                 print(f"  - audio_codec: {standardized_params.get('audio_codec')}")
 
-                medium_value = str(standardized_params.get("medium",
-                                                           "")).lower()
-                if is_mediainfo and ('blu' in medium_value
-                                     or 'unk1' in medium_value):
+                medium_value = str(standardized_params.get("medium", "")).lower()
+                if is_mediainfo and ("blu" in medium_value or "unk1" in medium_value):
                     standardized_params["medium"] = "medium.encode"
                     print("更正媒介为 encode")
 
@@ -1605,26 +1618,32 @@ class TorrentMigrator:
                         team_standard = standardized_params.get("team", "")
 
                         # 4. 检查是否在排除列表中
-                        exclude_teams = acknowledgment_config.get(
-                            "exclude_teams", [])
+                        exclude_teams = acknowledgment_config.get("exclude_teams", [])
 
                         if team_standard and team_standard not in exclude_teams:
                             # 5. 使用结构化检测判断是否已包含官组声明
                             # [修复] 优先使用已提取的statement内容，如果为空才使用原始BBCode
                             # 这样可以正确处理SSD等特殊站点
                             original_statement = intro.get("statement", "")
-                            detection_content = original_statement if original_statement.strip(
-                            ) else full_bbcode_descr_for_check
+                            detection_content = (
+                                original_statement
+                                if original_statement.strip()
+                                else full_bbcode_descr_for_check
+                            )
 
                             has_official_statement = self._detect_official_statement(
-                                detection_content, acknowledgment_config)
+                                detection_content, acknowledgment_config
+                            )
 
                             if has_official_statement:
-                                self.logger.info("检测到声明中已包含官组相关说明，跳过添加致谢声明")
+                                self.logger.info(
+                                    "检测到声明中已包含官组相关说明，跳过添加致谢声明"
+                                )
                             else:
                                 # 6. 获取制作组显示名称（从数据库查询）
                                 display_name = self._get_team_display_name(
-                                    team_standard, acknowledgment_config)
+                                    team_standard, acknowledgment_config
+                                )
 
                                 # 7. 如果数据库中未找到匹配，跳过添加致谢声明
                                 if display_name is None:
@@ -1635,38 +1654,41 @@ class TorrentMigrator:
                                     # 8. 生成致谢声明
                                     template = acknowledgment_config.get(
                                         "template",
-                                        "[quote][b][color=blue]{team_name}官组作品，感谢原制作者发布。[/color][/b][/quote]"
+                                        "[quote][b][color=blue][size=5]{team_name}官组作品，感谢原制作者发布。[/size][/color][/b][/quote]",
                                     )
-                                    acknowledgment = template.format(
-                                        team_name=display_name)
+                                    acknowledgment = template.format(team_name=display_name)
 
                                     # 9. 将致谢声明插入到 intro["statement"] 的开头
                                     if original_statement:
-                                        intro[
-                                            "statement"] = acknowledgment + "\n\n" + original_statement
+                                        intro["statement"] = (
+                                            acknowledgment + "\n\n" + original_statement
+                                        )
                                     else:
                                         intro["statement"] = acknowledgment
 
-                                    self.logger.info(
-                                        f"已添加官组致谢声明: {display_name}官组作品")
+                                    self.logger.info(f"已添加官组致谢声明: {display_name}官组作品")
 
                     # 发送步骤6完成日志
                     if self.task_id:
                         if has_official_statement:
-                            log_streamer.emit_log(self.task_id, "检查声明感谢",
-                                                  "存在声明信息", "success")
+                            log_streamer.emit_log(
+                                self.task_id, "检查声明感谢", "存在声明信息", "success"
+                            )
                         elif display_name is not None:
-                            log_streamer.emit_log(self.task_id, "检查声明感谢",
-                                                  "成功生成声明信息", "success")
+                            log_streamer.emit_log(
+                                self.task_id, "检查声明感谢", "成功生成声明信息", "success"
+                            )
                         else:
-                            log_streamer.emit_log(self.task_id, "检查声明感谢",
-                                                  "无需添加声明", "success")
+                            log_streamer.emit_log(
+                                self.task_id, "检查声明感谢", "无需添加声明", "success"
+                            )
                 except Exception as e:
                     self.logger.warning(f"添加官组致谢声明时发生错误: {e}")
                     # 即使出错也发送完成日志
                     if self.task_id:
-                        log_streamer.emit_log(self.task_id, "检查声明感谢",
-                                              f"处理出错: {str(e)}", "warning")
+                        log_streamer.emit_log(
+                            self.task_id, "检查声明感谢", f"处理出错: {str(e)}", "warning"
+                        )
                 # [致谢声明添加结束]
 
                 # 输出标准化参数以供前端预览
@@ -1677,8 +1699,9 @@ class TorrentMigrator:
                     "类型": standardized_params.get("type", ""),
                     "媒介": standardized_params.get("medium", ""),
                     "视频编码": standardized_params.get("video_codec", ""),
-                    "音频编码": standardized_params.get("audio_codec",
-                                                    ""),  # [注意] 这里现在会使用优化后的值
+                    "音频编码": standardized_params.get(
+                        "audio_codec", ""
+                    ),  # [注意] 这里现在会使用优化后的值
                     "分辨率": standardized_params.get("resolution", ""),
                     "制作组": standardized_params.get("team", ""),
                     "产地": standardized_params.get("source", ""),
@@ -1696,7 +1719,7 @@ class TorrentMigrator:
                     "source_params": source_params,
                     "modified_torrent_path": "",  # 临时占位符
                     # 添加标准化参数供预览
-                    "standardized_params": standardized_params
+                    "standardized_params": standardized_params,
                 }
 
                 # 创建前端预览参数
@@ -1711,44 +1734,33 @@ class TorrentMigrator:
                     "resolution": standardized_params.get("resolution", ""),
                     "release_group": standardized_params.get("team", ""),
                     "source": standardized_params.get("source", ""),
-                    "tags": standardized_params.get("tags", [])
+                    "tags": standardized_params.get("tags", []),
                 }
                 # --- [三层解耦模型核心实现] 结束 ---
 
                 self.logger.info("--- [步骤1] 种子信息获取和解析完成 ---")
 
                 review_data_payload = {
-                    "original_main_title":
-                    original_main_title,
-                    "title_components":
-                    title_components,
-                    "subtitle":
-                    subtitle,
-                    "imdb_link":
-                    imdb_link,
-                    "intro":
-                    intro,
-                    "mediainfo":
-                    mediainfo,
-                    "source_params":
-                    source_params,
+                    "original_main_title": original_main_title,
+                    "title_components": title_components,
+                    "subtitle": subtitle,
+                    "imdb_link": imdb_link,
+                    "intro": intro,
+                    "mediainfo": mediainfo,
+                    "source_params": source_params,
                     # 标准化参数
-                    "standardized_params":
-                    standardized_params,
-                    "final_publish_parameters":
-                    final_publish_parameters,
-                    "complete_publish_params":
-                    complete_publish_params,
-                    "raw_params_for_preview":
-                    raw_params_for_preview,
+                    "standardized_params": standardized_params,
+                    "final_publish_parameters": final_publish_parameters,
+                    "complete_publish_params": complete_publish_params,
+                    "raw_params_for_preview": raw_params_for_preview,
                     # 添加特殊提取器处理标志
-                    "special_extractor_processed":
-                    getattr(self, '_special_extractor_processed', False)
+                    "special_extractor_processed": getattr(
+                        self, "_special_extractor_processed", False
+                    ),
                 }
 
                 # 获取源站点种子的 hash 值
-                hash = seed_param_model.search_torrent_hash(
-                    self.torrent_name, self.SOURCE_NAME)
+                hash = seed_param_model.search_torrent_hash(self.torrent_name, self.SOURCE_NAME)
 
                 # 从torrents表中获取下载器ID
                 downloader_id_from_db = None
@@ -1761,17 +1773,16 @@ class TorrentMigrator:
                         # 查询torrents表中对应的下载器ID
                         if self.db_manager.db_type == "postgresql":
                             cursor.execute(
-                                "SELECT downloader_id FROM torrents WHERE hash = %s",
-                                (hash, ))
+                                "SELECT downloader_id FROM torrents WHERE hash = %s", (hash,)
+                            )
                         else:  # mysql and sqlite
                             cursor.execute(
-                                f"SELECT downloader_id FROM torrents WHERE hash = {ph}",
-                                (hash, ))
+                                f"SELECT downloader_id FROM torrents WHERE hash = {ph}", (hash,)
+                            )
 
                         result = cursor.fetchone()
                         if result:
-                            downloader_id_from_db = dict(result).get(
-                                "downloader_id")
+                            downloader_id_from_db = dict(result).get("downloader_id")
 
                         cursor.close()
                         conn.close()
@@ -1783,9 +1794,10 @@ class TorrentMigrator:
 
                 # 处理种子名称：去除 .torrent 后缀
                 torrent_name_without_ext = self.torrent_name
-                if torrent_name_without_ext.lower().endswith('.torrent'):
-                    torrent_name_without_ext = torrent_name_without_ext[:
-                                                                        -8]  # 去除 .torrent (8个字符)
+                if torrent_name_without_ext.lower().endswith(".torrent"):
+                    torrent_name_without_ext = torrent_name_without_ext[
+                        :-8
+                    ]  # 去除 .torrent (8个字符)
 
                 # 从title_components中提取标题拆解的各项参数（title_components已在方法开头定义）
 
@@ -1794,76 +1806,53 @@ class TorrentMigrator:
                 filtered_douban_link = douban_link
                 if douban_link:
                     douban_match = re.match(
-                        r'(https?://movie\.douban\.com/subject/\d+)',
-                        douban_link)
-                    filtered_douban_link = douban_match.group(
-                        1) if douban_match else douban_link
+                        r"(https?://movie\.douban\.com/subject/\d+)", douban_link
+                    )
+                    filtered_douban_link = douban_match.group(1) if douban_match else douban_link
 
                 seed_parameters = {
-                    "name":
-                    torrent_name_without_ext,  # 添加去除后缀的种子名称
-                    "title":
-                    original_main_title,
-                    "subtitle":
-                    subtitle,
-                    "imdb_link":
-                    imdb_link,
-                    "douban_link":
-                    filtered_douban_link,  # 使用过滤后的豆瓣链接
-                    "poster":
-                    intro.get("poster"),
-                    "screenshots":
-                    intro.get("screenshots"),
-                    "statement":
-                    intro.get("statement", "").strip(),
-                    "body":
-                    intro.get("body", "").strip(),
-                    "mediainfo":
-                    mediainfo,
+                    "name": torrent_name_without_ext,  # 添加去除后缀的种子名称
+                    "title": original_main_title,
+                    "subtitle": subtitle,
+                    "imdb_link": imdb_link,
+                    "douban_link": filtered_douban_link,  # 使用过滤后的豆瓣链接
+                    "poster": intro.get("poster"),
+                    "screenshots": intro.get("screenshots"),
+                    "statement": intro.get("statement", "").strip(),
+                    "body": intro.get("body", "").strip(),
+                    "mediainfo": mediainfo,
                     # [修正] 从 standardized_params 获取已经标准化的标签
-                    "tags":
-                    standardized_params.get("tags", []),
-
+                    "tags": standardized_params.get("tags", []),
                     # 保存完整的标题组件数据
-                    "title_components":
-                    title_components,
-
+                    "title_components": title_components,
                     # 保存被过滤掉的ARDTU声明内容
-                    "removed_ardtudeclarations":
-                    intro.get("removed_ardtudeclarations", []),
+                    "removed_ardtudeclarations": intro.get("removed_ardtudeclarations", []),
                 }
 
                 # 2. 将 standardized_params 中所有标准化的键值对合并进来。
                 #    这里的 .get() 会返回 'category.movie' 这样的完整字符串。
-                seed_parameters.update({
-                    "nickname":
-                    self.SOURCE_NAME,
-                    "save_path":
-                    self.save_path,
-                    "type":
-                    standardized_params.get("type"),
-                    "medium":
-                    standardized_params.get("medium"),
-                    "video_codec":
-                    standardized_params.get("video_codec"),
-                    "audio_codec":
-                    standardized_params.get("audio_codec"),
-                    "resolution":
-                    standardized_params.get("resolution"),
-                    "team":
-                    standardized_params.get("team"),
-                    "source":
-                    standardized_params.get("source"),
-                    # 移除单独的processing参数保存，统一使用source参数
-                    "downloader_id":
-                    final_downloader_id  # 添加下载器ID
-                })
+                seed_parameters.update(
+                    {
+                        "nickname": self.SOURCE_NAME,
+                        "save_path": self.save_path,
+                        "type": standardized_params.get("type"),
+                        "medium": standardized_params.get("medium"),
+                        "video_codec": standardized_params.get("video_codec"),
+                        "audio_codec": standardized_params.get("audio_codec"),
+                        "resolution": standardized_params.get("resolution"),
+                        "team": standardized_params.get("team"),
+                        "source": standardized_params.get("source"),
+                        # 移除单独的processing参数保存，统一使用source参数
+                        "downloader_id": final_downloader_id,  # 添加下载器ID
+                    }
+                )
                 # ------------------------------------------------------------------------------------------
 
                 # 保存到数据库并发送最终日志（步骤7）
                 if self.task_id:
-                    log_streamer.emit_log(self.task_id, "成功获取参数",
-                                          "正在保存参数到数据库...", "processing")
+                    log_streamer.emit_log(
+                        self.task_id, "成功获取参数", "正在保存参数到数据库...", "processing"
+                    )
 
                 # 保存到数据库（优先）和JSON文件（后备），使用hash作为唯一主键
                 # 将torrent_id和site_name作为普通字段保存到parameters中
@@ -1871,22 +1860,25 @@ class TorrentMigrator:
                 seed_parameters["site_name"] = self.SOURCE_SITE_CODE
                 # 确保传递正确的 torrent_id 和 site_name
                 save_result = seed_param_model.save_parameters(
-                    hash, torrent_id, self.SOURCE_SITE_CODE, seed_parameters)
+                    hash, torrent_id, self.SOURCE_SITE_CODE, seed_parameters
+                )
                 if save_result:
                     self.logger.info(
                         f"种子参数(使用标准化键)已保存: {hash} from {self.SOURCE_NAME} ({self.SOURCE_SITE_CODE})"
                     )
                     if self.task_id:
-                        log_streamer.emit_log(self.task_id, "成功获取参数",
-                                              "参数已成功获取", "success")
+                        log_streamer.emit_log(
+                            self.task_id, "成功获取参数", "参数已成功获取", "success"
+                        )
                         # 注意：不在这里关闭日志流，让调用方（routes_migrate.py）来关闭
                 else:
                     self.logger.warning(
                         f"种子参数(使用标准化键)保存失败: {hash} from {self.SOURCE_NAME} ({self.SOURCE_SITE_CODE})"
                     )
                     if self.task_id:
-                        log_streamer.emit_log(self.task_id, "成功获取参数", "参数保存失败",
-                                              "error")
+                        log_streamer.emit_log(
+                            self.task_id, "成功获取参数", "参数保存失败", "error"
+                        )
                         # 注意：不在这里关闭日志流，让调用方（routes_migrate.py）来关闭
 
                 # [修改] 如果执行到这里说明成功,直接返回结果
@@ -1906,43 +1898,48 @@ class TorrentMigrator:
 
                 if retry_count < MAX_RETRIES:
                     self.logger.warning(
-                        f"将在 {RETRY_DELAY} 秒后进行第 {retry_count + 1} 次重试...")
+                        f"将在 {RETRY_DELAY} 秒后进行第 {retry_count + 1} 次重试..."
+                    )
                     if self.task_id:
                         log_streamer.emit_log(
-                            self.task_id, "错误重试",
+                            self.task_id,
+                            "错误重试",
                             f"发生错误，{RETRY_DELAY} 秒后重试 ({retry_count}/{MAX_RETRIES})...",
-                            "warning")
+                            "warning",
+                        )
                     time.sleep(RETRY_DELAY)
                 else:
                     self.logger.error(f"已达到最大重试次数 ({MAX_RETRIES})，放弃重试")
                     if self.task_id:
-                        log_streamer.emit_log(self.task_id, "获取失败",
-                                              f"已重试 {MAX_RETRIES} 次仍然失败",
-                                              "error")
+                        log_streamer.emit_log(
+                            self.task_id, "获取失败", f"已重试 {MAX_RETRIES} 次仍然失败", "error"
+                        )
 
         # [新增] 如果所有重试都失败,返回错误信息
         # self.cleanup() # 此处不清理，因为原始种子文件需要被缓存
         return {
             "logs": self.log_handler.get_logs(),
-            "error": str(last_error) if last_error else "未知错误"
+            "error": str(last_error) if last_error else "未知错误",
         }
 
     def publish_prepared_torrent(self, upload_data, modified_torrent_path):
         """第二步：使用准备好的信息和文件执行上传。"""
         try:
-            self.logger.info(
-                f"--- [步骤2] 开始发布种子到 {self.target_site['nickname']} ---")
+            self.logger.info(f"--- [步骤2] 开始发布种子到 {self.target_site['nickname']} ---")
             upload_payload = upload_data.copy()
             upload_payload["modified_torrent_path"] = modified_torrent_path
 
             self.logger.info(
-                f"正在加载目标站点上传模块: uploaders.sites.{self.TARGET_UPLOAD_MODULE}")
+                f"正在加载目标站点上传模块: uploaders.sites.{self.TARGET_UPLOAD_MODULE}"
+            )
             # Use the base uploader's static upload method instead of calling directly on the module
             from core.uploaders.uploader import BaseUploader
+
             result, message = BaseUploader.upload(
                 site_name=self.target_site["site"],
                 site_info=self.target_site,
-                upload_payload=upload_payload)
+                upload_payload=upload_payload,
+            )
             if result:
                 self.logger.success(f"发布成功！站点消息: {message}")
             else:
@@ -1956,37 +1953,43 @@ class TorrentMigrator:
             if not final_url and "hddolby.com" in str(message):
                 # 检查 offers.php 格式
                 if offers_match := re.search(
-                        r"https?://www\.hddolby\.com/offers\.php\?id=(\d+)",
-                        str(message)):
+                    r"https?://www\.hddolby\.com/offers\.php\?id=(\d+)", str(message)
+                ):
                     offers_id = offers_match.group(1)
                     final_url = f"https://www.hddolby.com/details.php?id={offers_id}"
 
                     # 从数据库获取 hddolby 站点的 passkey
                     downhash = self._get_site_passkey("hddolby")
 
-                    direct_download_url = f"https://www.hddolby.com/download.php?id={offers_id}&downhash={downhash}"
+                    direct_download_url = (
+                        f"https://www.hddolby.com/download.php?id={offers_id}&downhash={downhash}"
+                    )
                     self.logger.info(
-                        f"检测到 hddolby 站点 offers.php 格式，已转换为详情页: {final_url}")
+                        f"检测到 hddolby 站点 offers.php 格式，已转换为详情页: {final_url}"
+                    )
 
                 # 检查直接的 details.php 格式
                 elif details_match := re.search(
-                        r"https?://www\.hddolby\.com/details\.php\?id=(\d+)",
-                        str(message)):
+                    r"https?://www\.hddolby\.com/details\.php\?id=(\d+)", str(message)
+                ):
                     details_id = details_match.group(1)
                     final_url = f"https://www.hddolby.com/details.php?id={details_id}"
 
                     # 从数据库获取 hddolby 站点的 passkey
                     downhash = self._get_site_passkey("hddolby")
 
-                    direct_download_url = f"https://www.hddolby.com/download.php?id={details_id}&downhash={downhash}"
+                    direct_download_url = (
+                        f"https://www.hddolby.com/download.php?id={details_id}&downhash={downhash}"
+                    )
                     self.logger.info(
-                        f"检测到 hddolby 站点 details.php 格式，已构建直接下载链接: {direct_download_url}")
-                    
+                        f"检测到 hddolby 站点 details.php 格式，已构建直接下载链接: {direct_download_url}"
+                    )
+
             if "hdtime.org" in str(message):
                 # 检查 hdtime.org 的详情页链接
                 if hdtime_match := re.search(
-                        r"https?://hdtime\.org/details\.php\?id=(\d+)",
-                        str(message)):
+                    r"https?://hdtime\.org/details\.php\?id=(\d+)", str(message)
+                ):
                     details_id = hdtime_match.group(1)
                     final_url = f"https://hdtime.org/details.php?id={details_id}"
 
@@ -1996,30 +1999,33 @@ class TorrentMigrator:
                     # 拼接直接下载链接
                     direct_download_url = f"https://hdtime.org/download.php?id={details_id}&passkey={passkey}&https=1"
                     self.logger.info(
-                        f"检测到 hdtime.org 站点 details.php 格式，已构建直接下载链接: {direct_download_url}")
+                        f"检测到 hdtime.org 站点 details.php 格式，已构建直接下载链接: {direct_download_url}"
+                    )
 
             if url_match := re.search(
-                    r"(https?://[^\s|]+(?:details\.php\?[^\s|]+|/torrent/info/\d+))",
-                    str(message)):
+                r"(https?://[^\s|]+(?:details\.php\?[^\s|]+|/torrent/info/\d+))", str(message)
+            ):
                 final_url = url_match.group(1)
 
             # 如果上面的正则没匹配到，尝试更宽泛的匹配（兜底策略）
             if not final_url:
-                if generic_match := re.search(r"链接:\s*(https?://[^\s|]+)",
-                                              str(message)):
+                if generic_match := re.search(r"链接:\s*(https?://[^\s|]+)", str(message)):
                     final_url = generic_match.group(1)
 
             # 提取直接下载链接 (朱雀站点特殊处理)
             if direct_download_match := re.search(
-                    r"DIRECT_DOWNLOAD:(https?://[^\s]+)", str(message)):
+                r"DIRECT_DOWNLOAD:(https?://[^\s]+)", str(message)
+            ):
                 direct_download_url = direct_download_match.group(1)
 
-            self.logger.info(f"返回结果: final_url={final_url}, direct_download_url={direct_download_url}")
+            self.logger.info(
+                f"返回结果: final_url={final_url}, direct_download_url={direct_download_url}"
+            )
             return {
                 "success": result,
                 "logs": self.log_handler.get_logs(),
                 "url": final_url,
-                "direct_download_url": direct_download_url
+                "direct_download_url": direct_download_url,
             }
         except Exception as e:
             self.logger.error(f"发布过程中发生致命错误: {e}")
@@ -2028,5 +2034,5 @@ class TorrentMigrator:
                 "success": False,
                 "logs": self.log_handler.get_logs(),
                 "url": None,
-                "direct_download_url": None
+                "direct_download_url": None,
             }

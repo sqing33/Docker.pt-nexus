@@ -455,32 +455,10 @@
                   >
                     {{ isStoppingBatch ? '停止中...' : '停止转种' }}
                   </el-button>
-                  <el-button
-                    type="primary"
-                    size="small"
-                    @click="refreshRecords"
-                    :loading="recordsLoading"
-                  >
-                    刷新
+                  <!-- 强制自动刷新状态显示 -->
+                  <el-button type="success" size="small" disabled>
+                    自动刷新中
                   </el-button>
-                  <el-button
-                    v-if="refreshTimer"
-                    type="warning"
-                    size="small"
-                    @click="stopAutoRefresh"
-                  >
-                    停止自动刷新
-                  </el-button>
-                  <!-- ✨ CHANGE START: Modified button logic -->
-                  <el-button
-                    v-else-if="isBatchRunning"
-                    type="success"
-                    size="small"
-                    @click="startAutoRefresh"
-                  >
-                    开启自动刷新
-                  </el-button>
-                  <!-- ✨ CHANGE END -->
                 </div>
               </div>
               <!-- 种子处理记录表格 -->
@@ -648,24 +626,9 @@
                   </el-radio-group>
                 </div>
                 <div class="tab-controls">
-                  <el-button type="primary" size="small" @click="refreshBDInfoRecords">
-                    刷新
-                  </el-button>
-                  <el-button
-                    v-if="bdinfoRefreshTimer"
-                    type="warning"
-                    size="small"
-                    @click="stopBDInfoAutoRefresh"
-                  >
-                    停止自动刷新
-                  </el-button>
-                  <el-button
-                    v-else-if="hasProcessingBDInfo"
-                    type="success"
-                    size="small"
-                    @click="startBDInfoAutoRefresh"
-                  >
-                    开启自动刷新
+                  <!-- 强制自动刷新状态显示 -->
+                  <el-button type="success" size="small" disabled>
+                    自动刷新中
                   </el-button>
                 </div>
               </div>
@@ -741,15 +704,15 @@
                         style="text-align: center"
                       >
                         <el-progress
-                          :percentage="scope.row.progress_info.progress_percent || 0"
+                          :percentage="scope.row.progress_info?.progress_percent || 0"
                           :status="
-                            scope.row.progress_info.progress_percent === 100 ? 'success' : ''
+                            (scope.row.progress_info?.progress_percent || 0) === 100 ? 'success' : ''
                           "
                           :stroke-width="6"
                           :show-text="false"
                         />
                         <div style="font-size: 12px; margin-top: 4px; color: #606266">
-                          {{ scope.row.progress_info.progress_percent || 0 }}%
+                          {{ scope.row.progress_info?.progress_percent || 0 }}%
                         </div>
                       </div>
                       <div
@@ -1056,7 +1019,7 @@ const retryingSeeds = ref<Set<string>>(new Set()) // 正在重试的种子ID集�
 
 // 定时刷新相关
 const refreshTimer = ref<ReturnType<typeof setInterval> | null>(null)
-const REFRESH_INTERVAL = 1000 // 5秒刷新一次
+const REFRESH_INTERVAL = 1000 // 1秒刷新一次
 const additionalRefreshCount = ref<number>(0) // 额外刷新次数计数器
 const ADDITIONAL_REFRESH_LIMIT = 3 // 完成后额外刷新3次
 
@@ -1087,6 +1050,7 @@ interface BDInfoRecord {
   seed_id: string
   title: string
   site_name: string
+  nickname?: string
   mediainfo_status: string
   bdinfo_task_id?: string
   bdinfo_started_at?: string
@@ -1094,6 +1058,12 @@ interface BDInfoRecord {
   bdinfo_error?: string
   mediainfo?: string
   is_bdinfo: boolean
+  progress_info?: {
+    progress_percent?: number
+    elapsed_time?: string
+    remaining_time?: string
+    last_progress_update?: string
+  }
 }
 
 // 路径树相关
@@ -2040,7 +2010,7 @@ const hasProcessingBDInfo = computed(() => {
   )
 })
 
-// 启动定时刷新
+// 启动定时刷新 - 强制自动刷新
 const startAutoRefresh = () => {
   // 先清除任何现有的定时器
   stopAutoRefresh()
@@ -2050,10 +2020,10 @@ const startAutoRefresh = () => {
 
   // 启动定时器 - 只要窗口打开就持续刷新，没有其他停止条件
   refreshTimer.value = setInterval(async () => {
-    if (recordDialogVisible.value) {
+    if (recordDialogVisible.value && activeRecordTab.value === 'cross-seed') {
       await refreshRecords()
     } else {
-      // 如果记录窗口已关闭，停止定时器
+      // 如果记录窗口已关闭或切换到其他标签页，停止定时器
       stopAutoRefresh()
     }
   }, REFRESH_INTERVAL)
@@ -2069,17 +2039,17 @@ const stopAutoRefresh = () => {
   additionalRefreshCount.value = 0
 }
 
-// 打开记录查看对话框
+// 打开记录查看对话框 - 强制启动自动刷新
 const openRecordViewDialog = () => {
   recordDialogVisible.value = true
 
-  // 根据当前激活的标签页加载对应的记录
+  // 根据当前激活的标签页加载对应的记录并强制启动自动刷新
   if (activeRecordTab.value === 'cross-seed') {
     refreshRecords() // 打开时加载一次记录
-    startAutoRefresh() // 打开时启动自动刷新
+    startAutoRefresh() // 强制启动自动刷新
   } else if (activeRecordTab.value === 'bdinfo') {
     refreshBDInfoRecords() // 打开时加载BDInfo记录
-    startBDInfoAutoRefresh() // 默认启动自动刷新
+    startBDInfoAutoRefresh() // 强制启动自动刷新
   }
 }
 
@@ -2238,21 +2208,14 @@ const refreshBDInfoRecords = async () => {
   }
 }
 
-// 启动BDInfo自动刷新
+// 启动BDInfo自动刷新 - 强制自动刷新
 const startBDInfoAutoRefresh = () => {
   stopBDInfoAutoRefresh()
   bdinfoRefreshTimer.value = setInterval(async () => {
     if (recordDialogVisible.value && activeRecordTab.value === 'bdinfo') {
       await refreshBDInfoRecords()
 
-      // 如果没有获取中的任务，停止自动刷新
-      if (!hasProcessingBDInfo.value) {
-        setTimeout(() => {
-          if (!hasProcessingBDInfo.value) {
-            stopBDInfoAutoRefresh()
-          }
-        }, 3000)
-      }
+      // 即使没有获取中的任务也继续刷新，实现强制自动刷新
     } else {
       stopBDInfoAutoRefresh()
     }
@@ -2330,7 +2293,7 @@ const copyToClipboard = async (text: string) => {
 
 // 查看BDInfo详情
 const viewBDInfoDetails = (record: BDInfoRecord) => {
-  selectedBDInfoRecord.value = record
+  selectedBDInfoRecord.value = record || null
   bdinfoDetailDialogVisible.value = true
 }
 
@@ -2413,10 +2376,8 @@ const retryBDInfo = async (record: BDInfoRecord) => {
       ElMessage.success('BDInfo重新获取任务已启动')
       await refreshBDInfoRecords()
 
-      // 如果有获取中的任务，启动自动刷新
-      if (hasProcessingBDInfo.value) {
-        startBDInfoAutoRefresh()
-      }
+      // 强制启动自动刷新
+      startBDInfoAutoRefresh()
     } else {
       ElMessage.error(result.message || '启动BDInfo重新获取失败')
     }
@@ -2554,20 +2515,16 @@ const stopBatchProcess = async () => {
   }
 }
 
-// 监听标签页切换
+// 监听标签页切换 - 强制启动对应标签页的自动刷新
 watch(activeRecordTab, (newTab, oldTab) => {
   if (newTab === 'cross-seed') {
     // 切换到批量转种记录标签页
     refreshRecords()
-    if (isBatchRunning.value) {
-      startAutoRefresh()
-    }
+    startAutoRefresh() // 强制启动自动刷新
   } else if (newTab === 'bdinfo') {
     // 切换到BDInfo记录标签页
     refreshBDInfoRecords()
-    if (hasProcessingBDInfo.value) {
-      startBDInfoAutoRefresh()
-    }
+    startBDInfoAutoRefresh() // 强制启动自动刷新
   }
 
   // 停止另一个标签页的自动刷新

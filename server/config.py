@@ -310,3 +310,8 @@ def get_db_config():
 
 
 config_manager = ConfigManager()
+
+
+def get_config():
+    """获取配置管理器实例"""
+    return config_manager

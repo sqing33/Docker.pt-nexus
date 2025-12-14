@@ -2,9 +2,9 @@
 
 # PT Nexus Proxy 安装脚本
 # 用法:
-#   wget -O - https://github.com/OWNER/REPO/releases/latest/download/install-pt-nexus-box-proxy.sh | bash
+#   wget -O - https://github.com/sqing33/Docker.pt-nexus/releases/download/latest/install-pt-nexus-box-proxy.sh | sudo bash
 # 或者:
-#   curl -s https://github.com/OWNER/REPO/releases/latest/download/install-pt-nexus-box-proxy.sh | bash
+#   curl -sL https://github.com/sqing33/Docker.pt-nexus/releases/download/latest/install-pt-nexus-box-proxy.sh | sudo bash
 
 set -e
 
@@ -121,12 +121,90 @@ download_proxy() {
     return 0
 }
 
+# 下载BDInfo相关文件
+download_bdinfo_tools() {
+    log "正在下载 BDInfo 工具..."
+
+    # 创建bdinfo目录
+    mkdir -p "bdinfo"
+    cd "bdinfo"
+
+    # BDInfo文件列表
+    local files=(
+        "BDInfo"
+        "BDInfoDataSubstractor"
+        "liblzfse.so"
+    )
+
+    # 下载每个文件
+    for file in "${files[@]}"; do
+        local url="https://raw.githubusercontent.com/$REPO_OWNER/Docker.pt-nexus/refs/heads/main/server/core/bdinfo/$file"
+        
+        log "正在下载 $file..."
+        
+        # 尝试使用curl下载
+        if command -v curl >/dev/null 2>&1; then
+            if ! curl -L -f -o "$file" "$url"; then
+                error "curl下载 $file 失败"
+                cd ..
+                return 1
+            fi
+        # 如果curl不可用，尝试使用wget
+        elif command -v wget >/dev/null 2>&1; then
+            if ! wget -O "$file" "$url"; then
+                error "wget下载 $file 失败"
+                cd ..
+                return 1
+            fi
+        else
+            error "未找到curl或wget，请先安装其中一个"
+            cd ..
+            return 1
+        fi
+
+        # 检查下载是否成功
+        if [ ! -f "$file" ]; then
+            error "下载 $file 失败"
+            cd ..
+            return 1
+        fi
+
+        # 检查文件大小，确保不是空文件
+        if [ ! -s "$file" ]; then
+            error "下载的 $file 为空"
+            rm -f "$file"
+            cd ..
+            return 1
+        fi
+
+        # 设置可执行权限（仅对可执行文件）
+        if [[ "$file" == "BDInfo" || "$file" == "BDInfoDataSubstractor" ]]; then
+            chmod +x "$file"
+        fi
+
+        log "$file 下载成功"
+    done
+
+    cd ..
+    log "所有 BDInfo 工具下载完成"
+    return 0
+}
+
 # 设置权限
 set_permissions() {
     log "设置文件权限..."
     chmod +x "pt-nexus-box-proxy"
     chmod +x "start.sh"
     chmod +x "stop.sh"
+    
+    # 设置BDInfo工具权限
+    if [ -d "bdinfo" ]; then
+        chmod -R 755 "bdinfo"
+        chmod +x "bdinfo/BDInfo"
+        chmod +x "bdinfo/BDInfoDataSubstractor"
+        chmod 644 "bdinfo/liblzfse.so"
+        log "BDInfo工具权限设置完成"
+    fi
 }
 
 # 创建启动脚本
@@ -162,7 +240,7 @@ echo "将使用端口: $PORT_INPUT"
 echo "[1/4] 正在检查并安装依赖 (需要 sudo 权限)..."
 
 # 定义需要的依赖列表
-DEPS="ffmpeg mediainfo mpv fonts-noto-cjk"
+DEPS="ffmpeg mediainfo mpv fonts-noto-cjk libicu-dev"
 
 # 检测包管理器
 if command -v apt-get &> /dev/null; then
@@ -422,6 +500,11 @@ main() {
     if ! download_proxy; then
         restore_backup
         exit 1
+    fi
+
+    # 下载BDInfo工具
+    if ! download_bdinfo_tools; then
+        warn "BDInfo工具下载失败，代理程序仍可正常使用但BDInfo功能将不可用"
     fi
 
     set_permissions

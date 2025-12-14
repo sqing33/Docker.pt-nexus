@@ -107,12 +107,16 @@
 
 # 更新日志
 
-### v3.2.5（2025.12.12）
+### v3.3.0（2025.12.15）
 
 > **注:若报错“ModuleNotFoundError: No module named 'PIL'”则需要重新下载镜像进行更新，如仍然报错则删除 data 目录下的 updates 文件夹。
-13City限速12.5MB/s，代码不会修改非0的限速，需要手动修改**
+13City限速12.5MB/s，代码不会修改非0的限速，需要手动修改。
+盒子获取 bdinfo 需要重新执行 curl -sL https://github.com/sqing33/Docker.pt-nexus/releases/download/latest/install-pt-nexus-box-proxy.sh | sudo bash 以更新盒子端脚本。**
 
 - 修复：“ModuleNotFoundError: No module named 'PIL'”报错
+- 修复：青蛙、三月传媒主标题出现重复制作组的问题
+- 新增：bdinfo 提取（盒子需更新脚本）
+- 新增：bdinfo 提取队列与历史记录（在一站多种的日志里）
 
 ### v3.2.5（2025.12.11）
 

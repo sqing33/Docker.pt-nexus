@@ -7,9 +7,18 @@ import os
 import requests
 import urllib.parse
 import json
+from datetime import datetime
 from flask import Blueprint, jsonify, request, Response, stream_with_context
 from bs4 import BeautifulSoup
-from utils import upload_data_title, upload_data_screenshot, upload_data_movie_info, add_torrent_to_downloader, extract_tags_from_mediainfo, extract_origin_from_description, extract_resolution_from_mediainfo
+from utils import (
+    upload_data_title,
+    upload_data_screenshot,
+    upload_data_movie_info,
+    add_torrent_to_downloader,
+    extract_tags_from_mediainfo,
+    extract_origin_from_description,
+    extract_resolution_from_mediainfo,
+)
 from core.migrator import TorrentMigrator
 
 # 导入种子参数模型
@@ -40,8 +49,7 @@ def get_cross_seed_settings():
     try:
         config = config_manager.get()
         # 使用 .get() 提供默认值，防止配置文件损坏时出错
-        cross_seed_config = config.get("cross_seed",
-                                       {"image_hoster": "pixhost"})
+        cross_seed_config = config.get("cross_seed", {"image_hoster": "pixhost"})
         return jsonify(cross_seed_config)
     except Exception as e:
         logging.error(f"获取转种设置失败: {e}", exc_info=True)
@@ -53,8 +61,7 @@ def save_cross_seed_settings():
     """保存转种相关的设置。"""
     try:
         new_settings = request.json
-        if not isinstance(new_settings,
-                          dict) or "image_hoster" not in new_settings:
+        if not isinstance(new_settings, dict) or "image_hoster" not in new_settings:
             return jsonify({"error": "无效的设置数据格式。"}), 400
 
         current_config = config_manager.get()
@@ -81,21 +88,22 @@ def save_cross_seed_settings():
 def get_db_seed_info():
     """从数据库读取种子信息用于展示"""
     try:
-        torrent_id = request.args.get('torrent_id')
-        site_name = request.args.get('site_name')
-        task_id = request.args.get('task_id')  # 接收前端传来的task_id
+        torrent_id = request.args.get("torrent_id")
+        site_name = request.args.get("site_name")
+        task_id = request.args.get("task_id")  # 接收前端传来的task_id
 
         if not torrent_id or not site_name:
-            return jsonify({
-                "success": False,
-                "message": "错误：torrent_id和site_name参数不能为空"
-            }), 400
+            return (
+                jsonify({"success": False, "message": "错误：torrent_id和site_name参数不能为空"}),
+                400,
+            )
 
         # 如果前端提供了task_id，使用它；否则生成新的
         if task_id:
             log_streamer.create_stream(task_id)
-            log_streamer.emit_log(task_id, "数据库查询", "正在从数据库读取种子信息...",
-                                  "processing")
+            log_streamer.emit_log(
+                task_id, "数据库查询", "正在从数据库读取种子信息...", "processing"
+            )
 
         db_manager = migrate_bp.db_manager
 
@@ -103,6 +111,7 @@ def get_db_seed_info():
         try:
             # 初始化种子参数模型
             from models.seed_parameter import SeedParameter
+
             seed_param_model = SeedParameter(db_manager)
 
             parameters = seed_param_model.get_parameters(torrent_id, site_name)
@@ -123,8 +132,7 @@ def get_db_seed_info():
                     try:
                         conn = db_manager._get_connection()
                         cursor = db_manager._get_cursor(conn)
-                        cursor.execute("SELECT * FROM sites WHERE site = ?",
-                                       (site_name, ))
+                        cursor.execute("SELECT * FROM sites WHERE site = ?", (site_name,))
                         source_info = cursor.fetchone()
                         if source_info:
                             source_info = dict(source_info)
@@ -143,49 +151,49 @@ def get_db_seed_info():
 
                 if task_id:
                     # 标记数据库查询步骤完成
-                    log_streamer.emit_log(task_id, "数据库查询", "数据库读取完成",
-                                          "success")
+                    log_streamer.emit_log(task_id, "数据库查询", "数据库读取完成", "success")
                     # 发送完成步骤
                     log_streamer.emit_log(task_id, "完成", "数据加载完成", "success")
                     # 关闭日志流
                     log_streamer.close_stream(task_id)
 
-                return jsonify({
-                    "success": True,
-                    "data": parameters,
-                    "source": "database",
-                    "task_id": cache_task_id,  # 返回cache_task_id给前端
-                    "reverse_mappings": reverse_mappings
-                })
+                return jsonify(
+                    {
+                        "success": True,
+                        "data": parameters,
+                        "source": "database",
+                        "task_id": cache_task_id,  # 返回cache_task_id给前端
+                        "reverse_mappings": reverse_mappings,
+                    }
+                )
             else:
                 logging.info(
-                    f"数据库中未找到种子信息: {torrent_id} from {site_name}，将从源站点抓取")
+                    f"数据库中未找到种子信息: {torrent_id} from {site_name}，将从源站点抓取"
+                )
 
                 # 标记数据库查询为失败，准备从源站点抓取
                 if task_id:
-                    log_streamer.emit_log(task_id, "数据库查询", "数据库中未找到缓存",
-                                          "error")
+                    log_streamer.emit_log(task_id, "数据库查询", "数据库中未找到缓存", "error")
 
-                return jsonify({
-                    "success": False,
-                    "message": "数据库中未找到种子信息",
-                    "should_fetch": True,  # 标记需要从源站点抓取
-                    "task_id": task_id  # 返回task_id以便前端继续使用同一个日志流
-                }), 202  # 使用202状态码表示"已接受，但需要继续处理"
+                return (
+                    jsonify(
+                        {
+                            "success": False,
+                            "message": "数据库中未找到种子信息",
+                            "should_fetch": True,  # 标记需要从源站点抓取
+                            "task_id": task_id,  # 返回task_id以便前端继续使用同一个日志流
+                        }
+                    ),
+                    202,
+                )  # 使用202状态码表示"已接受，但需要继续处理"
 
         except Exception as e:
             logging.error(f"从数据库读取种子信息失败: {e}", exc_info=True)
-            return jsonify({
-                "success": False,
-                "message": f"数据库读取失败: {str(e)}"
-            }), 500
+            return jsonify({"success": False, "message": f"数据库读取失败: {str(e)}"}), 500
 
     except Exception as e:
         logging.error(f"get_db_seed_info发生意外错误: {e}", exc_info=True)
-        return jsonify({
-            "success": False,
-            "message": f"服务器内部错误: {str(e)}"
-        }), 500
+        return jsonify({"success": False, "message": f"服务器内部错误: {str(e)}"}), 500
 
 
 def generate_reverse_mappings():
@@ -200,77 +208,74 @@ def generate_reverse_mappings():
 
         if os.path.exists(GLOBAL_MAPPINGS):
             try:
-                with open(GLOBAL_MAPPINGS, 'r', encoding='utf-8') as f:
+                with open(GLOBAL_MAPPINGS, "r", encoding="utf-8") as f:
                     config_data = yaml.safe_load(f)
-                    global_mappings = config_data.get('global_standard_keys',
-                                                      {})
+                    global_mappings = config_data.get("global_standard_keys", {})
                 logging.info(
-                    f"成功从global_mappings.yaml读取配置，包含{len(global_mappings)}个类别")
+                    f"成功从global_mappings.yaml读取配置，包含{len(global_mappings)}个类别"
+                )
             except Exception as e:
                 logging.warning(f"读取global_mappings.yaml失败: {e}，将使用配置文件中的设置")
 
         # 如果YAML文件读取失败，从配置管理器获取
         if not global_mappings:
             config = config_manager.get()
-            global_mappings = config.get('global_standard_keys', {})
+            global_mappings = config.get("global_standard_keys", {})
 
         reverse_mappings = {
-            'type': {},
-            'medium': {},
-            'video_codec': {},
-            'audio_codec': {},
-            'resolution': {},
-            'source': {},
-            'team': {},
-            'tags': {}
+            "type": {},
+            "medium": {},
+            "video_codec": {},
+            "audio_codec": {},
+            "resolution": {},
+            "source": {},
+            "team": {},
+            "tags": {},
         }
 
         # 为每个类别生成反向映射
         categories_mapping = {
-            'type': global_mappings.get('type', {}),
-            'medium': global_mappings.get('medium', {}),
-            'video_codec': global_mappings.get('video_codec', {}),
-            'audio_codec': global_mappings.get('audio_codec', {}),
-            'resolution': global_mappings.get('resolution', {}),
-            'source': global_mappings.get('source', {}),
-            'team': global_mappings.get('team', {}),
-            'tags': global_mappings.get('tag', {})  # 注意这里YAML中是'tag'而不是'tags'
+            "type": global_mappings.get("type", {}),
+            "medium": global_mappings.get("medium", {}),
+            "video_codec": global_mappings.get("video_codec", {}),
+            "audio_codec": global_mappings.get("audio_codec", {}),
+            "resolution": global_mappings.get("resolution", {}),
+            "source": global_mappings.get("source", {}),
+            "team": global_mappings.get("team", {}),
+            "tags": global_mappings.get("tag", {}),  # 注意这里YAML中是'tag'而不是'tags'
         }
 
         # 创建反向映射：从标准值到中文名称
         for category, mappings in categories_mapping.items():
-            if category == 'tags':
+            if category == "tags":
                 # 标签特殊处理，提取中文名作为键，标准值作为值
                 for chinese_name, standard_value in mappings.items():
                     if standard_value:  # 过滤掉null值
-                        reverse_mappings['tags'][standard_value] = chinese_name
+                        reverse_mappings["tags"][standard_value] = chinese_name
             else:
                 # 其他类别正常处理
                 for chinese_name, standard_value in mappings.items():
-                    if standard_value and standard_value not in reverse_mappings[
-                            category]:
-                        reverse_mappings[category][
-                            standard_value] = chinese_name
+                    if standard_value and standard_value not in reverse_mappings[category]:
+                        reverse_mappings[category][standard_value] = chinese_name
 
         # 只在必要时添加固定映射项作为后备，避免覆盖YAML配置
         add_fallback_mappings(reverse_mappings)
 
-        logging.info(
-            f"成功生成反向映射表: { {k: len(v) for k, v in reverse_mappings.items()} }")
+        logging.info(f"成功生成反向映射表: { {k: len(v) for k, v in reverse_mappings.items()} }")
         return reverse_mappings
 
     except Exception as e:
         logging.error(f"生成反向映射表失败: {e}", exc_info=True)
         # 返回空的反向映射表作为后备
         return {
-            'type': {},
-            'medium': {},
-            'video_codec': {},
-            'audio_codec': {},
-            'resolution': {},
-            'source': {},
-            'team': {},
-            'tags': {}
+            "type": {},
+            "medium": {},
+            "video_codec": {},
+            "audio_codec": {},
+            "resolution": {},
+            "source": {},
+            "team": {},
+            "tags": {},
         }
 
 
@@ -278,96 +283,110 @@ def add_fallback_mappings(reverse_mappings):
     """添加后备映射项，仅在YAML配置缺失时使用"""
 
     # 检查各个类别是否为空，如果为空则添加基础映射
-    if not reverse_mappings['type']:
+    if not reverse_mappings["type"]:
         logging.warning("type映射为空，添加基础后备映射")
-        reverse_mappings['type'].update({
-            'category.movie': '电影',
-            'category.tv_series': '剧集',
-            'category.animation': '动画',
-            'category.documentaries': '纪录片',
-            'category.music': '音乐',
-            'category.other': '其他'
-        })
+        reverse_mappings["type"].update(
+            {
+                "category.movie": "电影",
+                "category.tv_series": "剧集",
+                "category.animation": "动画",
+                "category.documentaries": "纪录片",
+                "category.music": "音乐",
+                "category.other": "其他",
+            }
+        )
 
-    if not reverse_mappings['medium']:
+    if not reverse_mappings["medium"]:
         logging.warning("medium映射为空，添加基础后备映射")
-        reverse_mappings['medium'].update({
-            'medium.bluray': 'Blu-ray',
-            'medium.uhd_bluray': 'UHD Blu-ray',
-            'medium.remux': 'Remux',
-            'medium.encode': 'Encode',
-            'medium.webdl': 'WEB-DL',
-            'medium.webrip': 'WebRip',
-            'medium.hdtv': 'HDTV',
-            'medium.dvd': 'DVD',
-            'medium.other': '其他'
-        })
+        reverse_mappings["medium"].update(
+            {
+                "medium.bluray": "Blu-ray",
+                "medium.uhd_bluray": "UHD Blu-ray",
+                "medium.remux": "Remux",
+                "medium.encode": "Encode",
+                "medium.webdl": "WEB-DL",
+                "medium.webrip": "WebRip",
+                "medium.hdtv": "HDTV",
+                "medium.dvd": "DVD",
+                "medium.other": "其他",
+            }
+        )
 
-    if not reverse_mappings['video_codec']:
+    if not reverse_mappings["video_codec"]:
         logging.warning("video_codec映射为空，添加基础后备映射")
-        reverse_mappings['video_codec'].update({
-            'video.h264': 'H.264/AVC',
-            'video.h265': 'H.265/HEVC',
-            'video.x265': 'x265',
-            'video.vc1': 'VC-1',
-            'video.mpeg2': 'MPEG-2',
-            'video.av1': 'AV1',
-            'video.other': '其他'
-        })
+        reverse_mappings["video_codec"].update(
+            {
+                "video.h264": "H.264/AVC",
+                "video.h265": "H.265/HEVC",
+                "video.x265": "x265",
+                "video.vc1": "VC-1",
+                "video.mpeg2": "MPEG-2",
+                "video.av1": "AV1",
+                "video.other": "其他",
+            }
+        )
 
-    if not reverse_mappings['audio_codec']:
+    if not reverse_mappings["audio_codec"]:
         logging.warning("audio_codec映射为空，添加基础后备映射")
-        reverse_mappings['audio_codec'].update({
-            'audio.flac': 'FLAC',
-            'audio.dts': 'DTS',
-            'audio.dts_hd_ma': 'DTS-HD MA',
-            'audio.dtsx': 'DTS:X',
-            'audio.truehd': 'TrueHD',
-            'audio.truehd_atmos': 'TrueHD Atmos',
-            'audio.ac3': 'AC-3',
-            'audio.ddp': 'E-AC-3',
-            'audio.aac': 'AAC',
-            'audio.mp3': 'MP3',
-            'audio.other': '其他'
-        })
+        reverse_mappings["audio_codec"].update(
+            {
+                "audio.flac": "FLAC",
+                "audio.dts": "DTS",
+                "audio.dts_hd_ma": "DTS-HD MA",
+                "audio.dtsx": "DTS:X",
+                "audio.truehd": "TrueHD",
+                "audio.truehd_atmos": "TrueHD Atmos",
+                "audio.ac3": "AC-3",
+                "audio.ddp": "E-AC-3",
+                "audio.aac": "AAC",
+                "audio.mp3": "MP3",
+                "audio.other": "其他",
+            }
+        )
 
-    if not reverse_mappings['resolution']:
+    if not reverse_mappings["resolution"]:
         logging.warning("resolution映射为空，添加基础后备映射")
-        reverse_mappings['resolution'].update({
-            'resolution.r8k': '8K',
-            'resolution.r4k': '4K',
-            'resolution.r2160p': '2160p',
-            'resolution.r1080p': '1080p',
-            'resolution.r1080i': '1080i',
-            'resolution.r720p': '720p',
-            'resolution.r480p': '480p',
-            'resolution.other': '其他'
-        })
+        reverse_mappings["resolution"].update(
+            {
+                "resolution.r8k": "8K",
+                "resolution.r4k": "4K",
+                "resolution.r2160p": "2160p",
+                "resolution.r1080p": "1080p",
+                "resolution.r1080i": "1080i",
+                "resolution.r720p": "720p",
+                "resolution.r480p": "480p",
+                "resolution.other": "其他",
+            }
+        )
 
-    if not reverse_mappings['source']:
+    if not reverse_mappings["source"]:
         logging.warning("source映射为空，添加基础后备映射")
-        reverse_mappings['source'].update({
-            'source.china': '中国',
-            'source.hongkong': '香港',
-            'source.taiwan': '台湾',
-            'source.western': '美国',
-            'source.uk': '英国',
-            'source.japan': '日本',
-            'source.korea': '韩国',
-            'source.other': '其他'
-        })
+        reverse_mappings["source"].update(
+            {
+                "source.china": "中国",
+                "source.hongkong": "香港",
+                "source.taiwan": "台湾",
+                "source.western": "美国",
+                "source.uk": "英国",
+                "source.japan": "日本",
+                "source.korea": "韩国",
+                "source.other": "其他",
+            }
+        )
 
-    if not reverse_mappings['team']:
+    if not reverse_mappings["team"]:
         logging.warning("team映射为空，添加基础后备映射")
-        reverse_mappings['team'].update({'team.other': '其他'})
+        reverse_mappings["team"].update({"team.other": "其他"})
 
-    if not reverse_mappings['tags']:
+    if not reverse_mappings["tags"]:
         logging.warning("tags映射为空，添加基础后备映射")
-        reverse_mappings['tags'].update({
-            'tag.DIY': 'DIY',
-            'tag.中字': '中字',
-            'tag.HDR': 'HDR',
-        })
+        reverse_mappings["tags"].update(
+            {
+                "tag.DIY": "DIY",
+                "tag.中字": "中字",
+                "tag.HDR": "HDR",
+            }
+        )
 
 
 @migrate_bp.route("/migrate/download_torrent_only", methods=["POST"])
@@ -375,24 +394,26 @@ def download_torrent_only():
     """仅下载种子文件，不进行数据解析或存储"""
     try:
         data = request.json
-        torrent_id = data.get('torrent_id')
-        site_name = data.get('site_name')
+        torrent_id = data.get("torrent_id")
+        site_name = data.get("site_name")
 
         if not all([torrent_id, site_name]):
-            return jsonify({
-                "success": False,
-                "message": "错误：缺少必要参数（torrent_id、site_name）"
-            }), 400
+            return (
+                jsonify(
+                    {"success": False, "message": "错误：缺少必要参数（torrent_id、site_name）"}
+                ),
+                400,
+            )
 
         db_manager = migrate_bp.db_manager
 
         # 获取站点信息
         source_info = db_manager.get_site_by_nickname(site_name)
         if not source_info or not source_info.get("cookie"):
-            return jsonify({
-                "success": False,
-                "message": f"错误：源站点 '{site_name}' 配置不完整。"
-            }), 404
+            return (
+                jsonify({"success": False, "message": f"错误：源站点 '{site_name}' 配置不完整。"}),
+                404,
+            )
 
         # 获取英文站点名（用于文件名前缀）
         site_code = source_info.get("site", site_name.lower())
@@ -407,11 +428,13 @@ def download_torrent_only():
         os.makedirs(torrent_dir, exist_ok=True)
 
         # 创建TorrentMigrator实例仅用于下载种子文件
-        migrator = TorrentMigrator(source_site_info=source_info,
-                                   target_site_info=None,
-                                   search_term=torrent_id,
-                                   config_manager=config_manager,
-                                   db_manager=db_manager)
+        migrator = TorrentMigrator(
+            source_site_info=source_info,
+            target_site_info=None,
+            search_term=torrent_id,
+            config_manager=config_manager,
+            db_manager=db_manager,
+        )
 
         # 下载种子文件（返回的是原始文件名）
         torrent_path = migrator._download_torrent_file(torrent_id, torrent_dir)
@@ -422,39 +445,38 @@ def download_torrent_only():
 
             # 添加站点-ID-前缀，与prepare_review_data保持一致
             prefixed_filename = f"{site_code}-{torrent_id}-{original_filename}"
-            prefixed_torrent_path = os.path.join(torrent_dir,
-                                                 prefixed_filename)
+            prefixed_torrent_path = os.path.join(torrent_dir, prefixed_filename)
 
             # 重命名文件
             try:
                 os.rename(torrent_path, prefixed_torrent_path)
-                logging.info(
-                    f"种子文件已重命名: {original_filename} -> {prefixed_filename}")
+                logging.info(f"种子文件已重命名: {original_filename} -> {prefixed_filename}")
 
-                return jsonify({
-                    "success": True,
-                    "torrent_path": prefixed_torrent_path,
-                    "torrent_dir": torrent_dir,
-                    "message": "种子文件下载成功"
-                })
+                return jsonify(
+                    {
+                        "success": True,
+                        "torrent_path": prefixed_torrent_path,
+                        "torrent_dir": torrent_dir,
+                        "message": "种子文件下载成功",
+                    }
+                )
             except Exception as rename_error:
                 logging.error(f"重命名种子文件失败: {rename_error}")
                 # 如果重命名失败，仍然返回原始路径
-                return jsonify({
-                    "success": True,
-                    "torrent_path": torrent_path,
-                    "torrent_dir": torrent_dir,
-                    "message": "种子文件下载成功（未添加前缀）"
-                })
+                return jsonify(
+                    {
+                        "success": True,
+                        "torrent_path": torrent_path,
+                        "torrent_dir": torrent_dir,
+                        "message": "种子文件下载成功（未添加前缀）",
+                    }
+                )
         else:
             return jsonify({"success": False, "message": "种子文件下载失败"}), 500
 
     except Exception as e:
         logging.error(f"download_torrent_only 发生意外错误: {e}", exc_info=True)
-        return jsonify({
-            "success": False,
-            "message": f"服务器内部错误: {str(e)}"
-        }), 500
+        return jsonify({"success": False, "message": f"服务器内部错误: {str(e)}"}), 500
 
 
 # 新增：专门负责数据抓取和存储的API接口
@@ -464,9 +486,12 @@ def migrate_fetch_and_store():
     db_manager = migrate_bp.db_manager
     data = request.json
     source_site_name, search_term, save_path, torrent_name, downloader_id = (
-        data.get("sourceSite"), data.get("searchTerm"),
-        data.get("savePath",
-                 ""), data.get("torrentName"), data.get("downloaderId"))
+        data.get("sourceSite"),
+        data.get("searchTerm"),
+        data.get("savePath", ""),
+        data.get("torrentName"),
+        data.get("downloaderId"),
+    )
 
     if not all([source_site_name, search_term]):
         return jsonify({"success": False, "message": "错误：源站点和搜索词不能为空。"}), 400
@@ -486,10 +511,12 @@ def migrate_fetch_and_store():
 
         if not source_info or not source_info.get("cookie"):
             return (
-                jsonify({
-                    "success": False,
-                    "message": f"错误：源站点 '{source_site_name}' 配置不完整。"
-                }),
+                jsonify(
+                    {
+                        "success": False,
+                        "message": f"错误：源站点 '{source_site_name}' 配置不完整。",
+                    }
+                ),
                 404,
             )
 
@@ -497,10 +524,12 @@ def migrate_fetch_and_store():
 
         if source_role not in [1, 3]:
             return (
-                jsonify({
-                    "success": False,
-                    "message": f"错误：站点 '{source_site_name}' 不允许作为源站点进行迁移。"
-                }),
+                jsonify(
+                    {
+                        "success": False,
+                        "message": f"错误：站点 '{source_site_name}' 不允许作为源站点进行迁移。",
+                    }
+                ),
                 403,
             )
 
@@ -508,15 +537,17 @@ def migrate_fetch_and_store():
         english_site_name = source_info.get("site", source_site_name.lower())
 
         # 初始化 Migrator 时不传入目标站点信息
-        migrator = TorrentMigrator(source_site_info=source_info,
-                                   target_site_info=None,
-                                   search_term=search_term,
-                                   save_path=save_path,
-                                   torrent_name=torrent_name,
-                                   config_manager=config_manager,
-                                   db_manager=db_manager,
-                                   downloader_id=downloader_id,
-                                   task_id=task_id)  # 传递task_id
+        migrator = TorrentMigrator(
+            source_site_info=source_info,
+            target_site_info=None,
+            search_term=search_term,
+            save_path=save_path,
+            torrent_name=torrent_name,
+            config_manager=config_manager,
+            db_manager=db_manager,
+            downloader_id=downloader_id,
+            task_id=task_id,
+        )  # 传递task_id
 
         result = migrator.prepare_review_data()
 
@@ -540,22 +571,20 @@ def migrate_fetch_and_store():
             # 关闭日志流
             log_streamer.close_stream(task_id)
 
-            return jsonify({
-                "success": True,
-                "task_id": new_task_id,
-                "message": "种子信息已成功保存到数据库",
-                "logs": result["logs"],
-            })
+            return jsonify(
+                {
+                    "success": True,
+                    "task_id": new_task_id,
+                    "message": "种子信息已成功保存到数据库",
+                    "logs": result["logs"],
+                }
+            )
         else:
             # 抓取失败，标记为错误
-            log_streamer.emit_log(task_id, "开始抓取", result.get("logs", "抓取失败"),
-                                  "error")
+            log_streamer.emit_log(task_id, "开始抓取", result.get("logs", "抓取失败"), "error")
             log_streamer.close_stream(task_id)
 
-            return jsonify({
-                "success": False,
-                "message": result.get("logs", "未知错误")
-            })
+            return jsonify({"success": False, "message": result.get("logs", "未知错误")})
     except Exception as e:
         logging.error(f"migrate_fetch_and_store 发生意外错误: {e}", exc_info=True)
         return jsonify({"success": False, "message": f"服务器内部错误: {e}"}), 500
@@ -567,46 +596,23 @@ def update_db_seed_info():
     """更新数据库中的参数并重新标准化"""
     try:
         data = request.json
-        torrent_id = data.get('torrent_id')
-        site_name = data.get('site_name')
-        updated_parameters = data.get('updated_parameters')
-
-        if not all([torrent_id, site_name, updated_parameters]):
-            return jsonify({
-                "success":
-                False,
-                "message":
-                "错误：缺少必要参数（torrent_id、site_name、updated_parameters）"
-            }), 400
+        torrent_name = data.get("torrent_name")
+        torrent_id = data.get("torrent_id")
+        site_name = data.get("site_name")
+        updated_parameters = data.get("updated_parameters")
 
         db_manager = migrate_bp.db_manager
 
         try:
             # 更新数据库
             from models.seed_parameter import SeedParameter
+
             seed_param_model = SeedParameter(db_manager)
 
-            # 获取站点信息以获取英文站点名
-            source_info = db_manager.get_site_by_nickname(site_name)
-            if source_info:
-                english_site_name = source_info.get("site", site_name.lower())
-            else:
-                # 如果找不到站点信息，使用映射关系
-                site_mapping = {
-                    '人人': 'audiences',
-                    '不可说': 'ssd',
-                    '憨憨': 'hhanclub'
-                }
-                english_site_name = site_mapping.get(site_name,
-                                                     site_name.lower())
-
-            logging.info(
-                f"开始更新种子参数: {torrent_id} from {site_name} ({english_site_name})"
-            )
+            logging.info(f"开始更新种子参数: {torrent_id} from {site_name} ({site_name})")
 
             # 检查用户是否提供了修改的标准参数
-            user_standardized_params = updated_parameters.get(
-                'standardized_params', {})
+            user_standardized_params = updated_parameters.get("standardized_params", {})
 
             if user_standardized_params:
                 # 用户已经修改了标准参数，优先使用用户的修改
@@ -618,48 +624,38 @@ def update_db_seed_info():
                 # 重新进行参数标准化（模拟ParameterMapper的处理）
                 # 需要构造extracted_data格式用于映射
                 extracted_data = {
-                    'title':
-                    updated_parameters.get('title', ''),
-                    'subtitle':
-                    updated_parameters.get('subtitle', ''),
-                    'imdb_link':
-                    updated_parameters.get('imdb_link', ''),
-                    'douban_link':
-                    updated_parameters.get('douban_link', ''),
-                    'intro': {
-                        'statement': updated_parameters.get('statement', ''),
-                        'poster': updated_parameters.get('poster', ''),
-                        'body': updated_parameters.get('body', ''),
-                        'screenshots':
-                        updated_parameters.get('screenshots', ''),
-                        'imdb_link': updated_parameters.get('imdb_link', ''),
-                        'douban_link':
-                        updated_parameters.get('douban_link', '')
+                    "title": updated_parameters.get("title", ""),
+                    "subtitle": updated_parameters.get("subtitle", ""),
+                    "imdb_link": updated_parameters.get("imdb_link", ""),
+                    "douban_link": updated_parameters.get("douban_link", ""),
+                    "intro": {
+                        "statement": updated_parameters.get("statement", ""),
+                        "poster": updated_parameters.get("poster", ""),
+                        "body": updated_parameters.get("body", ""),
+                        "screenshots": updated_parameters.get("screenshots", ""),
+                        "imdb_link": updated_parameters.get("imdb_link", ""),
+                        "douban_link": updated_parameters.get("douban_link", ""),
                     },
-                    'mediainfo':
-                    updated_parameters.get('mediainfo', ''),
-                    'source_params':
-                    updated_parameters.get('source_params', {}),
-                    'title_components':
-                    updated_parameters.get('title_components', [])
+                    "mediainfo": updated_parameters.get("mediainfo", ""),
+                    "source_params": updated_parameters.get("source_params", {}),
+                    "title_components": updated_parameters.get("title_components", []),
                 }
 
                 # 使用ParameterMapper重新标准化参数
                 from core.extractors.extractor import ParameterMapper
+
                 mapper = ParameterMapper()
 
                 # 重新标准化参数
-                standardized_params = mapper.map_parameters(
-                    site_name, english_site_name, extracted_data)
+                standardized_params = mapper.map_parameters(site_name, site_name, extracted_data)
 
             # 从title_components中提取标题拆解的各项参数
-            title_components = updated_parameters.get('title_components', [])
+            title_components = updated_parameters.get("title_components", [])
 
             # [新增] 开始：根据 title_components 拼接新标题
             # 1. 将 title_components 列表转换为字典，方便后续查找
             title_params = {
-                item["key"]: item["value"]
-                for item in title_components if item.get("value")
+                item["key"]: item["value"] for item in title_components if item.get("value")
             }
 
             # 2. 从 global_mappings.yaml 读取拼接顺序
@@ -687,20 +683,18 @@ def update_db_seed_info():
 
             try:
                 if os.path.exists(global_mappings_path):
-                    with open(global_mappings_path, 'r',
-                              encoding='utf-8') as f:
+                    with open(global_mappings_path, "r", encoding="utf-8") as f:
                         global_config = yaml.safe_load(f)
                         default_title_components = global_config.get(
-                            'default_title_components', {})
+                            "default_title_components", {}
+                        )
 
                         if default_title_components:
                             # 按照配置文件中的顺序构建 order 列表
                             order = []
-                            for key, config in default_title_components.items(
-                            ):
-                                if isinstance(config,
-                                              dict) and 'source_key' in config:
-                                    order.append(config['source_key'])
+                            for key, config in default_title_components.items():
+                                if isinstance(config, dict) and "source_key" in config:
+                                    order.append(config["source_key"])
 
                             logging.info(f"从配置文件读取到标题拼接顺序: {order}")
             except Exception as e:
@@ -709,12 +703,13 @@ def update_db_seed_info():
             for key in order:
                 value = title_params.get(key)
                 if value:
-                    title_parts.append(" ".join(map(str, value)) if isinstance(
-                        value, list) else str(value))
+                    title_parts.append(
+                        " ".join(map(str, value)) if isinstance(value, list) else str(value)
+                    )
 
             raw_main_part = " ".join(filter(None, title_parts))
-            main_part = re.sub(r'(?<!\d)\.(?!\d)', ' ', raw_main_part)
-            main_part = re.sub(r'\s+', ' ', main_part).strip()
+            main_part = re.sub(r"(?<!\d)\.(?!\d)", " ", raw_main_part)
+            main_part = re.sub(r"\s+", " ", main_part).strip()
             release_group = title_params.get("制作组", "NOGROUP")
             if "N/A" in release_group:
                 release_group = "NOGROUP"
@@ -731,29 +726,29 @@ def update_db_seed_info():
             final_parameters = {
                 # [修改] 将原来的 title 值替换为新生成的 preview_title
                 "title": preview_title,
-                "subtitle": updated_parameters.get('subtitle', ''),
-                "imdb_link": updated_parameters.get('imdb_link', ''),
-                "douban_link": updated_parameters.get('douban_link', ''),
-                "poster": updated_parameters.get('poster', ''),
-                "screenshots": updated_parameters.get('screenshots', ''),
-                "statement": updated_parameters.get('statement', ''),
-                "body": updated_parameters.get('body', ''),
-                "mediainfo": updated_parameters.get('mediainfo', ''),
-                "type": standardized_params.get('type', ''),
-                "medium": standardized_params.get('medium', ''),
-                "video_codec": standardized_params.get('video_codec', ''),
-                "audio_codec": standardized_params.get('audio_codec', ''),
-                "resolution": standardized_params.get('resolution', ''),
-                "team": standardized_params.get('team', ''),
-                "source": standardized_params.get('source', ''),
-                "tags": standardized_params.get('tags', []),
+                "subtitle": updated_parameters.get("subtitle", ""),
+                "imdb_link": updated_parameters.get("imdb_link", ""),
+                "douban_link": updated_parameters.get("douban_link", ""),
+                "poster": updated_parameters.get("poster", ""),
+                "screenshots": updated_parameters.get("screenshots", ""),
+                "statement": updated_parameters.get("statement", ""),
+                "body": updated_parameters.get("body", ""),
+                "mediainfo": updated_parameters.get("mediainfo", ""),
+                "type": standardized_params.get("type", ""),
+                "medium": standardized_params.get("medium", ""),
+                "video_codec": standardized_params.get("video_codec", ""),
+                "audio_codec": standardized_params.get("audio_codec", ""),
+                "resolution": standardized_params.get("resolution", ""),
+                "team": standardized_params.get("team", ""),
+                "source": standardized_params.get("source", ""),
+                "tags": standardized_params.get("tags", []),
                 "title_components": title_components,
                 "standardized_params": standardized_params,
                 "is_reviewed": True,  # 标记为已检查
                 "final_publish_parameters": {
                     # [修改] 预览标题也使用新生成的标题
                     "主标题 (预览)": preview_title,
-                    "副标题": updated_parameters.get('subtitle', ''),
+                    "副标题": updated_parameters.get("subtitle", ""),
                     "IMDb链接": standardized_params.get("imdb_link", ""),
                     "类型": standardized_params.get("type", ""),
                     "媒介": standardized_params.get("medium", ""),
@@ -765,42 +760,29 @@ def update_db_seed_info():
                     "标签": standardized_params.get("tags", []),
                 },
                 "complete_publish_params": {
-                    "title_components":
-                    updated_parameters.get('title_components', []),
-                    "subtitle":
-                    updated_parameters.get('subtitle', ''),
-                    "imdb_link":
-                    standardized_params.get("imdb_link", ""),
-                    "douban_link":
-                    standardized_params.get("douban_link", ""),
+                    "title_components": updated_parameters.get("title_components", []),
+                    "subtitle": updated_parameters.get("subtitle", ""),
+                    "imdb_link": standardized_params.get("imdb_link", ""),
+                    "douban_link": standardized_params.get("douban_link", ""),
                     "intro": {
-                        "statement":
-                        updated_parameters.get('statement', ''),
-                        "poster":
-                        updated_parameters.get('poster', ''),
-                        "body":
-                        updated_parameters.get('body', ''),
-                        "screenshots":
-                        updated_parameters.get('screenshots', ''),
-                        "removed_ardtudeclarations":
-                        updated_parameters.get('removed_ardtudeclarations',
-                                               []),
-                        "imdb_link":
-                        updated_parameters.get('imdb_link', ''),
-                        "douban_link":
-                        updated_parameters.get('douban_link', '')
+                        "statement": updated_parameters.get("statement", ""),
+                        "poster": updated_parameters.get("poster", ""),
+                        "body": updated_parameters.get("body", ""),
+                        "screenshots": updated_parameters.get("screenshots", ""),
+                        "removed_ardtudeclarations": updated_parameters.get(
+                            "removed_ardtudeclarations", []
+                        ),
+                        "imdb_link": updated_parameters.get("imdb_link", ""),
+                        "douban_link": updated_parameters.get("douban_link", ""),
                     },
-                    "mediainfo":
-                    updated_parameters.get('mediainfo', ''),
-                    "source_params":
-                    updated_parameters.get('source_params', {}),
-                    "standardized_params":
-                    standardized_params
+                    "mediainfo": updated_parameters.get("mediainfo", ""),
+                    "source_params": updated_parameters.get("source_params", {}),
+                    "standardized_params": standardized_params,
                 },
                 "raw_params_for_preview": {
                     # [修改] 原始预览参数也使用新标题
                     "final_main_title": preview_title,
-                    "subtitle": updated_parameters.get('subtitle', ''),
+                    "subtitle": updated_parameters.get("subtitle", ""),
                     "imdb_link": standardized_params.get("imdb_link", ""),
                     "type": standardized_params.get("type", ""),
                     "medium": standardized_params.get("medium", ""),
@@ -809,65 +791,53 @@ def update_db_seed_info():
                     "resolution": standardized_params.get("resolution", ""),
                     "release_group": standardized_params.get("team", ""),
                     "source": standardized_params.get("source", ""),
-                    "tags": standardized_params.get("tags", [])
-                }
+                    "tags": standardized_params.get("tags", []),
+                },
             }
 
             # 需要先获取hash值
-            hash_value = seed_param_model.search_torrent_hash(torrent_name, english_site_name)
+            hash_value = seed_param_model.search_torrent_hash_by_torrentid(torrent_id, site_name)
+            print("aaaaaaaaaaaaaaaaaa", hash_value, torrent_id, site_name)
             if hash_value:
                 update_result = seed_param_model.update_parameters(hash_value, final_parameters)
             else:
                 # 如果找不到hash，尝试插入新记录
-                final_parameters["hash"] = f"manual_{torrent_id}_{english_site_name}"  # 临时hash
+                final_parameters["hash"] = f"manual_{torrent_id}_{site_name}"  # 临时hash
                 final_parameters["torrent_id"] = torrent_id
-                final_parameters["site_name"] = english_site_name
+                final_parameters["site_name"] = site_name
                 # 确保传递正确的 torrent_id 和 site_name
-                update_result = seed_param_model.save_parameters(final_parameters["hash"], torrent_id, english_site_name, final_parameters)
+                update_result = seed_param_model.save_parameters(
+                    final_parameters["hash"], torrent_id, site_name, final_parameters
+                )
 
             if update_result:
-                logging.info(
-                    f"种子参数更新成功: {torrent_id} from {site_name} ({english_site_name})"
-                )
+                logging.info(f"种子参数更新成功: {torrent_id} from {site_name} ({site_name})")
 
                 # 生成反向映射表（从标准键到中文显示名称的映射）
                 reverse_mappings = generate_reverse_mappings()
 
-                return jsonify({
-                    "success":
-                    True,
-                    "standardized_params":
-                    standardized_params,
-                    "final_publish_parameters":
-                    final_parameters["final_publish_parameters"],
-                    "complete_publish_params":
-                    final_parameters["complete_publish_params"],
-                    "raw_params_for_preview":
-                    final_parameters["raw_params_for_preview"],
-                    "reverse_mappings":
-                    reverse_mappings,
-                    "message":
-                    "参数更新并标准化成功"
-                })
-            else:
-                logging.warning(
-                    f"种子参数更新失败: {torrent_id} from {site_name} ({english_site_name})"
+                return jsonify(
+                    {
+                        "success": True,
+                        "standardized_params": standardized_params,
+                        "final_publish_parameters": final_parameters["final_publish_parameters"],
+                        "complete_publish_params": final_parameters["complete_publish_params"],
+                        "raw_params_for_preview": final_parameters["raw_params_for_preview"],
+                        "reverse_mappings": reverse_mappings,
+                        "message": "参数更新并标准化成功",
+                    }
                 )
+            else:
+                logging.warning(f"种子参数更新失败: {torrent_id} from {site_name} ({site_name})")
                 return jsonify({"success": False, "message": "参数更新失败"}), 500
 
         except Exception as e:
             logging.error(f"更新种子参数失败: {e}", exc_info=True)
-            return jsonify({
-                "success": False,
-                "message": f"更新失败: {str(e)}"
-            }), 500
+            return jsonify({"success": False, "message": f"更新失败: {str(e)}"}), 500
 
     except Exception as e:
         logging.error(f"update_db_seed_info发生意外错误: {e}", exc_info=True)
-        return jsonify({
-            "success": False,
-            "message": f"服务器内部错误: {str(e)}"
-        }), 500
+        return jsonify({"success": False, "message": f"服务器内部错误: {str(e)}"}), 500
 
 
 @migrate_bp.route("/migrate/publish", methods=["POST"])
@@ -875,8 +845,11 @@ def migrate_publish():
     db_manager = migrate_bp.db_manager
     data = request.json
     task_id, upload_data, target_site_name, source_site_name = (
-        data.get("task_id"), data.get("upload_data"), data.get("targetSite"),
-        data.get("sourceSite"))
+        data.get("task_id"),
+        data.get("upload_data"),
+        data.get("targetSite"),
+        data.get("sourceSite"),
+    )
 
     if not task_id or task_id not in MIGRATION_CACHE:
         return jsonify({"success": False, "logs": "错误：无效或已过期的任务ID。"}), 400
@@ -891,10 +864,12 @@ def migrate_publish():
     try:
         target_info = db_manager.get_site_by_nickname(target_site_name)
         if not target_info:
-            return jsonify({
-                "success": False,
-                "logs": f"错误: 目标站点 '{target_site_name}' 配置不完整。"
-            }), 404
+            return (
+                jsonify(
+                    {"success": False, "logs": f"错误: 目标站点 '{target_site_name}' 配置不完整。"}
+                ),
+                404,
+            )
 
         source_info = context["source_info"]
         original_torrent_path = context["original_torrent_path"]
@@ -905,25 +880,25 @@ def migrate_publish():
             source_site_name = context.get("source_site_name", "")
 
         # 创建 TorrentMigrator 实例用于发布
-        migrator = TorrentMigrator(source_info,
-                                   target_info,
-                                   search_term=context.get(
-                                       "source_torrent_id", ""),
-                                   save_path=upload_data.get("save_path", "")
-                                   or upload_data.get("savePath", ""),
-                                   config_manager=config_manager,
-                                   db_manager=db_manager)
+        migrator = TorrentMigrator(
+            source_info,
+            target_info,
+            search_term=context.get("source_torrent_id", ""),
+            save_path=upload_data.get("save_path", "") or upload_data.get("savePath", ""),
+            config_manager=config_manager,
+            db_manager=db_manager,
+        )
 
         # 检查种子文件是否存在，如果不存在则重新下载
         # [核心修改] 优先在统一的 torrents 目录中查找
         source_torrent_id = context.get("source_torrent_id", "")
         source_site_code = source_info.get("site", source_site_name.lower())
 
-        if original_torrent_path is None or not os.path.exists(
-                original_torrent_path):
+        if original_torrent_path is None or not os.path.exists(original_torrent_path):
             logging.info("原始种子文件路径不存在，开始在统一目录中查找")
 
             from config import TEMP_DIR
+
             torrents_dir = os.path.join(TEMP_DIR, "torrents")
 
             # [新增] 首先在统一的 torrents 目录中查找以"站点-ID-"开头的种子文件
@@ -933,30 +908,26 @@ def migrate_publish():
 
                 try:
                     for file in os.listdir(torrents_dir):
-                        if file.startswith(prefix) and file.endswith(
-                                '.torrent'):
-                            original_torrent_path = os.path.join(
-                                torrents_dir, file)
+                        if file.startswith(prefix) and file.endswith(".torrent"):
+                            original_torrent_path = os.path.join(torrents_dir, file)
                             logging.info(f"✅ 在统一目录中找到种子文件: {file}")
                             break
                 except Exception as e:
                     logging.warning(f"遍历统一目录时出错: {e}")
 
             # 如果在统一目录中没找到，再检查旧格式目录
-            if (original_torrent_path is None
-                    or not os.path.exists(original_torrent_path)
-                ) and source_torrent_id:
+            if (
+                original_torrent_path is None or not os.path.exists(original_torrent_path)
+            ) and source_torrent_id:
                 logging.info("统一目录中未找到，检查旧格式目录")
                 # 检查旧格式目录
-                old_torrent_dir = os.path.join(TEMP_DIR,
-                                               f"torrent_{source_torrent_id}")
+                old_torrent_dir = os.path.join(TEMP_DIR, f"torrent_{source_torrent_id}")
                 if os.path.exists(old_torrent_dir):
                     try:
                         # 查找old_torrent_dir中的.torrent文件
                         for file in os.listdir(old_torrent_dir):
-                            if file.endswith('.torrent'):
-                                original_torrent_path = os.path.join(
-                                    old_torrent_dir, file)
+                            if file.endswith(".torrent"):
+                                original_torrent_path = os.path.join(old_torrent_dir, file)
                                 logging.info(
                                     f"在旧格式临时目录中找到种子文件: {original_torrent_path}"
                                 )
@@ -965,18 +936,15 @@ def migrate_publish():
                         logging.warning(f"查找旧格式临时目录中的种子文件时出错: {e}")
 
                 # 如果在旧格式目录中没找到，检查以种子名称命名的目录（新格式）
-                if original_torrent_path is None or not os.path.exists(
-                        original_torrent_path):
+                if original_torrent_path is None or not os.path.exists(original_torrent_path):
                     # 尝试从缓存中获取种子目录路径
                     cached_torrent_dir = context.get("torrent_dir")
-                    if cached_torrent_dir and os.path.exists(
-                            cached_torrent_dir):
+                    if cached_torrent_dir and os.path.exists(cached_torrent_dir):
                         try:
                             # 查找cached_torrent_dir中的.torrent文件
                             for file in os.listdir(cached_torrent_dir):
-                                if file.endswith('.torrent'):
-                                    original_torrent_path = os.path.join(
-                                        cached_torrent_dir, file)
+                                if file.endswith(".torrent"):
+                                    original_torrent_path = os.path.join(cached_torrent_dir, file)
                                     logging.info(
                                         f"在新格式临时目录中找到种子文件: {original_torrent_path}"
                                     )
@@ -989,58 +957,56 @@ def migrate_publish():
                         try:
                             from models.seed_parameter import SeedParameter
                             from flask import current_app
-                            db_manager = current_app.config['DB_MANAGER']
+
+                            db_manager = current_app.config["DB_MANAGER"]
                             seed_param_model = SeedParameter(db_manager)
 
-                            source_torrent_id = context.get(
-                                "source_torrent_id", "")
-                            source_site_name = context.get(
-                                "source_site_name", "")
+                            source_torrent_id = context.get("source_torrent_id", "")
+                            source_site_name = context.get("source_site_name", "")
 
                             if source_torrent_id and source_site_name:
                                 # 从数据库获取种子参数
                                 parameters = seed_param_model.get_parameters(
-                                    source_torrent_id, source_site_name)
+                                    source_torrent_id, source_site_name
+                                )
                                 if parameters and parameters.get("title"):
                                     # 重建种子目录路径
                                     from config import TEMP_DIR
                                     import re
-                                    original_main_title = parameters.get(
-                                        "title", "")
-                                    safe_filename_base = re.sub(
-                                        r'[\\/*?:"<>|]', "_",
-                                        original_main_title)[:150]
-                                    reconstructed_torrent_dir = os.path.join(
-                                        TEMP_DIR, safe_filename_base)
 
-                                    if os.path.exists(
-                                            reconstructed_torrent_dir):
+                                    original_main_title = parameters.get("title", "")
+                                    safe_filename_base = re.sub(
+                                        r'[\\/*?:"<>|]', "_", original_main_title
+                                    )[:150]
+                                    reconstructed_torrent_dir = os.path.join(
+                                        TEMP_DIR, safe_filename_base
+                                    )
+
+                                    if os.path.exists(reconstructed_torrent_dir):
                                         try:
                                             # 查找reconstructed_torrent_dir中的.torrent文件
-                                            for file in os.listdir(
-                                                    reconstructed_torrent_dir):
-                                                if file.endswith('.torrent'):
+                                            for file in os.listdir(reconstructed_torrent_dir):
+                                                if file.endswith(".torrent"):
                                                     original_torrent_path = os.path.join(
-                                                        reconstructed_torrent_dir,
-                                                        file)
+                                                        reconstructed_torrent_dir, file
+                                                    )
                                                     logging.info(
                                                         f"在重构的目录中找到种子文件: {original_torrent_path}"
                                                     )
                                                     break
                                         except Exception as e:
-                                            logging.warning(
-                                                f"查找重构目录中的种子文件时出错: {e}")
+                                            logging.warning(f"查找重构目录中的种子文件时出错: {e}")
                         except Exception as e:
                             logging.warning(f"尝试重构种子目录路径时出错: {e}")
 
             # 如果仍然没有找到，直接在TEMP_DIR中查找以种子名称命名的目录
-            if original_torrent_path is None or not os.path.exists(
-                    original_torrent_path):
+            if original_torrent_path is None or not os.path.exists(original_torrent_path):
                 try:
                     # 从数据库获取种子参数来确定目录名
                     from models.seed_parameter import SeedParameter
                     from flask import current_app
-                    db_manager = current_app.config['DB_MANAGER']
+
+                    db_manager = current_app.config["DB_MANAGER"]
                     seed_param_model = SeedParameter(db_manager)
 
                     source_torrent_id = context.get("source_torrent_id", "")
@@ -1049,24 +1015,24 @@ def migrate_publish():
                     if source_torrent_id and source_site_name:
                         # 从数据库获取种子参数
                         parameters = seed_param_model.get_parameters(
-                            source_torrent_id, source_site_name)
+                            source_torrent_id, source_site_name
+                        )
                         if parameters and parameters.get("title"):
                             # 重建种子目录路径
                             from config import TEMP_DIR
                             import re
+
                             original_main_title = parameters.get("title", "")
-                            safe_filename_base = re.sub(
-                                r'[\\/*?:"<>|]', "_",
-                                original_main_title)[:150]
-                            seed_name_dir = os.path.join(
-                                TEMP_DIR, safe_filename_base)
+                            safe_filename_base = re.sub(r'[\\/*?:"<>|]', "_", original_main_title)[
+                                :150
+                            ]
+                            seed_name_dir = os.path.join(TEMP_DIR, safe_filename_base)
 
                             # 在该目录中查找.torrent文件
                             if os.path.exists(seed_name_dir):
                                 for file in os.listdir(seed_name_dir):
-                                    if file.endswith('.torrent'):
-                                        original_torrent_path = os.path.join(
-                                            seed_name_dir, file)
+                                    if file.endswith(".torrent"):
+                                        original_torrent_path = os.path.join(seed_name_dir, file)
                                         logging.info(
                                             f"在种子名称目录中找到种子文件: {original_torrent_path}"
                                         )
@@ -1075,8 +1041,7 @@ def migrate_publish():
                     logging.warning(f"查找种子名称目录中的种子文件时出错: {e}")
 
             # 如果仍然没有找到有效的种子文件，则重新下载
-            if original_torrent_path is None or not os.path.exists(
-                    original_torrent_path):
+            if original_torrent_path is None or not os.path.exists(original_torrent_path):
                 logging.info("需要重新下载种子文件")
                 # 重新下载种子文件
                 try:
@@ -1090,12 +1055,10 @@ def migrate_publish():
                     scraper = cloudscraper.create_scraper(sess=session)
 
                     # 构造下载链接
-                    SOURCE_BASE_URL = source_info.get("base_url",
-                                                      "").rstrip('/')
+                    SOURCE_BASE_URL = source_info.get("base_url", "").rstrip("/")
                     # 确保URL有正确的协议前缀
-                    if SOURCE_BASE_URL and not SOURCE_BASE_URL.startswith(
-                        ('http://', 'https://')):
-                        SOURCE_BASE_URL = 'https://' + SOURCE_BASE_URL
+                    if SOURCE_BASE_URL and not SOURCE_BASE_URL.startswith(("http://", "https://")):
+                        SOURCE_BASE_URL = "https://" + SOURCE_BASE_URL
                     SOURCE_COOKIE = source_info.get("cookie", "")
                     source_torrent_id = context.get("source_torrent_id", "")
 
@@ -1104,20 +1067,17 @@ def migrate_publish():
                         response = scraper.get(
                             f"{SOURCE_BASE_URL}/details.php",
                             headers={
-                                "Cookie":
-                                SOURCE_COOKIE,
-                                "User-Agent":
-                                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+                                "Cookie": SOURCE_COOKIE,
+                                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
                             },
-                            params={
-                                "id": source_torrent_id,
-                                "hit": "1"
-                            },
-                            timeout=180)
+                            params={"id": source_torrent_id, "hit": "1"},
+                            timeout=180,
+                        )
                         response.raise_for_status()
                         response.encoding = "utf-8"
 
                         from bs4 import BeautifulSoup
+
                         soup = BeautifulSoup(response.text, "html.parser")
                         download_link_tag = soup.select_one(
                             f'a.index[href^="download.php?id={source_torrent_id}"]'
@@ -1128,10 +1088,8 @@ def migrate_publish():
                             torrent_response = scraper.get(
                                 f"{SOURCE_BASE_URL}/{download_link_tag['href']}",
                                 headers={
-                                    "Cookie":
-                                    SOURCE_COOKIE,
-                                    "User-Agent":
-                                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+                                    "Cookie": SOURCE_COOKIE,
+                                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
                                 },
                                 timeout=180,
                             )
@@ -1139,119 +1097,117 @@ def migrate_publish():
 
                             # 从响应头中尝试获取文件名
                             content_disposition = torrent_response.headers.get(
-                                'content-disposition')
+                                "content-disposition"
+                            )
                             torrent_filename = "unknown.torrent"
                             if content_disposition:
                                 # 尝试匹配filename*（支持UTF-8编码）和filename
                                 filename_match = re.search(
                                     r'filename\*="?UTF-8\'\'([^"]+)"?',
-                                    content_disposition, re.IGNORECASE)
+                                    content_disposition,
+                                    re.IGNORECASE,
+                                )
                                 if filename_match:
                                     torrent_filename = filename_match.group(1)
                                     # URL解码文件名（UTF-8编码）
                                     torrent_filename = urllib.parse.unquote(
-                                        torrent_filename, encoding='utf-8')
+                                        torrent_filename, encoding="utf-8"
+                                    )
                                 else:
                                     # 尝试匹配普通的filename
                                     filename_match = re.search(
-                                        r'filename="?([^"]+)"?',
-                                        content_disposition)
+                                        r'filename="?([^"]+)"?', content_disposition
+                                    )
                                     if filename_match:
-                                        torrent_filename = filename_match.group(
-                                            1)
+                                        torrent_filename = filename_match.group(1)
                                         # URL解码文件名
-                                        torrent_filename = urllib.parse.unquote(
-                                            torrent_filename)
+                                        torrent_filename = urllib.parse.unquote(torrent_filename)
 
                             # 使用统一的种子目录
                             from config import TEMP_DIR
+
                             torrent_dir = os.path.join(TEMP_DIR, "torrents")
                             os.makedirs(torrent_dir, exist_ok=True)
 
                             # 获取站点代码用于文件名前缀
-                            source_site_code = source_info.get(
-                                "site", source_site_name.lower())
+                            source_site_code = source_info.get("site", source_site_name.lower())
 
                             # 保存种子文件，添加站点-ID-前缀
                             try:
                                 # 对文件名进行文件系统安全的处理
                                 safe_filename = torrent_filename
                                 # 移除或替换文件系统不支持的字符
-                                safe_filename = re.sub(r'[<>:"/\\|?*]', '_',
-                                                       safe_filename)
+                                safe_filename = re.sub(r'[<>:"/\\|?*]', "_", safe_filename)
                                 # 确保文件名不超过文件系统限制
-                                if len(safe_filename.encode('utf-8')) > 255:
+                                if len(safe_filename.encode("utf-8")) > 255:
                                     # 如果文件名太长，截断并保持扩展名
                                     name, ext = os.path.splitext(safe_filename)
-                                    max_len = 255 - len(ext.encode('utf-8'))
-                                    safe_filename = name.encode(
-                                        'utf-8')[:max_len].decode(
-                                            'utf-8', 'ignore') + ext
+                                    max_len = 255 - len(ext.encode("utf-8"))
+                                    safe_filename = (
+                                        name.encode("utf-8")[:max_len].decode("utf-8", "ignore")
+                                        + ext
+                                    )
 
                                 # 添加站点-ID-前缀
-                                prefixed_filename = f"{source_site_code}-{source_torrent_id}-{safe_filename}"
+                                prefixed_filename = (
+                                    f"{source_site_code}-{source_torrent_id}-{safe_filename}"
+                                )
                                 original_torrent_path = os.path.join(
-                                    torrent_dir, prefixed_filename)
+                                    torrent_dir, prefixed_filename
+                                )
                                 with open(original_torrent_path, "wb") as f:
                                     f.write(torrent_response.content)
                                 logging.info(f"种子文件已保存: {prefixed_filename}")
                             except OSError as e:
                                 # 如果文件名有问题，使用默认名称
                                 logging.warning(f"使用原始文件名保存失败: {e}, 使用默认名称")
-                                prefixed_filename = f"{source_site_code}-{source_torrent_id}-torrent.torrent"
+                                prefixed_filename = (
+                                    f"{source_site_code}-{source_torrent_id}-torrent.torrent"
+                                )
                                 original_torrent_path = os.path.join(
-                                    torrent_dir, prefixed_filename)
+                                    torrent_dir, prefixed_filename
+                                )
                                 with open(original_torrent_path, "wb") as f:
                                     f.write(torrent_response.content)
 
-                            logging.info(
-                                f"重新下载种子文件成功: {original_torrent_path}")
+                            logging.info(f"重新下载种子文件成功: {original_torrent_path}")
                         else:
                             logging.error("未找到种子下载链接")
-                            return jsonify({
-                                "success": False,
-                                "logs": "错误：未找到种子下载链接。"
-                            }), 404
+                            return (
+                                jsonify({"success": False, "logs": "错误：未找到种子下载链接。"}),
+                                404,
+                            )
                     else:
                         logging.error("缺少必要的源站点信息")
-                        return jsonify({
-                            "success": False,
-                            "logs": "错误：缺少必要的源站点信息。"
-                        }), 400
+                        return (
+                            jsonify({"success": False, "logs": "错误：缺少必要的源站点信息。"}),
+                            400,
+                        )
                 except Exception as e:
                     logging.error(f"重新下载种子文件失败: {e}")
-                    return jsonify({
-                        "success": False,
-                        "logs": f"重新下载种子文件失败: {e}"
-                    }), 500
+                    return jsonify({"success": False, "logs": f"重新下载种子文件失败: {e}"}), 500
 
         # 1. 直接使用原始种子文件路径进行发布（不再修改种子）
-        if not original_torrent_path or not os.path.exists(
-                original_torrent_path):
+        if not original_torrent_path or not os.path.exists(original_torrent_path):
             raise Exception("原始种子文件路径无效或文件不存在。")
 
         # 2. 发布 (传递 torrent_dir 给上传器)
         upload_data["torrent_dir"] = torrent_dir  # 确保上传器能获取到 torrent_dir
-        result = migrator.publish_prepared_torrent(upload_data,
-                                                   original_torrent_path)
+        result = migrator.publish_prepared_torrent(upload_data, original_torrent_path)
 
         # 3. 如果发布成功，自动添加到下载器
         if result.get("success") and result.get("url"):
             auto_add = data.get("auto_add_to_downloader", True)  # 默认自动添加
-            print(
-                f"[下载器添加] 发布成功, auto_add={auto_add}, url={result.get('url')}")
+            print(f"[下载器添加] 发布成功, auto_add={auto_add}, url={result.get('url')}")
 
             if auto_add:
                 # 先获取配置的默认下载器
                 config = config_manager.get()
-                default_downloader = config.get("cross_seed",
-                                                {}).get("default_downloader")
+                default_downloader = config.get("cross_seed", {}).get("default_downloader")
 
                 # 从请求中获取下载器ID和保存路径
-                downloader_id = data.get("downloaderId") or data.get(
-                    "downloader_id")
-                save_path = upload_data.get("save_path") or upload_data.get(
-                    "savePath")
+                downloader_id = data.get("downloaderId") or data.get("downloader_id")
+                save_path = upload_data.get("save_path") or upload_data.get("savePath")
                 print(
                     f"[下载器添加] 初始参数: downloader_id={downloader_id}, save_path={save_path}"
                 )
@@ -1277,12 +1233,10 @@ def migrate_publish():
                                 cursor = db_manager._get_cursor(conn)
                                 placeholder = db_manager.get_placeholder()
                                 query = f"SELECT save_path FROM seed_parameters WHERE torrent_id = {placeholder} AND site_name = {placeholder}"
-                                cursor.execute(
-                                    query,
-                                    (source_torrent_id, source_site_name))
+                                cursor.execute(query, (source_torrent_id, source_site_name))
                                 row = cursor.fetchone()
-                                if row and row['save_path']:
-                                    save_path = row['save_path']
+                                if row and row["save_path"]:
+                                    save_path = row["save_path"]
                                     print(f"[下载器添加] 从数据库获取到保存路径: {save_path}")
                                 else:
                                     print(f"[下载器添加] 数据库中未找到保存路径")
@@ -1303,14 +1257,13 @@ def migrate_publish():
                             placeholder = db_manager.get_placeholder()
                             query = f"SELECT downloader_id, save_path FROM seed_parameters WHERE torrent_id = {placeholder} AND site_name = {placeholder}"
 
-                            cursor.execute(
-                                query, (source_torrent_id, source_site_name))
+                            cursor.execute(query, (source_torrent_id, source_site_name))
                             row = cursor.fetchone()
                             if row:
-                                downloader_id = row['downloader_id']
+                                downloader_id = row["downloader_id"]
                                 # 同时获取 save_path
-                                if not save_path and row['save_path']:
-                                    save_path = row['save_path']
+                                if not save_path and row["save_path"]:
+                                    save_path = row["save_path"]
                                     print(f"[下载器添加] 从数据库获取到保存路径: {save_path}")
                                 print(
                                     f"[下载器添加] 从数据库获取到源种子的下载器ID: {downloader_id}"
@@ -1331,7 +1284,9 @@ def migrate_publish():
                             f"[下载器添加] 准备同步添加到下载器: URL={result['url']}, Path={save_path}, DownloaderID={downloader_id}"
                         )
                         print(f"[下载器添加] 结果详情: {result}")
-                        print(f"[下载器添加] 直接下载链接: {result.get('direct_download_url', 'None')}")
+                        print(
+                            f"[下载器添加] 直接下载链接: {result.get('direct_download_url', 'None')}"
+                        )
 
                         # 同步调用 add_torrent_to_downloader 函数
                         success, message = add_torrent_to_downloader(
@@ -1340,13 +1295,14 @@ def migrate_publish():
                             downloader_id=downloader_id,
                             db_manager=db_manager,
                             config_manager=config_manager,
-                            direct_download_url=result.get("direct_download_url"))
+                            direct_download_url=result.get("direct_download_url"),
+                        )
 
                         result["auto_add_result"] = {
                             "success": success,
                             "message": message,
                             "sync": True,
-                            "downloader_id": downloader_id if success else None
+                            "downloader_id": downloader_id if success else None,
                         }
 
                         if success:
@@ -1357,10 +1313,11 @@ def migrate_publish():
                     except Exception as e:
                         print(f"❌ [下载器添加] 同步添加异常: {e}")
                         import traceback
+
                         traceback.print_exc()
                         result["auto_add_result"] = {
                             "success": False,
-                            "message": f"添加到下载器失败: {str(e)}"
+                            "message": f"添加到下载器失败: {str(e)}",
                         }
                 else:
                     missing = []
@@ -1371,7 +1328,7 @@ def migrate_publish():
                     print(f"⚠️ [下载器添加] 跳过: 缺少参数 {', '.join(missing)}")
                     result["auto_add_result"] = {
                         "success": False,
-                        "message": f"缺少必要参数: {', '.join(missing)}"
+                        "message": f"缺少必要参数: {', '.join(missing)}",
                     }
             else:
                 print(f"[下载器添加] auto_add=False, 跳过自动添加")
@@ -1399,9 +1356,11 @@ def migrate_publish():
                     seed_title = "未知标题"
                     try:
                         from models.seed_parameter import SeedParameter
+
                         seed_param_model = SeedParameter(db_manager)
                         seed_parameters = seed_param_model.get_parameters(
-                            source_torrent_id, source_site_name)
+                            source_torrent_id, source_site_name
+                        )
                         if seed_parameters and seed_parameters.get("title"):
                             seed_title = seed_parameters.get("title")
                             print(f"[批量转种记录] 从数据库获取到种子标题: {seed_title}")
@@ -1416,10 +1375,8 @@ def migrate_publish():
                     # 准备记录数据
                     video_size_gb = data.get("video_size_gb")  # Go端可能传递的视频大小
                     status = "success" if result.get("success") else "failed"
-                    success_url = result.get("url") if result.get(
-                        "success") else None
-                    error_detail = result.get(
-                        "logs") if not result.get("success") else None
+                    success_url = result.get("url") if result.get("success") else None
+                    error_detail = result.get("logs") if not result.get("success") else None
 
                     print(
                         f"[批量转种记录] 发布结果: status={status}, success_url={success_url}, video_size_gb={video_size_gb}"
@@ -1439,9 +1396,7 @@ def migrate_publish():
                         print(f"[批量转种记录] result所有键: {list(result.keys())}")
                         print(f"[批量转种记录] result完整内容: {result}")
 
-                    print(
-                        f"[批量转种记录] 准备写入数据库: downloader_result={downloader_result}"
-                    )
+                    print(f"[批量转种记录] 准备写入数据库: downloader_result={downloader_result}")
 
                     # 直接插入记录(发布的种子不会先被Go端插入,只有过滤的种子才会)
                     if db_manager.db_type == "mysql":
@@ -1462,11 +1417,20 @@ def migrate_publish():
                     )
                     cursor.execute(
                         insert_sql,
-                        (batch_id, seed_title, source_torrent_id,
-                         data.get("nickname",
-                                  source_site_name), target_site_name,
-                         data.get("batch_progress"), video_size_gb, status,
-                         success_url, error_detail, downloader_result))
+                        (
+                            batch_id,
+                            seed_title,
+                            source_torrent_id,
+                            data.get("nickname", source_site_name),
+                            target_site_name,
+                            data.get("batch_progress"),
+                            video_size_gb,
+                            status,
+                            success_url,
+                            error_detail,
+                            downloader_result,
+                        ),
+                    )
                     conn.commit()
                     cursor.close()
                     conn.close()
@@ -1485,6 +1449,7 @@ def migrate_publish():
             except Exception as e:
                 print(f"❌ [批量转种记录] 记录时出错: {e}")
                 import traceback
+
                 traceback.print_exc()
         else:
             print(f"[批量转种记录] 未检测到batch_id参数,跳过记录到batch_enhance_records表")
@@ -1494,13 +1459,8 @@ def migrate_publish():
         return jsonify(result)
 
     except Exception as e:
-        logging.error(f"migrate_publish to {target_site_name} 发生意外错误: {e}",
-                      exc_info=True)
-        return jsonify({
-            "success": False,
-            "logs": f"服务器内部错误: {e}",
-            "url": None
-        }), 500
+        logging.error(f"migrate_publish to {target_site_name} 发生意外错误: {e}", exc_info=True)
+        return jsonify({"success": False, "logs": f"服务器内部错误: {e}", "url": None}), 500
     finally:
         if migrator:
             migrator.cleanup()
@@ -1530,39 +1490,43 @@ def migrate_torrent():
 
         if not source_info or not source_info.get("cookie"):
             return (
-                jsonify({
-                    "success":
-                    False,
-                    "logs":
-                    f"错误：未找到源站点 '{source_site_name}' 或其缺少 Cookie 配置。",
-                }),
+                jsonify(
+                    {
+                        "success": False,
+                        "logs": f"错误：未找到源站点 '{source_site_name}' 或其缺少 Cookie 配置。",
+                    }
+                ),
                 404,
             )
         if not target_info or not target_info.get("cookie"):
             return (
-                jsonify({
-                    "success":
-                    False,
-                    "logs":
-                    f"错误：未找到目标站点 '{target_site_name}' 或其缺少 Cookie 配置。",
-                }),
+                jsonify(
+                    {
+                        "success": False,
+                        "logs": f"错误：未找到目标站点 '{target_site_name}' 或其缺少 Cookie 配置。",
+                    }
+                ),
                 404,
             )
 
-        migrator = TorrentMigrator(source_info,
-                                   target_info,
-                                   search_term,
-                                   config_manager=config_manager,
-                                   db_manager=db_manager)
+        migrator = TorrentMigrator(
+            source_info,
+            target_info,
+            search_term,
+            config_manager=config_manager,
+            db_manager=db_manager,
+        )
         if hasattr(migrator, "run"):
             result = migrator.run()
             return jsonify(result)
         else:
             return (
-                jsonify({
-                    "success": False,
-                    "logs": "错误：此服务器不支持一步式迁移，请使用新版迁移工具。",
-                }),
+                jsonify(
+                    {
+                        "success": False,
+                        "logs": "错误：此服务器不支持一步式迁移，请使用新版迁移工具。",
+                    }
+                ),
                 501,
             )
 
@@ -1586,14 +1550,16 @@ def parse_title_utility():
         parsed_components = upload_data_title(title_to_parse, mediaInfo=mediainfo)
 
         if not parsed_components:
-            return jsonify({
-                "success": False,
-                "message": "未能从此标题中解析出有效参数。",
-                "components": {
-                    "主标题": title_to_parse,
-                    "无法识别": "解析失败",
-                },
-            })
+            return jsonify(
+                {
+                    "success": False,
+                    "message": "未能从此标题中解析出有效参数。",
+                    "components": {
+                        "主标题": title_to_parse,
+                        "无法识别": "解析失败",
+                    },
+                }
+            )
 
         return jsonify({"success": True, "components": parsed_components})
 
@@ -1612,9 +1578,9 @@ def validate_media():
     save_path = data.get("savePath")
     torrent_name = data.get("torrentName")
     downloader_id = data.get("downloaderId")  # 获取下载器ID
-    subtitle = source_info.get("subtitle") if source_info else ''
-    imdb_link = source_info.get("imdb_link", '') if source_info else ''
-    douban_link = source_info.get("douban_link", '') if source_info else ''
+    subtitle = source_info.get("subtitle") if source_info else ""
+    imdb_link = source_info.get("imdb_link", "") if source_info else ""
+    douban_link = source_info.get("douban_link", "") if source_info else ""
 
     logging.info(
         f"收到媒体处理请求 - 类型: {media_type}, "
@@ -1622,38 +1588,50 @@ def validate_media():
     )
 
     if media_type == "screenshot":
-        screenshots = upload_data_screenshot(source_info, save_path,
-                                             torrent_name, downloader_id)
+        screenshots = upload_data_screenshot(source_info, save_path, torrent_name, downloader_id)
         return jsonify({"success": True, "screenshots": screenshots}), 200
     elif media_type == "poster":
         # 海报验证和转存已经在 upload_data_movie_info -> _parse_format_content 中自动完成
-        status, posters, description, extracted_imdb_link, extracted_douban_link = upload_data_movie_info(
-            media_type, douban_link, imdb_link, subtitle)
+        status, posters, description, extracted_imdb_link, extracted_douban_link = (
+            upload_data_movie_info(media_type, douban_link, imdb_link, subtitle)
+        )
         if status:
-            return jsonify({
-                "success": True,
-                "posters": posters,
-                "extracted_imdb_link": extracted_imdb_link,
-                "extracted_douban_link": extracted_douban_link
-            }), 200
+            return (
+                jsonify(
+                    {
+                        "success": True,
+                        "posters": posters,
+                        "extracted_imdb_link": extracted_imdb_link,
+                        "extracted_douban_link": extracted_douban_link,
+                    }
+                ),
+                200,
+            )
         else:
             return jsonify({"success": False, "error": posters}), 400
     elif media_type == "intro":
         # 处理简介重新获取请求
-        status, posters, description, extracted_imdb_link, extracted_douban_link = upload_data_movie_info(
-            media_type, douban_link, imdb_link, subtitle)
+        status, posters, description, extracted_imdb_link, extracted_douban_link = (
+            upload_data_movie_info(media_type, douban_link, imdb_link, subtitle)
+        )
         if status:
-            return jsonify({
-                "success": True,
-                "intro": description,
-                "extracted_imdb_link": extracted_imdb_link,
-                "extracted_douban_link": extracted_douban_link
-            }), 200
+            return (
+                jsonify(
+                    {
+                        "success": True,
+                        "intro": description,
+                        "extracted_imdb_link": extracted_imdb_link,
+                        "extracted_douban_link": extracted_douban_link,
+                    }
+                ),
+                200,
+            )
         else:
             return jsonify({"success": False, "error": description}), 400
     elif media_type == "mediainfo":
         # 处理媒体信息重新获取请求
         from utils import upload_data_mediaInfo
+
         # 获取当前的mediainfo（如果有的话）
         current_mediainfo = data.get("current_mediainfo", "")
         # 调用upload_data_mediaInfo函数重新生成mediainfo，设置force_refresh=True强制重新获取
@@ -1662,16 +1640,14 @@ def validate_media():
             save_path,
             torrent_name=torrent_name,
             downloader_id=downloader_id,
-            force_refresh=True)  # 强制重新获取
+            force_refresh=True,
+        )  # 强制重新获取
         if new_mediainfo:
             return jsonify({"success": True, "mediainfo": new_mediainfo}), 200
         else:
             return jsonify({"success": False, "error": "无法生成媒体信息"}), 400
     else:
-        return jsonify({
-            "success": False,
-            "error": f"不支持的媒体类型: {media_type}"
-        }), 400
+        return jsonify({"success": False, "error": f"不支持的媒体类型: {media_type}"}), 400
 
 
 @migrate_bp.route("/migrate/get_downloader_info", methods=["POST"])
@@ -1684,10 +1660,7 @@ def get_downloader_info():
     site_name = data.get("site_name")
 
     if not torrent_id or not site_name:
-        return jsonify({
-            "success": False,
-            "message": "缺少必要参数: torrent_id 或 site_name"
-        }), 400
+        return jsonify({"success": False, "message": "缺少必要参数: torrent_id 或 site_name"}), 400
 
     try:
         conn = db_manager._get_connection()
@@ -1702,20 +1675,19 @@ def get_downloader_info():
         conn.close()
 
         if row:
-            return jsonify({
-                "success": True,
-                "downloader_id": row['downloader_id'],
-                "save_path": row['save_path']
-            })
+            return jsonify(
+                {
+                    "success": True,
+                    "downloader_id": row["downloader_id"],
+                    "save_path": row["save_path"],
+                }
+            )
         else:
             return jsonify({"success": False, "message": "未找到该种子信息"}), 404
 
     except Exception as e:
         logging.error(f"查询下载器信息失败: {e}", exc_info=True)
-        return jsonify({
-            "success": False,
-            "message": f"数据库查询失败: {str(e)}"
-        }), 500
+        return jsonify({"success": False, "message": f"数据库查询失败: {str(e)}"}), 500
 
 
 @migrate_bp.route("/migrate/add_to_downloader", methods=["POST"])
@@ -1736,8 +1708,7 @@ def migrate_add_to_downloader():
     # 如果需要使用默认下载器，从配置中获取
     if use_default_downloader:
         config = config_manager.get()
-        default_downloader_id = config.get("cross_seed",
-                                           {}).get("default_downloader")
+        default_downloader_id = config.get("cross_seed", {}).get("default_downloader")
         # 只有当默认下载器ID不为空时才使用默认下载器
         if default_downloader_id:
             downloader_id = default_downloader_id
@@ -1745,16 +1716,17 @@ def migrate_add_to_downloader():
         # 如果 default_downloader_id 为空，则使用源种子所在的下载器（保持 downloader_id 不变）
 
     if not all([detail_page_url, save_path, downloader_id]):
-        return jsonify({
-            "success": False,
-            "message": "错误：缺少必要参数 (url, savePath, downloaderId)。"
-        }), 400
+        return (
+            jsonify(
+                {"success": False, "message": "错误：缺少必要参数 (url, savePath, downloaderId)。"}
+            ),
+            400,
+        )
 
     try:
-        success, message = add_torrent_to_downloader(detail_page_url,
-                                                     save_path,
-                                                     downloader_id, db_manager,
-                                                     config_manager)
+        success, message = add_torrent_to_downloader(
+            detail_page_url, save_path, downloader_id, db_manager, config_manager
+        )
         return jsonify({"success": success, "message": message})
     except Exception as e:
         logging.error(f"add_to_downloader 路由发生意外错误: {e}", exc_info=True)
@@ -1791,18 +1763,18 @@ def get_sites_status():
                 "has_cookie": bool(row.get("cookie")),
                 "has_passkey": bool(row.get("passkey")),
                 "is_source": migration_status in [1, 3],
-                "is_target": migration_status in [2, 3]
+                "is_target": migration_status in [2, 3],
             }
             sites_status.append(site_info)
 
-        return jsonify(sorted(sites_status, key=lambda x: x['name'].lower()))
+        return jsonify(sorted(sites_status, key=lambda x: x["name"].lower()))
 
     except Exception as e:
         logging.error(f"获取站点状态列表失败: {e}", exc_info=True)
         return jsonify({"error": "服务器内部错误"}), 500
     finally:
-        if 'conn' in locals() and conn:
-            if 'cursor' in locals() and cursor:
+        if "conn" in locals() and conn:
+            if "cursor" in locals() and cursor:
                 cursor.close()
             conn.close()
 
@@ -1832,22 +1804,23 @@ def update_preview_data():
         # 更新 review_data 中的相关字段
         review_data = context["review_data"].copy()
         review_data["original_main_title"] = updated_data.get(
-            "original_main_title", review_data.get("original_main_title", ""))
+            "original_main_title", review_data.get("original_main_title", "")
+        )
         review_data["title_components"] = updated_data.get(
-            "title_components", review_data.get("title_components", []))
-        review_data["subtitle"] = updated_data.get(
-            "subtitle", review_data.get("subtitle", ""))
-        review_data["imdb_link"] = updated_data.get(
-            "imdb_link", review_data.get("imdb_link", ""))
-        review_data["intro"] = updated_data.get("intro",
-                                                review_data.get("intro", {}))
-        review_data["mediainfo"] = updated_data.get(
-            "mediainfo", review_data.get("mediainfo", ""))
+            "title_components", review_data.get("title_components", [])
+        )
+        review_data["subtitle"] = updated_data.get("subtitle", review_data.get("subtitle", ""))
+        review_data["imdb_link"] = updated_data.get("imdb_link", review_data.get("imdb_link", ""))
+        review_data["intro"] = updated_data.get("intro", review_data.get("intro", {}))
+        review_data["mediainfo"] = updated_data.get("mediainfo", review_data.get("mediainfo", ""))
         review_data["source_params"] = updated_data.get(
-            "source_params", review_data.get("source_params", {}))
+            "source_params", review_data.get("source_params", {})
+        )
 
         # 重新提取产地信息
-        full_description_text = f"{review_data['intro'].get('statement', '')}\n{review_data['intro'].get('body', '')}"
+        full_description_text = (
+            f"{review_data['intro'].get('statement', '')}\n{review_data['intro'].get('body', '')}"
+        )
         origin_info = extract_origin_from_description(full_description_text)
         if origin_info and "source_params" in review_data:
             review_data["source_params"]["产地"] = origin_info
@@ -1861,20 +1834,20 @@ def update_preview_data():
                 # 传入mediainfo以便修正Blu-ray/BluRay格式
                 mediainfo = review_data.get("mediainfo", "")
                 title_components = upload_data_title(
-                    review_data["original_main_title"],
-                    mediaInfo=mediainfo)
+                    review_data["original_main_title"], mediaInfo=mediainfo
+                )
 
             # 2. 重新构建标题参数字典
             title_params = {
-                item["key"]: item["value"]
-                for item in title_components if item.get("value")
+                item["key"]: item["value"] for item in title_components if item.get("value")
             }
 
             # 3. 如果分辨率为空，尝试从MediaInfo中提取分辨率
             resolution_from_title = title_params.get("分辨率")
             if not resolution_from_title or resolution_from_title == "N/A":
                 resolution_from_mediainfo = extract_resolution_from_mediainfo(
-                    review_data["mediainfo"])
+                    review_data["mediainfo"]
+                )
                 if resolution_from_mediainfo:
                     # 更新标题参数中的分辨率
                     title_params["分辨率"] = resolution_from_mediainfo
@@ -1885,12 +1858,9 @@ def update_preview_data():
                             break
                     else:
                         # 如果没有找到分辨率项，添加一个新的
-                        title_components.append({
-                            "key":
-                            "分辨率",
-                            "value":
-                            resolution_from_mediainfo
-                        })
+                        title_components.append(
+                            {"key": "分辨率", "value": resolution_from_mediainfo}
+                        )
 
             # 3. 重新拼接主标题
             order = [
@@ -1913,12 +1883,13 @@ def update_preview_data():
             for key in order:
                 value = title_params.get(key)
                 if value:
-                    title_parts.append(" ".join(map(str, value)) if isinstance(
-                        value, list) else str(value))
+                    title_parts.append(
+                        " ".join(map(str, value)) if isinstance(value, list) else str(value)
+                    )
 
             raw_main_part = " ".join(filter(None, title_parts))
-            main_part = re.sub(r'(?<!\d)\.(?!\d)', ' ', raw_main_part)
-            main_part = re.sub(r'\s+', ' ', main_part).strip()
+            main_part = re.sub(r"(?<!\d)\.(?!\d)", " ", raw_main_part)
+            main_part = re.sub(r"\s+", " ", main_part).strip()
             release_group = title_params.get("制作组", "NOGROUP")
             if "N/A" in release_group:
                 release_group = "NOGROUP"
@@ -1935,12 +1906,12 @@ def update_preview_data():
                 f"{review_data['intro'].get('statement', '')}\n"
                 f"{review_data['intro'].get('poster', '')}\n"
                 f"{review_data['intro'].get('body', '')}\n"
-                f"{review_data['intro'].get('screenshots', '')}")
+                f"{review_data['intro'].get('screenshots', '')}"
+            )
 
             # 5. 重新收集标签
             source_tags = set(review_data["source_params"].get("标签") or [])
-            mediainfo_tags = set(
-                extract_tags_from_mediainfo(review_data["mediainfo"]))
+            mediainfo_tags = set(extract_tags_from_mediainfo(review_data["mediainfo"]))
             all_tags = sorted(list(source_tags.union(mediainfo_tags)))
 
             # 6. 重新组装预览字典
@@ -1964,11 +1935,15 @@ def update_preview_data():
             # 创建一个模拟的HTML soup对象用于提取器
             # 由于我们已经有提取的数据，我们可以创建一个简单的soup对象
             from bs4 import BeautifulSoup
-            mock_html = f"<html><body><h1 id='top'>{review_data.get('title', '')}</h1></body></html>"
-            mock_soup = BeautifulSoup(mock_html, 'html.parser')
+
+            mock_html = (
+                f"<html><body><h1 id='top'>{review_data.get('title', '')}</h1></body></html>"
+            )
+            mock_soup = BeautifulSoup(mock_html, "html.parser")
 
             # 初始化提取器
             from core.extractors.extractor import Extractor, ParameterMapper
+
             extractor = Extractor()
             mapper = ParameterMapper()
 
@@ -1979,40 +1954,34 @@ def update_preview_data():
                 "intro": review_data.get("intro", {}),
                 "mediainfo": review_data.get("mediainfo", ""),
                 "source_params": review_data.get("source_params", {}),
-                "title_components": title_components
+                "title_components": title_components,
             }
 
             # 使用ParameterMapper映射参数
-            standardized_params = mapper.map_parameters(
-                source_site_name, '', extracted_data)
+            standardized_params = mapper.map_parameters(source_site_name, "", extracted_data)
 
             # 保存参数到文件用于调试
             import os
+
             tmp_dir = "data/tmp"
             os.makedirs(tmp_dir, exist_ok=True)
 
             # 保存标准化参数到文件
-            with open(os.path.join(tmp_dir, "2.txt"), "w",
-                      encoding="utf-8") as f:
+            with open(os.path.join(tmp_dir, "2.txt"), "w", encoding="utf-8") as f:
                 f.write(f"源站点名称: {source_site_name}\n")
                 f.write("最终标准化参数（使用新映射系统）:\n")
                 for key, value in standardized_params.items():
                     f.write(f"{key}: {value}\n")
                 # 添加调试信息
                 f.write(f"\n调试信息:\n")
-                f.write(
-                    f"video_codec值: {standardized_params.get('video_codec', '未找到')}\n"
-                )
+                f.write(f"video_codec值: {standardized_params.get('video_codec', '未找到')}\n")
                 f.write(f"codec值: {standardized_params.get('codec', '未找到')}\n")
 
             # 用于预览显示标准化键对应的内容
-            preview_video_codec = standardized_params.get(
-                "video_codec", "video.other")
-            preview_audio_codec = standardized_params.get(
-                "audio_codec", "audio.other")
+            preview_video_codec = standardized_params.get("video_codec", "video.other")
+            preview_audio_codec = standardized_params.get("audio_codec", "audio.other")
             preview_medium = standardized_params.get("medium", "medium.other")
-            preview_resolution = standardized_params.get(
-                "resolution", "resolution.other")
+            preview_resolution = standardized_params.get("resolution", "resolution.other")
             preview_team = standardized_params.get("team", "team.other")
             preview_type = standardized_params.get("type", "category.other")
             preview_source = standardized_params.get("source", "N/A")
@@ -2028,7 +1997,7 @@ def update_preview_data():
                 "resolution": preview_resolution,
                 "release_group": preview_team,
                 "source": preview_source,
-                "tags": list(all_tags)
+                "tags": list(all_tags),
             }
 
             # 更新 review_data 中的预览参数
@@ -2038,17 +2007,10 @@ def update_preview_data():
             # 更新缓存中的 review_data
             MIGRATION_CACHE[task_id]["review_data"] = review_data
 
-            return jsonify({
-                "success": True,
-                "data": review_data,
-                "message": "预览数据更新成功"
-            })
+            return jsonify({"success": True, "data": review_data, "message": "预览数据更新成功"})
         except Exception as e:
             logging.error(f"重新生成预览数据时发生错误: {e}", exc_info=True)
-            return jsonify({
-                "success": False,
-                "message": f"重新生成预览数据时发生错误: {e}"
-            }), 500
+            return jsonify({"success": False, "message": f"重新生成预览数据时发生错误: {e}"}), 500
 
     except Exception as e:
         logging.error(f"update_preview_data 发生意外错误: {e}", exc_info=True)
@@ -2085,20 +2047,19 @@ def get_aggregated_torrents():
 
         # 获取所有站点配置信息
         cursor.execute("SELECT nickname, migration FROM sites")
-        site_configs = {
-            row["nickname"]: dict(row)
-            for row in cursor.fetchall()
-        }
+        site_configs = {row["nickname"]: dict(row) for row in cursor.fetchall()}
 
         # 查询所有种子数据
         if db_manager.db_type == "postgresql":
             cursor.execute(
-                "SELECT hash, name, save_path, size, progress, state, sites, \"group\", details, downloader_id FROM torrents WHERE state != %s",
-                ("不存在", ))
+                'SELECT hash, name, save_path, size, progress, state, sites, "group", details, downloader_id FROM torrents WHERE state != %s',
+                ("不存在",),
+            )
         else:
             cursor.execute(
                 "SELECT hash, name, save_path, size, progress, state, sites, `group`, details, downloader_id FROM torrents WHERE state != %s",
-                ("不存在", ))
+                ("不存在",),
+            )
         torrents_raw = [dict(row) for row in cursor.fetchall()]
 
         # 查询 seed_parameters 表中已存在的种子名称
@@ -2111,6 +2072,7 @@ def get_aggregated_torrents():
 
         # 按名称聚合种子
         from collections import defaultdict
+
         agg_torrents = defaultdict(
             lambda: {
                 "name": "",
@@ -2120,17 +2082,20 @@ def get_aggregated_torrents():
                 "state": set(),
                 "sites": defaultdict(dict),
                 "downloader_ids": [],
-            })
+            }
+        )
 
         for t in torrents_raw:
-            torrent_key = t['name']
+            torrent_key = t["name"]
             agg = agg_torrents[torrent_key]
             if not agg["name"]:
-                agg.update({
-                    "name": t["name"],
-                    "save_path": t.get("save_path", ""),
-                    "size": t.get("size", 0),
-                })
+                agg.update(
+                    {
+                        "name": t["name"],
+                        "save_path": t.get("save_path", ""),
+                        "size": t.get("size", 0),
+                    }
+                )
             downloader_id = t.get("downloader_id")
             if downloader_id and downloader_id not in agg["downloader_ids"]:
                 agg["downloader_ids"].append(downloader_id)
@@ -2140,8 +2105,9 @@ def get_aggregated_torrents():
                 site_name = t.get("sites")
                 agg["sites"][site_name]["comment"] = t.get("details")
                 agg["sites"][site_name]["state"] = t.get("state", "N/A")
-                agg["sites"][site_name]["migration"] = site_configs.get(
-                    site_name, {}).get("migration", 0)
+                agg["sites"][site_name]["migration"] = site_configs.get(site_name, {}).get(
+                    "migration", 0
+                )
 
         # 转换为列表并应用筛选
         filtered_list = []
@@ -2149,7 +2115,7 @@ def get_aggregated_torrents():
             # 排除已在 seed_parameters 表中存在的种子
             # 去除 .torrent 后缀进行匹配
             name_without_ext = name
-            if name_without_ext.lower().endswith('.torrent'):
+            if name_without_ext.lower().endswith(".torrent"):
                 name_without_ext = name_without_ext[:-8]
 
             if name_without_ext in existing_seed_names:
@@ -2171,14 +2137,10 @@ def get_aggregated_torrents():
 
             # 下载器筛选
             if downloader_filters:
-                if not any(did in downloader_filters
-                           for did in data.get("downloader_ids", [])):
+                if not any(did in downloader_filters for did in data.get("downloader_ids", [])):
                     continue
 
-            data.update({
-                "state": state_str,
-                "sites": dict(data["sites"])  # 转换为普通字典
-            })
+            data.update({"state": state_str, "sites": dict(data["sites"])})  # 转换为普通字典
             filtered_list.append(data)
 
         # 计算总数
@@ -2196,18 +2158,11 @@ def get_aggregated_torrents():
         cursor.close()
         conn.close()
 
-        return jsonify({
-            "success": True,
-            "data": paginated_list,
-            "total": total
-        })
+        return jsonify({"success": True, "data": paginated_list, "total": total})
 
     except Exception as e:
         logging.error(f"get_aggregated_torrents 发生错误: {e}", exc_info=True)
-        return jsonify({
-            "success": False,
-            "message": f"服务器内部错误: {str(e)}"
-        }), 500
+        return jsonify({"success": False, "message": f"服务器内部错误: {str(e)}"}), 500
 
 
 @migrate_bp.route("/migrate/batch_fetch_seed_data", methods=["POST"])
@@ -2227,10 +2182,10 @@ def batch_fetch_seed_data():
             return jsonify({"success": False, "message": "错误：种子名称列表不能为空"}), 400
 
         if not source_sites_priority:
-            return jsonify({
-                "success": False,
-                "message": "错误：请先在设置中配置源站点优先级"
-            }), 400
+            return (
+                jsonify({"success": False, "message": "错误：请先在设置中配置源站点优先级"}),
+                400,
+            )
 
         # 生成任务ID
         task_id = str(uuid.uuid4())
@@ -2243,33 +2198,27 @@ def batch_fetch_seed_data():
             "failed": 0,
             "skipped": 0,
             "isRunning": True,
-            "results": []
+            "results": [],
         }
 
         # 在后台线程中执行批量获取
         from threading import Thread
-        thread = Thread(target=_process_batch_fetch,
-                        args=(task_id, torrent_names, source_sites_priority,
-                              db_manager))
+
+        thread = Thread(
+            target=_process_batch_fetch,
+            args=(task_id, torrent_names, source_sites_priority, db_manager),
+        )
         thread.daemon = True
         thread.start()
 
-        return jsonify({
-            "success": True,
-            "task_id": task_id,
-            "message": "批量获取任务已启动"
-        })
+        return jsonify({"success": True, "task_id": task_id, "message": "批量获取任务已启动"})
 
     except Exception as e:
         logging.error(f"batch_fetch_seed_data 发生错误: {e}", exc_info=True)
-        return jsonify({
-            "success": False,
-            "message": f"服务器内部错误: {str(e)}"
-        }), 500
+        return jsonify({"success": False, "message": f"服务器内部错误: {str(e)}"}), 500
 
 
-def _process_batch_fetch(task_id, torrent_names, source_sites_priority,
-                         db_manager):
+def _process_batch_fetch(task_id, torrent_names, source_sites_priority, db_manager):
     """后台处理批量获取任务"""
     import time
 
@@ -2292,25 +2241,22 @@ def _process_batch_fetch(task_id, torrent_names, source_sites_priority,
                 if db_manager.db_type == "sqlite":
                     cursor.execute(
                         "SELECT hash, name, save_path, size, sites, details, downloader_id FROM torrents WHERE name = ? AND state != ?",
-                        (torrent_name, "不存在"))
+                        (torrent_name, "不存在"),
+                    )
                 else:  # postgresql or mysql
                     cursor.execute(
                         "SELECT hash, name, save_path, size, sites, details, downloader_id FROM torrents WHERE name = %s AND state != %s",
-                        (torrent_name, "不存在"))
+                        (torrent_name, "不存在"),
+                    )
 
                 torrents = [dict(row) for row in cursor.fetchall()]
                 cursor.close()
                 conn.close()
 
                 if not torrents:
-                    BATCH_FETCH_TASKS[task_id]["results"].append({
-                        "name":
-                        torrent_name,
-                        "status":
-                        "skipped",
-                        "reason":
-                        "未找到种子记录"
-                    })
+                    BATCH_FETCH_TASKS[task_id]["results"].append(
+                        {"name": torrent_name, "status": "skipped", "reason": "未找到种子记录"}
+                    )
                     BATCH_FETCH_TASKS[task_id]["skipped"] += 1
                     BATCH_FETCH_TASKS[task_id]["processed"] += 1
                     continue
@@ -2319,8 +2265,7 @@ def _process_batch_fetch(task_id, torrent_names, source_sites_priority,
                 source_found = None
                 for priority_site in source_sites_priority:
                     # 获取站点信息
-                    source_info = db_manager.get_site_by_nickname(
-                        priority_site)
+                    source_info = db_manager.get_site_by_nickname(priority_site)
                     if not source_info or not source_info.get("cookie"):
                         continue
 
@@ -2338,10 +2283,11 @@ def _process_batch_fetch(task_id, torrent_names, source_sites_priority,
                             if comment:
                                 # 尝试从comment中提取ID
                                 import re
-                                id_match = re.search(r'id=(\d+)', comment)
+
+                                id_match = re.search(r"id=(\d+)", comment)
                                 if id_match:
                                     torrent_id = id_match.group(1)
-                                elif re.match(r'^\d+$', comment.strip()):
+                                elif re.match(r"^\d+$", comment.strip()):
                                     torrent_id = comment.strip()
 
                             if torrent_id:
@@ -2349,7 +2295,7 @@ def _process_batch_fetch(task_id, torrent_names, source_sites_priority,
                                     "site": priority_site,
                                     "site_info": source_info,
                                     "torrent_id": torrent_id,
-                                    "torrent": torrent
+                                    "torrent": torrent,
                                 }
                                 break
 
@@ -2366,7 +2312,7 @@ def _process_batch_fetch(task_id, torrent_names, source_sites_priority,
                             # 获取种子大小（使用第一个种子的大小，因为同名种子大小应该相同）
                             torrent_size = 0
                             if torrents:
-                                torrent_size = torrents[0].get('size', 0)
+                                torrent_size = torrents[0].get("size", 0)
 
                             logging.info(
                                 f"优先级站点未找到，尝试使用 IYUU 查询: {torrent_name} (大小: {torrent_size} 字节)"
@@ -2374,10 +2320,10 @@ def _process_batch_fetch(task_id, torrent_names, source_sites_priority,
 
                             # 执行 IYUU 查询
                             result_stats = iyuu_thread._process_single_torrent(
-                                torrent_name, torrent_size)
+                                torrent_name, torrent_size
+                            )
 
-                            if result_stats and result_stats.get(
-                                    'total_found', 0) > 0:
+                            if result_stats and result_stats.get("total_found", 0) > 0:
                                 logging.info(
                                     f"IYUU 查询找到 {result_stats['total_found']} 条记录，重新查询数据库"
                                 )
@@ -2389,15 +2335,15 @@ def _process_batch_fetch(task_id, torrent_names, source_sites_priority,
                                 if db_manager.db_type == "sqlite":
                                     cursor.execute(
                                         "SELECT hash, name, save_path, sites, details, downloader_id FROM torrents WHERE name = ? AND state != ?",
-                                        (torrent_name, "不存在"))
+                                        (torrent_name, "不存在"),
+                                    )
                                 else:  # postgresql or mysql
                                     cursor.execute(
                                         "SELECT hash, name, save_path, sites, details, downloader_id FROM torrents WHERE name = %s AND state != %s",
-                                        (torrent_name, "不存在"))
+                                        (torrent_name, "不存在"),
+                                    )
 
-                                updated_torrents = [
-                                    dict(row) for row in cursor.fetchall()
-                                ]
+                                updated_torrents = [dict(row) for row in cursor.fetchall()]
                                 cursor.close()
                                 conn.close()
 
@@ -2409,47 +2355,38 @@ def _process_batch_fetch(task_id, torrent_names, source_sites_priority,
                                     for priority_site in source_sites_priority:
                                         # 获取站点信息
                                         source_info = db_manager.get_site_by_nickname(
-                                            priority_site)
-                                        if not source_info or not source_info.get(
-                                                "cookie"):
+                                            priority_site
+                                        )
+                                        if not source_info or not source_info.get("cookie"):
                                             continue
 
                                         # 检查该站点的migration状态
-                                        if source_info.get("migration",
-                                                           0) not in [1, 3]:
+                                        if source_info.get("migration", 0) not in [1, 3]:
                                             continue
 
                                         # 查找该站点的种子记录（在更新后的torrents中）
                                         for torrent in torrents:
-                                            if torrent.get(
-                                                    "sites") == priority_site:
+                                            if torrent.get("sites") == priority_site:
                                                 # 提取种子ID
-                                                comment = torrent.get(
-                                                    "details", "")
+                                                comment = torrent.get("details", "")
                                                 torrent_id = None
 
                                                 if comment:
                                                     # 尝试从comment中提取ID
                                                     import re
-                                                    id_match = re.search(
-                                                        r'id=(\d+)', comment)
+
+                                                    id_match = re.search(r"id=(\d+)", comment)
                                                     if id_match:
-                                                        torrent_id = id_match.group(
-                                                            1)
-                                                    elif re.match(
-                                                            r'^\d+$',
-                                                            comment.strip()):
-                                                        torrent_id = comment.strip(
-                                                        )
+                                                        torrent_id = id_match.group(1)
+                                                    elif re.match(r"^\d+$", comment.strip()):
+                                                        torrent_id = comment.strip()
 
                                                 if torrent_id:
                                                     source_found = {
                                                         "site": priority_site,
-                                                        "site_info":
-                                                        source_info,
-                                                        "torrent_id":
-                                                        torrent_id,
-                                                        "torrent": torrent
+                                                        "site_info": source_info,
+                                                        "torrent_id": torrent_id,
+                                                        "torrent": torrent,
                                                     }
                                                     logging.info(
                                                         f"IYUU 查询后在优先级站点中找到: {priority_site}"
@@ -2477,8 +2414,7 @@ def _process_batch_fetch(task_id, torrent_names, source_sites_priority,
                     # 在这些其他站点中查找可用的源站点
                     for site_name in existing_sites:
                         # 获取站点信息
-                        source_info = db_manager.get_site_by_nickname(
-                            site_name)
+                        source_info = db_manager.get_site_by_nickname(site_name)
                         if not source_info or not source_info.get("cookie"):
                             continue
                         # 检查该站点的migration状态
@@ -2493,17 +2429,18 @@ def _process_batch_fetch(task_id, torrent_names, source_sites_priority,
                                 if comment:
                                     # 尝试从comment中提取ID
                                     import re
-                                    id_match = re.search(r'id=(\d+)', comment)
+
+                                    id_match = re.search(r"id=(\d+)", comment)
                                     if id_match:
                                         torrent_id = id_match.group(1)
-                                    elif re.match(r'^\d+$', comment.strip()):
+                                    elif re.match(r"^\d+$", comment.strip()):
                                         torrent_id = comment.strip()
                                 if torrent_id:
                                     source_found = {
                                         "site": site_name,
                                         "site_info": source_info,
                                         "torrent_id": torrent_id,
-                                        "torrent": torrent
+                                        "torrent": torrent,
                                     }
                                     break
                         if source_found:
@@ -2528,8 +2465,7 @@ def _process_batch_fetch(task_id, torrent_names, source_sites_priority,
                     if priority_site in excluded_sites:
                         continue
 
-                    source_info = db_manager.get_site_by_nickname(
-                        priority_site)
+                    source_info = db_manager.get_site_by_nickname(priority_site)
                     if not source_info or not source_info.get("cookie"):
                         continue
                     if source_info.get("migration", 0) not in [1, 3]:
@@ -2542,25 +2478,23 @@ def _process_batch_fetch(task_id, torrent_names, source_sites_priority,
                             torrent_id = None
                             if comment:
                                 import re
-                                id_match = re.search(r'id=(\d+)', comment)
+
+                                id_match = re.search(r"id=(\d+)", comment)
                                 if id_match:
                                     torrent_id = id_match.group(1)
-                                elif re.match(r'^\d+$', comment.strip()):
+                                elif re.match(r"^\d+$", comment.strip()):
                                     torrent_id = comment.strip()
 
                             if torrent_id:
-                                all_available_sites.append({
-                                    "site_name":
-                                    priority_site,
-                                    "site_info":
-                                    source_info,
-                                    "torrent_id":
-                                    torrent_id,
-                                    "torrent":
-                                    torrent,
-                                    "priority":
-                                    "configured"
-                                })
+                                all_available_sites.append(
+                                    {
+                                        "site_name": priority_site,
+                                        "site_info": source_info,
+                                        "torrent_id": torrent_id,
+                                        "torrent": torrent,
+                                        "priority": "configured",
+                                    }
+                                )
                                 logging.info(f"✓ 添加优先级站点: {priority_site}")
                                 break
 
@@ -2587,11 +2521,10 @@ def _process_batch_fetch(task_id, torrent_names, source_sites_priority,
                     if source_info and source_info.get("cookie"):
                         migration_status = source_info.get("migration", 0)
                         # 优先级：可作为源(1,3) > 只作为目标(2) > 只配置不迁移(0)
-                        priority = 2 if migration_status in [
-                            1, 3
-                        ] else 1 if migration_status == 2 else 0
-                        sorted_sites.append(
-                            (site_name, torrent, source_info, priority))
+                        priority = (
+                            2 if migration_status in [1, 3] else 1 if migration_status == 2 else 0
+                        )
+                        sorted_sites.append((site_name, torrent, source_info, priority))
 
                 # 按优先级降序排序
                 sorted_sites.sort(key=lambda x: x[3], reverse=True)
@@ -2603,20 +2536,23 @@ def _process_batch_fetch(task_id, torrent_names, source_sites_priority,
                     torrent_id = None
                     if comment:
                         import re
-                        id_match = re.search(r'id=(\d+)', comment)
+
+                        id_match = re.search(r"id=(\d+)", comment)
                         if id_match:
                             torrent_id = id_match.group(1)
-                        elif re.match(r'^\d+$', comment.strip()):
+                        elif re.match(r"^\d+$", comment.strip()):
                             torrent_id = comment.strip()
 
                     if torrent_id:
-                        all_available_sites.append({
-                            "site_name": site_name,
-                            "site_info": source_info,
-                            "torrent_id": torrent_id,
-                            "torrent": torrent,
-                            "priority": "fallback"
-                        })
+                        all_available_sites.append(
+                            {
+                                "site_name": site_name,
+                                "site_info": source_info,
+                                "torrent_id": torrent_id,
+                                "torrent": torrent,
+                                "priority": "fallback",
+                            }
+                        )
                         logging.info(f"  添加后备站点: {site_name}")
 
                 logging.info(
@@ -2635,8 +2571,7 @@ def _process_batch_fetch(task_id, torrent_names, source_sites_priority,
                             # 检查站点请求间隔（批量模式下跳过）
                             if not os.getenv("BATCH_MODE") == "true":
                                 if site_name in site_last_request_time:
-                                    elapsed = time.time(
-                                    ) - site_last_request_time[site_name]
+                                    elapsed = time.time() - site_last_request_time[site_name]
                                     if elapsed < REQUEST_INTERVAL:
                                         wait_time = REQUEST_INTERVAL - elapsed
                                         logging.info(
@@ -2649,8 +2584,9 @@ def _process_batch_fetch(task_id, torrent_names, source_sites_priority,
                             if attempt > 1:
                                 logging.info(f"🔄 站点 {site_name} 第{attempt}次重试")
                             else:
-                                priority_indicator = "⭐" if site_attempt.get(
-                                    "priority") == "configured" else "📋"
+                                priority_indicator = (
+                                    "⭐" if site_attempt.get("priority") == "configured" else "📋"
+                                )
                                 logging.info(
                                     f"{priority_indicator} 正在从站点 {site_name} 获取 {torrent_name}"
                                 )
@@ -2660,13 +2596,12 @@ def _process_batch_fetch(task_id, torrent_names, source_sites_priority,
                                 source_site_info=site_attempt["site_info"],
                                 target_site_info=None,
                                 search_term=site_attempt["torrent_id"],
-                                save_path=site_attempt["torrent"].get(
-                                    "save_path", ""),
+                                save_path=site_attempt["torrent"].get("save_path", ""),
                                 torrent_name=torrent_name,
-                                downloader_id=site_attempt["torrent"].get(
-                                    "downloader_id"),
+                                downloader_id=site_attempt["torrent"].get("downloader_id"),
                                 config_manager=config_manager,
-                                db_manager=db_manager)
+                                db_manager=db_manager,
+                            )
 
                             # 尝试获取数据
                             result = migrator.prepare_review_data()
@@ -2675,8 +2610,7 @@ def _process_batch_fetch(task_id, torrent_names, source_sites_priority,
                                 # 成功获取
                                 final_source = site_attempt
                                 fetch_success = True
-                                logging.info(
-                                    f"✅ 从站点 {site_name} 成功获取 {torrent_name}")
+                                logging.info(f"✅ 从站点 {site_name} 成功获取 {torrent_name}")
                                 break
                             else:
                                 # 获取失败，记录错误
@@ -2690,20 +2624,21 @@ def _process_batch_fetch(task_id, torrent_names, source_sites_priority,
                                 should_retry = False
                                 if attempt < max_retry_per_site:
                                     # 对于网络相关错误和种子链接查找错误，使用指数退避重试
-                                    if ("连接" in error_detail.lower() or
-                                            "timeout" in error_detail.lower()
-                                            or "网络" in error_detail.lower()
-                                            or "placeholder"
-                                            in error_detail.lower()
-                                            or "429" in error_detail
-                                            or "502" in error_detail
-                                            or "503" in error_detail
-                                            or "504" in error_detail
-                                            or "未找到种子下载链接"
-                                            in error_detail):  # 新增：种子下载链接未找到错误
+                                    if (
+                                        "连接" in error_detail.lower()
+                                        or "timeout" in error_detail.lower()
+                                        or "网络" in error_detail.lower()
+                                        or "placeholder" in error_detail.lower()
+                                        or "429" in error_detail
+                                        or "502" in error_detail
+                                        or "503" in error_detail
+                                        or "504" in error_detail
+                                        or "未找到种子下载链接" in error_detail
+                                    ):  # 新增：种子下载链接未找到错误
 
                                         wait_time = REQUEST_INTERVAL * (
-                                            2**(attempt - 1))  # 指数退避
+                                            2 ** (attempt - 1)
+                                        )  # 指数退避
                                         logging.warning(
                                             f"⚠️ 站点 {site_name} 第{attempt}次失败 ({error_detail})，{wait_time}秒后重试"
                                         )
@@ -2715,8 +2650,7 @@ def _process_batch_fetch(task_id, torrent_names, source_sites_priority,
                                         )
 
                                 if not should_retry:
-                                    logging.info(
-                                        f"⏭️ 站点 {site_name} 获取失败，尝试下一个站点")
+                                    logging.info(f"⏭️ 站点 {site_name} 获取失败，尝试下一个站点")
                                     break
 
                         except Exception as attempt_error:
@@ -2726,17 +2660,14 @@ def _process_batch_fetch(task_id, torrent_names, source_sites_priority,
                             )
 
                             # 记录尝试过的站点
-                            if site_attempt[
-                                    'site_name'] not in attempted_sites_details:
-                                attempted_sites_details.append(
-                                    site_attempt['site_name'])
+                            if site_attempt["site_name"] not in attempted_sites_details:
+                                attempted_sites_details.append(site_attempt["site_name"])
 
                             # 对于网络异常，如果还没到重试上限则重试
                             if attempt < max_retry_per_site and (
-                                    "连接" in error_msg.lower()
-                                    or "timeout" in error_msg.lower()):
-                                wait_time = REQUEST_INTERVAL * (2**(attempt -
-                                                                    1))
+                                "连接" in error_msg.lower() or "timeout" in error_msg.lower()
+                            ):
+                                wait_time = REQUEST_INTERVAL * (2 ** (attempt - 1))
                                 logging.warning(
                                     f"⚠️ 站点 {site_attempt['site_name']} 第{attempt}次异常，{wait_time}秒后重试"
                                 )
@@ -2752,18 +2683,15 @@ def _process_batch_fetch(task_id, torrent_names, source_sites_priority,
 
                 # 处理最终结果
                 if fetch_success and final_source:
-                    BATCH_FETCH_TASKS[task_id]["results"].append({
-                        "name":
-                        torrent_name,
-                        "status":
-                        "success",
-                        "source_site":
-                        final_source["site_name"],
-                        "attempted_sites":
-                        len(attempted_sites_details),
-                        "retries":
-                        max_retry_per_site
-                    })
+                    BATCH_FETCH_TASKS[task_id]["results"].append(
+                        {
+                            "name": torrent_name,
+                            "status": "success",
+                            "source_site": final_source["site_name"],
+                            "attempted_sites": len(attempted_sites_details),
+                            "retries": max_retry_per_site,
+                        }
+                    )
                     BATCH_FETCH_TASKS[task_id]["success"] += 1
                     logging.info(
                         f"📊 {torrent_name} 批量获取成功 (尝试了{len(attempted_sites_details)}个站点，来自{final_source['site_name']})"
@@ -2773,27 +2701,23 @@ def _process_batch_fetch(task_id, torrent_names, source_sites_priority,
                     if attempted_sites_details:
                         failure_reason += f" (尝试站点: {', '.join(attempted_sites_details)})"
 
-                    BATCH_FETCH_TASKS[task_id]["results"].append({
-                        "name":
-                        torrent_name,
-                        "status":
-                        "failed",
-                        "reason":
-                        failure_reason,
-                        "attempted_sites":
-                        len(attempted_sites_details)
-                    })
+                    BATCH_FETCH_TASKS[task_id]["results"].append(
+                        {
+                            "name": torrent_name,
+                            "status": "failed",
+                            "reason": failure_reason,
+                            "attempted_sites": len(attempted_sites_details),
+                        }
+                    )
                     BATCH_FETCH_TASKS[task_id]["failed"] += 1
                     logging.error(f"❌ {torrent_name} 批量获取失败: {failure_reason}")
 
                 BATCH_FETCH_TASKS[task_id]["processed"] += 1
 
             except Exception as e:
-                BATCH_FETCH_TASKS[task_id]["results"].append({
-                    "name": torrent_name,
-                    "status": "failed",
-                    "reason": str(e)
-                })
+                BATCH_FETCH_TASKS[task_id]["results"].append(
+                    {"name": torrent_name, "status": "failed", "reason": str(e)}
+                )
                 BATCH_FETCH_TASKS[task_id]["failed"] += 1
                 BATCH_FETCH_TASKS[task_id]["processed"] += 1
                 logging.error(f"处理种子 {torrent_name} 时发生错误: {e}")
@@ -2827,10 +2751,7 @@ def batch_fetch_progress():
 
     except Exception as e:
         logging.error(f"batch_fetch_progress 发生错误: {e}", exc_info=True)
-        return jsonify({
-            "success": False,
-            "message": f"服务器内部错误: {str(e)}"
-        }), 500
+        return jsonify({"success": False, "message": f"服务器内部错误: {str(e)}"}), 500
 
 
 # ===================================================================
@@ -2841,7 +2762,7 @@ def batch_fetch_progress():
 @migrate_bp.route("/migrate/logs/stream/<task_id>", methods=["GET"])
 def stream_logs(task_id):
     """实时推送任务日志流 (Server-Sent Events)
-    
+
     前端通过 EventSource 连接此端点，接收实时日志事件
     每个事件包含：step（步骤名）、message（消息）、status（状态）等信息
     """
@@ -2872,7 +2793,7 @@ def stream_logs(task_id):
                         break
 
                     # 发送日志事件
-                    event['type'] = 'log'
+                    event["type"] = "log"
                     yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
 
                 except Exception as queue_error:
@@ -2891,12 +2812,13 @@ def stream_logs(task_id):
     # 返回 SSE 响应
     return Response(
         stream_with_context(generate()),
-        mimetype='text/event-stream',
+        mimetype="text/event-stream",
         headers={
-            'Cache-Control': 'no-cache',
-            'X-Accel-Buffering': 'no',  # 禁用 Nginx 缓冲
-            'Connection': 'keep-alive'
-        })
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",  # 禁用 Nginx 缓冲
+            "Connection": "keep-alive",
+        },
+    )
 
 
 @migrate_bp.route("/migrate/bdinfo_status/<seed_id>")
@@ -2904,106 +2826,121 @@ def get_bdinfo_status(seed_id):
     """获取 BDInfo 处理状态"""
     try:
         from core.bdinfo.bdinfo_manager import get_bdinfo_manager
-        
+
         # 从数据库查询基本信息
         conn = migrate_bp.db_manager._get_connection()
         cursor = migrate_bp.db_manager._get_cursor(conn)
-        
+
         # seed_id 格式为 "hash_torrentId_siteName"，需要解析
-        if '_' in seed_id:
+        if "_" in seed_id:
             # 解析复合 seed_id
-            parts = seed_id.split('_')
+            parts = seed_id.split("_")
             if len(parts) >= 3:
                 # 最后一个部分是 site_name，中间是 torrent_id，前面是 hash
                 site_name_val = parts[-1]
                 torrent_id_val = parts[-2]
-                hash_val = '_'.join(parts[:-2])  # hash 可能包含下划线
-                
+                hash_val = "_".join(parts[:-2])  # hash 可能包含下划线
+
                 # 使用复合主键查询
                 if migrate_bp.db_manager.db_type == "sqlite":
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         SELECT mediainfo_status, bdinfo_task_id, bdinfo_started_at, 
                                bdinfo_completed_at, mediainfo, bdinfo_error 
                         FROM seed_parameters 
                         WHERE hash = ? AND torrent_id = ? AND site_name = ?
-                    """, (hash_val, torrent_id_val, site_name_val))
+                    """,
+                        (hash_val, torrent_id_val, site_name_val),
+                    )
                 else:
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         SELECT mediainfo_status, bdinfo_task_id, bdinfo_started_at, 
                                bdinfo_completed_at, mediainfo, bdinfo_error 
                         FROM seed_parameters 
                         WHERE hash = %s AND torrent_id = %s AND site_name = %s
-                    """, (hash_val, torrent_id_val, site_name_val))
+                    """,
+                        (hash_val, torrent_id_val, site_name_val),
+                    )
             else:
                 # 如果格式不对，尝试使用 CONCAT 查询
                 if migrate_bp.db_manager.db_type == "sqlite":
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         SELECT mediainfo_status, bdinfo_task_id, bdinfo_started_at, 
                                bdinfo_completed_at, mediainfo, bdinfo_error 
                         FROM seed_parameters 
                         WHERE hash || '_' || torrent_id || '_' || site_name = ?
-                    """, (seed_id,))
+                    """,
+                        (seed_id,),
+                    )
                 else:
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         SELECT mediainfo_status, bdinfo_task_id, bdinfo_started_at, 
                                bdinfo_completed_at, mediainfo, bdinfo_error 
                         FROM seed_parameters 
                         WHERE CONCAT(hash, '_', torrent_id, '_', site_name) = %s
-                    """, (seed_id,))
+                    """,
+                        (seed_id,),
+                    )
         else:
             # 如果没有下划线，说明格式不对，返回错误
-            return jsonify({'error': f'无效的种子ID格式: {seed_id}'}), 400
-            
+            return jsonify({"error": f"无效的种子ID格式: {seed_id}"}), 400
+
         result = cursor.fetchone()
         cursor.close()
         conn.close()
-        
+
         if not result:
-            return jsonify({'error': '种子数据不存在'}), 404
-            
+            return jsonify({"error": "种子数据不存在"}), 404
+
         # 如果有任务ID，从任务管理器获取详细状态
         task_status = None
         progress_info = None
-        if result['bdinfo_task_id']:
+        if result["bdinfo_task_id"]:
             bdinfo_manager = get_bdinfo_manager()
-            task_status = bdinfo_manager.get_task_status(result['bdinfo_task_id'])
-            
+            task_status = bdinfo_manager.get_task_status(result["bdinfo_task_id"])
+
             # 如果任务正在处理中，获取进度信息
-            if task_status and task_status.get('status') in ['processing_bdinfo', 'processing']:
+            if task_status and task_status.get("status") in ["processing_bdinfo", "processing"]:
                 progress_info = {
-                    'progress_percent': task_status.get('progress_percent', 0.0),
-                    'current_file': task_status.get('current_file', ''),
-                    'elapsed_time': task_status.get('elapsed_time', ''),
-                    'remaining_time': task_status.get('remaining_time', '')
+                    "progress_percent": task_status.get("progress_percent", 0.0),
+                    "current_file": task_status.get("current_file", ""),
+                    "elapsed_time": task_status.get("elapsed_time", ""),
+                    "remaining_time": task_status.get("remaining_time", ""),
                 }
-        
+
         # 判断是否为BDInfo内容
         is_bdinfo = False
-        if result['mediainfo']:
+        if result["mediainfo"]:
             from utils.mediainfo import validate_media_info_format
-            _, is_bdinfo, _, _, _, _ = validate_media_info_format(result['mediainfo'])
-            
+
+            _, is_bdinfo, _, _, _, _ = validate_media_info_format(result["mediainfo"])
+
         response_data = {
-            'seed_id': seed_id,
-            'mediainfo_status': result['mediainfo_status'],
-            'bdinfo_task_id': result['bdinfo_task_id'],
-            'bdinfo_started_at': result['bdinfo_started_at'],
-            'bdinfo_completed_at': result['bdinfo_completed_at'],
-            'bdinfo_error': result['bdinfo_error'],
-            'mediainfo': result['mediainfo'] if result['mediainfo_status'] == 'completed' else None,
-            'is_bdinfo': is_bdinfo,
-            'task_status': task_status
+            "seed_id": seed_id,
+            "mediainfo_status": result["mediainfo_status"],
+            "bdinfo_task_id": result["bdinfo_task_id"],
+            "bdinfo_started_at": result["bdinfo_started_at"],
+            "bdinfo_completed_at": result["bdinfo_completed_at"],
+            "bdinfo_error": result["bdinfo_error"],
+            "mediainfo": (
+                result["mediainfo"] if result["mediainfo_status"] == "completed" else None
+            ),
+            "is_bdinfo": is_bdinfo,
+            "task_status": task_status,
         }
-        
+
         # 添加进度信息
         if progress_info:
-            response_data['progress_info'] = progress_info
-            
+            response_data["progress_info"] = progress_info
+
         return jsonify(response_data)
-        
+
     except Exception as e:
         logging.error(f"获取 BDInfo 状态失败: {e}", exc_info=True)
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
 
 @migrate_bp.route("/migrate/refresh_bdinfo/<seed_id>", methods=["POST"])
@@ -3013,31 +2950,32 @@ def refresh_bdinfo(seed_id):
         # 获取种子数据
         conn = migrate_bp.db_manager._get_connection()
         cursor = migrate_bp.db_manager._get_cursor(conn)
-        
+
         if migrate_bp.db_manager.db_type == "sqlite":
             cursor.execute("SELECT save_path FROM seed_parameters WHERE id = ?", (seed_id,))
         else:
             cursor.execute("SELECT save_path FROM seed_parameters WHERE id = %s", (seed_id,))
-            
+
         result = cursor.fetchone()
         cursor.close()
         conn.close()
-        
+
         if not result:
-            return jsonify({'error': '种子数据不存在'}), 404
-            
+            return jsonify({"error": "种子数据不存在"}), 404
+
         # 调用刷新函数
         from utils.mediainfo import refresh_bdinfo_for_seed
-        refresh_result = refresh_bdinfo_for_seed(seed_id, result['save_path'], priority=1)
-        
-        if refresh_result['success']:
+
+        refresh_result = refresh_bdinfo_for_seed(seed_id, result["save_path"], priority=1)
+
+        if refresh_result["success"]:
             return jsonify(refresh_result)
         else:
             return jsonify(refresh_result), 500
-        
+
     except Exception as e:
         logging.error(f"刷新 BDInfo 失败: {e}", exc_info=True)
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
 
 @migrate_bp.route("/migrate/bdinfo_tasks")
@@ -3045,19 +2983,16 @@ def get_bdinfo_tasks():
     """获取所有 BDInfo 任务状态（管理员接口）"""
     try:
         from core.bdinfo.bdinfo_manager import get_bdinfo_manager
-        
+
         bdinfo_manager = get_bdinfo_manager()
         tasks = bdinfo_manager.get_all_tasks()
         stats = bdinfo_manager.get_stats()
-        
-        return jsonify({
-            'tasks': tasks,
-            'stats': stats
-        })
-        
+
+        return jsonify({"tasks": tasks, "stats": stats})
+
     except Exception as e:
         logging.error(f"获取 BDInfo 任务列表失败: {e}", exc_info=True)
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
 
 @migrate_bp.route("/migrate/refresh_mediainfo_async", methods=["POST"])
@@ -3073,16 +3008,16 @@ def refresh_mediainfo_async():
         torrent_name = data.get("torrent_name")
         force_refresh = data.get("force_refresh", True)
         priority = data.get("priority", 1)  # 默认高优先级
-        
+
         if not seed_id or not save_path or seed_id == "" or seed_id == None:
-            return jsonify({
-                "success": False,
-                "message": "缺少必要参数: seed_id 或 save_path"
-            }), 400
-        
+            return (
+                jsonify({"success": False, "message": "缺少必要参数: seed_id 或 save_path"}),
+                400,
+            )
+
         # 调用异步版本的 MediaInfo 处理函数
         from utils.mediainfo import upload_data_mediaInfo_async
-        
+
         # 解析 seed_id 获取复合主键组件
         hash_value = torrent_id = site_name = None
         if "_" in seed_id:
@@ -3091,10 +3026,10 @@ def refresh_mediainfo_async():
                 site_name = parts[-1]
                 torrent_id = parts[-2]
                 hash_value = "_".join(parts[:-2])
-        
+
         # 获取站点中文名（如果需要的话）
         nickname = data.get("nickname")  # 从请求中获取站点中文名
-        
+
         new_mediainfo, is_mediainfo, is_bdinfo, bdinfo_info = upload_data_mediaInfo_async(
             mediaInfo=current_mediainfo,
             save_path=save_path,
@@ -3110,16 +3045,16 @@ def refresh_mediainfo_async():
             site_name=site_name,
             nickname=nickname,
         )
-        
+
         # 即使 MediaInfo 提取失败，如果 BDInfo 任务已添加，也返回成功
-        if bdinfo_info['bdinfo_status'] == 'processing' and bdinfo_info['bdinfo_task_id']:
+        if bdinfo_info["bdinfo_status"] == "processing" and bdinfo_info["bdinfo_task_id"]:
             response_data = {
                 "success": True,
-                "mediainfo": new_mediainfo or '',
+                "mediainfo": new_mediainfo or "",
                 "is_mediainfo": is_mediainfo,
                 "is_bdinfo": is_bdinfo,
                 "bdinfo_async": bdinfo_info,
-                "message": "BDInfo 正在后台处理中"
+                "message": "BDInfo 正在后台处理中",
             }
             return jsonify(response_data), 200
         elif new_mediainfo:
@@ -3129,21 +3064,15 @@ def refresh_mediainfo_async():
                 "is_mediainfo": is_mediainfo,
                 "is_bdinfo": is_bdinfo,
                 "bdinfo_async": bdinfo_info,
-                "message": "MediaInfo 更新完成"
+                "message": "MediaInfo 更新完成",
             }
             return jsonify(response_data), 200
         else:
-            return jsonify({
-                "success": False,
-                "message": "MediaInfo 提取失败"
-            }), 500
-            
+            return jsonify({"success": False, "message": "MediaInfo 提取失败"}), 500
+
     except Exception as e:
         logging.error(f"异步 MediaInfo 刷新失败: {e}", exc_info=True)
-        return jsonify({
-            "success": False,
-            "message": f"服务器内部错误: {str(e)}"
-        }), 500
+        return jsonify({"success": False, "message": f"服务器内部错误: {str(e)}"}), 500
 
 
 @migrate_bp.route("/migrate/bdinfo_records", methods=["GET"])
@@ -3154,11 +3083,11 @@ def get_bdinfo_records():
         status_filter = request.args.get("status_filter", "")
         page = int(request.args.get("page", 1))
         page_size = int(request.args.get("pageSize", 20))
-        
+
         # 构建查询条件
         where_conditions = ["bdinfo_task_id IS NOT NULL"]
         params = []
-        
+
         # 添加状态筛选
         if status_filter:
             if status_filter == "processing":
@@ -3166,23 +3095,25 @@ def get_bdinfo_records():
             elif status_filter == "completed":
                 where_conditions.append("mediainfo_status = 'completed'")
             elif status_filter == "failed":
-                where_conditions.append("(mediainfo_status = 'failed' OR bdinfo_error IS NOT NULL)")
-        
+                where_conditions.append(
+                    "(mediainfo_status = 'failed' OR bdinfo_error IS NOT NULL)"
+                )
+
         where_clause = " AND ".join(where_conditions)
-        
+
         # 获取数据库管理器
         db_manager = migrate_bp.db_manager
         conn = db_manager._get_connection()
         cursor = db_manager._get_cursor(conn)
-        
+
         # 获取总数
         count_sql = f"SELECT COUNT(*) as total FROM seed_parameters WHERE {where_clause}"
         cursor.execute(count_sql, params)
         total = cursor.fetchone()["total"]
-        
+
         # 计算偏移量
         offset = (page - 1) * page_size
-        
+
         # 获取记录
         if db_manager.db_type == "sqlite":
             records_sql = f"""
@@ -3226,48 +3157,44 @@ def get_bdinfo_records():
                 LIMIT %s OFFSET %s
             """
             params.extend([page_size, offset])
-        
+
         cursor.execute(records_sql, params)
         records = []
-        
+
         for row in cursor.fetchall():
             # 判断是否为BDInfo内容
             is_bdinfo = False
             if row["mediainfo"]:
                 from utils.mediainfo import validate_media_info_format
+
                 _, is_bdinfo, _, _, _, _ = validate_media_info_format(row["mediainfo"])
-            
-            records.append({
-                "seed_id": row["seed_id"],
-                "title": row["title"] or "未知标题",
-                "site_name": row["site_name"] or "未知站点",
-                "nickname": row["nickname"] or row["site_name"] or "未知站点",
-                "mediainfo_status": row["mediainfo_status"] or "unknown",
-                "bdinfo_task_id": row["bdinfo_task_id"],
-                "bdinfo_started_at": row["bdinfo_started_at"],
-                "bdinfo_completed_at": row["bdinfo_completed_at"],
-                "bdinfo_error": row["bdinfo_error"],
-                "mediainfo": row["mediainfo"],
-                "is_bdinfo": is_bdinfo
-            })
-        
+
+            records.append(
+                {
+                    "seed_id": row["seed_id"],
+                    "title": row["title"] or "未知标题",
+                    "site_name": row["site_name"] or "未知站点",
+                    "nickname": row["nickname"] or row["site_name"] or "未知站点",
+                    "mediainfo_status": row["mediainfo_status"] or "unknown",
+                    "bdinfo_task_id": row["bdinfo_task_id"],
+                    "bdinfo_started_at": row["bdinfo_started_at"],
+                    "bdinfo_completed_at": row["bdinfo_completed_at"],
+                    "bdinfo_error": row["bdinfo_error"],
+                    "mediainfo": row["mediainfo"],
+                    "is_bdinfo": is_bdinfo,
+                }
+            )
+
         cursor.close()
         conn.close()
-        
-        return jsonify({
-            "success": True,
-            "data": records,
-            "total": total,
-            "page": page,
-            "pageSize": page_size
-        })
-        
+
+        return jsonify(
+            {"success": True, "data": records, "total": total, "page": page, "pageSize": page_size}
+        )
+
     except Exception as e:
         logging.error(f"获取BDInfo记录失败: {e}", exc_info=True)
-        return jsonify({
-            "success": False,
-            "message": f"服务器内部错误: {str(e)}"
-        }), 500
+        return jsonify({"success": False, "message": f"服务器内部错误: {str(e)}"}), 500
 
 
 @migrate_bp.route("/migrate/bdinfo_sse/<seed_id>")
@@ -3276,16 +3203,86 @@ def bdinfo_sse(seed_id):
     try:
         # 生成唯一的连接ID
         connection_id = str(uuid.uuid4())
-        
+
         # 导入SSE响应生成器
         from utils.sse_manager import generate_sse_response
-        
+
         # 返回SSE响应流
         return generate_sse_response(connection_id, seed_id)
-        
+
     except Exception as e:
         logging.error(f"创建SSE连接失败: {e}", exc_info=True)
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
+
+
+@migrate_bp.route("/migrate/bdinfo/progress", methods=["POST"])
+def bdinfo_progress_callback():
+    """接收远程BDInfo进度回传"""
+    try:
+        data = request.json
+        task_id = data.get("task_id")
+        progress_percent = data.get("progress_percent", 0)
+        current_file = data.get("current_file", "")
+        elapsed_time = data.get("elapsed_time", "")
+        remaining_time = data.get("remaining_time", "")
+
+        if not task_id:
+            return jsonify({"success": False, "message": "缺少 task_id 参数"}), 400
+
+        from core.bdinfo.bdinfo_manager import get_bdinfo_manager
+
+        bdinfo_manager = get_bdinfo_manager()
+
+        # 使用新的回调处理方法
+        progress_data = {
+            "progress_percent": progress_percent,
+            "current_file": current_file,
+            "elapsed_time": elapsed_time,
+            "remaining_time": remaining_time,
+        }
+
+        success = bdinfo_manager.handle_remote_progress_callback(task_id, progress_data)
+
+        if not success:
+            return jsonify({"success": False, "message": f"任务不存在: {task_id}"}), 404
+
+        return jsonify({"success": True, "message": "进度更新成功"})
+
+    except Exception as e:
+        logging.error(f"处理BDInfo进度回传失败: {e}", exc_info=True)
+        return jsonify({"success": False, "message": f"服务器错误: {str(e)}"}), 500
+
+
+@migrate_bp.route("/migrate/bdinfo/complete", methods=["POST"])
+def bdinfo_complete_callback():
+    """接收远程BDInfo完成回传"""
+    try:
+        data = request.json
+        task_id = data.get("task_id")
+        success = data.get("success", False)
+        bdinfo_content = data.get("bdinfo", "")
+        error_message = data.get("error_message", "")
+
+        if not task_id:
+            return jsonify({"success": False, "message": "缺少 task_id 参数"}), 400
+
+        from core.bdinfo.bdinfo_manager import get_bdinfo_manager
+
+        bdinfo_manager = get_bdinfo_manager()
+
+        # 使用新的完成回调处理方法
+        callback_success = bdinfo_manager.handle_remote_completion_callback(
+            task_id, success, bdinfo_content, error_message
+        )
+
+        if not callback_success:
+            return jsonify({"success": False, "message": f"任务不存在: {task_id}"}), 404
+
+        return jsonify({"success": True, "message": "完成状态更新成功"})
+
+    except Exception as e:
+        logging.error(f"处理BDInfo完成回传失败: {e}", exc_info=True)
+        return jsonify({"success": False, "message": f"服务器错误: {str(e)}"}), 500
 
 
 @migrate_bp.route("/migrate/cleanup_bdinfo_process", methods=["POST"])
@@ -3293,15 +3290,15 @@ def cleanup_bdinfo_process():
     """清理 BDInfo 残留进程"""
     try:
         data = request.json
-        seed_id = data.get('seed_id')
-        
+        seed_id = data.get("seed_id")
+
         if not seed_id:
-            return jsonify({'error': '缺少 seed_id 参数'}), 400
-        
+            return jsonify({"error": "缺少 seed_id 参数"}), 400
+
         from core.bdinfo.bdinfo_manager import get_bdinfo_manager
-        
+
         bdinfo_manager = get_bdinfo_manager()
-        
+
         # 查找并清理对应的任务
         cleaned = False
         with bdinfo_manager.lock:
@@ -3310,21 +3307,15 @@ def cleanup_bdinfo_process():
                     bdinfo_manager._cleanup_process(task)
                     cleaned = True
                     break
-        
+
         if cleaned:
-            return jsonify({
-                'success': True,
-                'message': '已清理残留进程'
-            })
+            return jsonify({"success": True, "message": "已清理残留进程"})
         else:
-            return jsonify({
-                'success': True,
-                'message': '未找到需要清理的进程'
-            })
-        
+            return jsonify({"success": True, "message": "未找到需要清理的进程"})
+
     except Exception as e:
         logging.error(f"清理 BDInfo 进程失败: {e}", exc_info=True)
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
 
 @migrate_bp.route("/migrate/restart_bdinfo", methods=["POST"])
@@ -3332,80 +3323,123 @@ def restart_bdinfo():
     """重启卡死的 BDInfo 任务"""
     try:
         data = request.json
-        seed_id = data.get('seed_id')
-        
+        seed_id = data.get("seed_id")
+
         if not seed_id:
-            return jsonify({'error': '缺少 seed_id 参数'}), 400
-        
+            return jsonify({"error": "缺少 seed_id 参数"}), 400
+
         from core.bdinfo.bdinfo_manager import get_bdinfo_manager
-        
+
         bdinfo_manager = get_bdinfo_manager()
-        
+
         # 获取种子数据
         conn = migrate_bp.db_manager._get_connection()
         cursor = migrate_bp.db_manager._get_cursor(conn)
-        
-        # 解析复合 seed_id，但只使用hash作为主键
+
+        # 解析复合 seed_id，使用完整复合主键查询以确保准确性
         if "_" in seed_id:
             parts = seed_id.split("_")
             if len(parts) >= 3:
                 # 最后一个部分是 site_name，中间是 torrent_id，前面是 hash
+                site_name = parts[-1]
+                torrent_id = parts[-2]
                 hash_val = "_".join(parts[:-2])
-                
-                # 仅使用hash作为主键查询
+
+                # 使用完整复合主键查询，同时获取下载器ID和完整路径信息
                 if migrate_bp.db_manager.db_type == "sqlite":
                     cursor.execute(
-                        "SELECT save_path FROM seed_parameters WHERE hash = ?",
-                        (hash_val,)
+                        "SELECT save_path, downloader_id, name FROM seed_parameters WHERE hash = ? AND torrent_id = ? AND site_name = ?",
+                        (hash_val, torrent_id, site_name),
                     )
                 else:
                     cursor.execute(
-                        "SELECT save_path FROM seed_parameters WHERE hash = %s",
-                        (hash_val,)
+                        "SELECT save_path, downloader_id, name FROM seed_parameters WHERE hash = %s AND torrent_id = %s AND site_name = %s",
+                        (hash_val, torrent_id, site_name),
                     )
             else:
-                # 如果格式不对，尝试使用 CONCAT 查询，但只提取hash部分
+                # 如果格式不对，尝试使用 CONCAT 查询
                 if migrate_bp.db_manager.db_type == "sqlite":
                     cursor.execute(
-                        "SELECT hash, save_path FROM seed_parameters WHERE hash || '_' || torrent_id || '_' || site_name = ?",
-                        (seed_id,)
+                        "SELECT save_path, downloader_id, name FROM seed_parameters WHERE hash || '_' || torrent_id || '_' || site_name = ?",
+                        (seed_id,),
                     )
                 else:
                     cursor.execute(
-                        "SELECT hash, save_path FROM seed_parameters WHERE CONCAT(hash, '_', torrent_id, '_', site_name) = %s",
-                        (seed_id,)
+                        "SELECT save_path, downloader_id, name FROM seed_parameters WHERE CONCAT(hash, '_', torrent_id, '_', site_name) = %s",
+                        (seed_id,),
                     )
         else:
-            return jsonify({'error': '无效的 seed_id 格式'}), 400
-        
+            return jsonify({"error": "无效的 seed_id 格式"}), 400
+
         result = cursor.fetchone()
         cursor.close()
         conn.close()
-        
+
         if not result:
-            return jsonify({'error': '种子数据不存在'}), 404
-        
-        save_path = result[0]
-        
+            return jsonify({"error": "种子数据不存在"}), 404
+
+        # 处理不同数据库返回的结果格式
+        print(f"[DEBUG] 数据库查询结果: {result}")
+        if isinstance(result, dict):
+            save_path = result.get("save_path")
+            downloader_id = result.get("downloader_id")
+            torrent_name = result.get("name")
+        else:
+            save_path = result[0] if len(result) > 0 else None
+            downloader_id = result[1] if len(result) > 1 else None
+            torrent_name = result[2] if len(result) > 2 else None
+
+        if not save_path:
+            print(f"[DEBUG] save_path为空，返回错误")
+            return jsonify({"error": "无法获取保存路径"}), 404
+
         # 1. 清理可能的残留进程
         bdinfo_manager.cleanup_orphaned_process(seed_id)
-        
+
         # 2. 重置数据库状态
         bdinfo_manager.reset_task_status(seed_id)
-        
-        # 3. 重新添加任务
+
+        # 3. 构建完整的保存路径（如果有torrent_name）
+        actual_save_path = save_path
+        if torrent_name and save_path:
+            # 检查save_path是否已经包含了torrent_name
+            if not save_path.endswith(torrent_name):
+                actual_save_path = os.path.join(save_path, torrent_name)
+                logging.info(
+                    f"重启BDInfo任务构建完整路径: {save_path} + {torrent_name} -> {actual_save_path}"
+                )
+
+        # 4. 应用路径映射（如果有下载器ID）
+        if downloader_id:
+            try:
+                from utils.mediainfo import translate_path
+
+                mapped_path = translate_path(downloader_id, actual_save_path)
+                print(f"[DEBUG] 路径映射结果: {mapped_path}")
+                if mapped_path != actual_save_path:
+                    print(f"[DEBUG] 路径已映射: {actual_save_path} -> {mapped_path}")
+                    logging.info(
+                        f"重启BDInfo任务应用路径映射: {actual_save_path} -> {mapped_path}"
+                    )
+                    actual_save_path = mapped_path
+            except Exception as e:
+                print(f"[DEBUG] 路径映射异常: {e}")
+                logging.warning(f"路径映射失败，使用原始路径: {e}")
+        else:
+            print(f"[DEBUG] 无downloader_id，跳过路径映射")
+
+        # 5. 重新添加任务
+        print(f"[DEBUG] 开始添加BDInfo任务...")
         task_id = bdinfo_manager.add_task(
             seed_id=seed_id,
-            save_path=save_path,
-            priority=1  # 高优先级
+            save_path=actual_save_path,
+            priority=1,
+            downloader_id=downloader_id,  # 高优先级，传递下载器ID（可能为None）
         )
-        
-        return jsonify({
-            'success': True,
-            'task_id': task_id,
-            'message': 'BDInfo 任务已重启'
-        })
-        
+        print(f"[DEBUG] BDInfo任务已添加，task_id: {task_id}")
+
+        return jsonify({"success": True, "task_id": task_id, "message": "BDInfo 任务已重启"})
+
     except Exception as e:
         logging.error(f"重启 BDInfo 任务失败: {e}", exc_info=True)
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500

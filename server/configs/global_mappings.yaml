@@ -734,7 +734,6 @@ global_standard_keys:
     "JKCT": "team.jkct"
     "Destiny": "team.destiny"
 
-
   # 标签映射
   tag:
     # 禁转相关标签
@@ -875,7 +874,7 @@ default_title_components:
 # 官组致谢声明配置
 team_acknowledgment:
   enabled: true
-  template: "[quote][b][color=blue]{team_name}官组作品，感谢原制作者发布。[/color][/b][/quote]"
+  template: "[quote][b][color=blue][size=5]{team_name}官组作品，感谢原制作者发布。[/size][/color][/b][/quote]"
 
   # 排除列表
   exclude_teams:
