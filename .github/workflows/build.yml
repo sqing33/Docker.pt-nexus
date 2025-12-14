@@ -6,7 +6,7 @@ on:
       tags:
         description: "Tags to push (comma-separated, e.g., latest,v1.0.0)"
         required: true
-        default: "latest,v3.2.0"
+        default: "latest,v3.3.0"
 
 env:
   IMAGE_NAME: pt-nexus
@@ -102,7 +102,8 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          platforms: linux/amd64,linux/arm64
+          # platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           tags: ${{ steps.prepare-tags.outputs.tags }}
           cache-from: type=gha,scope=multi-arch

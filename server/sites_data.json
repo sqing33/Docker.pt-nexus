@@ -41,13 +41,13 @@
   },
   {
     "site": "tjupt",
-    "nickname": "北洋",
+    "nickname": "北洋园",
     "base_url": "tjupt.org",
     "special_tracker_domain": null,
     "group": "-TJTPU",
     "description": "TJTPU",
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 90
   },
   {
     "site": "pterclub",
@@ -927,6 +927,7 @@
     "base_url": "pt.luckpt.de",
     "special_tracker_domain": null,
     "group": "-LuckDIY,-LuckAni",
+    "description": "LuckPT",
     "migration": 3,
     "speed_limit": 10
   },

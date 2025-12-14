@@ -79,7 +79,7 @@ fi
 if echo "$STAGED_FILES" | grep -q "^proxy/"; then
     BUILDS_TRIGGERED=true
     echo -e "${YELLOW}📦 检测到 'proxy' 目录有变更，开始构建...${NC}"
-    (cd proxy && go build -o pt-nexus-box-proxy proxy.go) || handle_error "Go proxy 构建失败"
+    (cd proxy && go build -o pt-nexus-box-proxy proxy.go bdinfo.go) || handle_error "Go proxy 构建失败"
     echo -e "${GREEN}✓ Go proxy 构建成功。正在暂存产物...${NC}"
     git add proxy/pt-nexus-box-proxy
 else

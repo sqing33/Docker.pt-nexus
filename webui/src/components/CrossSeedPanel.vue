@@ -803,13 +803,14 @@
         <!-- 进度条显示 -->
         <div
           class="progress-section"
-          v-if="publishProgress.total > 0 || downloaderProgress.total > 0"
+          v-if="activeStep === 3"
         >
           <div class="progress-item" v-if="publishProgress.total > 0">
             <div class="progress-label">发布进度:</div>
             <el-progress
               :percentage="Math.round((publishProgress.current / publishProgress.total) * 100)"
               :show-text="true"
+              :stroke-width="8"
             />
             <div class="progress-text">
               {{ publishProgress.current }} / {{ publishProgress.total }}
@@ -822,6 +823,7 @@
                 Math.round((downloaderProgress.current / downloaderProgress.total) * 100)
               "
               :show-text="true"
+              :stroke-width="8"
             />
             <div class="progress-text">
               {{ downloaderProgress.current }} / {{ downloaderProgress.total }}
@@ -1084,7 +1086,7 @@
 <script setup lang="ts">
 // ... 你的 <script setup> 部分完全保持不变 ...
 import { ref, onMounted, onUnmounted, computed, nextTick, watch } from 'vue'
-import { ElNotification, ElMessageBox } from 'element-plus'
+import { ElNotification, ElMessageBox, ElProgress } from 'element-plus'
 import { ElTooltip } from 'element-plus'
 import axios from 'axios'
 import {
@@ -1788,34 +1790,34 @@ const refreshMediainfo = async () => {
 
 // 检查 BDInfo 状态并自动启动进度显示
 const checkAndStartBDInfoProgress = async (seedId: string, isFromFetch: boolean = false) => {
-  const maxRetries = isFromFetch ? 5 : 3  // 从抓取流程调用时增加重试次数
-  const retryDelay = isFromFetch ? 2000 : 1000  // 从抓取流程调用时增加延迟
-  
+  const maxRetries = isFromFetch ? 5 : 3 // 从抓取流程调用时增加重试次数
+  const retryDelay = isFromFetch ? 2000 : 1000 // 从抓取流程调用时增加延迟
+
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       const response = await axios.get(`/api/migrate/bdinfo_status/${seedId}`)
-      
+
       // 添加调试信息
       console.log(`BDInfo 状态 API 响应 (尝试 ${attempt}/${maxRetries}):`, response.data)
-      
+
       // 修复：直接检查响应数据，不依赖 success 字段
       const data = response.data
       if (data && !data.error) {
         // 修复：从正确的字段获取状态
         const status = data.mediainfo_status || data.task_status?.status
-        
+
         if (status === 'processing_bdinfo' || status === 'queued') {
           // 启动 BDInfo 进度显示
           console.log(`检测到 BDInfo 任务正在进行中: ${status}`)
           console.log('任务 ID:', data.bdinfo_task_id)
           console.log('进度信息:', data.progress_info)
-          
+
           startBDInfoSSE()
           bdinfoStatus.value = status
-          return  // 成功检测到任务，退出重试循环
+          return // 成功检测到任务，退出重试循环
         } else if (status === 'completed' || status === 'failed') {
           console.log(`BDInfo 任务已结束: ${status}，无需启动进度显示`)
-          return  // 任务已结束，退出重试循环
+          return // 任务已结束，退出重试循环
         } else {
           console.log(`BDInfo 任务状态: ${status}，尝试 ${attempt}/${maxRetries}`)
         }
@@ -1842,14 +1844,14 @@ const checkAndStartBDInfoProgress = async (seedId: string, isFromFetch: boolean 
         console.warn('检查 BDInfo 状态失败:', error.message)
       }
     }
-    
+
     // 如果不是最后一次尝试，等待后重试
     if (attempt < maxRetries) {
       console.log(`等待 ${retryDelay}ms 后重试检查 BDInfo 状态...`)
-      await new Promise(resolve => setTimeout(resolve, retryDelay))
+      await new Promise((resolve) => setTimeout(resolve, retryDelay))
     }
   }
-  
+
   // 所有重试都失败了
   console.warn(`经过 ${maxRetries} 次尝试，未能检测到 BDInfo 任务`)
 }
@@ -1857,7 +1859,7 @@ const checkAndStartBDInfoProgress = async (seedId: string, isFromFetch: boolean 
 // BDInfo SSE相关函数
 const startBDInfoSSE = () => {
   console.log('启动 BDInfo SSE 连接...')
-  
+
   // 验证 seed_id
   if (!torrentData.value?.seed_id) {
     console.error('seed_id 未设置，无法建立 SSE 连接')
@@ -1867,9 +1869,9 @@ const startBDInfoSSE = () => {
     })
     return
   }
-  
+
   console.log(`使用 seed_id 建立 SSE 连接: ${torrentData.value.seed_id}`)
-  
+
   // 关闭之前的连接
   stopBDInfoSSE(false)
 
@@ -1886,7 +1888,7 @@ const startBDInfoSSE = () => {
   const url = `/api/migrate/bdinfo_sse/${torrentData.value.seed_id}`
   console.log(`SSE 连接 URL: ${url}`)
   bdinfoEventSource.value = new EventSource(url)
-  
+
   // 添加连接超时处理
   let connectionTimeout: NodeJS.Timeout | null = setTimeout(() => {
     if (bdinfoEventSource.value?.readyState === EventSource.CONNECTING) {
@@ -1981,17 +1983,17 @@ const startBDInfoSSE = () => {
       clearTimeout(connectionTimeout)
       connectionTimeout = null
     }
-    
+
     // 检查连接状态
     const readyState = bdinfoEventSource.value?.readyState
     console.log(`SSE 连接状态: ${readyState} (0=CONNECTING, 1=OPEN, 2=CLOSED)`)
-    
+
     // 如果是连接中或已关闭，尝试重连
     if (readyState === EventSource.CONNECTING || readyState === EventSource.CLOSED) {
       if (bdinfoProgress.value.visible) {
         console.log('尝试重新建立 SSE 连接...')
         bdinfoProgress.value.currentFile = '连接中断，正在重连...'
-        
+
         // 延迟2秒后重连
         setTimeout(() => {
           if (bdinfoProgress.value.visible) {
@@ -2033,15 +2035,15 @@ const requestCurrentProgress = async () => {
     console.warn('seed_id 未设置，无法请求当前进度')
     return
   }
-  
+
   try {
     console.log('请求当前 BDInfo 进度状态...')
     const response = await axios.get(`/api/migrate/bdinfo_status/${torrentData.value.seed_id}`)
-    
+
     if (response.data && response.data.task_status) {
       const taskStatus = response.data.task_status
       console.log('获取到当前进度状态:', taskStatus)
-      
+
       // 如果任务正在进行中，更新进度显示
       if (taskStatus.status === 'processing_bdinfo') {
         bdinfoProgress.value = {
@@ -2300,16 +2302,7 @@ const getEnglishSiteName = async (chineseSiteName: string): Promise<string> => {
     console.warn('获取站点状态失败:', error)
   }
 
-  // 最后后备方案：使用常见的站点映射
-  const commonSiteMapping: Record<string, string> = {
-    人人: 'audiences',
-    不可说: 'ssd',
-    憨憨: 'hhanclub',
-    财神: 'cspt',
-    // 可以添加更多常见映射
-  }
-
-  return commonSiteMapping[chineseSiteName] || chineseSiteName.toLowerCase()
+  return chineseSiteName.toLowerCase()
 }
 
 // 提取出来的处理数据库数据的辅助函数 (避免代码重复)
@@ -3145,6 +3138,7 @@ const goToPublishPreviewStep = async () => {
 
     // 调用新的更新接口，此时会将 is_reviewed 设置为 true
     const response = await axios.post('/api/migrate/update_db_seed_info', {
+      torrent_name: torrent.value.name,
       torrent_id: torrentId,
       site_name: siteName,
       updated_parameters: updatedParameters,
@@ -3320,9 +3314,10 @@ const handlePublish = async () => {
   isLoading.value = true
   finalResultsList.value = []
 
-  // Initialize progress tracking
-  publishProgress.value = { current: 0, total: selectedTargetSites.value.length }
-  downloaderProgress.value = { current: 0, total: 0 }
+  // Initialize progress tracking - 确保进度条立即显示
+  const siteCount = selectedTargetSites.value.length
+  publishProgress.value = { current: 0, total: siteCount }
+  downloaderProgress.value = { current: 0, total: siteCount }
 
   ElNotification({
     title: '正在发布',
@@ -5020,31 +5015,65 @@ const filterUploadedParam = (url: string): string => {
 /* --- 进度条样式 --- */
 .progress-section {
   display: flex;
-  flex-direction: column;
   gap: 20px;
   margin-bottom: 30px;
   padding: 20px;
   background-color: #f5f7fa;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e4e7ed;
 }
 
 .progress-item {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-height: 60px;
+  flex: 1;
 }
 
 .progress-label {
   font-weight: 600;
   color: #303133;
   font-size: 14px;
+  margin-bottom: 4px;
 }
 
 .progress-text {
   font-size: 12px;
   color: #606266;
   text-align: right;
+  margin-top: 4px;
+}
+
+/* 确保进度条组件正确显示 */
+.progress-item :deep(.el-progress) {
+  width: 100%;
+  margin: 8px 0;
+}
+
+.progress-item :deep(.el-progress-bar__outer) {
+  background-color: #e4e7ed;
+  border-radius: 4px;
+}
+
+.progress-item :deep(.el-progress-bar__inner) {
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.progress-item :deep(.el-progress__text) {
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+}
+
+/* 响应式布局：小屏幕上垂直排列 */
+@media (max-width: 768px) {
+  .progress-section {
+    flex-direction: column;
+    gap: 16px;
+  }
 }
 
 /* --- 日志弹窗 --- */

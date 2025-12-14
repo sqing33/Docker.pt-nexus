@@ -20,6 +20,13 @@ class SSEManager:
         self.connections: Dict[str, Queue] = {}
         # 存储每个seed_id对应的连接ID集合
         self.seed_connections: Dict[str, Set[str]] = {}
+        # 存储每个seed_id的最后更新时间（用于频率控制）
+        self.last_update_time: Dict[str, float] = {}
+        # 存储每个seed_id的执行模式（local/remote）
+        self.seed_execution_mode: Dict[str, str] = {}
+        # 推送频率配置（秒）
+        self.local_update_interval = 1.0  # 本地任务1秒推送一次
+        self.remote_update_interval = 5.0  # 远程任务5秒推送一次
         self.lock = threading.RLock()
         
     def add_connection(self, connection_id: str, seed_id: str) -> Queue:
@@ -92,13 +99,20 @@ class SSEManager:
                 logging.info(f"SSE连接已移除: {connection_id}")
                 
     def send_progress_update(self, seed_id: str, progress_data: Dict[str, Any]):
-        """向特定seed的所有连接发送进度更新"""
+        """向特定seed的所有连接发送进度更新（支持差异化频率控制）"""
         with self.lock:
             if seed_id in self.seed_connections:
+                # 检查是否需要发送更新（频率控制）
+                if not self._should_send_update(seed_id):
+                    return
+                
                 message = {
                     "type": "progress_update",
                     "data": progress_data
                 }
+                
+                # 更新最后发送时间
+                self.last_update_time[seed_id] = time.time()
                 
                 # 向所有相关连接发送消息
                 for connection_id in self.seed_connections[seed_id].copy():
@@ -109,6 +123,34 @@ class SSEManager:
                     except Exception as e:
                         logging.error(f"发送SSE消息失败: {e}")
                         self.remove_connection(connection_id)
+
+    def _should_send_update(self, seed_id: str) -> bool:
+        """判断是否应该发送更新（基于执行模式和频率配置）"""
+        current_time = time.time()
+        
+        # 获取执行模式
+        execution_mode = self.seed_execution_mode.get(seed_id, "local")
+        
+        # 根据执行模式选择更新间隔
+        if execution_mode == "remote":
+            interval = self.remote_update_interval
+        else:
+            interval = self.local_update_interval
+        
+        # 检查是否到了发送时间
+        last_time = self.last_update_time.get(seed_id, 0)
+        return current_time - last_time >= interval
+
+    def set_execution_mode(self, seed_id: str, execution_mode: str):
+        """设置seed的执行模式"""
+        with self.lock:
+            self.seed_execution_mode[seed_id] = execution_mode
+            logging.info(f"设置seed {seed_id} 的执行模式为: {execution_mode}")
+
+    def get_execution_mode(self, seed_id: str) -> str:
+        """获取seed的执行模式"""
+        with self.lock:
+            return self.seed_execution_mode.get(seed_id, "local")
                         
     def send_completion(self, seed_id: str, result: str):
         """发送完成通知"""

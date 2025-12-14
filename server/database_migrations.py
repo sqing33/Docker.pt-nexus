@@ -147,13 +147,13 @@ class DatabaseMigrationManager:
                             'downloader_id': 'VARCHAR(36)',
                             'is_deleted': 'TINYINT(1) NOT NULL DEFAULT 0',
                             'is_reviewed': 'TINYINT(1) NOT NULL DEFAULT 0',
-                            'mediainfo_status': 'VARCHAR(20) DEFAULT "pending"',
+                            'mediainfo_status': 'VARCHAR(20) DEFAULT \'pending\'',
                             'bdinfo_task_id': 'VARCHAR(36)',
                             'bdinfo_started_at': 'DATETIME',
                             'bdinfo_completed_at': 'DATETIME',
                             'bdinfo_error': 'TEXT',
-                            'created_at': 'DATETIME NOT NULL',
-                            'updated_at': 'DATETIME NOT NULL'
+                            'created_at': 'DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP',
+                            'updated_at': 'DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'
                         },
                         'primary_key': ['hash', 'torrent_id', 'site_name'],
                         'engine': 'InnoDB',
@@ -288,13 +288,13 @@ class DatabaseMigrationManager:
                             'downloader_id': 'VARCHAR(36)',
                             'is_deleted': 'BOOLEAN NOT NULL DEFAULT FALSE',
                             'is_reviewed': 'BOOLEAN NOT NULL DEFAULT FALSE',
-                            'mediainfo_status': 'VARCHAR(20) DEFAULT "pending"',
+                            'mediainfo_status': 'VARCHAR(20) DEFAULT \'pending\'',
                             'bdinfo_task_id': 'VARCHAR(36)',
                             'bdinfo_started_at': 'TIMESTAMP',
                             'bdinfo_completed_at': 'TIMESTAMP',
                             'bdinfo_error': 'TEXT',
-                            'created_at': 'TIMESTAMP NOT NULL',
-                            'updated_at': 'TIMESTAMP NOT NULL'
+                            'created_at': 'TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP',
+                            'updated_at': 'TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP'
                         },
                         'primary_key': ['hash', 'torrent_id', 'site_name']
                     },
