@@ -921,8 +921,8 @@ class ParameterMapper:
 
             # 媒介特殊预处理：确保 BluRay Remux 能正确映射
             if param_key == "medium":
-                # 将所有 BluRay Remux 或 Blu-ray Remux 映射为 BD Remux
-                if re.match(r'^Blu-?ray\s*Remux$', value_str, re.IGNORECASE):
+                # 将所有 UHD BluRay Remux, BluRay Remux, Blu-ray Remux 映射为 BD Remux
+                if re.match(r'^(UHD\s+)?Blu-?ray\s*Remux$', value_str, re.IGNORECASE):
                     value_str = "BD Remux"
                     print(
                         f"[调试-标题解析参数] 媒介预处理: '{original_value_str}' -> '{value_str}'"

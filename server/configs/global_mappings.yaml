@@ -210,8 +210,8 @@ global_standard_keys:
     "BD Discs": "medium.bluray"
     "BD原盘": "medium.bluray"
     "BD DIY": "medium.bluray"
-    "BD Remux": "medium.remux"
     "Remux": "medium.remux"
+    "BD Remux": "medium.remux"
     "Remux TV": "medium.remux"
 
     # UHD/4K蓝光相关
@@ -796,8 +796,8 @@ global_standard_keys:
     "HDR": "tag.HDR"
     "HDR10": "tag.hdr10"
     "HDR10+": "tag.hdr10plus"
-    "Dolby Vision": "tag.Dolby_Vision"
     "DoVi+HDR": "tag.Dolby_Vision"
+    "Dolby Vision": "tag.Dolby_Vision"
     "菁彩HDR": "tag.菁彩HDR"
     "HLG": "tag.HLG"
     "杜比": "tag.杜比"
