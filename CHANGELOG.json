@@ -1,6 +1,13 @@
 {
   "history": [
     {
+      "version": "v3.3.1",
+      "date": "2025.12.16",
+      "changes": [
+        "修复：UHD BluRay Remux无法识别为Remux、TrueHD 7.1 Atmos无法识别为TrueHD Atmos的问题"
+      ]
+    },
+    {
       "version": "v3.3.0",
       "date": "2025.12.15",
       "note": "注:若报错“ModuleNotFoundError: No module named 'PIL'”则需要重新下载镜像进行更新，如仍然报错则删除 data 目录下的 updates 文件夹。\n13City限速12.5MB/s，代码不会修改非0的限速，需要手动修改。\n盒子获取 bdinfo 需要重新执行 curl -sL https://github.com/sqing33/Docker.pt-nexus/releases/download/latest/install-pt-nexus-box-proxy.sh | sudo bash 以更新盒子端脚本。",

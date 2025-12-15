@@ -214,6 +214,8 @@ def upload_data_title(title: str, torrent_filename: str = "", mediaInfo: str = "
     """
     从种子主标题中提取所有参数，并可选地从种子文件名中补充缺失参数。
     【新增】根据 MediaInfo/BDInfo 格式修正标题中的 Blu-ray/BluRay 格式
+    【新增】强制将音频参数中的声道数（如 7.1, 5.1）移动到音频名称的最末尾
+    【修正】修复 DTS 7.1 Atmos 等乱序格式的抓取问题
     """
     from .mediainfo import validate_media_info_format
 
@@ -337,20 +339,49 @@ def upload_data_title(title: str, torrent_filename: str = "", mediaInfo: str = "
         print(f"检测到剪辑版本: {cut_version}，已拼接到年份")
 
     # 4. 预处理标题：修复音频参数格式
+    # 增加更多音频格式到预处理列表
+    # 【修改】扩展关键词列表，确保 DTS-HD MA 5 1 这种中间有单词的格式也能被识别
+    # 注意：必须把长的词（如 DTS-HD MA）放在短的词（如 DTS）前面
+    audio_keywords_str = (
+        r"DTS-?HD\s*MA|DTS-?HD\s*HR|DTS-?HD|DTS-?X|DTS\s*X|"  # DTS 复合格式
+        r"E-?AC-?3|DD\+|"  # 杜比 复合格式
+        r"DTS|FLAC|DDP|AV3A|AAC|LPCM|AC3|DD|TrueHD|Opus|OGG|WAV|APE|ALAC|DSD|MP3"  # 基础格式
+    )
+
+    # 修复 "DTS-HD MA 5 1" -> "DTS-HD MA 5.1"
     title_part = re.sub(
-        r"((?:DTS|FLAC|DDP|AV3A|AAC|LPCM|AC3|DD))\s*(\d)\s*(\d)",
+        rf"((?:{audio_keywords_str}))\s*(\d)\s*(\d)",
         r"\1 \2.\3",
         title_part,
         flags=re.I,
     )
+    # 修复 "DTS-HD MA 5.1" -> "DTS-HD MA 5.1" (去除中间多余空格如果存在)
     title_part = re.sub(
-        r"((?:DTS|FLAC|DDP|AV3A|AAC|LPCM|AC3|DD))(\d(?:\.\d)?)", r"\1 \2", title_part, flags=re.I
+        rf"((?:{audio_keywords_str}))(\d(?:\.\d)?)", r"\1 \2", title_part, flags=re.I
     )
 
     # 技术标签提取（排除已识别的制作组名称）
     tech_patterns_definitions = {
         "medium": r"UHDTV|UHD\s*Blu-?ray|Blu-?ray\s+DIY|Blu-ray|BluRay\s+DIY|BluRay|BDrip|BD-?rip|WEB-DL|WEBrip|TVrip|DVDRip|HDTV|\bUHD\b",
-        "audio": r"DTS-?HD\s*MA(?:\s*\d\.\d)?(?:\s*X)?|DTS-?HD\s*HR(?:\s*\d\.\d)?|DTS-?HD(?:\s*\d\.\d)?|DTS-?X(?:\s*\d\.\d)?|DTS\s*X(?:\s*\d\.\d)?|DTS(?:\s*\d\.\d)?|(?:Dolby\s*)?TrueHD(?:\s*Atmos)?(?:\s*\d\.\d)?|Atmos(?:\s*TrueHD)?(?:\s*\d\.\d)?|DDP\s*Atmos(?:\s*\d\.\d)?|DDP(?:\s*\d\.\d)?|E-?AC-?3(?:\s*\d\.\d)?|DD\+(?:\s*\d\.\d)?|DD(?:\s*\d\.\d)?|AC3(?:\s*\d\.\d)?|FLAC(?:\s*\d\.\d)?|AAC(?:\s*\d\.\d)?|LPCM(?:\s*/\s*PCM)?(?:\s*\d\.\d)?|PCM(?:\s*\d\.\d)?|AV3A\s*\d\.\d|\d+\s*Audios?|MP2|DUAL",
+        # 【修改】核心修复：将所有编码和后缀(Atmos/X)合并处理，支持任意顺序
+        "audio": (
+            # 第一部分：匹配音频编码前缀（最长的放前面）
+            r"(?:DTS-?HD\s*MA|DTS-?HD\s*HR|DTS-?HD|DTS-?X|DTS\s*X|DTS|"
+            r"(?:Dolby\s*)?TrueHD|DDP|DD\+|DD|E-?AC-?3|AC3|"
+            r"FLAC|Opus|AAC|OGG|WAV|APE|ALAC|DSD|MP3|LPCM|PCM)"
+            # 第二部分：匹配后续内容，允许 (Atmos/X + 声道) 或 (声道 + Atmos/X)
+            # 这里的 ?: 表示不单独捕获组，确保整体作为一个字符串被提取
+            r"(?:"
+            r"(?:\s*(?:Atmos|X))(?:\s*\d\.\d)?|"  # 模式A: Atmos 7.1
+            r"(?:\s*\d\.\d)(?:\s*(?:Atmos|X))?"  # 模式B: 7.1 Atmos (这就是你需要修复的格式)
+            r")?|"
+            # 第三部分：兜底匹配（单独的 Atmos 开头或其他）
+            r"Atmos(?:\s*TrueHD)?(?:\s*\d\.\d)?|"
+            r"AV3A\s*\d\.\d|"
+            r"\d+\s*Audios?|"
+            r"MP2|"
+            r"DUAL"
+        ),
         "hdr_format": r"Dolby Vision|DoVi|HDR10\+|HDRVivid|HDR10|HLG|HDR|SDR|DV|Vivid",
         "resolution": r"\d{3,4}[pi]|4K",
         "video_codec": r"HEVC|AVC|x265|H\s*[\s\.]?\s*265|x264|H\s*[\s\.]?\s*264|VC-1|AV1|MPEG-2",
@@ -424,10 +455,16 @@ def upload_data_title(title: str, torrent_filename: str = "", mediaInfo: str = "
 
         # 1. 音频特殊处理
         if key == "audio":
+            # 先进行基础的格式修正
             processed_values = [re.sub(r"(DD)\+", r"\1+", val, flags=re.I) for val in raw_values]
+
+            # 预处理：修复 DDP 5 1 -> DDP 5.1 这种空格分隔的情况
+            audio_keywords = (
+                r"DTS|FLAC|DDP|AV3A|AAC|LPCM|AC3|DD|TrueHD|Opus|OGG|WAV|APE|ALAC|DSD|MP3"
+            )
             processed_values = [
                 re.sub(
-                    r"((?:DTS|FLAC|DDP|AV3A|AAC|LPCM|AC3|DD))\s*(\d)\s*(\d)",
+                    rf"((?:{audio_keywords}))\s*(\d)\s*(\d)",
                     r"\1 \2.\3",
                     val,
                     flags=re.I,
@@ -436,24 +473,50 @@ def upload_data_title(title: str, torrent_filename: str = "", mediaInfo: str = "
             ]
             processed_values = [
                 re.sub(
-                    r"((?:DTS|FLAC|DDP|AV3A|AAC|LPCM|AC3|DD))(\d(?:\.\d)?)",
+                    rf"((?:{audio_keywords}))(\d(?:\.\d)?)",
                     r"\1 \2",
                     val,
                     flags=re.I,
                 )
                 for val in processed_values
             ]
+
+            # 具体的文本标准化规则
             audio_standardization_rules = [
                 (r"DTS-?HD\s*MA", r"DTS-HD MA"),
                 (r"DTS-?HD\s*HR", r"DTS-HD HR"),
-                (r"True-?HD\s*Atmos", r"TrueHD Atmos"),
-                (r"True[-\s]?HD", r"TrueHD"),
+                (r"True-?HD", r"TrueHD"),  # 先统一 TrueHD 写法
                 (r"DDP\s*Atmos", r"DDP Atmos"),
+                (r"DTS-?X", r"DTS:X"),
+                (r"DTS\s*X", r"DTS:X"),
+                (r"E[-\s]?AC[-\s]?3", r"E-AC-3"),
+                (r"DD\+", r"DD+"),
+                (r"LPCM\s*/\s*PCM", r"LPCM"),
             ]
             for pattern_rgx, replacement in audio_standardization_rules:
                 processed_values = [
                     re.sub(pattern_rgx, replacement, val, flags=re.I) for val in processed_values
                 ]
+
+            # 【新增核心逻辑】强制将声道数移动到最后
+            # 此时因为正则的改进，val 应该是 "DTS 7.1 Atmos" 这样完整的字符串
+            final_audio_values = []
+            for val in processed_values:
+                # 查找类似 2.0, 5.1, 7.1 的模式
+                channel_match = re.search(r"\b(\d{1,2}\.\d)\b", val)
+                if channel_match:
+                    channels = channel_match.group(1)
+                    # 1. 从原字符串中移除声道数 (DTS 7.1 Atmos -> DTS  Atmos)
+                    temp_val = val.replace(channels, " ")
+                    # 2. 清理多余的空格 (DTS  Atmos -> DTS Atmos)
+                    temp_val = re.sub(r"\s+", " ", temp_val).strip()
+                    # 3. 将声道数拼接到最后 (DTS Atmos -> DTS Atmos 7.1)
+                    new_val = f"{temp_val} {channels}"
+                    final_audio_values.append(new_val)
+                else:
+                    # 如果没找到声道数，保持原样
+                    final_audio_values.append(val)
+            processed_values = final_audio_values
 
         # 2. 视频编码特殊处理（补充缺失的点）
         elif key == "video_codec":
@@ -552,12 +615,17 @@ def upload_data_title(title: str, torrent_filename: str = "", mediaInfo: str = "
                 processed_values = raw_values
 
                 if key == "audio":
+                    # 同样的预处理逻辑
                     processed_values = [
                         re.sub(r"(DD)\\+", r"\1+", val, flags=re.I) for val in raw_values
                     ]
+
+                    audio_keywords = (
+                        r"DTS|FLAC|DDP|AV3A|AAC|LPCM|AC3|DD|TrueHD|Opus|OGG|WAV|APE|ALAC|DSD|MP3"
+                    )
                     processed_values = [
                         re.sub(
-                            r"((?:DTS|FLAC|DDP|AV3A|AAC|LPCM|AC3|DD))\s*(\d)\s*(\d)",
+                            rf"((?:{audio_keywords}))\s*(\d)\s*(\d)",
                             r"\1 \2.\3",
                             val,
                             flags=re.I,
@@ -566,31 +634,45 @@ def upload_data_title(title: str, torrent_filename: str = "", mediaInfo: str = "
                     ]
                     processed_values = [
                         re.sub(
-                            r"((?:DTS|FLAC|DDP|AV3A|AAC|LPCM|AC3|DD))(\d(?:\.\d)?)",
+                            rf"((?:{audio_keywords}))(\d(?:\.\d)?)",
                             r"\1 \2",
                             val,
                             flags=re.I,
                         )
                         for val in processed_values
                     ]
+
+                    # 同样的标准化规则
                     audio_standardization_rules = [
                         (r"DTS-?HD\s*MA", r"DTS-HD MA"),
                         (r"DTS-?HD\s*HR", r"DTS-HD HR"),
+                        (r"True-?HD", r"TrueHD"),
+                        (r"DDP\s*Atmos", r"DDP Atmos"),
                         (r"DTS-?X", r"DTS:X"),
                         (r"DTS\s*X", r"DTS:X"),
-                        (r"True-?HD\s*Atmos", r"TrueHD Atmos"),
-                        (r"True[-\s]?HD", r"TrueHD"),
-                        (r"DDP\s*Atmos", r"DDP Atmos"),
                         (r"E[-\s]?AC[-\s]?3", r"E-AC-3"),
                         (r"DD\+", r"DD+"),
                         (r"LPCM\s*/\s*PCM", r"LPCM"),
-                        (r"PCM", r"PCM"),
                     ]
                     for pattern_rgx, replacement in audio_standardization_rules:
                         processed_values = [
                             re.sub(pattern_rgx, replacement, val, flags=re.I)
                             for val in processed_values
                         ]
+
+                    # 【新增核心逻辑】强制将声道数移动到最后 (与上面相同)
+                    final_audio_values = []
+                    for val in processed_values:
+                        channel_match = re.search(r"\b(\d{1,2}\.\d)\b", val)
+                        if channel_match:
+                            channels = channel_match.group(1)
+                            temp_val = val.replace(channels, " ")
+                            temp_val = re.sub(r"\s+", " ", temp_val).strip()
+                            new_val = f"{temp_val} {channels}"
+                            final_audio_values.append(new_val)
+                        else:
+                            final_audio_values.append(val)
+                    processed_values = final_audio_values
 
                 elif key == "video_codec":
                     # 修复 H 265 / H265 -> H.265

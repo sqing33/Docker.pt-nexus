@@ -107,6 +107,10 @@
 
 # 更新日志
 
+### v3.3.1（2025.12.16）
+
+- 修复：UHD BluRay Remux无法识别为Remux、TrueHD 7.1 Atmos无法识别为TrueHD Atmos的问题
+
 ### v3.3.0（2025.12.15）
 
 > **注:若报错“ModuleNotFoundError: No module named 'PIL'”则需要重新下载镜像进行更新，如仍然报错则删除 data 目录下的 updates 文件夹。
