@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -30,6 +31,10 @@ const (
 
 var (
 	localConfigFile string
+	shanghaiLoc     *time.Location
+	// 新增：互斥锁防止重复触发更新
+	updateMutex      sync.Mutex
+	isSystemUpdating bool
 )
 
 func init() {
@@ -40,6 +45,88 @@ func init() {
 		// 生产环境
 		localConfigFile = getEnv("LOCAL_CONFIG_FILE", "/app/CHANGELOG.json")
 	}
+
+	// 初始化时区
+	initTimezone()
+}
+
+// 初始化时区和定时配置
+func initTimezone() {
+	var err error
+	shanghaiLoc, err = time.LoadLocation("Asia/Shanghai")
+	if err != nil {
+		log.Printf("警告: 无法加载上海时区: %v，使用UTC时区", err)
+		shanghaiLoc = time.UTC
+	}
+	log.Printf("时区初始化完成: %s", shanghaiLoc.String())
+
+	// 从环境变量读取定时配置
+	if getEnv("SCHEDULE_ENABLED", "true") == "false" {
+		globalScheduleConfig.Enabled = false
+	}
+	if scheduleTime := getEnv("SCHEDULE_TIME", "06:00"); scheduleTime != "06:00" {
+		globalScheduleConfig.Time = scheduleTime
+	}
+	if scheduleTimezone := getEnv("SCHEDULE_TIMEZONE", "Asia/Shanghai"); scheduleTimezone != "Asia/Shanghai" {
+		globalScheduleConfig.Timezone = scheduleTimezone
+		// 重新加载时区
+		if loc, err := time.LoadLocation(scheduleTimezone); err == nil {
+			shanghaiLoc = loc
+			log.Printf("使用自定义时区: %s", scheduleTimezone)
+		}
+	}
+
+	log.Printf("定时更新配置: enabled=%v, time=%s, timezone=%s",
+		globalScheduleConfig.Enabled, globalScheduleConfig.Time, globalScheduleConfig.Timezone)
+}
+
+// 获取下一个早上6点的时间
+func getNextSixAM() time.Time {
+	now := time.Now().In(shanghaiLoc)
+	next := time.Date(now.Year(), now.Month(), now.Day(), 6, 0, 0, 0, shanghaiLoc)
+	if next.Before(now) {
+		next = next.Add(24 * time.Hour)
+	}
+	return next
+}
+
+// 解析时间字符串为时分
+func parseTime(timeStr string) (hour, min int, err error) {
+	parts := strings.Split(timeStr, ":")
+	if len(parts) != 2 {
+		return 0, 0, fmt.Errorf("时间格式错误，期望 HH:MM，得到: %s", timeStr)
+	}
+
+	hour, err = strconv.Atoi(parts[0])
+	if err != nil {
+		return 0, 0, fmt.Errorf("小时解析失败: %v", err)
+	}
+
+	min, err = strconv.Atoi(parts[1])
+	if err != nil {
+		return 0, 0, fmt.Errorf("分钟解析失败: %v", err)
+	}
+
+	if hour < 0 || hour > 23 || min < 0 || min > 59 {
+		return 0, 0, fmt.Errorf("时间值超出范围: %d:%d", hour, min)
+	}
+
+	return hour, min, nil
+}
+
+// 获取下一个指定时间
+func getNextScheduledTime(timeStr string) (time.Time, error) {
+	hour, min, err := parseTime(timeStr)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	now := time.Now().In(shanghaiLoc)
+	next := time.Date(now.Year(), now.Month(), now.Day(), hour, min, 0, 0, shanghaiLoc)
+	if next.Before(now) {
+		next = next.Add(24 * time.Hour)
+	}
+	return next, nil
 }
 
 // 获取更新源配置
@@ -76,10 +163,28 @@ type UpdateConfig struct {
 }
 
 type VersionInfo struct {
-	Version string   `json:"version"`
-	Date    string   `json:"date"`
-	Changes []string `json:"changes"`
-	Note    string   `json:"note,omitempty"`
+	Version       string   `json:"version"`
+	Date          string   `json:"date"`
+	ForceUpdate   bool     `json:"force_update"`
+	DisableUpdate bool     `json:"disable_update,omitempty"`
+	Changes       []string `json:"changes"`
+	Note          string   `json:"note,omitempty"`
+}
+
+// 定时更新配置 - 硬编码到Go代码中
+type ScheduleConfig struct {
+	Enabled  bool       `json:"enabled"`
+	Timezone string     `json:"timezone"`
+	Time     string     `json:"time"`
+	LastRun  *time.Time `json:"last_run"`
+}
+
+// 全局定时配置
+var globalScheduleConfig = ScheduleConfig{
+	Enabled:  true, // 默认启用，可通过环境变量SCHEDULE_ENABLED禁用
+	Timezone: "Asia/Shanghai",
+	Time:     "06:00",
+	LastRun:  nil,
 }
 
 type DirMapping struct {
@@ -89,12 +194,257 @@ type DirMapping struct {
 	Executable bool     `json:"executable"`
 }
 
+// 加载定时配置（从全局变量）
+func loadScheduleConfig() ScheduleConfig {
+	return globalScheduleConfig
+}
+
+// 保存定时配置（更新全局变量）
+func saveScheduleConfig(now time.Time) {
+	// 更新全局配置中的最后执行时间
+	globalScheduleConfig.LastRun = &now
+	log.Printf("更新定时配置最后执行时间: %s", now.Format("2006-01-02 15:04:05"))
+}
+
+// 检查是否应该执行更新
+func shouldRunUpdate(now time.Time, schedule ScheduleConfig) bool {
+	if !schedule.Enabled {
+		return false
+	}
+
+	// 解析定时时间
+	hour, min, err := parseTime(schedule.Time)
+	if err != nil {
+		log.Printf("时间配置错误: %v", err)
+		return false
+	}
+
+	// 检查当前时间是否匹配定时时间
+	if now.Hour() != hour || now.Minute() != min {
+		return false
+	}
+
+	// 检查今天是否已经执行过
+	if schedule.LastRun != nil {
+		lastRun := schedule.LastRun.In(shanghaiLoc)
+		if lastRun.Year() == now.Year() &&
+			lastRun.Month() == now.Month() &&
+			lastRun.Day() == now.Day() {
+			return false
+		}
+	}
+
+	return true
+}
+
+// 更新最后执行时间
+func updateLastRunTime(now time.Time) {
+	saveScheduleConfig(now)
+}
+
+// 执行自动更新
+func runAutoUpdate() {
+	log.Println("开始执行自动更新检查...")
+
+	localVersion := getLocalVersion()
+
+	// 1. 获取远程配置
+	remoteConfig, err := getRemoteConfig()
+	if err != nil {
+		log.Printf("自动更新失败：无法获取远程配置: %v", err)
+		return
+	}
+
+	if len(remoteConfig.History) == 0 {
+		log.Println("自动更新失败：远程配置为空")
+		return
+	}
+
+	remoteVersion := remoteConfig.History[0].Version
+	shouldForce := remoteConfig.History[0].ForceUpdate
+	shouldDisable := remoteConfig.History[0].DisableUpdate
+
+	// 2. 检查是否有新版本
+	if !isNewerVersion(remoteVersion, localVersion) {
+		log.Printf("本地版本 %s 已是最新，无需更新", localVersion)
+		return
+	}
+
+	log.Printf("检测到新版本: 本地 %s -> 远程 %s", localVersion, remoteVersion)
+
+	// 3. 检查是否满足自动更新条件
+	// 条件：(全局定时更新开启) 或者 (远程标记为强制更新 ForceUpdate)
+	// 这里的逻辑是：如果是ForceUpdate，哪怕本地配置可能有其他阻碍，也倾向于执行更新操作
+	if !globalScheduleConfig.Enabled && !shouldForce {
+		log.Println("定时更新未启用，且非强制更新版本，跳过自动更新")
+		return
+	}
+
+	// 4. 新增：检查是否禁止更新
+	if shouldDisable {
+		log.Printf("版本 %s 标记为 disable_update，跳过自动更新", remoteVersion)
+		return
+	}
+
+	log.Printf("执行更新流程 (强制更新: %v)...", shouldForce)
+
+	// 5. 删除updates目录强制重新拉取
+	// 这符合你的要求：如果有更新，先清理旧目录确保干净
+	log.Println("清理 updates 目录以强制重新拉取...")
+	if err := os.RemoveAll(UPDATE_DIR); err != nil {
+		log.Printf("删除updates目录失败: %v", err)
+		// 如果删除失败，可能影响后续流程，但尝试继续
+	}
+
+	// 确保更新目录存在
+	if err := os.MkdirAll(UPDATE_DIR, 0755); err != nil {
+		log.Printf("创建更新目录失败: %v", err)
+		return
+	}
+
+	// 6. 克隆仓库
+	log.Println("克隆仓库...")
+	if err := cloneRepoWithFallback(); err != nil {
+		log.Printf("克隆仓库失败: %v", err)
+		return
+	}
+
+	// 7. 停止服务
+	log.Println("停止服务...")
+	stopServices()
+
+	// 8. 备份当前版本
+	backupDir := filepath.Join(UPDATE_DIR, "backup")
+	os.RemoveAll(backupDir)
+	os.MkdirAll(backupDir, 0755)
+
+	// 9. 根据映射同步文件
+	// 注意：这里我们使用刚才获取到的 remoteConfig，而不是重新读取文件
+	// 虽然克隆了文件，但内存里的 config 是一样的
+	log.Println("同步文件...")
+	for _, mapping := range remoteConfig.Mappings {
+		source := filepath.Join(REPO_DIR, mapping.Source)
+		target := mapping.Target
+
+		if err := syncPath(source, target, mapping.Exclude, backupDir); err != nil {
+			log.Printf("同步失败: %v", err)
+			// 回滚
+			rollback(backupDir)
+			restartServices()
+			return
+		}
+
+		// 设置可执行权限
+		if mapping.Executable {
+			os.Chmod(target, 0755)
+		}
+	}
+
+	// 10. 更新本地配置文件
+	srcConfig := filepath.Join(REPO_DIR, "CHANGELOG.json")
+	copyFile(srcConfig, localConfigFile)
+
+	log.Println("重启服务...")
+	restartServices()
+
+	log.Printf("自动更新完成: %s", remoteVersion)
+}
+
+// 定时检查器
+func startScheduledChecker() {
+	log.Println("启动定时检查器...")
+	ticker := time.NewTicker(1 * time.Minute) // 每分钟检查一次
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			checkAndRunScheduledUpdate()
+		}
+	}
+}
+
+// 检查并执行定时更新
+func checkAndRunScheduledUpdate() {
+	schedule := loadScheduleConfig()
+	now := time.Now().In(shanghaiLoc)
+
+	// 这里只判断时间是否到达，是否真正执行更新在 runAutoUpdate 内部判断
+	// 这样可以实现：即使本地把 SCHEDULE_ENABLED 关了，但只要时间到了且远程有 ForceUpdate，依然可以更新
+
+	// 解析定时时间
+	hour, min, err := parseTime(schedule.Time)
+	if err != nil {
+		return
+	}
+
+	// 简单的分钟级匹配
+	if now.Hour() == hour && now.Minute() == min {
+		// 检查今天是否已经执行过
+		if schedule.LastRun != nil {
+			lastRun := schedule.LastRun.In(shanghaiLoc)
+			if lastRun.Year() == now.Year() &&
+				lastRun.Month() == now.Month() &&
+				lastRun.Day() == now.Day() {
+				return
+			}
+		}
+
+		log.Printf("触发定时检查点 (时区: %s)", now.Format("2006-01-02 15:04:05"))
+		// runAutoUpdate 内部会检查 Enabled 状态或 ForceUpdate 状态
+		runAutoUpdate()
+		updateLastRunTime(now)
+	}
+}
+
+// 检查是否有跨版本强制更新
+func hasCrossVersionForceUpdate(localVersion string, remoteConfig *UpdateConfig) bool {
+	if len(remoteConfig.History) == 0 {
+		return false
+	}
+
+	// 找到本地版本在历史中的位置
+	localVersionIndex := -1
+	for i, version := range remoteConfig.History {
+		if version.Version == localVersion {
+			localVersionIndex = i
+			break
+		}
+	}
+
+	// 如果找不到本地版本，检查从最新版本开始的所有版本
+	if localVersionIndex == -1 {
+		log.Printf("本地版本 %s 在历史记录中未找到，检查所有版本", localVersion)
+		for _, version := range remoteConfig.History {
+			if version.ForceUpdate {
+				log.Printf("发现跨版本强制更新: %s", version.Version)
+				return true
+			}
+		}
+		return false
+	}
+
+	// 检查从本地版本之后的所有版本
+	log.Printf("本地版本 %s 在历史记录中的位置: %d", localVersion, localVersionIndex)
+	for i := localVersionIndex - 1; i >= 0; i-- {
+		version := remoteConfig.History[i]
+		if version.ForceUpdate {
+			log.Printf("发现跨版本强制更新: %s (本地版本: %s)", version.Version, localVersion)
+			return true
+		}
+	}
+
+	return false
+}
+
 // 检查更新
 func checkUpdateHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	// 禁止缓存
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
 
 	if r.Method == "OPTIONS" {
 		w.WriteHeader(http.StatusOK)
@@ -102,24 +452,42 @@ func checkUpdateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	localVersion := getLocalVersion()
-	remoteVersion := getRemoteVersion()
+
+	// 获取远程配置
+	remoteConfig, err := getRemoteConfig()
+	var remoteVersion string
+	var forceUpdate bool
+	var disableUpdate bool
+
+	if err != nil {
+		log.Printf("检查更新时获取远程配置失败: %v", err)
+	} else if len(remoteConfig.History) > 0 {
+		remoteVersion = remoteConfig.History[0].Version
+		// 修改：检查跨版本强制更新
+		forceUpdate = hasCrossVersionForceUpdate(localVersion, remoteConfig)
+		disableUpdate = remoteConfig.History[0].DisableUpdate
+	}
 
 	hasUpdate := false
 	if remoteVersion != "" && localVersion != "" {
-		// 修复逻辑：只有当远程版本 大于 本地版本时，才提示有更新
 		hasUpdate = isNewerVersion(remoteVersion, localVersion)
 	}
-	
-	// 为了调试方便，可以打印一下比较结果
+
 	if hasUpdate {
-		log.Printf("检测到新版本: 本地 %s -> 远程 %s", localVersion, remoteVersion)
+		log.Printf("检测到新版本: %s -> %s (Force: %v, Disable: %v)", localVersion, remoteVersion, forceUpdate, disableUpdate)
 	}
 
+	// 这里不再做任何自动更新的触发逻辑，只返回数据
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success":        true,
 		"has_update":     hasUpdate,
 		"local_version":  localVersion,
 		"remote_version": remoteVersion,
+		"update_control": map[string]interface{}{
+			"force_update":   forceUpdate,
+			"disable_update": disableUpdate,
+			"schedule":       loadScheduleConfig(),
+		},
 	})
 }
 
@@ -164,7 +532,19 @@ func isNewerVersion(remote, local string) bool {
 		// 如果相等，继续比较下一位
 	}
 
-	return false // 版本完全相同
+	// 如果所有比较的位都相等，检查版本号长度
+	// 例如：3.3.2 vs 3.3，3.3.2 更新
+	if len(remoteParts) > len(localParts) {
+		// 检查远程版本多出的位是否都是0
+		for i := len(localParts); i < len(remoteParts); i++ {
+			if val, _ := strconv.Atoi(remoteParts[i]); val != 0 {
+				return true // 远程版本有非零的额外位，版本更新
+			}
+		}
+		return false // 远程版本多出的位都是0，版本相同
+	}
+
+	return false // 版本完全相同或本地版本更长
 }
 
 // 拉取代码
@@ -218,15 +598,15 @@ func execGitWithTimeout(timeout time.Duration, args ...string) error {
 
 	cmd := exec.CommandContext(ctx, "git", args...)
 	output, err := cmd.CombinedOutput()
-	
+
 	if ctx.Err() == context.DeadlineExceeded {
 		return fmt.Errorf("操作超时")
 	}
-	
+
 	if err != nil {
 		return fmt.Errorf("%v, 输出: %s", err, output)
 	}
-	
+
 	return nil
 }
 
@@ -274,6 +654,13 @@ func pullRepoWithFallback() error {
 	// 获取当前远程 URL 以显示来源
 	cmd := exec.Command("git", "-C", REPO_DIR, "remote", "get-url", "origin")
 	output, err := cmd.Output()
+	if err != nil {
+		log.Printf("获取远程URL失败，尝试重新设置: %v", err)
+		// 如果获取失败，直接重新克隆
+		os.RemoveAll(REPO_DIR)
+		return cloneRepoWithFallback()
+	}
+	
 	currentURL := strings.TrimSpace(string(output))
 	var repoSource string
 	if strings.Contains(currentURL, "gitee.com") {
@@ -283,47 +670,40 @@ func pullRepoWithFallback() error {
 	} else {
 		repoSource = "未知源"
 	}
-	
+
 	// 先尝试当前远程仓库
 	log.Printf("正在从 %s 仓库拉取更新 (超时时间: %v)...", repoSource, REPO_TIMEOUT)
+
+	// 尝试多个分支
+	branches := []string{"main", "master"}
 	
-	// Fetch
-	err = execGitWithTimeout(REPO_TIMEOUT, "-C", REPO_DIR, "fetch", "origin", "main")
-	if err != nil {
-		log.Printf("%s 仓库 fetch 失败: %v", repoSource, err)
-		
-		// 尝试切换远程仓库
-		if err := switchRemoteRepo(); err != nil {
-			return fmt.Errorf("切换远程仓库失败: %v", err)
-		}
-		
-		// 获取切换后的仓库源
-		cmd = exec.Command("git", "-C", REPO_DIR, "remote", "get-url", "origin")
-		output, _ = cmd.Output()
-		currentURL = strings.TrimSpace(string(output))
-		if strings.Contains(currentURL, "gitee.com") {
-			repoSource = "Gitee"
-		} else {
-			repoSource = "GitHub"
-		}
-		
-		log.Printf("正在从 %s 仓库重新拉取更新...", repoSource)
-		
-		// 重新尝试 fetch
-		err = execGitWithTimeout(REPO_TIMEOUT, "-C", REPO_DIR, "fetch", "origin", "main")
+	for _, branch := range branches {
+		log.Printf("尝试 fetch %s 分支...", branch)
+		err = execGitWithTimeout(REPO_TIMEOUT, "-C", REPO_DIR, "fetch", "origin", branch)
 		if err != nil {
-			return fmt.Errorf("%s 仓库 fetch 仍然失败: %v", repoSource, err)
+			log.Printf("%s 仓库 %s 分支 fetch 失败: %v", repoSource, branch, err)
+			continue
 		}
+
+		// Reset
+		err = execGitWithTimeout(REPO_TIMEOUT, "-C", REPO_DIR, "reset", "--hard", "origin/"+branch)
+		if err != nil {
+			log.Printf("%s 仓库 %s 分支 reset 失败: %v", repoSource, branch, err)
+			continue
+		}
+
+		log.Printf("已成功从 %s 仓库 %s 分支拉取更新", repoSource, branch)
+		return nil
 	}
-	
-	// Reset
-	err = execGitWithTimeout(REPO_TIMEOUT, "-C", REPO_DIR, "reset", "--hard", "origin/main")
-	if err != nil {
-		return fmt.Errorf("reset 失败: %v", err)
+
+	// 所有分支都失败，尝试切换远程仓库
+	log.Printf("所有分支都失败，尝试切换远程仓库...")
+	if err := switchRemoteRepo(); err != nil {
+		return fmt.Errorf("切换远程仓库失败: %v", err)
 	}
-	
-	log.Printf("已成功从 %s 仓库拉取更新", repoSource)
-	return nil
+
+	// 重新尝试
+	return pullRepoWithFallback()
 }
 
 // 切换远程仓库地址
@@ -463,11 +843,23 @@ func installUpdateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 生产环境：执行实际更新
-	
+
 	// 检查版本是否确实需要更新
 	localVersion := getLocalVersion()
 	remoteVersion := config.History[0].Version
-	
+
+    // ================== 新增校验开始 ==================
+    // 如果配置文件中标记了 disable_update，则拒绝后端更新
+    if config.History[0].DisableUpdate {
+        log.Printf("版本 %s 标记为 disable_update，拒绝执行热更新", remoteVersion)
+        json.NewEncoder(w).Encode(map[string]interface{}{
+            "success": false,
+            "error":   "当前版本需要更新 Docker 镜像，无法通过脚本进行热更新，请手动拉取最新镜像。",
+        })
+        return
+    }
+    // ================== 新增校验结束 ==================
+
 	if !isNewerVersion(remoteVersion, localVersion) {
 		log.Printf("本地版本 %s 已是最新，无需更新", localVersion)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -476,9 +868,9 @@ func installUpdateHandler(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	
+
 	log.Printf("开始更新: 本地 %s -> 远程 %s", localVersion, remoteVersion)
-	
+
 	// 停止主服务
 	log.Println("停止服务...")
 	stopServices()
@@ -736,6 +1128,48 @@ func rollback(backupDir string) {
 	})
 }
 
+// 获取最新版本的禁止更新标志
+func getLatestDisableUpdate() bool {
+	data, err := os.ReadFile(localConfigFile)
+	if err != nil {
+		log.Printf("读取本地配置失败: %v", err)
+		return false
+	}
+
+	var config UpdateConfig
+	if err := json.Unmarshal(data, &config); err != nil {
+		log.Printf("解析本地配置失败: %v", err)
+		return false
+	}
+
+	if len(config.History) == 0 {
+		return false
+	}
+
+	return config.History[0].DisableUpdate
+}
+
+// 获取最新版本的强制更新标志
+func getLatestForceUpdate() bool {
+	data, err := os.ReadFile(localConfigFile)
+	if err != nil {
+		log.Printf("读取本地配置失败: %v", err)
+		return false
+	}
+
+	var config UpdateConfig
+	if err := json.Unmarshal(data, &config); err != nil {
+		log.Printf("解析本地配置失败: %v", err)
+		return false
+	}
+
+	if len(config.History) == 0 {
+		return false
+	}
+
+	return config.History[0].ForceUpdate
+}
+
 // 获取本地版本
 func getLocalVersion() string {
 	data, err := os.ReadFile(localConfigFile)
@@ -753,33 +1187,61 @@ func getLocalVersion() string {
 	return config.History[0].Version
 }
 
-// 获取远程版本
-func getRemoteVersion() string {
+// 新增辅助函数：获取远程配置结构体
+func getRemoteConfig() (*UpdateConfig, error) {
 	var baseURL string
 	switch getUpdateSource() {
 	case "github":
-		baseURL = "https://github.com/sqing33/Docker.pt-nexus/raw/main/CHANGELOG.json"
+		// GitHub raw链接
+		baseURL = "https://raw.githubusercontent.com/sqing33/Docker.pt-nexus/main/CHANGELOG.json"
 	default:
+		// Gitee raw链接
 		baseURL = "https://gitee.com/sqing33/Docker.pt-nexus/raw/main/CHANGELOG.json"
 	}
 
-	log.Printf("从 %s 获取远程版本信息", getUpdateSource())
-	resp, err := http.Get(baseURL)
+	// 【修复】：添加随机时间戳参数，强制不使用缓存
+	// 这样每次请求都会被服务器视为新的请求，确保获取到最新的 disable_update 状态
+	requestURL := fmt.Sprintf("%s?t=%d", baseURL, time.Now().UnixNano())
+
+	// 创建不使用代理的 HTTP 客户端
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+		Transport: &http.Transport{
+			Proxy: func(req *http.Request) (*url.URL, error) {
+				return nil, nil // 不使用代理
+			},
+		},
+	}
+
+	log.Printf("正在请求远程配置: %s", requestURL) // 打印请求地址方便调试
+	resp, err := client.Get(requestURL)
 	if err != nil {
-		log.Printf("获取远程配置失败: %v", err)
-		return ""
+		return nil, fmt.Errorf("获取远程配置失败: %v", err)
 	}
 	defer resp.Body.Close()
 
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Printf("读取远程配置失败: %v", err)
-		return ""
+		return nil, fmt.Errorf("读取远程配置失败: %v", err)
 	}
 
 	var config UpdateConfig
 	if err := json.Unmarshal(data, &config); err != nil {
-		log.Printf("解析远程配置失败: %v", err)
+		return nil, fmt.Errorf("解析远程配置失败: %v", err)
+	}
+
+	return &config, nil
+}
+
+// 获取远程版本
+func getRemoteVersion() string {
+	config, err := getRemoteConfig()
+	if err != nil {
+		log.Printf("获取远程配置失败: %v", err)
+		return ""
+	}
+
+	if len(config.History) == 0 {
 		return ""
 	}
 
@@ -812,7 +1274,7 @@ func getChangelogHandler(w http.ResponseWriter, r *http.Request) {
 	var baseURL string
 	switch getUpdateSource() {
 	case "github":
-		baseURL = "https://github.com/sqing33/Docker.pt-nexus/raw/main/CHANGELOG.json"
+		baseURL = "https://raw.githubusercontent.com/sqing33/Docker.pt-nexus/main/CHANGELOG.json"
 	default:
 		baseURL = "https://gitee.com/sqing33/Docker.pt-nexus/raw/main/CHANGELOG.json"
 	}
@@ -932,8 +1394,19 @@ func proxyToBatchEnhancer(w http.ResponseWriter, r *http.Request) {
 func main() {
 	log.Println("PT Nexus 更新器启动...")
 	log.Println("监听端口:", PORT)
-	log.Println("更新方式: 手动触发")
 	log.Printf("配置的更新源: %s", getUpdateSource())
+
+	// 检查定时配置
+	schedule := loadScheduleConfig()
+	if schedule.Enabled {
+		log.Printf("定时更新已启用，时间: %s (%s)", schedule.Time, schedule.Timezone)
+		log.Println("更新方式: 定时检查 + 手动触发")
+		// 启动定时检查器
+		go startScheduledChecker()
+	} else {
+		log.Println("更新方式: 手动触发")
+		log.Printf("定时更新已禁用，可通过环境变量SCHEDULE_ENABLED=true启用")
+	}
 
 	// 注册路由
 	http.HandleFunc("/health", healthHandler)

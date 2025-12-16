@@ -497,6 +497,27 @@ def upload_data_title(title: str, torrent_filename: str = "", mediaInfo: str = "
                 processed_values = [
                     re.sub(pattern_rgx, replacement, val, flags=re.I) for val in processed_values
                 ]
+            
+            # 【新增】Atmos 格式特殊处理
+            # 将 "Atmos TrueHD" 调整为 "TrueHD Atmos"
+            # 将 "DDP Atmos" 保持不变，将 "DTS Atmos" 调整为 "DTS:X"
+            atmos_processed_values = []
+            for val in processed_values:
+                # 处理 Atmos TrueHD -> TrueHD Atmos
+                if re.search(r"Atmos\s+TrueHD", val, re.IGNORECASE):
+                    val = re.sub(r"Atmos\s+TrueHD", r"TrueHD Atmos", val, flags=re.I)
+                    print(f"[调试] 音频格式调整: Atmos TrueHD -> TrueHD Atmos")
+                
+                # 处理单独的 Atmos（通常前面应该有编码）
+                elif re.search(r"\bAtmos\b(?!\s+TrueHD)", val, re.IGNORECASE):
+                    # 如果 Atmos 前面是 DTS，转换为 DTS:X
+                    if re.search(r"DTS.*Atmos", val, re.IGNORECASE):
+                        val = re.sub(r"DTS.*Atmos", r"DTS:X", val, flags=re.I)
+                        print(f"[调试] 音频格式调整: DTS Atmos -> DTS:X")
+                    # 其他情况保持 Atmos 在正确位置
+                
+                atmos_processed_values.append(val)
+            processed_values = atmos_processed_values
 
             # 【新增核心逻辑】强制将声道数移动到最后
             # 此时因为正则的改进，val 应该是 "DTS 7.1 Atmos" 这样完整的字符串
@@ -528,13 +549,25 @@ def upload_data_title(title: str, torrent_filename: str = "", mediaInfo: str = "
             processed_values = [
                 re.sub(r"H\s*[\s\.]?\s*264", r"H.264", val, flags=re.I) for val in processed_values
             ]
+        
+        # 3. HDR 格式特殊处理（多个格式合并为字符串）
+        elif key == "hdr_format":
+            # 如果有多个 HDR 格式，将它们合并为一个字符串，用空格分隔
+            if len(processed_values) > 1:
+                processed_values = [" ".join(processed_values)]
+                print(f"[调试] HDR 格式合并: {processed_values[0]}")
         # --- 修改结束 ---
 
         unique_processed = sorted(
             list(set(processed_values)), key=lambda x: title_candidate.find(x.replace(" ", ""))
         )
         if unique_processed:
-            params[key] = unique_processed[0] if len(unique_processed) == 1 else unique_processed
+            # 所有参数都使用字符串，如果有多个值则用空格连接
+            if len(unique_processed) == 1:
+                params[key] = unique_processed[0]
+            else:
+                params[key] = " ".join(unique_processed)
+                print(f"[调试] {key} 多个值合并为字符串: {params[key]}")
 
     # --- [新增] UHD 媒介后处理：判断 UHD 是否为媒介 ---
     if "medium" in params:
@@ -659,6 +692,24 @@ def upload_data_title(title: str, torrent_filename: str = "", mediaInfo: str = "
                             re.sub(pattern_rgx, replacement, val, flags=re.I)
                             for val in processed_values
                         ]
+                    
+                    # 【新增】Atmos 格式特殊处理（与主处理逻辑相同）
+                    atmos_processed_values = []
+                    for val in processed_values:
+                        # 处理 Atmos TrueHD -> TrueHD Atmos
+                        if re.search(r"Atmos\s+TrueHD", val, re.IGNORECASE):
+                            val = re.sub(r"Atmos\s+TrueHD", r"TrueHD Atmos", val, flags=re.I)
+                            print(f"   [文件名补充] 音频格式调整: Atmos TrueHD -> TrueHD Atmos")
+                        
+                        # 处理单独的 Atmos
+                        elif re.search(r"\bAtmos\b(?!\s+TrueHD)", val, re.IGNORECASE):
+                            # 如果 Atmos 前面是 DTS，转换为 DTS:X
+                            if re.search(r"DTS.*Atmos", val, re.IGNORECASE):
+                                val = re.sub(r"DTS.*Atmos", r"DTS:X", val, flags=re.I)
+                                print(f"   [文件名补充] 音频格式调整: DTS Atmos -> DTS:X")
+                        
+                        atmos_processed_values.append(val)
+                    processed_values = atmos_processed_values
 
                     # 【新增核心逻辑】强制将声道数移动到最后 (与上面相同)
                     final_audio_values = []
@@ -694,9 +745,12 @@ def upload_data_title(title: str, torrent_filename: str = "", mediaInfo: str = "
 
                 if unique_processed:
                     print(f"   [文件名补充] 找到缺失参数 '{key}': {unique_processed}")
-                    params[key] = (
-                        unique_processed[0] if len(unique_processed) == 1 else unique_processed
-                    )
+                    # 所有参数都使用字符串，如果有多个值则用空格连接
+                    if len(unique_processed) == 1:
+                        params[key] = unique_processed[0]
+                    else:
+                        params[key] = " ".join(unique_processed)
+                        print(f"   [文件名补充] {key} 多个值合并为字符串: {params[key]}")
                     all_found_tags.extend(unique_processed)
     # --- [新增] 结束 ---
 
@@ -850,8 +904,7 @@ def upload_data_title(title: str, torrent_filename: str = "", mediaInfo: str = "
             if is_valid_uhd_medium:
                 if medium_value == "UHD":
                     params["medium"] = "UHD Blu-ray"
-                elif isinstance(medium_value, list):
-                    params["medium"] = ["UHD Blu-ray" if v == "UHD" else v for v in medium_value]
+                # 由于现在所有参数都是字符串，不再需要处理列表情况
                 print(f"[调试] 检测到单独的 UHD 媒介，已补充为: {params['medium']}")
             else:
                 print(
@@ -863,13 +916,14 @@ def upload_data_title(title: str, torrent_filename: str = "", mediaInfo: str = "
 
     if "quality_modifier" in params:
         modifiers = params.pop("quality_modifier")
-        if not isinstance(modifiers, list):
-            modifiers = [modifiers]
+        # 确保 modifiers 是字符串形式
+        if isinstance(modifiers, list):
+            modifiers_str = " ".join(modifiers)
+        else:
+            modifiers_str = modifiers
         if "medium" in params:
-            medium_str = (
-                params["medium"] if isinstance(params["medium"], str) else params["medium"][0]
-            )
-            params["medium"] = f"{medium_str} {' '.join(sorted(modifiers))}"
+            medium_str = params["medium"]  # 现在所有参数都是字符串
+            params["medium"] = f"{medium_str} {modifiers_str}"
 
     # 5. 最终标题和未识别内容确定
     # 如果 UHD 在标题中，需要重新计算标题区域
@@ -1331,6 +1385,25 @@ def add_torrent_to_downloader(
                         )
                     except Exception as e:
                         logging.warning(f"设置速度限制失败，但种子已添加成功: {e}")
+
+            # 在成功添加种子后检查发种限制
+            try:
+                from .downloader_checker import check_seeding_limit_for_downloader
+                
+                # 获取所有下载器配置
+                all_downloaders = config.get("downloaders", [])
+                
+                # 检查发种限制
+                can_continue, limit_message = check_seeding_limit_for_downloader(
+                    downloader_id, all_downloaders
+                )
+                
+                if not can_continue:
+                    return "LIMIT_REACHED", limit_message
+                    
+            except Exception as e:
+                logging.warning(f"检查发种限制时发生错误: {e}")
+                # 出错时不阻止正常流程，继续返回成功
 
             return True, f"成功添加到 '{client_name}'"
 

@@ -1,6 +1,17 @@
 {
   "history": [
     {
+      "version": "v3.3.2",
+      "date": "2025.12.17",
+      "disable_update": true,
+      "force_update": true,
+      "note": "注：优化在线升级脚本，需更新 docker 镜像，且删除 data 目录下的 updates 文件夹，防止后续更新失败，请尽快更新。",
+      "changes": [
+        "修复：主标题里的色深 10bit 与 hdr 参数位置错误，音频参数提取错误，青蛙标题多余 10bit 错误",
+        "优化：在线升级脚本（需更新 docker 镜像，且删除 data 目录下的 updates 文件夹。）"
+      ]
+    },
+    {
       "version": "v3.3.1",
       "date": "2025.12.16",
       "changes": [

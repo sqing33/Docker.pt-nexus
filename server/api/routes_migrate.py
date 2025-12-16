@@ -879,6 +879,30 @@ def migrate_publish():
         if not source_site_name:
             source_site_name = context.get("source_site_name", "")
 
+        # 🚫 发布前预检查发种限制 - 在任何发布逻辑之前进行
+        # downloader_id = data.get("downloaderId") or data.get("downloader_id")
+        # if downloader_id:
+        #     try:
+        #         from utils.downloader_checker import check_seeding_limit_for_downloader
+        #         config = config_manager.get()
+        #         all_downloaders = config.get("downloaders", [])
+        #         
+        #         can_continue, limit_message = check_seeding_limit_for_downloader(
+        #             downloader_id, all_downloaders
+        #         )
+        #         
+        #         if not can_continue:
+        #             return jsonify({
+        #                 "success": False, 
+        #                 "logs": f"🚫 发布前预检查触发限制: {limit_message}",
+        #                 "limit_reached": True,
+        #                 "pre_check": True
+        #             })
+        #         else:
+        #             print(f"✅ [发布前预检查] 通过，可以继续发布到 {target_site_name}")
+        #     except Exception as e:
+        #         print(f"⚠️ [发布前预检查] 检查失败，继续执行: {e}")
+
         # 创建 TorrentMigrator 实例用于发布
         migrator = TorrentMigrator(
             source_info,
@@ -1288,6 +1312,32 @@ def migrate_publish():
                             f"[下载器添加] 直接下载链接: {result.get('direct_download_url', 'None')}"
                         )
 
+                        # 🚫 发布前预检查发种限制
+                        # try:
+                        #     from utils.downloader_checker import check_seeding_limit_for_downloader
+                        #     config = config_manager.get()
+                        #     all_downloaders = config.get("downloaders", [])
+                        #     
+                        #     can_continue, limit_message = check_seeding_limit_for_downloader(
+                        #         downloader_id, all_downloaders
+                        #     )
+                        #     
+                        #     if not can_continue:
+                        #         print(f"🚫 [下载器添加] 发布前预检查触发限制: {limit_message}")
+                        #         result["auto_add_result"] = {
+                        #             "success": False,
+                        #             "message": limit_message,
+                        #             "sync": True,
+                        #             "downloader_id": None,
+                        #             "limit_reached": True,
+                        #             "pre_check": True,
+                        #         }
+                        #         return jsonify(result)
+                        #     else:
+                        #         print(f"✅ [下载器添加] 发布前预检查通过，可以继续添加")
+                        # except Exception as e:
+                        #     print(f"⚠️ [下载器添加] 发布前预检查失败，继续执行: {e}")
+
                         # 同步调用 add_torrent_to_downloader 函数
                         success, message = add_torrent_to_downloader(
                             detail_page_url=result["url"],
@@ -1298,15 +1348,21 @@ def migrate_publish():
                             direct_download_url=result.get("direct_download_url"),
                         )
 
+                        # 检查是否触发发种限制
+                        limit_reached = (success == "LIMIT_REACHED")
+                        
                         result["auto_add_result"] = {
-                            "success": success,
+                            "success": not limit_reached,  # 限制触发时视为失败
                             "message": message,
                             "sync": True,
-                            "downloader_id": downloader_id if success else None,
+                            "downloader_id": downloader_id if not limit_reached else None,
+                            "limit_reached": limit_reached,
                         }
 
-                        if success:
+                        if not limit_reached and success:
                             print(f"✅ [下载器添加] 同步添加成功: {message}")
+                        elif limit_reached:
+                            print(f"🚫 [下载器添加] 同步添加被限制: {message}")
                         else:
                             print(f"❌ [下载器添加] 同步添加失败: {message}")
 
@@ -1727,6 +1783,17 @@ def migrate_add_to_downloader():
         success, message = add_torrent_to_downloader(
             detail_page_url, save_path, downloader_id, db_manager, config_manager
         )
+        
+        # 处理发种限制状态
+        if success == "LIMIT_REACHED":
+            return jsonify({
+                "success": False,
+                "limit_reached": True,
+                "message": message,
+                "should_stop_batch": True,
+                "code": "SEEDING_LIMIT_EXCEEDED"
+            })
+        
         return jsonify({"success": success, "message": message})
     except Exception as e:
         logging.error(f"add_to_downloader 路由发生意外错误: {e}", exc_info=True)

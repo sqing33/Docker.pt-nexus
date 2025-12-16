@@ -1,12 +1,7 @@
-name: 构建 latest 镜像
+name: 构建 Docker 镜像
 
 on:
   workflow_dispatch:
-    inputs:
-      tags:
-        description: "Tags to push (comma-separated, e.g., latest,v1.0.0)"
-        required: true
-        default: "latest,v3.3.0"
 
 env:
   IMAGE_NAME: pt-nexus
@@ -73,8 +68,8 @@ jobs:
       - name: 6. 准备 Docker 标签
         id: prepare-tags
         run: |
-          # 读取用户输入的标签
-          INPUT_TAGS="${{ github.event.inputs.tags }}"
+          # 使用默认标签 latest
+          INPUT_TAGS="latest"
 
           # 准备两个仓库的基础路径
           GHCR_REPO="ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}"
@@ -167,8 +162,8 @@ jobs:
       - name: 4. 准备 Release 标签
         id: prepare-release-tag
         run: |
-          # 从输入的标签中提取第一个作为 release tag
-          INPUT_TAGS="${{ github.event.inputs.tags }}"
+          # 使用默认标签 latest 作为 release tag
+          INPUT_TAGS="latest"
           FIRST_TAG=$(echo "$INPUT_TAGS" | cut -d',' -f1 | xargs)
           echo "使用的 Release 标签: $FIRST_TAG"
           echo "tag=$FIRST_TAG" >> $GITHUB_OUTPUT
