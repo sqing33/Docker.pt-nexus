@@ -801,10 +801,7 @@
       <!-- 步骤 3: 完成发布 -->
       <div v-if="activeStep === 3" class="step-container results-container">
         <!-- 进度条显示 -->
-        <div
-          class="progress-section"
-          v-if="activeStep === 3"
-        >
+        <div class="progress-section" v-if="activeStep === 3">
           <div class="progress-item" v-if="publishProgress.total > 0">
             <div class="progress-label">发布进度:</div>
             <el-progress
@@ -827,6 +824,21 @@
             />
             <div class="progress-text">
               {{ downloaderProgress.current }} / {{ downloaderProgress.total }}
+            </div>
+          </div>
+
+          <!-- 🚫 发种限制提示 -->
+          <div class="limit-alert-section" v-if="limitAlert.visible">
+            <div class="limit-alert">
+              <div class="limit-alert-icon">
+                <el-icon color="#F56C6C" :size="20">
+                  <WarningFilled />
+                </el-icon>
+              </div>
+              <div class="limit-alert-content">
+                <div class="limit-alert-title">{{ limitAlert.title }}</div>
+                <div class="limit-alert-message">{{ limitAlert.message }}</div>
+              </div>
             </div>
           </div>
         </div>
@@ -1364,6 +1376,13 @@ const isScrolledToBottom = ref(false)
 // Progress tracking variables
 const publishProgress = ref({ current: 0, total: 0 })
 const downloaderProgress = ref({ current: 0, total: 0 })
+
+// 🚫 发种限制提示
+const limitAlert = ref({
+  visible: false,
+  title: '',
+  message: '',
+})
 
 // 防抖函数
 const debounce = (func, wait) => {
@@ -3352,6 +3371,87 @@ const handlePublish = async () => {
         result.isExisted = true
       }
 
+      // 🚫 检查发种限制状态
+      if (result.auto_add_result && result.auto_add_result.limit_reached) {
+        // 提取限制信息用于突出显示
+        const limitInfo = result.auto_add_result.message
+
+        result.downloaderStatus = {
+          success: false,
+          message: result.auto_add_result.message,
+          downloaderName: '限制触发',
+          limit_reached: true,
+        }
+
+        results.push(result)
+        finalResultsList.value = [...results]
+
+        // 🚫 显示限制提示
+        limitAlert.value = {
+          visible: true,
+          title: '发种限制触发',
+          message: limitInfo,
+        }
+
+        // 在日志顶部突出显示限制信息
+        logContent.value =
+          `\n\n=== 🚫 发种限制触发 ===\n${limitInfo}\n\n=== 🛑 批量发布已停止 ===\n由于发种限制触发，后续 ${selectedTargetSites.value.length - results.length} 个站点发布已暂停。\n\n` +
+          logContent.value
+
+        // 显示限制通知
+        ElNotification({
+          title: '发种限制触发',
+          message: `${siteName} 发布成功但因限制无法添加到下载器\n${limitInfo}\n后续站点发布已自动停止。`,
+          type: 'warning',
+          duration: 0,
+          showClose: true,
+        })
+
+        // 跳出循环
+        break
+      }
+
+      // 🚫 检查发布前预检查状态
+      if (result.pre_check && result.limit_reached) {
+        // 提取限制信息用于突出显示
+        const limitInfo = result.message.replace('🚫 发布前预检查触发限制: ', '')
+
+        result.downloaderStatus = {
+          success: false,
+          message: result.message,
+          downloaderName: '发布前限制',
+          limit_reached: true,
+          pre_check: true,
+        }
+
+        results.push(result)
+        finalResultsList.value = [...results]
+
+        // 🚫 显示限制提示
+        limitAlert.value = {
+          visible: true,
+          title: '发布前限制触发',
+          message: limitInfo,
+        }
+
+        // 在日志顶部突出显示限制信息
+        logContent.value =
+          `\n\n=== 🚫 发种限制触发 ===\n${limitInfo}\n\n=== 🛑 批量发布已停止 ===\n由于发种限制触发，后续 ${selectedTargetSites.value.length - results.length} 个站点发布已暂停。\n\n` +
+          logContent.value
+
+        // 显示发布前限制通知
+        ElNotification({
+          title: '发布前限制触发',
+          message: `${siteName} 因发种限制无法发布\n${limitInfo}\n后续站点发布已自动停止。`,
+          type: 'warning',
+          duration: 0,
+          showClose: true,
+        })
+
+        // 跳出循环
+        break
+      }
+
       // 立即更新下载器状态
       if (result.auto_add_result) {
         // 获取实际的下载器名称
@@ -3554,6 +3654,26 @@ const triggerAddToDownloader = async (result: any) => {
     if (response.data.success) {
       logContent.value += `\n[${result.siteName}] 成功: ${response.data.message}`
       return { success: true, message: response.data.message, downloaderName: targetDownloaderName }
+    } else if (response.data.limit_reached) {
+      // 处理发种限制
+      logContent.value += `\n[${result.siteName}] 🚫 发种限制: ${response.data.message}`
+
+      // 显示限制通知
+      ElNotification({
+        title: '发种限制触发',
+        message: response.data.message + '\n后续种子发布已自动停止。',
+        type: 'warning',
+        duration: 0,
+        showClose: true,
+      })
+
+      return {
+        success: false,
+        limit_reached: true,
+        message: response.data.message,
+        downloaderName: targetDownloaderName,
+        should_stop_batch: true,
+      }
     } else {
       logContent.value += `\n[${result.siteName}] 失败: ${response.data.message}`
       return {
@@ -5065,6 +5185,46 @@ const filterUploadedParam = (url: string): string => {
 .progress-item :deep(.el-progress__text) {
   font-size: 14px;
   font-weight: 600;
+}
+
+/* 🚫 发种限制提示样式 */
+.limit-alert-section {
+  margin-top: 20px;
+  width: 50%;
+}
+
+.limit-alert {
+  display: flex;
+  align-items: flex-start;
+  padding: 16px;
+  background: #fef0f0;
+  border: 1px solid #f56c6c;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(245, 108, 108, 0.1);
+}
+
+.limit-alert-icon {
+  margin-right: 12px;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.limit-alert-content {
+  flex: 1;
+}
+
+.limit-alert-title {
+  font-weight: 600;
+  color: #f56c6c;
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.limit-alert-message {
+  color: #606266;
+  font-size: 14px;
+  line-height: 1.5;
+  word-break: break-word;
   color: #303133;
 }
 

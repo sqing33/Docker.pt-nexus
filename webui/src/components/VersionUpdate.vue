@@ -4,7 +4,9 @@
     v-model="updateDialogVisible"
     title="PT Nexus 版本更新"
     width="800px"
-    :close-on-click-modal="false"
+    :close-on-click-modal="!isForceUpdate"
+    :close-on-press-escape="!isForceUpdate"
+    :show-close="!isForceUpdate"
     class="update-dialog"
   >
     <el-card shadow="never" class="update-card">
@@ -24,6 +26,24 @@
             <el-icon color="#67c23a" size="20"><SuccessFilled /></el-icon>
             <span>已是最新版本</span>
           </div>
+        </div>
+
+        <!-- 强制更新提示 -->
+        <div
+          v-if="isForceUpdate && !updateInfo.updateControl.disable_update"
+          class="force-update-notice"
+          style="color: #f56c6c; background: #fef0f0; border-color: #fde2e2"
+        >
+          <el-icon color="#f56c6c" size="18"><WarningFilled /></el-icon>
+          <span>检测到关键更新，系统将自动执行升级流程，请勿关闭页面。</span>
+        </div>
+
+        <div
+          v-else-if="updateInfo.updateControl.disable_update && updateInfo.hasUpdate"
+          class="force-update-notice"
+        >
+          <el-icon color="#e6a23c" size="18"><WarningFilled /></el-icon>
+          <span>此版本需要更新Docker镜像，请手动更新镜像后使用</span>
         </div>
 
         <!-- All Versions Timeline -->
@@ -89,15 +109,27 @@
 
         <!-- 按钮组 -->
         <div class="button-group">
-          <el-button @click="updateDialogVisible = false" :disabled="isUpdating">
+          <!-- 修复：如果是强制更新且没被禁用，才隐藏取消按钮 -->
+          <el-button
+            v-if="!isForceUpdate || updateInfo.updateControl.disable_update"
+            @click="updateDialogVisible = false"
+            :disabled="isUpdating"
+          >
             {{ updateInfo.hasUpdate ? '稍后更新' : '确定' }}
           </el-button>
+
+          <!-- 修复核心：强制更新时总是显示按钮，disable_update 时禁用 -->
           <el-button
-            v-if="updateInfo.hasUpdate"
+            v-if="updateInfo.hasUpdate || isForceUpdate"
             type="primary"
             @click="performUpdate"
             :loading="isUpdating"
-            :disabled="isUpdating"
+            :disabled="isUpdating || updateInfo.updateControl.disable_update"
+            :title="
+              updateInfo.updateControl.disable_update
+                ? '当前版本需要更新镜像，请手动更新Docker镜像'
+                : ''
+            "
           >
             {{ isUpdating ? '更新中...' : '立即更新' }}
           </el-button>
@@ -108,9 +140,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
-import { SuccessFilled } from '@element-plus/icons-vue'
+import { SuccessFilled, WarningFilled } from '@element-plus/icons-vue'
 import axios from 'axios'
 
 // 更新状态
@@ -118,17 +150,14 @@ const isUpdating = ref(false)
 const updateProgress = ref(0)
 const updateStatus = ref('')
 
-// 输出版本信息和显示对话框事件
 const emit = defineEmits<{
   'version-loaded': [version: string]
 }>()
 
-// 版本信息
 const currentVersion = ref('加载中...')
-
-// 更新对话框状态
 const updateDialogVisible = ref(false)
 const activeUpdateTab = ref('latest')
+
 const updateInfo = reactive({
   hasUpdate: false,
   currentVersion: '',
@@ -140,13 +169,27 @@ const updateInfo = reactive({
     changes: string[]
     note?: string
   }>,
+  updateControl: {
+    force_update: false,
+    disable_update: false,
+    schedule: {
+      enabled: false,
+      timezone: 'Asia/Shanghai',
+      time: '06:00',
+      last_run: null,
+    },
+  },
 })
 
-// 版本比较函数
+// 计算属性：判断是否为强制更新
+const isForceUpdate = computed(() => {
+  return updateInfo.updateControl.force_update
+})
+
 const compareVersions = (v1: string, v2: string): number => {
+  if (!v1 || !v2) return 0
   const v1parts = v1.split('.').map(Number)
   const v2parts = v2.split('.').map(Number)
-
   for (let i = 0; i < Math.max(v1parts.length, v2parts.length); i++) {
     const a = v1parts[i] || 0
     const b = v2parts[i] || 0
@@ -156,21 +199,45 @@ const compareVersions = (v1: string, v2: string): number => {
   return 0
 }
 
-// 加载版本信息并自动检测更新
 const loadVersionInfo = async () => {
   try {
-    const response = await axios.get('/update/check')
+    const timestamp = new Date().getTime()
+    // 1. 获取基础版本信息
+    const response = await axios.get(`/update/check?t=${timestamp}`)
     const data = response.data
+
     if (data.success) {
       currentVersion.value = data.local_version
       emit('version-loaded', currentVersion.value)
 
-      // 只有当远程版本高于本地版本时才提示更新
       const isReallyHasUpdate = compareVersions(data.remote_version || '', data.local_version) > 0
-      if (isReallyHasUpdate) {
-        setTimeout(() => {
-          showUpdateDialog()
-        }, 1000)
+
+      // 添加调试信息
+      console.log('版本检查结果:', {
+        local: data.local_version,
+        remote: data.remote_version,
+        hasUpdate: isReallyHasUpdate,
+        forceUpdate: data.update_control?.force_update,
+        disableUpdate: data.update_control?.disable_update,
+      })
+
+      // 修复：有更新 OR 强制更新时都要显示弹窗
+      if (isReallyHasUpdate || (data.update_control && data.update_control.force_update)) {
+        // 2. 将数据直接传给 showUpdateDialog，不再让它自己去请求
+        await showUpdateDialog(data)
+
+        // 3. 检查自动更新逻辑
+        // 只有在：是强制更新 AND 并没有禁止更新(disable_update=false) 时才自动执行
+        if (
+          data.update_control &&
+          data.update_control.force_update &&
+          !data.update_control.disable_update
+        ) {
+          console.log('检测到强制更新，自动触发更新流程...')
+          nextTick(() => {
+            performUpdate()
+          })
+        }
       }
     }
   } catch (error) {
@@ -180,26 +247,44 @@ const loadVersionInfo = async () => {
   }
 }
 
-// 显示更新对话框
-const showUpdateDialog = async () => {
+// 修改：接收可选的 preLoadedData
+const showUpdateDialog = async (preLoadedData: any = null) => {
   try {
-    const [changelogResponse, versionResponse] = await Promise.all([
-      axios.get('/update/changelog'),
-      axios.get('/update/check'),
-    ])
+    const timestamp = new Date().getTime()
 
+    // 无论如何我们都需要 changelog，因为 /update/check 不返回 changelog
+    const changelogPromise = axios.get(`/update/changelog?t=${timestamp}`)
+
+    let versionData = preLoadedData
+
+    // 如果没有预加载数据，才发起 check 请求
+    if (!versionData) {
+      const versionResponse = await axios.get(`/update/check?t=${timestamp}`)
+      versionData = versionResponse.data
+    }
+
+    const changelogResponse = await changelogPromise
     const changelogData = changelogResponse.data
-    const versionData = versionResponse.data
 
+    // 赋值给 reactive 对象，触发计算属性更新
     updateInfo.hasUpdate = compareVersions(versionData.remote_version, currentVersion.value) > 0
     updateInfo.currentVersion = currentVersion.value
     updateInfo.remoteVersion = versionData.remote_version
     updateInfo.changelog = changelogData.changelog || []
     updateInfo.history = changelogData.history || []
 
-    // 重置为最新版本标签
-    activeUpdateTab.value = 'latest'
+    updateInfo.updateControl = {
+      force_update: versionData.update_control?.force_update || false,
+      disable_update: versionData.update_control?.disable_update || false,
+      schedule: versionData.update_control?.schedule || {
+        enabled: false,
+        timezone: 'Asia/Shanghai',
+        time: '06:00',
+        last_run: null,
+      },
+    }
 
+    activeUpdateTab.value = 'latest'
     updateDialogVisible.value = true
   } catch (error) {
     console.error('检查更新失败:', error)
@@ -207,24 +292,27 @@ const showUpdateDialog = async () => {
   }
 }
 
-// 执行更新
+// 实际执行更新的逻辑 (发送请求)
 const performUpdate = async () => {
+  // 防卫：如果已经禁止更新，直接返回
+  if (updateInfo.updateControl.disable_update) {
+    ElMessage.warning('当前版本需要更新Docker镜像，不支持在线热更新')
+    return
+  }
+
   try {
-    // 初始化更新状态
     isUpdating.value = true
     updateProgress.value = 0
     updateStatus.value = '准备更新'
 
-    // 阶段1: 拉取更新 (0-50%)
-    // 使用不确定进度模式,因为 git 拉取时间不可预测
+    // 阶段1: 拉取
     updateStatus.value = '正在连接远程仓库'
-    updateProgress.value = -1 // -1 表示不确定进度(显示动画)
+    updateProgress.value = -1
 
+    // 调用后端接口执行真正的更新
     const pullResponse = await axios.post('/update/pull')
-    const pullData = pullResponse.data
-
-    if (!pullData.success) {
-      ElMessage.error('拉取更新失败: ' + pullData.error)
+    if (!pullResponse.data.success) {
+      ElMessage.error('拉取更新失败: ' + pullResponse.data.error)
       isUpdating.value = false
       updateProgress.value = 0
       return
@@ -234,30 +322,28 @@ const performUpdate = async () => {
     updateStatus.value = '代码拉取成功'
     await new Promise((resolve) => setTimeout(resolve, 500))
 
-    // 阶段2: 安装更新 (50-90%)
+    // 阶段2: 安装
     updateStatus.value = '正在安装更新'
     updateProgress.value = 60
 
     const installResponse = await axios.post('/update/install')
-    const installData = installResponse.data
-
-    if (installData.success) {
+    if (installResponse.data.success) {
       updateProgress.value = 90
-      updateStatus.value = '安装完成'
+      updateStatus.value = '安装完成，服务正在重启...'
       await new Promise((resolve) => setTimeout(resolve, 300))
 
-      // 阶段3: 完成 (90-100%)
       updateProgress.value = 100
       updateStatus.value = '更新成功'
-
       ElMessage.success('更新成功！页面将在5秒后刷新...')
 
       setTimeout(() => {
+        // 如果不是强制更新，可以让用户自己点，或者自动关闭
+        // 强制更新一般自动刷新
         updateDialogVisible.value = false
         window.location.reload()
       }, 5000)
     } else {
-      ElMessage.error('安装更新失败: ' + installData.error)
+      ElMessage.error('安装更新失败: ' + installResponse.data.error)
       isUpdating.value = false
       updateProgress.value = 0
     }
@@ -270,29 +356,26 @@ const performUpdate = async () => {
   }
 }
 
-// 暴露方法给父组件
 const show = () => {
   showUpdateDialog()
 }
 
-// 暴露版本号给父组件
 const getCurrentVersion = () => {
   return currentVersion.value
 }
 
-// 暴露方法给父组件
 defineExpose({
   show,
   getCurrentVersion,
 })
 
-// 初始化时加载版本信息
 onMounted(() => {
   loadVersionInfo()
 })
 </script>
 
 <style scoped>
+/* 原有样式保持不变 */
 /* Update Dialog Styles */
 .update-card {
   border: none;
@@ -349,80 +432,45 @@ onMounted(() => {
   font-weight: 500;
 }
 
-.changelog-section {
-  width: 100%;
-  max-width: 600px;
-}
-
-.changelog-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: #303133;
-  margin-bottom: 15px;
-  text-align: center;
-}
-
-.changelog-list {
-  max-height: 300px;
-  overflow-y: auto;
-}
-
-.no-changelog {
-  text-align: center;
-  padding: 20px;
-  color: #909399;
-}
-
-.changelog-item {
-  display: flex;
-  align-items: flex-start;
-  padding: 12px 15px;
-  margin-bottom: 10px;
-  background: #fafafa;
-  border-radius: 6px;
-  border: 1px solid #e8e8e8;
-}
-
-.changelog-number {
-  flex-shrink: 0;
-  width: 24px;
-  height: 24px;
-  background: #409eff;
-  color: white;
-  border-radius: 50%;
+.force-update-notice {
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  font-size: 12px;
-  margin-right: 12px;
-}
-
-.changelog-text {
-  flex: 1;
-  line-height: 24px;
+  gap: 8px;
+  padding: 10px 16px;
+  background: #fdf6ec;
+  border: 1px solid #faecd8;
+  border-radius: 6px;
+  color: #e6a23c;
   font-size: 14px;
-  color: #303133;
+  font-weight: 500;
+  margin-top: 12px;
+  margin-bottom: 12px;
 }
 
-/* Update Tabs Styles */
-.update-tabs {
-  width: 100%;
-}
-
-.update-tabs :deep(.el-tabs__content) {
-  padding: 0;
-}
-
-.update-tabs :deep(.el-tab-pane) {
-  padding: 0;
-}
-
-/* History Section Styles */
-.history-section {
-  height: 500px;
+.all-versions-section {
+  height: 400px;
   overflow-y: auto;
+  overflow-x: hidden;
   width: 100%;
+  margin: 0 20px;
+}
+
+.all-versions-section::-webkit-scrollbar {
+  width: 6px;
+}
+
+.all-versions-section::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.all-versions-section::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.all-versions-section::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
 }
 
 .no-history {
@@ -448,106 +496,6 @@ onMounted(() => {
 
 .history-version:last-child {
   margin-bottom: 0;
-}
-
-/* 版本标题区域 */
-.version-header {
-  margin-bottom: 15px;
-  padding-left: 12px;
-  position: relative;
-}
-
-.version-header::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 8px;
-  bottom: 8px;
-  width: 3px;
-  background: linear-gradient(to bottom, #c79081 0%, #dfa579 100%);
-  border-radius: 2px;
-}
-
-.version-title {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.version-name {
-  font-size: 16px;
-  font-weight: 600;
-  color: #303133;
-  background: linear-gradient(0deg, #c79081 0%, #dfa579 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-.version-date {
-  font-size: 13px;
-  color: #909399;
-  background: #f5f7fa;
-  padding: 4px 8px;
-  border-radius: 4px;
-  border: 1px solid #e4e7ed;
-}
-
-/* 版本变更内容区域 */
-.version-changes {
-  padding-left: 20px;
-}
-
-/* 特殊note样式 */
-.version-note {
-  background: #fff3cd;
-  border: 1px solid #ffeaa7;
-  color: #856404;
-  padding: 12px;
-  border-radius: 6px;
-  margin-bottom: 15px;
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.version-note::before {
-  content: '📢 ';
-  margin-right: 4px;
-}
-
-/* All Versions Section */
-.all-versions-section {
-  height: 400px;
-  overflow-y: auto;
-  overflow-x: hidden;
-  width: 100%;
-  margin: 0 20px;
-}
-
-/* 自定义滚动条样式 */
-.all-versions-section::-webkit-scrollbar {
-  width: 6px;
-}
-
-.all-versions-section::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 3px;
-}
-
-.all-versions-section::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 3px;
-}
-
-.all-versions-section::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
-}
-
-.no-history {
-  text-align: center;
-  padding: 40px 20px;
-  color: #909399;
-  font-size: 16px;
 }
 
 /* Latest Version Highlight */
@@ -593,11 +541,104 @@ onMounted(() => {
   box-shadow: 0 2px 8px rgba(64, 158, 255, 0.3);
 }
 
+.version-header {
+  margin-bottom: 15px;
+  padding-left: 12px;
+  position: relative;
+}
+
+.version-header::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  background: linear-gradient(to bottom, #c79081 0%, #dfa579 100%);
+  border-radius: 2px;
+}
+
+.version-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.version-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: #303133;
+  background: linear-gradient(0deg, #c79081 0%, #dfa579 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.version-date {
+  font-size: 13px;
+  color: #909399;
+  background: #f5f7fa;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid #e4e7ed;
+}
+
+.version-changes {
+  padding-left: 20px;
+}
+
+.version-note {
+  background: #fff3cd;
+  border: 1px solid #ffeaa7;
+  color: #856404;
+  padding: 12px;
+  border-radius: 6px;
+  margin-bottom: 15px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.version-note::before {
+  content: '📢 ';
+  margin-right: 4px;
+}
+
+.changelog-item {
+  display: flex;
+  align-items: flex-start;
+  padding: 12px 15px;
+  margin-bottom: 10px;
+  background: #fafafa;
+  border-radius: 6px;
+  border: 1px solid #e8e8e8;
+}
+
+.changelog-number {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  background: #409eff;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 12px;
+  margin-right: 12px;
+}
+
+.changelog-text {
+  flex: 1;
+  line-height: 24px;
+  font-size: 14px;
+  color: #303133;
+}
+
 :deep(.el-card__body) {
   padding: 20px 0;
 }
 
-/* 对话框底部样式 */
 .dialog-footer {
   display: flex;
   align-items: center;
@@ -606,7 +647,6 @@ onMounted(() => {
   width: 100%;
 }
 
-/* 进度条容器 */
 .progress-container {
   flex: 1;
   display: flex;
@@ -628,7 +668,6 @@ onMounted(() => {
   min-width: 120px;
 }
 
-/* 按钮组 */
 .button-group {
   display: flex;
   justify-content: flex-end;
@@ -637,7 +676,6 @@ onMounted(() => {
   margin-left: auto;
 }
 
-/* 进度条样式 */
 :deep(.el-progress-bar__outer) {
   background-color: #f0f2f5;
 }
@@ -646,7 +684,6 @@ onMounted(() => {
   transition: width 0.3s ease;
 }
 
-/* 移除按钮默认的加载动画边框 */
 :deep(.el-button.is-loading::before) {
   display: none !important;
 }

@@ -857,13 +857,13 @@ default_title_components:
   platform:
     source_key: "片源平台"
   medium:
-    source_key: "媒介" # 默认使用"媒介"
+    source_key: "媒介"
+  hdr_format:
+    source_key: "HDR格式"
   video_codec:
     source_key: "视频编码"
   video_format:
     source_key: "视频格式"
-  hdr_format:
-    source_key: "HDR格式"
   bit_depth:
     source_key: "色深"
   frame_rate:

@@ -657,7 +657,8 @@
     "nickname": "蟹黄堡",
     "base_url": "crabpt.vip",
     "special_tracker_domain": null,
-    "group": "-crab",
+    "group": "-Crab",
+    "description": "蟹黄堡",
     "migration": 3,
     "speed_limit": 10
   },
@@ -956,7 +957,7 @@
     "base_url": "www.ptskit.org",
     "special_tracker_domain": "kqbhek",
     "group": "[PTS]",
-    "migration": 2,
+    "migration": 0,
     "speed_limit": 10
   },
   {

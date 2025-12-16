@@ -129,6 +129,13 @@ services:
 
 # 更新日志
 
+### v3.3.2（2025.12.17）
+
+> **注：优化在线升级脚本，需更新 docker 镜像，且删除 data 目录下的 updates 文件夹，防止后续更新失败，请尽快更新。**
+
+- 修复：主标题里的色深 10bit 与 hdr 参数位置错误，音频参数提取错误，青蛙标题多余 10bit 错误
+- 优化：在线升级脚本（需更新 docker 镜像，且删除 data 目录下的 updates 文件夹。）
+
 ### v3.3.1（2025.12.16）
 
 - 修复：UHD BluRay Remux无法识别为Remux、TrueHD 7.1 Atmos无法识别为TrueHD Atmos的问题
