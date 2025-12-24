@@ -4,15 +4,25 @@
 
 site_name: "PTSKIT"
 
-# 表单字段定义 - PTSKit只需要类型字段
+# 表单字段定义 - PTSKit需要类型、媒介、编码、分辨率、制作组字段
 form_fields:
-  category: "type"  # 类别字段映射到type参数
+  category: "type" # 类别字段映射到type参数
+  medium: "medium" # 媒介字段
+  video_codec: "codec" # 视频编码字段
+  resolution: "standard" # 分辨率字段
+  team: "team" # 制作组字段
 
 # 标准化键映射 - 定义源文本到标准化键的映射规则
 source_parsers:
   source_params:
     type:
       source_key: "类型"
+    medium:
+      source_key: "媒介"
+    video_codec:
+      source_key: "视频编码"
+    resolution:
+      source_key: "分辨率"
     team:
       source_key: "制作组"
 
@@ -34,28 +44,106 @@ source_parsers:
       "Anime": "category.animation"
       "Other": "category.other"
 
+    medium:
+      "Track": "medium.track"
+      "CD": "medium.cd"
+      "DVDR": "medium.dvdr"
+      "HDTV": "medium.hdtv"
+      "MiniBD": "medium.minibd"
+      "Encode": "medium.encode"
+      "Remux": "medium.remux"
+      "HD DVD": "medium.hddvd"
+      "Blu-ray": "medium.bluray"
+      "BluRay": "medium.bluray"
+      "Other": "medium.other"
+
+    video_codec:
+      "H.264": "video.h264"
+      "VC-1": "video.vc1"
+      "Xvid": "video.xvid"
+      "MPEG-2": "video.mpeg2"
+      "Other": "video.other"
+
+    resolution:
+      "1080p": "resolution.r1080p"
+      "1080i": "resolution.r1080i"
+      "720p": "resolution.r720p"
+      "SD": "resolution.sd"
+      "2160p": "resolution.r2160p"
+      "4K": "resolution.r2160p"
+      "Other": "resolution.other"
+
+    team:
+      "HDS": "team.hds"
+      "CHD": "team.chd"
+      "MySiLU": "team.mysilu"
+      "WiKi": "team.wiki"
+      "Other": "team.other"
+
 # 参数映射规则 - 定义如何将标准化键映射到站点特定参数
 mappings:
   # 类型映射 - 根据HTML表单中的选项值
   type:
-    "category.movie": "404"      # 电影
-    "category.tv_series": "405"  # 电视剧
-    "category.tv_shows": "409"   # 综艺
-    "category.game": "403"       # 游戏
-    "category.music": "408"      # 音乐
-    "category.animation": "407"  # 动漫 / 漫画
-    "category.other": "406"      # 其他
-    "default": "406"             # 默认为其他
+    "category.movie": "404" # 电影
+    "category.tv_series": "405" # 电视剧
+    "category.tv_shows": "409" # 综艺
+    "category.game": "403" # 游戏
+    "category.music": "408" # 音乐
+    "category.animation": "407" # 动漫 / 漫画
+    "category.other": "406" # 其他
+    "default": "406" # 默认为其他
+
+  # 媒介映射
+  medium:
+    "medium.track": "9"
+    "medium.cd": "8"
+    "medium.dvdr": "6"
+    "medium.hdtv": "5"
+    "medium.minibd": "4"
+    "medium.encode": "7"
+    "medium.remux": "3"
+    "medium.hddvd": "2"
+    "medium.bluray": "1"
+    "medium.other": "13"
+    "default": "13"
+
+  # 视频编码映射
+  video_codec:
+    "video.h264": "1"
+    "video.vc1": "2"
+    "video.xvid": "3"
+    "video.mpeg2": "4"
+    "video.other": "5"
+    "default": "5"
+
+  # 分辨率映射
+  resolution:
+    "resolution.r1080p": "1"
+    "resolution.r1080i": "2"
+    "resolution.r720p": "3"
+    "resolution.sd": "4"
+    "resolution.r2160p": "5"
+    "resolution.other": "5"
+    "default": "5"
+
+  # 制作组映射
+  team:
+    "team.hds": "1"
+    "team.chd": "2"
+    "team.mysilu": "3"
+    "team.wiki": "4"
+    "team.other": "5"
+    "default": "5"
 
   # 标签映射 - PTSKit只使用这些特定标签
   # 根据HTML中的checkbox value值进行映射
   tag:
-    "tag.转载": "10"     # 转载（必选）
-    "tag.电影": "23"     # 电影
-    "tag.电视剧": "140"  # 电视剧
-    "tag.综艺": "229"    # 综艺
-    "tag.游戏": "139"    # 游戏
-    "tag.音乐": "230"    # 音乐
-    "tag.动漫": "44"     # 动漫
-    "tag.其他": "237"    # 其他
+    "tag.转载": "10" # 转载（必选）
+    "tag.电影": "23" # 电影
+    "tag.电视剧": "140" # 电视剧
+    "tag.综艺": "229" # 综艺
+    "tag.游戏": "139" # 游戏
+    "tag.音乐": "230" # 音乐
+    "tag.动漫": "44" # 动漫
+    "tag.其他": "237" # 其他
     "default": null
