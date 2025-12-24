@@ -1088,12 +1088,17 @@ class TorrentMigrator:
                 if processed_torrent_name.endswith(".torrent"):
                     processed_torrent_name = processed_torrent_name[:-8]  # 去除.torrent扩展名
 
-                # 过滤掉文件名中的站点信息（如[HDHome]、[HDSpace]等）
-                # 修改为可以移除多个连续的方括号标识符，包括纯数字标识符
-                processed_torrent_name = re.sub(r"^(?:\[[^\]]+\]\.?)+", "", processed_torrent_name)
-
-                # 过滤掉第二个文件名中的站点信息（如[OurBits].[230254]）
-                processed_torrent_name = re.sub(r"^\[[^\]]+\]\.", "", processed_torrent_name)
+                # 针对 [OurBits] 站点的特殊规则：过滤 [OurBits] 及其后跟随的 ID [12345]
+                # 只有当字符串以 [OurBits] 开头时，才匹配移除前两个方括号块
+                if processed_torrent_name.startswith("[OurBits]"):
+                    # 匹配模式：开头[OurBits] + 可选的点 + 第二个[] + 可选的点
+                    processed_torrent_name = re.sub(
+                        r"^\[OurBits\]\.?\[[^\]]+\]\.?", "", processed_torrent_name
+                    )
+                else:
+                    # 针对其他普通站点：仅过滤掉文件名的第一个站点信息 []
+                    # 移除之前的 greedy 匹配 (re.sub(r"^(?:\[[^\]]+\]\.?)+"), 改为只匹配开头的一个
+                    processed_torrent_name = re.sub(r"^\[[^\]]+\]\.?", "", processed_torrent_name)
 
                 # --- [核心修改] 在这里统一验证和重新生成截图 ---
                 screenshots_valid = True
