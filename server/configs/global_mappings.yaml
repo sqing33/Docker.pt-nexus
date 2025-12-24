@@ -763,6 +763,7 @@ global_standard_keys:
     "DIY原盘": "tag.DIY"
     "DIY": "tag.DIY"
     "Remux": "tag.Remux"
+    "WEB-DL": "tag.WEB-DL"
     "动画": "tag.动画"
     "大包": "tag.大包"
     "超分": "tag.超分"

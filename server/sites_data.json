@@ -724,8 +724,8 @@
     "special_tracker_domain": "ptl",
     "group": "-DYZ-Movie,-DYZ-WEB,-DYZ-TV,-DJWEB",
     "description": "LGS",
-    "migration": 0,
-    "speed_limit": 10
+    "migration": 2,
+    "speed_limit": 90
   },
   {
     "site": "lemonhd",

@@ -497,7 +497,7 @@ def upload_data_title(title: str, torrent_filename: str = "", mediaInfo: str = "
                 processed_values = [
                     re.sub(pattern_rgx, replacement, val, flags=re.I) for val in processed_values
                 ]
-            
+
             # 【新增】Atmos 格式特殊处理
             # 将 "Atmos TrueHD" 调整为 "TrueHD Atmos"
             # 将 "DDP Atmos" 保持不变，将 "DTS Atmos" 调整为 "DTS:X"
@@ -507,7 +507,7 @@ def upload_data_title(title: str, torrent_filename: str = "", mediaInfo: str = "
                 if re.search(r"Atmos\s+TrueHD", val, re.IGNORECASE):
                     val = re.sub(r"Atmos\s+TrueHD", r"TrueHD Atmos", val, flags=re.I)
                     print(f"[调试] 音频格式调整: Atmos TrueHD -> TrueHD Atmos")
-                
+
                 # 处理单独的 Atmos（通常前面应该有编码）
                 elif re.search(r"\bAtmos\b(?!\s+TrueHD)", val, re.IGNORECASE):
                     # 如果 Atmos 前面是 DTS，转换为 DTS:X
@@ -515,7 +515,7 @@ def upload_data_title(title: str, torrent_filename: str = "", mediaInfo: str = "
                         val = re.sub(r"DTS.*Atmos", r"DTS:X", val, flags=re.I)
                         print(f"[调试] 音频格式调整: DTS Atmos -> DTS:X")
                     # 其他情况保持 Atmos 在正确位置
-                
+
                 atmos_processed_values.append(val)
             processed_values = atmos_processed_values
 
@@ -549,7 +549,7 @@ def upload_data_title(title: str, torrent_filename: str = "", mediaInfo: str = "
             processed_values = [
                 re.sub(r"H\s*[\s\.]?\s*264", r"H.264", val, flags=re.I) for val in processed_values
             ]
-        
+
         # 3. HDR 格式特殊处理（多个格式合并为字符串）
         elif key == "hdr_format":
             # 如果有多个 HDR 格式，将它们合并为一个字符串，用空格分隔
@@ -692,7 +692,7 @@ def upload_data_title(title: str, torrent_filename: str = "", mediaInfo: str = "
                             re.sub(pattern_rgx, replacement, val, flags=re.I)
                             for val in processed_values
                         ]
-                    
+
                     # 【新增】Atmos 格式特殊处理（与主处理逻辑相同）
                     atmos_processed_values = []
                     for val in processed_values:
@@ -700,14 +700,14 @@ def upload_data_title(title: str, torrent_filename: str = "", mediaInfo: str = "
                         if re.search(r"Atmos\s+TrueHD", val, re.IGNORECASE):
                             val = re.sub(r"Atmos\s+TrueHD", r"TrueHD Atmos", val, flags=re.I)
                             print(f"   [文件名补充] 音频格式调整: Atmos TrueHD -> TrueHD Atmos")
-                        
+
                         # 处理单独的 Atmos
                         elif re.search(r"\bAtmos\b(?!\s+TrueHD)", val, re.IGNORECASE):
                             # 如果 Atmos 前面是 DTS，转换为 DTS:X
                             if re.search(r"DTS.*Atmos", val, re.IGNORECASE):
                                 val = re.sub(r"DTS.*Atmos", r"DTS:X", val, flags=re.I)
                                 print(f"   [文件名补充] 音频格式调整: DTS Atmos -> DTS:X")
-                        
+
                         atmos_processed_values.append(val)
                     processed_values = atmos_processed_values
 
@@ -1389,18 +1389,18 @@ def add_torrent_to_downloader(
             # 在成功添加种子后检查发种限制
             try:
                 from .downloader_checker import check_seeding_limit_for_downloader
-                
+
                 # 获取所有下载器配置
                 all_downloaders = config.get("downloaders", [])
-                
+
                 # 检查发种限制
                 can_continue, limit_message = check_seeding_limit_for_downloader(
                     downloader_id, all_downloaders
                 )
-                
+
                 if not can_continue:
                     return "LIMIT_REACHED", limit_message
-                    
+
             except Exception as e:
                 logging.warning(f"检查发种限制时发生错误: {e}")
                 # 出错时不阻止正常流程，继续返回成功
@@ -1448,6 +1448,7 @@ def extract_tags_from_title(title_components: list) -> list:
             (r"\bBlu-?ray\s+DIY\b", "DIY"),
             (r"\bBluRay\s+DIY\b", "DIY"),
             (r"\bRemux\b", "Remux"),
+            (r"\bWEB-DL\b", "WEB-DL"),
         ],
         "制作组": [
             (r"\bDIY\b", "DIY"),

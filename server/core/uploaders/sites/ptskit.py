@@ -40,32 +40,6 @@ class PtskitUploader(SpecialUploader):
 
         return "\n".join(description_parts)
 
-    def _map_parameters(self) -> dict:
-        """
-        实现PTKit站点的参数映射逻辑
-        根据类型选择对应的标签，转载标签为必选
-        现在支持媒介、视频编码、分辨率等质量参数
-        """
-        # 直接使用 migrator 准备好的标准化参数
-        standardized_params = self.upload_data.get("standardized_params", {})
-
-        # 降级处理：如果没有标准化参数才重新解析
-        if not standardized_params:
-            print("未找到标准化参数，回退到重新解析")
-            standardized_params = self._parse_source_data()
-
-        # 使用标准化参数进行映射
-        mapped_params = self._map_standardized_params(standardized_params)
-        
-        # 处理标签映射 - PTSKit只使用特定的标签
-        tags = self._map_ptskit_tags(standardized_params)
-
-        # 添加标签到映射参数
-        for i, tag_id in enumerate(sorted(list(set(tags)))):
-            mapped_params[f"tags[4][{i}]"] = tag_id
-
-        return mapped_params
-
     def _map_ptskit_tags(self, standardized_params: dict) -> list:
         """
         PTSKit特殊标签映射
@@ -96,3 +70,29 @@ class PtskitUploader(SpecialUploader):
             tags.append("237")  # 其他标签
 
         return tags
+
+    def _map_parameters(self) -> dict:
+        """
+        实现PTKit站点的参数映射逻辑
+        根据类型选择对应的标签，转载标签为必选
+        现在支持媒介、视频编码、分辨率等质量参数
+        """
+        # 直接使用 migrator 准备好的标准化参数
+        standardized_params = self.upload_data.get("standardized_params", {})
+
+        # 降级处理：如果没有标准化参数才重新解析
+        if not standardized_params:
+            print("未找到标准化参数，回退到重新解析")
+            standardized_params = self._parse_source_data()
+
+        # 使用标准化参数进行映射
+        mapped_params = self._map_standardized_params(standardized_params)
+
+        # 处理标签映射 - PTSKit只使用特定的标签
+        tags = self._map_ptskit_tags(standardized_params)
+
+        # 添加标签到映射参数
+        for i, tag_id in enumerate(sorted(list(set(tags)))):
+            mapped_params[f"tags[4][{i}]"] = tag_id
+
+        return mapped_params
