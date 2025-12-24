@@ -64,8 +64,8 @@ mappings:
   tag:
     "tag.国语": "603"
     "tag.中字": "604"
-    "tag.Dolby_Vision": "611"
-    "tag.hdr10": "613"
+    "tag.杜比": "611"
+    "tag.HDR": "613"
     "tag.特效字幕": "614"
     "tag.完结": "621"
     "tag.分集": "622"

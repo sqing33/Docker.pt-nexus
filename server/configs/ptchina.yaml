@@ -121,7 +121,7 @@ source_parsers:
       "国语": "tag.国语"
       "中字": "tag.中字"
       "HDR": "tag.HDR"
-      "Dolby Vision": "tag.Dolby_Vision"
+      "Dolby Vision": "tag.杜比"
 
 # 参数映射规则 - 定义如何将标准化键映射到站点特定参数
 mappings:
@@ -218,5 +218,5 @@ mappings:
     "tag.国语": 5
     "tag.中字": 6
     "tag.HDR": 7
-    "tag.Dolby_Vision": 8
+    "tag.杜比": 8
     "default": null

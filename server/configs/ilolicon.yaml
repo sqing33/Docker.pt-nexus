@@ -4,14 +4,14 @@ site_name: "ilolicon"
 # 表单字段定义 - 定义站点上传表单中各字段的标识符
 # 这些名称是根据HTML中的 <select name="..."> 或 <input name="..."> 确定的
 form_fields:
-  category: "type"                # 类别字段
-  source: "source_sel[6]"         # 地区字段
-  medium: "medium_sel[6]"         # 媒介字段
-  video_codec: "codec_sel[6]"     # 视频编码字段
+  category: "type" # 类别字段
+  source: "source_sel[6]" # 地区字段
+  medium: "medium_sel[6]" # 媒介字段
+  video_codec: "codec_sel[6]" # 视频编码字段
   audio_codec: "audiocodec_sel[6]" # 音频编码字段
-  resolution: "standard_sel[6]"   # 分辨率字段
-  team: "team_sel[6]"             # 制作组字段
-  tags[6][]: "tags[]"             # 标签字段
+  resolution: "standard_sel[6]" # 分辨率字段
+  team: "team_sel[6]" # 制作组字段
+  tags[6][]: "tags[]" # 标签字段
 
 # 源解析器 - 定义如何从原始数据中解析出标准化参数
 # 在这个配置中，主要用于定义各参数的中文名称，便于理解
@@ -214,12 +214,12 @@ mappings:
     "tag.国语": 5
     "tag.粤语": 23
     "tag.中字": 6
-    "tag.英字": 18  # 对应 ENSub
+    "tag.英字": 18 # 对应 ENSub
     "tag.特效": 22
     "tag.DIY": 4
-    "tag.Dolby_Vision": 13 # 对应 DoVi
-    "tag.hdr10": 7
-    "tag.hdr10plus": 14
+    "tag.杜比": 13 # 对应 DoVi
+    "tag.HDR": 7
+    "tag.HDR10+": 14
     "tag.Atmos": 16
     "tag.原生": 9 # 对应 原生原盘
     "tag.LOLI": 11

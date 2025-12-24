@@ -177,7 +177,7 @@ mappings:
     "tag.原盘": "9" # 原盘
     "tag.REMUX": "11" # REMUX
     "tag.WEB-DL": "14" # WEB-DL
-    "tag.Dolby_Vision": "8" # DoVi
+    "tag.杜比": "8" # DoVi
     "tag.HDR": "7" # HDR
     "tag.SDR": "12" # SDR
     "tag.特效字幕": "10" # 特效字幕

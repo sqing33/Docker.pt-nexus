@@ -154,7 +154,7 @@ source_parsers:
       "英字": "tag.英字"
       "中字": "tag.中字"
       "HDR": "tag.HDR"
-      "Dolby Vision": "tag.Dolby_Vision"
+      "Dolby Vision": "tag.杜比"
       "Blu-ray": "tag.Blu-ray"
       "LIVE现场": "tag.LIVE现场"
       "4 K": "tag.4K"
@@ -289,7 +289,7 @@ mappings:
     "tag.英字": 18
     "tag.中字": 6
     "tag.HDR": 7
-    "tag.Dolby_Vision": 8
+    "tag.杜比": 8
     "tag.Blu-ray": 9
     "tag.LIVE现场": 10
     "tag.4K": 11

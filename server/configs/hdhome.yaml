@@ -104,9 +104,9 @@ source_parsers:
       "连载": "tag.连载"
       "完结": "tag.完结"
       "DIY": "tag.DIY"
-      "Dolby Vision": "tag.Dolby_Vision"
-      "HDR10": "tag.HDR10"
-      "HDR10+": "tag.hdr10plus"
+      "Dolby Vision": "tag.杜比"
+      "HDR10": "tag.HDR
+      "HDR10+": "tag.HDR10+"
       "Criterion": "tag.Criterion"
       "零魔": "tag.零魔"
       "default": null

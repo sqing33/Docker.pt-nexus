@@ -114,10 +114,10 @@ source_parsers:
       "中字": "tag.中字"
       "高分国剧": "tag.高分国剧"
       "特效": "tag.特效"
-      "杜比视界": "tag.Dolby_Vision"
-      "HDR10+": "tag.hdr10plus"
+      "杜比视界": "tag.杜比"
+      "HDR10+": "tag.HDR10+"
       "菁彩HDR": "tag.菁彩HDR"
-      "HDR10": "tag.hdr10"
+      "HDR10": "tag.HDR
       "连载": "tag.连载"
       "合集": "tag.完结"
       "HLG": "tag.HLG"
@@ -217,10 +217,10 @@ mappings:
     "tag.中字": 6
     "tag.高分国剧": 21
     "tag.特效": 12
-    "tag.Dolby_Vision": 8
-    "tag.hdr10plus": 10
+    "tag.杜比": 8
+    "tag.HDR10+": 10
     "tag.菁彩HDR": 18
-    "tag.hdr10": 9
+    "tag.HDR": 9
     "tag.连载": 23
     "tag.完结": 20
     "tag.hlg": 19

@@ -112,9 +112,9 @@ source_parsers:
       "中字": "tag.中字"
       "特效": "tag.特效"
       "自译": "tag.自译"
-      "DoVi": "tag.Dolby_Vision"
-      "HDR10": "tag.hdr10"
-      "HDR10+": "tag.hdr10plus"
+      "DoVi": "tag.杜比"
+      "HDR10": "tag.HDR
+      "HDR10+": "tag.HDR10+"
       "菁彩HDR": "tag.菁彩HDR"
       "HLG": "tag.HLG"
       "CC": "tag.cc"

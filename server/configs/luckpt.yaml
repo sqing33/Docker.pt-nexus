@@ -10,7 +10,7 @@ form_fields:
   audio_codec: "audiocodec_sel[4]"
   resolution: "standard_sel[4]"
   team: "team_sel[4]"
-  category: "type"  # 类别字段映射到type参数
+  category: "type" # 类别字段映射到type参数
 
 # 标准化键映射 - 定义源文本到标准化键的映射规则
 # source_parsers部分：定义如何从原始数据解析出标准化参数
@@ -30,7 +30,6 @@ source_parsers:
       source_key: "制作组"
     source:
       source_key: "产地"
-
 
   # 标准化键映射规则（从原始文本到标准化键）
   standard_keys:
@@ -111,9 +110,9 @@ source_parsers:
       "中字": "tag.中字"
       "英语": "tag.英语"
       "菁彩HDR": "tag.菁彩HDR"
-      "Dolby Vision": "tag.Dolby_Vision"
-      "HDR10": "tag.hdr10"
-      "HDR10+": "tag.hdr10plus"
+      "Dolby Vision": "tag.杜比"
+      "HDR10": "tag.HDR
+      "HDR10+": "tag.HDR10+"
       "合集": "tag.合集"
       "特效": "tag.特效"
       "粤语": "tag.粤语"
@@ -206,9 +205,9 @@ mappings:
     "tag.中字": 6
     "tag.英语": 22
     "tag.菁彩HDR": 21
-    "tag.Dolby_Vision": 20
-    "tag.hdr10": 19
-    "tag.hdr10plus": 18
+    "tag.杜比": 20
+    "tag.HDR": 19
+    "tag.HDR10+": 18
     "tag.合集": 17
     "tag.特效": 16
     "tag.粤语": 14

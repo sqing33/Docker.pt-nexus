@@ -141,9 +141,9 @@ source_parsers:
       "国语": "tag.国语"
       "粤语": "tag.粤语"
       "中字": "tag.中字"
-      "杜比视界": "tag.Dolby_Vision"
+      "杜比视界": "tag.杜比"
       "HDR10+": "tag.HDR10+"
-      "HDR10": "tag.HDR10"
+      "HDR10": "tag.HDR
       "菁彩HDR": "tag.菁彩HDR"
       "特效": "tag.特效"
       "ASMR": "tag.ASMR"
@@ -262,9 +262,9 @@ mappings:
     "tag.国语": 5
     "tag.粤语": 13
     "tag.中字": 6
-    "tag.Dolby_Vision": 8
+    "tag.杜比": 8
     "tag.HDR10+": 9
-    "tag.HDR10": 7
+    "tag.HDR": 7
     "tag.菁彩HDR": 15
     "tag.特效": 12
     "tag.ASMR": 21

@@ -107,7 +107,7 @@ def upload_data_mediaInfo(
                     # 返回一个特殊标记，告诉 async 函数这是原盘，但还没有内容
                     return "REMOTE_BDMV_PLACEHOLDER", False, False
                 # -----------------
-                
+
                 print("通过代理获取 MediaInfo 成功")
                 proxy_mediainfo = result.get("mediainfo", mediaInfo)
                 # 处理代理返回的 MediaInfo，只保留 Complete name 中的文件名
@@ -369,9 +369,8 @@ def extract_tags_from_mediainfo(mediainfo_text: str) -> list:
         # HDR 格式标签
         "Dolby Vision": ["dolby vision", "杜比视界"],
         "HDR10+": ["hdr10+"],
-        "HDR10": ["hdr10"],
-        "HDR": ["hdr"],  # 作为通用 HDR 的备用选项
-        "HDRVivid": ["hdr vivid"],
+        "HDR": ["hdr", "hdr10"],
+        "菁彩HDR": ["hdr vivid"],
     }
 
     # 定义检查范围
@@ -742,9 +741,10 @@ def upload_data_mediaInfo_async(
     # 2. 准备路径（无论本地还是远程都需要这个路径）
     path_to_search = ""
     if save_path:
-        from .media_helper import _find_target_video_file # 确保导入
+        from .media_helper import _find_target_video_file  # 确保导入
+
         translated_save_path = translate_path(downloader_id, save_path)
-        
+
         # 构建搜索路径
         if torrent_name:
             path_to_search = os.path.join(translated_save_path, torrent_name)
@@ -761,7 +761,7 @@ def upload_data_mediaInfo_async(
         is_bluray_disc = True
         # 清空 mediainfo，因为 "REMOTE_BDMV_PLACEHOLDER" 不是有效的 mediainfo 文本，
         # 我们希望后续 BDInfo 任务完成后填入真正的内容
-        mediainfo = "" 
+        mediainfo = ""
     # ---------------------------------------------
     elif path_to_search:
         # 只有不是远程原盘时，才尝试在本地查找视频文件
@@ -827,7 +827,9 @@ def upload_data_mediaInfo_async(
 
                 # 添加 BDInfo 任务到后台队列，使用已经构建好的完整路径
                 # BDInfo管理器会自动根据downloader_id判断是否使用远程执行
-                print(f"[DEBUG] 准备添加 BDInfo 任务: seed_id={seed_id}, path={path_to_search}, priority={priority}, downloader_id={downloader_id}")
+                print(
+                    f"[DEBUG] 准备添加 BDInfo 任务: seed_id={seed_id}, path={path_to_search}, priority={priority}, downloader_id={downloader_id}"
+                )
                 task_id = bdinfo_manager.add_task(seed_id, path_to_search, priority, downloader_id)
 
                 # 获取任务信息以确定执行模式
