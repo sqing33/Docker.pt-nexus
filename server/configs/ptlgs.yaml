@@ -1,0 +1,188 @@
+# PTLGS站点的配置文件
+# 特殊站点：海报、截图、MediaInfo都是独立字段
+# 简介主体内容删除，只保留声明内容放到descr字段
+
+site_name: "PTLGS"
+
+# 表单字段定义 - PTLGS使用数组形式的字段名
+form_fields:
+  category: "type" # 类别字段映射到type参数
+  medium: "medium_sel[4]" # 媒介字段
+  video_codec: "codec_sel[4]" # 视频编码字段
+  audio_codec: "audiocodec_sel[4]" # 音频编码字段
+  resolution: "standard_sel[4]" # 分辨率字段
+  team: "team_sel[4]" # 制作组字段
+
+# 标准化键映射 - 定义源文本到标准化键的映射规则
+source_parsers:
+  source_params:
+    type:
+      source_key: "类型"
+    medium:
+      source_key: "媒介"
+    video_codec:
+      source_key: "视频编码"
+    audio_codec:
+      source_key: "音频编码"
+    resolution:
+      source_key: "分辨率"
+    team:
+      source_key: "制作组"
+
+  # 标准化键映射规则（从原始文本到标准化键）
+  # 引用 global_mappings.yaml 中的映射规则
+  standard_keys:
+    type:
+      "电影": "category.movie"
+      "剧集": "category.tv_series"
+      "综艺": "category.tv_shows"
+      "动漫": "category.animation"
+      "纪录片": "category.documentaries"
+      "体育": "category.sports"
+      "音乐": "category.music"
+      "其他": "category.other"
+
+    medium:
+      "Blu-ray": "medium.bluray"
+      "Remux": "medium.remux"
+      "BDRip": "medium.bdrip"
+      "WEB-DL": "medium.webdl"
+      "WEBRiP": "medium.webrip"
+      "HDTV": "medium.hdtv"
+      "TVRip": "medium.tvrip"
+      "DVD": "medium.dvd"
+      "DVDRiP": "medium.dvdr"
+      "CD": "medium.cd"
+      "Other": "medium.other"
+
+    video_codec:
+      "H.265/HEVC": "video.h265"
+      "H.264/AVC": "video.h264"
+      "VC-1": "video.vc1"
+      "MPEG-2": "video.mpeg2"
+      "Other": "video.other"
+
+    audio_codec:
+      "DTS-HD": "audio.dts_hd"
+      "TrueHD": "audio.truehd"
+      "LPCM": "audio.lpcm"
+      "DTS": "audio.dts"
+      "AC-3": "audio.ac3"
+      "AAC": "audio.aac"
+      "FLAC": "audio.flac"
+      "APE": "audio.ape"
+      "WAV": "audio.wav"
+      "MP3": "audio.mp3"
+      "Other": "audio.other"
+
+    resolution:
+      "2160p": "resolution.r2160p"
+      "1080p": "resolution.r1080p"
+      "1080i": "resolution.r1080i"
+      "720p": "resolution.r720p"
+      "SD": "resolution.sd"
+      "Other": "resolution.other"
+
+    team:
+      "DYZ-WEB": "team.dyz_web"
+      "DYZ-Movie": "team.dyz_movie"
+      "DYZ-TV": "team.dyz_tv"
+      "Eleph": "team.eleph"
+      "beAst": "team.beast"
+      "ZmWeb": "team.zmweb"
+      "Other": "team.other"
+
+# 参数映射规则 - 定义如何将标准化键映射到站点特定参数
+mappings:
+  # 类型映射 - 根据HTML表单中的选项值
+  type:
+    "category.movie": "401" # 电影
+    "category.tv_series": "402" # 剧集
+    "category.tv_shows": "403" # 综艺
+    "category.animation": "405" # 动漫
+    "category.documentaries": "404" # 纪录片
+    "category.sports": "407" # 体育
+    "category.music": "406" # 音乐
+    "category.other": "409" # 其他
+    "category.software": "411" # 字幕组
+    "default": "409" # 默认为其他
+
+  # 媒介映射
+  medium:
+    "medium.bluray": "14" # Blu-ray
+    "medium.remux": "8" # Remux
+    "medium.bdrip": "5" # BDRip
+    "medium.encode": "5" # BDRip
+    "medium.webdl": "4" # WEB-DL
+    "medium.webrip": "7" # WEBRiP
+    "medium.hdtv": "3" # HDTV
+    "medium.dvd": "1" # DVD
+    "medium.dvdr": "11" # DVDRiP
+    "medium.cd": "15" # CD
+    "medium.other": "12" # Other
+    "default": "12"
+
+  # 视频编码映射
+  video_codec:
+    "video.h265": "6" # H.265/HEVC
+    "video.h264": "7" # H.264/AVC
+    "video.vc1": "2" # VC-1
+    "video.mpeg2": "4" # MPEG-2
+    "video.other": "5" # Other
+    "default": "5"
+
+  # 音频编码映射
+  audio_codec:
+    "audio.dts_hd": "10" # DTS-HD
+    "audio.truehd": "12" # TrueHD
+    "audio.lpcm": "8" # LPCM
+    "audio.dts": "19" # DTS
+    "audio.ac3": "9" # AC-3
+    "audio.aac": "11" # AAC
+    "audio.flac": "13" # FLAC
+    "audio.ape": "14" # APE
+    "audio.wav": "1" # WAV
+    "audio.mp3": "6" # MP3
+    "audio.other": "7" # Other
+    "default": "7"
+
+  # 分辨率映射
+  resolution:
+    "resolution.r2160p": "6" # 2160p
+    "resolution.r1080p": "1" # 1080p
+    "resolution.r1080i": "2" # 1080i
+    "resolution.r720p": "3" # 720p
+    "resolution.sd": "4" # SD
+    "resolution.other": "7" # Other
+    "default": "7"
+
+  # 制作组映射
+  team:
+    "team.dyz_web": "17" # DYZ-WEB
+    "team.dyz_movie": "15" # DYZ-Movie
+    "team.dyz_tv": "14" # DYZ-TV
+    "team.eleph": "18" # Eleph
+    "team.beast": "9" # beAst
+    "team.zmweb": "11" # ZmWeb
+    "team.other": "13" # Other
+    "default": "13"
+
+  # 标签映射 - PTLGS支持全部19个标签
+  # 根据HTML中的checkbox value值进行映射
+  tag:
+    "tag.DIY": "4" # DIY
+    "tag.中字": "6" # 中字
+    "tag.3D": "20" # 3D
+    "tag.国语": "5" # 国语
+    "tag.原盘": "9" # 原盘
+    "tag.REMUX": "11" # REMUX
+    "tag.WEB-DL": "14" # WEB-DL
+    "tag.Dolby_Vision": "8" # DoVi
+    "tag.HDR": "7" # HDR
+    "tag.SDR": "12" # SDR
+    "tag.特效字幕": "10" # 特效字幕
+    "tag.完结": "15" # 完结
+    "tag.分集": "16" # 分集
+    "tag.高码率": "18" # 高码率
+    "tag.高帧率": "19" # 高帧率
+    "default": null
