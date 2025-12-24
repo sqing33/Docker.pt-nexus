@@ -152,7 +152,7 @@ source_parsers:
     tag:
       "中字": "tag.中字"
       "特效": "tag.特效"
-      "Dolby Vision": "tag.Dolby_Vision"
+      "Dolby Vision": "tag.杜比"
       "HDR": "tag.HDR"
       "完结": "tag.完结"
       "DIY": "tag.DIY"

@@ -332,7 +332,7 @@ class BaseUploader(ABC):
         combined_tags = self._collect_all_tags()
 
         for tag_str in combined_tags:
-            tag_id = self._find_mapping(tag_mapping, tag_str)
+            tag_id = self._find_mapping(tag_mapping, tag_str, mapping_type="tag")
             if tag_id:
                 tags.append(tag_id)
         for i, tag_id in enumerate(sorted(list(set(tags)))):

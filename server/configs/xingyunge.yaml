@@ -117,7 +117,7 @@ source_parsers:
       "美剧": "tag.美剧"
       "粤语": "tag.粤语"
       "特效字幕": "tag.特效"
-      "杜比视界": "tag.Dolby_Vision"
+      "杜比视界": "tag.杜比"
       "禁转": "tag.禁转"
       "DIY": "tag.DIY"
       "HDR": "tag.HDR"
@@ -218,7 +218,7 @@ mappings:
     "tag.美剧": 13
     "tag.粤语": 12
     "tag.特效": 9
-    "tag.Dolby_Vision": 8
+    "tag.杜比": 8
     "tag.DIY": 4
     "tag.HDR": 7
     "tag.原生": 24

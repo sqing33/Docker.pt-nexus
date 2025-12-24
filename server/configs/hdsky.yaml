@@ -125,8 +125,8 @@ source_parsers:
     tag:
       "禁转": "tag.禁转"
       "限转": "tag.限转"
-      "Dolby Vision": "tag.Dolby_Vision"
-      "DoVi+HDR": "tag.Dolby_Vision"
+      "Dolby Vision": "tag.杜比"
+      "DoVi+HDR": "tag.杜比"
       "去头尾广告纯净版": "tag.去头尾广告纯净版"
       "国语": "tag.国语"
       "粤语": "tag.粤语"
@@ -136,6 +136,6 @@ source_parsers:
       "特效": "tag.特效"
       "次时代国语": "tag.国语"
       "全景声国语": "tag.国语"
-      "HDR10": "tag.hdr10"
+      "HDR10": "tag.HDR
       "原生原盘": "tag.原生"
       "default": null

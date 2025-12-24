@@ -795,13 +795,13 @@ global_standard_keys:
 
     # HDR相关标签
     "HDR": "tag.HDR"
-    "HDR10": "tag.hdr10"
-    "HDR10+": "tag.hdr10plus"
-    "DoVi+HDR": "tag.Dolby_Vision"
-    "Dolby Vision": "tag.Dolby_Vision"
+    "HDR10": "tag.HDR"
+    "HDR10+": "tag.HDR10+"
+    "DoVi+HDR": "tag.杜比"
+    "Dolby Vision": "tag.杜比"
+    "杜比": "tag.杜比"
     "菁彩HDR": "tag.菁彩HDR"
     "HLG": "tag.HLG"
-    "杜比": "tag.杜比"
 
     # 视频质量标签
     "高码": "tag.高码"
@@ -1133,14 +1133,11 @@ fallback_chains:
       - "medium.encode"
       - "medium.other"
 
-  hdr_format:
-    "hdr.dolby_vision":
-      - "hdr.hdr10_plus"
-      - "hdr.hdr10"
-      - "hdr.sdr"
-    "hdr.hdr10_plus":
-      - "hdr.hdr10"
-      - "hdr.sdr"
+  tag:
+    "tag.菁彩HDR":
+      - "tag.HDR"
+    "tag.HDR10+":
+      - "tag.HDR"
 
   resolution:
     "resolution.r1080i":
