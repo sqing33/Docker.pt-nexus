@@ -44,6 +44,7 @@ class PtskitUploader(SpecialUploader):
         """
         实现PTKit站点的参数映射逻辑
         根据类型选择对应的标签，转载标签为必选
+        现在支持媒介、视频编码、分辨率等质量参数
         """
         # 直接使用 migrator 准备好的标准化参数
         standardized_params = self.upload_data.get("standardized_params", {})
@@ -53,15 +54,9 @@ class PtskitUploader(SpecialUploader):
             print("未找到标准化参数，回退到重新解析")
             standardized_params = self._parse_source_data()
 
-        # PTSKit站点不需要媒介、视频编码、音频编码、分辨率等质量参数
-        # 只需要类型和标签映射
-        mapped_params = {}
-
-        # 处理类型映射
-        content_type = standardized_params.get("type", "")
-        type_mapping = self.mappings.get("type", {})
-        mapped_params["type"] = self._find_mapping(type_mapping, content_type)
-
+        # 使用标准化参数进行映射
+        mapped_params = self._map_standardized_params(standardized_params)
+        
         # 处理标签映射 - PTSKit只使用特定的标签
         tags = self._map_ptskit_tags(standardized_params)
 
