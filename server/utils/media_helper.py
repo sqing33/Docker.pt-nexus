@@ -1680,7 +1680,7 @@ def check_animation_type_from_description(description_text: str) -> bool:
         return False
 
     # 从简介中提取类别字段
-    category_match = re.search(r"◎\s*类\s*别\s*(.+?)(?:\n|$)", description_text)
+    category_match = re.search(r"[◎❁]\s*类\s*别\s*(.+?)(?:\n|$)", description_text)
     if category_match:
         category_text = category_match.group(1).strip()
 

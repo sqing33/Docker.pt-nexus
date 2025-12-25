@@ -28,7 +28,7 @@ source_parsers:
       "Movies": "category.movie"
       "TV Series": "category.tv_series"
       "Documentaries": "category.documentaries"
-      "Animations": "category.animations"
+      "Animations": "category.animation"
       "TV Shows": "category.tv_shows"
       "Sports": "category.sports"
       "Music": "category.music"

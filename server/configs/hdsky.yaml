@@ -28,7 +28,7 @@ source_parsers:
       "Movies/电影": "category.movie"
       "Documentaries/纪录片": "category.documentaries"
       "iPad/iPad影视": "category.movie"
-      "Animations/动漫": "category.animations"
+      "Animations/动漫": "category.animation"
       "TV Series/剧集(分集）": "category.tv_series"
       "TV Series/剧集(合集）": "category.tv_pack"
       "TV Shows/综艺": "category.tv_shows"
@@ -136,6 +136,6 @@ source_parsers:
       "特效": "tag.特效"
       "次时代国语": "tag.国语"
       "全景声国语": "tag.国语"
-      "HDR10": "tag.HDR
+      "HDR10": "tag.HDR"
       "原生原盘": "tag.原生"
       "default": null

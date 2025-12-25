@@ -48,10 +48,10 @@ mappings:
     "medium.other": "399"
 
   video_codec:
-    "video.h265": "101"
-    "video.h264": "102"
-    "video.x265": "103"
-    "video.x264": "104"
+    "video.h264": "101"
+    "video.h265": "102"
+    "video.x264": "103"
+    "video.x265": "104"
     "default": "199"
 
   resolution:

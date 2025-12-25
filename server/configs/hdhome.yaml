@@ -105,7 +105,7 @@ source_parsers:
       "完结": "tag.完结"
       "DIY": "tag.DIY"
       "Dolby Vision": "tag.杜比"
-      "HDR10": "tag.HDR
+      "HDR10": "tag.HDR"
       "HDR10+": "tag.HDR10+"
       "Criterion": "tag.Criterion"
       "零魔": "tag.零魔"

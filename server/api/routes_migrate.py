@@ -797,7 +797,6 @@ def update_db_seed_info():
 
             # 需要先获取hash值
             hash_value = seed_param_model.search_torrent_hash_by_torrentid(torrent_id, site_name)
-            print("aaaaaaaaaaaaaaaaaa", hash_value, torrent_id, site_name)
             if hash_value:
                 update_result = seed_param_model.update_parameters(hash_value, final_parameters)
             else:

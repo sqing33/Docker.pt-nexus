@@ -835,7 +835,7 @@ class TorrentMigrator:
                 os.makedirs(torrent_dir, exist_ok=True)
 
                 # [核心修改] 在文件名前添加站点标识符和种子ID，格式: 站点-ID-原文件名.torrent
-                # 例如: ssd-12345-abc.torrent
+                # 例如: ssd-999999999-abc.torrent
                 prefixed_torrent_filename = (
                     f"{self.SOURCE_SITE_CODE}-{torrent_id}-{torrent_filename}"
                 )
@@ -1088,7 +1088,7 @@ class TorrentMigrator:
                 if processed_torrent_name.endswith(".torrent"):
                     processed_torrent_name = processed_torrent_name[:-8]  # 去除.torrent扩展名
 
-                # 针对 [OurBits] 站点的特殊规则：过滤 [OurBits] 及其后跟随的 ID [12345]
+                # 针对 [OurBits] 站点的特殊规则：过滤 [OurBits] 及其后跟随的 ID [999999999]
                 # 只有当字符串以 [OurBits] 开头时，才匹配移除前两个方括号块
                 if processed_torrent_name.startswith("[OurBits]"):
                     # 匹配模式：开头[OurBits] + 可选的点 + 第二个[] + 可选的点

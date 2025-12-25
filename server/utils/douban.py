@@ -13,7 +13,7 @@ def call_api_with_fallback(api_path, params=None, method='GET', timeout=10):
     调用API时支持主备域名切换的通用函数
 
     Args:
-        api_path (str): API路径，如 '/?imdbid=tt123456'
+        api_path (str): API路径，如 '/?imdbid=tt9999999996'
         params (dict): 额外的请求参数
         method (str): HTTP方法，默认 'GET'
         timeout (int): 超时时间，默认 10 秒
@@ -672,9 +672,9 @@ def _call_refactor_url_format_api(api_config: dict, douban_link: str,
     """
     调用新的URL格式API (pt-nexus-ptgen.sqing33.dpdns.org)
     只使用URL 参数方式（前后端一起部署）:
-    /api?url=https://movie.douban.com/subject/123456/
-    /api?url=https://www.imdb.com/title/tt123456/
-    /api?url=https://www.themoviedb.org/movie/123456
+    /api?url=https://movie.douban.com/subject/9999999996/
+    /api?url=https://www.imdb.com/title/tt9999999996/
+    /api?url=https://www.themoviedb.org/movie/9999999996
     """
     try:
         base_url = api_config['base_url']

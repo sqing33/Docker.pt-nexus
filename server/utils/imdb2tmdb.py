@@ -8,16 +8,16 @@ def extract_imdb_id(imdb_url: str) -> str:
     从IMDb链接中提取IMDb ID
 
     Args:
-        imdb_url: IMDb链接，格式如 https://www.imdb.com/title/tt1234567/
+        imdb_url: IMDb链接，格式如 https://www.imdb.com/title/tt99999999967/
 
     Returns:
-        str: IMDb ID，如 tt1234567，如果提取失败返回空字符串
+        str: IMDb ID，如 tt99999999967，如果提取失败返回空字符串
     """
     if not imdb_url:
         return ""
 
     # 匹配IMDb ID模式：tt后面跟着数字
-    match = re.search(r'(tt\d+)', imdb_url)
+    match = re.search(r"(tt\d+)", imdb_url)
     if match:
         imdb_id = match.group(1)
         logger.debug(f"从IMDb链接中提取到ID: {imdb_id}")
@@ -54,7 +54,7 @@ def imdb_to_tmdb(imdb_url: str, api_key: str = None) -> tuple[str, str] | str:
         ("直连API", "https://api.tmdb.org"),
         ("备用直连API", "https://api.themoviedb.org"),
         ("代理API", "http://pt-nexus-proxy.sqing33.dpdns.org/https://api.themoviedb.org"),
-        ("备用代理API", "http://pt-nexus-proxy.1395251710.workers.dev/https://api.themoviedb.org")
+        ("备用代理API", "http://pt-nexus-proxy.1395251710.workers.dev/https://api.themoviedb.org"),
     ]
 
     try:
@@ -80,13 +80,13 @@ def imdb_to_tmdb(imdb_url: str, api_key: str = None) -> tuple[str, str] | str:
                     data = response.json()
                     logger.info(f"{url_name}请求成功")
                     break
-                except (requests.exceptions.RequestException,
-                        requests.exceptions.SSLError) as e:
+                except (requests.exceptions.RequestException, requests.exceptions.SSLError) as e:
                     if attempt < max_retries - 1:
                         logger.warning(
                             f"{url_name}请求失败 (尝试 {attempt + 1}/{max_retries}): {e}"
                         )
                         import time
+
                         time.sleep(2**attempt)  # 指数退避
                         continue
                     else:
@@ -143,10 +143,9 @@ def imdb_to_tmdb(imdb_url: str, api_key: str = None) -> tuple[str, str] | str:
         return ""
 
 
-def get_tmdb_url_from_any_source(imdb_link: str = "",
-                                 douban_link: str = "",
-                                 tmdb_link: str = "",
-                                 api_key: str = None):
+def get_tmdb_url_from_any_source(
+    imdb_link: str = "", douban_link: str = "", tmdb_link: str = "", api_key: str = None
+):
     """
     从多个来源中获取TMDB链接
 
