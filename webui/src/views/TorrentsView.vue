@@ -520,7 +520,7 @@
               @keyup.enter="updateSiteComment"
             />
             <p class="input-hint">
-              支持输入完整链接（如：https://example.com/details.php?id=123）或仅输入数字ID（如：123456）
+              支持输入完整链接（如：https://example.com/details.php?id=123）或仅输入数字ID（如：9999999996）
             </p>
           </div>
           <div class="site-operation-buttons">
@@ -1562,13 +1562,13 @@ const FIRST_LOAD_KEY = 'torrents_view_first_load'
 onMounted(async () => {
   // 检查是否是首次加载（首次打开页面或刷新浏览器）
   const isFirstLoad = !sessionStorage.getItem(FIRST_LOAD_KEY)
-  
+
   // 1. 先加载保存的UI设置
   await loadUiSettings()
   // 2. loadUiSettings 会设置 settingsLoaded=true，此时表格才会被渲染
   // 3. 使用加载好的设置去获取数据
   fetchData()
-  
+
   // 4. 只在首次加载时触发种子数据刷新
   if (isFirstLoad) {
     try {
@@ -1586,7 +1586,7 @@ onMounted(async () => {
   } else {
     console.log('页面已加载过，跳过种子数据刷新')
   }
-  
+
   // 5. 执行其他初始化
   fetchDownloadersList()
   fetchAllSitesStatus()

@@ -72,7 +72,8 @@
               <div
                 v-if="version.note"
                 class="version-note"
-                v-html="version.note.replace(/\n/g, '<br>')"
+                @click="handleNoteClick"
+                v-html="formatNote(version.note)"
               ></div>
               <div class="version-changes">
                 <div
@@ -199,10 +200,59 @@ const compareVersions = (v1: string, v2: string): number => {
   return 0
 }
 
+/**
+ * 格式化注意信息
+ */
+const formatNote = (note: string) => {
+  if (!note) return ''
+  
+  let html = note.replace(/\n/g, '<br>')
+  
+  // 匹配 curl 命令
+  const cmdRegex = /(curl -sL https:\/\/github\.com\/sqing33\/Docker\.pt-nexus.*?\| sudo bash)/g
+  
+  // 修改结构：使用 div 布局，添加提示文本
+  html = html.replace(cmdRegex, (match) => {
+    return `<div class="cmd-copy-wrapper" title="点击复制整段命令" data-cmd="${match}">
+              <div class="cmd-header">
+                <span class="cmd-icon">➜</span>
+                <span class="cmd-hint">点击复制</span>
+              </div>
+              <div class="cmd-code">${match}</div>
+            </div>`
+  })
+  
+  return html
+}
+
+/**
+ * 处理 Note 区域的点击事件（事件委托）
+ */
+const handleNoteClick = async (e: MouseEvent) => {
+  const target = e.target as HTMLElement
+  // 查找最近的带有 cmd-copy-wrapper 类的祖先元素
+  const cmdBlock = target.closest('.cmd-copy-wrapper')
+  
+  if (cmdBlock) {
+    const cmd = cmdBlock.getAttribute('data-cmd')
+    if (cmd) {
+      try {
+        await navigator.clipboard.writeText(cmd)
+        ElMessage.success({
+          message: '命令已复制到剪贴板',
+          duration: 2000
+        })
+      } catch (err) {
+        console.error('复制失败:', err)
+        ElMessage.error('复制失败，请手动复制')
+      }
+    }
+  }
+}
+
 const loadVersionInfo = async () => {
   try {
     const timestamp = new Date().getTime()
-    // 1. 获取基础版本信息
     const response = await axios.get(`/update/check?t=${timestamp}`)
     const data = response.data
 
@@ -210,28 +260,35 @@ const loadVersionInfo = async () => {
       currentVersion.value = data.local_version
       emit('version-loaded', currentVersion.value)
 
-      const isReallyHasUpdate = compareVersions(data.remote_version || '', data.local_version) > 0
+      // 计算版本差异
+      // compareResult > 0 : 远程 > 本地 (有更新)
+      // compareResult < 0 : 远程 < 本地 (本地是开发版或更新版)
+      const compareResult = compareVersions(data.remote_version || '', data.local_version)
+      const isReallyHasUpdate = compareResult > 0
+      const isLocalNewer = compareResult < 0 
 
-      // 添加调试信息
       console.log('版本检查结果:', {
         local: data.local_version,
         remote: data.remote_version,
         hasUpdate: isReallyHasUpdate,
-        forceUpdate: data.update_control?.force_update,
-        disableUpdate: data.update_control?.disable_update,
+        isLocalNewer: isLocalNewer, // 调试看是否识别为本地更新
+        forceUpdate: data.update_control?.force_update
       })
 
-      // 修复：有更新 OR 强制更新时都要显示弹窗
-      if (isReallyHasUpdate || (data.update_control && data.update_control.force_update)) {
-        // 2. 将数据直接传给 showUpdateDialog，不再让它自己去请求
+      // 核心修复：
+      // 只有在 (有真实更新 OR (强制更新 AND 本地不比远程新)) 时才弹窗
+      // 这样就屏蔽了 3.3.4 (Local) > 3.3.3 (Remote) 但带有 force_update 标志的情况
+      const shouldShowDialog = isReallyHasUpdate || 
+        ((data.update_control?.force_update) && !isLocalNewer)
+
+      if (shouldShowDialog) {
         await showUpdateDialog(data)
 
-        // 3. 检查自动更新逻辑
-        // 只有在：是强制更新 AND 并没有禁止更新(disable_update=false) 时才自动执行
         if (
           data.update_control &&
           data.update_control.force_update &&
-          !data.update_control.disable_update
+          !data.update_control.disable_update &&
+          !isLocalNewer // 再次确保本地较新时不自动更新
         ) {
           console.log('检测到强制更新，自动触发更新流程...')
           nextTick(() => {
@@ -251,13 +308,9 @@ const loadVersionInfo = async () => {
 const showUpdateDialog = async (preLoadedData: any = null) => {
   try {
     const timestamp = new Date().getTime()
-
-    // 无论如何我们都需要 changelog，因为 /update/check 不返回 changelog
     const changelogPromise = axios.get(`/update/changelog?t=${timestamp}`)
 
     let versionData = preLoadedData
-
-    // 如果没有预加载数据，才发起 check 请求
     if (!versionData) {
       const versionResponse = await axios.get(`/update/check?t=${timestamp}`)
       versionData = versionResponse.data
@@ -266,15 +319,19 @@ const showUpdateDialog = async (preLoadedData: any = null) => {
     const changelogResponse = await changelogPromise
     const changelogData = changelogResponse.data
 
-    // 赋值给 reactive 对象，触发计算属性更新
-    updateInfo.hasUpdate = compareVersions(versionData.remote_version, currentVersion.value) > 0
+    const compareResult = compareVersions(versionData.remote_version, currentVersion.value)
+    // 如果 compareResult < 0，说明本地版本比远程新
+    const isLocalNewer = compareResult < 0 
+
+    updateInfo.hasUpdate = compareResult > 0
     updateInfo.currentVersion = currentVersion.value
     updateInfo.remoteVersion = versionData.remote_version
     updateInfo.changelog = changelogData.changelog || []
     updateInfo.history = changelogData.history || []
 
     updateInfo.updateControl = {
-      force_update: versionData.update_control?.force_update || false,
+      // 修复：如果本地版本比远程新，强行关闭 force_update 标志，防止UI显示错误
+      force_update: isLocalNewer ? false : (versionData.update_control?.force_update || false),
       disable_update: versionData.update_control?.disable_update || false,
       schedule: versionData.update_control?.schedule || {
         enabled: false,
@@ -285,6 +342,9 @@ const showUpdateDialog = async (preLoadedData: any = null) => {
     }
 
     activeUpdateTab.value = 'latest'
+    
+    // 如果是手动点击检查更新(versionData为空进来)，且本地比远程新，可以弹窗提示"已是最新"
+    // 但如果是自动检查(loadVersionInfo)，上面的逻辑已经拦截了
     updateDialogVisible.value = true
   } catch (error) {
     console.error('检查更新失败:', error)
@@ -686,5 +746,66 @@ onMounted(() => {
 
 :deep(.el-button.is-loading::before) {
   display: none !important;
+}
+
+/* 1. 外层容器：改为块级元素，增加上间距，改为亮色背景 */
+.version-note :deep(.cmd-copy-wrapper) {
+  display: block;                  /* 独占一行 */
+  margin-top: 10px;               /* 与上方文字拉开距离 */
+  background: #ffffff;            /* 纯白背景，在黄色的 note 中很清晰 */
+  border: 1px solid #e4e7ed;      /* 浅灰边框 */
+  border-left: 4px solid #409eff; /* 左侧蓝色竖条，增加设计感 */
+  border-radius: 4px;
+  padding: 10px 15px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+/* 2. 鼠标悬停效果 */
+.version-note :deep(.cmd-copy-wrapper:hover) {
+  background: #f5f7fa;            /* 悬停微灰 */
+  border-color: #c0c4cc;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05); /* 轻微浮起阴影 */
+  transform: translateY(-1px);
+}
+
+/* 3. 点击时的按压效果 */
+.version-note :deep(.cmd-copy-wrapper:active) {
+  transform: translateY(0);
+  background: #eef1f6;
+}
+
+/* 4. 顶部栏（图标 + 提示语） */
+.version-note :deep(.cmd-header) {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: #909399;
+}
+
+.version-note :deep(.cmd-icon) {
+  color: #409eff;
+  font-weight: bold;
+}
+
+.version-note :deep(.cmd-hint) {
+  font-size: 12px;
+  color: #409eff;
+  background: #ecf5ff;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+/* 5. 核心代码区域：允许换行，等宽字体 */
+.version-note :deep(.cmd-code) {
+  font-family: Consolas, Monaco, 'Courier New', monospace;
+  font-size: 13px;
+  color: #303133;           /* 深灰字体，清晰易读 */
+  line-height: 1.6;         /* 增加行高 */
+  word-break: break-all;    /* 核心：强制换行，防止溢出 */
+  white-space: pre-wrap;    /* 保留空格但允许换行 */
 }
 </style>

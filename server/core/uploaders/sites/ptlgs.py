@@ -18,14 +18,14 @@ class PtlgsUploader(SpecialUploader):
         - 海报、截图、MediaInfo 通过单独字段处理
         """
         intro = self.upload_data.get("intro", {})
-        
+
         # 只保留声明部分，删除豆瓣信息等主体内容
         statement = intro.get("statement", "").strip()
-        
+
         # 如果声明内容为空，返回空字符串
         if not statement:
             return ""
-            
+
         return statement
 
     def _map_parameters(self) -> dict:
@@ -45,16 +45,16 @@ class PtlgsUploader(SpecialUploader):
 
         # 使用PTLGS特殊的映射逻辑
         mapped_params = self._map_ptlgs_parameters(standardized_params)
-        
+
         # 处理标签映射 - PTLGS支持全部22个标签
         tags = self._collect_all_tags()
         tag_mapping = self.mappings.get("tag", {})
-        
+
         for i, tag_str in enumerate(sorted(list(set(tags)))):
             tag_id = self._find_mapping(tag_mapping, tag_str)
             if tag_id:
                 mapped_params[f"tags[4][{i}]"] = tag_id
-        
+
         return mapped_params
 
     def _map_ptlgs_parameters(self, standardized_params: dict) -> dict:
@@ -63,7 +63,7 @@ class PtlgsUploader(SpecialUploader):
         绕过基类的MediaInfo特殊处理，直接进行映射
         """
         mapped_params = {}
-        
+
         # 处理类型映射
         content_type = standardized_params.get("type", "")
         type_mapping = self.mappings.get("type", {})
@@ -74,32 +74,32 @@ class PtlgsUploader(SpecialUploader):
         medium_field = self.config.get("form_fields", {}).get("medium", "medium_sel[4]")
         medium_mapping = self.mappings.get("medium", {})
         mapped_params[medium_field] = self._find_mapping(
-            medium_mapping,
-            medium_str,
-            use_length_priority=False,
-            mapping_type="medium"
+            medium_mapping, medium_str, use_length_priority=False, mapping_type="medium"
         )
-        
+
         # 处理视频编码映射
         codec_str = standardized_params.get("video_codec", "")
         codec_field = self.config.get("form_fields", {}).get("video_codec", "codec_sel[4]")
         codec_mapping = self.mappings.get("video_codec", {})
         mapped_params[codec_field] = self._find_mapping(
-            codec_mapping, codec_str, mapping_type="video_codec")
+            codec_mapping, codec_str, mapping_type="video_codec"
+        )
 
         # 处理音频编码映射
         audio_str = standardized_params.get("audio_codec", "")
         audio_field = self.config.get("form_fields", {}).get("audio_codec", "audiocodec_sel[4]")
         audio_mapping = self.mappings.get("audio_codec", {})
         mapped_params[audio_field] = self._find_mapping(
-            audio_mapping, audio_str, mapping_type="audio_codec")
+            audio_mapping, audio_str, mapping_type="audio_codec"
+        )
 
         # 处理分辨率映射
         resolution_str = standardized_params.get("resolution", "")
         resolution_field = self.config.get("form_fields", {}).get("resolution", "standard_sel[4]")
         resolution_mapping = self.mappings.get("resolution", {})
         mapped_params[resolution_field] = self._find_mapping(
-            resolution_mapping, resolution_str, mapping_type="resolution")
+            resolution_mapping, resolution_str, mapping_type="resolution"
+        )
 
         # 处理制作组映射
         release_group_str = standardized_params.get("team", "")
@@ -115,7 +115,7 @@ class PtlgsUploader(SpecialUploader):
         处理字段分离：海报→cover，截图→screenshots，MediaInfo→technical_info
         """
         logger.info(f"使用PTLGS特殊上传逻辑处理 {self.site_name} 站点")
-        
+
         # 1. 获取标准化参数
         standardized_params = self.upload_data.get("standardized_params", {})
         if not standardized_params:
@@ -131,13 +131,13 @@ class PtlgsUploader(SpecialUploader):
         # 4. 构建描述（只包含声明内容）
         description = self._build_description()
 
-# 5. PTLGS字段预处理 - 去掉[img][/img]标签
+        # 5. PTLGS字段预处理 - 去掉[img][/img]标签
         intro = self.upload_data.get("intro", {})
         poster = intro.get("poster", "").strip()
         poster = poster.replace("[img]", "").replace("[/img]", "")
         screenshots = intro.get("screenshots", "").strip()
         screenshots = screenshots.replace("[img]", "").replace("[/img]", "")
-        
+
         # 6. 准备通用的 form_data
         form_data = {
             "name": final_main_title,
@@ -149,7 +149,6 @@ class PtlgsUploader(SpecialUploader):
             "technical_info": self.upload_data.get("mediainfo", "").strip(),  # MediaInfo单独字段
             "cover": poster,  # 海报单独字段（无[img]标签）
             "screenshots": screenshots,  # 截图单独字段（无[img]标签）
-            
             **mapped_params,  # 合并映射后的特殊参数
         }
 
@@ -160,13 +159,16 @@ class PtlgsUploader(SpecialUploader):
         # 7. 执行实际发布或测试模式
         if os.getenv("UPLOAD_TEST_MODE") == "true":
             logger.info("测试模式：跳过实际发布，模拟成功响应")
-            success_url = f"https://ptl.gs/details.php?id=12345&uploaded=1&test=true"
+            success_url = f"https://ptl.gs/details.php?id=999999999&uploaded=1&test=true"
             response = type(
-                'MockResponse', (), {
-                    'url': success_url,
-                    'text': f'<html><body>发布成功！种子ID: 12345 - TEST MODE</body></html>',
-                    'raise_for_status': lambda: None
-                })()
+                "MockResponse",
+                (),
+                {
+                    "url": success_url,
+                    "text": f"<html><body>发布成功！种子ID: 999999999 - TEST MODE</body></html>",
+                    "raise_for_status": lambda: None,
+                },
+            )()
         else:
             # 实际发布逻辑
             response = self._execute_actual_upload(form_data)
@@ -180,7 +182,7 @@ class PtlgsUploader(SpecialUploader):
         """
         import os
         from utils import cookies_raw2jar
-        
+
         torrent_path = self.upload_data["modified_torrent_path"]
         with open(torrent_path, "rb") as torrent_file:
             files = {
@@ -196,7 +198,7 @@ class PtlgsUploader(SpecialUploader):
                 logger.error("目标站点 Cookie 为空，无法发布。")
                 return False, "目标站点 Cookie 未配置。"
             cookie_jar = cookies_raw2jar(cleaned_cookie_str)
-            
+
             # 添加重试机制
             max_retries = 3
             last_exception = None
@@ -224,10 +226,9 @@ class PtlgsUploader(SpecialUploader):
 
                     if attempt < max_retries - 1:
                         import time
+
                         wait_time = 2**attempt  # 指数退避
-                        logger.info(
-                            f"等待 {wait_time} 秒后进行第 {attempt + 2} 次尝试..."
-                        )
+                        logger.info(f"等待 {wait_time} 秒后进行第 {attempt + 2} 次尝试...")
                         time.sleep(wait_time)
                     else:
                         logger.error("所有重试均已失败")
@@ -237,8 +238,9 @@ class PtlgsUploader(SpecialUploader):
 
         return response
 
-    def _save_dev_params(self, form_data: dict, standardized_params: dict, 
-                        final_main_title: str, description: str):
+    def _save_dev_params(
+        self, form_data: dict, standardized_params: dict, final_main_title: str, description: str
+    ):
         """
         开发环境下保存参数到文件
         """
@@ -281,11 +283,11 @@ class PtlgsUploader(SpecialUploader):
                 "imdb_link": self.upload_data.get("imdb_link", ""),
                 "mediainfo_length": len(self.upload_data.get("mediainfo", "")),
                 "modified_torrent_path": self.upload_data.get("modified_torrent_path", ""),
-            }
+            },
         }
 
         try:
-            with open(filepath, 'w', encoding='utf-8') as f:
+            with open(filepath, "w", encoding="utf-8") as f:
                 json.dump(save_data, f, ensure_ascii=False, indent=2)
             logger.info(f"上传参数已保存到: {filepath}")
         except Exception as save_error:
@@ -303,8 +305,9 @@ class PtlgsUploader(SpecialUploader):
         elif "offers.php" in final_url:
             logger.success("发布成功！已跳转到种子详情页。")
             import re
-            pattern = r'offers\.php\?id=(\d+)(&off_details.*)?'
-            replaced_url = re.sub(pattern, r'details.php?id=\1', final_url)
+
+            pattern = r"offers\.php\?id=(\d+)(&off_details.*)?"
+            replaced_url = re.sub(pattern, r"details.php?id=\1", final_url)
             return True, f"发布成功！新种子页面: {replaced_url}"
         elif "details.php" in final_url and "existed=1" in final_url:
             logger.success("种子已存在！已跳转到种子详情页。")
@@ -314,11 +317,12 @@ class PtlgsUploader(SpecialUploader):
         elif "该种子已存在" in response.text:
             logger.success("种子已存在！在页面内容中检测到已存在提示。")
             import re
-            url_pattern = r'url=([^&\s]+/details\.php\?id=\d+[^&\s]*)'
+
+            url_pattern = r"url=([^&\s]+/details\.php\?id=\d+[^&\s]*)"
             url_match = re.search(url_pattern, response.text)
             if url_match:
                 extracted_url = url_match.group(1)
-                if not extracted_url.startswith(('http://', 'https://')):
+                if not extracted_url.startswith(("http://", "https://")):
                     extracted_url = f"https://{extracted_url}"
                 logger.info(f"从响应内容中提取到详情页URL: {extracted_url}")
                 return True, f"发布成功！种子已存在，详情页: {extracted_url}"
@@ -328,11 +332,12 @@ class PtlgsUploader(SpecialUploader):
         elif "你的种子文件已经被人上传过了" in response.text:
             logger.success("种子已存在！PTLGS站点检测到种子已被上传。")
             import re
-            url_pattern = r'url=([^&\s]+/details\.php\?id=\d+[^&\s]*)'
+
+            url_pattern = r"url=([^&\s]+/details\.php\?id=\d+[^&\s]*)"
             url_match = re.search(url_pattern, response.text)
             if url_match:
                 extracted_url = url_match.group(1)
-                if not extracted_url.startswith(('http://', 'https://')):
+                if not extracted_url.startswith(("http://", "https://")):
                     extracted_url = f"https://{extracted_url}"
                 logger.info(f"从响应内容中提取到详情页URL: {extracted_url}")
                 return True, f"发布成功！种子已存在，详情页: {extracted_url}"

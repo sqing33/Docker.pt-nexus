@@ -104,7 +104,7 @@ mappings:
     "category.documentaries": "408"
     "category.music": "409"
     "category.books": "410"
-    "default": "410"
+    "default": "401"
 
   medium:
     "medium.uhd_bluray": "9"

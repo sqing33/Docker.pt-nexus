@@ -38,8 +38,7 @@ def _extract_core_domain(hostname):
     if not hostname:
         return None
     # 移除常见的前缀
-    hostname = re.sub(r"^(www|tracker|kp|pt|t|ipv4|ipv6|on|daydream)\.", "",
-                      hostname)
+    hostname = re.sub(r"^(www|tracker|kp|pt|t|ipv4|ipv6|on|daydream)\.", "", hostname)
     parts = hostname.split(".")
     # 处理如 .co.uk, .com.cn 等双后缀域名
     if len(parts) > 2 and len(parts[-2]) <= 3 and len(parts[-1]) <= 3:
@@ -59,11 +58,11 @@ def _parse_hostname_from_url(url_string):
 
 def _extract_url_from_comment(comment):
     """从注释字符串中提取种子链接或种子ID，过滤掉无效内容。
-    
+
     处理以下几种情况：
-    1. 内容只有种子链接：https://example.com/torrent/12345
-    2. 链接前后有内容：更多信息请访问 https://example.com/torrent/12345 查看详情
-    3. 只有一串数字（种子ID）：12345
+    1. 内容只有种子链接：https://example.com/torrent/999999999
+    2. 链接前后有内容：更多信息请访问 https://example.com/torrent/999999999 查看详情
+    3. 只有一串数字（种子ID）：999999999
     4. 特殊格式注释（如HDH）：HDHx122230x1653609725x185205f1（提取第二个x和第三个x之间的ID）
     5. ob_tid格式：ob_tid=160955
     6. 无效注释：返回None而不是保留原内容
@@ -154,16 +153,16 @@ def ensure_scheme(url: str, default_scheme: str = "https://") -> str:
 def process_bbcode_images_and_cleanup(bbcode_text: str) -> str:
     """
     处理BBCode文本中的图片链接和清理不需要的标签
-    
+
     功能：
     1. 处理嵌套的 [url=链接][img]图片[/img][/url] 格式，在移除[img]时同时清理外层的[url]
     2. 处理空的 [url=图片链接][/url] 格式，转换为 [img]图片链接[/img]
     3. 删除空的 [b][/b] 标签
     4. 删除 [*] 和 [/*] 列表标签
-    
+
     Args:
         bbcode_text: 原始BBCode文本
-        
+
     Returns:
         处理后的BBCode文本
     """
@@ -175,37 +174,25 @@ def process_bbcode_images_and_cleanup(bbcode_text: str) -> str:
     # 1. 处理嵌套的 [url=链接][img]图片[/img][/url] 格式
     # 当[img]被移除时，同时清理外层的[url]标签
     # 先匹配这种嵌套格式并完全删除（因为图片已经被提取到images列表中）
-    nested_url_img_pattern = r'\[url=[^\]]+\]\[img\][^\[]*\[/img\]\[/url\]'
-    processed_text = re.sub(nested_url_img_pattern,
-                            '',
-                            processed_text,
-                            flags=re.IGNORECASE)
+    nested_url_img_pattern = r"\[url=[^\]]+\]\[img\][^\[]*\[/img\]\[/url\]"
+    processed_text = re.sub(nested_url_img_pattern, "", processed_text, flags=re.IGNORECASE)
 
     # 2. 处理空的 [url=图片链接][/url] 格式，转换为 [img]图片链接[/img]
     # 匹配包含图片扩展名的URL，支持查询参数
-    url_img_pattern = r'\[url=([^\]]*\.(?:jpg|jpeg|png|gif|bmp|webp)(?:[^\]]*))\]\s*\[/url\]'
-    processed_text = re.sub(url_img_pattern,
-                            r'[img]\1[/img]',
-                            processed_text,
-                            flags=re.IGNORECASE)
+    url_img_pattern = r"\[url=([^\]]*\.(?:jpg|jpeg|png|gif|bmp|webp)(?:[^\]]*))\]\s*\[/url\]"
+    processed_text = re.sub(url_img_pattern, r"[img]\1[/img]", processed_text, flags=re.IGNORECASE)
 
     # 3. 删除空的 [b][/b] 标签（包括中间有换行的情况）
     # 匹配 [b] 后面只有空白字符（包括换行）和 [/b] 的情况
-    processed_text = re.sub(r'\[b\]\s*\n\s*\[/b\]\n?',
-                            '',
-                            processed_text,
-                            flags=re.IGNORECASE)
+    processed_text = re.sub(r"\[b\]\s*\n\s*\[/b\]\n?", "", processed_text, flags=re.IGNORECASE)
     # 再处理同一行的情况
-    processed_text = re.sub(r'\[b\]\s*\[/b\]',
-                            '',
-                            processed_text,
-                            flags=re.IGNORECASE)
+    processed_text = re.sub(r"\[b\]\s*\[/b\]", "", processed_text, flags=re.IGNORECASE)
 
     # 4. 删除 [*] 和 [/*] 标签（列表标签）
-    processed_text = re.sub(r'\[\*\]', '', processed_text)
-    processed_text = re.sub(r'\[\/\*\]', '', processed_text)
+    processed_text = re.sub(r"\[\*\]", "", processed_text)
+    processed_text = re.sub(r"\[\/\*\]", "", processed_text)
 
     # 5. 清理多余的空行
-    processed_text = re.sub(r'\n\s*\n\s*\n', '\n\n', processed_text)
+    processed_text = re.sub(r"\n\s*\n\s*\n", "\n\n", processed_text)
 
     return processed_text.strip()

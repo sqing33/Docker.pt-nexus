@@ -111,7 +111,7 @@ source_parsers:
       "英语": "tag.英语"
       "菁彩HDR": "tag.菁彩HDR"
       "Dolby Vision": "tag.杜比"
-      "HDR10": "tag.HDR
+      "HDR10": "tag.HDR"
       "HDR10+": "tag.HDR10+"
       "合集": "tag.合集"
       "特效": "tag.特效"

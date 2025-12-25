@@ -7,7 +7,12 @@ import cloudscraper
 import yaml
 from loguru import logger
 from abc import ABC, abstractmethod
-from utils import cookies_raw2jar, ensure_scheme, extract_tags_from_mediainfo, extract_origin_from_description
+from utils import (
+    cookies_raw2jar,
+    ensure_scheme,
+    extract_tags_from_mediainfo,
+    extract_origin_from_description,
+)
 from config import GLOBAL_MAPPINGS
 from .fallback_manager import FallbackManager
 
@@ -15,10 +20,9 @@ from .fallback_manager import FallbackManager
 DEFAULT_TITLE_COMPONENTS = {}
 try:
     if os.path.exists(GLOBAL_MAPPINGS):
-        with open(GLOBAL_MAPPINGS, 'r', encoding='utf-8') as f:
+        with open(GLOBAL_MAPPINGS, "r", encoding="utf-8") as f:
             global_config = yaml.safe_load(f)
-            DEFAULT_TITLE_COMPONENTS = global_config.get(
-                "default_title_components", {})
+            DEFAULT_TITLE_COMPONENTS = global_config.get("default_title_components", {})
     else:
         logger.warning(f"配置文件不存在: {GLOBAL_MAPPINGS}")
 except Exception as e:
@@ -47,12 +51,9 @@ class BaseUploader(ABC):
         self.post_url = f"{base_url}/takeupload.php"
         self.timeout = 40
         self.headers = {
-            "origin":
-            base_url,
-            "referer":
-            f"{base_url}/upload.php",
-            "user-agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+            "origin": base_url,
+            "referer": f"{base_url}/upload.php",
+            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
         }
 
         # 加载该站点对应的配置文件
@@ -70,9 +71,11 @@ class BaseUploader(ABC):
         # 修改配置文件路径到新的位置
         config_path = os.path.join(
             os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-            'configs', f'{site_name}.yaml')
+            "configs",
+            f"{site_name}.yaml",
+        )
         try:
-            with open(config_path, 'r', encoding='utf-8') as f:
+            with open(config_path, "r", encoding="utf-8") as f:
                 return yaml.safe_load(f)
         except FileNotFoundError:
             logger.warning(f"未找到站点 {site_name} 的配置文件 {config_path}，将使用空配置")
@@ -90,8 +93,7 @@ class BaseUploader(ABC):
 
         # 解析source_params
         source_params = self.upload_data.get("source_params", {})
-        for key, parser_config in self.source_parsers.get("source_params",
-                                                          {}).items():
+        for key, parser_config in self.source_parsers.get("source_params", {}).items():
             source_key = parser_config.get("source_key")
             if source_key and source_key in source_params:
                 value = source_params[source_key]
@@ -104,12 +106,12 @@ class BaseUploader(ABC):
         # 解析title_components (只在source_params中没有相应字段时才使用)
         title_components_list = self.upload_data.get("title_components", [])
         title_params = {
-            item["key"]: item["value"]
-            for item in title_components_list if item.get("value")
+            item["key"]: item["value"] for item in title_components_list if item.get("value")
         }
 
         for key, parser_config in self.source_parsers.get(
-                "title_components", DEFAULT_TITLE_COMPONENTS).items():
+            "title_components", DEFAULT_TITLE_COMPONENTS
+        ).items():
             source_key = parser_config.get("source_key")
             if source_key and source_key in title_params:
                 # 只有当source_params中没有该字段时才使用title_components中的值
@@ -133,9 +135,7 @@ class BaseUploader(ABC):
                 elif not source_value or source_value == "N/A" or source_value == "None":
                     value = title_params[source_key]
                     # 添加调试信息
-                    print(
-                        f"DEBUG: 使用title_components中的值 '{value}' 作为 '{standard_key}'"
-                    )
+                    print(f"DEBUG: 使用title_components中的值 '{value}' 作为 '{standard_key}'")
                     # 应用转换函数（如果定义了）
                     transform = parser_config.get("transform")
                     if transform:
@@ -185,19 +185,23 @@ class BaseUploader(ABC):
                 # 查找匹配的标准化键
                 for source_text, standard_key in mapping_rules.items():
                     # 支持精确匹配和部分匹配
-                    if (source_text.lower() == original_value.lower()
-                            or source_text.lower() in original_value.lower()
-                            or original_value.lower() in source_text.lower()):
+                    if (
+                        source_text.lower() == original_value.lower()
+                        or source_text.lower() in original_value.lower()
+                        or original_value.lower() in source_text.lower()
+                    ):
                         # 找到匹配项，更新为标准化键
                         standardized_params[field] = standard_key
                         break
 
-    def _find_mapping(self,
-                      mapping_dict: dict,
-                      key_to_find: str,
-                      default_key: str = "default",
-                      use_length_priority: bool = True,
-                      mapping_type: str = "general") -> str:
+    def _find_mapping(
+        self,
+        mapping_dict: dict,
+        key_to_find: str,
+        default_key: str = "default",
+        use_length_priority: bool = True,
+        mapping_type: str = "general",
+    ) -> str:
         """
         通用的映射查找函数，支持自动降级。
         """
@@ -211,11 +215,12 @@ class BaseUploader(ABC):
 
         # 2. 尝试正则部分匹配
         try:
-            pattern = r'\b' + re.escape(str(key_to_find).lower()) + r'\b'
-            sorted_items = sorted(
-                mapping_dict.items(), key=lambda x: len(x[0]),
-                reverse=True) if use_length_priority else list(
-                    mapping_dict.items())
+            pattern = r"\b" + re.escape(str(key_to_find).lower()) + r"\b"
+            sorted_items = (
+                sorted(mapping_dict.items(), key=lambda x: len(x[0]), reverse=True)
+                if use_length_priority
+                else list(mapping_dict.items())
+            )
 
             for key, value in sorted_items:
                 if re.search(pattern, str(key).lower()):
@@ -226,7 +231,8 @@ class BaseUploader(ABC):
         # 3. [新增] 使用降级管理器尝试降级
         if mapping_type != "general":
             fallback_result = self.fallback_manager.find_with_fallback(
-                mapping_dict, str(key_to_find), mapping_type)
+                mapping_dict, str(key_to_find), mapping_type
+            )
             if fallback_result:
                 return fallback_result
 
@@ -245,87 +251,74 @@ class BaseUploader(ABC):
         # 处理类型映射
         content_type = standardized_params.get("type", "")
         type_mapping = self.mappings.get("type", {})
-        mapped_params["type"] = self._find_mapping(type_mapping, content_type)
+        mapped_params["type"] = self._find_mapping(type_mapping, content_type, mapping_type="type")
 
         # 处理媒介映射
         medium_str = standardized_params.get("medium", "")
         mediainfo_str = self.upload_data.get("mediainfo", "")
         is_standard_mediainfo = "General" in mediainfo_str and "Complete name" in mediainfo_str
         is_bdinfo = "DISC INFO" in mediainfo_str and "PLAYLIST REPORT" in mediainfo_str
-        medium_field = self.config.get("form_fields",
-                                       {}).get("medium", "medium_sel[4]")
+        medium_field = self.config.get("form_fields", {}).get("medium", "medium_sel[4]")
         medium_mapping = self.mappings.get("medium", {})
-        if is_standard_mediainfo and ('blu' in str(medium_str).lower()
-                                      or 'dvd' in str(medium_str).lower()):
+        if is_standard_mediainfo and (
+            "blu" in str(medium_str).lower() or "dvd" in str(medium_str).lower()
+        ):
             encode_value = medium_mapping.get("Encode", "7")
             mapped_params[medium_field] = encode_value
-        elif is_bdinfo and ('blu' in str(medium_str).lower()
-                            or 'dvd' in str(medium_str).lower()):
+        elif is_bdinfo and ("blu" in str(medium_str).lower() or "dvd" in str(medium_str).lower()):
             mapped_params[medium_field] = self._find_mapping(
-                medium_mapping,
-                medium_str,
-                use_length_priority=False,
-                mapping_type="medium")
+                medium_mapping, medium_str, use_length_priority=False, mapping_type="medium"
+            )
         else:
             mapped_params[medium_field] = self._find_mapping(
-                medium_mapping,
-                medium_str,
-                use_length_priority=False,
-                mapping_type="medium")
-        logger.debug(
-            f"DEBUG: 媒介映射 '{medium_str}' -> '{mapped_params[medium_field]}'")
+                medium_mapping, medium_str, use_length_priority=False, mapping_type="medium"
+            )
+        logger.debug(f"DEBUG: 媒介映射 '{medium_str}' -> '{mapped_params[medium_field]}'")
 
         # [修改] 简化所有映射调用，直接传递标准化参数即可，无需硬编码
         # _find_mapping 函数会自动处理字符串或列表
 
         # 处理视频编码映射
         codec_str = standardized_params.get("video_codec", "")
-        codec_field = self.config.get("form_fields",
-                                      {}).get("video_codec", "codec_sel[4]")
+        codec_field = self.config.get("form_fields", {}).get("video_codec", "codec_sel[4]")
         codec_mapping = self.mappings.get("video_codec", {})
         print(f"开始查找视频编码映射: '{codec_str}' (类型: video_codec)")
         mapped_params[codec_field] = self._find_mapping(
-            codec_mapping, codec_str, mapping_type="video_codec")
-        logger.debug(
-            f"DEBUG: 视频编码映射 '{codec_str}' -> '{mapped_params[codec_field]}'")
+            codec_mapping, codec_str, mapping_type="video_codec"
+        )
+        logger.debug(f"DEBUG: 视频编码映射 '{codec_str}' -> '{mapped_params[codec_field]}'")
 
         # 处理音频编码映射
         audio_str = standardized_params.get("audio_codec", "")
-        audio_field = self.config.get("form_fields",
-                                      {}).get("audio_codec",
-                                              "audiocodec_sel[4]")
+        audio_field = self.config.get("form_fields", {}).get("audio_codec", "audiocodec_sel[4]")
         audio_mapping = self.mappings.get("audio_codec", {})
         print(f"开始查找音频编码映射: '{audio_str}' (类型: audio_codec)")
         mapped_params[audio_field] = self._find_mapping(
-            audio_mapping, audio_str, mapping_type="audio_codec")
-        logger.debug(
-            f"DEBUG: 音频编码映射 '{audio_str}' -> '{mapped_params[audio_field]}'")
+            audio_mapping, audio_str, mapping_type="audio_codec"
+        )
+        logger.debug(f"DEBUG: 音频编码映射 '{audio_str}' -> '{mapped_params[audio_field]}'")
 
         # 处理分辨率映射
         resolution_str = standardized_params.get("resolution", "")
-        resolution_field = self.config.get("form_fields",
-                                           {}).get("resolution",
-                                                   "standard_sel[4]")
+        resolution_field = self.config.get("form_fields", {}).get("resolution", "standard_sel[4]")
         resolution_mapping = self.mappings.get("resolution", {})
         print(f"开始查找分辨率映射: '{resolution_str}' (类型: resolution)")
         mapped_params[resolution_field] = self._find_mapping(
-            resolution_mapping, resolution_str, mapping_type="resolution")
+            resolution_mapping, resolution_str, mapping_type="resolution"
+        )
 
         # 处理制作组映射
         release_group_str = standardized_params.get("team", "")
-        team_field = self.config.get("form_fields",
-                                     {}).get("team", "team_sel[4]")
+        team_field = self.config.get("form_fields", {}).get("team", "team_sel[4]")
         team_mapping = self.mappings.get("team", {})
-        mapped_params[team_field] = self._find_mapping(team_mapping,
-                                                       release_group_str)
+        mapped_params[team_field] = self._find_mapping(team_mapping, release_group_str)
 
         # 处理地区/来源映射
         source_str = standardized_params.get("source", "")
         source_field = self.config.get("form_fields", {}).get("source", None)
         if source_field:
             source_mapping = self.mappings.get("source", {})
-            mapped_params[source_field] = self._find_mapping(
-                source_mapping, source_str)
+            mapped_params[source_field] = self._find_mapping(source_mapping, source_str)
 
         # 处理标签映射
         tag_mapping = self.mappings.get("tag", {})
@@ -382,7 +375,9 @@ class BaseUploader(ABC):
         site_title_components = site_source_parsers.get("title_components", {})
 
         # 使用站点配置或全局配置
-        title_components_config = site_title_components if site_title_components else DEFAULT_TITLE_COMPONENTS
+        title_components_config = (
+            site_title_components if site_title_components else DEFAULT_TITLE_COMPONENTS
+        )
 
         # 按照配置中的顺序构建 order_map
         for key, config in title_components_config.items():
@@ -402,16 +397,14 @@ class BaseUploader(ABC):
 
         # 3. 拼接主标题部分
         raw_main_part = " ".join(filter(None, title_parts))
-        main_part = re.sub(r'(?<!\d)\.(?!\d)', ' ', raw_main_part)
-        main_part = re.sub(r'\s+', ' ', main_part).strip()
+        main_part = re.sub(r"(?<!\d)\.(?!\d)", " ", raw_main_part)
+        main_part = re.sub(r"\s+", " ", main_part).strip()
 
         # 4. [核心修正] 单独处理制作组，永远使用原始值
         release_group = original_values.get("制作组", "NOGROUP").strip()
 
         # 如果原始制作组为空或无效，则不添加后缀
-        if not release_group or release_group.lower() in [
-                "na", "n/a", "nogroup"
-        ]:
+        if not release_group or release_group.lower() in ["na", "n/a", "nogroup"]:
             final_title = main_part
         else:
             # 对特殊制作组进行处理，不需要添加前缀连字符
@@ -430,10 +423,12 @@ class BaseUploader(ABC):
         根据 intro 数据构建完整的 BBCode 描述。
         """
         intro = self.upload_data.get("intro", {})
-        return (f"{intro.get('statement', '')}\n"
-                f"{intro.get('poster', '')}\n"
-                f"{intro.get('body', '')}\n"
-                f"{intro.get('screenshots', '')}")
+        return (
+            f"{intro.get('statement', '')}\n"
+            f"{intro.get('poster', '')}\n"
+            f"{intro.get('body', '')}\n"
+            f"{intro.get('screenshots', '')}"
+        )
 
     def _collect_all_tags(self) -> set:
         """
@@ -465,8 +460,7 @@ class BaseUploader(ABC):
         # 从标题组件中智能匹配HDR等信息
         title_components_list = self.upload_data.get("title_components", [])
         title_params = {
-            item["key"]: item["value"]
-            for item in title_components_list if item.get("value")
+            item["key"]: item["value"] for item in title_components_list if item.get("value")
         }
         hdr_value = title_params.get("HDR格式", "")
         # 处理HDR格式可能是列表的情况
@@ -492,8 +486,7 @@ class BaseUploader(ABC):
         logger.info(f"正在为 {self.site_name} 站点适配上传参数...")
         try:
             # 1. 直接从 upload_data 中获取由 migrator 准备好的标准化参数
-            standardized_params = self.upload_data.get("standardized_params",
-                                                       {})
+            standardized_params = self.upload_data.get("standardized_params", {})
 
             # 添加回退和警告逻辑，以防 standardized_params 未被传递
             if not standardized_params:
@@ -503,14 +496,12 @@ class BaseUploader(ABC):
                 standardized_params = self._parse_source_data()
 
             # 2. 检查是否为特殊上传器，如果是则使用子类的映射逻辑
-            if hasattr(self, '_map_parameters') and callable(
-                    getattr(self, '_map_parameters')):
+            if hasattr(self, "_map_parameters") and callable(getattr(self, "_map_parameters")):
                 # 特殊上传器使用子类的映射逻辑
                 mapped_params = self._map_parameters()
             else:
                 # 公共上传器使用基类的映射逻辑
-                mapped_params = self._map_standardized_params(
-                    standardized_params)
+                mapped_params = self._map_standardized_params(standardized_params)
 
             description = self._build_description()
             final_main_title = self._build_title(standardized_params)
@@ -518,6 +509,7 @@ class BaseUploader(ABC):
 
             # 3. 从配置读取匿名上传设置
             from config import config_manager
+
             config = config_manager.get()
             upload_settings = config.get("upload_settings", {})
             anonymous_upload = upload_settings.get("anonymous_upload", True)
@@ -552,8 +544,7 @@ class BaseUploader(ABC):
                 torrent_id = "unknown"
                 source_site_code = "unknown"
 
-                modified_torrent_path = self.upload_data.get(
-                    "modified_torrent_path", "")
+                modified_torrent_path = self.upload_data.get("modified_torrent_path", "")
                 if modified_torrent_path:
                     torrent_filename = os.path.basename(modified_torrent_path)
                     # 尝试从文件名中提取站点代码和种子ID（格式: 站点代码-种子ID-xxx.torrent）
@@ -578,22 +569,17 @@ class BaseUploader(ABC):
                     "final_main_title": final_main_title,
                     "description": description,
                     "upload_data_summary": {
-                        "subtitle":
-                        self.upload_data.get("subtitle", ""),
-                        "douban_link":
-                        self.upload_data.get("douban_link", ""),
-                        "imdb_link":
-                        self.upload_data.get("imdb_link", ""),
-                        "mediainfo_length":
-                        len(self.upload_data.get("mediainfo", "")),
-                        "modified_torrent_path":
-                        self.upload_data.get("modified_torrent_path", ""),
-                    }
+                        "subtitle": self.upload_data.get("subtitle", ""),
+                        "douban_link": self.upload_data.get("douban_link", ""),
+                        "imdb_link": self.upload_data.get("imdb_link", ""),
+                        "mediainfo_length": len(self.upload_data.get("mediainfo", "")),
+                        "modified_torrent_path": self.upload_data.get("modified_torrent_path", ""),
+                    },
                 }
 
                 # 保存到文件
                 try:
-                    with open(filepath, 'w', encoding='utf-8') as f:
+                    with open(filepath, "w", encoding="utf-8") as f:
                         json.dump(save_data, f, ensure_ascii=False, indent=2)
                     logger.info(f"上传参数已保存到: {filepath}")
                 except Exception as save_error:
@@ -602,14 +588,18 @@ class BaseUploader(ABC):
             # 如果环境变量 UPLOAD_TEST_MODE=true 为测试模式，则跳过实际发布
             if os.getenv("UPLOAD_TEST_MODE") == "true":
                 logger.info("测试模式：跳过实际发布，模拟成功响应")
-                success_url = f"https://demo.site.test/details.php?id=12345&uploaded=1&test=true"
+                success_url = (
+                    f"https://demo.site.test/details.php?id=999999999&uploaded=1&test=true"
+                )
                 response = type(
-                    'MockResponse', (), {
-                        'url': success_url,
-                        'text':
-                        f'<html><body>发布成功！种子ID: 12345 - TEST MODE</body></html>',
-                        'raise_for_status': lambda: None
-                    })()
+                    "MockResponse",
+                    (),
+                    {
+                        "url": success_url,
+                        "text": f"<html><body>发布成功！种子ID: 999999999 - TEST MODE</body></html>",
+                        "raise_for_status": lambda: None,
+                    },
+                )()
             else:
                 # 执行实际发布 【已注释，用于测试模式】
                 torrent_path = self.upload_data["modified_torrent_path"]
@@ -622,8 +612,7 @@ class BaseUploader(ABC):
                         ),
                         "nfo": ("", b"", "application/octet-stream"),
                     }
-                    cleaned_cookie_str = self.site_info.get("cookie",
-                                                            "").strip()
+                    cleaned_cookie_str = self.site_info.get("cookie", "").strip()
                     if not cleaned_cookie_str:
                         logger.error("目标站点 Cookie 为空，无法发布。")
                         return False, "目标站点 Cookie 未配置。"
@@ -662,10 +651,9 @@ class BaseUploader(ABC):
                             # 如果不是最后一次尝试，等待一段时间后重试
                             if attempt < max_retries - 1:
                                 import time
+
                                 wait_time = 2**attempt  # 指数退避
-                                logger.info(
-                                    f"等待 {wait_time} 秒后进行第 {attempt + 2} 次尝试..."
-                                )
+                                logger.info(f"等待 {wait_time} 秒后进行第 {attempt + 2} 次尝试...")
                                 time.sleep(wait_time)
                             else:
                                 logger.error("所有重试均已失败")
@@ -684,8 +672,9 @@ class BaseUploader(ABC):
             elif "offers.php" in final_url:
                 logger.success("发布成功！已跳转到种子详情页。")
                 import re
-                pattern = r'offers\.php\?id=(\d+)(&off_details.*)?'
-                replaced_url = re.sub(pattern, r'details.php?id=\1', final_url)
+
+                pattern = r"offers\.php\?id=(\d+)(&off_details.*)?"
+                replaced_url = re.sub(pattern, r"details.php?id=\1", final_url)
                 return True, f"发布成功！新种子页面: {replaced_url}"
             elif "details.php" in final_url and "existed=1" in final_url:
                 logger.success("种子已存在！已跳转到种子详情页。")
@@ -698,13 +687,14 @@ class BaseUploader(ABC):
                 logger.success("种子已存在！在页面内容中检测到已存在提示。")
                 # 尝试从响应内容中提取详情页URL
                 import re
+
                 # 匹配模式：url=domain/details.php?id=数字&其他参数
-                url_pattern = r'url=([^&\s]+/details\.php\?id=\d+[^&\s]*)'
+                url_pattern = r"url=([^&\s]+/details\.php\?id=\d+[^&\s]*)"
                 url_match = re.search(url_pattern, response.text)
                 if url_match:
                     extracted_url = url_match.group(1)
                     # 确保URL包含协议
-                    if not extracted_url.startswith(('http://', 'https://')):
+                    if not extracted_url.startswith(("http://", "https://")):
                         extracted_url = f"https://{extracted_url}"
                     logger.info(f"从响应内容中提取到详情页URL: {extracted_url}")
                     return True, f"发布成功！种子已存在，详情页: {extracted_url}"
@@ -716,13 +706,14 @@ class BaseUploader(ABC):
                 logger.success("种子已存在！HDDolby站点检测到种子已被上传。")
                 # 尝试从响应内容中提取详情页URL
                 import re
+
                 # 匹配模式：url=domain/details.php?id=数字&其他参数
-                url_pattern = r'url=([^&\s]+/details\.php\?id=\d+[^&\s]*)'
+                url_pattern = r"url=([^&\s]+/details\.php\?id=\d+[^&\s]*)"
                 url_match = re.search(url_pattern, response.text)
                 if url_match:
                     extracted_url = url_match.group(1)
                     # 确保URL包含协议
-                    if not extracted_url.startswith(('http://', 'https://')):
+                    if not extracted_url.startswith(("http://", "https://")):
                         extracted_url = f"https://{extracted_url}"
                     logger.info(f"从响应内容中提取到详情页URL: {extracted_url}")
                     return True, f"发布成功！种子已存在，详情页: {extracted_url}"
@@ -766,8 +757,7 @@ class BaseUploader(ABC):
         raise NotImplementedError("每个子类都必须实现 _map_parameters 方法")
 
     @staticmethod
-    def prepare_publish_params(site_name: str, site_info: dict,
-                               upload_payload: dict):
+    def prepare_publish_params(site_name: str, site_info: dict, upload_payload: dict):
         """
         预构建完整的发布参数供前端预览
         """
@@ -775,10 +765,11 @@ class BaseUploader(ABC):
             # 添加项目根目录到Python路径
             import sys
             import os
-            sys.path.append(
-                os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+            sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
             from .uploader import create_uploader
+
             uploader = create_uploader(site_name, site_info, upload_payload)
 
             # 直接从 payload 获取正确的 standardized_params，而不是重新解析
@@ -787,13 +778,13 @@ class BaseUploader(ABC):
                 logger.warning("预览参数构建：在 payload 中未找到 'standardized_params'。")
                 # 在预览场景下，即使没有也继续，让用户在前端看到可能不完整的数据
 
-            mapped_params = uploader._map_standardized_params(
-                standardized_params)
+            mapped_params = uploader._map_standardized_params(standardized_params)
             description = uploader._build_description()
             final_main_title = uploader._build_title(standardized_params)
 
             # 从配置读取匿名上传设置
             from config import config_manager
+
             config = config_manager.get()
             upload_settings = config.get("upload_settings", {})
             anonymous_upload = upload_settings.get("anonymous_upload", True)
@@ -814,11 +805,12 @@ class BaseUploader(ABC):
                 "form_data": form_data,
                 "standardized_params": standardized_params,
                 "final_main_title": final_main_title,
-                "description": description
+                "description": description,
             }
         except Exception as e:
             from loguru import logger
             import traceback
+
             logger.error(f"{site_name}上传器预构建参数时发生错误: {e}")
             logger.error(traceback.format_exc())
             return {"error": f"参数构建异常: {e}"}
@@ -832,10 +824,11 @@ class BaseUploader(ABC):
             # 添加项目根目录到Python路径
             import sys
             import os
-            sys.path.append(
-                os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+            sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
             from .uploader import create_uploader
+
             uploader = create_uploader(site_name, site_info, upload_payload)
             result = uploader.execute_upload()
 
@@ -852,6 +845,7 @@ class BaseUploader(ABC):
         except Exception as e:
             from loguru import logger
             import traceback
+
             logger.error(f"{site_name}上传器执行时发生错误: {e}")
             logger.error(traceback.format_exc())
             return False, f"请求异常: {e}"
@@ -880,9 +874,9 @@ class CommonUploader(BaseUploader):
         """
         # 检查源站点是否为需要特殊处理的站点
         special_sites = ["人人", "不可说", "憨憨"]
-        source_name = getattr(self, '_source_name',
-                              None) or self.upload_data.get(
-                                  'source_site_name', '')
+        source_name = getattr(self, "_source_name", None) or self.upload_data.get(
+            "source_site_name", ""
+        )
         return source_name in special_sites
 
     def execute_upload(self):
@@ -890,8 +884,7 @@ class CommonUploader(BaseUploader):
         执行上传，根据源站点决定是否使用特殊处理
         """
         if self._should_use_special_handler():
-            logger.info(
-                f"检测到源站点 {getattr(self, '_source_name', 'unknown')} 需要特殊处理")
+            logger.info(f"检测到源站点 {getattr(self, '_source_name', 'unknown')} 需要特殊处理")
             return self._execute_special_upload()
         else:
             logger.info("使用通用上传逻辑")
@@ -930,8 +923,7 @@ class SpecialUploader(BaseUploader):
         return super().execute_upload()
 
 
-def create_uploader(site_name: str, site_info: dict,
-                    upload_data: dict) -> BaseUploader:
+def create_uploader(site_name: str, site_info: dict, upload_data: dict) -> BaseUploader:
     """
     工厂函数，根据站点名称动态创建对应的上传器实例。
 
@@ -942,12 +934,11 @@ def create_uploader(site_name: str, site_info: dict,
     """
     try:
         # 将站点名称转换为模块名（处理特殊字符）
-        module_name = site_name.replace('-', '_').replace('.', '_')
+        module_name = site_name.replace("-", "_").replace(".", "_")
 
         try:
             # 尝试动态导入站点模块
-            site_module = __import__(f"core.uploaders.sites.{module_name}",
-                                     fromlist=[module_name])
+            site_module = __import__(f"core.uploaders.sites.{module_name}", fromlist=[module_name])
 
             # 获取上传器类名（通常是站点名+Uploader）
             class_name = f"{module_name.capitalize()}Uploader"
@@ -993,7 +984,7 @@ def get_available_sites() -> list:
             if filename.endswith(".py") and filename != "__init__.py":
                 site_name = filename[:-3]  # 移除.py扩展名
                 # 将模块名转换回站点名
-                site_name = site_name.replace('_', '-')
+                site_name = site_name.replace("_", "-")
                 sites.append(site_name)
 
     return sites

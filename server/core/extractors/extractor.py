@@ -928,37 +928,36 @@ class ParameterMapper:
                         f"[调试-标题解析参数] 媒介预处理: '{original_value_str}' -> '{value_str}'"
                     )
 
-            # 优先级 1: 尝试在全局映射中查找
+            # [修正] 合并全局映射和站点映射，统一进行长匹配优先查找
+            # 获取映射表
             global_mappings = GLOBAL_STANDARD_KEYS.get(param_key, {})
-            for source_text, standard_key in global_mappings.items():
-                # 使用精确匹配优先，然后是部分匹配
+            site_mappings = site_standard_keys.get(param_key, {})
+
+            # 合并映射：站点映射优先于全局映射（如果源文本相同）
+            # 使用 merged_mappings 统一处理
+            merged_mappings = global_mappings.copy()
+            if site_mappings:
+                merged_mappings.update(site_mappings)
+
+            # 1. 精确匹配优先
+            for source_text, standard_key in merged_mappings.items():
                 if source_text.lower() == value_str.lower():
                     print(
                         f"[调试-标题解析参数] {param_key} 精确匹配: '{value_str}' -> '{standard_key}'"
                     )
                     return standard_key
-            # 如果没有精确匹配，尝试部分匹配，但优先匹配更长的键
-            # 按键长度降序排列，确保更具体的匹配优先
-            sorted_mappings = sorted(global_mappings.items(),
+
+            # 2. 部分匹配：按键长度降序排列，确保匹配最长的关键词
+            # 例如：确保 '音乐视频' (len=4) 优先于 '音乐' (len=2) 被匹配
+            sorted_mappings = sorted(merged_mappings.items(),
                                      key=lambda x: len(x[0]),
                                      reverse=True)
+            
             for source_text, standard_key in sorted_mappings:
-                if source_text.lower() in value_str.lower():
+                # 只有当 standard_key 存在时才匹配（避免配置为 null 的项）
+                if standard_key and source_text.lower() in value_str.lower():
                     print(
                         f"[调试-标题解析参数] {param_key} 部分匹配: '{value_str}' 包含 '{source_text}' -> '{standard_key}'"
-                    )
-                    return standard_key
-
-            # 优先级 2: 尝试在源站点特定的映射中查找
-            site_mappings = site_standard_keys.get(param_key, {})
-            # 同样按键长度降序排列，确保更具体的匹配优先
-            sorted_site_mappings = sorted(site_mappings.items(),
-                                          key=lambda x: len(x[0]),
-                                          reverse=True)
-            for source_text, standard_key in sorted_site_mappings:
-                if source_text.lower() in value_str.lower():
-                    print(
-                        f"[调试-标题解析参数] {param_key} 站点映射匹配: '{value_str}' -> '{standard_key}'"
                     )
                     return standard_key
 

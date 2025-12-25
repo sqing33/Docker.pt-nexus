@@ -1079,6 +1079,11 @@ content_filtering:
 # target site, the system will try the next parameter in the list.
 # 参数降级链。如果目标站点不支持某个特定参数，系统将尝试列表中的下一个参数。
 fallback_chains:
+  type:
+    "category.mv":
+      - "category.music"
+      - "category.other"
+
   audio_codec:
     # Dolby / TrueHD Family
     "audio.truehd_atmos":

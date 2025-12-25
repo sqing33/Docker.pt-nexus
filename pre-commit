@@ -13,6 +13,15 @@
 # 优点: 极大地提升了提交速度，只在必要时才执行构建。
 # ==============================================================================
 
+# 加载 NVM 环境（关键：让钩子识别 node/pnpm）
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # 加载 nvm
+nvm use default > /dev/null 2>&1  # 静默加载默认 node 版本（避免输出干扰）
+
+# 解决 locale 警告（可选，顺带修复）
+export LC_ALL=en_US.UTF-8
+export LANG=en_US.UTF-8
+
 # 颜色定义
 GREEN='\033[0;32m'
 RED='\033[0;31m'

@@ -10,10 +10,9 @@ from config import GLOBAL_MAPPINGS
 CONTENT_FILTERING_CONFIG = {}
 try:
     if os.path.exists(GLOBAL_MAPPINGS):
-        with open(GLOBAL_MAPPINGS, 'r', encoding='utf-8') as f:
+        with open(GLOBAL_MAPPINGS, "r", encoding="utf-8") as f:
             global_config = yaml.safe_load(f)
-            CONTENT_FILTERING_CONFIG = global_config.get(
-                "content_filtering", {})
+            CONTENT_FILTERING_CONFIG = global_config.get("content_filtering", {})
     else:
         print(f"警告：配置文件不存在: {GLOBAL_MAPPINGS}")
 except Exception as e:
@@ -23,7 +22,7 @@ except Exception as e:
 class SSDSpecialExtractor:
     """SSD("不可说")特殊站点提取器"""
 
-    def __init__(self, soup, base_url='', cookie='', torrent_id=''):
+    def __init__(self, soup, base_url="", cookie="", torrent_id=""):
         self.soup = soup
         self.base_url = base_url
         self.cookie = cookie
@@ -50,8 +49,7 @@ class SSDSpecialExtractor:
                         return mediainfo_text
 
         # 如果没有找到完整版本，尝试简短版本
-        mediainfo_short_sections = self.soup.select(
-            "[data-group='mediainfo_toggle']")
+        mediainfo_short_sections = self.soup.select("[data-group='mediainfo_toggle']")
         for section in mediainfo_short_sections:
             codemain_div = section.select_one("div.codemain")
             if codemain_div:
@@ -63,8 +61,10 @@ class SSDSpecialExtractor:
 
         # 最后的备选方案
         selectors = [
-            "div.codemain", "div.spoiler-content pre",
-            "div.nexus-media-info-raw > pre", "pre"
+            "div.codemain",
+            "div.spoiler-content pre",
+            "div.nexus-media-info-raw > pre",
+            "pre",
         ]
 
         for selector in selectors:
@@ -86,8 +86,7 @@ class SSDSpecialExtractor:
             return False
 
         # 使用统一的验证函数
-        is_mediainfo, is_bdinfo, _, _, _, _ = validate_media_info_format(
-            content)
+        is_mediainfo, is_bdinfo, _, _, _, _ = validate_media_info_format(content)
         return is_mediainfo or is_bdinfo
 
     def extract_intro(self):
@@ -108,19 +107,69 @@ class SSDSpecialExtractor:
         # 额外文本BBCode部分（包含声明）
         extra_text_bbcode = self.soup.select_one("#torrent-extra-text-bbcode")
 
+        # SSD站点特有的"本作素材"提取
+        extra_text_section = self.soup.select_one("artical.extra-text")
+        if extra_text_section:
+            # 获取内部HTML内容 (decode_contents保留标签，get_text会丢失标签)
+            content_html = extra_text_section.decode_contents()
+
+            # 只有当包含"本作素材"时才处理
+            if "本作素材" in extra_text_section.get_text():
+                # 1. 预处理换行：将 <br> 转换为换行符
+                content_html = re.sub(r"<br\s*/?>", "\n", content_html, flags=re.IGNORECASE)
+
+                # 2. 转换 <b> 和 <strong> 标签
+                content_html = re.sub(r"<(?:b|strong)>", "[b]", content_html, flags=re.IGNORECASE)
+                content_html = re.sub(
+                    r"</(?:b|strong)>", "[/b]", content_html, flags=re.IGNORECASE
+                )
+
+                # 3. 转换 <font size="x"> 标签
+                content_html = re.sub(
+                    r'<font\s+size="(\d+)">', r"[size=\1]", content_html, flags=re.IGNORECASE
+                )
+                content_html = re.sub(r"</font>", "[/size]", content_html, flags=re.IGNORECASE)
+
+                # 4. 转换颜色 span 标签
+                def color_replace(match):
+                    # 获取颜色值，去除可能存在的分号、空白，并转为小写
+                    color = match.group(1).strip().replace(";", "").lower()
+                    return f"[color={color}]"
+
+                # 匹配 style="color: xxx;" 的 span，兼容有无分号的情况
+                content_html = re.sub(
+                    r'<span\s+style="color:\s*([^"]+?)"\s*>',
+                    color_replace,
+                    content_html,
+                    flags=re.IGNORECASE,
+                )
+                content_html = re.sub(r"</span>", "[/color]", content_html, flags=re.IGNORECASE)
+
+                # 5. 使用 BeautifulSoup 清理剩余的 HTML 标签，只保留我们转换好的 BBCode 文本
+                # 这一步非常重要，它会去除 <artical> 等不需要的标签，但保留 [b]...[/b] 等文本
+                temp_soup = BeautifulSoup(content_html, "html.parser")
+                material_content = temp_soup.get_text()
+
+                # 6. 后期清理和格式化
+                # 去除首尾空白
+                material_content = material_content.strip()
+                # 修复可能出现的连续换行问题
+                material_content = re.sub(r"\n{3,}", "\n\n", material_content)
+
+                if material_content and not self._is_unwanted_declaration(material_content):
+                    # 按照目标格式，在 quote 内部添加换行
+                    quotes.append(f"[quote]\n{material_content}\n[/quote]")
+
         # 提取声明信息（引用块）
         if extra_text_bbcode:
             # 从BBCode格式中提取引用块
             bbcode_text = extra_text_bbcode.get_text().strip()
             # 提取所有[quote]...[/quote]块
-            quote_blocks = re.findall(r'\[quote\].*?\[/quote\]', bbcode_text,
-                                      re.DOTALL)
+            quote_blocks = re.findall(r"\[quote\].*?\[/quote\]", bbcode_text, re.DOTALL)
             for quote_block in quote_blocks:
                 # 清理引用块内容
-                quote_content = re.sub(r'\[\/?quote\]', '',
-                                       quote_block).strip()
-                if quote_content and not self._is_unwanted_declaration(
-                        quote_content):
+                quote_content = re.sub(r"\[\/?quote\]", "", quote_block).strip()
+                if quote_content and not self._is_unwanted_declaration(quote_content):
                     quotes.append(quote_block)  # 保留原始的BBCode格式
 
         # 提取海报图片
@@ -135,8 +184,7 @@ class SSDSpecialExtractor:
 
         # 提取截图信息
         screenshots = []
-        screenshots_section = self.soup.select_one(
-            "[data-group='screenshots']")
+        screenshots_section = self.soup.select_one("[data-group='screenshots']")
         if screenshots_section:
             screenshot_imgs = screenshots_section.select("div.screenshot img")
             for img in screenshot_imgs:
@@ -151,8 +199,7 @@ class SSDSpecialExtractor:
         imdb_link = ""
 
         # 首先在整个文档中查找链接
-        douban_link_tag = self.soup.select_one(
-            "a[href*='movie.douban.com/subject/']")
+        douban_link_tag = self.soup.select_one("a[href*='movie.douban.com/subject/']")
         if douban_link_tag:
             douban_link = douban_link_tag.get("href", "")
 
@@ -163,34 +210,32 @@ class SSDSpecialExtractor:
         # 如果在全局没找到，尝试从特定部分查找
         if not douban_link and douban_section:
             # 从豆瓣部分提取豆瓣链接
-            douban_link_tag = douban_section.select_one(
-                "a[href*='movie.douban.com/subject/']")
+            douban_link_tag = douban_section.select_one("a[href*='movie.douban.com/subject/']")
             if not douban_link_tag:
                 # 最后尝试从文本中提取豆瓣链接
                 douban_text = douban_section.get_text()
-                douban_match = re.search(
-                    r'https?://movie\.douban\.com/subject/\d+', douban_text)
+                douban_match = re.search(r"https?://movie\.douban\.com/subject/\d+", douban_text)
                 if douban_match:
                     douban_link = douban_match.group(0)
 
         if not imdb_link and imdb_section:
             # 从IMDb部分提取IMDb链接
-            imdb_link_tag = imdb_section.select_one(
-                "a[href*='imdb.com/title/tt']")
+            imdb_link_tag = imdb_section.select_one("a[href*='imdb.com/title/tt']")
             if not imdb_link_tag:
                 # 最后尝试从文本中提取IMDb链接
                 imdb_text = imdb_section.get_text() if imdb_section else ""
-                imdb_match = re.search(r'https?://www\.imdb\.com/title/tt\d+',
-                                       imdb_text)
+                imdb_match = re.search(r"https?://www\.imdb\.com/title/tt\d+", imdb_text)
                 if imdb_match:
                     imdb_link = imdb_match.group(0)
 
         if douban_link or imdb_link:
             try:
                 from utils import upload_data_movie_info
+
                 # 使用upload_data_movie_info函数同时获取海报和简介
-                movie_status, poster_content, description_content, imdb_content, douban_content = upload_data_movie_info(
-                    "", douban_link, imdb_link, "")
+                movie_status, poster_content, description_content, imdb_content, douban_content = (
+                    upload_data_movie_info("", douban_link, imdb_link, "")
+                )
 
                 if movie_status and description_content:
                     body = description_content
@@ -203,18 +248,14 @@ class SSDSpecialExtractor:
                 print(f"调用PT-Gen时发生错误: {e}")
 
         # 过滤掉不需要的声明信息
-        body_lines = [
-            line for line in body.split('\n')
-            if not self._is_unwanted_declaration(line)
-        ]
-        body = '\n'.join(body_lines).strip()
+        body_lines = [line for line in body.split("\n") if not self._is_unwanted_declaration(line)]
+        body = "\n".join(body_lines).strip()
 
         intro = {
             "statement": "\n".join(quotes) if quotes else "",  # 声明对应的是声明
             "poster": images[0] if images else "",  # 海报
             "body": re.sub(r"\n{2,}", "\n", body),  # 正文内容
-            "screenshots":
-            "\n".join(screenshots) if screenshots else "",  # 截图信息
+            "screenshots": "\n".join(screenshots) if screenshots else "",  # 截图信息
         }
 
         return intro
@@ -226,8 +267,7 @@ class SSDSpecialExtractor:
         if not CONTENT_FILTERING_CONFIG.get("enabled", False):
             return False
 
-        unwanted_patterns = CONTENT_FILTERING_CONFIG.get(
-            "unwanted_patterns", [])
+        unwanted_patterns = CONTENT_FILTERING_CONFIG.get("unwanted_patterns", [])
         return any(pattern in text for pattern in unwanted_patterns)
 
     def extract_basic_info(self):
@@ -239,8 +279,7 @@ class SSDSpecialExtractor:
 
         if basic_info_td and basic_info_td.find_next_sibling("td"):
             # 获取td中的所有span元素
-            span_elements = basic_info_td.find_next_sibling("td").find_all(
-                "span")
+            span_elements = basic_info_td.find_next_sibling("td").find_all("span")
             for span in span_elements:
                 title = span.get("title")
                 text = span.get_text().strip()
@@ -248,9 +287,8 @@ class SSDSpecialExtractor:
                     # 根据title映射到标准字段名
                     if title == "类型":
                         # 从文本中提取括号内的内容作为类型
-                        type_match = re.search(r'\((.*?)\)', text)
-                        basic_info_dict["类型"] = type_match.group(
-                            1) if type_match else text
+                        type_match = re.search(r"\((.*?)\)", text)
+                        basic_info_dict["类型"] = type_match.group(1) if type_match else text
                     elif title == "格式":
                         basic_info_dict["媒介"] = text
                     elif title == "视频编码":
@@ -276,8 +314,7 @@ class SSDSpecialExtractor:
         """
         # 提取主标题
         title_span = self.soup.select_one("span#torrent-name")
-        original_main_title = title_span.get_text().strip(
-        ) if title_span else ""
+        original_main_title = title_span.get_text().strip() if title_span else ""
 
         # 如果没有找到span#torrent-name，尝试从h1#top中提取
         if not title_span:
@@ -286,15 +323,14 @@ class SSDSpecialExtractor:
                 # 获取h1标签中的直接文本内容，跳过子元素
                 original_main_title = h1_top.get_text().strip()
                 # 移除"已审"等无关信息
-                original_main_title = re.sub(r'\(.*?\)', '',
-                                             original_main_title).strip()
+                original_main_title = re.sub(r"\(.*?\)", "", original_main_title).strip()
 
         # 从标题中提取制作组的正则表达式
         # 修正：优先匹配 -制作组 或 @制作组 格式，这样可以正确识别包含特殊字符的制作组
         group_patterns = [
-            r'^\[(\w+(?:-\w+)*)\]',  # 开头的 [制作组] 格式
-            r'[-@]([^\s]+)$',  # 结尾的 -制作组 或 @制作组 格式（匹配任意非空白字符）
-            r'\[([A-Z]+(?:-[A-Z]+)*)\]$',  # 结尾的 [制作组] 格式
+            r"^\[(\w+(?:-\w+)*)\]",  # 开头的 [制作组] 格式
+            r"[-@]([^\s]+)$",  # 结尾的 -制作组 或 @制作组 格式（匹配任意非空白字符）
+            r"\[([A-Z]+(?:-[A-Z]+)*)\]$",  # 结尾的 [制作组] 格式
         ]
 
         for pattern in group_patterns:
@@ -311,8 +347,7 @@ class SSDSpecialExtractor:
         tags_td = self.soup.find("td", string="标签")
         if tags_td and tags_td.find_next_sibling("td"):
             tags = [
-                s.get_text(strip=True)
-                for s in tags_td.find_next_sibling("td").find_all("span")
+                s.get_text(strip=True) for s in tags_td.find_next_sibling("td").find_all("span")
             ]
 
             # 过滤掉指定的标签
@@ -354,8 +389,7 @@ class SSDSpecialExtractor:
         douban_info = ""
 
         # 在"不可说"站点中，豆瓣链接在特定的a标签中
-        douban_link = self.soup.select_one(
-            "a[href*='movie.douban.com/subject/']")
+        douban_link = self.soup.select_one("a[href*='movie.douban.com/subject/']")
         if douban_link:
             douban_info = douban_link.get("href", "")
         else:
@@ -373,8 +407,7 @@ class SSDSpecialExtractor:
                 descr_text = descr_container.get_text()
 
             # 提取豆瓣链接
-            douban_match = re.search(
-                r"(https?://movie\.douban\.com/subject/\d+)", descr_text)
+            douban_match = re.search(r"(https?://movie\.douban\.com/subject/\d+)", descr_text)
             if douban_match:
                 douban_info = douban_match.group(1)
 
@@ -401,8 +434,7 @@ class SSDSpecialExtractor:
                     descr_text = imdb_section.get_text()
                 else:
                     # 检查额外信息部分
-                    extra_text_section = self.soup.select_one(
-                        "[data-group='extra_text']")
+                    extra_text_section = self.soup.select_one("[data-group='extra_text']")
                     if extra_text_section:
                         descr_text = extra_text_section.get_text()
                     else:
@@ -411,8 +443,7 @@ class SSDSpecialExtractor:
                 descr_text = descr_container.get_text()
 
             # 提取IMDb链接
-            imdb_match = re.search(r"(https?://www\.imdb\.com/title/tt\d+)",
-                                   descr_text)
+            imdb_match = re.search(r"(https?://www\.imdb\.com/title/tt\d+)", descr_text)
             if imdb_match:
                 imdb_info = imdb_match.group(1)
 
@@ -425,8 +456,7 @@ class SSDSpecialExtractor:
         """
         # 在"不可说"站点中，主标题在span#torrent-name中
         title_span = self.soup.select_one("span#torrent-name")
-        original_main_title = title_span.get_text().strip(
-        ) if title_span else "未找到标题"
+        original_main_title = title_span.get_text().strip() if title_span else "未找到标题"
 
         # 如果没有找到span#torrent-name，尝试从h1#top中提取
         if not title_span:
@@ -435,8 +465,7 @@ class SSDSpecialExtractor:
                 # 获取h1标签中的直接文本内容，跳过子元素
                 original_main_title = h1_top.get_text().strip()
                 # 移除"已审"等无关信息
-                original_main_title = re.sub(r'\(.*?\)', '',
-                                             original_main_title).strip()
+                original_main_title = re.sub(r"\(.*?\)", "", original_main_title).strip()
 
         # 返回原始提取的标题，让公共解析器处理点号
         return original_main_title
@@ -495,10 +524,8 @@ class SSDSpecialExtractor:
         # 更新intro中的豆瓣和IMDb链接信息
         # 过滤豆瓣链接，只保留ID部分
         if douban_info:
-            douban_match = re.match(
-                r'(https?://movie\.douban\.com/subject/\d+)', douban_info)
-            intro["douban_link"] = douban_match.group(
-                1) if douban_match else douban_info
+            douban_match = re.match(r"(https?://movie\.douban\.com/subject/\d+)", douban_info)
+            intro["douban_link"] = douban_match.group(1) if douban_match else douban_info
         else:
             intro["douban_link"] = douban_info
         intro["imdb_link"] = imdb_info

@@ -789,11 +789,12 @@ func findSubtitleEventsForPGS(videoPath string, subtitleStreamIndex int, duratio
 	log.Printf("   ✅ 成功从指定区间提取到 %d 个PGS字幕显示时间段。", len(events))
 	return events, nil
 }
+
 func findTargetVideoFile(path string) (string, error) {
-	log.Printf("开始在路径 '%s' 中智能查找目标视频文件...", path)
+	log.Printf("正在路径 '%s' 中查找体积最大的视频文件...", path)
 	videoExtensions := map[string]bool{".mkv": true, ".mp4": true, ".ts": true, ".avi": true, ".wmv": true, ".mov": true, ".flv": true, ".m2ts": true}
 
-	// 首先检查路径是否存在
+	// 1. 首先检查路径是否存在
 	info, err := os.Stat(path)
 	if os.IsNotExist(err) {
 		return "", fmt.Errorf("提供的路径不存在: %s", path)
@@ -802,112 +803,58 @@ func findTargetVideoFile(path string) (string, error) {
 		return "", fmt.Errorf("无法获取路径信息: %v", err)
 	}
 
-	// 如果路径直接指向一个视频文件，直接返回
+	// 2. 如果路径本身直接指向一个文件，且是视频，直接返回
 	if !info.IsDir() {
 		if videoExtensions[strings.ToLower(filepath.Ext(path))] {
-			log.Printf("路径直接指向一个视频文件，将使用: %s", path)
+			log.Printf("输入路径直接指向文件: %s", path)
 			return path, nil
 		}
-		return "", fmt.Errorf("路径是一个文件，但不是支持的视频格式: %s", path)
+		return "", fmt.Errorf("输入路径是一个文件，但不是支持的视频格式: %s", path)
 	}
 
-	// 如果是目录，优先检查是否有种子名称匹配的文件
-	// 这种情况通常发生在没有文件夹包裹的电影文件
-	parentDir := filepath.Dir(path)
-	fileName := filepath.Base(path)
+	// 3. 如果是目录，遍历目录寻找最大的视频文件
+	var largestFile string
+	var maxSize int64 = -1
 
-	// 检查父目录中是否有匹配的文件名（不含扩展名）
-	if parentDir != path { // 确保这不是根目录的情况
-		files, err := os.ReadDir(parentDir)
-		if err == nil {
-			for _, file := range files {
-				if !file.IsDir() && videoExtensions[strings.ToLower(filepath.Ext(file.Name()))] {
-					// 检查文件名是否匹配（忽略扩展名）
-					fileNameWithoutExt := strings.TrimSuffix(file.Name(), filepath.Ext(file.Name()))
-					if strings.Contains(fileName, fileNameWithoutExt) || strings.Contains(fileNameWithoutExt, fileName) {
-						fullPath := filepath.Join(parentDir, file.Name())
-						log.Printf("找到匹配的视频文件: %s", fullPath)
-						return fullPath, nil
-					}
-				}
-			}
-		}
-	}
-
-	// 如果没有找到匹配的文件，继续原来的查找逻辑
-	var videoFiles []string
 	err = filepath.Walk(path, func(filePath string, fileInfo os.FileInfo, err error) error {
 		if err != nil {
-			return err
+			log.Printf("警告: 访问文件 '%s' 时出错: %v", filePath, err)
+			return nil // 继续遍历其他文件
 		}
-		if !fileInfo.IsDir() && videoExtensions[strings.ToLower(filepath.Ext(filePath))] {
-			videoFiles = append(videoFiles, filePath)
+
+		// 跳过目录本身
+		if fileInfo.IsDir() {
+			return nil
+		}
+
+		// 检查是否为视频扩展名
+		if videoExtensions[strings.ToLower(filepath.Ext(filePath))] {
+			// 如果当前文件比已记录的最大文件还大，则更新
+			if fileInfo.Size() > maxSize {
+				maxSize = fileInfo.Size()
+				largestFile = filePath
+			}
 		}
 		return nil
 	})
+
 	if err != nil {
 		return "", fmt.Errorf("遍历目录失败: %v", err)
 	}
-	if len(videoFiles) == 0 {
+
+	// 4. 结果检查
+	if largestFile == "" {
 		return "", fmt.Errorf("在目录 '%s' 中未找到任何视频文件", path)
 	}
 
-	// 如果只有一个视频文件，直接使用
-	if len(videoFiles) == 1 {
-		log.Printf("找到唯一的视频文件: %s", videoFiles[0])
-		return videoFiles[0], nil
+	// 打印结果
+	log.Printf("✅ 已选定最大文件 (大小: %.2f GB): %s", float64(maxSize)/1024/1024/1024, largestFile)
+
+	// 可选警告：如果最大文件都非常小（比如小于100MB），可能说明目录里全是垃圾文件
+	if maxSize < 100*1024*1024 {
+		log.Printf("⚠️ 警告: 选中的最大文件小于 100MB，可能不是正片。")
 	}
 
-	// 如果有多个视频文件，尝试找到最匹配的文件名
-	bestMatch := ""
-	bestScore := -1
-	for _, videoFile := range videoFiles {
-		baseName := strings.ToLower(filepath.Base(videoFile))
-		pathName := strings.ToLower(fileName)
-
-		// 计算匹配度
-		score := 0
-		if strings.Contains(baseName, pathName) {
-			score += 10
-		}
-		if strings.Contains(pathName, baseName) {
-			score += 5
-		}
-
-		// 长度越接近，得分越高
-		if math.Abs(float64(len(baseName)-len(pathName))) < 5 {
-			score += 3
-		}
-
-		if score > bestScore {
-			bestScore = score
-			bestMatch = videoFile
-		}
-	}
-
-	if bestMatch != "" {
-		log.Printf("选择最佳匹配的视频文件: %s (匹配度: %d)", bestMatch, bestScore)
-		return bestMatch, nil
-	}
-
-	// 如果没有找到好的匹配，选择最大的文件
-	var largestFile string
-	var maxSize int64 = -1
-	for _, f := range videoFiles {
-		fileInfo, err := os.Stat(f)
-		if err != nil {
-			log.Printf("警告: 无法获取文件 '%s' 的大小: %v", f, err)
-			continue
-		}
-		if fileInfo.Size() > maxSize {
-			maxSize = fileInfo.Size()
-			largestFile = f
-		}
-	}
-	if largestFile == "" {
-		return "", fmt.Errorf("无法确定最大的视频文件")
-	}
-	log.Printf("已选择最大文件 (%.2f GB): %s", float64(maxSize)/1024/1024/1024, largestFile)
 	return largestFile, nil
 }
 
@@ -1305,8 +1252,8 @@ func mediainfoHandler(w http.ResponseWriter, r *http.Request) {
 	if isBlurayDisc(initialPath) {
 		log.Printf("MediaInfo请求: 检测到蓝光原盘目录，返回 is_bdmv=true 由控制端决定后续操作: %s", initialPath)
 		writeJSONResponse(w, r, http.StatusOK, MediaInfoResponse{
-			Success: true, 
-			Message: "检测到蓝光原盘", 
+			Success: true,
+			Message: "检测到蓝光原盘",
 			IsBDMV:  true, // 告诉 Python 端这是原盘
 		})
 		return

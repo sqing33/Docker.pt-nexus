@@ -8,9 +8,8 @@ import requests
 import logging
 
 sys.path.append(
-    os.path.join(
-        os.path.dirname(
-            os.path.dirname(os.path.dirname(os.path.dirname(__file__))))))
+    os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
+)
 from utils import get_tmdb_url_from_any_source
 
 
@@ -34,19 +33,16 @@ class ZhuqueUploader(SpecialUploader):
             self.session.headers.update({"cookie": cookie_str})
 
         # 设置基础 Headers
-        self.session.headers.update({
-            "referer":
-            f"{base_url}/torrent/upload",
-            "origin":
-            base_url,  # 补充 origin 头，有时防跨站检查需要
-            "x-requested-with":
-            "XMLHttpRequest",
-            "accept":
-            "application/json, text/plain, */*",
-            "user-agent":
-            self.site_info.get("user_agent") or
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        })
+        self.session.headers.update(
+            {
+                "referer": f"{base_url}/torrent/upload",
+                "origin": base_url,  # 补充 origin 头，有时防跨站检查需要
+                "x-requested-with": "XMLHttpRequest",
+                "accept": "application/json, text/plain, */*",
+                "user-agent": self.site_info.get("user_agent")
+                or "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            }
+        )
 
         self.headers.update(self.session.headers)
 
@@ -61,8 +57,7 @@ class ZhuqueUploader(SpecialUploader):
             resp = self.session.get(page_url, timeout=30)
 
             if resp.status_code == 200:
-                match = re.search(
-                    r'<meta name="x-csrf-token" content="([^"]+)">', resp.text)
+                match = re.search(r'<meta name="x-csrf-token" content="([^"]+)">', resp.text)
                 if match:
                     token = match.group(1)
                     logger.success(f"成功获取 CSRF Token: {token[:8]}...")
@@ -80,9 +75,7 @@ class ZhuqueUploader(SpecialUploader):
             api_url = f"{base_url}/api/user/getSecurityInfo"
 
             # 设置 Referer
-            headers = {
-                "Referer": f"{base_url}/user/rss"
-            }
+            headers = {"Referer": f"{base_url}/user/rss"}
 
             logger.info(f"正在获取 torrentKey: {api_url}")
             resp = self.session.get(api_url, headers=headers, timeout=30)
@@ -120,21 +113,24 @@ class ZhuqueUploader(SpecialUploader):
         mapping_config = self.config.get("mappings", {})
 
         mapped["category"] = self._find_mapping(
-            mapping_config.get("type", {}),
-            standardized_params.get("type", ""))
-        mapped["medium"] = self._find_mapping(mapping_config.get("medium", {}),
-                                              standardized_params.get(
-                                                  "medium", ""),
-                                              use_length_priority=False,
-                                              mapping_type="medium")
+            mapping_config.get("type", {}), standardized_params.get("type", "")
+        )
+        mapped["medium"] = self._find_mapping(
+            mapping_config.get("medium", {}),
+            standardized_params.get("medium", ""),
+            use_length_priority=False,
+            mapping_type="medium",
+        )
         mapped["videoCoding"] = self._find_mapping(
             mapping_config.get("video_codec", {}),
             standardized_params.get("video_codec", ""),
-            mapping_type="video_codec")
+            mapping_type="video_codec",
+        )
         mapped["resolution"] = self._find_mapping(
             mapping_config.get("resolution", {}),
             standardized_params.get("resolution", ""),
-            mapping_type="resolution")
+            mapping_type="resolution",
+        )
 
         # 2. 标签映射
         combined_tags = self._collect_all_tags()
@@ -148,7 +144,7 @@ class ZhuqueUploader(SpecialUploader):
             "HDR10": "613",
             "特效字幕": "614",
             "完结": "621",
-            "分集": "622"
+            "分集": "622",
         }
 
         for tag_str in combined_tags:
@@ -188,8 +184,7 @@ class ZhuqueUploader(SpecialUploader):
         imdb_link = self.upload_data.get("imdb_link", "") or ""
         douban_link = self.upload_data.get("douban_link", "") or ""
 
-        tmdb_result = get_tmdb_url_from_any_source(
-            imdb_link, douban_link, tmdb_link)
+        tmdb_result = get_tmdb_url_from_any_source(imdb_link, douban_link, tmdb_link)
 
         # Handle different return types from get_tmdb_url_from_any_source
         if tmdb_result:
@@ -207,9 +202,9 @@ class ZhuqueUploader(SpecialUploader):
             media_type = "movie"
 
         if tmdb_url:
-            match = re.search(r'themoviedb\.org/(?:movie|tv)/(\d+)', tmdb_url)
+            match = re.search(r"themoviedb\.org/(?:movie|tv)/(\d+)", tmdb_url)
             if match:
-                return match.group(1), "1" if media_type == 'tv' else "0"
+                return match.group(1), "1" if media_type == "tv" else "0"
         return "", "0"
 
     def _extract_screenshots_for_zhuque(self) -> str:
@@ -218,16 +213,16 @@ class ZhuqueUploader(SpecialUploader):
         if not screenshots:
             return ""
 
-        img_urls = re.findall(r'\[img\](.*?)\[/img\]', screenshots)
+        img_urls = re.findall(r"\[img\](.*?)\[/img\]", screenshots)
         if img_urls:
             return "\n".join(img_urls)
 
-        lines = screenshots.strip().split('\n')
+        lines = screenshots.strip().split("\n")
         url_lines = []
         for line in lines:
             line = line.strip()
-            if line.startswith(('http://', 'https://')):
-                clean_url = re.search(r'https?://[^\s\[\]]+', line)
+            if line.startswith(("http://", "https://")):
+                clean_url = re.search(r"https?://[^\s\[\]]+", line)
                 if clean_url:
                     url_lines.append(clean_url.group(0))
         return "\n".join(url_lines)
@@ -239,7 +234,7 @@ class ZhuqueUploader(SpecialUploader):
         # 声明
         if statement := intro.get("statement", "").strip():
             # 过滤掉所有的BBCode标签 [tag] [/tag] [tag=...] 等
-            filtered_statement = re.sub(r'\[[^\]]*\]', '', statement)
+            filtered_statement = re.sub(r"\[[^\]]*\]", "", statement)
             parts.append(filtered_statement)
 
         if imdb := self.upload_data.get("imdb_link", ""):
@@ -264,14 +259,15 @@ class ZhuqueUploader(SpecialUploader):
                 logger.error("无法获取 x-csrf-token，上传请求可能会失败！")
 
             # 2. 准备参数
-            standardized_params = self.upload_data.get("standardized_params",
-                                                       {})
+            standardized_params = self.upload_data.get("standardized_params", {})
             mapped_params = self._map_parameters()
             final_main_title = super()._build_title(standardized_params)
 
             from config import config_manager
-            anonymous_upload = config_manager.get().get(
-                "upload_settings", {}).get("anonymous_upload", True)
+
+            anonymous_upload = (
+                config_manager.get().get("upload_settings", {}).get("anonymous_upload", True)
+            )
 
             # 3. 构造 Data
             data = {
@@ -280,7 +276,7 @@ class ZhuqueUploader(SpecialUploader):
                 "mediainfo": self.upload_data.get("mediainfo", ""),
                 "anonymous": "true" if anonymous_upload else "false",
                 "confirm": "true",
-                **mapped_params
+                **mapped_params,
             }
 
             # 3.1 验证必需参数
@@ -297,8 +293,32 @@ class ZhuqueUploader(SpecialUploader):
 
             # 4. 保存参数用于调试
             if os.getenv("DEV_ENV") == "true":
-                self._save_upload_parameters(data, mapped_params,
-                                             final_main_title)
+                self._save_upload_parameters(data, mapped_params, final_main_title)
+
+            # ================= [新增] 测试模式检查开始 =================
+            if os.getenv("UPLOAD_TEST_MODE") == "true":
+                logger.info("测试模式：跳过实际发布，模拟成功响应")
+
+                # 模拟一个成功的返回
+                dummy_id = "999999999"
+                base_url = ensure_scheme(self.site_info.get("base_url") or "")
+                details_url = f"demo.site.test/torrent/info/{dummy_id}"
+
+                # 尝试获取 key 用于模拟下载链接（保持逻辑完整性）
+                torrent_key = self._get_torrent_key() or "TEST_KEY"
+                download_url = f"demo.site.test/api/torrent/download/{dummy_id}/{torrent_key}"
+
+                logger.success(f"发布成功！(测试模式) 种子ID: {dummy_id}")
+                return (
+                    True,
+                    f"发布成功！(测试模式) 链接: {details_url}",
+                    {
+                        "torrent_id": dummy_id,
+                        "details_url": details_url,
+                        "download_url": download_url,
+                    },
+                )
+            # ================= [新增] 测试模式检查结束 =================
 
             # 5. 构造 File
             torrent_path = self.upload_data.get("modified_torrent_path")
@@ -308,21 +328,15 @@ class ZhuqueUploader(SpecialUploader):
             file_name = os.path.basename(torrent_path)
 
             # 使用 open 打开文件 (注意: requests 会自动管理 multipart boundary)
-            files = {
-                'torrent': (file_name, open(torrent_path,
-                                            'rb'), 'application/octet-stream')
-            }
+            files = {"torrent": (file_name, open(torrent_path, "rb"), "application/octet-stream")}
 
             # 7. 发送请求
             logger.info(f"正在向 {self.site_name} 提交发布请求...")
 
-            response = self.session.post(self.post_url,
-                                         data=data,
-                                         files=files,
-                                         timeout=120)
+            response = self.session.post(self.post_url, data=data, files=files, timeout=120)
 
             # 关闭文件
-            files['torrent'][1].close()
+            files["torrent"][1].close()
 
             # 8. 响应处理
             if response.status_code == 400:
@@ -358,8 +372,7 @@ class ZhuqueUploader(SpecialUploader):
                 # 情况1: status 200 + data.code UPLOAD_SUCCESS
                 if resp_json.get("status") == 200:
                     d = resp_json.get("data", {})
-                    if isinstance(d,
-                                  dict) and d.get("code") == "UPLOAD_SUCCESS":
+                    if isinstance(d, dict) and d.get("code") == "UPLOAD_SUCCESS":
                         is_success = True
                 # 情况2: code 0
                 elif resp_json.get("code") == 0:
@@ -370,38 +383,40 @@ class ZhuqueUploader(SpecialUploader):
 
                 if is_success:
                     torrent_id = None
-                    if resp_json.get("data") and isinstance(
-                            resp_json["data"], dict):
+                    if resp_json.get("data") and isinstance(resp_json["data"], dict):
                         torrent_id = resp_json["data"].get("id")
                     elif resp_json.get("id"):
                         torrent_id = resp_json.get("id")
 
                     if torrent_id:
-                        base_url = ensure_scheme(
-                            self.site_info.get("base_url") or "")
+                        base_url = ensure_scheme(self.site_info.get("base_url") or "")
                         details_url = f"{base_url}/torrent/info/{torrent_id}"
                         logger.success(f"发布成功！种子ID: {torrent_id}")
 
                         # 获取 torrentKey 并构造下载链接
                         torrent_key = self._get_torrent_key()
                         if torrent_key:
-                            download_url = f"{base_url}/api/torrent/download/{torrent_id}/{torrent_key}"
+                            download_url = (
+                                f"{base_url}/api/torrent/download/{torrent_id}/{torrent_key}"
+                            )
                             print(f"种子下载链接: {download_url}")
                         else:
                             logger.warning("无法获取 torrentKey，无法构造下载链接")
 
-                        return True, f"发布成功！链接: {details_url}", {
-                            "torrent_id": torrent_id,
-                            "details_url": details_url,
-                            "download_url": download_url
-                        }
+                        return (
+                            True,
+                            f"发布成功！链接: {details_url}",
+                            {
+                                "torrent_id": torrent_id,
+                                "details_url": details_url,
+                                "download_url": download_url,
+                            },
+                        )
                     else:
                         return True, "发布成功，但未获取到ID", None
                 else:
-                    msg = resp_json.get("message") or resp_json.get(
-                        "msg") or "未知错误"
-                    if resp_json.get("data") and isinstance(
-                            resp_json["data"], dict):
+                    msg = resp_json.get("message") or resp_json.get("msg") or "未知错误"
+                    if resp_json.get("data") and isinstance(resp_json["data"], dict):
                         msg = resp_json["data"].get("message") or msg
                     return False, f"发布失败: {msg}", None
 
@@ -413,6 +428,7 @@ class ZhuqueUploader(SpecialUploader):
         except Exception as e:
             logger.error(f"发布到 {self.site_name} 发生错误: {e}")
             import traceback
+
             logger.error(traceback.format_exc())
             return False, f"请求异常: {e}", None
 
@@ -432,8 +448,7 @@ class ZhuqueUploader(SpecialUploader):
             torrent_id = "unknown"
             source_site_code = "unknown"
 
-            modified_torrent_path = self.upload_data.get(
-                "modified_torrent_path", "")
+            modified_torrent_path = self.upload_data.get("modified_torrent_path", "")
             if modified_torrent_path:
                 torrent_filename = os.path.basename(modified_torrent_path)
                 # 尝试从文件名中提取站点代码和种子ID（格式: 站点代码-种子ID-xxx.torrent）
@@ -457,23 +472,17 @@ class ZhuqueUploader(SpecialUploader):
                 "mapped_params": mapped_params,
                 "final_main_title": final_main_title,
                 "upload_data_summary": {
-                    "subtitle":
-                    self.upload_data.get("subtitle", ""),
-                    "douban_link":
-                    self.upload_data.get("douban_link", ""),
-                    "imdb_link":
-                    self.upload_data.get("imdb_link", ""),
-                    "tmdb_link":
-                    self.upload_data.get("tmdb_link", ""),
-                    "mediainfo_length":
-                    len(self.upload_data.get("mediainfo", "")),
-                    "modified_torrent_path":
-                    self.upload_data.get("modified_torrent_path", ""),
-                }
+                    "subtitle": self.upload_data.get("subtitle", ""),
+                    "douban_link": self.upload_data.get("douban_link", ""),
+                    "imdb_link": self.upload_data.get("imdb_link", ""),
+                    "tmdb_link": self.upload_data.get("tmdb_link", ""),
+                    "mediainfo_length": len(self.upload_data.get("mediainfo", "")),
+                    "modified_torrent_path": self.upload_data.get("modified_torrent_path", ""),
+                },
             }
 
             # 保存到文件
-            with open(filepath, 'w', encoding='utf-8') as f:
+            with open(filepath, "w", encoding="utf-8") as f:
                 json.dump(save_data, f, ensure_ascii=False, indent=2)
             logger.info(f"朱雀上传参数已保存到: {filepath}")
         except Exception as save_error:
@@ -481,6 +490,6 @@ class ZhuqueUploader(SpecialUploader):
 
 
 def ensure_scheme(url: str) -> str:
-    if not url: return ""
-    return f"https://{url}" if not url.startswith(
-        ('http://', 'https://')) else url
+    if not url:
+        return ""
+    return f"https://{url}" if not url.startswith(("http://", "https://")) else url

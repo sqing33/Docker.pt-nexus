@@ -28,13 +28,21 @@ source_parsers:
   standard_keys:
     type:
       "Movies(电影)": "category.movie"
+      "电影": "category.movie"
       "TV Series(剧集)": "category.tv_series"
+      "剧集": "category.tv_series"
       "Docs(纪录)": "category.documentaries"
+      "纪录": "category.documentaries"
       "TV Shows(综艺)": "category.tv_shows"
+      "综艺": "category.tv_shows"
       "Sports(体育)": "category.sports"
+      "体育": "category.sports"
       "MV(音乐视频)": "category.mv"
+      "音乐视频": "category.mv"
       "Music(音乐)": "category.music"
+      "音乐": "category.music"
       "Audio(有声)": "category.audiobook"
+      "有声": "category.audiobook"
       "Other(其他类型)": "category.other"
 
     source:
@@ -113,7 +121,7 @@ source_parsers:
       "特效": "tag.特效"
       "自译": "tag.自译"
       "DoVi": "tag.杜比"
-      "HDR10": "tag.HDR
+      "HDR10": "tag.HDR"
       "HDR10+": "tag.HDR10+"
       "菁彩HDR": "tag.菁彩HDR"
       "HLG": "tag.HLG"

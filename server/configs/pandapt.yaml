@@ -11,7 +11,7 @@ form_fields:
   resolution: "standard_sel[4]"
   source: "source_sel[4]"
   team: "team_sel[4]"
-  category: "type"  # 类别字段映射到type参数
+  category: "type" # 类别字段映射到type参数
   processing: "processing_sel[4]"
 
 # 标准化键映射 - 定义源文本到标准化键的映射规则
@@ -143,7 +143,7 @@ source_parsers:
       "中字": "tag.中字"
       "杜比视界": "tag.杜比"
       "HDR10+": "tag.HDR10+"
-      "HDR10": "tag.HDR
+      "HDR10": "tag.HDR"
       "菁彩HDR": "tag.菁彩HDR"
       "特效": "tag.特效"
       "ASMR": "tag.ASMR"
