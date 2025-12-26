@@ -408,7 +408,7 @@ func fetchServerStatsForDownloader(wg *sync.WaitGroup, config DownloaderConfig, 
 	resultsChan <- stats
 }
 
-// ======================= 媒体处理辅助函数 (无变动) =======================
+// ======================= 媒体处理辅助函数 (有变动) =======================
 
 func executeCommand(name string, args ...string) (string, error) {
 	cmd := exec.Command(name, args...)
@@ -556,23 +556,12 @@ func takeScreenshot(videoPath, outputPath string, timePoint float64, subtitleStr
 		"--no-audio",
 		fmt.Sprintf("--start=%.2f", timePoint),
 		"--frames=1",
-
-		// --- 关键修改：移除 mpv 的色调映射，保留原始 HDR 信息 ---
-		// 我们移除了 --target-trc=srgb 和 --tone-mapping=hable
-		// 让 mpv 输出最原始的画面，后续交给 ffmpeg 的 zscale 滤镜处理
-
-		// 开启高位深截图，确保 HDR 信息不丢失
 		"--screenshot-high-bit-depth=yes",
-		// 关闭 mpv 的 PNG 压缩 (0-9)，设为0最快，反正后面 ffmpeg 会压
 		"--screenshot-png-compression=0",
-		// 确保写入正确的色彩标签
 		"--screenshot-tag-colorspace=yes",
-
-		// --- 字体配置参数 (保持不变) ---
 		"--sub-font-provider=fontconfig",
 		"--sub-font=Noto Sans CJK SC",
 		"--sub-font-size=52",
-
 		fmt.Sprintf("--o=%s", outputPath),
 		videoPath,
 	}
@@ -585,64 +574,84 @@ func takeScreenshot(videoPath, outputPath string, timePoint float64, subtitleStr
 	return nil
 }
 
+// [核心修改] 增加二次压缩逻辑
 func convertPngToOptimizedPng(sourcePath, destPath string) error {
-	// 步骤 1: 检测图片是否为 HDR (通过 ffprobe 查找 smpte2084 或 bt2020)
-	// 对应 Shell: IS_HDR=$(ffprobe ... | grep ...)
+	const maxUploadSize = 10 * 1024 * 1024 // 10 MB
+
+	// 步骤 1: 检测图片是否为 HDR
 	checkCmd := exec.Command("ffprobe", "-v", "error", "-show_streams", sourcePath)
 	output, err := checkCmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("ffprobe 检测失败: %v", err)
 	}
-	outputStr := string(output)
-	isHDR := strings.Contains(outputStr, "smpte2084") || strings.Contains(outputStr, "bt2020")
+	isHDR := strings.Contains(string(output), "smpte2084") || strings.Contains(string(output), "bt2020")
 
-	// 步骤 2: 构建 FFmpeg 命令
+	// 步骤 2: 构建 FFmpeg 命令 (初次压缩)
 	var vfFilter string
 	if isHDR {
 		log.Printf("   🎨 检测到 HDR 图片，正在应用 zscale 色调映射...")
-		// 对应 HDR 情况的滤镜链
 		vfFilter = "zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=pc,format=rgb24"
 	} else {
 		log.Printf("   🎨 检测到 SDR 图片，应用标准 RGB24 转换...")
-		// 对应 SDR 情况
 		vfFilter = "format=rgb24"
 	}
 
-	log.Printf("正在优化 PNG: %s -> %s (HDR: %v)", sourcePath, destPath, isHDR)
-
+	log.Printf("正在优化 PNG (第一轮): %s -> %s (HDR: %v)", sourcePath, destPath, isHDR)
 	args := []string{
-		"-y",          // 覆盖输出
-		"-v", "error", // 减少日志噪音
-		"-i", sourcePath, // 输入
-		"-frames:v", "1", // 仅一帧
-		"-vf", vfFilter, // 动态滤镜
-
-		// 核心压缩参数：平衡体积(<10MB)与速度
-		"-compression_level", "4",
+		"-y", "-v", "error", "-i", sourcePath, "-frames:v", "1",
+		"-vf", vfFilter,
+		"-compression_level", "4", // 正常压缩级别
 		"-pred", "mixed",
-
-		destPath, // 输出
+		destPath,
 	}
-
 	cmd := exec.Command("ffmpeg", args...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
-
 	start := time.Now()
-	err = cmd.Run()
-	if err != nil {
-		return fmt.Errorf("ffmpeg 优化失败: %v, 错误: %s", err, stderr.String())
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("ffmpeg 初次优化失败: %v, 错误: %s", err, stderr.String())
 	}
 
-	// 统计结果
-	duration := time.Since(start)
-	sourceInfo, _ := os.Stat(sourcePath)
-	destInfo, _ := os.Stat(destPath)
-	destSizeMB := float64(destInfo.Size()) / 1024 / 1024
-	compressionRatio := float64(destInfo.Size()) / float64(sourceInfo.Size()) * 100
+	// 检查文件大小
+	destInfo, err := os.Stat(destPath)
+	if err != nil {
+		return fmt.Errorf("无法获取优化后文件的大小: %v", err)
+	}
+	initialSize := destInfo.Size()
+	log.Printf("   ✅ 第一轮优化完成 (耗时: %.2fs) | 大小: %.2f MB", time.Since(start).Seconds(), float64(initialSize)/1024/1024)
 
-	log.Printf("   ✅ 优化完成 (耗时: %.2fs) | 大小: %.2f MB (%.2f%%) | HDR处理: %v",
-		duration.Seconds(), destSizeMB, compressionRatio, isHDR)
+	// [新增逻辑] 如果文件大小超过限制，进行二次强力压缩
+	if initialSize > maxUploadSize {
+		log.Printf("   ⚠️ 图片大小 (%.2f MB) 超出 10MB 限制，正在进行二次强力压缩...", float64(initialSize)/1024/1024)
+
+		tempRecompressPath := destPath + ".recompressed.png"
+		recompressArgs := []string{
+			"-y", "-v", "error", "-i", destPath, // 输入是已优化的图片
+			"-compression_level", "100", // 使用最大压缩级别
+			tempRecompressPath,
+		}
+		recompressCmd := exec.Command("ffmpeg", recompressArgs...)
+		var recompressStderr bytes.Buffer
+		recompressCmd.Stderr = &recompressStderr
+		recompressStart := time.Now()
+		if err := recompressCmd.Run(); err != nil {
+			return fmt.Errorf("ffmpeg 二次压缩失败: %v, 错误: %s", err, recompressStderr.String())
+		}
+
+		// 替换原文件
+		if err := os.Rename(tempRecompressPath, destPath); err != nil {
+			return fmt.Errorf("替换二次压缩文件失败: %v", err)
+		}
+
+		// 报告最终结果
+		finalInfo, _ := os.Stat(destPath)
+		finalSize := finalInfo.Size()
+		log.Printf("   ✅ 二次强力压缩完成 (耗时: %.2fs) | 最终大小: %.2f MB", time.Since(recompressStart).Seconds(), float64(finalSize)/1024/1024)
+
+		if finalSize > maxUploadSize {
+			log.Printf("   ‼️ 警告: 即使经过强力压缩，文件大小 (%.2f MB) 仍然可能超过图床限制。", float64(finalSize)/1024/1024)
+		}
+	}
 
 	return nil
 }
@@ -793,8 +802,6 @@ func findSubtitleEventsForPGS(videoPath string, subtitleStreamIndex int, duratio
 func findTargetVideoFile(path string) (string, error) {
 	log.Printf("正在路径 '%s' 中查找体积最大的视频文件...", path)
 	videoExtensions := map[string]bool{".mkv": true, ".mp4": true, ".ts": true, ".avi": true, ".wmv": true, ".mov": true, ".flv": true, ".m2ts": true}
-
-	// 1. 首先检查路径是否存在
 	info, err := os.Stat(path)
 	if os.IsNotExist(err) {
 		return "", fmt.Errorf("提供的路径不存在: %s", path)
@@ -802,8 +809,6 @@ func findTargetVideoFile(path string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("无法获取路径信息: %v", err)
 	}
-
-	// 2. 如果路径本身直接指向一个文件，且是视频，直接返回
 	if !info.IsDir() {
 		if videoExtensions[strings.ToLower(filepath.Ext(path))] {
 			log.Printf("输入路径直接指向文件: %s", path)
@@ -811,25 +816,17 @@ func findTargetVideoFile(path string) (string, error) {
 		}
 		return "", fmt.Errorf("输入路径是一个文件，但不是支持的视频格式: %s", path)
 	}
-
-	// 3. 如果是目录，遍历目录寻找最大的视频文件
 	var largestFile string
 	var maxSize int64 = -1
-
 	err = filepath.Walk(path, func(filePath string, fileInfo os.FileInfo, err error) error {
 		if err != nil {
 			log.Printf("警告: 访问文件 '%s' 时出错: %v", filePath, err)
-			return nil // 继续遍历其他文件
+			return nil
 		}
-
-		// 跳过目录本身
 		if fileInfo.IsDir() {
 			return nil
 		}
-
-		// 检查是否为视频扩展名
 		if videoExtensions[strings.ToLower(filepath.Ext(filePath))] {
-			// 如果当前文件比已记录的最大文件还大，则更新
 			if fileInfo.Size() > maxSize {
 				maxSize = fileInfo.Size()
 				largestFile = filePath
@@ -837,52 +834,34 @@ func findTargetVideoFile(path string) (string, error) {
 		}
 		return nil
 	})
-
 	if err != nil {
 		return "", fmt.Errorf("遍历目录失败: %v", err)
 	}
-
-	// 4. 结果检查
 	if largestFile == "" {
 		return "", fmt.Errorf("在目录 '%s' 中未找到任何视频文件", path)
 	}
-
-	// 打印结果
 	log.Printf("✅ 已选定最大文件 (大小: %.2f GB): %s", float64(maxSize)/1024/1024/1024, largestFile)
-
-	// 可选警告：如果最大文件都非常小（比如小于100MB），可能说明目录里全是垃圾文件
 	if maxSize < 100*1024*1024 {
 		log.Printf("⚠️ 警告: 选中的最大文件小于 100MB，可能不是正片。")
 	}
-
 	return largestFile, nil
 }
-
-// selectWellDistributedEvents 从已排序的字幕事件中选择分布均匀的时间段
 func selectWellDistributedEvents(sortedEvents []SubtitleEvent, numToSelect int) []SubtitleEvent {
 	if len(sortedEvents) <= numToSelect {
-		// 如果事件数量不超过需要的数量，全部选择
 		return sortedEvents
 	}
-
 	n := len(sortedEvents)
 	selected := make([]SubtitleEvent, 0, numToSelect)
-
 	if numToSelect == 1 {
-		// 只需要一张截图，选择中间位置
 		midIndex := n / 2
 		selected = append(selected, sortedEvents[midIndex])
 	} else if numToSelect <= 3 {
-		// 少量截图时，选择前、中、后位置
 		indices := []int{0, n / 2, n - 1}
 		for i := 0; i < numToSelect && i < len(indices); i++ {
 			selected = append(selected, sortedEvents[indices[i]])
 		}
 	} else {
-		// 多张截图时，使用均匀分布算法
 		interval := n / (numToSelect + 1)
-
-		// 从第一个间隔开始选择
 		for i := 0; i < numToSelect; i++ {
 			index := interval * (i + 1)
 			if index >= n {
@@ -891,27 +870,20 @@ func selectWellDistributedEvents(sortedEvents []SubtitleEvent, numToSelect int) 
 			selected = append(selected, sortedEvents[index])
 		}
 	}
-
-	// 确保选择的事件在时间上有足够间隔（至少30秒）
 	filteredSelected := make([]SubtitleEvent, 0, numToSelect)
-	minInterval := 30.0 // 最小时间间隔（秒）
-
+	minInterval := 30.0
 	for _, event := range selected {
 		shouldAdd := true
 		for _, existing := range filteredSelected {
-			// 检查时间间隔
 			if math.Abs(event.StartTime-existing.StartTime) < minInterval {
 				shouldAdd = false
 				break
 			}
 		}
-
 		if shouldAdd {
 			filteredSelected = append(filteredSelected, event)
 		} else {
-			// 如果间隔太小，尝试找一个替代的位置
 			for _, altEvent := range sortedEvents {
-				// 检查是否已经在选择列表中
 				alreadySelected := false
 				for _, s := range selected {
 					if s.StartTime == altEvent.StartTime && s.EndTime == altEvent.EndTime {
@@ -922,8 +894,6 @@ func selectWellDistributedEvents(sortedEvents []SubtitleEvent, numToSelect int) 
 				if alreadySelected {
 					continue
 				}
-
-				// 检查与已选择事件的时间间隔
 				allGood := true
 				for _, existing := range filteredSelected {
 					if math.Abs(altEvent.StartTime-existing.StartTime) < minInterval {
@@ -938,8 +908,6 @@ func selectWellDistributedEvents(sortedEvents []SubtitleEvent, numToSelect int) 
 			}
 		}
 	}
-
-	// 如果过滤后数量不够，用剩余的随机事件补充
 	if len(filteredSelected) < numToSelect {
 		remaining := make([]SubtitleEvent, 0)
 		for _, e := range sortedEvents {
@@ -954,30 +922,22 @@ func selectWellDistributedEvents(sortedEvents []SubtitleEvent, numToSelect int) 
 				remaining = append(remaining, e)
 			}
 		}
-
 		needed := numToSelect - len(filteredSelected)
 		if len(remaining) > 0 && needed > 0 {
-			// 随机选择剩余需要的事件
 			rand.Shuffle(len(remaining), func(i, j int) {
 				remaining[i], remaining[j] = remaining[j], remaining[i]
 			})
-
 			for i := 0; i < needed && i < len(remaining); i++ {
 				filteredSelected = append(filteredSelected, remaining[i])
 			}
 		}
 	}
-
-	// 按时间顺序返回
 	if len(filteredSelected) > numToSelect {
 		filteredSelected = filteredSelected[:numToSelect]
 	}
-
-	// 对结果进行排序
 	sort.Slice(filteredSelected, func(i, j int) bool {
 		return filteredSelected[i].StartTime < filteredSelected[j].StartTime
 	})
-
 	return filteredSelected
 }
 
@@ -1054,7 +1014,7 @@ func statsHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSONResponse(w, r, http.StatusOK, allStats)
 }
 
-// [重构版] screenshotHandler, 移除并发，改为顺序执行
+// [核心修改] 改进错误处理，失败时跳过而不是中断
 func screenshotHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSONResponse(w, r, http.StatusMethodNotAllowed, ScreenshotResponse{Success: false, Message: "仅支持 POST 方法"})
@@ -1120,17 +1080,12 @@ func screenshotHandler(w http.ResponseWriter, r *http.Request) {
 			targetEvents = subtitleEvents
 		}
 		if len(targetEvents) > 0 {
-			// 按时间先后排序事件
 			sort.Slice(targetEvents, func(i, j int) bool {
 				return targetEvents[i].StartTime < targetEvents[j].StartTime
 			})
-
-			// 智能选择分布均匀的时间段
 			chosenEvents := selectWellDistributedEvents(targetEvents, numScreenshots)
-
 			for i, event := range chosenEvents {
 				durationOfEvent := event.EndTime - event.StartTime
-				// 在时间段的前10%-90%之间随机选择一个点
 				randomOffset := durationOfEvent*0.1 + rand.Float64()*(durationOfEvent*0.8)
 				randomPoint := event.StartTime + randomOffset
 				screenshotPoints = append(screenshotPoints, randomPoint)
@@ -1160,62 +1115,43 @@ func screenshotHandler(w http.ResponseWriter, r *http.Request) {
 
 	var uploadedURLs []string
 
-	// [核心修改] 改为简单的顺序for循环
 	for i, point := range screenshotPoints {
 		log.Printf("开始处理第 %d/%d 张截图...", i+1, len(screenshotPoints))
-
-		// --- 1. 计算时分秒格式 ---
 		totalSeconds := int(point)
-		hours := totalSeconds / 3600
-		minutes := (totalSeconds % 3600) / 60
-		seconds := totalSeconds % 60
-
-		// 格式化时间: 00h12m45s
+		hours, minutes, seconds := totalSeconds/3600, (totalSeconds%3600)/60, totalSeconds%60
 		timeStr := fmt.Sprintf("%02dh%02dm%02ds", hours, minutes, seconds)
-
-		// 构造文件名: s1_00h12m45s.png
-		// s%d 对应 s1, s2... (不补零，保持简洁)
 		fileName := fmt.Sprintf("s%d_%s.png", i+1, timeStr)
-
-		// 定义路径
-		// 中间文件加 raw_ 前缀
 		intermediatePngPath := filepath.Join(tempDir, "raw_"+fileName)
-		// 最终文件就是 s1_00h12m45s.png
 		finalPngPath := filepath.Join(tempDir, fileName)
 
-		// 步骤1: 截图 (使用修改后的 takeScreenshot)
+		// 步骤1: 截图
 		if err := takeScreenshot(videoPath, intermediatePngPath, point, subtitleIndex); err != nil {
-			errMsg := fmt.Sprintf("第 %d 张图截图失败: %v", i+1, err)
-			log.Println(errMsg)
-			writeJSONResponse(w, r, http.StatusInternalServerError, ScreenshotResponse{Success: false, Message: errMsg})
-			return
+			log.Printf("错误: 第 %d 张图截图失败: %v。跳过此图。", i+1, err)
+			continue // 跳到下一张图
 		}
 
-		// 步骤2: PNG压缩 (使用修改后的 convertPngToOptimizedPng)
+		// 步骤2: PNG压缩
 		if err := convertPngToOptimizedPng(intermediatePngPath, finalPngPath); err != nil {
-			errMsg := fmt.Sprintf("第 %d 张图PNG压缩失败: %v", i+1, err)
-			log.Println(errMsg)
-			writeJSONResponse(w, r, http.StatusInternalServerError, ScreenshotResponse{Success: false, Message: errMsg})
-			return
+			log.Printf("错误: 第 %d 张图PNG压缩失败: %v。跳过此图。", i+1, err)
+			continue // 跳到下一张图
 		}
 
 		// 步骤3: 上传
 		showURL, err := uploadToPixhost(finalPngPath)
 		if err != nil {
-			errMsg := fmt.Sprintf("第 %d 张图上传失败: %v", i+1, err)
-			log.Println(errMsg)
-			writeJSONResponse(w, r, http.StatusInternalServerError, ScreenshotResponse{Success: false, Message: errMsg})
-			return
+			log.Printf("错误: 第 %d 张图上传失败: %v。跳过此图。", i+1, err)
+			continue // 跳到下一张图
 		}
 
-		// 转换直链
 		directURL := strings.Replace(showURL, "https://pixhost.to/show/", "https://img1.pixhost.to/images/", 1)
 		uploadedURLs = append(uploadedURLs, directURL)
-		log.Printf("第 %d/%d 张截图处理成功: %s", i+1, len(screenshotPoints), fileName)
+		log.Printf("✅ 第 %d/%d 张截图处理成功: %s", i+1, len(screenshotPoints), fileName)
 	}
 
-	if len(uploadedURLs) < numScreenshots {
-		msg := fmt.Sprintf("处理完成，但成功上传的图片数量 (%d) 少于预期 (%d)", len(uploadedURLs), numScreenshots)
+	// [核心修改] 最终响应逻辑
+	if len(uploadedURLs) == 0 {
+		msg := "所有截图处理均失败，请检查日志获取详细信息。"
+		log.Println(msg)
 		writeJSONResponse(w, r, http.StatusInternalServerError, ScreenshotResponse{Success: false, Message: msg})
 		return
 	}
@@ -1226,8 +1162,10 @@ func screenshotHandler(w http.ResponseWriter, r *http.Request) {
 		bbcodeBuilder.WriteString(fmt.Sprintf("[img]%s[/img]\n", url))
 	}
 
+	successMsg := fmt.Sprintf("成功上传 %d/%d 张截图", len(uploadedURLs), numScreenshots)
+	log.Println(successMsg)
 	writeJSONResponse(w, r, http.StatusOK, ScreenshotResponse{
-		Success: true, Message: "所有截图均已成功上传", BBCode: strings.TrimSpace(bbcodeBuilder.String()),
+		Success: true, Message: successMsg, BBCode: strings.TrimSpace(bbcodeBuilder.String()),
 	})
 }
 func mediainfoHandler(w http.ResponseWriter, r *http.Request) {
@@ -1246,44 +1184,33 @@ func mediainfoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("MediaInfo请求: 开始处理路径 '%s'", initialPath)
-
-	// --- [核心修改] ---
-	// 检查是否是蓝光原盘目录，如果是，只返回状态，不执行提取
 	if isBlurayDisc(initialPath) {
 		log.Printf("MediaInfo请求: 检测到蓝光原盘目录，返回 is_bdmv=true 由控制端决定后续操作: %s", initialPath)
 		writeJSONResponse(w, r, http.StatusOK, MediaInfoResponse{
 			Success: true,
 			Message: "检测到蓝光原盘",
-			IsBDMV:  true, // 告诉 Python 端这是原盘
+			IsBDMV:  true,
 		})
 		return
 	}
-	// ----------------
-
-	// 如果不是蓝光原盘，按常规方式处理
 	videoPath, err := findTargetVideoFile(initialPath)
 	if err != nil {
 		log.Printf("MediaInfo请求: 查找视频文件失败: %v", err)
 		writeJSONResponse(w, r, http.StatusBadRequest, MediaInfoResponse{Success: false, Message: err.Error()})
 		return
 	}
-
 	log.Printf("正在获取 MediaInfo: %s", videoPath)
-	// 使用带超时的命令执行 (5分钟超时)
 	mediaInfoText, err := executeCommandWithTimeout(5*time.Minute, "mediainfo", "--Output=text", videoPath)
 	if err != nil {
 		log.Printf("MediaInfo请求: mediainfo命令执行失败: %v", err)
 		writeJSONResponse(w, r, http.StatusInternalServerError, MediaInfoResponse{Success: false, Message: "获取 MediaInfo 失败: " + err.Error()})
 		return
 	}
-
 	log.Printf("MediaInfo请求: 成功获取MediaInfo，长度: %d 字节", len(mediaInfoText))
 	writeJSONResponse(w, r, http.StatusOK, MediaInfoResponse{
 		Success: true, Message: "MediaInfo 获取成功", MediaInfo: strings.TrimSpace(mediaInfoText),
 	})
 }
-
-// fileCheckHandler 处理文件/目录存在性检查
 func fileCheckHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSONResponse(w, r, http.StatusMethodNotAllowed, FileCheckResponse{Success: false, Message: "仅支持 POST 方法"})
@@ -1299,10 +1226,7 @@ func fileCheckHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSONResponse(w, r, http.StatusBadRequest, FileCheckResponse{Success: false, Message: "remote_path 不能为空"})
 		return
 	}
-
 	log.Printf("文件检查请求: 正在检查路径 '%s'", remotePath)
-
-	// 检查文件/目录是否存在
 	fileInfo, err := os.Stat(remotePath)
 	if os.IsNotExist(err) {
 		log.Printf("文件检查请求: 路径不存在 '%s'", remotePath)
@@ -1321,11 +1245,8 @@ func fileCheckHandler(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-
-	// 文件/目录存在，获取详细信息
 	isFile := !fileInfo.IsDir()
 	size := fileInfo.Size()
-
 	log.Printf("文件检查请求: 路径存在 '%s' (是否文件: %v, 大小: %d 字节)", remotePath, isFile, size)
 	writeJSONResponse(w, r, http.StatusOK, FileCheckResponse{
 		Success: true,
@@ -1335,8 +1256,6 @@ func fileCheckHandler(w http.ResponseWriter, r *http.Request) {
 		Size:    size,
 	})
 }
-
-// batchFileCheckHandler 处理批量文件/目录存在性检查
 func batchFileCheckHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSONResponse(w, r, http.StatusMethodNotAllowed, BatchFileCheckResponse{Success: false, Message: "仅支持 POST 方法"})
@@ -1347,16 +1266,12 @@ func batchFileCheckHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSONResponse(w, r, http.StatusBadRequest, BatchFileCheckResponse{Success: false, Message: "无效的 JSON 请求体: " + err.Error()})
 		return
 	}
-
 	if len(reqData.RemotePaths) == 0 {
 		writeJSONResponse(w, r, http.StatusBadRequest, BatchFileCheckResponse{Success: false, Message: "remote_paths 不能为空"})
 		return
 	}
-
 	log.Printf("批量文件检查请求: 正在检查 %d 个路径", len(reqData.RemotePaths))
-
 	results := make([]FileCheckResult, 0, len(reqData.RemotePaths))
-
 	for _, remotePath := range reqData.RemotePaths {
 		result := FileCheckResult{
 			Path:   remotePath,
@@ -1364,40 +1279,30 @@ func batchFileCheckHandler(w http.ResponseWriter, r *http.Request) {
 			IsFile: false,
 			Size:   0,
 		}
-
-		// 检查文件/目录是否存在
 		fileInfo, err := os.Stat(remotePath)
 		if os.IsNotExist(err) {
-			// 路径不存在，使用默认值（已设置）
 			results = append(results, result)
 			continue
 		}
 		if err != nil {
 			log.Printf("批量文件检查: 访问路径失败 '%s': %v", remotePath, err)
-			// 访问失败，使用默认值
 			results = append(results, result)
 			continue
 		}
-
-		// 文件/目录存在，设置详细信息
 		result.Exists = true
 		result.IsFile = !fileInfo.IsDir()
 		result.Size = fileInfo.Size()
 		results = append(results, result)
 	}
-
 	log.Printf("批量文件检查请求: 完成检查 %d 个路径，其中 %d 个存在",
 		len(reqData.RemotePaths),
 		countExisting(results))
-
 	writeJSONResponse(w, r, http.StatusOK, BatchFileCheckResponse{
 		Success: true,
 		Message: "批量检查完成",
 		Results: results,
 	})
 }
-
-// countExisting 计算存在的文件数量
 func countExisting(results []FileCheckResult) int {
 	count := 0
 	for _, r := range results {
@@ -1408,9 +1313,8 @@ func countExisting(results []FileCheckResult) int {
 	return count
 }
 
-// isBlurayDisc 检查给定路径是否是蓝光原盘目录
 
-// episodeCountHandler 处理远程目录集数统计
+
 func episodeCountHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSONResponse(w, r, http.StatusMethodNotAllowed, EpisodeCountResponse{Success: false, Message: "仅支持 POST 方法"})
@@ -1426,10 +1330,7 @@ func episodeCountHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSONResponse(w, r, http.StatusBadRequest, EpisodeCountResponse{Success: false, Message: "remote_path 不能为空"})
 		return
 	}
-
 	log.Printf("集数统计请求: 正在统计路径 '%s'", remotePath)
-
-	// 检查路径是否存在
 	if _, err := os.Stat(remotePath); os.IsNotExist(err) {
 		log.Printf("集数统计请求: 路径不存在 '%s'", remotePath)
 		writeJSONResponse(w, r, http.StatusOK, EpisodeCountResponse{
@@ -1438,38 +1339,24 @@ func episodeCountHandler(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-
-	// 视频文件扩展名
 	videoExtensions := map[string]bool{
 		".mkv": true, ".mp4": true, ".ts": true, ".avi": true,
 		".wmv": true, ".mov": true, ".flv": true, ".m2ts": true,
 	}
-
-	// 剧集文件名模式：支持 S01E01, S01E02, s01e01, S1E1 等格式
 	episodePattern := regexp.MustCompile(`[Ss](\d{1,2})[Ee](\d{1,3})`)
-
-	// 使用 map 存储 (season, episode) 对，去重
 	episodeSet := make(map[string]bool)
 	seasonNumbers := make(map[int]bool)
-
-	// 遍历目录查找视频文件
 	err := filepath.Walk(remotePath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
-
-		// 跳过目录
 		if info.IsDir() {
 			return nil
 		}
-
-		// 检查是否是视频文件
 		ext := strings.ToLower(filepath.Ext(info.Name()))
 		if !videoExtensions[ext] {
 			return nil
 		}
-
-		// 匹配剧集编号
 		matches := episodePattern.FindStringSubmatch(info.Name())
 		if len(matches) >= 3 {
 			season, _ := strconv.Atoi(matches[1])
@@ -1478,10 +1365,8 @@ func episodeCountHandler(w http.ResponseWriter, r *http.Request) {
 			episodeSet[key] = true
 			seasonNumbers[season] = true
 		}
-
 		return nil
 	})
-
 	if err != nil {
 		log.Printf("集数统计请求: 遍历目录失败 '%s': %v", remotePath, err)
 		writeJSONResponse(w, r, http.StatusInternalServerError, EpisodeCountResponse{
@@ -1490,8 +1375,6 @@ func episodeCountHandler(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-
-	// 如果没有找到任何剧集文件
 	if len(episodeSet) == 0 {
 		log.Printf("集数统计请求: 未找到剧集文件 '%s'", remotePath)
 		writeJSONResponse(w, r, http.StatusOK, EpisodeCountResponse{
@@ -1501,26 +1384,20 @@ func episodeCountHandler(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-
-	// 确定主要季数（通常统计第一季）
 	mainSeason := 1
 	if len(seasonNumbers) > 0 {
-		// 找到最小的季数作为主季
 		for season := range seasonNumbers {
 			if season < mainSeason || mainSeason == 0 {
 				mainSeason = season
 			}
 		}
 	}
-
-	// 统计主季的集数
 	seasonEpisodeCount := 0
 	for key := range episodeSet {
 		if strings.HasPrefix(key, fmt.Sprintf("S%d", mainSeason)) {
 			seasonEpisodeCount++
 		}
 	}
-
 	log.Printf("集数统计请求: 路径 '%s' 找到第%d季共 %d 集", remotePath, mainSeason, seasonEpisodeCount)
 	writeJSONResponse(w, r, http.StatusOK, EpisodeCountResponse{
 		Success:      true,
@@ -1533,18 +1410,15 @@ func episodeCountHandler(w http.ResponseWriter, r *http.Request) {
 // ======================= 主函数 (无变动) =======================
 
 func main() {
-	// 获取命令行参数中的端口，默认为9090
 	port := "9090"
 	if len(os.Args) > 1 {
 		port = os.Args[1]
-		// 确保端口前有冒号
 		if !strings.HasPrefix(port, ":") {
 			port = ":" + port
 		}
 	} else {
 		port = ":9090"
 	}
-
 	http.HandleFunc("/api/torrents/all", allTorrentsHandler)
 	http.HandleFunc("/api/stats/server", statsHandler)
 	http.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
@@ -1552,7 +1426,7 @@ func main() {
 	})
 	http.HandleFunc("/api/media/screenshot", screenshotHandler)
 	http.HandleFunc("/api/media/mediainfo", mediainfoHandler)
-	RegisterBDInfoRoutes() // 注册 BDInfo 相关路由
+	RegisterBDInfoRoutes()
 	http.HandleFunc("/api/file/check", fileCheckHandler)
 	http.HandleFunc("/api/file/batch-check", batchFileCheckHandler)
 	http.HandleFunc("/api/media/episode-count", episodeCountHandler)

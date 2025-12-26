@@ -129,6 +129,10 @@ services:
 
 # 更新日志
 
+### v3.3.5（2025.12.26）
+
+- 修复：选择 HDR10+ 标签报错或者无法提取到 HDR10+ 标签
+
 ### v3.3.4（2025.12.25）
 
 > **注：修复盒子端获取原盘的截图有概率会报错失败的问题需要重新执行 curl -sL https://github.com/sqing33/Docker.pt-nexus/releases/download/latest/install-pt-nexus-box-proxy.sh | sudo bash 以更新盒子端脚本。**

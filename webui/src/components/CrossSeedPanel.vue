@@ -3022,7 +3022,7 @@ const invalidStandardParams = computed(() => {
   const invalidParamsList = []
 
   // 【修改】使用与 invalidTagsList 相同的、更强大的正则表达式
-  const flexibleRegex = new RegExp(/^[\p{L}\p{N}_-]+\.[\p{L}\p{N}_-]+$/u)
+  const flexibleRegex = new RegExp(/^[\p{L}\p{N}_-]+\.[\p{L}\p{N}_+-]+$/u)
 
   for (const key of standardParamKeys) {
     const value = standardizedParams[key]
@@ -3739,7 +3739,7 @@ const invalidTagsList = computed(() => {
   // \p{N} -> 匹配任何语言的数字
   // _-  -> 匹配下划线和连字符
   // u 标志 -> 启用 Unicode 支持
-  const flexibleRegex = new RegExp(/^[\p{L}\p{N}_-]+\.[\p{L}\p{N}_-]+$/u)
+  const flexibleRegex = new RegExp(/^[\p{L}\p{N}_-]+\.[\p{L}\p{N}_+-]+$/u)
 
   // 从已过滤的标签中，再次过滤出不符合新正则的标签
   return filteredTags.value.filter((tag) => !flexibleRegex.test(tag))

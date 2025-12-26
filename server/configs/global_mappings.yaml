@@ -794,8 +794,8 @@ global_standard_keys:
     "外语": "tag.外语"
 
     # HDR相关标签
-    "HDR": "tag.HDR"
     "HDR10": "tag.HDR"
+    "HDR": "tag.HDR"
     "HDR10+": "tag.HDR10+"
     "DoVi+HDR": "tag.杜比"
     "Dolby Vision": "tag.杜比"
