@@ -97,6 +97,7 @@ source_parsers:
       "国语": "tag.国语"
       "中字": "tag.中字"
       "HDR": "tag.HDR"
+      "HDR10+": "tag.HDR10+"
       "独家": "tag.独家"
       "自压": "tag.自压"
       "重制": "tag.重制"

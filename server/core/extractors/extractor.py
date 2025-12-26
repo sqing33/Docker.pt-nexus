@@ -803,6 +803,15 @@ class ParameterMapper:
     def __init__(self):
         pass
 
+    def _deduplicate_hdr_tags(self, tags_list):
+        """
+        HDR标签去重：当tag.HDR和tag.HDR10+同时存在时，只保留tag.HDR10+
+        """
+        if "tag.HDR" in tags_list and "tag.HDR10+" in tags_list:
+            tags_list.remove("tag.HDR")
+            print(f"[HDR标签去重] 移除tag.HDR，保留tag.HDR10+")
+        return tags_list
+
     def _map_tags(self, raw_tags, site_name: str):
         """
         将原始标签映射到站点特定格式
@@ -1087,5 +1096,10 @@ class ParameterMapper:
                 )
             else:
                 logging.warning("未在全局映射中找到'动漫'的标准键，无法修正类型")
+
+        # HDR标签去重处理
+        if "tags" in final_standardized_params:
+            deduplicated_tags = self._deduplicate_hdr_tags(final_standardized_params["tags"])
+            final_standardized_params["tags"] = deduplicated_tags
 
         return final_standardized_params

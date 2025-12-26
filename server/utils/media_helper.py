@@ -385,7 +385,7 @@ def upload_data_title(title: str, torrent_filename: str = "", mediaInfo: str = "
         "hdr_format": r"Dolby Vision|DoVi|HDR10\+|HDRVivid|HDR10|HLG|HDR|SDR|DV|Vivid",
         "resolution": r"\d{3,4}[pi]|4K",
         "video_codec": r"HEVC|AVC|x265|H\s*[\s\.]?\s*265|x264|H\s*[\s\.]?\s*264|VC-1|AV1|MPEG-2",
-        "source_platform": r"Apple TV\+|ViuTV|MyTVSuper|MyVideo|AMZN|Netflix|NF|DSNP|MAX|ATVP|iTunes|friDay|USA|EUR|JPN|CEE|FRA|LINETV|EDR|PCOK|Hami|GBR|NowPlayer|CR|SEEZN|GER|CHN|MA|Viu|Baha|KKTV|IQ|HKG|ITA|ESP",
+        "source_platform": r"Apple TV\+|ViuTV|MyTVSuper|MyVideo|AMZN|Netflix|NF|DSNP|MAX|ATVP|iTunes|friDay|USA|EUR|JPN|CEE|FRA|LINETV|EDR|PCOK|Hami|GBR|NowPlayer|CR|SEEZN|GER|CHN|MA|Viu|Baha|KKTV|IQ|HKG|ITA|ESP|Disney\+|Disney",
         "bit_depth": r"\b(?:8|10)bit\b",
         "framerate": r"\d{2,3}fps",
         "completion_status": r"Complete|COMPLETE",
@@ -1423,13 +1423,13 @@ def add_torrent_to_downloader(
 
 def extract_tags_from_title(title_components: list) -> list:
     """
-    从标题参数中提取标签，主要从媒介和制作组字段提取 DIY 和 VCB-Studio 标签。
+    从标题参数中提取标签，主要从媒介、制作组和HDR格式字段提取标签。
 
-    返回原始标签名称（如 "DIY", "VCB-Studio"），而不是标准化键。
+    返回原始标签名称（如 "DIY", "VCB-Studio", "HDR10+"），而不是标准化键。
     这样可以被 ParameterMapper 正确映射到 global_mappings.yaml 中定义的标准化键。
 
     :param title_components: 标题组件列表，格式为 [{"key": "主标题", "value": "..."}, ...]
-    :return: 一个包含原始标签名称的列表，例如 ['DIY', 'VCB-Studio']
+    :return: 一个包含原始标签名称的列表，例如 ['DIY', 'VCB-Studio', 'HDR10+']
     """
     if not title_components:
         return []
@@ -1455,6 +1455,15 @@ def extract_tags_from_title(title_components: list) -> list:
             (r"\bVCB-Studio\b", "VCB-Studio"),
             (r"\bVCB\b", "VCB-Studio"),
         ],
+        "HDR格式": [
+            (r"\bDolby\s+Vision\b|\bDV\b", "Dolby Vision"),
+            (r"\bHDR10\+", "HDR10+"),
+            (r"\bHDR10\b(?!\+)", "HDR10"),
+            (r"\bHDR\b(?!10)", "HDR"),
+            (r"\bSDR\b", "SDR"),
+            (r"\b菁彩HDR\b", "菁彩HDR"),
+            (r"\bVivid\b", "Vivid"),
+        ],
     }
 
     # 遍历需要检查的字段
@@ -1475,6 +1484,10 @@ def extract_tags_from_title(title_components: list) -> list:
             if re.search(pattern, field_value, re.IGNORECASE):
                 found_tags.add(tag_name)
                 print(f"从标题参数 '{field_name}' 中提取到标签: {tag_name} (匹配: {pattern})")
+                
+                # 对于HDR格式字段，找到第一个匹配后就停止
+                if field_name == "HDR格式":
+                    break
 
     result_tags = list(found_tags)
     if result_tags:
