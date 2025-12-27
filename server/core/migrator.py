@@ -22,10 +22,14 @@ from utils import (
     ensure_scheme,
     upload_data_mediaInfo,
     upload_data_title,
-    extract_tags_from_mediainfo,
     extract_origin_from_description,
     upload_data_movie_info,
     upload_data_mediaInfo_async,
+    extract_tags_from_mediainfo,
+)
+from utils.mediainfo_parser import (
+    extract_hdr_info_from_mediainfo,
+    extract_audio_info_from_mediainfo,
 )
 from utils import _process_poster_url
 from utils import is_image_url_valid_robust
@@ -39,32 +43,6 @@ from utils import log_streamer
 
 # 导入新的Extractor和ParameterMapper
 from core.extractors.extractor import Extractor, ParameterMapper
-
-# [新增] 定义音频编码的层级（权重），数字越大越优先
-AUDIO_CODEC_HIERARCHY = {
-    # Top Tier (最精确)
-    "audio.truehd_atmos": 5,
-    "audio.dtsx": 5,
-    # High Tier (无损次世代)
-    "audio.truehd": 4,
-    "audio.dts_hd_ma": 4,
-    # Mid Tier (有损次世代 / 无损)
-    "audio.ddp": 3,
-    "audio.dts": 3,
-    "audio.flac": 3,
-    "audio.lpcm": 3,
-    # Standard Tier (核心/普通)
-    "audio.ac3": 2,
-    # Low Tier (有损)
-    "audio.aac": 1,
-    "audio.mp3": 1,
-    "audio.alac": 1,
-    "audio.ape": 1,
-    "audio.m4a": 1,
-    "audio.wav": 1,
-    # Other/Default
-    "audio.other": 0,
-}
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -847,15 +825,137 @@ class TorrentMigrator:
 
                 self.logger.info(f"种子文件已保存到: {original_torrent_path}")
 
+                # 处理torrent_filename，去除.torrent扩展名、URL解码并过滤站点信息，以便正确查找视频文件
+                processed_torrent_name = urllib.parse.unquote(torrent_filename)
+                if processed_torrent_name.endswith(".torrent"):
+                    processed_torrent_name = processed_torrent_name[:-8]  # 去除.torrent扩展名
+
+                # 针对 [OurBits] 站点的特殊规则：过滤 [OurBits] 及其后跟随的 ID [999999999]
+                # 只有当字符串以 [OurBits] 开头时，才匹配移除前两个方括号块
+                if processed_torrent_name.startswith("[OurBits]"):
+                    # 匹配模式：开头[OurBits] + 可选的点 + 第二个[] + 可选的点
+                    processed_torrent_name = re.sub(
+                        r"^\[OurBits\]\.?\[[^\]]+\]\.?", "", processed_torrent_name
+                    )
+                else:
+                    # 针对其他普通站点：仅过滤掉文件名的第一个站点信息 []
+                    # 移除之前的 greedy 匹配 (re.sub(r"^(?:\[[^\]]+\]\.?)+"), 改为只匹配开头的一个
+                    processed_torrent_name = re.sub(r"^\[[^\]]+\]\.?", "", processed_torrent_name)
+
+                # 使用upload_data_mediaInfo_async处理mediainfo（支持异步BDInfo）
+                if self.task_id:
+                    log_streamer.emit_log(
+                        self.task_id, "提取媒体信息", "正在提取 MediaInfo...", "processing"
+                    )
+
+                # 生成种子ID用于BDInfo任务跟踪
+                # 使用复合主键格式: hash_torrentId_siteName
+                # 从search_term中提取torrent_id（在批量处理中search_term就是torrent_id）
+                torrent_id = self.search_term if self.search_term else "unknown"
+                # 从source_site中获取site_name，使用英文站点名而不是中文名
+                site_name = (
+                    self.SOURCE_SITE_CODE if hasattr(self, "SOURCE_SITE_CODE") else "unknown"
+                )
+
+                # 获取真实的hash值
+                seed_hash = "batch_seed"  # 默认值
+                try:
+                    # 使用与保存种子参数相同的方法获取hash
+                    temp_seed_param_model = SeedParameter(self.db_manager)
+                    real_hash = temp_seed_param_model.search_torrent_hash(
+                        self.torrent_name, self.SOURCE_NAME
+                    )
+                    if real_hash:
+                        seed_hash = real_hash
+                except Exception as e:
+                    print(f"获取hash失败，使用默认值: {e}")
+
+                # 构建复合seed_id
+                composite_seed_id = f"{seed_hash}_{torrent_id}_{site_name}"
+
+                # 使用异步版本的MediaInfo处理
+                mediainfo, is_mediainfo, is_bdinfo, bdinfo_async = upload_data_mediaInfo_async(
+                    mediaInfo=mediainfo_text if mediainfo_text else "未找到 Mediainfo 或 BDInfo",
+                    save_path=self.save_path,
+                    seed_id=composite_seed_id,
+                    torrent_name=processed_torrent_name,
+                    downloader_id=self.downloader_id,
+                    priority=2,  # 批量获取使用普通优先级
+                    # 新增参数：预写入所需的基本信息
+                    hash_value=seed_hash,
+                    torrent_id=torrent_id,
+                    site_name=site_name,
+                    nickname=self.SOURCE_NAME,  # 传递站点中文名
+                )
+
+                if self.task_id:
+                    if mediainfo and mediainfo != "未找到 Mediainfo 或 BDInfo":
+                        log_streamer.emit_log(
+                            self.task_id, "提取媒体信息", "MediaInfo 提取成功", "success"
+                        )
+
+                        # 如果BDInfo在后台处理中，添加提示
+                        if bdinfo_async and bdinfo_async.get("bdinfo_status") == "processing":
+                            log_streamer.emit_log(
+                                self.task_id,
+                                "BDInfo处理",
+                                f"BDInfo 正在后台处理中 (任务ID: {bdinfo_async.get('bdinfo_task_id')})",
+                                "info",
+                            )
+                    else:
+                        log_streamer.emit_log(
+                            self.task_id, "提取媒体信息", "MediaInfo 提取失败或不存在", "warning"
+                        )
+
+                # [新增] 从 MediaInfo 中提取标签并补充到 source_params
+                if mediainfo and mediainfo != "未找到 Mediainfo 或 BDInfo":
+                    self.logger.info("开始从 MediaInfo 提取标签...")
+                    tags_from_mediainfo = extract_tags_from_mediainfo(mediainfo)
+                    if tags_from_mediainfo:
+                        # 将从 MediaInfo 提取的标签与源站点的标签合并（去重）
+                        existing_tags = source_params.get("标签", [])
+
+                        # [修复] 统一标签格式：移除 tag. 前缀以确保去重正常工作
+                        # MediaInfo 提取的标签格式为 'tag.中字'，网页提取的为 '中字'
+                        normalized_mediainfo_tags = [
+                            tag.replace("tag.", "") if tag.startswith("tag.") else tag
+                            for tag in tags_from_mediainfo
+                        ]
+
+                        # 合并标签并去重，保持顺序
+                        merged_tags = list(
+                            dict.fromkeys(existing_tags + normalized_mediainfo_tags)
+                        )
+                        source_params["标签"] = merged_tags
+                        self.logger.info(f"从 MediaInfo 提取到标签: {tags_from_mediainfo}")
+                        self.logger.info(f"标准化后的标签: {normalized_mediainfo_tags}")
+                        self.logger.info(f"合并后的标签: {merged_tags}")
+                    else:
+                        self.logger.info("MediaInfo 中未提取到额外标签")
+
+                # [新增] 从 MediaInfo 中提取 HDR 和音频信息，用于标题解析的优先级覆盖
+                mediainfo_hdr = None
+                mediainfo_audio = None
+                if mediainfo and mediainfo != "未找到 Mediainfo 或 BDInfo":
+                    self.logger.info("开始从 MediaInfo 提取 HDR 信息...")
+                    mediainfo_hdr = extract_hdr_info_from_mediainfo(mediainfo)
+                    if mediainfo_hdr:
+                        self.logger.info(f"从 MediaInfo 提取到 HDR 信息: {mediainfo_hdr}")
+
+                    self.logger.info("开始从 MediaInfo 提取音频信息...")
+                    mediainfo_audio = extract_audio_info_from_mediainfo(mediainfo)
+                    if mediainfo_audio:
+                        self.logger.info(f"从 MediaInfo 提取到音频信息: {mediainfo_audio}")
+
                 # 发送日志：开始解析标题
                 if self.task_id:
                     log_streamer.emit_log(
                         self.task_id, "解析参数", "正在解析标题组件...", "processing"
                     )
 
-                # 调用 upload_data_title 时，传入主标题、种子文件名和mediainfo
+                # 调用 upload_data_title 时，传入主标题、种子文件名、mediainfo以及提取的HDR和音频信息
                 title_components = upload_data_title(
-                    original_main_title, torrent_filename, mediainfo_text
+                    original_main_title, torrent_filename, mediainfo, mediainfo_hdr, mediainfo_audio
                 )
                 # --- [核心修改 1] 结束 --
 
@@ -1274,97 +1374,6 @@ class TorrentMigrator:
                         # 清空截图
                         intro["screenshots"] = ""
                         images = [images[0]] if images and images[0] else []
-
-                # 使用upload_data_mediaInfo_async处理mediainfo（支持异步BDInfo）
-                if self.task_id:
-                    log_streamer.emit_log(
-                        self.task_id, "提取媒体信息", "正在提取 MediaInfo...", "processing"
-                    )
-
-                # 生成种子ID用于BDInfo任务跟踪
-                # 使用复合主键格式: hash_torrentId_siteName
-                # 从search_term中提取torrent_id（在批量处理中search_term就是torrent_id）
-                torrent_id = self.search_term if self.search_term else "unknown"
-                # 从source_site中获取site_name，使用英文站点名而不是中文名
-                site_name = (
-                    self.SOURCE_SITE_CODE if hasattr(self, "SOURCE_SITE_CODE") else "unknown"
-                )
-
-                # 获取真实的hash值
-                seed_hash = "batch_seed"  # 默认值
-                try:
-                    # 使用与保存种子参数相同的方法获取hash
-                    temp_seed_param_model = SeedParameter(self.db_manager)
-                    real_hash = temp_seed_param_model.search_torrent_hash(
-                        self.torrent_name, self.SOURCE_NAME
-                    )
-                    if real_hash:
-                        seed_hash = real_hash
-                except Exception as e:
-                    print(f"获取hash失败，使用默认值: {e}")
-
-                # 构建复合seed_id
-                composite_seed_id = f"{seed_hash}_{torrent_id}_{site_name}"
-
-                # 使用异步版本的MediaInfo处理
-                mediainfo, is_mediainfo, is_bdinfo, bdinfo_async = upload_data_mediaInfo_async(
-                    mediaInfo=mediainfo_text if mediainfo_text else "未找到 Mediainfo 或 BDInfo",
-                    save_path=self.save_path,
-                    seed_id=composite_seed_id,
-                    torrent_name=processed_torrent_name,
-                    downloader_id=self.downloader_id,
-                    priority=2,  # 批量获取使用普通优先级
-                    # 新增参数：预写入所需的基本信息
-                    hash_value=seed_hash,
-                    torrent_id=torrent_id,
-                    site_name=site_name,
-                    nickname=self.SOURCE_NAME,  # 传递站点中文名
-                )
-
-                if self.task_id:
-                    if mediainfo and mediainfo != "未找到 Mediainfo 或 BDInfo":
-                        log_streamer.emit_log(
-                            self.task_id, "提取媒体信息", "MediaInfo 提取成功", "success"
-                        )
-
-                        # 如果BDInfo在后台处理中，添加提示
-                        if bdinfo_async and bdinfo_async.get("bdinfo_status") == "processing":
-                            log_streamer.emit_log(
-                                self.task_id,
-                                "BDInfo处理",
-                                f"BDInfo 正在后台处理中 (任务ID: {bdinfo_async.get('bdinfo_task_id')})",
-                                "info",
-                            )
-                    else:
-                        log_streamer.emit_log(
-                            self.task_id, "提取媒体信息", "MediaInfo 提取失败或不存在", "warning"
-                        )
-
-                # [新增] 从 MediaInfo 中提取标签并补充到 source_params
-                if mediainfo and mediainfo != "未找到 Mediainfo 或 BDInfo":
-                    self.logger.info("开始从 MediaInfo 提取标签...")
-                    tags_from_mediainfo = extract_tags_from_mediainfo(mediainfo)
-                    if tags_from_mediainfo:
-                        # 将从 MediaInfo 提取的标签与源站点的标签合并（去重）
-                        existing_tags = source_params.get("标签", [])
-
-                        # [修复] 统一标签格式：移除 tag. 前缀以确保去重正常工作
-                        # MediaInfo 提取的标签格式为 'tag.中字'，网页提取的为 '中字'
-                        normalized_mediainfo_tags = [
-                            tag.replace("tag.", "") if tag.startswith("tag.") else tag
-                            for tag in tags_from_mediainfo
-                        ]
-
-                        # 合并标签并去重，保持顺序
-                        merged_tags = list(
-                            dict.fromkeys(existing_tags + normalized_mediainfo_tags)
-                        )
-                        source_params["标签"] = merged_tags
-                        self.logger.info(f"从 MediaInfo 提取到标签: {tags_from_mediainfo}")
-                        self.logger.info(f"标准化后的标签: {normalized_mediainfo_tags}")
-                        self.logger.info(f"合并后的标签: {merged_tags}")
-                    else:
-                        self.logger.info("MediaInfo 中未提取到额外标签")
 
                 # [新增] 从标题参数中提取标签（DIY、VCB-Studio等）
                 from utils import extract_tags_from_title

@@ -52,8 +52,6 @@ source_parsers:
       source_key: "视频编码"
     video_format:
       source_key: "视频格式"
-    frame_rate:
-      source_key: "帧率"
     audio_codec:
       source_key: "音频编码"
 
