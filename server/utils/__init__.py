@@ -13,15 +13,18 @@ from .formatters import (
     ensure_scheme,
     process_bbcode_images_and_cleanup,
 )
-from .media_helper import (
+from .title import (
     upload_data_title,
-    add_torrent_to_downloader,
     extract_tags_from_title,
+    extract_tags_from_subtitle,
+    is_uhd_as_medium,
+)
+from .media_helper import (
+    add_torrent_to_downloader,
     extract_origin_from_description,
     check_intro_completeness,
     extract_tags_from_description,
     check_animation_type_from_description,
-    extract_tags_from_subtitle,
     _get_downloader_proxy_config,
     translate_path,
     _convert_pixhost_url_to_direct,

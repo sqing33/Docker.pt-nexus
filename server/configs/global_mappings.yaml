@@ -855,6 +855,8 @@ default_title_components:
     source_key: "发布版本"
   resolution:
     source_key: "分辨率"
+  frame_rate:
+    source_key: "帧率"
   platform:
     source_key: "片源平台"
   medium:
@@ -867,8 +869,6 @@ default_title_components:
     source_key: "视频格式"
   bit_depth:
     source_key: "色深"
-  frame_rate:
-    source_key: "帧率"
   audio_codec:
     source_key: "音频编码"
 

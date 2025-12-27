@@ -673,11 +673,11 @@ def update_db_seed_info():
                 "分辨率",
                 "片源平台",
                 "媒介",
+                "帧率",
                 "视频编码",
                 "视频格式",
                 "HDR格式",
                 "色深",
-                "帧率",
                 "音频编码",
             ]
 
@@ -885,14 +885,14 @@ def migrate_publish():
         #         from utils.downloader_checker import check_seeding_limit_for_downloader
         #         config = config_manager.get()
         #         all_downloaders = config.get("downloaders", [])
-        #         
+        #
         #         can_continue, limit_message = check_seeding_limit_for_downloader(
         #             downloader_id, all_downloaders
         #         )
-        #         
+        #
         #         if not can_continue:
         #             return jsonify({
-        #                 "success": False, 
+        #                 "success": False,
         #                 "logs": f"🚫 发布前预检查触发限制: {limit_message}",
         #                 "limit_reached": True,
         #                 "pre_check": True
@@ -1316,11 +1316,11 @@ def migrate_publish():
                         #     from utils.downloader_checker import check_seeding_limit_for_downloader
                         #     config = config_manager.get()
                         #     all_downloaders = config.get("downloaders", [])
-                        #     
+                        #
                         #     can_continue, limit_message = check_seeding_limit_for_downloader(
                         #         downloader_id, all_downloaders
                         #     )
-                        #     
+                        #
                         #     if not can_continue:
                         #         print(f"🚫 [下载器添加] 发布前预检查触发限制: {limit_message}")
                         #         result["auto_add_result"] = {
@@ -1348,8 +1348,8 @@ def migrate_publish():
                         )
 
                         # 检查是否触发发种限制
-                        limit_reached = (success == "LIMIT_REACHED")
-                        
+                        limit_reached = success == "LIMIT_REACHED"
+
                         result["auto_add_result"] = {
                             "success": not limit_reached,  # 限制触发时视为失败
                             "message": message,
@@ -1593,6 +1593,11 @@ def migrate_torrent():
 @migrate_bp.route("/utils/parse_title", methods=["POST"])
 def parse_title_utility():
     """接收一个标题字符串，返回解析后的参数字典。"""
+    from utils.mediainfo_parser import (
+        extract_hdr_info_from_mediainfo,
+        extract_audio_info_from_mediainfo,
+    )
+
     data = request.json
     title_to_parse = data.get("title")
     mediainfo = data.get("mediainfo", "")  # 可选的 mediaInfo 参数
@@ -1601,8 +1606,26 @@ def parse_title_utility():
         return jsonify({"success": False, "error": "标题不能为空。"}), 400
 
     try:
-        # 传递 mediaInfo 参数以便修正 Blu-ray/BluRay 格式
-        parsed_components = upload_data_title(title_to_parse, mediaInfo=mediainfo)
+        # 从 MediaInfo 提取 HDR 和音频信息
+        mediainfo_hdr = None
+        mediainfo_audio = None
+
+        if mediainfo and mediainfo.strip():
+            try:
+                mediainfo_hdr = extract_hdr_info_from_mediainfo(mediainfo)
+                mediainfo_audio = extract_audio_info_from_mediainfo(mediainfo)
+                logging.info(f"从 MediaInfo 提取到 HDR 信息: {mediainfo_hdr}")
+                logging.info(f"从 MediaInfo 提取到音频信息: {mediainfo_audio}")
+            except Exception as e:
+                logging.warning(f"从 MediaInfo 提取 HDR/音频信息失败: {e}")
+
+        # 传递 mediaInfo 参数以便修正 Blu-ray/BluRay 格式，以及 HDR 和音频信息
+        parsed_components = upload_data_title(
+            title_to_parse,
+            mediaInfo=mediainfo,
+            mediainfo_hdr=mediainfo_hdr,
+            mediainfo_audio=mediainfo_audio,
+        )
 
         if not parsed_components:
             return jsonify(
@@ -1782,17 +1805,19 @@ def migrate_add_to_downloader():
         success, message = add_torrent_to_downloader(
             detail_page_url, save_path, downloader_id, db_manager, config_manager
         )
-        
+
         # 处理发种限制状态
         if success == "LIMIT_REACHED":
-            return jsonify({
-                "success": False,
-                "limit_reached": True,
-                "message": message,
-                "should_stop_batch": True,
-                "code": "SEEDING_LIMIT_EXCEEDED"
-            })
-        
+            return jsonify(
+                {
+                    "success": False,
+                    "limit_reached": True,
+                    "message": message,
+                    "should_stop_batch": True,
+                    "code": "SEEDING_LIMIT_EXCEEDED",
+                }
+            )
+
         return jsonify({"success": success, "message": message})
     except Exception as e:
         logging.error(f"add_to_downloader 路由发生意外错误: {e}", exc_info=True)
@@ -1938,11 +1963,11 @@ def update_preview_data():
                 "分辨率",
                 "片源平台",
                 "媒介",
+                "帧率",
+                "HDR格式",
                 "视频编码",
                 "视频格式",
-                "HDR格式",
                 "色深",
-                "帧率",
                 "音频编码",
             ]
             title_parts = []
