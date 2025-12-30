@@ -87,12 +87,13 @@ global_standard_keys:
     "音乐 MV": "category.mv"
 
     # 音频相关
-    "Audio/音频": "category.audio"
     "音频": "category.audio"
+    "Audio/音频": "category.audio"
     "Audio(音频)": "category.audio"
     "Audio": "category.audio"
 
     # 有声书相关
+    "有声书": "category.audiobook"
     "Audiobook": "category.audiobook"
     "Audiobook/有声书": "category.audiobook"
     "Audio Books/有声读物": "category.audiobook"
@@ -100,9 +101,9 @@ global_standard_keys:
     "Audio(有声)": "category.audiobook"
 
     # 纪录片相关
-    "documentary": "category.documentaries"
-    "Documentary": "category.documentaries"
     "纪录片": "category.documentaries"
+    "Documentary": "category.documentaries"
+    "documentary": "category.documentaries"
     "Record Education/纪录教育": "category.documentaries"
     "纪录片/Docmentaries": "category.documentaries"
     "Documentaries(纪录片)": "category.documentaries"

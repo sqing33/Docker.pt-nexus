@@ -1606,6 +1606,40 @@ class TorrentMigrator:
                     standardized_params["medium"] = "medium.encode"
                     print("更正媒介为 encode")
 
+                # [新增] 禁转/限转/分集标签限制：确保标准化标签中保留限制标签并记录提示
+                restricted_tag_map = {
+                    "禁转": "tag.禁转",
+                    "tag.禁转": "tag.禁转",
+                    "限转": "tag.限转",
+                    "tag.限转": "tag.限转",
+                    "分集": "tag.分集",
+                    "tag.分集": "tag.分集",
+                }
+                raw_tag_candidates = (
+                    (source_params.get("标签") or []) + (standardized_params.get("tags") or [])
+                )
+                restricted_tags = []
+                for tag in raw_tag_candidates:
+                    mapped_tag = restricted_tag_map.get(tag)
+                    if mapped_tag and mapped_tag not in restricted_tags:
+                        restricted_tags.append(mapped_tag)
+
+                if restricted_tags:
+                    current_tags = standardized_params.get("tags", []) or []
+                    standardized_params["tags"] = list(
+                        dict.fromkeys(current_tags + restricted_tags)
+                    )
+                    self.logger.warning(
+                        f"检测到受限标签(禁转/限转/分集): {restricted_tags}，已标记为不可发布"
+                    )
+                    if self.task_id:
+                        log_streamer.emit_log(
+                            self.task_id,
+                            "标签限制",
+                            f"检测到禁转/限转/分集标签: {restricted_tags}",
+                            "warning",
+                        )
+
                 # [移除] Blu-ray/BluRay 修正功能已迁移到 media_helper.py 的 upload_data_title 函数
 
                 # [调试] 打印标准化后的制作组信息

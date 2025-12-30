@@ -1092,8 +1092,9 @@ def _transfer_poster_to_pixhost(poster_url: str) -> str:
 
             print(f"   临时文件已保存: {temp_file}")
 
-            # 3. 上传到pixhost，支持主备域名切换
+            # 3. 上传到pixhost，支持主备域名切换（优先直连，失败时使用代理）
             api_urls = [
+                'https://api.pixhost.to/images',
                 'http://pt-nexus-proxy.sqing33.dpdns.org/https://api.pixhost.to/images',
                 'http://pt-nexus-proxy.1395251710.workers.dev/https://api.pixhost.to/images'
             ]

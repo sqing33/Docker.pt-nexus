@@ -861,6 +861,33 @@ def migrate_publish():
     migrator = None  # 确保在 finally 中可用
 
     try:
+        # 🚫 发布前标签限制检查：禁转/限转/分集直接拦截
+        restricted_tag_map = {
+            "禁转": "tag.禁转",
+            "tag.禁转": "tag.禁转",
+            "限转": "tag.限转",
+            "tag.限转": "tag.限转",
+            "分集": "tag.分集",
+            "tag.分集": "tag.分集",
+        }
+        standardized_params = (upload_data or {}).get("standardized_params", {})
+        raw_tags = (standardized_params.get("tags") or []) + (upload_data or {}).get("tags", [])
+        restricted_tags = []
+        for tag in raw_tags:
+            mapped_tag = restricted_tag_map.get(tag)
+            if mapped_tag and mapped_tag not in restricted_tags:
+                restricted_tags.append(mapped_tag)
+
+        if restricted_tags:
+            return jsonify(
+                {
+                    "success": False,
+                    "logs": f"🚫 发布前标签限制: 检测到禁转/限转/分集标签 {restricted_tags}",
+                    "limit_reached": True,
+                    "pre_check": True,
+                }
+            )
+
         target_info = db_manager.get_site_by_nickname(target_site_name)
         if not target_info:
             return (
@@ -879,28 +906,26 @@ def migrate_publish():
             source_site_name = context.get("source_site_name", "")
 
         # 🚫 发布前预检查发种限制 - 在任何发布逻辑之前进行
-        # downloader_id = data.get("downloaderId") or data.get("downloader_id")
-        # if downloader_id:
-        #     try:
-        #         from utils.downloader_checker import check_seeding_limit_for_downloader
-        #         config = config_manager.get()
-        #         all_downloaders = config.get("downloaders", [])
-        #
-        #         can_continue, limit_message = check_seeding_limit_for_downloader(
-        #             downloader_id, all_downloaders
-        #         )
-        #
-        #         if not can_continue:
-        #             return jsonify({
-        #                 "success": False,
-        #                 "logs": f"🚫 发布前预检查触发限制: {limit_message}",
-        #                 "limit_reached": True,
-        #                 "pre_check": True
-        #             })
-        #         else:
-        #             print(f"✅ [发布前预检查] 通过，可以继续发布到 {target_site_name}")
-        #     except Exception as e:
-        #         print(f"⚠️ [发布前预检查] 检查失败，继续执行: {e}")
+        downloader_id = data.get("downloaderId") or data.get("downloader_id")
+        if downloader_id:
+            try:
+                from .internal_guard import check_downloader_gate
+
+                can_continue, limit_message = check_downloader_gate(downloader_id)
+
+                if not can_continue:
+                    return jsonify(
+                        {
+                            "success": False,
+                            "logs": f"🚫 发布前预检查触发限制: {limit_message}",
+                            "limit_reached": True,
+                            "pre_check": True,
+                        }
+                    )
+                else:
+                    print(f"✅ [发布前预检查] 通过，可以继续发布到 {target_site_name}")
+            except Exception as e:
+                print(f"⚠️ [发布前预检查] 检查失败，继续执行: {e}")
 
         # 创建 TorrentMigrator 实例用于发布
         migrator = TorrentMigrator(
@@ -1312,30 +1337,28 @@ def migrate_publish():
                         )
 
                         # 🚫 发布前预检查发种限制
-                        # try:
-                        #     from utils.downloader_checker import check_seeding_limit_for_downloader
-                        #     config = config_manager.get()
-                        #     all_downloaders = config.get("downloaders", [])
-                        #
-                        #     can_continue, limit_message = check_seeding_limit_for_downloader(
-                        #         downloader_id, all_downloaders
-                        #     )
-                        #
-                        #     if not can_continue:
-                        #         print(f"🚫 [下载器添加] 发布前预检查触发限制: {limit_message}")
-                        #         result["auto_add_result"] = {
-                        #             "success": False,
-                        #             "message": limit_message,
-                        #             "sync": True,
-                        #             "downloader_id": None,
-                        #             "limit_reached": True,
-                        #             "pre_check": True,
-                        #         }
-                        #         return jsonify(result)
-                        #     else:
-                        #         print(f"✅ [下载器添加] 发布前预检查通过，可以继续添加")
-                        # except Exception as e:
-                        #     print(f"⚠️ [下载器添加] 发布前预检查失败，继续执行: {e}")
+                        try:
+                            from .internal_guard import check_downloader_gate
+
+                            can_continue, limit_message = check_downloader_gate(
+                                downloader_id
+                            )
+
+                            if not can_continue:
+                                print(f"🚫 [下载器添加] 发布前预检查触发限制: {limit_message}")
+                                result["auto_add_result"] = {
+                                    "success": False,
+                                    "message": limit_message,
+                                    "sync": True,
+                                    "downloader_id": None,
+                                    "limit_reached": True,
+                                    "pre_check": True,
+                                }
+                                return jsonify(result)
+                            else:
+                                print(f"✅ [下载器添加] 发布前预检查通过，可以继续添加")
+                        except Exception as e:
+                            print(f"⚠️ [下载器添加] 发布前预检查失败，继续执行: {e}")
 
                         # 同步调用 add_torrent_to_downloader 函数
                         success, message = add_torrent_to_downloader(
@@ -1659,7 +1682,9 @@ def validate_media():
     subtitle = source_info.get("subtitle") if source_info else ""
     imdb_link = source_info.get("imdb_link", "") if source_info else ""
     douban_link = source_info.get("douban_link", "") if source_info else ""
-    content_name = data.get("content_name") or (source_info.get("main_title") if source_info else "")
+    content_name = data.get("content_name") or (
+        source_info.get("main_title") if source_info else ""
+    )
 
     logging.info(
         f"收到媒体处理请求 - 类型: {media_type}, "
