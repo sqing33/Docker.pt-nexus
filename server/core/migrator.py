@@ -878,6 +878,7 @@ class TorrentMigrator:
                     mediaInfo=mediainfo_text if mediainfo_text else "未找到 Mediainfo 或 BDInfo",
                     save_path=self.save_path,
                     seed_id=composite_seed_id,
+                    content_name=original_main_title,
                     torrent_name=processed_torrent_name,
                     downloader_id=self.downloader_id,
                     priority=2,  # 批量获取使用普通优先级

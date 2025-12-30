@@ -335,7 +335,7 @@
             <div class="mapped-cell datetime-cell">
               {{
                 scope.row.is_deleted || hasRestrictedTag(scope.row.tags)
-                  ? '已删除/禁转'
+                  ? '已删除/禁转/分集'
                   : formatDateTime(scope.row.updated_at)
               }}
             </div>
@@ -456,9 +456,7 @@
                     {{ isStoppingBatch ? '停止中...' : '停止转种' }}
                   </el-button>
                   <!-- 强制自动刷新状态显示 -->
-                  <el-button type="success" size="small" disabled>
-                    自动刷新中
-                  </el-button>
+                  <el-button type="success" size="small" disabled> 自动刷新中 </el-button>
                 </div>
               </div>
               <!-- 种子处理记录表格 -->
@@ -627,9 +625,7 @@
                 </div>
                 <div class="tab-controls">
                   <!-- 强制自动刷新状态显示 -->
-                  <el-button type="success" size="small" disabled>
-                    自动刷新中
-                  </el-button>
+                  <el-button type="success" size="small" disabled> 自动刷新中 </el-button>
                 </div>
               </div>
 
@@ -706,7 +702,9 @@
                         <el-progress
                           :percentage="scope.row.progress_info?.progress_percent || 0"
                           :status="
-                            (scope.row.progress_info?.progress_percent || 0) === 100 ? 'success' : ''
+                            (scope.row.progress_info?.progress_percent || 0) === 100
+                              ? 'success'
+                              : ''
                           "
                           :stroke-width="6"
                           :show-text="false"
@@ -1259,7 +1257,9 @@ const getTagType = (tags: string[] | string, index: number) => {
     originalTag === '禁转' ||
     originalTag === 'tag.禁转' ||
     originalTag === '限转' ||
-    originalTag === 'tag.限转'
+    originalTag === 'tag.限转' ||
+    originalTag === '分集' ||
+    originalTag === 'tag.分集'
   ) {
     return 'danger' // 红色
   }
@@ -1298,7 +1298,9 @@ const getTagClass = (tags: string[] | string, index: number) => {
     originalTag === '禁转' ||
     originalTag === 'tag.禁转' ||
     originalTag === '限转' ||
-    originalTag === 'tag.限转'
+    originalTag === 'tag.限转' ||
+    originalTag === '分集' ||
+    originalTag === 'tag.分集'
   ) {
     return 'restricted-tag' // 返回禁转标签的自定义类名
   }
@@ -1775,7 +1777,13 @@ const hasRestrictedTag = (tags: string[] | string): boolean => {
 
   // 检查是否包含"禁转"或"tag.禁转"
   return tagList.some(
-    (tag) => tag === '禁转' || tag === 'tag.禁转' || tag === '限转' || tag === 'tag.限转',
+    (tag) =>
+      tag === '禁转' ||
+      tag === 'tag.禁转' ||
+      tag === '限转' ||
+      tag === 'tag.限转' ||
+      tag === '分集' ||
+      tag === 'tag.分集',
   )
 }
 

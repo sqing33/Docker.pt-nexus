@@ -21,6 +21,7 @@ from config import TEMP_DIR, config_manager, GLOBAL_MAPPINGS
 from qbittorrentapi import Client as qbClient
 from transmission_rpc import Client as TrClient
 from utils import ensure_scheme
+from .title import extract_season_episode
 
 
 def translate_path(downloader_id: str, remote_path: str) -> str:
@@ -77,15 +78,34 @@ def translate_path(downloader_id: str, remote_path: str) -> str:
     return remote_path
 
 
-def _find_target_video_file(path: str) -> tuple[str | None, bool]:
+MULTI_EPISODE_PATTERN = re.compile(
+    r"(?i)S\d{1,2}E\d{1,3}\s*(?:[-~]\s*(?:S\d{1,2})?E?\d{1,3}|E\d{1,3})"
+)
+
+
+def _parse_season_episode_numbers(season_episode: str):
+    if not season_episode:
+        return None, None
+
+    match = re.match(r"(?i)^S(\d{1,2})(?:E(\d{1,3}))?$", season_episode.strip())
+    if not match:
+        return None, None
+
+    season = int(match.group(1))
+    episode = match.group(2)
+    return season, int(episode) if episode is not None else None
+
+
+def _find_target_video_file(path: str, content_name: str | None = None) -> tuple[str | None, bool]:
     """
     根据路径智能查找目标视频文件，并检测是否为原盘文件。
     - 优先检查种子名称匹配的文件（处理电影直接放在下载目录根目录的情况）
     - 如果是电影目录，返回最大的视频文件。
-    - 如果是剧集目录，返回按名称排序的第一个视频文件。
+    - 如果是剧集目录，优先按季集信息匹配，季包默认选择 E01。
     - 检测是否为原盘文件（检查 BDMV/CERTIFICATE 目录）
 
     :param path: 要搜索的目录或文件路径。
+    :param content_name: 可选的主标题，用于补充季集信息匹配。
     :return: 元组 (目标视频文件的完整路径, 是否为原盘文件)
     """
     print(f"开始在路径 '{path}' 中查找目标视频文件...")
@@ -125,7 +145,7 @@ def _find_target_video_file(path: str) -> tuple[str | None, bool]:
     # 优先检查种子名称匹配的文件（处理电影直接放在根目录的情况）
     # 这种情况通常发生在没有文件夹包裹的电影文件
     parent_dir = os.path.dirname(path)
-    file_name = os.path.basename(path)
+    file_name = os.path.basename(os.path.normpath(path))
 
     # 检查父目录中是否有匹配的文件名（不含扩展名）
     if parent_dir != path:  # 确保这不是根目录的情况
@@ -162,6 +182,69 @@ def _find_target_video_file(path: str) -> tuple[str | None, bool]:
     if len(video_files) == 1:
         print(f"找到唯一的视频文件: {video_files[0]}")
         return video_files[0], is_bluray_disc
+
+    # 如果目录名包含季集信息，优先匹配对应集数
+    season_episode = None
+    if content_name:
+        season_episode = extract_season_episode(content_name)
+    if not season_episode:
+        season_episode = extract_season_episode(file_name)
+    if season_episode:
+        target_season, target_episode = _parse_season_episode_numbers(season_episode)
+        if target_season is not None:
+            if target_episode is None:
+                target_episode = 1
+
+            episode_matches = []
+            season_candidates = []
+            for video_file in video_files:
+                base_name = os.path.basename(video_file)
+                candidate = extract_season_episode(base_name)
+                if not candidate:
+                    continue
+
+                cand_season, cand_episode = _parse_season_episode_numbers(candidate)
+                if cand_season is None or cand_episode is None:
+                    continue
+
+                if cand_season != target_season:
+                    continue
+
+                is_multi = bool(MULTI_EPISODE_PATTERN.search(base_name))
+                season_candidates.append((cand_episode, is_multi, video_file))
+
+                if cand_episode == target_episode:
+                    episode_matches.append((video_file, is_multi))
+
+            if episode_matches:
+                single_episode_files = [
+                    video_file for video_file, is_multi in episode_matches if not is_multi
+                ]
+                if single_episode_files:
+                    selected = sorted(single_episode_files)[0]
+                else:
+                    selected = sorted([video_file for video_file, _ in episode_matches])[0]
+                print(f"根据季集信息选择视频文件: {selected}")
+                return selected, is_bluray_disc
+
+            if season_candidates:
+                min_episode = min(episode for episode, _, _ in season_candidates)
+                min_episode_files = [
+                    (video_file, is_multi)
+                    for episode, is_multi, video_file in season_candidates
+                    if episode == min_episode
+                ]
+                single_episode_files = [
+                    video_file for video_file, is_multi in min_episode_files if not is_multi
+                ]
+                if single_episode_files:
+                    selected = sorted(single_episode_files)[0]
+                else:
+                    selected = sorted([video_file for video_file, _ in min_episode_files])[0]
+                print(
+                    f"未找到 S{target_season}E{target_episode:02d}，选择该季最小集: {selected}"
+                )
+                return selected, is_bluray_disc
 
     # 如果有多个视频文件，尝试找到最匹配的文件名
     best_match = ""

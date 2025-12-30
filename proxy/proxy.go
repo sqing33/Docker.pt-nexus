@@ -88,7 +88,8 @@ type qbHTTPClient struct {
 	IsLoggedIn bool
 }
 type ScreenshotRequest struct {
-	RemotePath string `json:"remote_path"`
+	RemotePath  string `json:"remote_path"`
+	ContentName string `json:"content_name,omitempty"`
 }
 type ScreenshotResponse struct {
 	Success bool   `json:"success"`
@@ -96,7 +97,8 @@ type ScreenshotResponse struct {
 	BBCode  string `json:"bbcode,omitempty"`
 }
 type MediaInfoRequest struct {
-	RemotePath string `json:"remote_path"`
+	RemotePath  string `json:"remote_path"`
+	ContentName string `json:"content_name,omitempty"`
 }
 type MediaInfoResponse struct {
 	Success   bool   `json:"success"`
@@ -799,8 +801,45 @@ func findSubtitleEventsForPGS(videoPath string, subtitleStreamIndex int, duratio
 	return events, nil
 }
 
-func findTargetVideoFile(path string) (string, error) {
-	log.Printf("正在路径 '%s' 中查找体积最大的视频文件...", path)
+var seasonEpisodePattern = regexp.MustCompile(`(?i)S\d{1,2}E\d{1,3}`)
+var seasonOnlyPattern = regexp.MustCompile(`(?i)S\d{1,2}`)
+var multiEpisodePattern = regexp.MustCompile(`(?i)S\d{1,2}E\d{1,3}\s*(?:[-~]\s*(?:S?\d{1,2})?E?\d{1,3}|E\d{1,3})`)
+
+func extractSeasonEpisode(text string) string {
+	if text == "" {
+		return ""
+	}
+	if match := seasonEpisodePattern.FindString(text); match != "" {
+		return strings.ToUpper(match)
+	}
+	if match := seasonOnlyPattern.FindString(text); match != "" {
+		return strings.ToUpper(match)
+	}
+	return ""
+}
+
+func parseSeasonEpisodeNumbers(seasonEpisode string) (int, int, bool) {
+	re := regexp.MustCompile(`(?i)^S(\d{1,2})(?:E(\d{1,3}))?$`)
+	match := re.FindStringSubmatch(strings.TrimSpace(seasonEpisode))
+	if match == nil {
+		return 0, 0, false
+	}
+	season, err := strconv.Atoi(match[1])
+	if err != nil {
+		return 0, 0, false
+	}
+	if match[2] == "" {
+		return season, 0, false
+	}
+	episode, err := strconv.Atoi(match[2])
+	if err != nil {
+		return 0, 0, false
+	}
+	return season, episode, true
+}
+
+func findTargetVideoFile(path string, contentName string) (string, error) {
+	log.Printf("正在路径 '%s' 中查找目标视频文件...", path)
 	videoExtensions := map[string]bool{".mkv": true, ".mp4": true, ".ts": true, ".avi": true, ".wmv": true, ".mov": true, ".flv": true, ".m2ts": true}
 	info, err := os.Stat(path)
 	if os.IsNotExist(err) {
@@ -816,8 +855,11 @@ func findTargetVideoFile(path string) (string, error) {
 		}
 		return "", fmt.Errorf("输入路径是一个文件，但不是支持的视频格式: %s", path)
 	}
-	var largestFile string
-	var maxSize int64 = -1
+	type videoFileInfo struct {
+		path string
+		size int64
+	}
+	var videoFiles []videoFileInfo
 	err = filepath.Walk(path, func(filePath string, fileInfo os.FileInfo, err error) error {
 		if err != nil {
 			log.Printf("警告: 访问文件 '%s' 时出错: %v", filePath, err)
@@ -827,18 +869,129 @@ func findTargetVideoFile(path string) (string, error) {
 			return nil
 		}
 		if videoExtensions[strings.ToLower(filepath.Ext(filePath))] {
-			if fileInfo.Size() > maxSize {
-				maxSize = fileInfo.Size()
-				largestFile = filePath
-			}
+			videoFiles = append(videoFiles, videoFileInfo{path: filePath, size: fileInfo.Size()})
 		}
 		return nil
 	})
 	if err != nil {
 		return "", fmt.Errorf("遍历目录失败: %v", err)
 	}
-	if largestFile == "" {
+	if len(videoFiles) == 0 {
 		return "", fmt.Errorf("在目录 '%s' 中未找到任何视频文件", path)
+	}
+
+	if len(videoFiles) == 1 {
+		log.Printf("✅ 找到唯一视频文件: %s", videoFiles[0].path)
+		return videoFiles[0].path, nil
+	}
+
+	seasonEpisode := ""
+	if contentName != "" {
+		seasonEpisode = extractSeasonEpisode(contentName)
+	}
+	if seasonEpisode == "" {
+		seasonEpisode = extractSeasonEpisode(filepath.Base(path))
+	}
+
+	if seasonEpisode != "" {
+		targetSeason, targetEpisode, hasEpisode := parseSeasonEpisodeNumbers(seasonEpisode)
+		if targetSeason > 0 {
+			if !hasEpisode {
+				targetEpisode = 1
+			}
+			type episodeCandidate struct {
+				episode int
+				isMulti bool
+				path    string
+			}
+			var episodeMatches []episodeCandidate
+			var seasonCandidates []episodeCandidate
+			for _, vf := range videoFiles {
+				baseName := filepath.Base(vf.path)
+				candidate := extractSeasonEpisode(baseName)
+				if candidate == "" {
+					continue
+				}
+				candSeason, candEpisode, candHasEpisode := parseSeasonEpisodeNumbers(candidate)
+				if candSeason != targetSeason || !candHasEpisode {
+					continue
+				}
+				isMulti := multiEpisodePattern.MatchString(baseName)
+				seasonCandidates = append(seasonCandidates, episodeCandidate{
+					episode: candEpisode,
+					isMulti: isMulti,
+					path:    vf.path,
+				})
+				if candEpisode == targetEpisode {
+					episodeMatches = append(episodeMatches, episodeCandidate{
+						episode: candEpisode,
+						isMulti: isMulti,
+						path:    vf.path,
+					})
+				}
+			}
+			if len(episodeMatches) > 0 {
+				selected := episodeMatches[0].path
+				for _, cand := range episodeMatches {
+					if !cand.isMulti {
+						if selected == "" || cand.path < selected {
+							selected = cand.path
+						}
+					}
+				}
+				if selected == "" {
+					selected = episodeMatches[0].path
+					for _, cand := range episodeMatches {
+						if cand.path < selected {
+							selected = cand.path
+						}
+					}
+				}
+				log.Printf("✅ 根据季集信息选择视频文件: %s", selected)
+				return selected, nil
+			}
+			if len(seasonCandidates) > 0 {
+				minEpisode := seasonCandidates[0].episode
+				for _, cand := range seasonCandidates {
+					if cand.episode < minEpisode {
+						minEpisode = cand.episode
+					}
+				}
+				selected := ""
+				for _, cand := range seasonCandidates {
+					if cand.episode != minEpisode {
+						continue
+					}
+					if !cand.isMulti {
+						if selected == "" || cand.path < selected {
+							selected = cand.path
+						}
+					}
+				}
+				if selected == "" {
+					for _, cand := range seasonCandidates {
+						if cand.episode == minEpisode {
+							if selected == "" || cand.path < selected {
+								selected = cand.path
+							}
+						}
+					}
+				}
+				if selected != "" {
+					log.Printf("⚠️ 未找到 S%02dE%02d，选择该季最小集: %s", targetSeason, targetEpisode, selected)
+					return selected, nil
+				}
+			}
+		}
+	}
+
+	largestFile := ""
+	var maxSize int64 = -1
+	for _, vf := range videoFiles {
+		if vf.size > maxSize {
+			maxSize = vf.size
+			largestFile = vf.path
+		}
 	}
 	log.Printf("✅ 已选定最大文件 (大小: %.2f GB): %s", float64(maxSize)/1024/1024/1024, largestFile)
 	if maxSize < 100*1024*1024 {
@@ -1031,7 +1184,7 @@ func screenshotHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	videoPath, err := findTargetVideoFile(initialPath)
+	videoPath, err := findTargetVideoFile(initialPath, reqData.ContentName)
 	if err != nil {
 		writeJSONResponse(w, r, http.StatusBadRequest, ScreenshotResponse{Success: false, Message: err.Error()})
 		return
@@ -1193,7 +1346,7 @@ func mediainfoHandler(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	videoPath, err := findTargetVideoFile(initialPath)
+	videoPath, err := findTargetVideoFile(initialPath, reqData.ContentName)
 	if err != nil {
 		log.Printf("MediaInfo请求: 查找视频文件失败: %v", err)
 		writeJSONResponse(w, r, http.StatusBadRequest, MediaInfoResponse{Success: false, Message: err.Error()})

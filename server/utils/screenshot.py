@@ -489,7 +489,7 @@ def upload_data_screenshot(source_info, save_path, torrent_name=None, downloader
         try:
             response = requests.post(
                 f"{proxy_config['proxy_base_url']}/api/media/screenshot",
-                json={"remote_path": full_video_path},
+                json={"remote_path": full_video_path, "content_name": content_name},
                 timeout=300,
             )
             response.raise_for_status()
@@ -505,7 +505,13 @@ def upload_data_screenshot(source_info, save_path, torrent_name=None, downloader
             return ""
 
     # --- 本地截图逻辑 ---
-    target_video_file, is_bluray_disc = _find_target_video_file(full_video_path)
+    content_name = None
+    if source_info and isinstance(source_info, dict):
+        content_name = source_info.get("main_title")
+
+    target_video_file, is_bluray_disc = _find_target_video_file(
+        full_video_path, content_name=content_name
+    )
     if not target_video_file:
         print("错误：在指定路径中未找到视频文件。")
         return ""

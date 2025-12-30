@@ -1659,6 +1659,7 @@ def validate_media():
     subtitle = source_info.get("subtitle") if source_info else ""
     imdb_link = source_info.get("imdb_link", "") if source_info else ""
     douban_link = source_info.get("douban_link", "") if source_info else ""
+    content_name = data.get("content_name") or (source_info.get("main_title") if source_info else "")
 
     logging.info(
         f"收到媒体处理请求 - 类型: {media_type}, "
@@ -1717,6 +1718,7 @@ def validate_media():
             current_mediainfo,
             save_path,
             torrent_name=torrent_name,
+            content_name=content_name,
             downloader_id=downloader_id,
             force_refresh=True,
         )  # 强制重新获取

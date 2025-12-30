@@ -94,7 +94,7 @@ def upload_data_mediaInfo(
         try:
             response = requests.post(
                 f"{proxy_config['proxy_base_url']}/api/media/mediainfo",
-                json={"remote_path": remote_path},
+                json={"remote_path": remote_path, "content_name": content_name},
                 timeout=300,
             )  # 5分钟超时
             response.raise_for_status()
@@ -139,7 +139,9 @@ def upload_data_mediaInfo(
         print(f"已提供 content_name，将在精确路径中搜索: '{path_to_search}'")
 
     # 使用新构建的路径来查找视频文件
-    target_video_file, is_bluray_disc = _find_target_video_file(path_to_search)
+    target_video_file, is_bluray_disc = _find_target_video_file(
+        path_to_search, content_name=content_name
+    )
 
     if not target_video_file:
         print("未能在指定路径中找到合适的视频文件，提取失败。")
@@ -765,7 +767,9 @@ def upload_data_mediaInfo_async(
     # ---------------------------------------------
     elif path_to_search:
         # 只有不是远程原盘时，才尝试在本地查找视频文件
-        target_video_file, is_bluray_disc = _find_target_video_file(path_to_search)
+        target_video_file, is_bluray_disc = _find_target_video_file(
+            path_to_search, content_name=content_name
+        )
     # --------------------------------
 
     bdinfo_async_info = {

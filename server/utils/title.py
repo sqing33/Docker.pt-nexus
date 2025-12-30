@@ -8,6 +8,50 @@ import re
 from typing import Dict, Any
 from config import config_manager, GLOBAL_MAPPINGS
 
+SEASON_EPISODE_PATTERN = re.compile(
+    r"(?<!\w)(S\d{1,2}(?:(?:[-–~]\s*S?\d{1,2})?|(?:\s*E\d{1,3}(?:[-–~]\s*(?:S\d{1,2})?E?\d{1,3})*)?))(?!\w)",
+    re.I,
+)
+
+
+def _normalize_season_episode_value(season_str: str) -> str | None:
+    cleaned = re.sub(r"\s", "", season_str.upper())
+    match = re.search(r"(S\d{1,2}).*?E(\d{1,3})", cleaned, re.I)
+    if match:
+        return f"{match.group(1).upper()}E{match.group(2)}"
+    match = re.search(r"(S\d{1,2})", cleaned, re.I)
+    if match:
+        return match.group(1).upper()
+    return None
+
+
+def extract_season_episode(text: str) -> str | None:
+    """
+    提取季集信息，支持多集格式并返回首集（如 S01E05-06 -> S01E05）。
+    """
+    if not text:
+        return None
+
+    season_match = SEASON_EPISODE_PATTERN.search(text)
+    if season_match:
+        return _normalize_season_episode_value(season_match.group(1))
+
+    compact_match = re.search(
+        r"(?i)S\d{1,2}E\d{1,3}(?:E\d{1,3}|[-~]\s*(?:S\d{1,2})?E?\d{1,3})",
+        text,
+    )
+    if compact_match:
+        return _normalize_season_episode_value(compact_match.group(0))
+
+    simple_match = re.search(r"(?i)S\d{1,2}E\d{1,3}", text)
+    if simple_match:
+        return _normalize_season_episode_value(simple_match.group(0))
+
+    season_only_match = re.search(r"(?i)S\d{1,2}", text)
+    if season_only_match:
+        return season_only_match.group(0).upper()
+
+    return None
 
 def get_title_components_order():
     """
@@ -463,11 +507,7 @@ def upload_data_title(
                 release_group = "N/A (无发布组)"
 
     # 3. 季集、年份、剪辑版本提取
-    season_match = re.search(
-        r"(?<!\w)(S\d{1,2}(?:(?:[-–~]\s*S?\d{1,2})?|(?:\s*E\d{1,3}(?:[-–~]\s*(?:S\d{1,2})?E?\d{1,3})*)?))(?!\w)",
-        main_part,
-        re.I,
-    )
+    season_match = SEASON_EPISODE_PATTERN.search(main_part)
     if season_match:
         season_str = season_match.group(1)
         main_part = main_part.replace(season_str, " ").strip()
