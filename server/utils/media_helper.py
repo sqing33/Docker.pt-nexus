@@ -560,15 +560,10 @@ def add_torrent_to_downloader(
 
             # 在成功添加种子后检查发种限制
             try:
-                from .downloader_checker import check_seeding_limit_for_downloader
-
-                # 获取所有下载器配置
-                all_downloaders = config.get("downloaders", [])
+                from api.internal_guard import check_downloader_gate
 
                 # 检查发种限制
-                can_continue, limit_message = check_seeding_limit_for_downloader(
-                    downloader_id, all_downloaders
-                )
+                can_continue, limit_message = check_downloader_gate(downloader_id)
 
                 if not can_continue:
                     return "LIMIT_REACHED", limit_message

@@ -92,7 +92,7 @@ class SSDSpecialExtractor:
     def extract_intro(self):
         """
         提取简介信息，针对"不可说"站点的特殊结构
-        完全使用ptgen来获取简介信息，并去掉海报部分
+        修复了附加信息提取失败的问题
         """
         intro = {}
         quotes = []
@@ -104,17 +104,44 @@ class SSDSpecialExtractor:
         douban_section = self.soup.select_one("[data-group='douban']")
         # IMDb信息部分
         imdb_section = self.soup.select_one("[data-group='imdb']")
-        # 额外文本BBCode部分（包含声明）
+        # 额外文本BBCode部分（包含声明，隐藏的元素，包含最准确的BBCode）
         extra_text_bbcode = self.soup.select_one("#torrent-extra-text-bbcode")
-
-        # SSD站点特有的"本作素材"提取
+        # 额外文本HTML部分（显示的元素）
         extra_text_section = self.soup.select_one("artical.extra-text")
-        if extra_text_section:
-            # 获取内部HTML内容 (decode_contents保留标签，get_text会丢失标签)
-            content_html = extra_text_section.decode_contents()
 
-            # 只有当包含"本作素材"时才处理
-            if "本作素材" in extra_text_section.get_text():
+        # --- 修复部分开始：提取附加信息 (Statement) ---
+
+        found_statement = False  # 标记是否已经找到声明，避免重复添加
+
+        # 策略1：优先尝试提取隐藏的 BBCode (id="torrent-extra-text-bbcode")
+        # 这是最准确的，因为网站已经转换好了
+        if extra_text_bbcode:
+            bbcode_text = extra_text_bbcode.get_text().strip()
+            if bbcode_text:
+                # 检查是否包含 [quote]，如果有则提取块，如果没有则整体作为引用
+                if "[quote]" in bbcode_text:
+                    quote_blocks = re.findall(r"\[quote\].*?\[/quote\]", bbcode_text, re.DOTALL)
+                    for quote_block in quote_blocks:
+                        quote_content = re.sub(r"\[\/?quote\]", "", quote_block).strip()
+                        if quote_content and not self._is_unwanted_declaration(quote_content):
+                            quotes.append(quote_block)
+                            found_statement = True
+                else:
+                    # 修复点：如果没有 [quote] 标签，直接将整个内容包装进去
+                    if not self._is_unwanted_declaration(bbcode_text):
+                        quotes.append(f"[quote]{bbcode_text}[/quote]")
+                        found_statement = True
+
+        # 策略2：如果 BBCode 没找到或为空，尝试解析 HTML (artical.extra-text)
+        # 只有在策略1失败时才执行，或者你希望两者合并（通常不需要）
+        if not found_statement and extra_text_section:
+            # 修复点：删除了 "if '本作素材' in ..." 的判断，改为只要有内容就处理
+
+            # 获取内部HTML内容
+            content_html = extra_text_section.decode_contents()
+            content_text_check = extra_text_section.get_text(strip=True)
+
+            if content_text_check:  # 只要有文本内容就进行转换
                 # 1. 预处理换行：将 <br> 转换为换行符
                 content_html = re.sub(r"<br\s*/?>", "\n", content_html, flags=re.IGNORECASE)
 
@@ -132,11 +159,9 @@ class SSDSpecialExtractor:
 
                 # 4. 转换颜色 span 标签
                 def color_replace(match):
-                    # 获取颜色值，去除可能存在的分号、空白，并转为小写
                     color = match.group(1).strip().replace(";", "").lower()
                     return f"[color={color}]"
 
-                # 匹配 style="color: xxx;" 的 span，兼容有无分号的情况
                 content_html = re.sub(
                     r'<span\s+style="color:\s*([^"]+?)"\s*>',
                     color_replace,
@@ -145,32 +170,18 @@ class SSDSpecialExtractor:
                 )
                 content_html = re.sub(r"</span>", "[/color]", content_html, flags=re.IGNORECASE)
 
-                # 5. 使用 BeautifulSoup 清理剩余的 HTML 标签，只保留我们转换好的 BBCode 文本
-                # 这一步非常重要，它会去除 <artical> 等不需要的标签，但保留 [b]...[/b] 等文本
+                # 5. 清理剩余 HTML
                 temp_soup = BeautifulSoup(content_html, "html.parser")
                 material_content = temp_soup.get_text()
 
-                # 6. 后期清理和格式化
-                # 去除首尾空白
+                # 6. 后期清理
                 material_content = material_content.strip()
-                # 修复可能出现的连续换行问题
                 material_content = re.sub(r"\n{3,}", "\n\n", material_content)
 
                 if material_content and not self._is_unwanted_declaration(material_content):
-                    # 按照目标格式，在 quote 内部添加换行
                     quotes.append(f"[quote]\n{material_content}\n[/quote]")
 
-        # 提取声明信息（引用块）
-        if extra_text_bbcode:
-            # 从BBCode格式中提取引用块
-            bbcode_text = extra_text_bbcode.get_text().strip()
-            # 提取所有[quote]...[/quote]块
-            quote_blocks = re.findall(r"\[quote\].*?\[/quote\]", bbcode_text, re.DOTALL)
-            for quote_block in quote_blocks:
-                # 清理引用块内容
-                quote_content = re.sub(r"\[\/?quote\]", "", quote_block).strip()
-                if quote_content and not self._is_unwanted_declaration(quote_content):
-                    quotes.append(quote_block)  # 保留原始的BBCode格式
+        # --- 修复部分结束 ---
 
         # 提取海报图片
         poster_img = self.soup.select_one("img[src*='doubanio.com']")
@@ -190,7 +201,6 @@ class SSDSpecialExtractor:
             for img in screenshot_imgs:
                 src = img.get("src")
                 if src:
-                    # 清理src中的换行符
                     src = src.strip()
                     screenshots.append(f"[img]{src}[/img]")
 
@@ -198,7 +208,6 @@ class SSDSpecialExtractor:
         douban_link = ""
         imdb_link = ""
 
-        # 首先在整个文档中查找链接
         douban_link_tag = self.soup.select_one("a[href*='movie.douban.com/subject/']")
         if douban_link_tag:
             douban_link = douban_link_tag.get("href", "")
@@ -207,22 +216,17 @@ class SSDSpecialExtractor:
         if imdb_link_tag:
             imdb_link = imdb_link_tag.get("href", "")
 
-        # 如果在全局没找到，尝试从特定部分查找
         if not douban_link and douban_section:
-            # 从豆瓣部分提取豆瓣链接
             douban_link_tag = douban_section.select_one("a[href*='movie.douban.com/subject/']")
             if not douban_link_tag:
-                # 最后尝试从文本中提取豆瓣链接
                 douban_text = douban_section.get_text()
                 douban_match = re.search(r"https?://movie\.douban\.com/subject/\d+", douban_text)
                 if douban_match:
                     douban_link = douban_match.group(0)
 
         if not imdb_link and imdb_section:
-            # 从IMDb部分提取IMDb链接
             imdb_link_tag = imdb_section.select_one("a[href*='imdb.com/title/tt']")
             if not imdb_link_tag:
-                # 最后尝试从文本中提取IMDb链接
                 imdb_text = imdb_section.get_text() if imdb_section else ""
                 imdb_match = re.search(r"https?://www\.imdb\.com/title/tt\d+", imdb_text)
                 if imdb_match:
@@ -232,14 +236,12 @@ class SSDSpecialExtractor:
             try:
                 from utils import upload_data_movie_info
 
-                # 使用upload_data_movie_info函数同时获取海报和简介
                 movie_status, poster_content, description_content, imdb_content, douban_content = (
                     upload_data_movie_info("", douban_link, imdb_link, "")
                 )
 
                 if movie_status and description_content:
                     body = description_content
-                    # 如果还没有海报，可以使用从ptgen获取的海报
                     if not images and poster_content:
                         images.append(poster_content)
                 else:

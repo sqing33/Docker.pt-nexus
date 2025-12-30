@@ -56,8 +56,8 @@
     "special_tracker_domain": null,
     "group": "-PTerWEB,-PTer,-PTerDIY,-PTerTV,-PTerGame,-PTerMV",
     "description": "PTerClub",
-    "migration": 1,
-    "speed_limit": 10
+    "migration": 3,
+    "speed_limit": 99999
   },
   {
     "site": "hdhome",
@@ -1274,6 +1274,15 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 0,
+    "speed_limit": 10
+  },
+  {
+    "site": "baozi",
+    "nickname": "包子",
+    "base_url": "p.t-baozi.cc",
+    "special_tracker_domain": null,
+    "group": null,
+    "migration": 2,
     "speed_limit": 10
   }
 ]

@@ -830,11 +830,6 @@
           <!-- 🚫 发种限制提示 -->
           <div class="limit-alert-section" v-if="limitAlert.visible">
             <div class="limit-alert">
-              <div class="limit-alert-icon">
-                <el-icon color="#F56C6C" :size="20">
-                  <WarningFilled />
-                </el-icon>
-              </div>
               <div class="limit-alert-content">
                 <div class="limit-alert-title">{{ limitAlert.title }}</div>
                 <div class="limit-alert-message">{{ limitAlert.message }}</div>
@@ -5219,12 +5214,6 @@ const filterUploadedParam = (url: string): string => {
   border: 1px solid #f56c6c;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(245, 108, 108, 0.1);
-}
-
-.limit-alert-icon {
-  margin-right: 12px;
-  margin-top: 2px;
-  flex-shrink: 0;
 }
 
 .limit-alert-content {

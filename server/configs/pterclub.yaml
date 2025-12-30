@@ -1,35 +1,45 @@
-site_name: "PterClub"
+site_name: "PTerClub"
 
 form_fields:
-  category: "type"
   medium: "source_sel"
   source: "team_sel"
+  category: "type"
+  jinzhuan: "jinzhuan"
+  guanfang: "guanfang"
+  guoyu: "guoyu"
+  yueyu: "yueyu"
+  zhongzi: "zhongzi"
+  ensub: "ensub"
+  yingqiu: "yingqiu"
+  diy: "diy"
+  pr: "pr"
+  bim: "bim"
+  mp: "mp"
 
 source_parsers:
   source_params:
     type:
       source_key: "类型"
     medium:
-      source_key: "质量"
+      source_key: "媒介"
     source:
-      source_key: "地区"
-    team:
-      source_key: "制作组"
+      source_key: "区域"
 
   standard_keys:
     type:
-      "电影 (Movie)": "category.movie"
-      "电视剧 (TV Series)": "category.tv_series"
-      "动画 (Animation)": "category.animation"
-      "综艺 (TV Show)": "category.tv_shows"
-      "音乐短片 (MV)": "category.mv"
-      "音乐 (Music)": "category.music"
-      "舞台演出(Stage Performance)": "category.stage"
-      "纪录片 (Documentary)": "category.documentaries"
-      "体育 (Sport)": "category.sports"
-      "软件 (Software)": "category.software"
-      "学习 (Study)": "category.study"
-      "其它 (Other)": "category.other"
+      "电影": "category.movie"
+      "电视剧": "category.tv_series"
+      "动画": "category.animation"
+      "综艺": "category.tv_shows"
+      "音乐短片": "category.mv"
+      "音乐": "category.music"
+      "舞台演出": "category.stage"
+      "纪录片": "category.documentaries"
+      "体育": "category.sports"
+      "电子书": "category.ebook"
+      "软件": "category.software"
+      "学习": "category.study"
+      "其它": "category.other"
 
     medium:
       "UHD Discs": "medium.uhd_bluray"
@@ -38,7 +48,7 @@ source_parsers:
       "HDTV": "medium.hdtv"
       "WEB-DL": "medium.webdl"
       "Encode": "medium.encode"
-      "DVD Discs": "medium.dvd"
+      "DVD Discs": "medium.dvdr"
       "FLAC": "medium.flac"
       "WAV": "medium.wav"
       "ISO": "medium.iso"
@@ -58,12 +68,59 @@ source_parsers:
       "印度 (IND)": "source.india"
       "其它 (Other)": "source.other"
 
-    # Pter标签是checkbox形式，此处映射用于详情页解析或特定适配，对应HTML中的标签文本
-    tag:
-      "禁转": "tag.禁转"
-      "国语": "tag.国语"
-      "粤语": "tag.粤语"
-      "中字": "tag.中字"
-      "英字": "tag.英字"
-      "DIY原盘": "tag.DIY"
-      "MV母盘": "tag.master"
+mappings:
+  type:
+    "category.movie": "401"
+    "category.tv_series": "404"
+    "category.animation": "403"
+    "category.tv_shows": "405"
+    "category.mv": "413"
+    "category.music": "406"
+    "category.stage": "418"
+    "category.documentaries": "402"
+    "category.sports": "407"
+    "category.ebook": "408"
+    "category.software": "410"
+    "category.study": "411"
+    "category.other": "412"
+    "default": "401"
+
+  medium:
+    "medium.uhd_bluray": "1"
+    "medium.bluray": "2"
+    "medium.remux": "3"
+    "medium.hdtv": "4"
+    "medium.webdl": "5"
+    "medium.encode": "6"
+    "medium.dvdr": "7"
+    "medium.flac": "8"
+    "medium.wav": "9"
+    "medium.iso": "10"
+    "medium.pdf": "11"
+    "medium.pub": "12"
+    "medium.azw": "13"
+    "medium.mobi": "14"
+    "medium.other": "15"
+    "default": "15"
+
+  source:
+    "source.china": "1"
+    "source.hongkong": "2"
+    "source.taiwan": "3"
+    "source.western": "4"
+    "source.korea": "5"
+    "source.japan": "6"
+    "source.india": "7"
+    "source.other": "8"
+    "default": "8"
+
+  tag:
+    "tag.国语": "yes"
+    "tag.粤语": "yes"
+    "tag.中字": "yes"
+    "tag.英字": "yes"
+    "tag.DIY": "yes"
+    "tag.原创": "yes"
+    "tag.自购": "yes"
+    "tag.MV母盘": "yes"
+    "default": null

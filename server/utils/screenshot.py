@@ -20,11 +20,11 @@ def _upload_to_pixhost(image_path: str):
     :param image_path: 本地图片文件的路径。
     :return: 成功时返回图片的展示URL，失败时返回None。
     """
-    # 主备域名配置 - 替换子域名部分
+    # 主备域名配置 - 优先直连，失败时使用代理
     api_urls = [
+        "https://api.pixhost.to/images",
         "http://pt-nexus-proxy.sqing33.dpdns.org/https://api.pixhost.to/images",
         "http://pt-nexus-proxy.1395251710.workers.dev/https://api.pixhost.to/images",
-        "https://api.pixhost.to/images",
     ]
 
     params = {"content_type": 0}
@@ -484,6 +484,11 @@ def upload_data_screenshot(source_info, save_path, torrent_name=None, downloader
                     }
                 break
 
+    # 初始化 content_name（用于辅助识别剧集文件）
+    content_name = None
+    if source_info and isinstance(source_info, dict):
+        content_name = source_info.get("main_title")
+
     if use_proxy and proxy_config:
         print(f"使用代理处理截图: {proxy_config['proxy_base_url']}")
         try:
@@ -505,9 +510,6 @@ def upload_data_screenshot(source_info, save_path, torrent_name=None, downloader
             return ""
 
     # --- 本地截图逻辑 ---
-    content_name = None
-    if source_info and isinstance(source_info, dict):
-        content_name = source_info.get("main_title")
 
     target_video_file, is_bluray_disc = _find_target_video_file(
         full_video_path, content_name=content_name

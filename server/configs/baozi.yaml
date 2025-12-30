@@ -1,0 +1,185 @@
+site_name: "Baozi"
+
+form_fields:
+  medium: "medium_sel[4]"
+  video_codec: "codec_sel[4]"
+  audio_codec: "audiocodec_sel[4]"
+  resolution: "standard_sel[4]"
+  team: "team_sel[4]"
+  category: "type"
+  tags[4][]: "tags[]"
+
+source_parsers:
+  source_params:
+    type:
+      source_key: "类型"
+    medium:
+      source_key: "媒介"
+    video_codec:
+      source_key: "视频编码"
+    audio_codec:
+      source_key: "音频编码"
+    resolution:
+      source_key: "分辨率"
+    team:
+      source_key: "制作组"
+
+  standard_keys:
+    type:
+      "电影": "category.movie"
+      "剧集": "category.tv_series"
+      "综艺": "category.tv_shows"
+      "纪录片": "category.documentaries"
+      "动漫": "category.animation"
+      "音乐视频": "category.mv"
+      "体育运动": "category.sports"
+      "高品质音频": "category.music"
+      "其他": "category.other"
+
+    medium:
+      "Track": "medium.track"
+      "CD": "medium.cd"
+      "DVDR": "medium.dvdr"
+      "HDTV": "medium.hdtv"
+      "MiniBD": "medium.minibd"
+      "Encode": "medium.encode"
+      "Remux": "medium.remux"
+      "HD DVD": "medium.hddvd"
+      "Blu-ray 原盘": "medium.bluray"
+      "Blu-ray DIY": "medium.bluray"
+      "UHD Blu-ray 原盘": "medium.uhd_bluray"
+      "UHD Blu-ray DIY": "medium.uhd_bluray"
+      "WEB-DL": "medium.webdl"
+
+    video_codec:
+      "H.264(AVC)": "video.h264"
+      "H.265(HEVC)": "video.h265"
+      "AV1": "video.av1"
+      "VC-1": "video.vc1"
+      "MPEG-2": "video.mpeg2"
+      "Other": "video.other"
+
+    audio_codec:
+      "DTS:X": "audio.dtsx"
+      "TrueHD Atmos": "audio.truehd_atmos"
+      "DTS-HD MA": "audio.dts_hd_ma"
+      "TrueHD": "audio.truehd"
+      "LPCM": "audio.lpcm"
+      "DTS": "audio.dts"
+      "DD/AC3": "audio.ac3"
+      "OPUS": "audio.opus"
+      "AAC": "audio.aac"
+      "FLAC": "audio.flac"
+      "APE": "audio.ape"
+      "WAV": "audio.wav"
+      "MP3": "audio.mp3"
+      "M4A": "audio.m4a"
+      "Other": "audio.other"
+
+    resolution:
+      "8K": "resolution.r4320p"
+      "4K": "resolution.r2160p"
+      "1080p": "resolution.r1080p"
+      "1080i": "resolution.r1080i"
+      "720p": "resolution.r720p"
+      "SD": "resolution.sd"
+      "None": "resolution.other"
+
+    team:
+      "HDS": "team.hdsky"
+      "CHD": "team.chd"
+      "MySiLU": "team.mysilu"
+      "WiKi": "team.wiki"
+      "Other": "team.other"
+
+mappings:
+  type:
+    "category.movie": "401"
+    "category.tv_series": "402"
+    "category.tv_shows": "403"
+    "category.documentaries": "404"
+    "category.animation": "405"
+    "category.mv": "406"
+    "category.sports": "407"
+    "category.music": "408"
+    "category.other": "409"
+    "default": "401"
+
+  medium:
+    "medium.track": "9"
+    "medium.cd": "8"
+    "medium.dvdr": "6"
+    "medium.hdtv": "5"
+    "medium.minibd": "4"
+    "medium.encode": "7"
+    "medium.remux": "3"
+    "medium.hddvd": "2"
+    "medium.bluray": "1"
+    "medium.bluray_diy": "13"
+    "medium.uhd_bluray": "11"
+    "medium.uhd_diy": "12"
+    "medium.webdl": "10"
+    "default": "13"
+
+  video_codec:
+    "video.h264": "1"
+    "video.h265": "6"
+    "video.vc1": "2"
+    "video.mpeg2": "4"
+    "video.av1": "3"
+    "video.other": "5"
+    "default": "5"
+
+  audio_codec:
+    "audio.dtsx": "8"
+    "audio.truehd_atmos": "9"
+    "audio.dts_hd_ma": "10"
+    "audio.truehd": "11"
+    "audio.lpcm": "12"
+    "audio.dts": "3"
+    "audio.ac3": "1"
+    "audio.opus": "2"
+    "audio.aac": "6"
+    "audio.flac": "13"
+    "audio.ape": "14"
+    "audio.wav": "15"
+    "audio.mp3": "4"
+    "audio.m4a": "5"
+    "audio.other": "7"
+    "default": "7"
+
+  resolution:
+    "resolution.r4320p": "6"
+    "resolution.r2160p": "5"
+    "resolution.r1080p": "1"
+    "resolution.r1080i": "2"
+    "resolution.r720p": "3"
+    "resolution.sd": "4"
+    "resolution.other": "7"
+    "default": "7"
+
+  team:
+    "team.hdsky": "1"
+    "team.chd": "2"
+    "team.mysilu": "3"
+    "team.wiki": "4"
+    "team.other": "5"
+    "default": "5"
+
+  tag:
+    "tag.国语": 5
+    "tag.粤语": 8
+    "tag.中字": 6
+    "tag.完结": 12
+    "tag.DIY": 4
+    "tag.动画": 11
+    "tag.杜比视界": 13
+    "tag.HDR10+": 15
+    "tag.MV": 18
+    "tag.卡拉OK": 19
+    "tag.LIVE现场": 20
+    "tag.演唱会": 21
+    "tag.成人": 23
+    "tag.HDR": 7
+    "tag.音乐专辑": 22
+    "default": null

@@ -335,7 +335,7 @@
             <div class="mapped-cell datetime-cell">
               {{
                 scope.row.is_deleted || hasRestrictedTag(scope.row.tags)
-                  ? '已删除/禁转/分集'
+                  ? '已删除本地文件\n/禁转/分集'
                   : formatDateTime(scope.row.updated_at)
               }}
             </div>
