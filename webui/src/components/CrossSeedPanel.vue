@@ -1613,6 +1613,7 @@ const refreshIntro = async () => {
 
   const payload = {
     type: 'intro',
+    content_name: torrentData.value.original_main_title,
     source_info: {
       main_title: torrentData.value.original_main_title,
       subtitle: torrentData.value.subtitle,
@@ -1684,6 +1685,7 @@ const refreshScreenshots = async () => {
 
   const payload = {
     type: 'screenshot',
+    content_name: torrentData.value.original_main_title,
     source_info: {
       main_title: torrentData.value.original_main_title,
       source_site: sourceSite.value,
@@ -2149,6 +2151,7 @@ const refreshPosters = async () => {
 
   const payload = {
     type: 'poster',
+    content_name: torrentData.value.original_main_title,
     source_info: {
       main_title: torrentData.value.original_main_title,
       source_site: sourceSite.value,
@@ -2242,6 +2245,7 @@ const handleImageError = async (url: string, type: 'poster' | 'screenshot', inde
 
   const payload = {
     type: type,
+    content_name: torrentData.value.original_main_title,
     source_info: {
       main_title: torrentData.value.original_main_title,
       source_site: sourceSite.value,
@@ -2358,7 +2362,7 @@ const processDbData = (dataRes: any, tId: string) => {
       team: dbData.team || '',
       source: dbData.source || '',
       tags: (dbData.tags || []).sort((a: any, b: any) => {
-        const restricted = ['禁转', 'tag.禁转', '限转', 'tag.限转']
+        const restricted = ['禁转', 'tag.禁转', '限转', 'tag.限转', '分集', 'tag.分集']
         const isRa = restricted.includes(a)
         const isRb = restricted.includes(b)
         return isRa === isRb ? 0 : isRa ? -1 : 1
@@ -2547,7 +2551,7 @@ const fetchTorrentInfo = async () => {
             team: dbData.team || '',
             source: dbData.source || '',
             tags: (dbData.tags || []).sort((a, b) => {
-              const restricted = ['禁转', 'tag.禁转', '限转', 'tag.限转']
+              const restricted = ['禁转', 'tag.禁转', '限转', 'tag.限转', '分集', 'tag.分集']
               const isRa = restricted.includes(a)
               const isRb = restricted.includes(b)
               return isRa === isRb ? 0 : isRa ? -1 : 1
@@ -2629,7 +2633,7 @@ const fetchTorrentInfo = async () => {
           team: dbData.team || '',
           source: dbData.source || '',
           tags: (dbData.tags || []).sort((a, b) => {
-            const restricted = ['禁转', 'tag.禁转', '限转', 'tag.限转']
+            const restricted = ['禁转', 'tag.禁转', '限转', 'tag.限转', '分集', 'tag.分集']
             const isRa = restricted.includes(a)
             const isRb = restricted.includes(b)
             return isRa === isRb ? 0 : isRa ? -1 : 1
@@ -2870,7 +2874,7 @@ const fetchTorrentInfo = async () => {
             team: dbData.team || '',
             source: dbData.source || '',
             tags: (dbData.tags || []).sort((a, b) => {
-              const restricted = ['禁转', 'tag.禁转', '限转', 'tag.限转']
+              const restricted = ['禁转', 'tag.禁转', '限转', 'tag.限转', '分集', 'tag.分集']
               const isRa = restricted.includes(a)
               const isRb = restricted.includes(b)
               return isRa === isRb ? 0 : isRa ? -1 : 1
@@ -3234,7 +3238,14 @@ const allTagOptions = computed(() => {
 // 【修改并添加调试代码】方法：根据标签是否有效，返回不同的类型
 const getTagType = (tag: string) => {
   // 优先检查是否为禁转标签
-  if (tag === '禁转' || tag === 'tag.禁转' || tag === '限转' || tag === 'tag.限转') {
+  if (
+    tag === '禁转' ||
+    tag === 'tag.禁转' ||
+    tag === '限转' ||
+    tag === 'tag.限转' ||
+    tag === '分集' ||
+    tag === 'tag.分集'
+  ) {
     return 'danger' // 红色
   }
 
@@ -3773,7 +3784,14 @@ const initialTitleComponents = computed(() => {
 
 // 检查是否为受限标签（禁转或tag.禁转）
 const isRestrictedTag = (tag: string): boolean => {
-  return tag === '禁转' || tag === 'tag.禁转' || tag === '限转' || tag === 'tag.限转'
+  return (
+    tag === '禁转' ||
+    tag === 'tag.禁转' ||
+    tag === '限转' ||
+    tag === 'tag.限转' ||
+    tag === '分集' ||
+    tag === 'tag.分集'
+  )
 }
 
 // 检查是否包含受限标签
@@ -3787,7 +3805,7 @@ const handleTagClose = (tagToRemove: string) => {
   if (isRestrictedTag(tagToRemove)) {
     ElNotification.warning({
       title: '无法删除',
-      message: '禁转/限转标签不允许删除',
+      message: '禁转/限转/分集标签不允许删除',
       duration: 2000,
     })
     return
@@ -3937,7 +3955,7 @@ const isNextButtonDisabled = computed(() => {
 const nextButtonTooltipContent = computed(() => {
   // 1. 优先级最高：检查禁转标签
   if (hasRestrictedTag.value) {
-    return '检测到禁转/限转标签，不允许继续发布'
+    return '检测到禁转/限转/分集标签，不允许继续发布'
   }
 
   // 2. 检查是否存在“无法识别”的内容
