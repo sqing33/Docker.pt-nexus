@@ -123,7 +123,6 @@ class DatabaseMigrationManager:
                             'torrent_id': 'VARCHAR(255) NOT NULL',
                             'site_name': 'VARCHAR(255) NOT NULL',
                             'nickname': 'VARCHAR(255)',
-                            'save_path': 'TEXT',
                             'name': 'TEXT',
                             'title': 'TEXT',
                             'subtitle': 'TEXT',
@@ -144,8 +143,6 @@ class DatabaseMigrationManager:
                             'mediainfo': 'TEXT',
                             'title_components': 'TEXT',
                             'removed_ardtudeclarations': 'TEXT',
-                            'downloader_id': 'VARCHAR(36)',
-                            'is_deleted': 'TINYINT(1) NOT NULL DEFAULT 0',
                             'is_reviewed': 'TINYINT(1) NOT NULL DEFAULT 0',
                             'mediainfo_status': 'VARCHAR(20) DEFAULT \'pending\'',
                             'bdinfo_task_id': 'VARCHAR(36)',
@@ -264,7 +261,6 @@ class DatabaseMigrationManager:
                             'torrent_id': 'VARCHAR(255) NOT NULL',
                             'site_name': 'VARCHAR(255) NOT NULL',
                             'nickname': 'VARCHAR(255)',
-                            'save_path': 'TEXT',
                             'name': 'TEXT',
                             'title': 'TEXT',
                             'subtitle': 'TEXT',
@@ -285,8 +281,6 @@ class DatabaseMigrationManager:
                             'mediainfo': 'TEXT',
                             'title_components': 'TEXT',
                             'removed_ardtudeclarations': 'TEXT',
-                            'downloader_id': 'VARCHAR(36)',
-                            'is_deleted': 'BOOLEAN NOT NULL DEFAULT FALSE',
                             'is_reviewed': 'BOOLEAN NOT NULL DEFAULT FALSE',
                             'mediainfo_status': 'VARCHAR(20) DEFAULT \'pending\'',
                             'bdinfo_task_id': 'VARCHAR(36)',
@@ -402,7 +396,6 @@ class DatabaseMigrationManager:
                             'torrent_id': 'TEXT NOT NULL',
                             'site_name': 'TEXT NOT NULL',
                             'nickname': 'TEXT',
-                            'save_path': 'TEXT',
                             'name': 'TEXT',
                             'title': 'TEXT',
                             'subtitle': 'TEXT',
@@ -423,8 +416,6 @@ class DatabaseMigrationManager:
                             'mediainfo': 'TEXT',
                             'title_components': 'TEXT',
                             'removed_ardtudeclarations': 'TEXT',
-                            'downloader_id': 'TEXT',
-                            'is_deleted': 'INTEGER NOT NULL DEFAULT 0',
                             'is_reviewed': 'INTEGER NOT NULL DEFAULT 0',
                             'mediainfo_status': 'TEXT DEFAULT "pending"',
                             'bdinfo_task_id': 'TEXT',
@@ -477,34 +468,51 @@ class DatabaseMigrationManager:
         """
         try:
             logging.info("开始执行数据库迁移检查...")
+            start_ts = time.time()
 
             # 1. 执行列删除迁移（proxy列）
+            logging.info("迁移阶段: 1/10 删除 proxy 列检查")
             self._migrate_remove_proxy_column(conn, cursor)
 
             # 2. 执行列添加迁移（passkey列）
+            logging.info("迁移阶段: 2/10 添加 passkey 列检查")
             self._migrate_add_passkey_column(conn, cursor)
 
             # 3. 执行列添加迁移（seeders列）
+            logging.info("迁移阶段: 3/10 添加 seeders 列检查")
             self._migrate_add_seeders_column(conn, cursor)
 
-            # 4. 执行BDInfo字段迁移
-            self.migrate_bdinfo_fields()
+            # 4. 删除seed_parameters中的save_path/downloader_id列
+            logging.info("迁移阶段: 4/10 删除 seed_parameters.save_path/downloader_id")
+            self._migrate_remove_seed_parameters_path_fields(conn, cursor)
 
-            # 5. 执行MySQL字符集统一迁移
+            # 5. 删除seed_parameters中的is_deleted列
+            logging.info("迁移阶段: 5/10 删除 seed_parameters.is_deleted")
+            self._migrate_remove_seed_parameters_is_deleted(conn, cursor)
+
+            # 6. 执行BDInfo字段迁移
+            logging.info("迁移阶段: 6/10 BDInfo 字段迁移")
+            self.migrate_bdinfo_fields(conn, cursor)
+
+            # 7. 执行MySQL字符集统一迁移
             if self.db_type == "mysql":
+                logging.info("迁移阶段: 7/10 MySQL 字符集统一")
                 self._migrate_mysql_collation_unification(conn, cursor)
 
-            # 6. 执行完整的Schema完整性检查
+            # 8. 执行完整的Schema完整性检查
+            logging.info("迁移阶段: 8/10 Schema 完整性检查")
             self._ensure_schema_integrity(conn, cursor)
 
-            # 7. 执行复合主键迁移
+            # 9. 执行复合主键迁移
+            logging.info("迁移阶段: 9/10 复合主键迁移")
             self._migrate_composite_primary_key(conn, cursor)
 
-            # 8. 执行片源平台格式修复迁移
+            # 10. 执行片源平台格式修复迁移
+            logging.info("迁移阶段: 10/10 片源平台格式修复")
             self._migrate_source_platform_format(conn, cursor)
 
             conn.commit()
-            logging.info("✓ 所有数据库迁移检查完成")
+            logging.info("✓ 所有数据库迁移检查完成 (%.2fs)", time.time() - start_ts)
             return True
 
         except Exception as e:
@@ -649,9 +657,34 @@ class DatabaseMigrationManager:
 
     def _is_column_definition_compatible(self, current: str, expected: str) -> bool:
         """检查列定义是否兼容"""
+        def normalize_type(type_def: str) -> str:
+            parts = type_def.strip().upper().split()
+            if not parts:
+                return ""
+
+            # Handle multi-word types.
+            if parts[0] == "CHARACTER" and len(parts) > 1 and parts[1] == "VARYING":
+                base = "VARCHAR"
+            elif parts[0] == "DOUBLE" and len(parts) > 1 and parts[1] == "PRECISION":
+                base = "DOUBLE"
+            elif parts[0] == "TIMESTAMP" and len(parts) > 1 and parts[1] in ("WITH", "WITHOUT"):
+                base = "TIMESTAMP"
+            else:
+                base = parts[0]
+
+            # Strip length/precision (e.g., VARCHAR(255), DECIMAL(8,2)).
+            if "(" in base:
+                base = base.split("(", 1)[0]
+
+            # Normalize remaining aliases.
+            if base == "CHARACTER":
+                base = "CHAR"
+
+            return base
+
         # 简化的兼容性检查，主要检查数据类型
-        current_type = current.split()[0].upper()
-        expected_type = expected.split()[0].upper()
+        current_type = normalize_type(current)
+        expected_type = normalize_type(expected)
 
         # 类型映射检查
         type_mappings = {
@@ -1045,6 +1078,62 @@ class DatabaseMigrationManager:
 
         except Exception as e:
             logging.warning(f"迁移添加seeders列时出错: {e}")
+
+    def _migrate_remove_seed_parameters_path_fields(self, conn, cursor):
+        """迁移：删除seed_parameters表中的save_path/downloader_id列"""
+        try:
+            logging.info("检查是否需要删除seed_parameters表中的save_path/downloader_id列...")
+
+            save_path_exists = self._column_exists(cursor, "seed_parameters", "save_path")
+            downloader_id_exists = self._column_exists(cursor, "seed_parameters", "downloader_id")
+
+            if not save_path_exists and not downloader_id_exists:
+                logging.info("save_path/downloader_id列不存在，无需迁移")
+                return
+
+            if self.db_type == "mysql":
+                if save_path_exists:
+                    cursor.execute("ALTER TABLE seed_parameters DROP COLUMN save_path")
+                if downloader_id_exists:
+                    cursor.execute("ALTER TABLE seed_parameters DROP COLUMN downloader_id")
+                logging.info("✓ 成功删除seed_parameters表中的save_path/downloader_id列 (MySQL)")
+            elif self.db_type == "postgresql":
+                if save_path_exists:
+                    cursor.execute("ALTER TABLE seed_parameters DROP COLUMN save_path")
+                if downloader_id_exists:
+                    cursor.execute("ALTER TABLE seed_parameters DROP COLUMN downloader_id")
+                logging.info("✓ 成功删除seed_parameters表中的save_path/downloader_id列 (PostgreSQL)")
+            else:  # SQLite
+                logging.info("检测到需要重建seed_parameters表以删除列...")
+                self._recreate_sqlite_seed_parameters_table(cursor)
+                logging.info("✓ 成功删除seed_parameters表中的save_path/downloader_id列 (SQLite)")
+
+        except Exception as e:
+            logging.warning(f"迁移删除seed_parameters列时出错: {e}")
+
+    def _migrate_remove_seed_parameters_is_deleted(self, conn, cursor):
+        """迁移：删除seed_parameters表中的is_deleted列"""
+        try:
+            logging.info("检查是否需要删除seed_parameters表中的is_deleted列...")
+
+            is_deleted_exists = self._column_exists(cursor, "seed_parameters",
+                                                    "is_deleted")
+            if not is_deleted_exists:
+                return
+
+            if self.db_type == "mysql":
+                cursor.execute("ALTER TABLE seed_parameters DROP COLUMN is_deleted")
+                logging.info("✓ 成功删除seed_parameters表中的is_deleted列 (MySQL)")
+            elif self.db_type == "postgresql":
+                cursor.execute("ALTER TABLE seed_parameters DROP COLUMN is_deleted")
+                logging.info("✓ 成功删除seed_parameters表中的is_deleted列 (PostgreSQL)")
+            else:  # SQLite
+                logging.info("检测到需要重建seed_parameters表以删除is_deleted列...")
+                self._recreate_sqlite_seed_parameters_table(cursor)
+                logging.info("✓ 成功删除seed_parameters表中的is_deleted列 (SQLite)")
+
+        except Exception as e:
+            logging.warning(f"迁移删除seed_parameters.is_deleted列时出错: {e}")
 
     def _column_exists(self, cursor, table_name: str, column_name: str) -> bool:
         """检查列是否存在"""
@@ -1581,13 +1670,16 @@ class DatabaseMigrationManager:
         except Exception as e:
             logging.error(f"MySQL字符集统一迁移失败: {e}")
 
-    def migrate_bdinfo_fields(self):
+    def migrate_bdinfo_fields(self, conn=None, cursor=None):
         """迁移 BDInfo 相关字段到 seed_parameters 表"""
         try:
             logging.info("开始 BDInfo 字段迁移...")
-            
-            conn = self.db_manager._get_connection()
-            cursor = self.db_manager._get_cursor(conn)
+
+            own_conn = False
+            if conn is None or cursor is None:
+                conn = self.db_manager._get_connection()
+                cursor = self.db_manager._get_cursor(conn)
+                own_conn = True
             
             # 检查表是否存在
             if not self._table_exists(cursor, 'seed_parameters'):
@@ -1641,9 +1733,10 @@ class DatabaseMigrationManager:
                         # SQLite 不支持直接添加列，需要重建表
                         logging.warning("SQLite 需要重建表以添加 BDInfo 字段")
                         self._recreate_sqlite_table_with_bdinfo_fields(cursor)
-                        conn.commit()
-                        cursor.close()
-                        conn.close()
+                        if own_conn:
+                            conn.commit()
+                            cursor.close()
+                            conn.close()
                         logging.info("✓ BDInfo 字段迁移完成 (SQLite)")
                         return
                     
@@ -1653,9 +1746,10 @@ class DatabaseMigrationManager:
             # seed_parameters 表已经有复合主键 (hash, torrent_id, site_name)，不需要添加额外的 id 字段
             logging.info("✓ seed_parameters 表已有复合主键，跳过 id 字段添加")
             
-            conn.commit()
-            cursor.close()
-            conn.close()
+            if own_conn:
+                conn.commit()
+                cursor.close()
+                conn.close()
             
             if added_fields:
                 logging.info(f"✓ BDInfo 字段迁移完成，已添加字段: {', '.join(added_fields)}")
@@ -1669,10 +1763,28 @@ class DatabaseMigrationManager:
     def _recreate_sqlite_table_with_bdinfo_fields(self, cursor):
         """重建 SQLite 表以添加 BDInfo 字段"""
         try:
+            self._recreate_sqlite_seed_parameters_table(cursor)
+            logging.info("✓ SQLite 表重建完成，已添加 BDInfo 字段")
+            
+        except Exception as e:
+            logging.error(f"SQLite 表重建失败: {e}", exc_info=True)
+            # 尝试恢复原表
+            try:
+                cursor.execute("DROP TABLE seed_parameters")
+                cursor.execute("ALTER TABLE seed_parameters_old RENAME TO seed_parameters")
+                logging.info("✓ 已恢复原表结构")
+            except:
+                pass
+            raise
+            raise
+
+    def _recreate_sqlite_seed_parameters_table(self, cursor):
+        """重建 SQLite seed_parameters 表"""
+        try:
             # 1. 重命名原表
             cursor.execute("ALTER TABLE seed_parameters RENAME TO seed_parameters_old")
-            
-            # 2. 创建新表结构
+
+            # 2. 创建新表结构（不含 save_path/downloader_id/is_deleted）
             cursor.execute("""
                 CREATE TABLE seed_parameters (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1680,7 +1792,6 @@ class DatabaseMigrationManager:
                     torrent_id TEXT NOT NULL,
                     site_name TEXT NOT NULL,
                     nickname TEXT,
-                    save_path TEXT,
                     name TEXT,
                     title TEXT,
                     subtitle TEXT,
@@ -1701,8 +1812,6 @@ class DatabaseMigrationManager:
                     mediainfo TEXT,
                     title_components TEXT,
                     removed_ardtudeclarations TEXT,
-                    downloader_id TEXT,
-                    is_deleted INTEGER NOT NULL DEFAULT 0,
                     is_reviewed INTEGER NOT NULL DEFAULT 0,
                     mediainfo_status TEXT DEFAULT 'pending',
                     bdinfo_task_id TEXT,
@@ -1714,38 +1823,63 @@ class DatabaseMigrationManager:
                     UNIQUE(hash, torrent_id, site_name)
                 )
             """)
-            
-            # 3. 迁移数据
-            cursor.execute("""
-                INSERT INTO seed_parameters (
-                    hash, torrent_id, site_name, nickname, save_path, name, title, subtitle,
-                    imdb_link, douban_link, type, medium, video_codec, audio_codec, resolution,
-                    team, source, tags, poster, screenshots, statement, body, mediainfo,
-                    title_components, removed_ardtudeclarations, downloader_id, is_deleted,
-                    is_reviewed, created_at, updated_at
+
+            # 3. 迁移数据（仅复制旧表中存在的列）
+            cursor.execute("PRAGMA table_info(seed_parameters_old)")
+            old_columns = [row[1] for row in cursor.fetchall()]
+
+            new_columns = [
+                "id",
+                "hash",
+                "torrent_id",
+                "site_name",
+                "nickname",
+                "name",
+                "title",
+                "subtitle",
+                "imdb_link",
+                "douban_link",
+                "type",
+                "medium",
+                "video_codec",
+                "audio_codec",
+                "resolution",
+                "team",
+                "source",
+                "tags",
+                "poster",
+                "screenshots",
+                "statement",
+                "body",
+                "mediainfo",
+                "title_components",
+                "removed_ardtudeclarations",
+                "is_reviewed",
+                "mediainfo_status",
+                "bdinfo_task_id",
+                "bdinfo_started_at",
+                "bdinfo_completed_at",
+                "bdinfo_error",
+                "created_at",
+                "updated_at",
+            ]
+
+            common_columns = [col for col in new_columns if col in old_columns]
+            if common_columns:
+                columns_str = ", ".join(common_columns)
+                cursor.execute(
+                    f"INSERT INTO seed_parameters ({columns_str}) SELECT {columns_str} FROM seed_parameters_old"
                 )
-                SELECT 
-                    hash, torrent_id, site_name, nickname, save_path, name, title, subtitle,
-                    imdb_link, douban_link, type, medium, video_codec, audio_codec, resolution,
-                    team, source, tags, poster, screenshots, statement, body, mediainfo,
-                    title_components, removed_ardtudeclarations, downloader_id, is_deleted,
-                    is_reviewed, created_at, updated_at
-                FROM seed_parameters_old
-            """)
-            
+
             # 4. 删除旧表
             cursor.execute("DROP TABLE seed_parameters_old")
-            
-            logging.info("✓ SQLite 表重建完成，已添加 BDInfo 字段")
-            
         except Exception as e:
-            logging.error(f"SQLite 表重建失败: {e}", exc_info=True)
+            logging.error(f"SQLite seed_parameters 表重建失败: {e}", exc_info=True)
             # 尝试恢复原表
             try:
                 cursor.execute("DROP TABLE seed_parameters")
                 cursor.execute("ALTER TABLE seed_parameters_old RENAME TO seed_parameters")
                 logging.info("✓ 已恢复原表结构")
-            except:
+            except Exception:
                 pass
-            raise
             raise

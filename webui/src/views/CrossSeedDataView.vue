@@ -335,7 +335,7 @@
             <div class="mapped-cell datetime-cell">
               {{
                 scope.row.is_deleted || hasRestrictedTag(scope.row.tags)
-                  ? '已删除本地文件\n/禁转/分集'
+                  ? getRestrictionText(scope.row)
                   : formatDateTime(scope.row.updated_at)
               }}
             </div>
@@ -930,6 +930,7 @@ interface SeedParameter {
   torrent_id: string
   site_name: string
   nickname: string
+  downloader_id?: string
   title: string
   subtitle: string
   imdb_link: string
@@ -1759,21 +1760,26 @@ const tableRowClassName = ({ row }: { row: SeedParameter }) => {
   return ''
 }
 
-// 检查标签中是否包含禁转标签
-const hasRestrictedTag = (tags: string[] | string): boolean => {
-  let tagList: string[] = []
+const normalizeTagList = (tags: string[] | string): string[] => {
   if (typeof tags === 'string') {
     try {
-      tagList = JSON.parse(tags)
+      return JSON.parse(tags)
     } catch {
-      tagList = tags
+      return tags
         .split(',')
         .map((tag) => tag.trim())
         .filter((tag) => tag)
     }
-  } else if (Array.isArray(tags)) {
-    tagList = tags
   }
+  if (Array.isArray(tags)) {
+    return tags
+  }
+  return []
+}
+
+// 检查标签中是否包含禁转标签
+const hasRestrictedTag = (tags: string[] | string): boolean => {
+  const tagList = normalizeTagList(tags)
 
   // 检查是否包含"禁转"或"tag.禁转"
   return tagList.some(
@@ -1785,6 +1791,31 @@ const hasRestrictedTag = (tags: string[] | string): boolean => {
       tag === '分集' ||
       tag === 'tag.分集',
   )
+}
+
+const getRestrictionText = (row: SeedParameter) => {
+  const labels: string[] = []
+  const tagList = normalizeTagList(row.tags)
+
+  if (row.is_deleted) {
+    labels.push('已删除做种文件')
+  }
+
+  const restrictedTags: string[] = []
+  if (tagList.some((tag) => tag === '禁转' || tag === 'tag.禁转')) {
+    restrictedTags.push('禁转')
+  }
+  if (tagList.some((tag) => tag === '限转' || tag === 'tag.限转')) {
+    restrictedTags.push('限转')
+  }
+  if (tagList.some((tag) => tag === '分集' || tag === 'tag.分集')) {
+    restrictedTags.push('分集')
+  }
+  if (restrictedTags.length > 0) {
+    labels.push(restrictedTags.join('/'))
+  }
+
+  return labels.join('\n')
 }
 
 // 控制表格行是否可选择
@@ -1858,6 +1889,7 @@ const handleBatchCrossSeed = async () => {
         torrent_id: row.torrent_id,
         site_name: row.site_name,
         nickname: row.nickname,
+        downloader_id: row.downloader_id || '',
       })),
     }
 

@@ -65,8 +65,7 @@ def backup_tables(db_manager):
     tables_to_backup = [
         "traffic_stats",
         "torrents",
-        "torrent_upload_stats",
-        "seed_parameters"
+        "torrent_upload_stats"
     ]
     
     try:
@@ -408,8 +407,7 @@ def execute_migration(db_manager, config_manager, backup=True, auto_cleanup=True
         tables_to_backup = [
             "traffic_stats",
             "torrents",
-            "torrent_upload_stats",
-            "seed_parameters"
+            "torrent_upload_stats"
         ]
         
         try:
@@ -445,8 +443,7 @@ def execute_migration(db_manager, config_manager, backup=True, auto_cleanup=True
     tables_to_migrate = [
         ("traffic_stats", "downloader_id"),
         ("torrents", "downloader_id"),
-        ("torrent_upload_stats", "downloader_id"),
-        ("seed_parameters", "downloader_id")
+        ("torrent_upload_stats", "downloader_id")
     ]
     
     for table_name, id_column in tables_to_migrate:

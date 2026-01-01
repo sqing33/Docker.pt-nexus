@@ -672,9 +672,6 @@ class DataTracker(Thread):
                 logging.error(f"处理下载器 {downloader['name']} 时出错: {e}", exc_info=True)
                 continue
 
-        # 更新 seed_parameters 表的 is_deleted 字段
-        self._update_seed_parameters_deleted_status()
-
         # 清理已删除下载器的数据
         self._cleanup_deleted_downloaders(config)
 
@@ -1097,56 +1094,6 @@ class DataTracker(Thread):
 
         return new_count, update_count
 
-    def _update_seed_parameters_deleted_status(self):
-        """更新 seed_parameters 表的 is_deleted 字段"""
-        conn = None
-        try:
-            conn = self.db_manager._get_connection()
-            cursor = self.db_manager._get_cursor(conn)
-            placeholder = "%s" if self.db_manager.db_type in ["mysql", "postgresql"] else "?"
-
-            # 获取所有seed_parameters表中的hash值
-            cursor.execute("SELECT DISTINCT hash FROM seed_parameters")
-            seed_hashes = {row["hash"] for row in cursor.fetchall()}
-
-            # 获取所有torrents表中的hash值
-            cursor.execute("SELECT DISTINCT hash FROM torrents")
-            torrent_hashes = {row["hash"] for row in cursor.fetchall()}
-
-            # 找出在torrents表中存在的hash值和不存在的hash值
-            hashes_in_torrents = seed_hashes & torrent_hashes
-            hashes_not_in_torrents = seed_hashes - torrent_hashes
-
-            # 更新在torrents表中存在的hash值的is_deleted字段为0
-            if hashes_in_torrents:
-                update_placeholders = ",".join([placeholder] * len(hashes_in_torrents))
-                if self.db_manager.db_type == 'postgresql':
-                    update_query = f"UPDATE seed_parameters SET is_deleted = FALSE WHERE hash IN ({update_placeholders})"
-                else:
-                    update_query = f"UPDATE seed_parameters SET is_deleted = 0 WHERE hash IN ({update_placeholders})"
-                cursor.execute(update_query, tuple(hashes_in_torrents))
-                print(f"【刷新线程】已更新 {len(hashes_in_torrents)} 个种子的is_deleted字段为0")
-
-            # 更新在torrents表中不存在的hash值的is_deleted字段为1
-            if hashes_not_in_torrents:
-                update_placeholders = ",".join([placeholder] * len(hashes_not_in_torrents))
-                if self.db_manager.db_type == 'postgresql':
-                    update_query = f"UPDATE seed_parameters SET is_deleted = TRUE WHERE hash IN ({update_placeholders})"
-                else:
-                    update_query = f"UPDATE seed_parameters SET is_deleted = 1 WHERE hash IN ({update_placeholders})"
-                cursor.execute(update_query, tuple(hashes_not_in_torrents))
-                print(f"【刷新线程】已更新 {len(hashes_not_in_torrents)} 个种子的is_deleted字段为1")
-
-            conn.commit()
-        except Exception as e:
-            logging.error(f"更新seed_parameters表失败: {e}", exc_info=True)
-            if conn:
-                conn.rollback()
-        finally:
-            if conn:
-                cursor.close()
-                conn.close()
-
     def _cleanup_deleted_downloaders(self, config):
         """清理已删除下载器的种子数据"""
         conn = None
@@ -1449,55 +1396,6 @@ class DataTracker(Thread):
                     )
                     logging.info(
                         f"已删除下载器 {downloader_id} 中的 {total_deleted} 个已移除的种子记录")
-
-            # 更新seed_parameters表中的is_deleted字段
-            print("【刷新线程】开始更新seed_parameters表中的is_deleted字段...")
-            # 获取所有seed_parameters表中的hash值
-            cursor.execute("SELECT DISTINCT hash FROM seed_parameters")
-            seed_hashes = {row["hash"] for row in cursor.fetchall()}
-
-            # 获取所有torrents表中的hash值
-            cursor.execute("SELECT DISTINCT hash FROM torrents")
-            torrent_hashes = {row["hash"] for row in cursor.fetchall()}
-
-            # 找出在torrents表中存在的hash值和不存在的hash值
-            hashes_in_torrents = seed_hashes & torrent_hashes
-            hashes_not_in_torrents = seed_hashes - torrent_hashes
-
-            # 更新在torrents表中存在的hash值的is_deleted字段为0
-            if hashes_in_torrents:
-                print(f"【刷新线程】发现 {len(hashes_in_torrents)} 个种子在torrents表中存在")
-                update_placeholders = ",".join([placeholder] *
-                                               len(hashes_in_torrents))
-                # 根据数据库类型使用正确的布尔值
-                if self.db_manager.db_type == 'postgresql':
-                    update_query = f"UPDATE seed_parameters SET is_deleted = FALSE WHERE hash IN ({update_placeholders})"
-                else:
-                    update_query = f"UPDATE seed_parameters SET is_deleted = 0 WHERE hash IN ({update_placeholders})"
-                cursor.execute(update_query, tuple(hashes_in_torrents))
-                print(
-                    f"【刷新线程】已更新 {len(hashes_in_torrents)} 个种子的is_deleted字段为0")
-                logging.info(
-                    f"已更新 {len(hashes_in_torrents)} 个种子的is_deleted字段为0")
-
-            # 更新在torrents表中不存在的hash值的is_deleted字段为1
-            if hashes_not_in_torrents:
-                print(
-                    f"【刷新线程】发现 {len(hashes_not_in_torrents)} 个种子在torrents表中不存在"
-                )
-                update_placeholders = ",".join([placeholder] *
-                                               len(hashes_not_in_torrents))
-                # 根据数据库类型使用正确的布尔值
-                if self.db_manager.db_type == 'postgresql':
-                    update_query = f"UPDATE seed_parameters SET is_deleted = TRUE WHERE hash IN ({update_placeholders})"
-                else:
-                    update_query = f"UPDATE seed_parameters SET is_deleted = 1 WHERE hash IN ({update_placeholders})"
-                cursor.execute(update_query, tuple(hashes_not_in_torrents))
-                print(
-                    f"【刷新线程】已更新 {len(hashes_not_in_torrents)} 个种子的is_deleted字段为1"
-                )
-                logging.info(
-                    f"已更新 {len(hashes_not_in_torrents)} 个种子的is_deleted字段为1")
 
             if torrents_to_upsert:
                 # 确保参数顺序与 SQL 语句完全匹配
