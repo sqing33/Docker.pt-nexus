@@ -126,14 +126,13 @@ class SeedParameter:
                 # PostgreSQL使用ON CONFLICT DO UPDATE
                 insert_sql = f"""
                     INSERT INTO seed_parameters
-                    (hash, torrent_id, site_name, nickname, save_path, name, title, subtitle, imdb_link, douban_link, type, medium,
+                    (hash, torrent_id, site_name, nickname, name, title, subtitle, imdb_link, douban_link, type, medium,
                      video_codec, audio_codec, resolution, team, source, tags, poster, screenshots,
-                     statement, body, mediainfo, title_components, removed_ardtudeclarations, downloader_id, is_reviewed, created_at, updated_at)
-                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+                     statement, body, mediainfo, title_components, removed_ardtudeclarations, is_reviewed, created_at, updated_at)
+                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
                     ON CONFLICT (hash, torrent_id, site_name)
                     DO UPDATE SET
                         nickname = EXCLUDED.nickname,
-                        save_path = EXCLUDED.save_path,
                         name = EXCLUDED.name,
                         title = EXCLUDED.title,
                         subtitle = EXCLUDED.subtitle,
@@ -154,7 +153,6 @@ class SeedParameter:
                         mediainfo = EXCLUDED.mediainfo,
                         title_components = EXCLUDED.title_components,
                         removed_ardtudeclarations = EXCLUDED.removed_ardtudeclarations,
-                        downloader_id = EXCLUDED.downloader_id,
                         is_reviewed = EXCLUDED.is_reviewed,
                         updated_at = EXCLUDED.updated_at
                 """
@@ -162,14 +160,13 @@ class SeedParameter:
                 # MySQL使用ON DUPLICATE KEY UPDATE
                 insert_sql = f"""
                     INSERT INTO seed_parameters
-                    (hash, torrent_id, site_name, nickname, save_path, name, title, subtitle, imdb_link, douban_link, type, medium,
+                    (hash, torrent_id, site_name, nickname, name, title, subtitle, imdb_link, douban_link, type, medium,
                      video_codec, audio_codec, resolution, team, source, tags, poster, screenshots,
-                     statement, body, mediainfo, title_components, removed_ardtudeclarations, downloader_id, is_reviewed, created_at, updated_at)
-                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+                     statement, body, mediainfo, title_components, removed_ardtudeclarations, is_reviewed, created_at, updated_at)
+                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
                     ON DUPLICATE KEY UPDATE
                         torrent_id = VALUES(torrent_id),
                         nickname = VALUES(nickname),
-                        save_path = VALUES(save_path),
                         name = VALUES(name),
                         title = VALUES(title),
                         subtitle = VALUES(subtitle),
@@ -190,7 +187,6 @@ class SeedParameter:
                         mediainfo = VALUES(mediainfo),
                         title_components = VALUES(title_components),
                         removed_ardtudeclarations = VALUES(removed_ardtudeclarations),
-                        downloader_id = VALUES(downloader_id),
                         is_reviewed = VALUES(is_reviewed),
                         updated_at = VALUES(updated_at)
                 """
@@ -198,15 +194,14 @@ class SeedParameter:
                 # SQLite使用ON CONFLICT DO UPDATE
                 insert_sql = f"""
                     INSERT INTO seed_parameters
-                    (hash, torrent_id, site_name, nickname, save_path, name, title, subtitle, imdb_link, douban_link, type, medium,
+                    (hash, torrent_id, site_name, nickname, name, title, subtitle, imdb_link, douban_link, type, medium,
                      video_codec, audio_codec, resolution, team, source, tags, poster, screenshots,
-                     statement, body, mediainfo, title_components, removed_ardtudeclarations, downloader_id, is_reviewed, created_at, updated_at)
-                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+                     statement, body, mediainfo, title_components, removed_ardtudeclarations, is_reviewed, created_at, updated_at)
+                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
                     ON CONFLICT (hash, torrent_id, site_name)
                     DO UPDATE SET
                         torrent_id = excluded.torrent_id,
                         nickname = excluded.nickname,
-                        save_path = excluded.save_path,
                         name = excluded.name,
                         title = excluded.title,
                         subtitle = excluded.subtitle,
@@ -227,7 +222,6 @@ class SeedParameter:
                         mediainfo = excluded.mediainfo,
                         title_components = excluded.title_components,
                         removed_ardtudeclarations = excluded.removed_ardtudeclarations,
-                        downloader_id = excluded.downloader_id,
                         is_reviewed = excluded.is_reviewed,
                         updated_at = excluded.updated_at
                 """
@@ -256,7 +250,6 @@ class SeedParameter:
                 torrent_id,
                 site_name,
                 parameters.get("nickname", ""),
-                parameters.get("save_path", ""),
                 parameters.get("name", ""),
                 parameters.get("title", ""),
                 parameters.get("subtitle", ""),
@@ -277,7 +270,6 @@ class SeedParameter:
                 mediainfo,
                 title_components,
                 removed_ardtudeclarations,
-                parameters.get("downloader_id"),
                 parameters.get("is_reviewed", False),
                 parameters["created_at"],
                 parameters["updated_at"],
@@ -564,7 +556,6 @@ class SeedParameter:
                 "torrent_id",
                 "site_name",
                 "nickname",
-                "save_path",
                 "name",
                 "title",
                 "subtitle",
@@ -585,8 +576,6 @@ class SeedParameter:
                 "mediainfo",
                 "title_components",
                 "removed_ardtudeclarations",
-                "downloader_id",
-                "is_deleted",
                 "is_reviewed",
                 "mediainfo_status",
                 "bdinfo_task_id",
@@ -625,12 +614,6 @@ class SeedParameter:
                         # 将字典转换为JSON字符串
                         update_values.append(json.dumps(value, ensure_ascii=False))
                     elif key == "is_reviewed" and isinstance(value, bool):
-                        # 根据数据库类型处理布尔值
-                        if self.db_manager.db_type == "postgresql":
-                            update_values.append(value)  # PostgreSQL 使用布尔值
-                        else:
-                            update_values.append(int(value))  # MySQL/SQLite 使用整数
-                    elif key == "is_deleted" and isinstance(value, bool):
                         # 根据数据库类型处理布尔值
                         if self.db_manager.db_type == "postgresql":
                             update_values.append(value)  # PostgreSQL 使用布尔值
@@ -703,7 +686,6 @@ class SeedParameter:
                 "torrent_id",
                 "site_name",
                 "nickname",
-                "save_path",
                 "name",
                 "title",
                 "subtitle",
@@ -724,8 +706,6 @@ class SeedParameter:
                 "mediainfo",
                 "title_components",
                 "removed_ardtudeclarations",
-                "downloader_id",
-                "is_deleted",
                 "is_reviewed",
                 "mediainfo_status",
                 "bdinfo_task_id",
@@ -759,9 +739,6 @@ class SeedParameter:
                     # 将字典转换为JSON字符串
                     processed_parameters[key] = json.dumps(value, ensure_ascii=False)
                 elif key == "is_reviewed" and isinstance(value, bool):
-                    # 布尔值转换为整数
-                    processed_parameters[key] = int(value)
-                elif key == "is_deleted" and isinstance(value, bool):
                     # 布尔值转换为整数
                     processed_parameters[key] = int(value)
                 elif value is None:

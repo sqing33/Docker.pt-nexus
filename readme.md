@@ -1,32 +1,59 @@
 # PT Nexus - PT 种子聚合管理平台
 
-**PT Nexus** 是一款 PT 种子聚合管理平台，集 `下载器流量统计`、`铺种做种查询`、`多站点转种`、`本地做种文件检索` 于一体，大幅简化转种流程，提升 PT 站点管理效率。（经过一些站点的管理人员提议，批量发布应限制种子大小，所以批量转种部分代码使用 go 编写不开源，避免有人修改代码后批量转一些小种子倒垃圾到各各站点，目前限制为 1G，在一种多站功能中不做限制）
+**PT Nexus** 是一款支持 Docker 容器化部署、兼容多下载器与多数据库的 **PT 种子聚合管理平台**，可自动提取标准化种子参数、解析标题组件，智能纠错补充 MediaInfo/截图/简介等内容、适配不同站点发布规范，支持批量转种与自动推送下载器做种，还具备禁转检测、已存在种子智能匹配等机制，搭配本地文件检索、IYUU API 查漏种等辅助功能，大幅简化跨站点转种流程，显著提升 PT 转种与管理效率。
 
 - Wiki：https://ptn-wiki.sqing33.dpdns.org
 - Github：https://github.com/sqing33/Docker.pt-nexus
 - DockerHub：https://hub.docker.com/r/sqing33/pt-nexus
 
+## 2026 年 1 月 1 日起规范转种功能限制
+
+> 转种限制方案由多位站点管理人员共同制定，转种限制代码使用 Go 编写编译且暂不开源，其他功能均在 Python 代码里实现，感谢各位站点管理人员的支持与配合。
+> 代码仅供学习参考使用，严禁用于商业用途。
+
+1. **带有禁转标签一律不可转种。**
+2. **带有限转一律标签不可转种，不会自动检测源站是否取消限转，续后续自行确认后重新获取种子消息。**
+3. **带有分集一律标签不可转种，因为目前有几个站点不允许转分集，且大多数用户下载分集都是在源站下的，大部分源站点在完结后还会删除分集，断种率也高。**
+4. **同一个 ip 网段下的下载器同时最多可以有 15 个在上传的种子，超过 15 个则不可转种。（添加超过 24 小时的种子不计算，做种人数大于 5 人不计算，盒子不受限制）**
+5. **一站多种的批量转种不允许发布小于 1GB 的种子，一种多站的单个转种不受此限制。**
+
+### 一、核心转种功能
+
+1. 种源管控：仅允许从有自动种审/人工种审的站点转出种子，保障合规性；
+2. 智能参数处理：自动解析种子标题（主标题、季集、年份等），统一不同站点参数格式，便于跨站转种；
+3. 多站点适配：为每个目标站点单独适配发布格式，不支持的参数自动降级；
+4. 自动推送做种：转种成功后自动下载种子并推送至下载器，qBittorrent 支持跳过校验；
+5. 智能种子检测：识别目标站点已存在的种子并自动补种，检测到禁转标签则屏蔽转种；
+6. 批量操作：支持批量获取、检查、转种种子，实时监控进度并记录详情。
+
+### 二、错误参数修正相关功能
+
+1. 自动纠错：修正标题错误、简介错误、截图丢失等问题，解决参数位置错乱（如色深 10bit 与 HDR 参数）；
+2. 内容增强：自动补充缺失的 MediaInfo、截图、简介，获取豆瓣海报并转存图床；
+3. 参数识别优化：修正音频编码（如 TrueHD 7.1 Atmos）、格式标签（如 UHD BluRay Remux）等识别错误；
+4. 质量校验：转种前检测参数错误/缺失，提供修正建议，确保符合目标站点规范。
+
 ### Docker 部署
 
 #### 环境变量
 
-| 分类       | 参数              | 说明                                         | 示例                      |
-| ---------- | ----------------- | -------------------------------------------- | ------------------------- |
-| **通用**   | TZ                | 设置容器时区，确保时间与日志准确。           | Asia/Shanghai             |
-|            | http_proxy        | 设置容器代理，确保能正常访问站点与各种服务。 | http://192.168.1.100:7890 |
-|            | https_proxy       | 设置容器代理，确保能正常访问站点与各种服务。 | http://192.168.1.100:7890 |
-|            | UPDATE_SOURCE     | 选择更新源，github 或 gitee，不设置默认 gitee。       | gitee                     |
-| **数据库** | DB_TYPE           | 选择数据库类型。sqlite、mysql 或 postgres。  | sqlite                    |
-|            | MYSQL_HOST        | **(MySQL 专用)** 数据库主机地址。            | 192.168.1.100             |
-|            | MYSQL_PORT        | **(MySQL 专用)** 数据库端口。                | 3306                      |
-|            | MYSQL_DATABASE    | **(MySQL 专用)** 数据库名称。                | pt-nexus                  |
-|            | MYSQL_USER        | **(MySQL 专用)** 数据库用户名。              | root                      |
-|            | MYSQL_PASSWORD    | **(MySQL 专用)** 数据库密码。                | your_password             |
-|            | POSTGRES_HOST     | **(PostgreSQL 专用)** 数据库主机地址。       | 192.168.1.100             |
-|            | POSTGRES_PORT     | **(PostgreSQL 专用)** 数据库端口。           | 5432                      |
-|            | POSTGRES_DATABASE | **(PostgreSQL 专用)** 数据库名称。           | pt-nexus                  |
-|            | POSTGRES_USER     | **(PostgreSQL 专用)** 数据库用户名。         | root                      |
-|            | POSTGRES_PASSWORD | **(PostgreSQL 专用)** 数据库密码。           | your_password             |
+| 分类       | 参数              | 说明                                            | 示例                      |
+| ---------- | ----------------- | ----------------------------------------------- | ------------------------- |
+| **通用**   | TZ                | 设置容器时区，确保时间与日志准确。              | Asia/Shanghai             |
+|            | http_proxy        | 设置容器代理，确保能正常访问站点与各种服务。    | http://192.168.1.100:7890 |
+|            | https_proxy       | 设置容器代理，确保能正常访问站点与各种服务。    | http://192.168.1.100:7890 |
+|            | UPDATE_SOURCE     | 选择更新源，github 或 gitee，不设置默认 gitee。 | gitee                     |
+| **数据库** | DB_TYPE           | 选择数据库类型。sqlite、mysql 或 postgres。     | sqlite                    |
+|            | MYSQL_HOST        | **(MySQL 专用)** 数据库主机地址。               | 192.168.1.100             |
+|            | MYSQL_PORT        | **(MySQL 专用)** 数据库端口。                   | 3306                      |
+|            | MYSQL_DATABASE    | **(MySQL 专用)** 数据库名称。                   | pt-nexus                  |
+|            | MYSQL_USER        | **(MySQL 专用)** 数据库用户名。                 | root                      |
+|            | MYSQL_PASSWORD    | **(MySQL 专用)** 数据库密码。                   | your_password             |
+|            | POSTGRES_HOST     | **(PostgreSQL 专用)** 数据库主机地址。          | 192.168.1.100             |
+|            | POSTGRES_PORT     | **(PostgreSQL 专用)** 数据库端口。              | 5432                      |
+|            | POSTGRES_DATABASE | **(PostgreSQL 专用)** 数据库名称。              | pt-nexus                  |
+|            | POSTGRES_USER     | **(PostgreSQL 专用)** 数据库用户名。            | root                      |
+|            | POSTGRES_PASSWORD | **(PostgreSQL 专用)** 数据库密码。              | your_password             |
 
 #### Docker Compose 示例
 
@@ -52,8 +79,8 @@ services:
       - /vol1/1000/Docker/transmission2/torrents:/data/tr_torrents/tr2
     environment:
       - TZ=Asia/Shanghai
-      - http_proxy=http://192.168.1.100:7890 # 代理服务器
-      - https_proxy=http://192.168.1.100:7890 # 代理服务器
+      # - http_proxy=http://192.168.1.100:7890 # 代理服务器
+      # - https_proxy=http://192.168.1.100:7890 # 代理服务器
       - UPDATE_SOURCE=gitee # 更新源，可选: gitee 或 github，不设置默认gitee
       - DB_TYPE=sqlite
 ```
@@ -76,8 +103,8 @@ services:
       - /vol1/1000/Docker/transmission2/torrents:/data/tr_torrents/tr2
     environment:
       - TZ=Asia/Shanghai
-      - http_proxy=http://192.168.1.100:7890 # 代理服务器
-      - https_proxy=http://192.168.1.100:7890 # 代理服务器
+      # - http_proxy=http://192.168.1.100:7890 # 代理服务器
+      # - https_proxy=http://192.168.1.100:7890 # 代理服务器
       - UPDATE_SOURCE=gitee # 更新源，可选: gitee 或 github，不设置默认gitee
       - DB_TYPE=mysql
       - MYSQL_HOST=192.168.1.100
@@ -105,8 +132,8 @@ services:
       - /vol1/1000/Docker/transmission2/torrents:/data/tr_torrents/tr2
     environment:
       - TZ=Asia/Shanghai
-      - http_proxy=http://192.168.1.100:7890 # 代理服务器
-      - https_proxy=http://192.168.1.100:7890 # 代理服务器
+      # - http_proxy=http://192.168.1.100:7890 # 代理服务器
+      # - https_proxy=http://192.168.1.100:7890 # 代理服务器
       - UPDATE_SOURCE=gitee # 更新源，可选: gitee 或 github，不设置默认gitee
       - DB_TYPE=postgresql
       - POSTGRES_HOST=192.168.1.100
@@ -123,15 +150,19 @@ services:
 
 # 更新
 
-> 通过 Docker 部署的 PT Nexus 支持更新功能，您可以在不重新下载镜像的情况下，直接从 GitHub 拉取最新代码并应用更新。
+> 通过 Docker 部署的 PT Nexus 支持更新功能，您可以在不重新下载镜像的情况下，直接从 GitHub 与 Gitee 拉取最新代码并应用更新。
 
 ![更新](https://img1.pixhost.to/images/10201/661470654_79517501-6fc3-4d37-9f44-440ef15b7ac7.png)
 
 # 更新日志
 
+### v3.4.1（2026.01.02）
+
+- 修复：一站多种里获取的种子记录无法随着种子位置移动而改变
+
 ### v3.4.0（2025.12.31）
 
-> **2025年最后一次更新，拜拜了您嘞！**
+> **2025 年最后一次更新，拜拜了您嘞！**
 
 - 新增：转种目标站点-猫站、包子
 - 新增：从 mediainfo 提取音频编码参数与 HDR 参数
@@ -153,7 +184,7 @@ services:
 
 ### v3.3.3（2025.12.17）
 
-- 修改：longpt龙宝发种有问题，暂时屏蔽（有空修）
+- 修改：longpt 龙宝发种有问题，暂时屏蔽（有空修）
 
 ### v3.3.2（2025.12.17）
 
@@ -164,13 +195,13 @@ services:
 
 ### v3.3.1（2025.12.16）
 
-- 修复：UHD BluRay Remux无法识别为Remux、TrueHD 7.1 Atmos无法识别为TrueHD Atmos的问题
+- 修复：UHD BluRay Remux 无法识别为 Remux、TrueHD 7.1 Atmos 无法识别为 TrueHD Atmos 的问题
 
 ### v3.3.0（2025.12.15）
 
 > **注:若报错“ModuleNotFoundError: No module named 'PIL'”则需要重新下载镜像进行更新，如仍然报错则删除 data 目录下的 updates 文件夹。
-13City限速12.5MB/s，代码不会修改非0的限速，需要手动修改。
-盒子获取 bdinfo 需要重新执行 curl -sL https://github.com/sqing33/Docker.pt-nexus/releases/download/latest/install-pt-nexus-box-proxy.sh | sudo bash 以更新盒子端脚本。**
+> 13City 限速 12.5MB/s，代码不会修改非 0 的限速，需要手动修改。
+> 盒子获取 bdinfo 需要重新执行 curl -sL https://github.com/sqing33/Docker.pt-nexus/releases/download/latest/install-pt-nexus-box-proxy.sh | sudo bash 以更新盒子端脚本。**
 
 - 修复：“ModuleNotFoundError: No module named 'PIL'”报错
 - 修复：青蛙、三月传媒主标题出现重复制作组的问题
@@ -191,7 +222,7 @@ services:
 ### v3.2.3（2025.12.11）
 
 > **注：（需要更新 docker 镜像）新增环境变量 UPDATE_SOURCE，可选值 github 或 gitee，默认为 gitee，用于选择更新的源。
-盒子截图 png 需要重新执行 curl -sL https://github.com/sqing33/Docker.pt-nexus/releases/download/latest/install-pt-nexus-box-proxy.sh | sudo bash 以更新盒子端脚本。**
+> 盒子截图 png 需要重新执行 curl -sL https://github.com/sqing33/Docker.pt-nexus/releases/download/latest/install-pt-nexus-box-proxy.sh | sudo bash 以更新盒子端脚本。**
 
 - 修复：数据库迁移错误
 - 修复：标题参数 DTS 无法正确识别
@@ -215,29 +246,29 @@ services:
 
 ### v3.2.0（2025.11.30）
 
-> **注：QB下载器使用api现成的方法推送种子到下载器，TR下载器需要映射本地种子目录
-下载器设置里从左到右排序，在docker compose映射第一个tr到/data/tr_torrents/tr1，第二个映射到/data/tr_torrents/tr2
-例：- /vol1/1000/Docker/transmission/torrents:/data/tr_torrents/tr1**
+> **注：QB 下载器使用 api 现成的方法推送种子到下载器，TR 下载器需要映射本地种子目录
+> 下载器设置里从左到右排序，在 docker compose 映射第一个 tr 到/data/tr_torrents/tr1，第二个映射到/data/tr_torrents/tr2
+> 例：- /vol1/1000/Docker/transmission/torrents:/data/tr_torrents/tr1**
 
 - 新增：暂停本地种子，然添加到盒子进行下载，用于多站转种。（一站多种-转种-上盒）
 
 ### v3.1.6（2025.11.29）
 
 > **注：杜比发种需要获取 rsskey，在设置-站点管理填写
-杜比作为源站点有时候会因为 2fa 的问题而获取失败，需要浏览器打开站点过一遍 2fa 再尝试（玄学）**
+> 杜比作为源站点有时候会因为 2fa 的问题而获取失败，需要浏览器打开站点过一遍 2fa 再尝试（玄学）**
 
 - 新增：转种目标站点-杜比
 - 优化：通过 passkey 获取 HDtime 的种子推送到下载器
 
 ### v3.1.5（2025.11.27）
 
-> **注：月月、彩虹岛、天空种子详情页没有禁转/限转的提示，目前使用的方案是使用搜索功能准确获取种子列表页面提取禁转/限转标签，每个种子会出现至少2次请求。
-因为我堡的每小时请求次数有严格限制，目前仅可作为一种多站的源站点（获取信息后不影响批量转种）**
+> **注：月月、彩虹岛、天空种子详情页没有禁转/限转的提示，目前使用的方案是使用搜索功能准确获取种子列表页面提取禁转/限转标签，每个种子会出现至少 2 次请求。
+> 因为我堡的每小时请求次数有严格限制，目前仅可作为一种多站的源站点（获取信息后不影响批量转种）**
 
 - 修复：ptgen 查询到错误影片，更换了 ptgen 后端
 - 修复：憨憨、家园提取参数错误，补充映射参数
 - 优化：一种多站在获取种子信息的时候出现错误的提示
-（遇到问题找我请携带错误信息截图或者 Docker 日志截图）
+  （遇到问题找我请携带错误信息截图或者 Docker 日志截图）
 - 新增：转种源站点-月月、彩虹岛、天空、我堡
 - 新增：转种目标站点-朱雀
 
@@ -249,7 +280,7 @@ services:
 
 - 修复：织梦作为源站点提取纪录片类型出错的问题
 - 新增：一站多种获取种子信息可以筛选有无源站点
-- 新增：一种多站获取失败的时候自动重试2次
+- 新增：一种多站获取失败的时候自动重试 2 次
 - 新增：一站多种获取种子的时候如果第一优先级站点获取错误则自动尝试后续站点
 
 ### v3.1.2（2025.11.17）

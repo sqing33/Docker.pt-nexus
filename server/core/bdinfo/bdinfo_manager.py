@@ -1747,6 +1747,8 @@ class BDInfoManager:
             orphaned_tasks = []
             for i, row in enumerate(results):
                 try:
+                    if not isinstance(row, dict) and hasattr(row, "keys"):
+                        row = {key: row[key] for key in row.keys()}
                     # 处理字典格式的结果（MySQL 默认）
                     if isinstance(row, dict):
                         # 构造复合 seed_id

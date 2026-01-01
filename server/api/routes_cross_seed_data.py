@@ -10,6 +10,37 @@ from datetime import datetime, timedelta
 # 创建蓝图
 cross_seed_data_bp = Blueprint('cross_seed_data', __name__, url_prefix="/api")
 
+INACTIVE_TORRENT_STATES = ("未做种", "已暂停", "已停止", "错误", "等待", "队列")
+
+
+def build_current_torrents_subquery(db_type: str):
+    """构建按hash取当前种子的子查询（优先活跃状态，其次last_seen最新）"""
+    states_sql = "', '".join(INACTIVE_TORRENT_STATES)
+
+    def state_rank(alias: str) -> str:
+        return f"CASE WHEN {alias}.state NOT IN ('{states_sql}') THEN 0 ELSE 1 END"
+
+    if db_type == "postgresql":
+        return f"""
+            SELECT DISTINCT ON (t.hash) t.hash, t.save_path, t.downloader_id, t.state, t.last_seen
+            FROM torrents t
+            ORDER BY t.hash, {state_rank('t')}, t.last_seen DESC
+        """
+
+    return f"""
+        SELECT t.hash, t.save_path, t.downloader_id, t.state, t.last_seen
+        FROM torrents t
+        JOIN (
+            SELECT hash,
+                   MIN({state_rank('t2')}) AS state_rank,
+                   MAX(last_seen) AS max_last_seen
+            FROM torrents t2
+            GROUP BY hash
+        ) ranked ON t.hash = ranked.hash
+        WHERE {state_rank('t')} = ranked.state_rank
+          AND t.last_seen = ranked.max_last_seen
+    """
+
 
 def generate_reverse_mappings():
     """Generate reverse mappings from standard keys to Chinese display names"""
@@ -100,13 +131,18 @@ def get_unique_save_paths():
         conn = db_manager._get_connection()
         cursor = db_manager._get_cursor(conn)
 
-        # 查询所有唯一的保存路径
-        if db_manager.db_type == "postgresql":
-            query = "SELECT DISTINCT save_path FROM seed_parameters WHERE save_path IS NOT NULL AND save_path != '' ORDER BY save_path"
-            cursor.execute(query)
-        else:
-            query = "SELECT DISTINCT save_path FROM seed_parameters WHERE save_path IS NOT NULL AND save_path != '' ORDER BY save_path"
-            cursor.execute(query)
+        # 查询所有唯一的保存路径（从torrents取当前路径）
+        current_torrents_subquery = build_current_torrents_subquery(
+            db_manager.db_type
+        )
+        query = f"""
+            SELECT DISTINCT ct.save_path
+            FROM seed_parameters sp
+            JOIN ({current_torrents_subquery}) ct ON sp.hash = ct.hash
+            WHERE ct.save_path IS NOT NULL AND ct.save_path != ''
+            ORDER BY ct.save_path
+        """
+        cursor.execute(query)
 
         rows = cursor.fetchall()
 
@@ -156,7 +192,17 @@ def get_cross_seed_data():
         conn = db_manager._get_connection()
         cursor = db_manager._get_cursor(conn)
 
+        current_torrents_subquery = build_current_torrents_subquery(
+            db_manager.db_type
+        )
+        from_clause = f"""
+            FROM seed_parameters sp
+            LEFT JOIN ({current_torrents_subquery}) ct ON sp.hash = ct.hash
+        """
+
         # 构建查询条件
+        is_deleted_condition = "ct.hash IS NULL"
+        is_not_deleted_condition = "ct.hash IS NOT NULL"
         where_conditions = []
         params = []
 
@@ -164,7 +210,7 @@ def get_cross_seed_data():
         if search_query:
             if db_manager.db_type == "postgresql":
                 where_conditions.append(
-                    "(title ILIKE %s OR torrent_id ILIKE %s OR subtitle ILIKE %s)"
+                    "(sp.title ILIKE %s OR sp.torrent_id ILIKE %s OR sp.subtitle ILIKE %s)"
                 )
                 params.extend([
                     f"%{search_query}%", f"%{search_query}%",
@@ -172,7 +218,7 @@ def get_cross_seed_data():
                 ])
             elif db_manager.db_type == "mysql":
                 where_conditions.append(
-                    "(title LIKE %s OR torrent_id LIKE %s OR subtitle LIKE %s)"
+                    "(sp.title LIKE %s OR sp.torrent_id LIKE %s OR sp.subtitle LIKE %s)"
                 )
                 params.extend([
                     f"%{search_query}%", f"%{search_query}%",
@@ -180,7 +226,7 @@ def get_cross_seed_data():
                 ])
             else:  # sqlite
                 where_conditions.append(
-                    "(title LIKE ? OR torrent_id LIKE ? OR subtitle LIKE ?)")
+                    "(sp.title LIKE ? OR sp.torrent_id LIKE ? OR sp.subtitle LIKE ?)")
                 params.extend([
                     f"%{search_query}%", f"%{search_query}%",
                     f"%{search_query}%"
@@ -197,92 +243,88 @@ def get_cross_seed_data():
                         # PostgreSQL 使用 ANY 操作符进行精确匹配
                         placeholders = ', '.join(['%s'] * len(paths))
                         where_conditions.append(
-                            f"save_path = ANY(ARRAY[{placeholders}])")
+                            f"ct.save_path = ANY(ARRAY[{placeholders}])")
                         params.extend(paths)
                     else:
                         # MySQL 和 SQLite 使用 IN 操作符进行精确匹配
                         placeholders = ', '.join(
                             ['%s' if db_manager.db_type == "mysql" else '?'] *
                             len(paths))
-                        where_conditions.append(f"save_path IN ({placeholders})")
+                        where_conditions.append(f"ct.save_path IN ({placeholders})")
                         params.extend(paths)
             except (json_module.JSONDecodeError, ValueError) as e:
                 logging.warning(f"解析路径筛选参数失败: {e}")
 
         # 删除状态筛选条件
         if is_deleted_filter in ['0', '1']:
-            if db_manager.db_type == "postgresql":
-                # PostgreSQL handles boolean differently - convert '1' to True, '0' to False
-                bool_value = True if is_deleted_filter == '1' else False
-                where_conditions.append("is_deleted = %s")
-                params.append(bool_value)
+            if is_deleted_filter == '1':
+                where_conditions.append(is_deleted_condition)
             else:
-                where_conditions.append("is_deleted = ?")
-                params.append(int(is_deleted_filter))
+                where_conditions.append(is_not_deleted_condition)
 
         # 检查状态筛选条件
         if review_status_filter:
             if review_status_filter == 'reviewed':
-                # 已检查：is_reviewed = true（且不是已删除或禁转或无法识别）
+                # 已检查：is_reviewed = true（且不是已删除或禁转/限转/分集或无法识别）
                 if db_manager.db_type == "postgresql":
                     where_conditions.append(
-                        "is_reviewed = true AND is_deleted = false AND (tags IS NULL OR tags::text NOT LIKE %s) AND (title_components IS NULL OR title_components::text !~ %s)"
+                        f"sp.is_reviewed = true AND {is_not_deleted_condition} AND (sp.tags IS NULL OR (sp.tags::text NOT LIKE %s AND sp.tags::text NOT LIKE %s AND sp.tags::text NOT LIKE %s)) AND (sp.title_components IS NULL OR sp.title_components::text !~ %s)"
                     )
-                    params.extend(['%禁转%', r'"无法识别"[^}]*"value":\s*".+"'])
+                    params.extend(['%禁转%', '%限转%', '%分集%', r'"无法识别"[^}]*"value":\s*".+"'])
                 elif db_manager.db_type == "mysql":
                     where_conditions.append(
-                        "is_reviewed = 1 AND is_deleted = 0 AND (tags IS NULL OR tags NOT LIKE %s) AND (title_components IS NULL OR title_components NOT REGEXP %s)"
+                        f"sp.is_reviewed = 1 AND {is_not_deleted_condition} AND (sp.tags IS NULL OR (sp.tags NOT LIKE %s AND sp.tags NOT LIKE %s AND sp.tags NOT LIKE %s)) AND (sp.title_components IS NULL OR sp.title_components NOT REGEXP %s)"
                     )
-                    params.extend(['%禁转%', r'"无法识别"[^}]*"value":\s*".+"'])
+                    params.extend(['%禁转%', '%限转%', '%分集%', r'"无法识别"[^}]*"value":\s*".+"'])
                 else:  # sqlite
                     where_conditions.append(
-                        "is_reviewed = 1 AND is_deleted = 0 AND (tags IS NULL OR tags NOT LIKE ?) AND (title_components IS NULL OR NOT (title_components LIKE ? AND title_components NOT LIKE ?))"
+                        f"sp.is_reviewed = 1 AND {is_not_deleted_condition} AND (sp.tags IS NULL OR (sp.tags NOT LIKE ? AND sp.tags NOT LIKE ? AND sp.tags NOT LIKE ?)) AND (sp.title_components IS NULL OR NOT (sp.title_components LIKE ? AND sp.title_components NOT LIKE ?))"
                     )
-                    params.extend(['%禁转%', '%"无法识别"%', '%"value": ""%'])
+                    params.extend(['%禁转%', '%限转%', '%分集%', '%"无法识别"%', '%"value": ""%'])
             elif review_status_filter == 'unreviewed':
-                # 待检查：is_reviewed = false 且不是已删除，且不包含禁转标签，且无法识别字段为空
+                # 待检查：is_reviewed = false 且不是已删除，且不包含禁转/限转/分集标签，且无法识别字段为空
                 if db_manager.db_type == "postgresql":
                     where_conditions.append(
-                        "is_reviewed = false AND is_deleted = false AND (tags IS NULL OR tags::text NOT LIKE %s) AND (title_components IS NULL OR title_components::text !~ %s)"
+                        f"sp.is_reviewed = false AND {is_not_deleted_condition} AND (sp.tags IS NULL OR (sp.tags::text NOT LIKE %s AND sp.tags::text NOT LIKE %s AND sp.tags::text NOT LIKE %s)) AND (sp.title_components IS NULL OR sp.title_components::text !~ %s)"
                     )
-                    params.extend(['%禁转%', r'"无法识别"[^}]*"value":\s*".+"'])
+                    params.extend(['%禁转%', '%限转%', '%分集%', r'"无法识别"[^}]*"value":\s*".+"'])
                 elif db_manager.db_type == "mysql":
                     where_conditions.append(
-                        "is_reviewed = 0 AND is_deleted = 0 AND (tags IS NULL OR tags NOT LIKE %s) AND (title_components IS NULL OR title_components NOT REGEXP %s)"
+                        f"sp.is_reviewed = 0 AND {is_not_deleted_condition} AND (sp.tags IS NULL OR (sp.tags NOT LIKE %s AND sp.tags NOT LIKE %s AND sp.tags NOT LIKE %s)) AND (sp.title_components IS NULL OR sp.title_components NOT REGEXP %s)"
                     )
-                    params.extend(['%禁转%', r'"无法识别"[^}]*"value":\s*".+"'])
+                    params.extend(['%禁转%', '%限转%', '%分集%', r'"无法识别"[^}]*"value":\s*".+"'])
                 else:  # sqlite
                     where_conditions.append(
-                        "is_reviewed = 0 AND is_deleted = 0 AND (tags IS NULL OR tags NOT LIKE ?) AND (title_components IS NULL OR NOT (title_components LIKE ? AND title_components NOT LIKE ?))"
+                        f"sp.is_reviewed = 0 AND {is_not_deleted_condition} AND (sp.tags IS NULL OR (sp.tags NOT LIKE ? AND sp.tags NOT LIKE ? AND sp.tags NOT LIKE ?)) AND (sp.title_components IS NULL OR NOT (sp.title_components LIKE ? AND sp.title_components NOT LIKE ?))"
                     )
-                    params.extend(['%禁转%', '%"无法识别"%', '%"value": ""%'])
+                    params.extend(['%禁转%', '%限转%', '%分集%', '%"无法识别"%', '%"value": ""%'])
             elif review_status_filter == 'error':
                 # 错误：包含以下任一条件的记录
                 # 1. is_deleted = true（已删除）
-                # 2. tags中包含"禁转"
+                # 2. tags中包含"禁转/限转/分集"
                 # 3. title_components中"无法识别"字段的value不为空
                 #    匹配模式: "key": "无法识别", "value": "非空内容"
                 #    使用正则: "无法识别"[^}]*"value":\s*"[^"]+" 来匹配value不为空的情况
                 if db_manager.db_type == "postgresql":
                     # PostgreSQL支持正则表达式
-                    error_condition = "(is_deleted = true OR tags::text LIKE %s OR title_components::text ~ %s)"
+                    error_condition = f"({is_deleted_condition} OR sp.tags::text LIKE %s OR sp.tags::text LIKE %s OR sp.tags::text LIKE %s OR sp.title_components::text ~ %s)"
                     where_conditions.append(error_condition)
                     # 正则模式：匹配 "无法识别" 后面跟着非空的 value
-                    params.extend(['%禁转%', r'"无法识别"[^}]*"value":\s*".+"'])
+                    params.extend(['%禁转%', '%限转%', '%分集%', r'"无法识别"[^}]*"value":\s*".+"'])
                 else:
                     # MySQL和SQLite使用REGEXP（MySQL 8.0+支持）
                     placeholder = '?' if db_manager.db_type == 'sqlite' else '%s'
                     if db_manager.db_type == 'mysql':
                         # MySQL使用REGEXP
-                        error_condition = f"(is_deleted = 1 OR tags LIKE {placeholder} OR title_components REGEXP {placeholder})"
+                        error_condition = f"({is_deleted_condition} OR sp.tags LIKE {placeholder} OR sp.tags LIKE {placeholder} OR sp.tags LIKE {placeholder} OR sp.title_components REGEXP {placeholder})"
                         where_conditions.append(error_condition)
-                        params.extend(['%禁转%', r'"无法识别"[^}]*"value":\s*".+"'])
+                        params.extend(['%禁转%', '%限转%', '%分集%', r'"无法识别"[^}]*"value":\s*".+"'])
                     else:
                         # SQLite可能不支持REGEXP，使用LIKE作为后备
                         # 这不完美，但至少能过滤掉value为空字符串的情况
-                        error_condition = f"(is_deleted = 1 OR tags LIKE {placeholder} OR (title_components LIKE {placeholder} AND title_components NOT LIKE {placeholder}))"
+                        error_condition = f"({is_deleted_condition} OR sp.tags LIKE {placeholder} OR sp.tags LIKE {placeholder} OR sp.tags LIKE {placeholder} OR (sp.title_components LIKE {placeholder} AND sp.title_components NOT LIKE {placeholder}))"
                         where_conditions.append(error_condition)
-                        params.extend(['%禁转%', '%"无法识别"%', '%"value": ""%'])
+                        params.extend(['%禁转%', '%限转%', '%分集%', '%"无法识别"%', '%"value": ""%'])
 
         # 目标站点排除筛选条件
         if exclude_target_sites_filter:
@@ -307,7 +349,7 @@ def get_cross_seed_data():
                         )
                     """
                     where_conditions.append(
-                        f"seed_parameters.hash NOT IN ({subquery})")
+                        f"sp.hash NOT IN ({subquery})")
                     params.append(exclude_site)
                 else:
                     # MySQL 和 SQLite - 直接在WHERE子句中嵌入子查询
@@ -315,7 +357,7 @@ def get_cross_seed_data():
                     # 为MySQL添加COLLATE子句以解决字符集冲突
                     if db_manager.db_type == "mysql":
                         where_conditions.append(f"""
-                            seed_parameters.hash NOT IN (
+                            sp.hash NOT IN (
                                 SELECT DISTINCT sp.hash
                                 FROM seed_parameters sp
                                 WHERE sp.hash IN (
@@ -331,7 +373,7 @@ def get_cross_seed_data():
                         """)
                     else:
                         where_conditions.append(f"""
-                            seed_parameters.hash NOT IN (
+                            sp.hash NOT IN (
                                 SELECT DISTINCT sp.hash
                                 FROM seed_parameters sp
                                 WHERE sp.hash IN (
@@ -360,7 +402,7 @@ def get_cross_seed_data():
             logging.info(f"所有查询参数: {params}")
 
         # 先查询总数
-        count_query = f"SELECT COUNT(*) as total FROM seed_parameters {where_clause}"
+        count_query = f"SELECT COUNT(*) as total {from_clause} {where_clause}"
         if db_manager.db_type == "postgresql":
             cursor.execute(count_query, params)
         else:
@@ -372,22 +414,34 @@ def get_cross_seed_data():
         # 查询当前页的数据，只获取前端需要显示的列
         if db_manager.db_type == "postgresql":
             query = f"""
-                SELECT hash, torrent_id, site_name, nickname, save_path, title, subtitle, type, medium, video_codec,
-                       audio_codec, resolution, team, source, tags, title_components, is_deleted, is_reviewed, updated_at
-                FROM seed_parameters
+                SELECT sp.hash, sp.torrent_id, sp.site_name, sp.nickname,
+                       COALESCE(ct.save_path, '') AS save_path,
+                       ct.downloader_id AS downloader_id,
+                       sp.title, sp.subtitle, sp.type, sp.medium, sp.video_codec,
+                       sp.audio_codec, sp.resolution, sp.team, sp.source, sp.tags,
+                       sp.title_components,
+                       CASE WHEN ct.hash IS NULL THEN true ELSE false END AS is_deleted,
+                       sp.is_reviewed, sp.updated_at
+                {from_clause}
                 {where_clause}
-                ORDER BY created_at DESC
+                ORDER BY sp.created_at DESC
                 LIMIT %s OFFSET %s
             """
             cursor.execute(query, params + [page_size, offset])
         else:
             placeholder = "?" if db_manager.db_type == "sqlite" else "%s"
             query = f"""
-                SELECT hash, torrent_id, site_name, nickname, save_path, title, subtitle, type, medium, video_codec,
-                       audio_codec, resolution, team, source, tags, title_components, is_deleted, is_reviewed, updated_at
-                FROM seed_parameters
+                SELECT sp.hash, sp.torrent_id, sp.site_name, sp.nickname,
+                       COALESCE(ct.save_path, '') AS save_path,
+                       ct.downloader_id AS downloader_id,
+                       sp.title, sp.subtitle, sp.type, sp.medium, sp.video_codec,
+                       sp.audio_codec, sp.resolution, sp.team, sp.source, sp.tags,
+                       sp.title_components,
+                       CASE WHEN ct.hash IS NULL THEN 1 ELSE 0 END AS is_deleted,
+                       sp.is_reviewed, sp.updated_at
+                {from_clause}
                 {where_clause}
-                ORDER BY created_at DESC
+                ORDER BY sp.created_at DESC
                 LIMIT {placeholder} OFFSET {placeholder}
             """
             cursor.execute(query, params + [page_size, offset])
@@ -470,12 +524,14 @@ def get_cross_seed_data():
             target_sites_list = [row[0] for row in target_sites_rows if row[0]]
 
         # 获取所有唯一的保存路径（用于路径树）
-        if db_manager.db_type == "postgresql":
-            path_query = "SELECT DISTINCT save_path FROM seed_parameters WHERE save_path IS NOT NULL AND save_path != '' ORDER BY save_path"
-            cursor.execute(path_query)
-        else:
-            path_query = "SELECT DISTINCT save_path FROM seed_parameters WHERE save_path IS NOT NULL AND save_path != '' ORDER BY save_path"
-            cursor.execute(path_query)
+        path_query = f"""
+            SELECT DISTINCT ct.save_path
+            FROM seed_parameters sp
+            JOIN ({current_torrents_subquery}) ct ON sp.hash = ct.hash
+            WHERE ct.save_path IS NOT NULL AND ct.save_path != ''
+            ORDER BY ct.save_path
+        """
+        cursor.execute(path_query)
 
         path_rows = cursor.fetchall()
 

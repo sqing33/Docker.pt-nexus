@@ -925,6 +925,8 @@ content_filtering:
   unwanted_patterns:
     # ARDTU工具相关
     - "ARDTU工具自动发布"
+    - "CSAUTO工具自动发布"
+    - "FWAUTO工具自动发布"
     - "有错误请评论或举报"
     - "郑重声明："
     - "本站提供的所有作品均是用户自行搜集并且上传"
@@ -941,10 +943,12 @@ content_filtering:
     - "| A | By ATU"
     - "A | By ATU"
     - "| By ARDTU"
-    - "By ARDTU"
     - "| ARDTU"
     - "ARDTU"
     - "| A"
+    - "By ARDTU"
+    - "By CSAUTO"
+    - "By FWAUTO"
 
     # 不规范的技术信息标记
     - ".Release.Info"

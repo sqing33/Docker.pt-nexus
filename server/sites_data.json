@@ -27,7 +27,7 @@
     "group": "-MWeb,-MTeam,-PTTV",
     "description": "MTeam",
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 120
   },
   {
     "site": "hdsky",
@@ -37,7 +37,7 @@
     "group": "-HDSky,-HDSWEB,-HDS,-HDSTV,-HDSPad",
     "description": "HDSky",
     "migration": 1,
-    "speed_limit": 10
+    "speed_limit": 495
   },
   {
     "site": "tjupt",
@@ -87,7 +87,7 @@
     "group": "-OurBits,-OurTV",
     "description": "OurBits",
     "migration": 1,
-    "speed_limit": 10
+    "speed_limit": 45
   },
   {
     "site": "torrentccf",
@@ -107,7 +107,7 @@
     "group": "-WiKi,-TTG,-NGB",
     "description": "TTG",
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 95
   },
   {
     "site": "nanyangpt",
@@ -163,7 +163,7 @@
     "group": "-CMCT,-CMCTV,-CMCTA,￡CMCT,-Oldboys",
     "description": "CMCT",
     "migration": 1,
-    "speed_limit": 10
+    "speed_limit": 120
   },
   {
     "site": "soulvoice",
@@ -182,7 +182,7 @@
     "group": "-CHDBits,-CHDWEB,-CHD",
     "description": "CHDBits",
     "migration": 1,
-    "speed_limit": 50
+    "speed_limit": 95
   },
   {
     "site": "ptsbao",
@@ -631,7 +631,7 @@
     "base_url": "pt.gtkpw.xyz",
     "special_tracker_domain": "gtkpw",
     "group": null,
-    "migration": 2,
+    "migration": 0,
     "speed_limit": 10
   },
   {

@@ -505,8 +505,7 @@ def update_settings():
                         tables_to_migrate = [
                             ("traffic_stats", "downloader_id"),
                             ("torrents", "downloader_id"),
-                            ("torrent_upload_stats", "downloader_id"),
-                            ("seed_parameters", "downloader_id")
+                            ("torrent_upload_stats", "downloader_id")
                         ]
                         
                         migration_success = True

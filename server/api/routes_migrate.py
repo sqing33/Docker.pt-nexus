@@ -38,6 +38,66 @@ migrate_bp = Blueprint("migrate_api", __name__, url_prefix="/api")
 
 MIGRATION_CACHE = {}
 
+INACTIVE_TORRENT_STATES = ("未做种", "已暂停", "已停止", "错误", "等待", "队列")
+
+
+def get_seed_hash(db_manager, torrent_id, site_name):
+    """根据torrent_id/site_name获取hash"""
+    try:
+        conn = db_manager._get_connection()
+        cursor = db_manager._get_cursor(conn)
+        ph = db_manager.get_placeholder()
+        query = (
+            f"SELECT hash FROM seed_parameters WHERE torrent_id = {ph} AND site_name = {ph} "
+            f"ORDER BY updated_at DESC LIMIT 1"
+        )
+        cursor.execute(query, (torrent_id, site_name))
+        row = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        if not row:
+            return None
+        return row["hash"] if isinstance(row, dict) else row[0]
+    except Exception as e:
+        logging.warning(f"获取hash失败: {e}")
+        return None
+
+
+def get_current_torrent_info(db_manager, hash_value):
+    """根据hash获取当前种子的保存路径/下载器ID（优先活跃状态）"""
+    if not hash_value:
+        return None
+
+    try:
+        conn = db_manager._get_connection()
+        cursor = db_manager._get_cursor(conn)
+        ph = db_manager.get_placeholder()
+        states_sql = "', '".join(INACTIVE_TORRENT_STATES)
+        state_rank = f"CASE WHEN state NOT IN ('{states_sql}') THEN 0 ELSE 1 END"
+        query = f"""
+            SELECT save_path, downloader_id, name
+            FROM torrents
+            WHERE hash = {ph}
+            ORDER BY {state_rank}, last_seen DESC
+            LIMIT 1
+        """
+        cursor.execute(query, (hash_value,))
+        row = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        if not row:
+            return None
+        if isinstance(row, dict):
+            return {
+                "save_path": row.get("save_path"),
+                "downloader_id": row.get("downloader_id"),
+                "name": row.get("name"),
+            }
+        return {"save_path": row[0], "downloader_id": row[1], "name": row[2]}
+    except Exception as e:
+        logging.warning(f"获取当前种子信息失败: {e}")
+        return None
+
 # ===================================================================
 #                          转种设置 API (新整合)
 # ===================================================================
@@ -118,6 +178,13 @@ def get_db_seed_info():
 
             if parameters:
                 logging.info(f"成功从数据库读取种子信息: {torrent_id} from {site_name}")
+
+                # 从torrents补充当前保存路径/下载器ID
+                hash_value = parameters.get("hash")
+                torrent_info = get_current_torrent_info(db_manager, hash_value)
+                if torrent_info:
+                    parameters["save_path"] = torrent_info.get("save_path") or ""
+                    parameters["downloader_id"] = torrent_info.get("downloader_id")
 
                 # 生成反向映射表（从标准键到中文显示名称的映射）
                 reverse_mappings = generate_reverse_mappings()
@@ -1276,51 +1343,35 @@ def migrate_publish():
                         print(f"[下载器添加] 缺少save_path,从数据库获取源种子的保存路径")
                         source_torrent_id = context.get("source_torrent_id")
                         if source_torrent_id and source_site_name:
-                            try:
-                                conn = db_manager._get_connection()
-                                cursor = db_manager._get_cursor(conn)
-                                placeholder = db_manager.get_placeholder()
-                                query = f"SELECT save_path FROM seed_parameters WHERE torrent_id = {placeholder} AND site_name = {placeholder}"
-                                cursor.execute(query, (source_torrent_id, source_site_name))
-                                row = cursor.fetchone()
-                                if row and row["save_path"]:
-                                    save_path = row["save_path"]
-                                    print(f"[下载器添加] 从数据库获取到保存路径: {save_path}")
-                                else:
-                                    print(f"[下载器添加] 数据库中未找到保存路径")
-                                conn.close()
-                            except Exception as e:
-                                print(f"[下载器添加] 从数据库查询保存路径失败: {e}")
+                            hash_value = get_seed_hash(
+                                db_manager, source_torrent_id, source_site_name
+                            )
+                            torrent_info = get_current_torrent_info(db_manager, hash_value)
+                            if torrent_info and torrent_info.get("save_path"):
+                                save_path = torrent_info["save_path"]
+                                print(f"[下载器添加] 从数据库获取到保存路径: {save_path}")
+                            else:
+                                print(f"[下载器添加] 数据库中未找到保存路径")
                 else:
                     # 配置为"使用源种子所在的下载器"或未配置
                     # 尝试从数据库查询原始种子的下载器和保存路径
                     print(f"[下载器添加] 配置为使用源种子下载器,从数据库查询")
                     source_torrent_id = context.get("source_torrent_id")
                     if source_torrent_id and source_site_name:
-                        try:
-                            conn = db_manager._get_connection()
-                            cursor = db_manager._get_cursor(conn)
-
-                            # 使用 db_manager 的占位符方法
-                            placeholder = db_manager.get_placeholder()
-                            query = f"SELECT downloader_id, save_path FROM seed_parameters WHERE torrent_id = {placeholder} AND site_name = {placeholder}"
-
-                            cursor.execute(query, (source_torrent_id, source_site_name))
-                            row = cursor.fetchone()
-                            if row:
-                                downloader_id = row["downloader_id"]
-                                # 同时获取 save_path
-                                if not save_path and row["save_path"]:
-                                    save_path = row["save_path"]
-                                    print(f"[下载器添加] 从数据库获取到保存路径: {save_path}")
-                                print(
-                                    f"[下载器添加] 从数据库获取到源种子的下载器ID: {downloader_id}"
-                                )
-                            else:
-                                print(f"[下载器添加] 数据库中未找到源种子信息")
-                            conn.close()
-                        except Exception as e:
-                            print(f"[下载器添加] 从数据库查询下载器ID失败: {e}")
+                        hash_value = get_seed_hash(
+                            db_manager, source_torrent_id, source_site_name
+                        )
+                        torrent_info = get_current_torrent_info(db_manager, hash_value)
+                        if torrent_info:
+                            downloader_id = torrent_info.get("downloader_id")
+                            if not save_path and torrent_info.get("save_path"):
+                                save_path = torrent_info["save_path"]
+                                print(f"[下载器添加] 从数据库获取到保存路径: {save_path}")
+                            print(
+                                f"[下载器添加] 从数据库获取到源种子的下载器ID: {downloader_id}"
+                            )
+                        else:
+                            print(f"[下载器添加] 数据库中未找到源种子信息")
 
                     if not downloader_id:
                         print(f"[下载器添加] 未找到源种子的下载器信息")
@@ -1768,27 +1819,18 @@ def get_downloader_info():
         return jsonify({"success": False, "message": "缺少必要参数: torrent_id 或 site_name"}), 400
 
     try:
-        conn = db_manager._get_connection()
-        cursor = db_manager._get_cursor(conn)
+        hash_value = get_seed_hash(db_manager, torrent_id, site_name)
+        torrent_info = get_current_torrent_info(db_manager, hash_value)
 
-        # 使用 db_manager 的占位符方法
-        placeholder = db_manager.get_placeholder()
-        query = f"SELECT downloader_id, save_path FROM seed_parameters WHERE torrent_id = {placeholder} AND site_name = {placeholder}"
-
-        cursor.execute(query, (torrent_id, site_name))
-        row = cursor.fetchone()
-        conn.close()
-
-        if row:
+        if torrent_info:
             return jsonify(
                 {
                     "success": True,
-                    "downloader_id": row["downloader_id"],
-                    "save_path": row["save_path"],
+                    "downloader_id": torrent_info.get("downloader_id"),
+                    "save_path": torrent_info.get("save_path"),
                 }
             )
-        else:
-            return jsonify({"success": False, "message": "未找到该种子信息"}), 404
+        return jsonify({"success": False, "message": "未找到该种子信息"}), 404
 
     except Exception as e:
         logging.error(f"查询下载器信息失败: {e}", exc_info=True)
@@ -3065,26 +3107,39 @@ def get_bdinfo_status(seed_id):
 def refresh_bdinfo(seed_id):
     """手动触发 BDInfo 重新获取"""
     try:
-        # 获取种子数据
-        conn = migrate_bp.db_manager._get_connection()
-        cursor = migrate_bp.db_manager._get_cursor(conn)
+        db_manager = migrate_bp.db_manager
+        hash_value = None
 
-        if migrate_bp.db_manager.db_type == "sqlite":
-            cursor.execute("SELECT save_path FROM seed_parameters WHERE id = ?", (seed_id,))
+        if "_" in seed_id:
+            parts = seed_id.split("_")
+            if len(parts) >= 3:
+                hash_value = "_".join(parts[:-2])
         else:
-            cursor.execute("SELECT save_path FROM seed_parameters WHERE id = %s", (seed_id,))
+            try:
+                conn = db_manager._get_connection()
+                cursor = db_manager._get_cursor(conn)
+                ph = db_manager.get_placeholder()
+                cursor.execute(
+                    f"SELECT hash FROM seed_parameters WHERE id = {ph}", (seed_id,)
+                )
+                row = cursor.fetchone()
+                cursor.close()
+                conn.close()
+                if row:
+                    hash_value = row["hash"] if isinstance(row, dict) else row[0]
+            except Exception as e:
+                logging.warning(f"通过id查询hash失败: {e}")
 
-        result = cursor.fetchone()
-        cursor.close()
-        conn.close()
-
-        if not result:
-            return jsonify({"error": "种子数据不存在"}), 404
+        torrent_info = get_current_torrent_info(db_manager, hash_value)
+        if not torrent_info or not torrent_info.get("save_path"):
+            return jsonify({"error": "无法获取保存路径"}), 404
 
         # 调用刷新函数
         from utils.mediainfo import refresh_bdinfo_for_seed
 
-        refresh_result = refresh_bdinfo_for_seed(seed_id, result["save_path"], priority=1)
+        refresh_result = refresh_bdinfo_for_seed(
+            seed_id, torrent_info["save_path"], priority=1
+        )
 
         if refresh_result["success"]:
             return jsonify(refresh_result)
@@ -3455,6 +3510,8 @@ def restart_bdinfo():
         cursor = migrate_bp.db_manager._get_cursor(conn)
 
         # 解析复合 seed_id，使用完整复合主键查询以确保准确性
+        hash_val = torrent_id = site_name = None
+        result = None
         if "_" in seed_id:
             parts = seed_id.split("_")
             if len(parts) >= 3:
@@ -3463,33 +3520,34 @@ def restart_bdinfo():
                 torrent_id = parts[-2]
                 hash_val = "_".join(parts[:-2])
 
-                # 使用完整复合主键查询，同时获取下载器ID和完整路径信息
+                # 使用完整复合主键查询种子名称
                 if migrate_bp.db_manager.db_type == "sqlite":
                     cursor.execute(
-                        "SELECT save_path, downloader_id, name FROM seed_parameters WHERE hash = ? AND torrent_id = ? AND site_name = ?",
+                        "SELECT name FROM seed_parameters WHERE hash = ? AND torrent_id = ? AND site_name = ?",
                         (hash_val, torrent_id, site_name),
                     )
                 else:
                     cursor.execute(
-                        "SELECT save_path, downloader_id, name FROM seed_parameters WHERE hash = %s AND torrent_id = %s AND site_name = %s",
+                        "SELECT name FROM seed_parameters WHERE hash = %s AND torrent_id = %s AND site_name = %s",
                         (hash_val, torrent_id, site_name),
                     )
+                result = cursor.fetchone()
             else:
                 # 如果格式不对，尝试使用 CONCAT 查询
                 if migrate_bp.db_manager.db_type == "sqlite":
                     cursor.execute(
-                        "SELECT save_path, downloader_id, name FROM seed_parameters WHERE hash || '_' || torrent_id || '_' || site_name = ?",
+                        "SELECT hash, torrent_id, site_name, name FROM seed_parameters WHERE hash || '_' || torrent_id || '_' || site_name = ?",
                         (seed_id,),
                     )
                 else:
                     cursor.execute(
-                        "SELECT save_path, downloader_id, name FROM seed_parameters WHERE CONCAT(hash, '_', torrent_id, '_', site_name) = %s",
+                        "SELECT hash, torrent_id, site_name, name FROM seed_parameters WHERE CONCAT(hash, '_', torrent_id, '_', site_name) = %s",
                         (seed_id,),
                     )
+                result = cursor.fetchone()
         else:
             return jsonify({"error": "无效的 seed_id 格式"}), 400
 
-        result = cursor.fetchone()
         cursor.close()
         conn.close()
 
@@ -3499,13 +3557,25 @@ def restart_bdinfo():
         # 处理不同数据库返回的结果格式
         print(f"[DEBUG] 数据库查询结果: {result}")
         if isinstance(result, dict):
-            save_path = result.get("save_path")
-            downloader_id = result.get("downloader_id")
+            if result.get("hash"):
+                hash_val = result.get("hash")
+                torrent_id = result.get("torrent_id")
+                site_name = result.get("site_name")
             torrent_name = result.get("name")
         else:
-            save_path = result[0] if len(result) > 0 else None
-            downloader_id = result[1] if len(result) > 1 else None
-            torrent_name = result[2] if len(result) > 2 else None
+            if len(result) >= 4:
+                hash_val = result[0]
+                torrent_id = result[1]
+                site_name = result[2]
+                torrent_name = result[3]
+            else:
+                torrent_name = result[0] if len(result) > 0 else None
+
+        torrent_info = get_current_torrent_info(migrate_bp.db_manager, hash_val)
+        save_path = torrent_info.get("save_path") if torrent_info else None
+        downloader_id = torrent_info.get("downloader_id") if torrent_info else None
+        if not torrent_name and torrent_info:
+            torrent_name = torrent_info.get("name")
 
         if not save_path:
             print(f"[DEBUG] save_path为空，返回错误")
