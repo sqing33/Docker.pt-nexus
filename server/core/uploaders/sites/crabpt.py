@@ -19,14 +19,13 @@ class CrabptUploader(SpecialUploader):
         # 降级处理：如果没有标准化参数才重新解析
         if not standardized_params:
             from loguru import logger
+
             logger.warning("未找到标准化参数，回退到重新解析")
             # 获取数据
             source_params = self.upload_data.get("source_params", {})
-            title_components_list = self.upload_data.get(
-                "title_components", [])
+            title_components_list = self.upload_data.get("title_components", [])
             title_params = {
-                item["key"]: item["value"]
-                for item in title_components_list if item.get("value")
+                item["key"]: item["value"] for item in title_components_list if item.get("value")
             }
         else:
             # 使用标准化参数构建title_params（用于兼容现有逻辑）
@@ -75,55 +74,53 @@ class CrabptUploader(SpecialUploader):
             # 格式映射
             format_str = title_params.get("格式", "")
             special_codec_field = self.config.get("form_fields", {}).get(
-                "special_codec", "codec_sel[6]")
+                "special_codec", "codec_sel[6]"
+            )
             format_mapping = self.config.get("mappings", {}).get("format", {})
-            mapped[special_codec_field] = self._find_mapping(
-                format_mapping, format_str)
+            mapped[special_codec_field] = self._find_mapping(format_mapping, format_str)
 
             # 特别区音频编码映射
             audio_str = title_params.get("音频编码", "")
             special_audio_field = self.config.get("form_fields", {}).get(
-                "special_audio_codec", "audiocodec_sel[6]")
-            special_audio_mapping = self.config.get("mappings", {}).get(
-                "special_audio_codec", {})
-            mapped[special_audio_field] = self._find_mapping(
-                special_audio_mapping, audio_str)
+                "special_audio_codec", "audiocodec_sel[6]"
+            )
+            special_audio_mapping = self.config.get("mappings", {}).get("special_audio_codec", {})
+            mapped[special_audio_field] = self._find_mapping(special_audio_mapping, audio_str)
 
             # 特别区制作组映射
             release_group_str = str(title_params.get("制作组", "")).upper()
             special_team_field = self.config.get("form_fields", {}).get(
-                "special_team", "team_sel[6]")
-            special_team_mapping = self.config.get("mappings",
-                                                   {}).get("special_team", {})
+                "special_team", "team_sel[6]"
+            )
+            special_team_mapping = self.config.get("mappings", {}).get("special_team", {})
             mapped[special_team_field] = self._find_mapping(
-                special_team_mapping, release_group_str)
+                special_team_mapping, release_group_str
+            )
 
             # 特别区地区映射 - ✅ 优先使用标准化的source参数
             if standardized_params:
                 standardized_source = standardized_params.get("source", "")
-                special_processing_field = self.config.get(
-                    "form_fields", {}).get("special_processing",
-                                           "processing_sel[6]")
+                special_processing_field = self.config.get("form_fields", {}).get(
+                    "special_processing", "processing_sel[6]"
+                )
                 # 使用source映射（而不是processing映射）
-                source_mapping = self.config.get("mappings",
-                                                 {}).get("source", {})
+                source_mapping = self.config.get("mappings", {}).get("source", {})
                 mapped[special_processing_field] = self._find_mapping(
-                    source_mapping, standardized_source)
+                    source_mapping, standardized_source
+                )
             else:
-                source_str = source_params.get("产地", "") or title_params.get(
-                    "片源平台", "")
-                special_processing_field = self.config.get(
-                    "form_fields", {}).get("special_processing",
-                                           "processing_sel[6]")
-                processing_mapping = self.config.get("mappings",
-                                                     {}).get("processing", {})
+                source_str = source_params.get("产地", "") or title_params.get("片源平台", "")
+                special_processing_field = self.config.get("form_fields", {}).get(
+                    "special_processing", "processing_sel[6]"
+                )
+                processing_mapping = self.config.get("mappings", {}).get("processing", {})
                 mapped[special_processing_field] = self._find_mapping(
-                    processing_mapping, source_str)
+                    processing_mapping, source_str
+                )
 
             # 特别区标签映射
             combined_tags = self._collect_all_tags()
-            special_tag_mapping = self.config.get("mappings",
-                                                  {}).get("special_tag", {})
+            special_tag_mapping = self.config.get("mappings", {}).get("special_tag", {})
 
             for tag_str in combined_tags:
                 tag_id = self._find_mapping(special_tag_mapping, tag_str)
@@ -140,73 +137,65 @@ class CrabptUploader(SpecialUploader):
             mediainfo_str = self.upload_data.get("mediainfo", "")
             is_standard_mediainfo = "General" in mediainfo_str and "Complete name" in mediainfo_str
 
-            medium_field = self.config.get("form_fields",
-                                           {}).get("medium", "source_sel[4]")
+            medium_field = self.config.get("form_fields", {}).get("medium", "source_sel[4]")
             medium_mapping = self.config.get("mappings", {}).get("medium", {})
 
-            if is_standard_mediainfo and ('blu' in medium_str.lower()
-                                          or 'dvd' in medium_str.lower()):
+            if is_standard_mediainfo and (
+                "blu" in medium_str.lower() or "dvd" in medium_str.lower()
+            ):
                 encode_value = medium_mapping.get("Encode", "7")
                 mapped[medium_field] = encode_value
             else:
                 mapped[medium_field] = self._find_mapping(
-                    medium_mapping, medium_str, use_length_priority=False)
+                    medium_mapping, medium_str, use_length_priority=False
+                )
 
             # 视频编码映射
             codec_str = title_params.get("视频编码", "")
-            codec_field = self.config.get("form_fields",
-                                          {}).get("video_codec",
-                                                  "codec_sel[4]")
-            codec_mapping = self.config.get("mappings",
-                                            {}).get("video_codec", {})
-            mapped[codec_field] = self._find_mapping(codec_mapping, codec_str)
+            codec_field = self.config.get("form_fields", {}).get("video_codec", "codec_sel[4]")
+            codec_mapping = self.config.get("mappings", {}).get("video_codec", {})
+            mapped[codec_field] = self._find_mapping(
+                codec_mapping, codec_str, mapping_type="video_codec"
+            )
 
             # 音频编码映射
             audio_str = title_params.get("音频编码", "")
-            audio_field = self.config.get("form_fields",
-                                          {}).get("audio_codec",
-                                                  "audiocodec_sel[4]")
-            audio_mapping = self.config.get("mappings",
-                                            {}).get("audio_codec", {})
+            audio_field = self.config.get("form_fields", {}).get(
+                "audio_codec", "audiocodec_sel[4]"
+            )
+            audio_mapping = self.config.get("mappings", {}).get("audio_codec", {})
             mapped[audio_field] = self._find_mapping(audio_mapping, audio_str)
 
             # 分辨率映射
             resolution_str = title_params.get("分辨率", "")
-            resolution_field = self.config.get("form_fields",
-                                               {}).get("resolution",
-                                                       "standard_sel[4]")
-            resolution_mapping = self.config.get("mappings",
-                                                 {}).get("resolution", {})
-            mapped[resolution_field] = self._find_mapping(
-                resolution_mapping, resolution_str)
+            resolution_field = self.config.get("form_fields", {}).get(
+                "resolution", "standard_sel[4]"
+            )
+            resolution_mapping = self.config.get("mappings", {}).get("resolution", {})
+            mapped[resolution_field] = self._find_mapping(resolution_mapping, resolution_str)
 
             # 制作组映射
             release_group_str = str(title_params.get("制作组", "")).upper()
-            team_field = self.config.get("form_fields",
-                                         {}).get("team", "team_sel[4]")
+            team_field = self.config.get("form_fields", {}).get("team", "team_sel[4]")
             team_mapping = self.config.get("mappings", {}).get("team", {})
-            mapped[team_field] = self._find_mapping(team_mapping,
-                                                    release_group_str)
+            mapped[team_field] = self._find_mapping(team_mapping, release_group_str)
 
             # 地区映射 - ✅ 优先使用标准化的source参数
             if standardized_params:
                 standardized_source = standardized_params.get("source", "")
                 processing_field = self.config.get("form_fields", {}).get(
-                    "processing", "processing_sel[4]")
+                    "processing", "processing_sel[4]"
+                )
                 # 使用source映射（而不是processing映射）
-                source_mapping = self.config.get("mappings",
-                                                 {}).get("source", {})
-                mapped[processing_field] = self._find_mapping(
-                    source_mapping, standardized_source)
+                source_mapping = self.config.get("mappings", {}).get("source", {})
+                mapped[processing_field] = self._find_mapping(source_mapping, standardized_source)
             else:
-                source_str = source_params.get("产地", "") or title_params.get(
-                    "片源平台", "")
+                source_str = source_params.get("产地", "") or title_params.get("片源平台", "")
                 processing_field = self.config.get("form_fields", {}).get(
-                    "processing", "processing_sel[4]")
-                processing_mapping = self.config.get("mappings",
-                                                     {}).get("processing", {})
-                mapped[processing_field] = self._find_mapping(
-                    processing_mapping, source_str)
+                    "processing", "processing_sel[4]"
+                )
+                processing_mapping = self.config.get("mappings", {}).get("processing", {})
+                mapped[processing_field] = self._find_mapping(processing_mapping, source_str)
 
             # 标签映射
             combined_tags = self._collect_all_tags()
@@ -228,15 +217,16 @@ class CrabptUploader(SpecialUploader):
         重写描述构建方法以添加调试信息
         """
         intro = self.upload_data.get("intro", {})
-        description = (f"{intro.get('statement', '')}\n"
-                       f"{intro.get('poster', '')}\n"
-                       f"{intro.get('body', '')}\n"
-                       f"{intro.get('screenshots', '')}")
+        description = (
+            f"{intro.get('statement', '')}\n"
+            f"{intro.get('poster', '')}\n"
+            f"{intro.get('body', '')}\n"
+            f"{intro.get('screenshots', '')}"
+        )
 
         return description
 
-    def _save_upload_parameters(self, form_data, mapped_params,
-                                final_main_title, description):
+    def _save_upload_parameters(self, form_data, mapped_params, final_main_title, description):
         """
         保存上传参数到tmp目录，用于调试和测试
         """
@@ -260,23 +250,23 @@ class CrabptUploader(SpecialUploader):
                 if title:
                     # 清理文件名中的非法字符，限制长度为150
                     import re
-                    safe_title = re.sub(r'[\\/:*?"<>|]', '_', title)[:150]
+
+                    safe_title = re.sub(r'[\\/:*?"<>|]', "_", title)[:150]
                     torrent_dir = os.path.join(tmp_dir, safe_title)
                 else:
                     # 如果没有title，使用torrent文件名作为备选
-                    torrent_path = self.upload_data.get(
-                        "modified_torrent_path", "")
+                    torrent_path = self.upload_data.get("modified_torrent_path", "")
                     if torrent_path:
                         torrent_name = os.path.basename(torrent_path)
-                        if torrent_name.endswith('.torrent'):
+                        if torrent_name.endswith(".torrent"):
                             torrent_name = torrent_name[:-8]  # 移除 .torrent 扩展名
                         # 移除 .modified.时间戳 后缀
-                        if '.modified.' in torrent_name:
-                            torrent_name = torrent_name.split('.modified.')[0]
+                        if ".modified." in torrent_name:
+                            torrent_name = torrent_name.split(".modified.")[0]
                         # 清理文件名中的非法字符
                         import re
-                        torrent_name = re.sub(r'[\\/:*?"<>|]', '_',
-                                              torrent_name)
+
+                        torrent_name = re.sub(r'[\\/:*?"<>|]', "_", torrent_name)
                         torrent_dir = os.path.join(tmp_dir, torrent_name)
                     else:
                         torrent_dir = os.path.join(tmp_dir, "unknown_torrent")
@@ -297,19 +287,15 @@ class CrabptUploader(SpecialUploader):
                 "final_main_title": final_main_title,
                 "description": description,
                 "upload_data_summary": {
-                    "subtitle":
-                    self.upload_data.get("subtitle", ""),
-                    "imdb_link":
-                    self.upload_data.get("imdb_link", ""),
-                    "mediainfo_length":
-                    len(self.upload_data.get("mediainfo", "")),
-                    "modified_torrent_path":
-                    self.upload_data.get("modified_torrent_path", ""),
-                }
+                    "subtitle": self.upload_data.get("subtitle", ""),
+                    "imdb_link": self.upload_data.get("imdb_link", ""),
+                    "mediainfo_length": len(self.upload_data.get("mediainfo", "")),
+                    "modified_torrent_path": self.upload_data.get("modified_torrent_path", ""),
+                },
             }
 
             # 保存到文件
-            with open(filepath, 'w', encoding='utf-8') as f:
+            with open(filepath, "w", encoding="utf-8") as f:
                 json.dump(save_data, f, ensure_ascii=False, indent=2)
             logger.info(f"上传参数已保存到: {filepath}")
         except Exception as save_error:
@@ -324,8 +310,7 @@ class CrabptUploader(SpecialUploader):
         logger.info(f"正在为 {self.site_name} 站点适配上传参数...")
         try:
             # 1. 直接从 upload_data 中获取由 migrator 准备好的标准化参数
-            standardized_params = self.upload_data.get("standardized_params",
-                                                       {})
+            standardized_params = self.upload_data.get("standardized_params", {})
 
             # 添加回退和警告逻辑，以防 standardized_params 未被传递
             if not standardized_params:
@@ -341,6 +326,7 @@ class CrabptUploader(SpecialUploader):
 
             # 2. 从配置读取匿名上传设置
             from config import config_manager
+
             config = config_manager.get()
             upload_settings = config.get("upload_settings", {})
             anonymous_upload = upload_settings.get("anonymous_upload", True)
@@ -348,30 +334,23 @@ class CrabptUploader(SpecialUploader):
 
             # 准备完整的 form_data，包含 CrabPT 站点需要的所有参数
             form_data = {
-                "name":
-                final_main_title,
-                "small_descr":
-                self.upload_data.get("subtitle", ""),
-                "url":
-                self.upload_data.get("imdb_link", "") or "",
-                "descr":
-                description,
-                "technical_info":
-                self.upload_data.get("mediainfo", ""),
-                "uplver":
-                uplver_value,  # 根据配置设置匿名上传
+                "name": final_main_title,
+                "small_descr": self.upload_data.get("subtitle", ""),
+                "url": self.upload_data.get("imdb_link", "") or "",
+                "descr": description,
+                "technical_info": self.upload_data.get("mediainfo", ""),
+                "uplver": uplver_value,  # 根据配置设置匿名上传
                 # 添加 CrabPT 站点可能需要的额外参数
-                "douban_link":
-                self.upload_data.get("douban_link", ""),
-                "original_main_title":
-                self.upload_data.get("original_main_title", ""),
+                "douban_link": self.upload_data.get("douban_link", ""),
+                "original_main_title": self.upload_data.get("original_main_title", ""),
                 **mapped_params,  # 合并子类映射的特殊参数
             }
 
             # 保存所有参数到文件用于调试和测试
             if os.getenv("UPLOAD_TEST_MODE") == "true":
-                self._save_upload_parameters(form_data, mapped_params,
-                                             final_main_title, description)
+                self._save_upload_parameters(
+                    form_data, mapped_params, final_main_title, description
+                )
 
             # 调用父类的execute_upload方法继续执行上传
             return super().execute_upload()
