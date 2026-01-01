@@ -120,13 +120,17 @@
 
 # 更新日志
 
+### v3.4.2（2026.01.02）
+
+- 修复：蟹黄堡的 h264、h265 映射错误
+
 ### v3.4.1（2026.01.02）
 
 - 修复：一站多种里获取的种子记录无法随着种子位置移动而改变
 
 ### v3.4.0（2025.12.31）
 
-> **2025 年最后一次更新，拜拜了您嘞！**
+> **2025年最后一次更新，拜拜了您嘞！**
 
 - 新增：转种目标站点-猫站、包子
 - 新增：从 mediainfo 提取音频编码参数与 HDR 参数
@@ -148,7 +152,7 @@
 
 ### v3.3.3（2025.12.17）
 
-- 修改：longpt 龙宝发种有问题，暂时屏蔽（有空修）
+- 修改：longpt龙宝发种有问题，暂时屏蔽（有空修）
 
 ### v3.3.2（2025.12.17）
 
@@ -159,13 +163,13 @@
 
 ### v3.3.1（2025.12.16）
 
-- 修复：UHD BluRay Remux 无法识别为 Remux、TrueHD 7.1 Atmos 无法识别为 TrueHD Atmos 的问题
+- 修复：UHD BluRay Remux无法识别为Remux、TrueHD 7.1 Atmos无法识别为TrueHD Atmos的问题
 
 ### v3.3.0（2025.12.15）
 
 > **注:若报错“ModuleNotFoundError: No module named 'PIL'”则需要重新下载镜像进行更新，如仍然报错则删除 data 目录下的 updates 文件夹。
-> 13City 限速 12.5MB/s，代码不会修改非 0 的限速，需要手动修改。
-> 盒子获取 bdinfo 需要重新执行 curl -sL https://github.com/sqing33/Docker.pt-nexus/releases/download/latest/install-pt-nexus-box-proxy.sh | sudo bash 以更新盒子端脚本。**
+13City限速12.5MB/s，代码不会修改非0的限速，需要手动修改。
+盒子获取 bdinfo 需要重新执行 curl -sL https://github.com/sqing33/Docker.pt-nexus/releases/download/latest/install-pt-nexus-box-proxy.sh | sudo bash 以更新盒子端脚本。**
 
 - 修复：“ModuleNotFoundError: No module named 'PIL'”报错
 - 修复：青蛙、三月传媒主标题出现重复制作组的问题
@@ -186,7 +190,7 @@
 ### v3.2.3（2025.12.11）
 
 > **注：（需要更新 docker 镜像）新增环境变量 UPDATE_SOURCE，可选值 github 或 gitee，默认为 gitee，用于选择更新的源。
-> 盒子截图 png 需要重新执行 curl -sL https://github.com/sqing33/Docker.pt-nexus/releases/download/latest/install-pt-nexus-box-proxy.sh | sudo bash 以更新盒子端脚本。**
+盒子截图 png 需要重新执行 curl -sL https://github.com/sqing33/Docker.pt-nexus/releases/download/latest/install-pt-nexus-box-proxy.sh | sudo bash 以更新盒子端脚本。**
 
 - 修复：数据库迁移错误
 - 修复：标题参数 DTS 无法正确识别
@@ -210,29 +214,29 @@
 
 ### v3.2.0（2025.11.30）
 
-> **注：QB 下载器使用 api 现成的方法推送种子到下载器，TR 下载器需要映射本地种子目录
-> 下载器设置里从左到右排序，在 docker compose 映射第一个 tr 到/data/tr_torrents/tr1，第二个映射到/data/tr_torrents/tr2
-> 例：- /vol1/1000/Docker/transmission/torrents:/data/tr_torrents/tr1**
+> **注：QB下载器使用api现成的方法推送种子到下载器，TR下载器需要映射本地种子目录
+下载器设置里从左到右排序，在docker compose映射第一个tr到/data/tr_torrents/tr1，第二个映射到/data/tr_torrents/tr2
+例：- /vol1/1000/Docker/transmission/torrents:/data/tr_torrents/tr1**
 
 - 新增：暂停本地种子，然添加到盒子进行下载，用于多站转种。（一站多种-转种-上盒）
 
 ### v3.1.6（2025.11.29）
 
 > **注：杜比发种需要获取 rsskey，在设置-站点管理填写
-> 杜比作为源站点有时候会因为 2fa 的问题而获取失败，需要浏览器打开站点过一遍 2fa 再尝试（玄学）**
+杜比作为源站点有时候会因为 2fa 的问题而获取失败，需要浏览器打开站点过一遍 2fa 再尝试（玄学）**
 
 - 新增：转种目标站点-杜比
 - 优化：通过 passkey 获取 HDtime 的种子推送到下载器
 
 ### v3.1.5（2025.11.27）
 
-> **注：月月、彩虹岛、天空种子详情页没有禁转/限转的提示，目前使用的方案是使用搜索功能准确获取种子列表页面提取禁转/限转标签，每个种子会出现至少 2 次请求。
-> 因为我堡的每小时请求次数有严格限制，目前仅可作为一种多站的源站点（获取信息后不影响批量转种）**
+> **注：月月、彩虹岛、天空种子详情页没有禁转/限转的提示，目前使用的方案是使用搜索功能准确获取种子列表页面提取禁转/限转标签，每个种子会出现至少2次请求。
+因为我堡的每小时请求次数有严格限制，目前仅可作为一种多站的源站点（获取信息后不影响批量转种）**
 
 - 修复：ptgen 查询到错误影片，更换了 ptgen 后端
 - 修复：憨憨、家园提取参数错误，补充映射参数
 - 优化：一种多站在获取种子信息的时候出现错误的提示
-  （遇到问题找我请携带错误信息截图或者 Docker 日志截图）
+（遇到问题找我请携带错误信息截图或者 Docker 日志截图）
 - 新增：转种源站点-月月、彩虹岛、天空、我堡
 - 新增：转种目标站点-朱雀
 
@@ -244,7 +248,7 @@
 
 - 修复：织梦作为源站点提取纪录片类型出错的问题
 - 新增：一站多种获取种子信息可以筛选有无源站点
-- 新增：一种多站获取失败的时候自动重试 2 次
+- 新增：一种多站获取失败的时候自动重试2次
 - 新增：一站多种获取种子的时候如果第一优先级站点获取错误则自动尝试后续站点
 
 ### v3.1.2（2025.11.17）
