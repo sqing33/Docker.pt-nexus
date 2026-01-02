@@ -4017,6 +4017,33 @@ const nextButtonTooltipContent = computed(() => {
 })
 
 // 辅助函数：检查是否为有效的 MediaInfo 格式
+// 辅助函数：检查是否包含禁止模式
+const _hasForbiddenPatterns = (text: string): boolean => {
+  const forbiddenPatterns = [
+    // BBCode 标签
+    { pattern: /\[b\]/, description: 'BBCode粗体标签' },
+    { pattern: /\[color=[^\]]+\]/, description: 'BBCode颜色标签' },
+    { pattern: /\[size=[^\]]+\]/, description: 'BBCode大小标签' },
+    { pattern: /\[\/[^\]]+\]/, description: 'BBCode结束标签' },
+    { pattern: /\[\/?[a-zA-Z]+(=[^\]]+)?\]/, description: 'BBCode通用标签' },
+
+    // 特殊符号
+    { pattern: /★{2,}/, description: '连续的星星符号' },
+    { pattern: /。{3,}/, description: '连续的中文句号' },
+    { pattern: /…{2,}/, description: '连续的省略号' },
+    { pattern: /……{2,}/, description: '连续的中文省略号' },
+  ]
+
+  for (const { pattern, description } of forbiddenPatterns) {
+    if (pattern.test(text)) {
+      console.log(`检测到禁止模式: ${description}`)
+      return true
+    }
+  }
+  return false
+}
+
+// 辅助函数：检查是否为有效的 MediaInfo 格式
 const _isValidMediainfo = (text: string): boolean => {
   const standardMediainfoKeywords = [
     'General',
@@ -4030,7 +4057,16 @@ const _isValidMediainfo = (text: string): boolean => {
   ]
 
   const matches = standardMediainfoKeywords.filter((keyword) => text.includes(keyword))
-  return matches.length >= 3 // 至少匹配3个关键字才认为是有效的MediaInfo
+  if (matches.length < 3) {
+    return false
+  }
+
+  // 关键字验证通过后，检查禁止模式
+  if (_hasForbiddenPatterns(text)) {
+    return false
+  }
+
+  return true
 }
 
 // 辅助函数：检查是否为有效的 BDInfo 格式
@@ -4055,10 +4091,20 @@ const _isValidBDInfo = (text: string): boolean => {
   const optionalMatches = bdInfoOptionalKeywords.filter((keyword) => text.includes(keyword)).length
 
   // 必须所有必要关键字都存在，或者至少有1个必要关键字且2个以上可选关键字
-  return (
+  const hasRequiredKeywords =
     requiredMatches === bdInfoRequiredKeywords.length ||
     (requiredMatches >= 1 && optionalMatches >= 2)
-  )
+
+  if (!hasRequiredKeywords) {
+    return false
+  }
+
+  // 关键字验证通过后，检查禁止模式
+  if (_hasForbiddenPatterns(text)) {
+    return false
+  }
+
+  return true
 }
 
 // 检查截图有效性
