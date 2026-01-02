@@ -780,7 +780,7 @@
     "special_tracker_domain": null,
     "group": "AFWEB",
     "migration": 2,
-    "speed_limit": 5
+    "speed_limit": 120
   },
   {
     "site": "hspt",

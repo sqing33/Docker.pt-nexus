@@ -47,6 +47,7 @@ source_parsers:
       "UHD Blu-ray": "medium.uhd_bluray"
       "Blu-ray": "medium.bluray"
       "Other": "medium.other"
+      "UHD Blu-ray Remux": "medium.uhd_bluray_remux"
 
     video_codec:
       "H.264/AVC": "video.h264"
@@ -60,6 +61,9 @@ source_parsers:
       "FLAC": "audio.flac"
       "APE": "audio.ape"
       "DTS": "audio.dts"
+      "DTS-HD MA": "audio.dts_hd_ma"
+      "DTS:X": "audio.dtsx"
+      "DTS-HD": "audio.dts_hd"
       "MP3": "audio.mp3"
       "OGG": "audio.ogg"
       "AAC": "audio.aac"
@@ -67,6 +71,10 @@ source_parsers:
       "M4A": "audio.m4a"
       "TrueHD Atmos": "audio.truehd_atmos"
       "DDP": "audio.ddp"
+      "LPCM": "audio.lpcm"
+      "WAV": "audio.wav"
+      "ALAC": "audio.alac"
+      "AC3": "audio.ac3"
 
     resolution:
       "2K/1440p/1440i": "resolution.r1440p"
@@ -111,6 +119,7 @@ mappings:
     "medium.uhd_bluray": "2"
     "medium.bluray": "1"
     "medium.other": "10"
+    "medium.uhd_bluray_remux": "11"
     "default": "10"
 
   video_codec:
@@ -126,6 +135,7 @@ mappings:
     "audio.flac": "1"
     "audio.ape": "2"
     "audio.dts": "3"
+    "audio.dts_hd_ma": "3"
     "audio.mp3": "4"
     "audio.ogg": "5"
     "audio.aac": "6"
@@ -133,6 +143,12 @@ mappings:
     "audio.m4a": "8"
     "audio.truehd_atmos": "9"
     "audio.ddp": "10"
+    "audio.lpcm": "14"
+    "audio.wav": "17"
+    "audio.alac": "16"
+    "audio.ac3": "15"
+    "audio.dtsx": "12"
+    "audio.dts_hd": "13"
     "default": "7"
 
   resolution:
@@ -162,6 +178,9 @@ mappings:
     "tag.国语": 5
     "tag.中字": 6
     "tag.HDR": 7
+    "tag.高码": 15
+    "tag.臻彩MAX": 14
+    "tag.高分": 13
     "tag.分集": 12
     "tag.特效": 11
     "tag.杜比": 10
