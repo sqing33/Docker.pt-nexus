@@ -186,6 +186,7 @@ def validate_media_info_format(mediaInfo: str):
 
         mediainfo_keywords = config.get("content_filtering", {}).get("mediainfo_keywords", {})
         bdinfo_keywords = config.get("content_filtering", {}).get("bdinfo_keywords", {})
+        forbidden_patterns_list = config.get("content_filtering", {}).get("forbidden_patterns", [])
 
         mediainfo_required = mediainfo_keywords.get("required", [])
         mediainfo_optional = mediainfo_keywords.get("optional", [])
@@ -211,6 +212,7 @@ def validate_media_info_format(mediaInfo: str):
             "Language",
             "Description",
         ]
+        forbidden_patterns_list = []
 
     # 验证 MediaInfo 格式
     mediainfo_required_matches = sum(1 for keyword in mediainfo_required if keyword in mediaInfo)
@@ -227,6 +229,20 @@ def validate_media_info_format(mediaInfo: str):
     is_bdinfo = (len(bdinfo_required) > 0 and bdinfo_required_matches == len(bdinfo_required)) or (
         bdinfo_required_matches >= 1 and bdinfo_optional_matches >= 2
     )
+
+    # 检查禁止模式（只在关键字验证通过后才检查）
+    if is_mediainfo or is_bdinfo:
+        for pattern_item in forbidden_patterns_list:
+            pattern = pattern_item.get("pattern", "")
+            if pattern:
+                try:
+                    if re.search(pattern, mediaInfo):
+                        description = pattern_item.get("description", pattern)
+                        print(f"检测到禁止模式: {description}")
+                        # 如果检测到禁止模式，返回无效
+                        return (False, False, 0, 0, 0, 0)
+                except re.error as e:
+                    print(f"正则表达式错误: {pattern}, 错误: {e}")
 
     return (
         is_mediainfo,

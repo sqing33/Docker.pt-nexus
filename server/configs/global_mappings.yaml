@@ -984,6 +984,31 @@ content_filtering:
       - "Language"
       - "Description"
 
+  # MediaInfo/BDInfo 禁止出现的模式（用于检测无效格式）
+  # 如果文本中包含这些模式，即使关键字匹配也会被判定为无效
+  forbidden_patterns:
+    # BBCode 标签
+    - pattern: "\\[b\\]"
+      description: "BBCode粗体标签"
+    - pattern: "\\[color=[^\\]]+\\]"
+      description: "BBCode颜色标签"
+    - pattern: "\\[size=[^\\]]+\\]"
+      description: "BBCode大小标签"
+    - pattern: "\\[\\/[^\\]]+\\]"
+      description: "BBCode结束标签"
+    - pattern: "\\[\\/?[a-zA-Z]+(=[^\\]]+)?\\]"
+      description: "BBCode通用标签"
+
+    # 特殊符号
+    - pattern: "★{2,}"
+      description: "连续的星星符号"
+    - pattern: "。{3,}"
+      description: "连续的中文句号"
+    - pattern: "…{2,}"
+      description: "连续的省略号"
+    - pattern: "……{2,}"
+      description: "连续的中文省略号"
+
   # 技术参数quote检测规则
   technical_params_detection:
     # 包含这些组合的quote会被识别为技术参数并过滤
