@@ -4025,7 +4025,6 @@ const _hasForbiddenPatterns = (text: string): boolean => {
     { pattern: /\[color=[^\]]+\]/, description: 'BBCode颜色标签' },
     { pattern: /\[size=[^\]]+\]/, description: 'BBCode大小标签' },
     { pattern: /\[\/[^\]]+\]/, description: 'BBCode结束标签' },
-    { pattern: /\[\/?[a-zA-Z]+(=[^\]]+)?\]/, description: 'BBCode通用标签' },
 
     // 特殊符号
     { pattern: /★{2,}/, description: '连续的星星符号' },
