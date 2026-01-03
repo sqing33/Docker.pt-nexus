@@ -1,6 +1,11 @@
 {
   "history": [
     {
+      "version": "v3.4.5",
+      "date": "2026.01.03",
+      "changes": ["修复：部分正确的 mediainfo 和 bdinfo 无法通过格式校验"]
+    },
+    {
       "version": "v3.4.4",
       "date": "2026.01.02",
       "changes": ["修复：13City 的 音频编码 DD/AC3 错误映射到 DDP/EAC3"]
