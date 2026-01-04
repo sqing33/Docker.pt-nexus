@@ -189,6 +189,10 @@ def get_downloaders_with_paths():
             downloader_name = downloader.get("name", "未知")
             path_mappings = downloader.get("path_mappings", [])
 
+            # 检查是否为远程下载器
+            proxy_config = _get_downloader_proxy_config(downloader_id)
+            is_remote = proxy_config is not None
+
             # 查询该下载器的所有唯一路径
             ph = db_manager.get_placeholder()
             cursor.execute(
@@ -230,10 +234,34 @@ def get_downloaders_with_paths():
                             paths_set[mapped_path] += count
 
             # 转换为列表格式
-            paths = [{
-                "path": path,
-                "count": count
-            } for path, count in sorted(paths_set.items())]
+            paths = []
+            for path, count in sorted(paths_set.items()):
+                # 对于本地下载器，检查路径是否存在
+                if not is_remote:
+                    # 将远程路径映射到本地路径进行检查
+                    local_path = path
+                    for mapping in path_mappings:
+                        remote = mapping.get("remote", "").rstrip("/")
+                        local = mapping.get("local", "").rstrip("/")
+                        if remote and local:
+                            if path == remote or path.startswith(remote + "/"):
+                                local_path = path.replace(remote, local, 1)
+                                break
+
+                    # 检查路径是否存在
+                    if os.path.exists(local_path):
+                        paths.append({
+                            "path": path,
+                            "count": count
+                        })
+                    else:
+                        logger.info(f"路径不存在，已过滤: {path} (本地路径: {local_path})")
+                else:
+                    # 对于远程下载器，直接返回所有路径
+                    paths.append({
+                        "path": path,
+                        "count": count
+                    })
 
             if paths:
                 result.append({

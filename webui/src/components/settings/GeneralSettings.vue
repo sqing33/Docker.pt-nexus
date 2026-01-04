@@ -434,7 +434,6 @@
                   v-model="uploadForm.anonymous_upload"
                   active-text="启用匿名"
                   inactive-text="禁用匿名"
-                  size="large"
                 />
               </div>
             </el-form-item>
@@ -511,28 +510,20 @@
           <el-form :model="tagsForm" label-position="top" class="settings-form">
             <!-- 第一行：标签开关 + 分类开关 -->
             <el-form-item label="" class="form-item">
-              <div style="display: flex; align-items: center; gap: 30px; padding: 15px 0">
+              <div style="display: flex; align-items: center; gap: 30px">
                 <div style="display: flex; align-items: center; gap: 12px">
                   <el-icon size="20">
                     <Collection />
                   </el-icon>
                   <span style="font-weight: 500; font-size: 14px">标签</span>
-                  <el-switch
-                    v-model="tagsForm.tags.enabled"
-                    size="large"
-                    @change="autoSaveTagsSettings"
-                  />
+                  <el-switch v-model="tagsForm.tags.enabled" @change="autoSaveTagsSettings" />
                 </div>
                 <div style="display: flex; align-items: center; gap: 12px">
                   <el-icon size="20">
                     <FolderOpened />
                   </el-icon>
                   <span style="font-weight: 500; font-size: 14px">分类</span>
-                  <el-switch
-                    v-model="tagsForm.category.enabled"
-                    size="large"
-                    @change="autoSaveTagsSettings"
-                  />
+                  <el-switch v-model="tagsForm.category.enabled" @change="autoSaveTagsSettings" />
                 </div>
               </div>
             </el-form-item>
@@ -543,11 +534,11 @@
 
               <!-- 第三行：输入框 + 添加标签按钮 -->
               <el-form-item label="" class="form-item">
-                <div style="display: flex; align-items: center; gap: 10px; width: 100%">
+                <div style="display: flex; align-items: center; gap: 10px">
                   <el-input
                     v-model="newTagInput"
                     placeholder="输入新标签"
-                    style="flex: 1"
+                    style="height: 32px; width: 200px"
                     @keyup.enter="addCustomTag"
                   />
                   <el-button type="primary" size="small" @click="addCustomTag">
@@ -558,61 +549,39 @@
 
               <!-- 第四行：标签列表 -->
 
-                            <el-form-item label="" class="form-item">
+              <el-form-item label="" class="form-item">
+                <div
+                  v-if="tagsForm.tags.tags.length > 0"
+                  style="display: flex; flex-wrap: wrap; gap: 8px"
+                >
+                  <el-tag
+                    v-for="(tag, index) in tagsForm.tags.tags"
+                    :key="index"
+                    closable
+                    @close="removeCustomTag(index)"
+                    size="small"
+                  >
+                    {{ tag }}
+                  </el-tag>
+                </div>
+              </el-form-item>
+            </template>
 
-                              <div
-
-                                v-if="tagsForm.tags.tags.length > 0"
-
-                                style="display: flex; flex-wrap: wrap; gap: 8px"
-
-                              >
-
-                                <el-tag
-
-                                  v-for="(tag, index) in tagsForm.tags.tags"
-
-                                  :key="index"
-
-                                  closable
-
-                                  @close="removeCustomTag(index)"
-
-                                  size="small"
-
-                                >
-
-                                  {{ tag }}
-
-                                </el-tag>
-
-                              </div>
-
-                            </el-form-item>
-
-                          </template>
-
-              
-
-                          <template v-if="tagsForm.category.enabled">
+            <template v-if="tagsForm.category.enabled">
               <!-- 第五行：自定义分类文字 -->
               <el-form-item label="自定义分类" class="form-item" style="margin: 0"> </el-form-item>
 
               <!-- 第七行：分类选择 -->
               <el-form-item class="form-item">
-                <div style="display: flex; align-items: center; gap: 10px; width: 100%">
+                <div style="display: flex; align-items: center; gap: 10px">
                   <el-input
                     v-model="tagsForm.category.category"
                     placeholder="输入分类名称"
                     size="small"
                     clearable
-                    style="flex: 1"
+                    style="height: 32px; width: 200px"
                   />
-                  <el-button
-                    type="primary"
-                    size="small"
-                    @click="autoSaveTagsSettings"
-                  >
+                  <el-button type="primary" size="small" @click="autoSaveTagsSettings">
                     保存
                   </el-button>
                 </div>
@@ -625,10 +594,9 @@
               <el-icon size="12">
                 <InfoFilled />
               </el-icon>
-              启用标签功能后，转种完成时会自动为种子添加标签<br />
+              启用标签与分类功能后，会自动为种子添加标签与分类<br />
               默认添加"站点/{站点名称}"和"PT Nexus"标签<br />
-              自定义标签：可以为转种的种子添加自定义标签<br />
-              分类：qBittorrent 支持一个分类，Transmission 将分类添加到标签中
+              自定义标签：可以为转种的种子添加自定义标签
             </el-text>
           </el-form>
         </div>
