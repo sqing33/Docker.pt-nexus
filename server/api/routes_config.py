@@ -167,3 +167,45 @@ def save_cross_seed_review_filter():
     except Exception as e:
         logging.error(f"保存转种数据检查状态筛选配置失败: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@bp_config.route('/api/config/tags', methods=['GET'])
+def get_tags_config():
+    """获取标签配置"""
+    try:
+        config = config_manager.get()
+        tags_config = config.get('tags_config', {
+            'category': {'enabled': True, 'category': ''},
+            'tags': {'enabled': True, 'tags': ["PT Nexus", "站点/{站点名称}"]},
+        })
+        return jsonify({'success': True, 'data': tags_config})
+    except Exception as e:
+        logging.error(f"获取标签配置失败: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@bp_config.route('/api/config/tags', methods=['POST'])
+def save_tags_config():
+    """保存标签配置"""
+    try:
+        data = request.get_json()
+
+        # 获取当前配置
+        config = config_manager.get()
+
+        # 更新标签配置
+        config['tags_config'] = {
+            'category': data.get('category', {'enabled': True, 'category': ''}),
+            'tags': data.get('tags', {'enabled': True, 'tags': ["PT Nexus", "站点/{站点名称}"]})
+        }
+
+        # 保存配置
+        if config_manager.save(config):
+            logging.info(f"标签配置已保存: {config['tags_config']}")
+            return jsonify({'success': True, 'message': '标签配置已保存'})
+        else:
+            return jsonify({'success': False, 'message': '保存配置文件失败'}), 500
+
+    except Exception as e:
+        logging.error(f"保存标签配置失败: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500

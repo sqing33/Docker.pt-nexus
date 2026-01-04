@@ -1,6 +1,11 @@
 {
   "history": [
     {
+      "version": "v3.4.6",
+      "date": "2026.01.05",
+      "changes": ["新增：添加种子到下载器设置默认的标签与分类"]
+    },
+    {
       "version": "v3.4.5",
       "date": "2026.01.03",
       "changes": ["修复：部分正确的 mediainfo 和 bdinfo 无法通过格式校验"]

@@ -18,7 +18,7 @@
               </el-icon>
               临时密码-请立即修改
             </el-tag>
-          </div> 
+          </div>
           <el-button type="primary" :loading="loading" @click="onSubmit" size="small">
             保存
           </el-button>
@@ -295,20 +295,16 @@
             </el-icon>
             <h3>图床设置</h3>
           </div>
-          <el-button
-            type="primary"
-            @click="saveCrossSeedSettings"
-            :loading="savingCrossSeed"
-            size="small"
-          >
-            保存
-          </el-button>
         </div>
 
         <div class="card-content">
           <el-form :model="settingsForm" label-position="top" class="settings-form">
             <el-form-item label="截图图床" class="form-item">
-              <el-select v-model="settingsForm.image_hoster" placeholder="请选择图床服务">
+              <el-select
+                v-model="settingsForm.image_hoster"
+                placeholder="请选择图床服务"
+                @change="autoSaveCrossSeedSettings"
+              >
                 <el-option
                   v-for="item in imageHosterOptions"
                   :key="item.value"
@@ -338,6 +334,7 @@
                       v-model="settingsForm.agsv_email"
                       placeholder="请输入邮箱"
                       size="small"
+                      @blur="autoSaveCrossSeedSettings"
                     />
                   </el-form-item>
 
@@ -348,6 +345,7 @@
                       placeholder="请输入密码"
                       show-password
                       size="small"
+                      @blur="autoSaveCrossSeedSettings"
                     />
                   </el-form-item>
                 </div>
@@ -374,14 +372,6 @@
             </el-icon>
             <h3>默认下载器设置</h3>
           </div>
-          <el-button
-            type="primary"
-            @click="saveCrossSeedSettings"
-            :loading="savingCrossSeed"
-            size="small"
-          >
-            保存
-          </el-button>
         </div>
 
         <div class="card-content">
@@ -391,6 +381,7 @@
                 v-model="settingsForm.default_downloader"
                 placeholder="请选择默认下载器"
                 clearable
+                @change="autoSaveCrossSeedSettings"
               >
                 <el-option label="使用源种子所在的下载器" value="" />
                 <el-option
@@ -496,8 +487,148 @@
               </el-icon>
               启用后，发布种子时将使用匿名模式，不显示上传者信息<br />
               配置财神 PTGen API Token 后，优先使用该API获取影片信息<br />
-              财神 PTGen API 每日限量 100次<br />
+              财神 PTGen API 每日限量 100+ 次，上限随等级提升<br />
               使用完会自动切换内置的其他 PTGen API
+            </el-text>
+          </el-form>
+        </div>
+      </div>
+
+      <!-- 下载器标签/分类设置卡片 -->
+      <div
+        class="settings-card glass-card glass-rounded glass-transparent-header glass-transparent-body"
+      >
+        <div class="card-header">
+          <div class="header-content">
+            <el-icon class="header-icon">
+              <Collection />
+            </el-icon>
+            <h3>下载器标签/分类设置</h3>
+          </div>
+        </div>
+
+        <div class="card-content">
+          <el-form :model="tagsForm" label-position="top" class="settings-form">
+            <!-- 第一行：标签开关 + 分类开关 -->
+            <el-form-item label="" class="form-item">
+              <div style="display: flex; align-items: center; gap: 30px; padding: 15px 0">
+                <div style="display: flex; align-items: center; gap: 12px">
+                  <el-icon size="20">
+                    <Collection />
+                  </el-icon>
+                  <span style="font-weight: 500; font-size: 14px">标签</span>
+                  <el-switch
+                    v-model="tagsForm.tags.enabled"
+                    size="large"
+                    @change="autoSaveTagsSettings"
+                  />
+                </div>
+                <div style="display: flex; align-items: center; gap: 12px">
+                  <el-icon size="20">
+                    <FolderOpened />
+                  </el-icon>
+                  <span style="font-weight: 500; font-size: 14px">分类</span>
+                  <el-switch
+                    v-model="tagsForm.category.enabled"
+                    size="large"
+                    @change="autoSaveTagsSettings"
+                  />
+                </div>
+              </div>
+            </el-form-item>
+
+            <template v-if="tagsForm.tags.enabled">
+              <!-- 第二行：自定义标签文字 -->
+              <el-form-item label="自定义标签" class="form-item" style="margin: 0"> </el-form-item>
+
+              <!-- 第三行：输入框 + 添加标签按钮 -->
+              <el-form-item label="" class="form-item">
+                <div style="display: flex; align-items: center; gap: 10px; width: 100%">
+                  <el-input
+                    v-model="newTagInput"
+                    placeholder="输入新标签"
+                    style="flex: 1"
+                    @keyup.enter="addCustomTag"
+                  />
+                  <el-button type="primary" size="small" @click="addCustomTag">
+                    添加标签
+                  </el-button>
+                </div>
+              </el-form-item>
+
+              <!-- 第四行：标签列表 -->
+
+                            <el-form-item label="" class="form-item">
+
+                              <div
+
+                                v-if="tagsForm.tags.tags.length > 0"
+
+                                style="display: flex; flex-wrap: wrap; gap: 8px"
+
+                              >
+
+                                <el-tag
+
+                                  v-for="(tag, index) in tagsForm.tags.tags"
+
+                                  :key="index"
+
+                                  closable
+
+                                  @close="removeCustomTag(index)"
+
+                                  size="small"
+
+                                >
+
+                                  {{ tag }}
+
+                                </el-tag>
+
+                              </div>
+
+                            </el-form-item>
+
+                          </template>
+
+              
+
+                          <template v-if="tagsForm.category.enabled">
+              <!-- 第五行：自定义分类文字 -->
+              <el-form-item label="自定义分类" class="form-item" style="margin: 0"> </el-form-item>
+
+              <!-- 第七行：分类选择 -->
+              <el-form-item class="form-item">
+                <div style="display: flex; align-items: center; gap: 10px; width: 100%">
+                  <el-input
+                    v-model="tagsForm.category.category"
+                    placeholder="输入分类名称"
+                    size="small"
+                    clearable
+                    style="flex: 1"
+                  />
+                  <el-button
+                    type="primary"
+                    size="small"
+                    @click="autoSaveTagsSettings"
+                  >
+                    保存
+                  </el-button>
+                </div>
+              </el-form-item>
+            </template>
+
+            <div class="form-spacer"></div>
+
+            <el-text type="info" size="small" class="proxy-hint">
+              <el-icon size="12">
+                <InfoFilled />
+              </el-icon>
+              启用标签功能后，转种完成时会自动为种子添加标签<br />
+              默认添加"站点/{站点名称}"和"PT Nexus"标签<br />
+              自定义标签：可以为转种的种子添加自定义标签<br />
+              分类：qBittorrent 支持一个分类，Transmission 将分类添加到标签中
             </el-text>
           </el-form>
         </div>
@@ -525,34 +656,42 @@
       </div>
     </div>
   </div>
-<!-- 路径选择弹窗 -->
- <div><div>
-      <el-dialog
-        v-model="pathSelectorVisible"
-        title="选择IYUU查询路径"
-        width="600px"
-        top="50px"
-      >
-        <div v-loading="loadingPaths" style="min-height: 300px;">
-          <div v-if="!loadingPaths && availablePaths.length === 0" style="text-align: center; padding: 40px; color: var(--el-text-color-secondary);">
-            <el-icon style="font-size: 48px; margin-bottom: 16px; opacity: 0.5;">
+  <!-- 路径选择弹窗 -->
+  <div>
+    <div>
+      <el-dialog v-model="pathSelectorVisible" title="选择IYUU查询路径" width="600px" top="50px">
+        <div v-loading="loadingPaths" style="min-height: 300px">
+          <div
+            v-if="!loadingPaths && availablePaths.length === 0"
+            style="text-align: center; padding: 40px; color: var(--el-text-color-secondary)"
+          >
+            <el-icon style="font-size: 48px; margin-bottom: 16px; opacity: 0.5">
               <FolderOpened />
             </el-icon>
             <p>暂无可用的保存路径</p>
-            <el-button type="primary" @click="refreshPaths" style="margin-top: 16px;">
+            <el-button type="primary" @click="refreshPaths" style="margin-top: 16px">
               刷新路径列表
             </el-button>
           </div>
 
           <div v-else-if="availablePaths.length > 0">
-            <div style="margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
-              <span style="color: var(--el-text-color-regular);">
+            <div
+              style="
+                margin-bottom: 16px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+              "
+            >
+              <span style="color: var(--el-text-color-regular)">
                 已选择 {{ getSelectedLeafPaths().length }} / {{ availablePaths.length }} 个路径
               </span>
               <div>
                 <el-button size="small" @click="selectAllPaths">全选</el-button>
                 <el-button size="small" @click="clearAllPaths">清空</el-button>
-                <el-button size="small" @click="refreshPaths" :loading="loadingPaths">刷新</el-button>
+                <el-button size="small" @click="refreshPaths" :loading="loadingPaths"
+                  >刷新</el-button
+                >
               </div>
             </div>
 
@@ -574,14 +713,17 @@
         </div>
 
         <template #footer>
-          <div style="text-align: right;">
+          <div style="text-align: right">
             <el-button @click="pathSelectorVisible = false">取消</el-button>
-            <el-button type="primary" @click="saveSelectedPaths" :disabled="tempSelectedPaths.length === 0">
+            <el-button
+              type="primary"
+              @click="saveSelectedPaths"
+              :disabled="tempSelectedPaths.length === 0"
+            >
               确定选择 ({{ tempSelectedPaths.length }})
             </el-button>
           </div>
         </template>
-        
       </el-dialog>
     </div>
   </div>
@@ -606,6 +748,7 @@ import {
   Hide,
   Folder,
   FolderOpened,
+  Collection,
 } from '@element-plus/icons-vue'
 
 // 用户设置相关
@@ -692,7 +835,7 @@ const toggleShowIyuuToken = () => {
 const onIyuuTokenInput = (value: string) => {
   // 如果用户修改了内容，更新实际的token值
   // 检查是否全是星号（不管多少个）
-  const isAllStars = value.length > 0 && value.split('').every(char => char === '*')
+  const isAllStars = value.length > 0 && value.split('').every((char) => char === '*')
   if (!isAllStars) {
     actualIyuuToken.value = value
     iyuuForm.token = value
@@ -720,6 +863,118 @@ const uploadForm = reactive({
 // 打开财神PTGen网页获取Token
 const openCsptPtgenPage = () => {
   window.open('https://cspt.top/ptgen.php', '_blank')
+}
+
+// 标签设置相关
+const savingTags = ref(false)
+const tagsForm = reactive({
+  category: {
+    enabled: true,
+    category: '',
+  },
+  tags: {
+    enabled: true,
+    tags: ['PT Nexus', '站点/{站点名称}'],
+  },
+})
+
+// 新标签输入框的值
+const newTagInput = ref('')
+
+// 添加自定义标签
+const addCustomTag = () => {
+  const newTag = newTagInput.value
+  if (newTag && newTag.trim()) {
+    const trimmedTag = newTag.trim()
+    // 检查是否已存在
+    if (!tagsForm.tags.tags.includes(trimmedTag)) {
+      tagsForm.tags.tags.push(trimmedTag)
+      // 自动保存
+      autoSaveTagsSettings()
+      // 清空输入框
+      newTagInput.value = ''
+    } else {
+      ElMessage.warning('该标签已存在')
+    }
+  }
+}
+
+// 删除自定义标签
+const removeCustomTag = (index: number) => {
+  tagsForm.tags.tags.splice(index, 1)
+  // 自动保存
+  autoSaveTagsSettings()
+}
+
+// 保存标签设置
+const saveTagsSettings = async () => {
+  savingTags.value = true
+  try {
+    // 保存标签配置
+    const tagsConfig = {
+      enabled: tagsForm.enabled,
+      site_tags: tagsForm.site_tags,
+      content_tags: {
+        enabled: true,
+        sources: ['mediainfo', 'title', 'description'],
+      },
+      custom_tags: tagsForm.custom_tags,
+      merge_rules: tagsForm.merge_rules,
+    }
+
+    await axios.post('/api/config/tags', tagsConfig)
+    ElMessage.success('标签设置已保存！')
+
+    // 刷新配置以确保 UI 显示最新状态
+    await fetchSettings()
+  } catch (error: any) {
+    const errorMessage = error.response?.data?.message || '保存失败。'
+    ElMessage.error(errorMessage)
+  } finally {
+    savingTags.value = false
+  }
+}
+
+// 自动保存标签设置
+const autoSaveTagsSettings = async () => {
+  try {
+    // 保存标签配置
+    const tagsConfig = {
+      category: tagsForm.category,
+      tags: tagsForm.tags,
+    }
+
+    console.log('正在保存标签配置:', tagsConfig)
+    const response = await axios.post('/api/config/tags', tagsConfig)
+    console.log('保存结果:', response.data)
+    // 不显示成功消息，避免频繁提示
+  } catch (error: any) {
+    const errorMessage = error.response?.data?.message || '保存失败。'
+    console.error('保存失败:', errorMessage)
+    ElMessage.error(errorMessage)
+  }
+}
+
+// 自动保存转种设置
+const autoSaveCrossSeedSettings = async () => {
+  savingCrossSeed.value = true
+  try {
+    // 保存转种设置
+    const crossSeedSettings = {
+      image_hoster: settingsForm.image_hoster,
+      agsv_email: settingsForm.agsv_email,
+      agsv_password: settingsForm.agsv_password,
+      default_downloader: settingsForm.default_downloader,
+    }
+
+    await axios.post('/api/settings/cross_seed', crossSeedSettings)
+    // 不显示成功消息，避免频繁提示
+  } catch (error: any) {
+    const errorMessage = error.response?.data?.error || '保存失败。'
+    ElMessage.error(errorMessage)
+  } finally {
+    savingCrossSeed.value = false
+  }
 }
 
 // 获取所有设置
@@ -773,6 +1028,19 @@ const fetchSettings = async () => {
     // 获取财神ptgen token（从cross_seed配置中读取）
     if (config.cross_seed && config.cross_seed.cspt_ptgen_token) {
       uploadForm.cspt_ptgen_token = config.cross_seed.cspt_ptgen_token
+    }
+
+    // 获取标签设置
+    if (config.tags_config) {
+      // 使用深度复制，避免引用问题
+      if (config.tags_config.category) {
+        tagsForm.category.enabled = config.tags_config.category.enabled
+        tagsForm.category.category = config.tags_config.category.category
+      }
+      if (config.tags_config.tags) {
+        tagsForm.tags.enabled = config.tags_config.tags.enabled
+        tagsForm.tags.tags = config.tags_config.tags.tags || []
+      }
     }
 
     // 获取下载器列表
@@ -1092,7 +1360,7 @@ const selectAllPaths = () => {
     // 只选择叶子节点（完整路径）
     const leafPaths: string[] = []
     const traverse = (nodes: any[]) => {
-      nodes.forEach(node => {
+      nodes.forEach((node) => {
         if (!node.children || node.children.length === 0) {
           leafPaths.push(node.path)
         } else {

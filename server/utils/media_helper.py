@@ -301,6 +301,7 @@ def add_torrent_to_downloader(
     db_manager,
     config_manager,
     direct_download_url: str = "",
+    tags: list | None = None,
 ):
     """
     从种子详情页下载 .torrent 文件并添加到指定的下载器。
@@ -505,6 +506,9 @@ def add_torrent_to_downloader(
             api_config = _prepare_api_config(downloader_config)
             client_name = downloader_config["name"]
 
+            # 获取标签配置（在两个下载器代码块之前）
+            tags_config = config.get("tags_config", {})
+
             if downloader_config["type"] == "qbittorrent":
                 client = qbClient(**api_config)
                 client.auth_log_in()
@@ -516,6 +520,39 @@ def add_torrent_to_downloader(
                     "is_paused": False,
                     "skip_checking": True,
                 }
+
+                # 处理标签
+                final_tags = []
+                if tags:
+                    final_tags = tags
+
+                # 如果启用了标签功能，提取并合并标签
+                if tags_config.get("tags", {}).get("enabled", False):
+                    # 添加自定义标签
+                    tags_list = tags_config.get("tags", {}).get("tags", [])
+                    for tag in tags_list:
+                        # 检查是否是站点标签占位符
+                        if tag == "站点/{站点名称}":
+                            # 替换为实际的站点标签
+                            site_tag = f"站点/{site_info['nickname']}"
+                            if site_tag not in final_tags:
+                                final_tags.append(site_tag)
+                        else:
+                            # 添加普通自定义标签
+                            if tag and tag not in final_tags:
+                                final_tags.append(tag)
+
+                # 添加标签到 qBittorrent 参数
+                if final_tags:
+                    qb_params["tags"] = ",".join(final_tags)
+                    logging.info(f"准备添加标签: {', '.join(final_tags)}")
+
+                # 添加分类到 qBittorrent 参数
+                if tags_config.get("category", {}).get("enabled", False):
+                    category_name = tags_config.get("category", {}).get("category", "")
+                    if category_name and category_name.strip():
+                        qb_params["category"] = category_name.strip()
+                        logging.info(f"准备添加分类: {category_name}")
 
                 # 如果站点设置了速度限制，则添加速度限制参数
                 # 数据库中存储的是MB/s，需要转换为bytes/s传递给下载器API
@@ -538,6 +575,39 @@ def add_torrent_to_downloader(
                     "download_dir": save_path,
                     "paused": False,
                 }
+
+                # 处理标签
+                final_tags = []
+                if tags:
+                    final_tags = tags
+
+                # 如果启用了标签功能，提取并合并标签
+                if tags_config.get("tags", {}).get("enabled", False):
+                    # 添加自定义标签
+                    tags_list = tags_config.get("tags", {}).get("tags", [])
+                    for tag in tags_list:
+                        # 检查是否是站点标签占位符
+                        if tag == "站点/{站点名称}":
+                            # 替换为实际的站点标签
+                            site_tag = f"站点/{site_info['nickname']}"
+                            if site_tag not in final_tags:
+                                final_tags.append(site_tag)
+                        else:
+                            # 添加普通自定义标签
+                            if tag and tag not in final_tags:
+                                final_tags.append(tag)
+
+                    # 如果设置了分类，将分类添加到标签中（Transmission 只有标签，没有分类）
+                    if tags_config.get("category", {}).get("enabled", False):
+                        category_name = tags_config.get("category", {}).get("category", "")
+                        if category_name and category_name.strip() and category_name.strip() not in final_tags:
+                            final_tags.append(category_name.strip())
+                            logging.info(f"将分类 '{category_name}' 添加到标签中")
+
+                # 如果有标签，添加到参数中
+                if final_tags:
+                    tr_params["labels"] = final_tags
+                    logging.info(f"准备添加标签: {', '.join(final_tags)}")
 
                 # 先添加种子
                 result = client.add_torrent(**tr_params)
@@ -588,6 +658,20 @@ def add_torrent_to_downloader(
                 return False, msg
 
 
+
+
+def _apply_tag_rules(tags: list, rules: dict) -> list:
+    """应用标签合并规则"""
+    # 去重
+    if rules.get("deduplication", True):
+        tags = list(set(tags))
+
+    # 限制数量
+    max_tags = rules.get("max_tags", 20)
+    if len(tags) > max_tags:
+        tags = tags[:max_tags]
+
+    return tags
 
 
 def extract_tags_from_description(description_text: str) -> list:

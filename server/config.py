@@ -41,28 +41,18 @@ class ConfigManager:
         return {
             "downloaders": [],
             "realtime_speed_enabled": True,
-            "auth": {
-                "username": "admin",
-                "password_hash": "",
-                "must_change_password": True
-            },
-            "cookiecloud": {
-                "url": "",
-                "key": "",
-                "e2e_password": ""
-            },
+            "auth": {"username": "admin", "password_hash": "", "must_change_password": True},
+            "cookiecloud": {"url": "", "key": "", "e2e_password": ""},
             "cross_seed": {
                 "image_hoster": "pixhost",
                 # [新增] 为 SeedVault (agsvpic) 添加配置字段
                 "seedvault_email": "",
                 "seedvault_password": "",
                 # [新增] 默认下载器设置
-                "default_downloader": ""
+                "default_downloader": "",
             },
             # --- [新增] 上传设置 ---
-            "upload_settings": {
-                "anonymous_upload": True  # 默认启用匿名上传
-            },
+            "upload_settings": {"anonymous_upload": True},  # 默认启用匿名上传
             # --- [新增] 下载器队列设置 ---
             "downloader_queue": {
                 "enabled": True,
@@ -72,7 +62,7 @@ class ConfigManager:
                 "retry_delay_base": 2,  # 重试延迟基数（秒），指数退避
                 "max_retry_delay": 60,  # 最大重试延迟（秒）
                 "task_cleanup_hours": 24,  # 任务记录清理时间（小时）
-                "queue_monitor_interval": 30  # 队列监控间隔（秒）
+                "queue_monitor_interval": 30,  # 队列监控间隔（秒）
             },
             # --- [新增] 为前端 UI 添加默认设置 ---
             "ui_settings": {
@@ -87,9 +77,9 @@ class ConfigManager:
                         "siteExistence": "all",
                         "siteNames": [],
                         "downloaderIds": [],
-                    }
+                    },
                 },
-                "background_url": ""
+                "background_url": "",
             },
             # --- [新增] IYUU Token 设置 ---
             "iyuu_token": "",
@@ -97,18 +87,19 @@ class ConfigManager:
             "iyuu_settings": {
                 "query_interval_hours": 72,
                 "auto_query_enabled": True,
-                "tmp_dir": TEMP_DIR
+                "tmp_dir": TEMP_DIR,
             },
             # --- [新增] 源站点优先级设置 ---
             "source_priority": [],
             # --- [新增] 批量获取筛选条件设置 ---
-            "batch_fetch_filters": {
-                "paths": [],
-                "states": [],
-                "downloaderIds": []
-            },
+            "batch_fetch_filters": {"paths": [], "states": [], "downloaderIds": []},
             # --- [新增] 已删除的站点列表 ---
-            "deleted_sites": []
+            "deleted_sites": [],
+            # --- [新增] 标签设置 ---
+            "tags_config": {
+                "category": {"enabled": True, "category": "PT Nexus"},
+                "tags": {"enabled": True, "tags": ["PT Nexus", "站点/{站点名称}"]},
+            },
         }
 
     def load(self):
@@ -127,8 +118,7 @@ class ConfigManager:
 
                 # --- 确保旧配置平滑迁移 ---
                 if "realtime_speed_enabled" not in self._config:
-                    self._config["realtime_speed_enabled"] = default_conf[
-                        "realtime_speed_enabled"]
+                    self._config["realtime_speed_enabled"] = default_conf["realtime_speed_enabled"]
 
                 if "cookiecloud" not in self._config:
                     self._config["cookiecloud"] = default_conf["cookiecloud"]
@@ -148,9 +138,9 @@ class ConfigManager:
                     self._config["ui_settings"] = default_conf["ui_settings"]
                 elif "torrents_view" not in self._config["ui_settings"]:
                     # 如果 ui_settings 已存在但缺少 torrents_view，也进行补充
-                    self._config["ui_settings"][
-                        "torrents_view"] = default_conf["ui_settings"][
-                            "torrents_view"]
+                    self._config["ui_settings"]["torrents_view"] = default_conf["ui_settings"][
+                        "torrents_view"
+                    ]
 
                 # --- [新增] IYUU Token 配置兼容 ---
                 if "iyuu_token" not in self._config:
@@ -158,21 +148,17 @@ class ConfigManager:
 
                 # --- [新增] IYUU 功能设置兼容 ---
                 if "iyuu_settings" not in self._config:
-                    self._config["iyuu_settings"] = default_conf[
-                        "iyuu_settings"]
+                    self._config["iyuu_settings"] = default_conf["iyuu_settings"]
                 else:
                     # 如果已有 iyuu_settings，检查是否缺少新字段
-                    if "query_interval_hours" not in self._config[
-                            "iyuu_settings"]:
-                        self._config["iyuu_settings"][
-                            "query_interval_hours"] = 72
-                    if "auto_query_enabled" not in self._config[
-                            "iyuu_settings"]:
-                        self._config["iyuu_settings"][
-                            "auto_query_enabled"] = True
-                    if "tmp_dir" not in self._config[
-                            "iyuu_settings"] or not self._config[
-                                "iyuu_settings"]["tmp_dir"]:
+                    if "query_interval_hours" not in self._config["iyuu_settings"]:
+                        self._config["iyuu_settings"]["query_interval_hours"] = 72
+                    if "auto_query_enabled" not in self._config["iyuu_settings"]:
+                        self._config["iyuu_settings"]["auto_query_enabled"] = True
+                    if (
+                        "tmp_dir" not in self._config["iyuu_settings"]
+                        or not self._config["iyuu_settings"]["tmp_dir"]
+                    ):
                         self._config["iyuu_settings"]["tmp_dir"] = TEMP_DIR
 
                 # --- [新增] 认证配置兼容 ---
@@ -195,8 +181,35 @@ class ConfigManager:
                     self._config["batch_fetch_filters"] = {
                         "paths": [],
                         "states": [],
-                        "downloaderIds": []
+                        "downloaderIds": [],
                     }
+
+                # --- [新增] 标签配置兼容 ---
+                tags_config_needs_save = False
+
+                # 检查 tags_config 是否存在
+                if "tags_config" in self._config:
+                    old_tags_config = self._config["tags_config"]
+
+                    # 检查是否已经是新格式（有 category 和 tags 字段）
+                    if "category" in old_tags_config and "tags" in old_tags_config:
+                        # 已经是新格式，跳过迁移
+                        logging.info("tags_config 已经是新格式，跳过迁移")
+                        tags_config_needs_save = False
+                    else:
+                        # 如果是旧格式，使用默认配置覆盖
+                        logging.info("tags_config 是旧格式，使用默认配置覆盖")
+                        self._config["tags_config"] = default_conf["tags_config"]
+                        tags_config_needs_save = True
+                else:
+                    # 如果不存在 tags_config，使用默认配置
+                    self._config["tags_config"] = default_conf["tags_config"]
+                    tags_config_needs_save = True
+
+                # 如果标签配置有更新，自动保存到文件
+                if tags_config_needs_save:
+                    self.save(self._config)
+                    logging.info("标签配置已自动更新并保存到配置文件")
 
                 # --- [新增] 已删除站点列表配置兼容 ---
                 if "deleted_sites" not in self._config:
@@ -204,14 +217,11 @@ class ConfigManager:
 
                 # --- [新增] 上传设置配置兼容 ---
                 if "upload_settings" not in self._config:
-                    self._config["upload_settings"] = default_conf[
-                        "upload_settings"]
+                    self._config["upload_settings"] = default_conf["upload_settings"]
                 else:
                     # 如果已有 upload_settings，检查是否缺少新字段
-                    if "anonymous_upload" not in self._config[
-                            "upload_settings"]:
-                        self._config["upload_settings"][
-                            "anonymous_upload"] = True
+                    if "anonymous_upload" not in self._config["upload_settings"]:
+                        self._config["upload_settings"]["anonymous_upload"] = True
 
             except (json.JSONDecodeError, IOError) as e:
                 logging.error(f"无法读取或解析 {CONFIG_FILE}: {e}。将加载一个安全的默认配置。")
@@ -233,8 +243,7 @@ class ConfigManager:
             config_to_save = copy.deepcopy(config_data)
 
             # 从内存中移除 CookieCloud 的端到端密码，避免写入文件
-            if "cookiecloud" in config_to_save and "e2e_password" in config_to_save[
-                    "cookiecloud"]:
+            if "cookiecloud" in config_to_save and "e2e_password" in config_to_save["cookiecloud"]:
                 # 如果用户在UI中输入了密码，我们不希望它被保存
                 if config_to_save["cookiecloud"]["e2e_password"]:
                     config_to_save["cookiecloud"]["e2e_password"] = ""
@@ -269,8 +278,7 @@ def get_db_config():
         try:
             mysql_config["port"] = int(mysql_config["port"])
         except (ValueError, TypeError):
-            logging.error(
-                f"关键错误: MYSQL_PORT ('{mysql_config['port']}') 不是一个有效的整数！")
+            logging.error(f"关键错误: MYSQL_PORT ('{mysql_config['port']}') 不是一个有效的整数！")
             sys.exit(1)
         logging.info("MySQL 配置验证通过。")
         return {"db_type": "mysql", "mysql": mysql_config}
@@ -285,8 +293,7 @@ def get_db_config():
             "port": os.getenv("POSTGRES_PORT", 5432),
         }
         if not all(postgresql_config.values()):
-            logging.error(
-                "关键错误: DB_TYPE='postgresql', 但一个或多个 POSTGRES_* 环境变量缺失！")
+            logging.error("关键错误: DB_TYPE='postgresql', 但一个或多个 POSTGRES_* 环境变量缺失！")
             sys.exit(1)
         try:
             postgresql_config["port"] = int(postgresql_config["port"])

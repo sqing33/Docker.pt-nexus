@@ -102,6 +102,7 @@ source_parsers:
       "StarfallWeb": "team.starfallweb"
       "LuckAni": "team.luckani"
       "LuckDIY": "team.luckdiy"
+      "LuckDocu": "team.luckdocu"
 
     tag:
       "禁转": "tag.禁转"
@@ -196,6 +197,7 @@ mappings:
     "team.starfallweb": "10"
     "team.luckani": "11"
     "team.luckdiy": "12"
+    "team.luckdocu": "13"
     "default": "5"
 
   tag:
