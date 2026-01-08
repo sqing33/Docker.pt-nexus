@@ -105,7 +105,7 @@ source_parsers:
       "8K/4320P": "resolution.r4320p"
 
     team:
-      "HDSky/原盘DIY小组": "team.hdsky"
+      "HDSky/原盘DIY小组": "team.hds"
       "HDS/重编码及remux小组": "team.hds"
       "HDS3D/3D重编码小组": "team.hds3d"
       "HDSTV/电视录制小组": "team.hdstv"

@@ -10,7 +10,7 @@ form_fields:
   audio_codec: "audiocodec_sel[4]"
   resolution: "standard_sel[4]"
   team: "team_sel[4]"
-  category: "type"  # 类别字段映射到type参数
+  category: "type" # 类别字段映射到type参数
 
 # 标准化键映射 - 定义源文本到标准化键的映射规则
 # source_parsers部分：定义如何从原始数据解析出标准化参数
@@ -89,7 +89,7 @@ source_parsers:
       "8K/4320p": "resolution.r4320p"
 
     team:
-      "HDSky": "team.hdsky"
+      "HDSky": "team.hds"
       "CHD": "team.chd"
       "MySiLU": "team.mysilu"
       "WiKi": "team.wiki"
@@ -171,7 +171,7 @@ mappings:
     "default": "6"
 
   team:
-    "team.hdsky": "1"
+    "team.hds": "1"
     "team.chd": "2"
     "team.mysilu": "3"
     "team.wiki": "4"

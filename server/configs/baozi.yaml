@@ -86,7 +86,7 @@ source_parsers:
       "None": "resolution.other"
 
     team:
-      "HDS": "team.hdsky"
+      "HDS": "team.hds"
       "CHD": "team.chd"
       "MySiLU": "team.mysilu"
       "WiKi": "team.wiki"
@@ -159,7 +159,7 @@ mappings:
     "default": "7"
 
   team:
-    "team.hdsky": "1"
+    "team.hds": "1"
     "team.chd": "2"
     "team.mysilu": "3"
     "team.wiki": "4"

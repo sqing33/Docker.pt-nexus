@@ -22,8 +22,8 @@ const (
 	PORT                = "5274"
 	SERVER_PORT         = "5275"
 	BATCH_ENHANCER_PORT = "5276"
-	GITEE_REPO_URL      = "https://gitee.com/sqing33/Docker.pt-nexus.git"
-	GITHUB_REPO_URL     = "https://github.com/sqing33/Docker.pt-nexus.git"
+	GITEE_REPO_URL      = "https://gitee.com/sqing33/PTNexus.git"
+	GITHUB_REPO_URL     = "https://github.com/sqing33/PTNexus.git"
 	UPDATE_DIR          = "/app/data/updates"
 	REPO_DIR            = "/app/data/updates/repo"
 	REPO_TIMEOUT        = 60 * time.Second // 仓库克隆/拉取超时时间
@@ -40,7 +40,7 @@ var (
 func init() {
 	if os.Getenv("DEV_ENV") == "true" {
 		// 开发环境
-		localConfigFile = getEnv("LOCAL_CONFIG_FILE", "/home/sqing/Codes/Docker.pt-nexus-dev/CHANGELOG.json")
+		localConfigFile = getEnv("LOCAL_CONFIG_FILE", "/home/sqing/Codes/PTNexus-dev/CHANGELOG.json")
 	} else {
 		// 生产环境
 		localConfigFile = getEnv("LOCAL_CONFIG_FILE", "/app/CHANGELOG.json")
@@ -1193,10 +1193,10 @@ func getRemoteConfig() (*UpdateConfig, error) {
 	switch getUpdateSource() {
 	case "github":
 		// GitHub raw链接
-		baseURL = "https://raw.githubusercontent.com/sqing33/Docker.pt-nexus/main/CHANGELOG.json"
+		baseURL = "https://raw.githubusercontent.com/sqing33/PTNexus/main/CHANGELOG.json"
 	default:
 		// Gitee raw链接
-		baseURL = "https://gitee.com/sqing33/Docker.pt-nexus/raw/main/CHANGELOG.json"
+		baseURL = "https://gitee.com/sqing33/PTNexus/raw/main/CHANGELOG.json"
 	}
 
 	// 【修复】：添加随机时间戳参数，强制不使用缓存
@@ -1274,9 +1274,9 @@ func getChangelogHandler(w http.ResponseWriter, r *http.Request) {
 	var baseURL string
 	switch getUpdateSource() {
 	case "github":
-		baseURL = "https://raw.githubusercontent.com/sqing33/Docker.pt-nexus/main/CHANGELOG.json"
+		baseURL = "https://raw.githubusercontent.com/sqing33/PTNexus/main/CHANGELOG.json"
 	default:
-		baseURL = "https://gitee.com/sqing33/Docker.pt-nexus/raw/main/CHANGELOG.json"
+		baseURL = "https://gitee.com/sqing33/PTNexus/raw/main/CHANGELOG.json"
 	}
 
 	log.Printf("正在从 %s 获取更新日志", getUpdateSource())

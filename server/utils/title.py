@@ -53,6 +53,7 @@ def extract_season_episode(text: str) -> str | None:
 
     return None
 
+
 def get_title_components_order():
     """
     从 global_mappings.yaml 读取标题组件顺序
@@ -521,7 +522,7 @@ def upload_data_title(
 
     # 4.1 提取剪辑版本并拼接到年份
     cut_version_pattern = re.compile(
-        r"(?<!\w)(Theatrical[\s\.]?Cut|Directors?[\s\.]?Cut|DC|Extended[\s\.]?(?:Cut|Edition)|Final[\s\.]?Cut|Anniversary[\s\.]?Edition|Restored|Remastered|Criterion[\s\.]?(?:Edition|Collection)|Ultimate[\s\.]?Cut|IMAX[\s\.]?Edition|Open[\s\.]?Matte|Unrated[\s\.]?Cut)(?!\w)",
+        r"(?<!\w)(Theatrical[\s\.]?Cut|Directors?[\s\.]?Cut|DC|Extended(?:[\s\.]?(?:Cut|Edition))?|Final[\s\.]?Cut|Anniversary[\s\.]?Edition|Restored|Remastered|Criterion[\s\.]?(?:Edition|Collection)|Ultimate[\s\.]?Cut|IMAX[\s\.]?Edition|Open[\s\.]?Matte|Unrated[\s\.]?Cut)(?!\w)",
         re.IGNORECASE,
     )
     cut_version_match = cut_version_pattern.search(title_part)
@@ -598,8 +599,8 @@ def upload_data_title(
         "video_format": r"3D|HSBS",
         "release_version": r"REMASTERED|REPACK|RERIP|PROPER|REPOST|V\d+",
         # 【修改】允许 Unrated 单独出现
-        "cut_version": r"Theatrical[\s\.]?Cut|Directors?[\s\.]?Cut|DC|Extended[\s\.]?(?:Cut|Edition)|Final[\s\.]?Cut|(?:\d+th\s*)?Anniv(?:ersary)?(?:\s*Edition)?|Restored|Remastered|Criterion[\s\.]?(?:Edition|Collection)|Ultimate[\s\.]?Cut|IMAX(?:\s*Edition)?|Open[\s\.]?Matte|Unrated(?:\s*Cut)?",
-        "quality_modifier": r"MAXPLUS|HQ|EXTENDED|REMUX|EE|MiniBD|HFR",
+        "cut_version": r"Theatrical[\s\.]?Cut|Directors?[\s\.]?Cut|DC|Extended(?:[\s\.]?(?:Cut|Edition))?|Final[\s\.]?Cut|(?:\d+th\s*)?Anniv(?:ersary)?(?:\s*Edition)?|Restored|Remastered|Criterion[\s\.]?(?:Edition|Collection)|Ultimate[\s\.]?Cut|IMAX(?:\s*Edition)?|Open[\s\.]?Matte|Unrated(?:\s*Cut)?",
+        "quality_modifier": r"MAXPLUS|HQ|REMUX|MiniBD|HFR",
     }
     priority_order = [
         "completion_status",

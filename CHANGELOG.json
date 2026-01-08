@@ -1,6 +1,13 @@
 {
   "history": [
     {
+      "version": "v3.4.8",
+      "date": "2026.01.09",
+      "changes": [
+        "修复：剪辑版本部分参数拼接错误"
+      ]
+    },
+    {
       "version": "v3.4.7",
       "date": "2026.01.08",
       "note": "注：修改 Github 仓库地址为 'https://github.com/sqing33/PTNexus'，因为 'pt-nexus' 缺失横杠无法搜索到，以至于有人在安装的时候安装到了 'nexusphp'。\n结算画面： 'https://img1.pixhost.to/images/11481/682419724_4ba3b6c6-d528-471d-b898-c05c88ea4332.png' \n新的盒子端安装地址为 curl -sL https://github.com/sqing33/PTNexus/releases/download/latest/install-pt-nexus-box-proxy.sh | sudo bash",
