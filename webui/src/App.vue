@@ -34,7 +34,7 @@
     </div>
     <div class="right-buttons-container">
       <el-link
-        href="https://github.com/sqing33/Docker.pt-nexus"
+        href="https://github.com/sqing33/PTNexus"
         target="_blank"
         :underline="false"
         style="margin-right: 8px"
@@ -46,7 +46,7 @@
         {{ currentVersion }}
       </el-tag>
       <el-link
-        href="https://github.com/sqing33/Docker.pt-nexus/issues"
+        href="https://github.com/sqing33/PTNexus/issues"
         target="_blank"
         :underline="false"
         style="margin-right: 8px"

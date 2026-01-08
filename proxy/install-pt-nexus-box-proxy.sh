@@ -2,9 +2,9 @@
 
 # PT Nexus Proxy 安装脚本
 # 用法:
-#   wget -O - https://github.com/sqing33/Docker.pt-nexus/releases/download/latest/install-pt-nexus-box-proxy.sh | sudo bash
+#   wget -O - https://github.com/sqing33/PTNexus/releases/download/latest/install-pt-nexus-box-proxy.sh | sudo bash
 # 或者:
-#   curl -sL https://github.com/sqing33/Docker.pt-nexus/releases/download/latest/install-pt-nexus-box-proxy.sh | sudo bash
+#   curl -sL https://github.com/sqing33/PTNexus/releases/download/latest/install-pt-nexus-box-proxy.sh | sudo bash
 
 set -e
 
@@ -138,7 +138,7 @@ download_bdinfo_tools() {
 
     # 下载每个文件
     for file in "${files[@]}"; do
-        local url="https://raw.githubusercontent.com/$REPO_OWNER/Docker.pt-nexus/refs/heads/main/server/core/bdinfo/$file"
+        local url="https://raw.githubusercontent.com/$REPO_OWNER/PTNexus/refs/heads/main/server/core/bdinfo/$file"
         
         log "正在下载 $file..."
         

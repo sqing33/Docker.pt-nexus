@@ -1,6 +1,15 @@
 {
   "history": [
     {
+      "version": "v3.4.7",
+      "date": "2026.01.08",
+      "note": "注：修改 Github 仓库地址为 'https://github.com/sqing33/PTNexus'，因为 'pt-nexus' 缺失横杠无法搜索到，以至于有人在安装的时候安装到了 'nexusphp'。\n结算画面： 'https://img1.pixhost.to/images/11481/682419724_4ba3b6c6-d528-471d-b898-c05c88ea4332.png' \n新的盒子端安装地址为 curl -sL https://github.com/sqing33/PTNexus/releases/download/latest/install-pt-nexus-box-proxy.sh | sudo bash",
+      "changes": [
+        "修改：从 mediainfo 与 bdinfo 获取音频编码的选择",
+        "修改：Github 仓库地址为 'https://github.com/sqing33/PTNexus'"
+      ]
+    },
+    {
       "version": "v3.4.6",
       "date": "2026.01.05",
       "changes": [
@@ -11,12 +20,16 @@
     {
       "version": "v3.4.5",
       "date": "2026.01.03",
-      "changes": ["修复：部分正确的 mediainfo 和 bdinfo 无法通过格式校验"]
+      "changes": [
+        "修复：部分正确的 mediainfo 和 bdinfo 无法通过格式校验"
+      ]
     },
     {
       "version": "v3.4.4",
       "date": "2026.01.02",
-      "changes": ["修复：13City 的 音频编码 DD/AC3 错误映射到 DDP/EAC3"]
+      "changes": [
+        "修复：13City 的 音频编码 DD/AC3 错误映射到 DDP/EAC3"
+      ]
     },
     {
       "version": "v3.4.3",
@@ -30,12 +43,16 @@
     {
       "version": "v3.4.2",
       "date": "2026.01.02",
-      "changes": ["修复：蟹黄堡的 h264、h265 映射错误"]
+      "changes": [
+        "修复：蟹黄堡的 h264、h265 映射错误"
+      ]
     },
     {
       "version": "v3.4.1",
       "date": "2026.01.02",
-      "changes": ["修复：一站多种里获取的种子记录无法随着种子位置移动而改变"]
+      "changes": [
+        "修复：一站多种里获取的种子记录无法随着种子位置移动而改变"
+      ]
     },
     {
       "version": "v3.4.0",
@@ -50,12 +67,14 @@
     {
       "version": "v3.3.5",
       "date": "2025.12.26",
-      "changes": ["修复：选择 HDR10+ 标签报错或者无法提取到 HDR10+ 标签"]
+      "changes": [
+        "修复：选择 HDR10+ 标签报错或者无法提取到 HDR10+ 标签"
+      ]
     },
     {
       "version": "v3.3.4",
       "date": "2025.12.25",
-      "note": "注：修复盒子端获取原盘的截图有概率会报错失败的问题需要重新执行 curl -sL https://github.com/sqing33/Docker.pt-nexus/releases/download/latest/install-pt-nexus-box-proxy.sh | sudo bash 以更新盒子端脚本。",
+      "note": "注：修复盒子端获取原盘的截图有概率会报错失败的问题需要重新执行 curl -sL https://github.com/sqing33/PTNexus/releases/download/latest/install-pt-nexus-box-proxy.sh | sudo bash 以更新盒子端脚本。",
       "changes": [
         "新增：转种目标站点-劳改所",
         "修复：部分站点丢失 HDR 标签",
@@ -67,7 +86,9 @@
     {
       "version": "v3.3.3",
       "date": "2025.12.17",
-      "changes": ["修改：longpt龙宝发种有问题，暂时屏蔽（有空修）"]
+      "changes": [
+        "修改：longpt龙宝发种有问题，暂时屏蔽（有空修）"
+      ]
     },
     {
       "version": "v3.3.2",
@@ -90,7 +111,7 @@
     {
       "version": "v3.3.0",
       "date": "2025.12.15",
-      "note": "注:若报错“ModuleNotFoundError: No module named 'PIL'”则需要重新下载镜像进行更新，如仍然报错则删除 data 目录下的 updates 文件夹。\n13City限速12.5MB/s，代码不会修改非0的限速，需要手动修改。\n盒子获取 bdinfo 需要重新执行 curl -sL https://github.com/sqing33/Docker.pt-nexus/releases/download/latest/install-pt-nexus-box-proxy.sh | sudo bash 以更新盒子端脚本。",
+      "note": "注:若报错“ModuleNotFoundError: No module named 'PIL'”则需要重新下载镜像进行更新，如仍然报错则删除 data 目录下的 updates 文件夹。\n13City限速12.5MB/s，代码不会修改非0的限速，需要手动修改。\n盒子获取 bdinfo 需要重新执行 curl -sL https://github.com/sqing33/PTNexus/releases/download/latest/install-pt-nexus-box-proxy.sh | sudo bash 以更新盒子端脚本。",
       "changes": [
         "修复：“ModuleNotFoundError: No module named 'PIL'”报错",
         "修复：青蛙、三月传媒主标题出现重复制作组的问题",
@@ -101,12 +122,14 @@
     {
       "version": "v3.2.5",
       "date": "2025.12.11",
-      "changes": ["修复：藏宝阁标题丢失的问题"]
+      "changes": [
+        "修复：藏宝阁标题丢失的问题"
+      ]
     },
     {
       "version": "v3.2.4",
       "date": "2025.12.11",
-      "note": "注：盒子优化截图速度需要重新执行 curl -sL https://github.com/sqing33/Docker.pt-nexus/releases/download/latest/install-pt-nexus-box-proxy.sh | sudo bash 以更新盒子端脚本。",
+      "note": "注：盒子优化截图速度需要重新执行 curl -sL https://github.com/sqing33/PTNexus/releases/download/latest/install-pt-nexus-box-proxy.sh | sudo bash 以更新盒子端脚本。",
       "changes": [
         "优化：截图速度，截图名称用时间点命名",
         "新增：转种目标站点-PTSkit"
@@ -115,7 +138,7 @@
     {
       "version": "v3.2.3",
       "date": "2025.12.11",
-      "note": "注：（需要更新 docker 镜像）新增环境变量 UPDATE_SOURCE，可选值 github 或 gitee，默认为 gitee，用于选择更新的源。\n盒子截图 png 需要重新执行 curl -sL https://github.com/sqing33/Docker.pt-nexus/releases/download/latest/install-pt-nexus-box-proxy.sh | sudo bash 以更新盒子端脚本。",
+      "note": "注：（需要更新 docker 镜像）新增环境变量 UPDATE_SOURCE，可选值 github 或 gitee，默认为 gitee，用于选择更新的源。\n盒子截图 png 需要重新执行 curl -sL https://github.com/sqing33/PTNexus/releases/download/latest/install-pt-nexus-box-proxy.sh | sudo bash 以更新盒子端脚本。",
       "changes": [
         "修复：数据库迁移错误",
         "修复：标题参数 DTS 无法正确识别",
@@ -175,7 +198,9 @@
     {
       "version": "v3.1.4",
       "date": "2025.11.19",
-      "changes": ["修复：解决 luckpt(幸运) 站点英语标签与国语标签冲突的问题"]
+      "changes": [
+        "修复：解决 luckpt(幸运) 站点英语标签与国语标签冲突的问题"
+      ]
     },
     {
       "version": "v3.1.3",
@@ -191,12 +216,16 @@
       "version": "v3.1.2",
       "date": "2025.11.17",
       "note": "注：v3.1.2 之前的版本需要重新拉取镜像以应用 gitee 更新的功能",
-      "changes": ["修改：使用 gitee 与 github 仓库共同进行更新"]
+      "changes": [
+        "修改：使用 gitee 与 github 仓库共同进行更新"
+      ]
     },
     {
       "version": "v3.1.1",
       "date": "2025.11.16",
-      "changes": ["修复：一种多站点击转种按钮没有反应的问题"]
+      "changes": [
+        "修复：一种多站点击转种按钮没有反应的问题"
+      ]
     },
     {
       "version": "v3.1.0",
@@ -319,24 +348,35 @@
     {
       "version": "v1.1.1",
       "date": "2025.08.23",
-      "changes": ["适配：mysql"]
+      "changes": [
+        "适配：mysql"
+      ]
     },
     {
       "version": "v1.1",
       "date": "2025.08.23",
-      "changes": ["新增：设置页面，实现多下载器支持。"]
+      "changes": [
+        "新增：设置页面，实现多下载器支持。"
+      ]
     },
     {
       "version": "v1.0",
       "date": "2025.08.19",
-      "changes": ["完成：下载统计、种子查询、站点信息查询功能。"]
+      "changes": [
+        "完成：下载统计、种子查询、站点信息查询功能。"
+      ]
     }
   ],
   "mappings": [
     {
       "source": "server",
       "target": "/app",
-      "exclude": ["*.pyc", "__pycache__", "*.backup", ".env"]
+      "exclude": [
+        "*.pyc",
+        "__pycache__",
+        "*.backup",
+        ".env"
+      ]
     },
     {
       "source": "webui/dist",

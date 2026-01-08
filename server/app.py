@@ -30,7 +30,7 @@ def cleanup_old_tmp_structure():
     - server/data/tmp/torrents/ 目录（并清理其中的 JSON 文件）
     - server/data/tmp/batch.log 文件
     删除其他所有文件和目录（包括 extracted_data）
-    
+
     清理 BDInfo 目录下的 .log 文件：
     - 开发环境：/home/sqing/Codes/Docker.pt-nexus-dev/server/core/bdinfo/
     - 生产环境：/app/bdinfo/
@@ -105,11 +105,12 @@ def cleanup_old_tmp_structure():
         except Exception as e:
             print(f"清理 tmp 目录结构时出错: {e}")
             import traceback
+
             traceback.print_exc()
 
     # 清理 BDInfo 目录下的 .log 文件（开发环境和生产环境都执行）
     print("开始清理 BDInfo 目录下的 .log 文件...")
-    
+
     # 根据环境变量设置BDInfo相关路径
     if is_dev_env:
         # 开发环境
@@ -117,7 +118,7 @@ def cleanup_old_tmp_structure():
     else:
         # 生产环境（Docker容器内）
         bdinfo_dir = "/app/bdinfo"
-    
+
     log_removed = 0
     try:
         if os.path.exists(bdinfo_dir):
@@ -141,6 +142,7 @@ def cleanup_old_tmp_structure():
     except Exception as e:
         print(f"清理 BDInfo 日志文件时出错: {e}")
         import traceback
+
         traceback.print_exc()
 
 
@@ -506,12 +508,14 @@ if __name__ == "__main__":
         logging.info("正在清理后台线程...")
         try:
             from core.services import stop_data_tracker
+
             stop_data_tracker()
         except Exception as e:
             logging.error(f"停止数据追踪线程失败: {e}", exc_info=True)
         logging.info("后台线程清理完成。")
 
     import atexit
+
     atexit.register(cleanup_bdinfo_manager)
     atexit.register(cleanup)
 
@@ -526,11 +530,11 @@ if __name__ == "__main__":
         # 执行数据库迁移
         conn = db_manager._get_connection()
         cursor = db_manager._get_cursor(conn)
-        
+
         success = db_manager.migration_manager.run_all_migrations(conn, cursor)
         cursor.close()
         conn.close()
-        
+
         if success:
             logging.info("数据库迁移完成")
         else:
@@ -544,14 +548,15 @@ if __name__ == "__main__":
 
         bdinfo_manager = get_bdinfo_manager()
         bdinfo_manager.start()
-        
+
         # 等待一秒确保管理器完全启动
         import time
+
         time.sleep(1)
-        
+
         # 启动时恢复遗留任务
         bdinfo_manager.recover_orphaned_tasks()
-        
+
         logging.info("BDInfo 管理器初始化成功")
     except Exception as e:
         logging.error(f"BDInfo 管理器初始化失败: {e}", exc_info=True)

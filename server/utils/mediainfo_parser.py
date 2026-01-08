@@ -489,7 +489,7 @@ def get_channel_layout_from_mediainfo(layout_line: str, count_line: str) -> str:
 
 def select_best_track_dynamic(track_list: List[Dict[str, Any]], total_tracks_count: int, is_mediainfo: bool) -> Optional[Dict[str, Any]]:
     """
-    动态选择最佳音轨
+    动态选择最佳音轨（直接选择第一个音轨）
     
     Args:
         track_list: 音轨列表
@@ -502,16 +502,10 @@ def select_best_track_dynamic(track_list: List[Dict[str, Any]], total_tracks_cou
     if not track_list:
         return None
     for track in track_list:
-        tier = get_codec_tier(track["base_codec"])
-        ch_count = parse_channel_count(track["channel_layout"])
-        has_feature = 0 if (track["suffix_tag"] == "Atmos" or track["base_codec"] in ["AV3A", "DTS:X"]) else 1
-        track["sort_key"] = (tier, -ch_count, has_feature)
-
         display_ch = track["channel_layout"] if track["channel_layout"] != "1.0" else ""
         parts = [track["base_codec"], display_ch, track["suffix_tag"]]
         track["display_title"] = " ".join([p for p in parts if p])
 
-    track_list.sort(key=lambda x: x["sort_key"])
     best_track = track_list[0]
 
     final_parts = [best_track["display_title"]]
