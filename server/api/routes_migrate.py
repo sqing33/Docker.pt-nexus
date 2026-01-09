@@ -98,6 +98,7 @@ def get_current_torrent_info(db_manager, hash_value):
         logging.warning(f"获取当前种子信息失败: {e}")
         return None
 
+
 # ===================================================================
 #                          转种设置 API (新整合)
 # ===================================================================
@@ -695,6 +696,7 @@ def update_db_seed_info():
                     "subtitle": updated_parameters.get("subtitle", ""),
                     "imdb_link": updated_parameters.get("imdb_link", ""),
                     "douban_link": updated_parameters.get("douban_link", ""),
+                    "tmdb_link": updated_parameters.get("tmdb_link", ""),
                     "intro": {
                         "statement": updated_parameters.get("statement", ""),
                         "poster": updated_parameters.get("poster", ""),
@@ -702,6 +704,7 @@ def update_db_seed_info():
                         "screenshots": updated_parameters.get("screenshots", ""),
                         "imdb_link": updated_parameters.get("imdb_link", ""),
                         "douban_link": updated_parameters.get("douban_link", ""),
+                        "tmdb_link": updated_parameters.get("tmdb_link", ""),
                     },
                     "mediainfo": updated_parameters.get("mediainfo", ""),
                     "source_params": updated_parameters.get("source_params", {}),
@@ -796,6 +799,7 @@ def update_db_seed_info():
                 "subtitle": updated_parameters.get("subtitle", ""),
                 "imdb_link": updated_parameters.get("imdb_link", ""),
                 "douban_link": updated_parameters.get("douban_link", ""),
+                "tmdb_link": updated_parameters.get("tmdb_link", ""),
                 "poster": updated_parameters.get("poster", ""),
                 "screenshots": updated_parameters.get("screenshots", ""),
                 "statement": updated_parameters.get("statement", ""),
@@ -817,6 +821,8 @@ def update_db_seed_info():
                     "主标题 (预览)": preview_title,
                     "副标题": updated_parameters.get("subtitle", ""),
                     "IMDb链接": standardized_params.get("imdb_link", ""),
+                    "豆瓣链接": standardized_params.get("douban_link", ""),
+                    "TMDb链接": standardized_params.get("tmdb_link", ""),
                     "类型": standardized_params.get("type", ""),
                     "媒介": standardized_params.get("medium", ""),
                     "视频编码": standardized_params.get("video_codec", ""),
@@ -831,6 +837,7 @@ def update_db_seed_info():
                     "subtitle": updated_parameters.get("subtitle", ""),
                     "imdb_link": standardized_params.get("imdb_link", ""),
                     "douban_link": standardized_params.get("douban_link", ""),
+                    "tmdb_link": standardized_params.get("tmdb_link", ""),
                     "intro": {
                         "statement": updated_parameters.get("statement", ""),
                         "poster": updated_parameters.get("poster", ""),
@@ -851,6 +858,8 @@ def update_db_seed_info():
                     "final_main_title": preview_title,
                     "subtitle": updated_parameters.get("subtitle", ""),
                     "imdb_link": standardized_params.get("imdb_link", ""),
+                    "douban_link": standardized_params.get("douban_link", ""),
+                    "tmdb_link": standardized_params.get("tmdb_link", ""),
                     "type": standardized_params.get("type", ""),
                     "medium": standardized_params.get("medium", ""),
                     "video_codec": standardized_params.get("video_codec", ""),
@@ -1358,18 +1367,14 @@ def migrate_publish():
                     print(f"[下载器添加] 配置为使用源种子下载器,从数据库查询")
                     source_torrent_id = context.get("source_torrent_id")
                     if source_torrent_id and source_site_name:
-                        hash_value = get_seed_hash(
-                            db_manager, source_torrent_id, source_site_name
-                        )
+                        hash_value = get_seed_hash(db_manager, source_torrent_id, source_site_name)
                         torrent_info = get_current_torrent_info(db_manager, hash_value)
                         if torrent_info:
                             downloader_id = torrent_info.get("downloader_id")
                             if not save_path and torrent_info.get("save_path"):
                                 save_path = torrent_info["save_path"]
                                 print(f"[下载器添加] 从数据库获取到保存路径: {save_path}")
-                            print(
-                                f"[下载器添加] 从数据库获取到源种子的下载器ID: {downloader_id}"
-                            )
+                            print(f"[下载器添加] 从数据库获取到源种子的下载器ID: {downloader_id}")
                         else:
                             print(f"[下载器添加] 数据库中未找到源种子信息")
 
@@ -1391,9 +1396,7 @@ def migrate_publish():
                         try:
                             from .internal_guard import check_downloader_gate
 
-                            can_continue, limit_message = check_downloader_gate(
-                                downloader_id
-                            )
+                            can_continue, limit_message = check_downloader_gate(downloader_id)
 
                             if not can_continue:
                                 print(f"🚫 [下载器添加] 发布前预检查触发限制: {limit_message}")
@@ -1733,6 +1736,7 @@ def validate_media():
     subtitle = source_info.get("subtitle") if source_info else ""
     imdb_link = source_info.get("imdb_link", "") if source_info else ""
     douban_link = source_info.get("douban_link", "") if source_info else ""
+    tmdb_link = source_info.get("tmdb_link", "") if source_info else ""
     content_name = data.get("content_name") or (
         source_info.get("main_title") if source_info else ""
     )
@@ -1747,9 +1751,14 @@ def validate_media():
         return jsonify({"success": True, "screenshots": screenshots}), 200
     elif media_type == "poster":
         # 海报验证和转存已经在 upload_data_movie_info -> _parse_format_content 中自动完成
-        status, posters, description, extracted_imdb_link, extracted_douban_link = (
-            upload_data_movie_info(media_type, douban_link, imdb_link, subtitle)
-        )
+        (
+            status,
+            posters,
+            description,
+            extracted_imdb_link,
+            extracted_douban_link,
+            extracted_tmdb_link,
+        ) = upload_data_movie_info(media_type, douban_link, imdb_link, tmdb_link, subtitle)
         if status:
             return (
                 jsonify(
@@ -1758,6 +1767,7 @@ def validate_media():
                         "posters": posters,
                         "extracted_imdb_link": extracted_imdb_link,
                         "extracted_douban_link": extracted_douban_link,
+                        "extracted_tmdb_link": extracted_tmdb_link,
                     }
                 ),
                 200,
@@ -1766,21 +1776,24 @@ def validate_media():
             return jsonify({"success": False, "error": posters}), 400
     elif media_type == "intro":
         # 处理简介重新获取请求
-        status, posters, description, extracted_imdb_link, extracted_douban_link = (
-            upload_data_movie_info(media_type, douban_link, imdb_link, subtitle)
-        )
+        (
+            status,
+            posters,
+            description,
+            extracted_imdb_link,
+            extracted_douban_link,
+            extracted_tmdb_link,
+        ) = upload_data_movie_info(media_type, douban_link, imdb_link, tmdb_link, subtitle)
+
         if status:
-            return (
-                jsonify(
-                    {
-                        "success": True,
-                        "intro": description,
-                        "extracted_imdb_link": extracted_imdb_link,
-                        "extracted_douban_link": extracted_douban_link,
-                    }
-                ),
-                200,
-            )
+            response_data = {
+                "success": True,
+                "intro": description,
+                "extracted_imdb_link": extracted_imdb_link,
+                "extracted_douban_link": extracted_douban_link,
+                "extracted_tmdb_link": extracted_tmdb_link,
+            }
+            return jsonify(response_data), 200
         else:
             return jsonify({"success": False, "error": description}), 400
     elif media_type == "mediainfo":
@@ -3119,9 +3132,7 @@ def refresh_bdinfo(seed_id):
                 conn = db_manager._get_connection()
                 cursor = db_manager._get_cursor(conn)
                 ph = db_manager.get_placeholder()
-                cursor.execute(
-                    f"SELECT hash FROM seed_parameters WHERE id = {ph}", (seed_id,)
-                )
+                cursor.execute(f"SELECT hash FROM seed_parameters WHERE id = {ph}", (seed_id,))
                 row = cursor.fetchone()
                 cursor.close()
                 conn.close()
@@ -3137,9 +3148,7 @@ def refresh_bdinfo(seed_id):
         # 调用刷新函数
         from utils.mediainfo import refresh_bdinfo_for_seed
 
-        refresh_result = refresh_bdinfo_for_seed(
-            seed_id, torrent_info["save_path"], priority=1
-        )
+        refresh_result = refresh_bdinfo_for_seed(seed_id, torrent_info["save_path"], priority=1)
 
         if refresh_result["success"]:
             return jsonify(refresh_result)
@@ -3554,8 +3563,6 @@ def restart_bdinfo():
         if not result:
             return jsonify({"error": "种子数据不存在"}), 404
 
-        # 处理不同数据库返回的结果格式
-        print(f"[DEBUG] 数据库查询结果: {result}")
         if isinstance(result, dict):
             if result.get("hash"):
                 hash_val = result.get("hash")
@@ -3578,7 +3585,6 @@ def restart_bdinfo():
             torrent_name = torrent_info.get("name")
 
         if not save_path:
-            print(f"[DEBUG] save_path为空，返回错误")
             return jsonify({"error": "无法获取保存路径"}), 404
 
         # 1. 清理可能的残留进程
@@ -3603,28 +3609,20 @@ def restart_bdinfo():
                 from utils.mediainfo import translate_path
 
                 mapped_path = translate_path(downloader_id, actual_save_path)
-                print(f"[DEBUG] 路径映射结果: {mapped_path}")
                 if mapped_path != actual_save_path:
-                    print(f"[DEBUG] 路径已映射: {actual_save_path} -> {mapped_path}")
                     logging.info(
                         f"重启BDInfo任务应用路径映射: {actual_save_path} -> {mapped_path}"
                     )
                     actual_save_path = mapped_path
             except Exception as e:
-                print(f"[DEBUG] 路径映射异常: {e}")
                 logging.warning(f"路径映射失败，使用原始路径: {e}")
-        else:
-            print(f"[DEBUG] 无downloader_id，跳过路径映射")
-
         # 5. 重新添加任务
-        print(f"[DEBUG] 开始添加BDInfo任务...")
         task_id = bdinfo_manager.add_task(
             seed_id=seed_id,
             save_path=actual_save_path,
             priority=1,
             downloader_id=downloader_id,  # 高优先级，传递下载器ID（可能为None）
         )
-        print(f"[DEBUG] BDInfo任务已添加，task_id: {task_id}")
 
         return jsonify({"success": True, "task_id": task_id, "message": "BDInfo 任务已重启"})
 

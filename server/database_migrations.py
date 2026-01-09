@@ -128,6 +128,7 @@ class DatabaseMigrationManager:
                             'subtitle': 'TEXT',
                             'imdb_link': 'TEXT',
                             'douban_link': 'TEXT',
+                            'tmdb_link': 'TEXT',
                             'type': 'VARCHAR(100)',
                             'medium': 'VARCHAR(100)',
                             'video_codec': 'VARCHAR(100)',
@@ -266,6 +267,7 @@ class DatabaseMigrationManager:
                             'subtitle': 'TEXT',
                             'imdb_link': 'TEXT',
                             'douban_link': 'TEXT',
+                            'tmdb_link': 'TEXT',
                             'type': 'VARCHAR(100)',
                             'medium': 'VARCHAR(100)',
                             'video_codec': 'VARCHAR(100)',
@@ -401,6 +403,7 @@ class DatabaseMigrationManager:
                             'subtitle': 'TEXT',
                             'imdb_link': 'TEXT',
                             'douban_link': 'TEXT',
+                            'tmdb_link': 'TEXT',
                             'type': 'TEXT',
                             'medium': 'TEXT',
                             'video_codec': 'TEXT',
@@ -508,8 +511,12 @@ class DatabaseMigrationManager:
             self._migrate_composite_primary_key(conn, cursor)
 
             # 10. 执行片源平台格式修复迁移
-            logging.info("迁移阶段: 10/10 片源平台格式修复")
+            logging.info("迁移阶段: 10/11 片源平台格式修复")
             self._migrate_source_platform_format(conn, cursor)
+
+            # 11. 执行添加tmdb_link列迁移
+            logging.info("迁移阶段: 11/11 添加 tmdb_link 列")
+            self._migrate_add_tmdb_link_column(conn, cursor)
 
             conn.commit()
             logging.info("✓ 所有数据库迁移检查完成 (%.2fs)", time.time() - start_ts)
@@ -1135,6 +1142,29 @@ class DatabaseMigrationManager:
         except Exception as e:
             logging.warning(f"迁移删除seed_parameters.is_deleted列时出错: {e}")
 
+    def _migrate_add_tmdb_link_column(self, conn, cursor):
+        """迁移：添加seed_parameters表中的tmdb_link列"""
+        try:
+            logging.info("检查是否需要添加seed_parameters表中的tmdb_link列...")
+
+            column_exists = self._column_exists(cursor, 'seed_parameters', 'tmdb_link')
+
+            if not column_exists:
+                logging.info("检测到缺少tmdb_link列，正在添加...")
+
+                if self.db_type == "mysql":
+                    cursor.execute("ALTER TABLE seed_parameters ADD COLUMN tmdb_link TEXT")
+                elif self.db_type == "postgresql":
+                    cursor.execute('ALTER TABLE seed_parameters ADD COLUMN tmdb_link TEXT')
+                else:  # SQLite
+                    self._add_column_to_sqlite_table(conn, cursor, 'seed_parameters', 'tmdb_link', 'TEXT')
+                    logging.info(f"✓ 成功添加seed_parameters表中的tmdb_link列 ({self.db_type.upper()})")
+            else:
+                logging.info("tmdb_link列已存在，无需迁移")
+
+        except Exception as e:
+            logging.warning(f"迁移添加tmdb_link列时出错: {e}")
+
     def _column_exists(self, cursor, table_name: str, column_name: str) -> bool:
         """检查列是否存在"""
         try:
@@ -1442,7 +1472,16 @@ class DatabaseMigrationManager:
                 col_name = col_info[1]
                 col_type = col_info[2]
                 not_null = "NOT NULL" if col_info[3] else ""
-                default_val = f"DEFAULT {col_info[4]}" if col_info[4] is not None else ""
+                
+                # 处理默认值
+                if col_info[4] is not None and str(col_info[4]).strip() != "":
+                    # 如果默认值是字符串 "NULL"，跳过（SQLite 不需要显式的 DEFAULT NULL）
+                    if str(col_info[4]).strip() == "NULL":
+                        default_val = ""
+                    else:
+                        default_val = f"DEFAULT {col_info[4]}"
+                else:
+                    default_val = ""
 
                 # 处理SQLite保留字（如group）
                 if col_name.lower() in ('group', 'order', 'where', 'select', 'insert', 'update', 'delete'):
@@ -1450,19 +1489,27 @@ class DatabaseMigrationManager:
                 else:
                     quoted_col_name = col_name
 
-                create_columns.append(f"{quoted_col_name} {col_type} {not_null} {default_val}")
+                # 构建列定义（确保不会有多余的空格）
+                col_parts = [quoted_col_name, col_type]
+                if not_null:
+                    col_parts.append(not_null)
+                if default_val:
+                    col_parts.append(default_val)
+                
+                col_def_str = " ".join(col_parts)
+                create_columns.append(col_def_str)
                 select_columns.append(col_name)
 
             # 添加新列
             create_columns.append(f"{column_name} {column_def}")
-            select_columns.append(f"NULL as {column_name}")  # 为现有数据设置NULL默认值
+            select_columns.append(column_name)  # 添加新列名到列名列表
 
             # 创建临时表
             create_sql = f"CREATE TABLE {temp_table} ({', '.join(create_columns)})"
             cursor.execute(create_sql)
 
-            # 复制数据
-            insert_sql = f"INSERT INTO {temp_table} ({', '.join(select_columns)}) SELECT {', '.join(select_columns)} FROM {table_name}"
+            # 复制数据（新列的值设为NULL）
+            insert_sql = f"INSERT INTO {temp_table} ({', '.join(select_columns)}) SELECT {', '.join(select_columns[:-1])}, NULL FROM {table_name}"
             cursor.execute(insert_sql)
 
             # 删除原表，重命名临时表

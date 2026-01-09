@@ -126,10 +126,10 @@ class SeedParameter:
                 # PostgreSQL使用ON CONFLICT DO UPDATE
                 insert_sql = f"""
                     INSERT INTO seed_parameters
-                    (hash, torrent_id, site_name, nickname, name, title, subtitle, imdb_link, douban_link, type, medium,
+                    (hash, torrent_id, site_name, nickname, name, title, subtitle, imdb_link, douban_link, tmdb_link, type, medium,
                      video_codec, audio_codec, resolution, team, source, tags, poster, screenshots,
                      statement, body, mediainfo, title_components, removed_ardtudeclarations, is_reviewed, created_at, updated_at)
-                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
                     ON CONFLICT (hash, torrent_id, site_name)
                     DO UPDATE SET
                         nickname = EXCLUDED.nickname,
@@ -138,6 +138,7 @@ class SeedParameter:
                         subtitle = EXCLUDED.subtitle,
                         imdb_link = EXCLUDED.imdb_link,
                         douban_link = EXCLUDED.douban_link,
+                        tmdb_link = EXCLUDED.tmdb_link,
                         type = EXCLUDED.type,
                         medium = EXCLUDED.medium,
                         video_codec = EXCLUDED.video_codec,
@@ -160,10 +161,10 @@ class SeedParameter:
                 # MySQL使用ON DUPLICATE KEY UPDATE
                 insert_sql = f"""
                     INSERT INTO seed_parameters
-                    (hash, torrent_id, site_name, nickname, name, title, subtitle, imdb_link, douban_link, type, medium,
+                    (hash, torrent_id, site_name, nickname, name, title, subtitle, imdb_link, douban_link, tmdb_link, type, medium,
                      video_codec, audio_codec, resolution, team, source, tags, poster, screenshots,
                      statement, body, mediainfo, title_components, removed_ardtudeclarations, is_reviewed, created_at, updated_at)
-                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
                     ON DUPLICATE KEY UPDATE
                         torrent_id = VALUES(torrent_id),
                         nickname = VALUES(nickname),
@@ -172,6 +173,7 @@ class SeedParameter:
                         subtitle = VALUES(subtitle),
                         imdb_link = VALUES(imdb_link),
                         douban_link = VALUES(douban_link),
+                        tmdb_link = VALUES(tmdb_link),
                         type = VALUES(type),
                         medium = VALUES(medium),
                         video_codec = VALUES(video_codec),
@@ -194,10 +196,10 @@ class SeedParameter:
                 # SQLite使用ON CONFLICT DO UPDATE
                 insert_sql = f"""
                     INSERT INTO seed_parameters
-                    (hash, torrent_id, site_name, nickname, name, title, subtitle, imdb_link, douban_link, type, medium,
+                    (hash, torrent_id, site_name, nickname, name, title, subtitle, imdb_link, douban_link, tmdb_link, type, medium,
                      video_codec, audio_codec, resolution, team, source, tags, poster, screenshots,
                      statement, body, mediainfo, title_components, removed_ardtudeclarations, is_reviewed, created_at, updated_at)
-                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
+                    VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
                     ON CONFLICT (hash, torrent_id, site_name)
                     DO UPDATE SET
                         torrent_id = excluded.torrent_id,
@@ -207,6 +209,7 @@ class SeedParameter:
                         subtitle = excluded.subtitle,
                         imdb_link = excluded.imdb_link,
                         douban_link = excluded.douban_link,
+                        tmdb_link = excluded.tmdb_link,
                         type = excluded.type,
                         medium = excluded.medium,
                         video_codec = excluded.video_codec,
@@ -255,6 +258,7 @@ class SeedParameter:
                 parameters.get("subtitle", ""),
                 parameters.get("imdb_link", ""),
                 parameters.get("douban_link", ""),
+                parameters.get("tmdb_link", ""),
                 parameters.get("type", ""),
                 parameters.get("medium", ""),
                 parameters.get("video_codec", ""),
@@ -532,7 +536,7 @@ class SeedParameter:
                     pass
                 else:
                     merged[key] = value
-
+            
         return merged
 
     def _update_by_hash(self, hash: str, parameters: Dict[str, Any]) -> bool:
@@ -561,6 +565,7 @@ class SeedParameter:
                 "subtitle",
                 "imdb_link",
                 "douban_link",
+                "tmdb_link",
                 "type",
                 "medium",
                 "video_codec",
@@ -691,6 +696,7 @@ class SeedParameter:
                 "subtitle",
                 "imdb_link",
                 "douban_link",
+                "tmdb_link",
                 "type",
                 "medium",
                 "video_codec",
@@ -718,6 +724,7 @@ class SeedParameter:
 
             # 处理所有特殊字段，确保它们是SQL兼容的类型
             processed_parameters = {}
+            
             for key, value in parameters.items():
                 # 只处理数据库表中存在的字段
                 if key not in valid_fields:

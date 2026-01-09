@@ -114,7 +114,7 @@ def enhance_description_if_needed(current_description: str,
     # 如果没有任何链接，无法获取
     if not imdb_link and not douban_link:
         logging.warning("没有IMDb或豆瓣链接，无法增强简介")
-        return current_description, imdb_link, False
+        return current_description, "", imdb_link, False
 
     # 尝试从PT-Gen获取新简介
     try:
@@ -127,8 +127,9 @@ def enhance_description_if_needed(current_description: str,
         if not douban_match:
             media_type = ""
             
-        status, posters, new_description, new_imdb, new_douban = upload_data_movie_info(
-            media_type, douban_link, imdb_link, subtitle)
+        status, posters, new_description, new_imdb, new_douban, _ = upload_data_movie_info(
+            media_type, douban_link, imdb_link, subtitle=subtitle
+        )
 
         if not status or not new_description:
             logging.warning(f"获取简介失败: {posters}")

@@ -467,6 +467,7 @@ global_standard_keys:
     "大陆 (Mainland,CHN)": "source.china"
     "大陆剧": "source.china"
     "CN(中国大陆)": "source.china"
+    "China": "source.china"
 
     "HK/TW(港台)": "source.hongkong_taiwan"
 
@@ -478,6 +479,7 @@ global_standard_keys:
     "HK/香港": "source.hongkong"
     "Hongkong(香港)": "source.hongkong"
     "港剧": "source.hongkong"
+    "Hong Kong": "source.hongkong"
 
     # 台湾
     "台湾": "source.taiwan"
@@ -487,6 +489,7 @@ global_standard_keys:
     "台湾 (TWN,CHN)": "source.taiwan"
     "Taiwan(台湾)": "source.taiwan"
     "台剧": "source.taiwan"
+    "Taiwan": "source.taiwan"
 
     # 美国
     "美国": "source.western"
@@ -499,6 +502,7 @@ global_standard_keys:
     "West(欧美)": "source.western"
     "US/EU(欧美)": "source.western"
     "美剧": "source.western"
+    "United States of America": "source.western"
 
     # 日本
     "日本": "source.japan"
@@ -508,6 +512,7 @@ global_standard_keys:
     "日本 (JPN)": "source.japan"
     "JP(日)": "source.japan"
     "Japan(日本)": "source.japan"
+    "Japan": "source.japan"
     "日剧": "source.japan"
 
     # 韩国
@@ -519,6 +524,7 @@ global_standard_keys:
     "KR(韩)": "source.korea"
     "Korea(韩国)": "source.korea"
     "韩剧": "source.korea"
+    "South Korea": "source.korea"
 
     # 英国
     "英国": "source.uk"
@@ -527,21 +533,25 @@ global_standard_keys:
     "GB/英国": "source.uk"
     "UK/英国": "source.uk"
     "英剧": "source.uk"
+    "United Kingdom": "source.uk"
 
     # 法国
     "法国": "source.france"
     "FR": "source.france"
     "FR/法国": "source.france"
+    "France": "source.france"
 
     # 德国
     "德国": "source.germany"
     "DE": "source.germany"
     "DE/德国": "source.germany"
+    "Germany": "source.germany"
 
     # 其他欧洲国家
     "欧洲": "source.europe"
     "EU": "source.europe"
     "EU/欧洲": "source.europe"
+    "Europe": "source.europe"
 
     # 印度
     "印度": "source.india"
@@ -549,46 +559,55 @@ global_standard_keys:
     "IN/印度": "source.india"
     "印度 (IND)": "source.india"
     "India(印度)": "source.india"
+    "India": "source.india"
 
     # 俄罗斯
     "俄罗斯": "source.russia"
     "RU": "source.russia"
     "RU/俄罗斯": "source.russia"
     "Russia(俄国)": "source.russia"
+    "Russia": "source.russia"
 
     # 加拿大
     "加拿大": "source.canada"
     "CA": "source.canada"
     "CA/加拿大": "source.canada"
+    "Canada": "source.canada"
 
     # 巴西
     "巴西": "source.brazil"
     "BR": "source.brazil"
     "BR/巴西": "source.brazil"
+    "Brazil": "source.brazil"
 
     # 瑞典
     "瑞典": "source.sweden"
     "SE": "source.sweden"
     "SE/瑞典": "source.sweden"
+    "Sweden": "source.sweden"
 
     # 丹麦
     "丹麦": "source.denmark"
     "DK": "source.denmark"
     "DK/丹麦": "source.denmark"
+    "Denmark": "source.denmark"
 
     # 泰国
     "泰国": "source.thailand"
     "TH": "source.thailand"
     "TH/泰国": "source.thailand"
     "Thailand(泰国)": "source.thailand"
+    "Thailand": "source.thailand"
 
     # 新加坡
     "新加坡": "source.singapore"
     "新剧": "source.singapore"
+    "Singapore": "source.singapore"
 
     # 马来西亚
     "马来西亚": "source.malaysia"
     "马剧": "source.malaysia"
+    "Malaysia": "source.malaysia"
 
     # 其他
     "其他": "source.other"

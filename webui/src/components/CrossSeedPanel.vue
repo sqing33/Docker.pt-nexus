@@ -403,14 +403,25 @@
                     </el-button>
                   </div>
                 </template>
-                <el-input type="textarea" v-model="torrentData.intro.body" :rows="18" />
+                <el-input type="textarea" v-model="torrentData.intro.body" :rows="21" />
               </el-form-item>
-              <el-form-item label="豆瓣链接">
-                <el-input v-model="torrentData.douban_link" placeholder="请输入豆瓣电影链接" />
-              </el-form-item>
-              <el-form-item label="IMDb链接">
-                <el-input v-model="torrentData.imdb_link" placeholder="请输入IMDb电影链接" />
-              </el-form-item>
+              <el-row :gutter="20">
+                <el-col :span="8">
+                  <el-form-item label="豆瓣链接">
+                    <el-input v-model="torrentData.douban_link" placeholder="请输入豆瓣电影链接" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="8">
+                  <el-form-item label="IMDb链接">
+                    <el-input v-model="torrentData.imdb_link" placeholder="请输入IMDb电影链接" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="8">
+                  <el-form-item label="TMDb链接">
+                    <el-input v-model="torrentData.tmdb_link" placeholder="请输入TMDb电影链接" />
+                  </el-form-item>
+                </el-col>
+              </el-row>
             </el-form>
           </el-tab-pane>
           <el-tab-pane label="媒体信息" name="mediainfo">
@@ -554,6 +565,18 @@
               <div class="param-row">
                 <div class="param-item imdb-item half-width">
                   <div style="display: flex">
+                    <span style="letter-spacing: 2.6px" class="param-label">豆瓣链接</span>
+                    <span style="font-size: 13px">：</span>
+                    <span
+                      :class="[
+                        'param-value',
+                        { empty: !torrentData.douban_link || torrentData.douban_link === 'N/A' },
+                      ]"
+                    >
+                      {{ torrentData.douban_link || 'N/A' }}
+                    </span>
+                  </div>
+                  <div style="display: flex">
                     <span class="param-label">IMDb链接：</span>
                     <span
                       :class="[
@@ -565,15 +588,15 @@
                     </span>
                   </div>
                   <div style="display: flex">
-                    <span style="letter-spacing: 2.6px" class="param-label">豆瓣链接</span>
+                    <span style="letter-spacing: 0" class="param-label">TMDb链接</span>
                     <span style="font-size: 13px">：</span>
                     <span
                       :class="[
                         'param-value',
-                        { empty: !torrentData.douban_link || torrentData.douban_link === 'N/A' },
+                        { empty: !torrentData.tmdb_link || torrentData.tmdb_link === 'N/A' },
                       ]"
                     >
-                      {{ torrentData.douban_link || 'N/A' }}
+                      {{ torrentData.tmdb_link || 'N/A' }}
                     </span>
                   </div>
                 </div>
@@ -1303,6 +1326,7 @@ const getInitialTorrentData = () => ({
   subtitle: '',
   imdb_link: '',
   douban_link: '',
+  tmdb_link: '',
   intro: { statement: '', poster: '', body: '', screenshots: '', removed_ardtudeclarations: [] },
   mediainfo: '',
   source_params: {},
@@ -1602,7 +1626,7 @@ const refreshIntro = async () => {
   isRefreshingIntro.value = true
   ElNotification.info({
     title: '正在重新获取',
-    message: '正在从豆瓣/IMDb重新获取简介...',
+    message: '正在从豆瓣/IMDb/TMDb重新获取简介...',
     duration: 0,
   })
 
@@ -1615,6 +1639,7 @@ const refreshIntro = async () => {
       source_site: sourceSite.value,
       imdb_link: torrentData.value.imdb_link,
       douban_link: torrentData.value.douban_link,
+      tmdb_link: torrentData.value.tmdb_link,
     },
   }
 
@@ -1625,7 +1650,7 @@ const refreshIntro = async () => {
     if (response.data.success && response.data.intro) {
       torrentData.value.intro.body = filterExtraEmptyLines(response.data.intro)
 
-      // 使用返回的IMDb链接、豆瓣链接填充
+      // 使用返回的IMDb链接、豆瓣链接、TMDb链接填充
       if (response.data.extracted_imdb_link && !torrentData.value.imdb_link) {
         torrentData.value.imdb_link = response.data.extracted_imdb_link
       }
@@ -1634,14 +1659,18 @@ const refreshIntro = async () => {
         torrentData.value.douban_link = response.data.extracted_douban_link
       }
 
+      if (response.data.extracted_tmdb_link && !torrentData.value.tmdb_link) {
+        torrentData.value.tmdb_link = response.data.extracted_tmdb_link
+      }
+
       ElNotification.success({
         title: '重新获取成功',
-        message: '已成功从豆瓣/IMDb获取并更新了简介内容。',
+        message: '已成功从豆瓣/IMDb/TMDb获取并更新了简介内容。',
       })
     } else {
       ElNotification.error({
         title: '重新获取失败',
-        message: response.data.error || '无法从豆瓣/IMDb获取简介。',
+        message: response.data.error || '无法从豆瓣/IMDb/TMDb获取简介。',
       })
     }
   } catch (error: any) {
@@ -1686,6 +1715,7 @@ const refreshScreenshots = async () => {
       source_site: sourceSite.value,
       imdb_link: torrentData.value.imdb_link,
       douban_link: torrentData.value.douban_link,
+      tmdb_link: torrentData.value.tmdb_link,
     },
     savePath: torrent.value.save_path,
     torrentName: torrent.value.name,
@@ -2152,6 +2182,7 @@ const refreshPosters = async () => {
       source_site: sourceSite.value,
       imdb_link: torrentData.value.imdb_link,
       douban_link: torrentData.value.douban_link,
+      tmdb_link: torrentData.value.tmdb_link,
     },
     savePath: torrent.value.save_path,
     torrentName: torrent.value.name,
@@ -2164,6 +2195,18 @@ const refreshPosters = async () => {
 
     if (response.data.success && response.data.posters) {
       torrentData.value.intro.poster = response.data.posters
+
+      // 同时更新链接（如果返回了的话）
+      if (response.data.extracted_imdb_link && !torrentData.value.imdb_link) {
+        torrentData.value.imdb_link = response.data.extracted_imdb_link
+      }
+      if (response.data.extracted_douban_link && !torrentData.value.douban_link) {
+        torrentData.value.douban_link = response.data.extracted_douban_link
+      }
+      if (response.data.extracted_tmdb_link && !torrentData.value.tmdb_link) {
+        torrentData.value.tmdb_link = response.data.extracted_tmdb_link
+      }
+
       ElNotification.success({
         title: '重新获取成功',
         message: '已成功生成并加载了新的海报。',
@@ -2246,6 +2289,7 @@ const handleImageError = async (url: string, type: 'poster' | 'screenshot', inde
       source_site: sourceSite.value,
       imdb_link: torrentData.value.imdb_link,
       douban_link: torrentData.value.douban_link,
+      tmdb_link: torrentData.value.tmdb_link,
     },
     savePath: torrent.value.save_path,
     torrentName: torrent.value.name,
@@ -2339,6 +2383,7 @@ const processDbData = (dataRes: any, tId: string) => {
     subtitle: dbData.subtitle,
     imdb_link: dbData.imdb_link,
     douban_link: dbData.douban_link,
+    tmdb_link: dbData.tmdb_link,
     intro: {
       statement: filterExtraEmptyLines(dbData.statement) || '',
       poster: dbData.poster || '',
@@ -2528,6 +2573,7 @@ const fetchTorrentInfo = async () => {
           subtitle: dbData.subtitle,
           imdb_link: dbData.imdb_link,
           douban_link: dbData.douban_link,
+          tmdb_link: dbData.tmdb_link,
           intro: {
             statement: filterExtraEmptyLines(dbData.statement) || '',
             poster: dbData.poster || '',
@@ -2610,6 +2656,7 @@ const fetchTorrentInfo = async () => {
         subtitle: dbData.subtitle,
         imdb_link: dbData.imdb_link,
         douban_link: dbData.douban_link,
+        tmdb_link: dbData.tmdb_link,
         intro: {
           statement: filterExtraEmptyLines(dbData.statement) || '',
           poster: dbData.poster || '',
@@ -2851,6 +2898,7 @@ const fetchTorrentInfo = async () => {
           subtitle: dbData.subtitle,
           imdb_link: dbData.imdb_link,
           douban_link: dbData.douban_link,
+          tmdb_link: dbData.tmdb_link,
           intro: {
             statement: filterExtraEmptyLines(dbData.statement) || '',
             poster: dbData.poster || '',
@@ -3141,6 +3189,7 @@ const goToPublishPreviewStep = async () => {
       subtitle: torrentData.value.subtitle,
       imdb_link: torrentData.value.imdb_link,
       douban_link: torrentData.value.douban_link,
+      tmdb_link: torrentData.value.tmdb_link,
       poster: torrentData.value.intro.poster,
       screenshots: torrentData.value.intro.screenshots,
       statement: filterExtraEmptyLines(torrentData.value.intro.statement),

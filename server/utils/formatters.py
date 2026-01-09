@@ -196,3 +196,69 @@ def process_bbcode_images_and_cleanup(bbcode_text: str) -> str:
     processed_text = re.sub(r"\n\s*\n\s*\n", "\n\n", processed_text)
 
     return processed_text.strip()
+
+
+def normalize_douban_link(link: str) -> str:
+    """
+    规范化豆瓣链接，只保留到数字 ID 部分
+
+    Args:
+        link (str): 原始豆瓣链接
+
+    Returns:
+        str: 规范化后的豆瓣链接，格式为 https://movie.douban.com/subject/{id}
+             如果链接无效则返回空字符串
+
+    Examples:
+        >>> normalize_douban_link("https://movie.douban.com/subject/35371261/ratings")
+        "https://movie.douban.com/subject/35371261"
+        >>> normalize_douban_link("https://movie.douban.com/subject/35371261")
+        "https://movie.douban.com/subject/35371261"
+        >>> normalize_douban_link("")
+        ""
+        >>> normalize_douban_link(None)
+        ""
+    """
+    if not link:
+        return ""
+
+    # 使用正则表达式匹配并提取标准格式
+    match = re.match(r'(https?://movie\.douban\.com/subject/\d+)', link)
+    if match:
+        return match.group(1)
+
+    return ""
+
+
+def normalize_imdb_link(link: str) -> str:
+    """
+    规范化 IMDB 链接，只保留到 tt 数字 ID 部分
+
+    Args:
+        link (str): 原始 IMDB 链接
+
+    Returns:
+        str: 规范化后的 IMDB 链接，格式为 https://www.imdb.com/title/tt{id}
+             如果链接无效则返回空字符串
+
+    Examples:
+        >>> normalize_imdb_link("https://www.imdb.com/title/tt16428256/ratings")
+        "https://www.imdb.com/title/tt16428256"
+        >>> normalize_imdb_link("https://www.imdb.com/title/tt16428256")
+        "https://www.imdb.com/title/tt16428256"
+        >>> normalize_imdb_link("")
+        ""
+        >>> normalize_imdb_link(None)
+        ""
+    """
+
+    if not link:
+        return ""
+
+    # 使用正则表达式匹配并提取标准格式
+    match = re.match(r'(https?://www\.imdb\.com/title/tt\d+)', link)
+    if match:
+        result = match.group(1)
+        return result
+
+    return ""

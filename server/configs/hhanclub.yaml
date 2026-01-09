@@ -52,7 +52,7 @@ source_parsers:
       "UHD REMUX": "medium.remux"
       "Remux": "medium.remux"
       "Encode": "medium.encode"
-      "WEB-DL": "medium.web_dl"
+      "WEB-DL": "medium.webdl"
       "HDTV": "medium.hdtv"
       "DVDR": "medium.dvdr"
       "CD": "medium.cd"

@@ -2,7 +2,7 @@ import re
 import os
 import yaml
 from bs4 import BeautifulSoup
-from utils import extract_tags_from_mediainfo, extract_origin_from_description
+from utils import extract_tags_from_mediainfo, extract_origin_from_description, normalize_douban_link, normalize_imdb_link
 from utils import validate_media_info_format
 from config import GLOBAL_MAPPINGS
 
@@ -207,18 +207,21 @@ class SSDSpecialExtractor:
         # 提取豆瓣或IMDb链接以使用ptgen获取简介
         douban_link = ""
         imdb_link = ""
+        tmdb_link = ""
 
         douban_link_tag = self.soup.select_one("a[href*='movie.douban.com/subject/']")
         if douban_link_tag:
-            douban_link = douban_link_tag.get("href", "")
+            douban_link = normalize_douban_link(douban_link_tag.get("href", ""))
 
         imdb_link_tag = self.soup.select_one("a[href*='imdb.com/title/tt']")
         if imdb_link_tag:
-            imdb_link = imdb_link_tag.get("href", "")
+            imdb_link = normalize_imdb_link(imdb_link_tag.get("href", ""))
 
         if not douban_link and douban_section:
             douban_link_tag = douban_section.select_one("a[href*='movie.douban.com/subject/']")
-            if not douban_link_tag:
+            if douban_link_tag:
+                douban_link = normalize_douban_link(douban_link_tag.get("href", ""))
+            else:
                 douban_text = douban_section.get_text()
                 douban_match = re.search(r"https?://movie\.douban\.com/subject/\d+", douban_text)
                 if douban_match:
@@ -226,7 +229,9 @@ class SSDSpecialExtractor:
 
         if not imdb_link and imdb_section:
             imdb_link_tag = imdb_section.select_one("a[href*='imdb.com/title/tt']")
-            if not imdb_link_tag:
+            if imdb_link_tag:
+                imdb_link = normalize_imdb_link(imdb_link_tag.get("href", ""))
+            else:
                 imdb_text = imdb_section.get_text() if imdb_section else ""
                 imdb_match = re.search(r"https?://www\.imdb\.com/title/tt\d+", imdb_text)
                 if imdb_match:
@@ -236,14 +241,25 @@ class SSDSpecialExtractor:
             try:
                 from utils import upload_data_movie_info
 
-                movie_status, poster_content, description_content, imdb_content, douban_content = (
-                    upload_data_movie_info("", douban_link, imdb_link, "")
-                )
+                (
+                    movie_status,
+                    poster_content,
+                    description_content,
+                    imdb_content,
+                    douban_content,
+                    tmdb_content,
+                ) = upload_data_movie_info("", douban_link, imdb_link, "")
 
                 if movie_status and description_content:
                     body = description_content
                     if not images and poster_content:
                         images.append(poster_content)
+                    if imdb_content:
+                        imdb_link = imdb_content
+                    if douban_content:
+                        douban_link = douban_content
+                    if tmdb_content:
+                        tmdb_link = tmdb_content
                 else:
                     print(f"PT-Gen获取电影信息失败: {description_content}")
             except Exception as e:
@@ -258,6 +274,9 @@ class SSDSpecialExtractor:
             "poster": images[0] if images else "",  # 海报
             "body": re.sub(r"\n{2,}", "\n", body),  # 正文内容
             "screenshots": "\n".join(screenshots) if screenshots else "",  # 截图信息
+            "imdb_link": imdb_link,
+            "douban_link": douban_link,
+            "tmdb_link": tmdb_link,
         }
 
         return intro
@@ -393,7 +412,7 @@ class SSDSpecialExtractor:
         # 在"不可说"站点中，豆瓣链接在特定的a标签中
         douban_link = self.soup.select_one("a[href*='movie.douban.com/subject/']")
         if douban_link:
-            douban_info = douban_link.get("href", "")
+            douban_info = normalize_douban_link(douban_link.get("href", ""))
         else:
             # 如果没有找到特定链接，尝试从文本中提取
             descr_container = self.soup.select_one("div#kdescr")
@@ -424,7 +443,7 @@ class SSDSpecialExtractor:
         # 在"不可说"站点中，IMDb链接在特定的a标签中
         imdb_link = self.soup.select_one("a[href*='imdb.com/title/tt']")
         if imdb_link:
-            imdb_info = imdb_link.get("href", "")
+            imdb_info = normalize_imdb_link(imdb_link.get("href", ""))
         else:
             # 如果没有找到特定链接，尝试从文本中提取
             descr_container = self.soup.select_one("div#kdescr")

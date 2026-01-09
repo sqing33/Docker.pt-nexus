@@ -1,6 +1,13 @@
 {
   "history": [
     {
+      "version": "v3.5.0",
+      "date": "2026.01.10",
+      "changes": [
+        "新增：ptgen-tmdb，解决部分影片豆瓣词条被删除而无法获取 ptgen 内容的问题（ptgen-tmdb 代码来自于星陨阁，迁移为 python 版本）"
+      ]
+    },
+    {
       "version": "v3.4.8",
       "date": "2026.01.09",
       "changes": [

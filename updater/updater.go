@@ -40,7 +40,7 @@ var (
 func init() {
 	if os.Getenv("DEV_ENV") == "true" {
 		// 开发环境
-		localConfigFile = getEnv("LOCAL_CONFIG_FILE", "/home/sqing/Codes/PTNexus-dev/CHANGELOG.json")
+		localConfigFile = getEnv("LOCAL_CONFIG_FILE", "/home/sqing/Codes/Docker.pt-nexus-dev/CHANGELOG.json")
 	} else {
 		// 生产环境
 		localConfigFile = getEnv("LOCAL_CONFIG_FILE", "/app/CHANGELOG.json")
@@ -660,7 +660,7 @@ func pullRepoWithFallback() error {
 		os.RemoveAll(REPO_DIR)
 		return cloneRepoWithFallback()
 	}
-	
+
 	currentURL := strings.TrimSpace(string(output))
 	var repoSource string
 	if strings.Contains(currentURL, "gitee.com") {
@@ -676,7 +676,7 @@ func pullRepoWithFallback() error {
 
 	// 尝试多个分支
 	branches := []string{"main", "master"}
-	
+
 	for _, branch := range branches {
 		log.Printf("尝试 fetch %s 分支...", branch)
 		err = execGitWithTimeout(REPO_TIMEOUT, "-C", REPO_DIR, "fetch", "origin", branch)
@@ -848,17 +848,17 @@ func installUpdateHandler(w http.ResponseWriter, r *http.Request) {
 	localVersion := getLocalVersion()
 	remoteVersion := config.History[0].Version
 
-    // ================== 新增校验开始 ==================
-    // 如果配置文件中标记了 disable_update，则拒绝后端更新
-    if config.History[0].DisableUpdate {
-        log.Printf("版本 %s 标记为 disable_update，拒绝执行热更新", remoteVersion)
-        json.NewEncoder(w).Encode(map[string]interface{}{
-            "success": false,
-            "error":   "当前版本需要更新 Docker 镜像，无法通过脚本进行热更新，请手动拉取最新镜像。",
-        })
-        return
-    }
-    // ================== 新增校验结束 ==================
+	// ================== 新增校验开始 ==================
+	// 如果配置文件中标记了 disable_update，则拒绝后端更新
+	if config.History[0].DisableUpdate {
+		log.Printf("版本 %s 标记为 disable_update，拒绝执行热更新", remoteVersion)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "当前版本需要更新 Docker 镜像，无法通过脚本进行热更新，请手动拉取最新镜像。",
+		})
+		return
+	}
+	// ================== 新增校验结束 ==================
 
 	if !isNewerVersion(remoteVersion, localVersion) {
 		log.Printf("本地版本 %s 已是最新，无需更新", localVersion)

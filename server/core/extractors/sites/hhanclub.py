@@ -1,6 +1,6 @@
 import re
 from bs4 import BeautifulSoup
-from utils import extract_tags_from_mediainfo, extract_origin_from_description
+from utils import extract_tags_from_mediainfo, extract_origin_from_description, normalize_douban_link, normalize_imdb_link
 import os
 from config import TEMP_DIR, GLOBAL_MAPPINGS
 import yaml
@@ -124,19 +124,32 @@ class HHCLUBSpecialExtractor:
         # 4. 提取豆瓣/IMDb链接以供PT-Gen使用
         douban_link = self.extract_douban_info()
         imdb_link = self.extract_imdb_info()
+        tmdb_link = ""
 
         # 5. 使用ptgen获取电影信息正文
         if douban_link or imdb_link:
             try:
                 from utils import upload_data_movie_info
-                movie_status, poster_content, description_content, imdb_content, douban_content = upload_data_movie_info(
-                    "", douban_link, imdb_link, "")
+                (
+                    movie_status,
+                    poster_content,
+                    description_content,
+                    imdb_content,
+                    douban_content,
+                    tmdb_content,
+                ) = upload_data_movie_info("", douban_link, imdb_link, "")
 
                 if movie_status and description_content:
                     body = description_content
                     # 如果页面上没找到海报，使用ptgen获取的海报
                     if not images and poster_content:
                         images.append(poster_content)
+                    if imdb_content:
+                        imdb_link = imdb_content
+                    if douban_content:
+                        douban_link = douban_content
+                    if tmdb_content:
+                        tmdb_link = tmdb_content
                 else:
                     print(f"PT-Gen获取电影信息失败: {description_content}")
             except Exception as e:
@@ -155,6 +168,9 @@ class HHCLUBSpecialExtractor:
             "poster": images[0] if images else "",
             "body": body,
             "screenshots": "\n".join(screenshots),
+            "imdb_link": imdb_link,
+            "douban_link": douban_link,
+            "tmdb_link": tmdb_link,
         }
         return intro
 
@@ -303,14 +319,18 @@ class HHCLUBSpecialExtractor:
         """
         douban_link_tag = self.soup.select_one(
             "a[href*='movie.douban.com/subject/']")
-        return douban_link_tag.get("href", "") if douban_link_tag else ""
+        if douban_link_tag:
+            return normalize_douban_link(douban_link_tag.get("href", ""))
+        return ""
 
     def extract_imdb_info(self):
         """
         提取IMDb信息，直接在全文搜索链接。
         """
         imdb_link_tag = self.soup.select_one("a[href*='imdb.com/title/tt']")
-        return imdb_link_tag.get("href", "") if imdb_link_tag else ""
+        if imdb_link_tag:
+            return normalize_imdb_link(imdb_link_tag.get("href", ""))
+        return ""
 
     def extract_title(self):
         """

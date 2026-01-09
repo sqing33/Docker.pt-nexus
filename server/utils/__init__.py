@@ -12,6 +12,8 @@ from .formatters import (
     cookies_raw2jar,
     ensure_scheme,
     process_bbcode_images_and_cleanup,
+    normalize_douban_link,
+    normalize_imdb_link,
 )
 from .title import (
     upload_data_title,
@@ -75,4 +77,4 @@ from .content_filter import (
 from .description_enhancer import enhance_description_if_needed
 from .torrent_manager import TorrentManager
 from .torrent_list_fetcher import TorrentListFetcher
-from .imdb2tmdb import get_tmdb_url_from_any_source
+from .imdb2tmdb2douban import get_tmdb_url_from_any_source

@@ -4,7 +4,7 @@ import yaml
 import datetime
 import uuid
 from bs4 import BeautifulSoup
-from utils import extract_tags_from_mediainfo, extract_origin_from_description, validate_media_info_format
+from utils import extract_tags_from_mediainfo, extract_origin_from_description, validate_media_info_format, normalize_douban_link, normalize_imdb_link
 from utils import TorrentListFetcher
 from config import GLOBAL_MAPPINGS
 
@@ -134,7 +134,7 @@ class PTerClubSpecialExtractor:
             if douban_value_td:
                 link_a = douban_value_td.find("a", href=True)
                 if link_a:
-                    douban_link = link_a['href']
+                    douban_link = normalize_douban_link(link_a['href'])
 
         # 2. 提取 IMDb 链接
         imdb_row = self.soup.find(
@@ -146,19 +146,19 @@ class PTerClubSpecialExtractor:
             if imdb_value_td:
                 link_a = imdb_value_td.find("a", href=True)
                 if link_a:
-                    imdb_link = link_a['href']
+                    imdb_link = normalize_imdb_link(link_a['href'])
 
         # 如果没找到，尝试在全文链接中搜索兜底
         if not douban_link:
             d_link = self.soup.select_one(
                 "a[href*='movie.douban.com/subject/']")
             if d_link:
-                douban_link = d_link.get("href", "").strip()
+                douban_link = normalize_douban_link(d_link.get("href", ""))
 
         if not imdb_link:
             i_link = self.soup.select_one("a[href*='imdb.com/title/tt']")
             if i_link:
-                imdb_link = i_link.get("href", "").strip()
+                imdb_link = normalize_imdb_link(i_link.get("href", ""))
         # --- 修复结束 ---
 
         intro["douban_link"] = douban_link
@@ -169,12 +169,24 @@ class PTerClubSpecialExtractor:
         images = []
         try:
             from utils import upload_data_movie_info
-            movie_status, poster_content, description_content, _, _ = upload_data_movie_info(
-                "", douban_link, imdb_link, subtitle)
+            (
+                movie_status,
+                poster_content,
+                description_content,
+                extracted_imdb,
+                extracted_douban,
+                extracted_tmdb,
+            ) = upload_data_movie_info("", douban_link, imdb_link, subtitle=subtitle)
             if movie_status and description_content:
                 body = description_content
                 if poster_content:
                     images.append(poster_content)
+                if extracted_imdb:
+                    imdb_link = extracted_imdb
+                if extracted_douban:
+                    douban_link = extracted_douban
+                if extracted_tmdb:
+                    intro["tmdb_link"] = extracted_tmdb
         except Exception as e:
             print(f"PT-Gen错误: {e}")
 

@@ -8,7 +8,7 @@ import requests
 import urllib.parse
 
 # 导入自定义工具函数
-from utils import handle_incomplete_links, search_by_subtitle
+from utils import handle_incomplete_links, search_by_subtitle, normalize_imdb_link
 from utils.content_filter import get_content_filter, get_unwanted_image_urls
 from config import GLOBAL_MAPPINGS
 from .sites.audiences import AudiencesSpecialExtractor
@@ -216,7 +216,7 @@ class Extractor:
             # 优先级 1: 查找专用的 div#kimdb 容器
             kimdb_div = soup.select_one("div#kimdb a[href*='imdb.com/title/tt']")
             if kimdb_div and kimdb_div.get("href"):
-                imdb_link = kimdb_div.get("href")
+                imdb_link = normalize_imdb_link(kimdb_div.get("href"))
 
             # 优先级 2 (后备): 在主简介容器(div#kdescr)的文本中搜索
             descr_text = descr_container.get_text()
@@ -246,12 +246,14 @@ class Extractor:
                     ):
                         douban_link = douban_match.group(1)
 
-            # --- [新方案] 使用远程 API 服务互补缺失的 IMDb/豆瓣 链接 ---
+            # --- [新方案] 使用远程 API 服务互补缺失的 IMDb/豆瓣/TMDb 链接 ---
             # 使用工具函数处理不完整的链接
-            imdb_link, douban_link = handle_incomplete_links(imdb_link, douban_link, subtitle)
+            tmdb_link = ""  # 初始化 tmdb_link
+            imdb_link, douban_link, tmdb_link, _ = handle_incomplete_links(imdb_link, douban_link, tmdb_link, subtitle)
 
             extracted_data["intro"]["imdb_link"] = imdb_link
             extracted_data["intro"]["douban_link"] = douban_link
+            extracted_data["intro"]["tmdb_link"] = tmdb_link
 
             # Process description content to extract quotes, images, and body text
             descr_html_string = str(descr_container)

@@ -170,112 +170,124 @@ def search_by_subtitle(subtitle):
     return imdb_link, douban_link
 
 
-def handle_incomplete_links(imdb_link, douban_link, subtitle):
+def handle_incomplete_links(imdb_link, douban_link, tmdb_link, subtitle):
     """
-    当检测到 IMDb 或豆瓣链接不完整时，尝试使用远程 API 补充缺失的链接
+    当检测到 IMDb、豆瓣或 TMDb 链接不完整时，尝试使用远程 API 补充缺失的链接
     
     Args:
         imdb_link (str): 已有的 IMDb 链接
         douban_link (str): 已有的豆瓣链接
+        tmdb_link (str): 已有的 TMDb 链接
+        subtitle (str): 副标题（用于搜索）
         
     Returns:
-        tuple: (imdb_link, douban_link) 补充后的链接元组
+        tuple: (imdb_link, douban_link, tmdb_link, use_tmdb_fallback) 补充后的链接元组和兜底标志
     """
-    if not imdb_link and not douban_link:
+    # 导入统一转换函数
+    from utils.imdb2tmdb2douban import convert_media_id
+    
+    # 初始化兜底标志
+    use_tmdb_fallback = False
+    
+    # 如果三个链接都缺失，尝试通过副标题搜索
+    if not imdb_link and not douban_link and not tmdb_link:
         logging.info("未找到任何链接，尝试使用远程 API 补充...")
         print("未找到任何链接，尝试使用远程 API 补充...")
+        
+        # 尝试通过副标题搜索（保持原有逻辑）
         imdb_link, douban_link = search_by_subtitle(subtitle)
-
-    if (imdb_link and not douban_link) or (douban_link and not imdb_link):
-        logging.info("检测到 IMDb/豆瓣 链接不完整，尝试使用远程 API 补充...")
-        print("检测到 IMDb/豆瓣 链接不完整，尝试使用远程 API 补充...")
-
-        try:
-            if imdb_link and not douban_link:
-                print("[DEBUG] 尝试从IMDb链接获取豆瓣链接")
-                if imdb_id_match := re.search(r'(tt\d+)', imdb_link):
-                    imdb_id = imdb_id_match.group(1)
-                    api_path = f"/?imdbid={imdb_id}"
-                    logging.info(f"使用 IMDb ID 查询远程 API")
-                    print(f"[*] 正在使用 IMDb ID 查询 API")
-
-                    success, data, error_msg = call_api_with_fallback(api_path, timeout=10)
-                    if success:
-                        # data 可能是 dict 或 list
-                        if isinstance(data, dict):
-                            data = data.get('data', [])
-                        elif isinstance(data, list):
-                            data = data
-                        if data and data[0].get('doubanid'):
-                            douban_id = data[0]['doubanid']
-                            douban_link = f"https://movie.douban.com/subject/{douban_id}/"
-                            logging.info(f"✅ 成功从 API 补充豆瓣链接: {douban_link}")
-                            print(f"  [+] 成功补充豆瓣链接: {douban_link}")
-                        else:
-                            logging.warning(f"API 响应中未找到与 {imdb_id} 匹配的豆瓣ID")
-                            print(f"  [-] API 响应中未找到与 {imdb_id} 匹配的豆瓣ID")
-                    else:
-                        logging.warning(f"API 查询失败: {error_msg}")
-                        print(f"  [-] API 查询失败: {error_msg}")
-
-            elif douban_link and not imdb_link:
-                print("[DEBUG] 尝试从豆瓣链接获取IMDb链接")
-                if douban_id_match := re.search(r'subject/(\d+)', douban_link):
-                    douban_id = douban_id_match.group(1)
-                    api_path = f"/?doubanid={douban_id}"
-                    logging.info(f"使用 Douban ID 查询远程 API")
-                    print(f"[*] 正在使用 Douban ID 查询 API")
-
-                    success, data, error_msg = call_api_with_fallback(api_path, timeout=10)
-                    if success:
-                        # data 可能是 dict 或 list
-                        if isinstance(data, dict):
-                            data = data.get('data', [])
-                        elif isinstance(data, list):
-                            data = data
-                        if data and data[0].get('imdbid'):
-                            imdb_id = data[0]['imdbid']
-                            imdb_link = f"https://www.imdb.com/title/{imdb_id}/"
-                            logging.info(f"✅ 成功从 API 补充 IMDb 链接: {imdb_link}")
-                            print(f"  [+] 成功补充 IMDb 链接: {imdb_link}")
-                        else:
-                            logging.warning(
-                                f"API 响应中未找到与 {douban_id} 匹配的IMDb ID")
-                            print(f"  [-] API 响应中未找到与 {douban_id} 匹配的IMDb ID")
-                    else:
-                        logging.warning(f"API 查询失败: {error_msg}")
-                        print(f"  [-] API 查询失败: {error_msg}")
-
-        except Exception as e:
-            logging.error(f"处理链接补充时发生错误: {e}", exc_info=True)
-            print(f"  [!] 处理链接补充时发生错误: {e}")
-
-    print(
-        f"[DEBUG] handle_incomplete_links returning: imdb_link={imdb_link}, douban_link={douban_link}"
-    )
-    return imdb_link, douban_link
+        
+        # 如果获得了IMDb或豆瓣链接，再尝试获取TMDb链接
+        if imdb_link or douban_link:
+            result = convert_media_id(imdb_link or douban_link)
+            if result['success']:
+                tmdb_link = result.get('tmdb', '')
+        
+        return imdb_link, douban_link, tmdb_link, use_tmdb_fallback
+    
+    # 如果没有豆瓣链接，尝试通过 TMDb 或 IMDb 获取豆瓣链接
+    if not douban_link:
+        # 优先使用 TMDb 链接，其次使用 IMDb 链接
+        if tmdb_link:
+            logging.info("没有豆瓣链接，尝试通过 TMDb 链接获取豆瓣链接...")
+            print("没有豆瓣链接，尝试通过 TMDb 链接获取豆瓣链接...")
+            
+            result = convert_media_id(tmdb_link)
+            if result['success'] and result.get('douban'):
+                douban_link = result['douban']
+                logging.info(f"✅ 成功通过TMDb链接获取豆瓣链接: {douban_link}")
+                print(f"  [+] 成功通过TMDb链接获取豆瓣链接: {douban_link}")
+        elif imdb_link:
+            logging.info("没有豆瓣链接，尝试通过 IMDb 链接获取豆瓣链接...")
+            print("没有豆瓣链接，尝试通过 IMDb 链接获取豆瓣链接...")
+            
+            result = convert_media_id(imdb_link)
+            if result['success'] and result.get('douban'):
+                douban_link = result['douban']
+                logging.info(f"✅ 成功通过IMDb链接获取豆瓣链接: {douban_link}")
+                print(f"  [+] 成功通过IMDb链接获取豆瓣链接: {douban_link}")
+            else:
+                # 如果通过 IMDb 获取豆瓣链接失败，设置使用 TMDB 兜底
+                logging.warning("通过IMDb链接获取豆瓣链接失败，将使用TMDB作为兜底方案")
+                print("  [-] 通过IMDb链接获取豆瓣链接失败，将使用TMDB作为兜底方案")
+                use_tmdb_fallback = True
+    
+    # 使用统一转换函数补充缺失的链接
+    input_url = imdb_link or douban_link or tmdb_link
+    
+    if input_url:
+        logging.info("检测到链接不完整，尝试使用远程 API 补充...")
+        print("检测到链接不完整，尝试使用远程 API 补充...")
+        
+        result = convert_media_id(input_url)
+        
+        if result['success']:
+            # 补充缺失的链接
+            if not imdb_link and result.get('imdb'):
+                imdb_link = result['imdb']
+                logging.info(f"✅ 成功补充IMDb链接: {imdb_link}")
+                print(f"  [+] 成功补充IMDb链接: {imdb_link}")
+            
+            if not douban_link and result.get('douban'):
+                douban_link = result['douban']
+                logging.info(f"✅ 成功补充豆瓣链接: {douban_link}")
+                print(f"  [+] 成功补充豆瓣链接: {douban_link}")
+            
+            if not tmdb_link and result.get('tmdb'):
+                tmdb_link = result['tmdb']
+                logging.info(f"✅ 成功补充TMDb链接: {tmdb_link}")
+                print(f"  [+] 成功补充TMDb链接: {tmdb_link}")
+        else:
+            logging.warning(f"API转换失败: {result.get('message')}")
+            print(f"  [-] API转换失败: {result.get('message')}")
+    
+    return imdb_link, douban_link, tmdb_link, use_tmdb_fallback
 
 
 def upload_data_movie_info(media_type: str,
                            douban_link: str,
                            imdb_link: str,
+                           tmdb_link: str = "",
                            subtitle: str = ""):
     """
     通过多个PT-Gen API获取电影信息的完整内容，包括海报、简介和IMDb链接。
-    支持从豆瓣链接或IMDb链接获取信息，失败时自动切换API。
-    返回: (状态, 海报, 简介, IMDb链接, 豆瓣链接)
+    支持从豆瓣链接、IMDb链接或TMDb链接获取信息，失败时自动切换API。
+    返回: (状态, 海报, 简介, IMDb链接, 豆瓣链接, TMDb链接)
     """
-    # 如果缺失豆瓣链接，尝试使用远程API获取豆瓣链接
-    if not douban_link:
-        print("检测到缺失豆瓣链接，尝试通过远程API补充豆瓣链接...")
-        new_imdb_link, new_douban_link = handle_incomplete_links(
-            imdb_link, douban_link, subtitle)
-        douban_link = new_douban_link
-
-        if douban_link or imdb_link:
-            print(f"成功补充链接: IMDb={imdb_link}, 豆瓣={douban_link}")
+    # 如果缺失链接，尝试使用远程API补充
+    use_tmdb_fallback = False  # 初始化兜底标志
+    if not douban_link or not imdb_link or not tmdb_link:
+        print("检测到缺失链接，尝试通过远程API补充...")
+        new_imdb_link, new_douban_link, new_tmdb_link, use_tmdb_fallback = handle_incomplete_links(
+            imdb_link, douban_link, tmdb_link, subtitle)
+        
+        if new_imdb_link or new_douban_link or new_tmdb_link:
+            imdb_link = new_imdb_link or imdb_link
+            douban_link = new_douban_link or douban_link
+            tmdb_link = new_tmdb_link or tmdb_link
+            print(f"成功补充链接: IMDb={imdb_link}, 豆瓣={douban_link}, TMDb={tmdb_link}")
         else:
-            print("未能补充IMDb链接或豆瓣链接")
+            print("未能补充任何链接")
 
     # 过滤豆瓣链接，只保留完整的 subject URL 部分
     if douban_link:
@@ -327,79 +339,101 @@ def upload_data_movie_info(media_type: str,
                 'token': cspt_token
             })
 
-    # 确定要使用的资源URL（豆瓣优先）
-    if not douban_link and not imdb_link:
-        return False, "", "", "", "未提供豆瓣或IMDb链接。"
+    # 确定要使用的资源URL（优先级：豆瓣 > TMDb > IMDb）
+    if not douban_link and not tmdb_link and not imdb_link:
+        return False, "", "", "", "", "未提供豆瓣、TMDb或IMDb链接。"
 
     # 确保返回的链接是完整的
     final_douban_link = douban_link
     final_imdb_link = imdb_link
+    final_tmdb_link = tmdb_link
 
-    # 尝试每个API
-    last_error = ""
-    for api_config in api_configs:
-        try:
-            print(f"尝试使用API: {api_config['name']}")
+    # 判断是否有豆瓣链接
+    if douban_link:
+        # 有豆瓣链接，尝试豆瓣 API
+        last_error = ""
+        for api_config in api_configs:
+            try:
+                print(f"尝试使用API: {api_config['name']}")
 
-            if api_config['type'] == 'cspt_format':
-                # CSPT格式API (cspt.top)
-                success, poster, description, imdb_link_result = _call_cspt_format_api(
-                    api_config, douban_link, imdb_link, media_type)
-            elif api_config['type'] == 'tju_format':
-                # TJU格式API (ptgen.tju.pt) - 强制使用豆瓣模式
-                success, poster, description, imdb_link_result = _call_tju_format_api(
-                    api_config, douban_link, imdb_link, media_type)
-            elif api_config['type'] == 'refactor_url_format':
-                # 新的URL格式API (pt-nexus-ptgen.sqing33.dpdns.org)
-                success, poster, description, imdb_link_result = _call_refactor_url_format_api(
-                    api_config, douban_link, imdb_link, media_type)
-            elif api_config['type'] == 'url_format':
-                # URL格式API (workers.dev, homeqian.top)
-                success, poster, description, imdb_link_result = _call_url_format_api(
-                    api_config, douban_link, imdb_link, media_type)
-            elif api_config['type'] == 'iyuu_format':
-                # IYUU格式API (api.iyuu.cn)
-                success, poster, description, imdb_link_result = _call_iyuu_format_api(
-                    api_config, douban_link, imdb_link, media_type)
-            else:
+                if api_config['type'] == 'cspt_format':
+                    # CSPT格式API (cspt.top)
+                    success, poster, description, imdb_link_result = _call_cspt_format_api(
+                        api_config, douban_link, imdb_link, tmdb_link, media_type)
+                elif api_config['type'] == 'tju_format':
+                    # TJU格式API (ptgen.tju.pt) - 强制使用豆瓣模式
+                    success, poster, description, imdb_link_result = _call_tju_format_api(
+                        api_config, douban_link, imdb_link, tmdb_link, media_type)
+                elif api_config['type'] == 'refactor_url_format':
+                    # 新的URL格式API (pt-nexus-ptgen.sqing33.dpdns.org)
+                    success, poster, description, imdb_link_result = _call_refactor_url_format_api(
+                        api_config, douban_link, imdb_link, tmdb_link, media_type)
+                elif api_config['type'] == 'url_format':
+                    # URL格式API (workers.dev, homeqian.top)
+                    success, poster, description, imdb_link_result = _call_url_format_api(
+                        api_config, douban_link, imdb_link, tmdb_link, media_type)
+                elif api_config['type'] == 'iyuu_format':
+                    # IYUU格式API (api.iyuu.cn)
+                    success, poster, description, imdb_link_result = _call_iyuu_format_api(
+                        api_config, douban_link, imdb_link, tmdb_link, media_type)
+                else:
+                    continue
+
+                if success:
+                    print(f"API {api_config['name']} 调用成功")
+                    # 更新最终链接，如果API返回了新的链接
+                    if imdb_link_result:
+                        final_imdb_link = imdb_link_result
+                        # 如果之前没有豆瓣链接或TMDb链接，尝试从新的IMDb链接补全
+                        if not final_douban_link or not final_tmdb_link:
+                            _, new_douban_link, new_tmdb_link, _ = handle_incomplete_links(
+                                final_imdb_link, "", "", subtitle)
+                            if new_douban_link:
+                                final_douban_link = new_douban_link
+                            if new_tmdb_link:
+                                final_tmdb_link = new_tmdb_link
+
+                    return True, poster, description, final_imdb_link, final_douban_link, final_tmdb_link
+                else:
+                    last_error = description  # 错误信息存储在description中
+                    print(f"API {api_config['name']} 返回失败: {last_error}")
+
+            except Exception as e:
+                last_error = f"API {api_config['name']} 请求异常: {e}"
+                print(last_error)
                 continue
-
-            if success:
-                print(f"API {api_config['name']} 调用成功")
-                # 更新最终链接，如果API返回了新的链接
-                if imdb_link_result:
-                    final_imdb_link = imdb_link_result
-                    # 如果之前没有豆瓣链接，尝试从新的IMDb链接补全豆瓣链接
-                    if not final_douban_link:
-                        _, new_douban_link = handle_incomplete_links(
-                            final_imdb_link, "", "")
-                        if new_douban_link:
-                            final_douban_link = new_douban_link
-
-                return True, poster, description, final_imdb_link, final_douban_link
-            else:
-                last_error = description  # 错误信息存储在description中
-                print(f"API {api_config['name']} 返回失败: {last_error}")
-
-        except Exception as e:
-            last_error = f"API {api_config['name']} 请求异常: {e}"
-            print(last_error)
-            continue
-
-    # 所有API都失败
-    return False, "", "", final_imdb_link, final_douban_link
+    else:
+        # 没有豆瓣链接，直接使用 TMDb API
+        print("没有豆瓣链接，直接使用 TMDb API 获取信息...")
+        success, poster, description, imdb_link_result = _call_tmdb_format_api(
+            {'name': 'tmdb_api', 'base_url': 'https://api.tmdb.org', 'type': 'tmdb_format'},
+            douban_link, imdb_link, tmdb_link, media_type
+        )
+        
+        if success:
+            print(f"TMDb API 调用成功")
+            if imdb_link_result:
+                final_imdb_link = imdb_link_result
+            return True, poster, description, final_imdb_link, final_douban_link, final_tmdb_link
+        else:
+            last_error = description
+            print(f"TMDb API 返回失败: {last_error}")
+    
+    return False, "", "", final_imdb_link, final_douban_link, final_tmdb_link
 
 
 def _call_cspt_format_api(api_config: dict, douban_link: str, imdb_link: str,
-                          media_type: str):
+                          tmdb_link: str, media_type: str):
     """
     调用CSPT格式API (cspt.top)
     API格式: https://cspt.top/api/ptgen/query/{token}?url=https://movie.douban.com/subject/2254648/
+    优先级: 豆瓣 > TMDb > IMDb
     """
     try:
-        resource_url = douban_link or imdb_link
+        # 优先级：豆瓣 > TMDb > IMDb
+        resource_url = douban_link or tmdb_link or imdb_link
         if not resource_url:
-            return False, "", "未提供豆瓣或IMDb链接", ""
+            return False, "", "未提供豆瓣、TMDb或IMDb链接", ""
 
         token = api_config.get('token', '')
         if not token:
@@ -446,12 +480,13 @@ def _call_cspt_format_api(api_config: dict, douban_link: str, imdb_link: str,
 
 
 def _call_tju_format_api(api_config: dict, douban_link: str, imdb_link: str,
-                         media_type: str):
+                         tmdb_link: str, media_type: str):
     """
     调用TJU格式API (ptgen.tju.pt) - 强制使用site=douban模式
+    优先级: 豆瓣 > TMDb > IMDb
     """
     try:
-        # 强制使用site=douban，这样IMDb链接也会被转换查询豆瓣
+        # 强制使用site=douban，这样IMDb/TMDb链接也会被转换查询豆瓣
         if douban_link:
             # 从豆瓣链接提取ID
             douban_id = _extract_douban_id(douban_link)
@@ -459,6 +494,13 @@ def _call_tju_format_api(api_config: dict, douban_link: str, imdb_link: str,
                 url = f"{api_config['base_url']}?site=douban&sid={douban_id}"
             else:
                 raise ValueError("无法从豆瓣链接提取ID")
+        elif tmdb_link:
+            # 从TMDb链接提取ID，但强制使用douban模式
+            tmdb_id = _extract_tmdb_id(tmdb_link)
+            if tmdb_id:
+                url = f"{api_config['base_url']}?site=douban&sid={tmdb_id}"
+            else:
+                raise ValueError("无法从TMDb链接提取ID")
         elif imdb_link:
             # 从IMDb链接提取ID，但强制使用douban模式
             imdb_id = _extract_imdb_id(imdb_link)
@@ -509,22 +551,25 @@ def _call_tju_format_api(api_config: dict, douban_link: str, imdb_link: str,
 
 
 def _call_url_format_api(api_config: dict, douban_link: str, imdb_link: str,
-                         media_type: str):
+                         tmdb_link: str, media_type: str):
     """
     调用URL格式API (workers.dev, homeqian.top)
+    优先级: 豆瓣 > TMDb > IMDb
     """
     try:
         # 根据API名称确定使用的参数格式
         base_url = api_config['base_url']
         api_name = api_config.get('name', '')
 
-        # 默认使用URL参数方式
+        # 默认使用URL参数方式（优先级：豆瓣 > TMDb > IMDb）
         if douban_link:
             resource_url = douban_link
+        elif tmdb_link:
+            resource_url = tmdb_link
         elif imdb_link:
             resource_url = imdb_link
         else:
-            return False, "", "未提供豆瓣或IMDb链接", ""
+            return False, "", "未提供豆瓣、TMDb或IMDb链接", ""
 
         # 对于特定API，尝试使用不同的参数方式
         if 'pt-nexus-ptgen.sqing33.dpdns.org' in api_name or 'pt-nexus-ptgen' in api_name:
@@ -668,25 +713,29 @@ def call_ptgen_api_with_fallback(base_url: str, resource_url: str, method='POST'
 
 
 def _call_refactor_url_format_api(api_config: dict, douban_link: str,
-                                  imdb_link: str, media_type: str):
+                                  imdb_link: str, tmdb_link: str, media_type: str):
     """
     调用新的URL格式API (pt-nexus-ptgen.sqing33.dpdns.org)
     只使用URL 参数方式（前后端一起部署）:
     /api?url=https://movie.douban.com/subject/9999999996/
-    /api?url=https://www.imdb.com/title/tt9999999996/
     /api?url=https://www.themoviedb.org/movie/9999999996
+    /api?url=https://www.imdb.com/title/tt9999999996/
+    
+    优先级: 豆瓣 > TMDb > IMDb
     """
     try:
         base_url = api_config['base_url']
 
-        # 确定资源URL
+        # 确定资源URL（优先级：豆瓣 > TMDb > IMDb）
         resource_url = None
         if douban_link:
             resource_url = douban_link
+        elif tmdb_link:
+            resource_url = tmdb_link
         elif imdb_link:
             resource_url = imdb_link
         else:
-            return False, "", "未提供豆瓣或IMDb链接", ""
+            return False, "", "未提供豆瓣、TMDb或IMDb链接", ""
 
         # 使用备用域名机制调用API
         success, data, error_msg = call_ptgen_api_with_fallback(base_url, resource_url, method='POST', timeout=30)
@@ -744,12 +793,14 @@ def _call_refactor_url_format_api(api_config: dict, douban_link: str,
 
 
 def _call_iyuu_format_api(api_config: dict, douban_link: str, imdb_link: str,
-                          media_type: str):
+                          tmdb_link: str, media_type: str):
     """
     调用IYUU格式API (api.iyuu.cn)
+    优先级: 豆瓣 > TMDb > IMDb
     """
     try:
-        resource_url = douban_link or imdb_link
+        # 优先级：豆瓣 > TMDb > IMDb
+        resource_url = douban_link or tmdb_link or imdb_link
         url = f"{api_config['base_url']}?url={resource_url}"
 
         response = requests.get(url, timeout=30)
@@ -859,6 +910,15 @@ def _extract_imdb_id(imdb_link: str) -> str:
     例如: https://www.imdb.com/title/tt13721828/ -> tt13721828
     """
     match = re.search(r'/title/(tt\d+)', imdb_link)
+    return match.group(1) if match else ""
+
+
+def _extract_tmdb_id(tmdb_link: str) -> str:
+    """
+    从TMDb链接中提取ID
+    例如: https://www.themoviedb.org/movie/507562 -> 507562
+    """
+    match = re.search(r'/movie/(\d+)', tmdb_link)
     return match.group(1) if match else ""
 
 
@@ -984,8 +1044,14 @@ def _get_smart_poster_url(original_url: str,
                 return original_url
         else:
             print("✗ 原始URL验证失败，使用 ptgen 获取海报")
-            status, poster, description, final_imdb_link, final_douban_link = upload_data_movie_info(
-                '', douban_link, imdb_link)
+            (
+                status,
+                poster,
+                description,
+                final_imdb_link,
+                final_douban_link,
+                _,
+            ) = upload_data_movie_info("", douban_link, imdb_link)
             if status and poster:
                 return _process_poster_url(poster, final_imdb_link,
                                            final_douban_link)
@@ -1169,3 +1235,84 @@ def _transfer_poster_to_pixhost(poster_url: str) -> str:
     except Exception as e:
         print(f"   转存失败: {type(e).__name__} - {e}")
         return ""
+
+
+def _call_tmdb_format_api(api_config: dict, douban_link: str, imdb_link: str, tmdb_link: str, media_type: str):
+    """
+    调用 TMDB API 直接获取影片信息（兜底方案）
+    
+    使用场景：
+    - 没有豆瓣链接
+    - 有 IMDb 链接，但通过 IMDb 获取豆瓣链接失败
+    - 作为最后的兜底方案
+    
+    Args:
+        api_config: API 配置
+        douban_link: 豆瓣链接（可能为空）
+        imdb_link: IMDb 链接
+        tmdb_link: TMDb 链接（可能为空）
+        media_type: 媒体类型
+        
+    Returns:
+        tuple: (success, poster, description, imdb_link_result)
+    """
+    try:
+        from utils.tmdb import get_tmdb_info
+        
+        print("[*] 使用新的 TMDB 模块获取信息...")
+        
+        # 确定 TMDB ID
+        tmdb_id = None
+        if tmdb_link:
+            # 从 TMDb 链接提取 ID
+            tmdb_match = re.search(r'/(\d+)', tmdb_link)
+            if tmdb_match:
+                tmdb_id = tmdb_match.group(1)
+                print(f"[*] 从 TMDb 链接提取 ID: {tmdb_id}")
+        elif imdb_link:
+            # 如果没有 TMDb 链接但有 IMDb 链接，先转换为 TMDb
+            print("[*] 从 IMDb 链接转换为 TMDb ID...")
+            from utils.imdb2tmdb2douban import imdb_to_tmdb
+            success, tmdb_url = imdb_to_tmdb(imdb_link)
+            if success:
+                tmdb_match = re.search(r'/(\d+)', tmdb_url)
+                if tmdb_match:
+                    tmdb_id = tmdb_match.group(1)
+                    print(f"[*] 转换成功，TMDb ID: {tmdb_id}")
+                else:
+                    print(f"[!] 转换失败，无法从 URL 提取 ID: {tmdb_url}")
+            else:
+                print(f"[!] IMDb 转 TMDb 失败")
+        
+        if not tmdb_id:
+            print("[!] 无法确定 TMDB ID")
+            return False, "", "无法确定 TMDB ID", ""
+        
+        # 配置
+        config = {
+            "tmdbApiKey": "0f79586eb9d92afa2b7266f7928b055c",
+            "language": "zh-CN",
+            "timeout": 30.0,
+            "fetch_imdb": True
+        }
+        
+        print(f"[*] 调用 TMDB API 获取信息 (ID: {tmdb_id})...")
+        
+        # 调用新的 TMDB 函数
+        result = get_tmdb_info(tmdb_id, config)
+        
+        if result.get("success"):
+            format_string = result.get("format", "")
+            imdb_link_result = result.get("imdb_link", "")
+            tmdb_link_result = result.get("tmdb_link", "")
+            
+            # 调用 _parse_format_content 提取海报和简介
+            return _parse_format_content(format_string, imdb_link_result, media_type)
+        else:
+            error_msg = result.get("error", "未知错误")
+            print(f"[!] TMDB API 调用失败: {error_msg}")
+            return False, "", f"TMDB API 调用失败: {error_msg}", ""
+            
+    except Exception as e:
+        print(f"[!] TMDB 格式 API 调用异常: {type(e).__name__} - {e}")
+        return False, "", f"TMDB 格式 API 调用失败: {e}", ""

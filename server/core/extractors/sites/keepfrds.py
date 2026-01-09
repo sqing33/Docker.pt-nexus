@@ -3,7 +3,7 @@ import os
 import yaml
 import datetime
 from bs4 import BeautifulSoup
-from utils import extract_tags_from_mediainfo, extract_origin_from_description, validate_media_info_format
+from utils import extract_tags_from_mediainfo, extract_origin_from_description, validate_media_info_format, normalize_douban_link
 from utils import TorrentListFetcher
 from config import GLOBAL_MAPPINGS
 
@@ -105,14 +105,14 @@ class KEEPFRDSSpecialExtractor:
         if kdouban:
             d_link = kdouban.select_one("a[href*='movie.douban.com/subject/']")
             if d_link:
-                douban_link = d_link.get("href", "").strip()
+                douban_link = normalize_douban_link(d_link.get("href", ""))
 
         # 如果没找到，尝试全局搜索
         if not douban_link:
             d_link = self.soup.select_one(
                 "a[href*='movie.douban.com/subject/']")
             if d_link:
-                douban_link = d_link.get("href", "").strip()
+                douban_link = normalize_douban_link(d_link.get("href", ""))
 
         # 3. 提取 IMDb 链接
         imdb_link = ""
@@ -132,13 +132,25 @@ class KEEPFRDSSpecialExtractor:
 
         try:
             from utils import upload_data_movie_info
-            movie_status, poster_content, description_content, _, _ = upload_data_movie_info(
-                "", douban_link, imdb_link, subtitle)
+            (
+                movie_status,
+                poster_content,
+                description_content,
+                extracted_imdb,
+                extracted_douban,
+                extracted_tmdb,
+            ) = upload_data_movie_info("", douban_link, imdb_link, subtitle=subtitle)
 
             if movie_status and description_content:
                 body = description_content
                 if poster_content:
                     images.append(poster_content)
+                if extracted_imdb:
+                    imdb_link = extracted_imdb
+                if extracted_douban:
+                    douban_link = extracted_douban
+                if extracted_tmdb:
+                    intro["tmdb_link"] = extracted_tmdb
             else:
                 print(f"PT-Gen获取电影信息失败: {description_content}")
         except Exception as e:

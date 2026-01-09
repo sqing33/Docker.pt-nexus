@@ -1024,12 +1024,14 @@ class TorrentMigrator:
                 # 提取IMDb和豆瓣链接
                 imdb_link = intro.get("imdb_link", "")
                 douban_link = intro.get("douban_link", "")
+                tmdb_link = intro.get("tmdb_link", "")
 
                 # 使用统一提取方法获取的数据
                 descr_container = soup.select_one("div#kdescr")
 
                 # 从提取的数据中获取简介信息
                 intro_data = extracted_data.get("intro", {})
+                tmdb_link = tmdb_link or intro_data.get("tmdb_link", "")
                 quotes = (
                     intro_data.get("statement", "").split("\n")
                     if intro_data.get("statement")
@@ -1140,10 +1142,12 @@ class TorrentMigrator:
                         description_content,
                         extracted_imdb,
                         extracted_douban,
+                        extracted_tmdb,
                     ) = upload_data_movie_info(
                         media_type="",
                         douban_link=douban_link,
                         imdb_link=imdb_link,
+                        tmdb_link=tmdb_link,
                         subtitle=subtitle,
                     )
 
@@ -1167,6 +1171,16 @@ class TorrentMigrator:
                         douban_link = extracted_douban
                         self.logger.info(f"成功补全豆瓣链接: {douban_link}")
 
+                    # 更新TMDb链接（如果获取成功且当前没有）
+                    if extracted_tmdb and not tmdb_link:
+                        tmdb_link = extracted_tmdb
+                        self.logger.info(f"成功补全TMDb链接: {tmdb_link}")
+
+                    # 更新简介（如果当前为空，且获取到新简介）
+                    if (not body or not body.strip()) and description_content:
+                        body = description_content
+                        self.logger.info("成功补全简介内容")
+
                 # 重新组装intro字典
                 intro = {
                     "statement": "\n".join(quotes),
@@ -1176,6 +1190,7 @@ class TorrentMigrator:
                     "removed_ardtudeclarations": ardtu_declarations,
                     "imdb_link": imdb_link,
                     "douban_link": douban_link,
+                    "tmdb_link": tmdb_link,
                 }
 
                 # 6. 提取产地信息并添加到source_params中
@@ -1456,13 +1471,24 @@ class TorrentMigrator:
                             )
 
                         try:
-                            status, posters, description, extracted_imdb, extracted_douban = (
-                                upload_data_movie_info("", douban_link, imdb_link, subtitle)
+                            (
+                                status,
+                                posters,
+                                description,
+                                extracted_imdb,
+                                extracted_douban,
+                                _,
+                            ) = upload_data_movie_info(
+                                "", douban_link, imdb_link, subtitle=subtitle
                             )
 
                             if status and description:
                                 # 更新简介内容
                                 intro["body"] = description
+                                if extracted_imdb and not imdb_link:
+                                    imdb_link = extracted_imdb
+                                if extracted_douban and not douban_link:
+                                    douban_link = extracted_douban
                                 if self.task_id:
                                     log_streamer.emit_log(
                                         self.task_id,
@@ -1865,6 +1891,7 @@ class TorrentMigrator:
                     "subtitle": subtitle,
                     "imdb_link": imdb_link,
                     "douban_link": filtered_douban_link,  # 使用过滤后的豆瓣链接
+                    "tmdb_link": intro.get("tmdb_link", ""),  # 添加 TMDb 链接
                     "poster": intro.get("poster"),
                     "screenshots": intro.get("screenshots"),
                     "statement": intro.get("statement", "").strip(),
@@ -1907,6 +1934,7 @@ class TorrentMigrator:
                 # 将torrent_id和site_name作为普通字段保存到parameters中
                 seed_parameters["torrent_id"] = torrent_id
                 seed_parameters["site_name"] = self.SOURCE_SITE_CODE
+                
                 # 确保传递正确的 torrent_id 和 site_name
                 save_result = seed_param_model.save_parameters(
                     hash, torrent_id, self.SOURCE_SITE_CODE, seed_parameters
