@@ -64,7 +64,7 @@ def get_seed_hash(db_manager, torrent_id, site_name):
 
 
 def get_current_torrent_info(db_manager, hash_value):
-    """根据hash获取当前种子的保存路径/下载器ID（优先活跃状态）"""
+    """根据hash获取当前种子的保存路径/下载器ID（优先活跃状态，优先use_proxy=true）"""
     if not hash_value:
         return None
 
@@ -75,25 +75,68 @@ def get_current_torrent_info(db_manager, hash_value):
         states_sql = "', '".join(INACTIVE_TORRENT_STATES)
         state_rank = f"CASE WHEN state NOT IN ('{states_sql}') THEN 0 ELSE 1 END"
         query = f"""
-            SELECT save_path, downloader_id, name
+            SELECT save_path, downloader_id, name, state, last_seen
             FROM torrents
             WHERE hash = {ph}
             ORDER BY {state_rank}, last_seen DESC
-            LIMIT 1
         """
         cursor.execute(query, (hash_value,))
-        row = cursor.fetchone()
+        rows = cursor.fetchall()
         cursor.close()
         conn.close()
-        if not row:
+
+        if not rows:
             return None
-        if isinstance(row, dict):
-            return {
-                "save_path": row.get("save_path"),
-                "downloader_id": row.get("downloader_id"),
-                "name": row.get("name"),
-            }
-        return {"save_path": row[0], "downloader_id": row[1], "name": row[2]}
+
+        # 获取下载器配置
+        config = config_manager.get()
+        downloaders = config.get("downloaders", [])
+        downloader_map = {
+            downloader.get("id"): downloader.get("use_proxy", False)
+            for downloader in downloaders
+        }
+
+        # 将结果转换为列表
+        torrent_list = []
+        for row in rows:
+            if isinstance(row, dict):
+                torrent_list.append({
+                    "save_path": row.get("save_path"),
+                    "downloader_id": row.get("downloader_id"),
+                    "name": row.get("name"),
+                    "state": row.get("state"),
+                    "last_seen": row.get("last_seen"),
+                })
+            else:
+                torrent_list.append({
+                    "save_path": row[0],
+                    "downloader_id": row[1],
+                    "name": row[2],
+                    "state": row[3],
+                    "last_seen": row[4],
+                })
+
+        # 排序：优先 use_proxy=true，然后按活跃状态，最后按 last_seen
+        def sort_key(torrent):
+            downloader_id = torrent.get("downloader_id")
+            use_proxy = downloader_map.get(downloader_id, False)
+
+            # 计算活跃状态排名（0=活跃，1=非活跃）
+            state = torrent.get("state", "")
+            state_rank = 0 if state not in INACTIVE_TORRENT_STATES else 1
+
+            # 返回排序键：use_proxy（降序），state_rank（升序），last_seen（降序）
+            return (-1 if use_proxy else 1, state_rank, -torrent.get("last_seen", 0))
+
+        torrent_list.sort(key=sort_key)
+
+        # 返回排序后的第一个种子
+        first_torrent = torrent_list[0]
+        return {
+            "save_path": first_torrent.get("save_path"),
+            "downloader_id": first_torrent.get("downloader_id"),
+            "name": first_torrent.get("name"),
+        }
     except Exception as e:
         logging.warning(f"获取当前种子信息失败: {e}")
         return None
