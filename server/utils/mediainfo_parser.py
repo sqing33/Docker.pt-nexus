@@ -826,6 +826,7 @@ def extract_audio_info_from_mediainfo(mediainfo_text: str, bdinfo_text: str = No
     if audio_info.get("best_track"):
         best_track = audio_info["best_track"]
         total_tracks = audio_info.get("total_tracks", 0)
+        all_tracks = audio_info.get("all_tracks", [])
         
         # 构建channels字段，包含音轨数（当音轨数大于1时才添加音轨数标记）
         channel_layout = best_track.get("channel_layout", "")
@@ -836,10 +837,22 @@ def extract_audio_info_from_mediainfo(mediainfo_text: str, bdinfo_text: str = No
         
         result["codec"] = best_track.get("base_codec", "")
         result["has_atmos"] = best_track.get("suffix_tag") == "Atmos"
+        
+        # 构建所有音轨的详细信息，用于智能匹配
+        result["all_tracks"] = []
+        for track in all_tracks:
+            track_info = {
+                "codec": track.get("base_codec", ""),
+                "channels": track.get("channel_layout", ""),
+                "has_atmos": track.get("suffix_tag") == "Atmos",
+                "audio_count": f"{total_tracks}Audios" if total_tracks > 1 else ""
+            }
+            result["all_tracks"].append(track_info)
+        
         result["details"] = {
             "title": audio_info.get("title", ""),
             "total_tracks": total_tracks,
-            "all_tracks": audio_info.get("all_tracks", []),
+            "all_tracks": all_tracks,
             "final_title": best_track.get("final_title", ""),
             "display_title": best_track.get("display_title", ""),
             "sort_key": best_track.get("sort_key", (999, 0, 1))
