@@ -100,20 +100,22 @@ def get_current_torrent_info(db_manager, hash_value):
         torrent_list = []
         for row in rows:
             if isinstance(row, dict):
+                last_seen = row.get("last_seen")
                 torrent_list.append({
                     "save_path": row.get("save_path"),
                     "downloader_id": row.get("downloader_id"),
                     "name": row.get("name"),
                     "state": row.get("state"),
-                    "last_seen": row.get("last_seen"),
+                    "last_seen": last_seen.timestamp() if last_seen else 0,
                 })
             else:
+                last_seen = row[4]
                 torrent_list.append({
                     "save_path": row[0],
                     "downloader_id": row[1],
                     "name": row[2],
                     "state": row[3],
-                    "last_seen": row[4],
+                    "last_seen": last_seen.timestamp() if last_seen else 0,
                 })
 
         # 排序：优先 use_proxy=true，然后按活跃状态，最后按 last_seen
@@ -267,6 +269,8 @@ def get_db_seed_info():
                     log_streamer.emit_log(task_id, "完成", "数据加载完成", "success")
                     # 关闭日志流
                     log_streamer.close_stream(task_id)
+                    
+                print("aaaaaaaaaaaaaaaaaaaa", parameters)
 
                 return jsonify(
                     {
