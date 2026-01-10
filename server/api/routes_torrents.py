@@ -10,6 +10,7 @@ from threading import Thread
 # 从项目根目录导入核心模块和工具函数
 from core import services
 from utils import custom_sort_compare, format_bytes
+from utils.downloader_selector import select_best_downloader
 
 # --- Blueprint Setup ---
 torrents_bp = Blueprint("torrents_api", __name__, url_prefix="/api")
@@ -213,8 +214,10 @@ def get_data_api():
                 "downloaderIds":
                 data.get("downloader_ids", []),
                 "downloaderId":
-                data.get("downloader_ids", [None])[0]
-                if data.get("downloader_ids") else None  # 保持向后兼容
+                select_best_downloader(
+                    downloader_ids=data.get("downloader_ids", []),
+                    config_manager=torrents_bp.config_manager
+                )
             })
             final_torrent_list.append(data)
 

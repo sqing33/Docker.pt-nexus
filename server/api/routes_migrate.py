@@ -19,6 +19,7 @@ from utils import (
     extract_origin_from_description,
     extract_resolution_from_mediainfo,
 )
+from utils.downloader_selector import select_best_downloader
 from core.migrator import TorrentMigrator
 
 # 导入种子参数模型
@@ -63,38 +64,51 @@ def get_seed_hash(db_manager, torrent_id, site_name):
         return None
 
 
-def get_current_torrent_info(db_manager, hash_value):
-    """根据hash获取当前种子的保存路径/下载器ID（优先活跃状态，优先use_proxy=true）"""
-    if not hash_value:
+def get_seed_name(db_manager, torrent_id, site_name):
+    """根据torrent_id/site_name获取name"""
+    try:
+        conn = db_manager._get_connection()
+        cursor = db_manager._get_cursor(conn)
+        ph = db_manager.get_placeholder()
+        query = (
+            f"SELECT name FROM seed_parameters WHERE torrent_id = {ph} AND site_name = {ph} "
+            f"ORDER BY updated_at DESC LIMIT 1"
+        )
+        cursor.execute(query, (torrent_id, site_name))
+        row = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        if not row:
+            return None
+        return row["name"] if isinstance(row, dict) else row[0]
+    except Exception as e:
+        logging.warning(f"获取name失败: {e}")
+        return None
+
+
+def get_current_torrent_info(db_manager, torrent_name):
+    """根据种子名称获取当前种子的保存路径/下载器ID（优先活跃状态，优先use_proxy=true）"""
+    if not torrent_name:
         return None
 
     try:
         conn = db_manager._get_connection()
         cursor = db_manager._get_cursor(conn)
         ph = db_manager.get_placeholder()
-        states_sql = "', '".join(INACTIVE_TORRENT_STATES)
-        state_rank = f"CASE WHEN state NOT IN ('{states_sql}') THEN 0 ELSE 1 END"
+        
+        # 查询所有相同名称的种子记录
         query = f"""
             SELECT save_path, downloader_id, name, state, last_seen
             FROM torrents
-            WHERE hash = {ph}
-            ORDER BY {state_rank}, last_seen DESC
+            WHERE name = {ph}
         """
-        cursor.execute(query, (hash_value,))
+        cursor.execute(query, (torrent_name,))
         rows = cursor.fetchall()
         cursor.close()
         conn.close()
 
         if not rows:
             return None
-
-        # 获取下载器配置
-        config = config_manager.get()
-        downloaders = config.get("downloaders", [])
-        downloader_map = {
-            downloader.get("id"): downloader.get("use_proxy", False)
-            for downloader in downloaders
-        }
 
         # 将结果转换为列表
         torrent_list = []
@@ -118,22 +132,20 @@ def get_current_torrent_info(db_manager, hash_value):
                     "last_seen": last_seen.timestamp() if last_seen else 0,
                 })
 
-        # 排序：优先 use_proxy=true，然后按活跃状态，最后按 last_seen
-        def sort_key(torrent):
-            downloader_id = torrent.get("downloader_id")
-            use_proxy = downloader_map.get(downloader_id, False)
-
-            # 计算活跃状态排名（0=活跃，1=非活跃）
-            state = torrent.get("state", "")
-            state_rank = 0 if state not in INACTIVE_TORRENT_STATES else 1
-
-            # 返回排序键：use_proxy（降序），state_rank（升序），last_seen（降序）
-            return (-1 if use_proxy else 1, state_rank, -torrent.get("last_seen", 0))
-
-        torrent_list.sort(key=sort_key)
-
-        # 返回排序后的第一个种子
-        first_torrent = torrent_list[0]
+        # 获取所有下载器ID
+        downloader_ids = list(set(t.get("downloader_id") for t in torrent_list if t.get("downloader_id")))
+        
+        # 使用工具函数选择最佳下载器
+        best_downloader_id = select_best_downloader(
+            downloader_ids=downloader_ids,
+            config_manager=config_manager,
+            torrent_list=torrent_list,
+            inactive_torrent_states=INACTIVE_TORRENT_STATES
+        )
+        
+        # 找到使用最佳下载器的种子记录
+        first_torrent = next((t for t in torrent_list if t.get("downloader_id") == best_downloader_id), torrent_list[0])
+        
         return {
             "save_path": first_torrent.get("save_path"),
             "downloader_id": first_torrent.get("downloader_id"),
@@ -141,6 +153,7 @@ def get_current_torrent_info(db_manager, hash_value):
         }
     except Exception as e:
         logging.warning(f"获取当前种子信息失败: {e}")
+        print(f"[get_current_torrent_info] 异常: {e}")
         return None
 
 
@@ -226,8 +239,8 @@ def get_db_seed_info():
                 logging.info(f"成功从数据库读取种子信息: {torrent_id} from {site_name}")
 
                 # 从torrents补充当前保存路径/下载器ID
-                hash_value = parameters.get("hash")
-                torrent_info = get_current_torrent_info(db_manager, hash_value)
+                torrent_name = parameters.get("name")
+                torrent_info = get_current_torrent_info(db_manager, torrent_name)
                 if torrent_info:
                     parameters["save_path"] = torrent_info.get("save_path") or ""
                     parameters["downloader_id"] = torrent_info.get("downloader_id")
@@ -269,8 +282,6 @@ def get_db_seed_info():
                     log_streamer.emit_log(task_id, "完成", "数据加载完成", "success")
                     # 关闭日志流
                     log_streamer.close_stream(task_id)
-                    
-                print("aaaaaaaaaaaaaaaaaaaa", parameters)
 
                 return jsonify(
                     {
@@ -1399,10 +1410,10 @@ def migrate_publish():
                         print(f"[下载器添加] 缺少save_path,从数据库获取源种子的保存路径")
                         source_torrent_id = context.get("source_torrent_id")
                         if source_torrent_id and source_site_name:
-                            hash_value = get_seed_hash(
+                            torrent_name = get_seed_name(
                                 db_manager, source_torrent_id, source_site_name
                             )
-                            torrent_info = get_current_torrent_info(db_manager, hash_value)
+                            torrent_info = get_current_torrent_info(db_manager, torrent_name)
                             if torrent_info and torrent_info.get("save_path"):
                                 save_path = torrent_info["save_path"]
                                 print(f"[下载器添加] 从数据库获取到保存路径: {save_path}")
@@ -1414,8 +1425,8 @@ def migrate_publish():
                     print(f"[下载器添加] 配置为使用源种子下载器,从数据库查询")
                     source_torrent_id = context.get("source_torrent_id")
                     if source_torrent_id and source_site_name:
-                        hash_value = get_seed_hash(db_manager, source_torrent_id, source_site_name)
-                        torrent_info = get_current_torrent_info(db_manager, hash_value)
+                        torrent_name = get_seed_name(db_manager, source_torrent_id, source_site_name)
+                        torrent_info = get_current_torrent_info(db_manager, torrent_name)
                         if torrent_info:
                             downloader_id = torrent_info.get("downloader_id")
                             if not save_path and torrent_info.get("save_path"):
@@ -1879,8 +1890,8 @@ def get_downloader_info():
         return jsonify({"success": False, "message": "缺少必要参数: torrent_id 或 site_name"}), 400
 
     try:
-        hash_value = get_seed_hash(db_manager, torrent_id, site_name)
-        torrent_info = get_current_torrent_info(db_manager, hash_value)
+        torrent_name = get_seed_name(db_manager, torrent_id, site_name)
+        torrent_info = get_current_torrent_info(db_manager, torrent_name)
 
         if torrent_info:
             return jsonify(
@@ -3168,7 +3179,7 @@ def refresh_bdinfo(seed_id):
     """手动触发 BDInfo 重新获取"""
     try:
         db_manager = migrate_bp.db_manager
-        hash_value = None
+        torrent_name = None
 
         if "_" in seed_id:
             parts = seed_id.split("_")
@@ -3179,16 +3190,16 @@ def refresh_bdinfo(seed_id):
                 conn = db_manager._get_connection()
                 cursor = db_manager._get_cursor(conn)
                 ph = db_manager.get_placeholder()
-                cursor.execute(f"SELECT hash FROM seed_parameters WHERE id = {ph}", (seed_id,))
+                cursor.execute(f"SELECT name FROM seed_parameters WHERE id = {ph}", (seed_id,))
                 row = cursor.fetchone()
                 cursor.close()
                 conn.close()
                 if row:
-                    hash_value = row["hash"] if isinstance(row, dict) else row[0]
+                    torrent_name = row["name"] if isinstance(row, dict) else row[0]
             except Exception as e:
-                logging.warning(f"通过id查询hash失败: {e}")
+                logging.warning(f"通过id查询name失败: {e}")
 
-        torrent_info = get_current_torrent_info(db_manager, hash_value)
+        torrent_info = get_current_torrent_info(db_manager, torrent_name)
         if not torrent_info or not torrent_info.get("save_path"):
             return jsonify({"error": "无法获取保存路径"}), 404
 
@@ -3625,7 +3636,7 @@ def restart_bdinfo():
             else:
                 torrent_name = result[0] if len(result) > 0 else None
 
-        torrent_info = get_current_torrent_info(migrate_bp.db_manager, hash_val)
+        torrent_info = get_current_torrent_info(migrate_bp.db_manager, torrent_name)
         save_path = torrent_info.get("save_path") if torrent_info else None
         downloader_id = torrent_info.get("downloader_id") if torrent_info else None
         if not torrent_name and torrent_info:
