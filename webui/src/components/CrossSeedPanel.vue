@@ -2828,7 +2828,7 @@ const cleanTeamValue = (value: string): string => {
   if (!value || typeof value !== 'string') {
     return value
   }
-  return value.replace(/-/g, '')
+  return value.replace(/^-/, '')
 }
 
 // 处理制作组输入，自动去掉横杠
@@ -3705,6 +3705,12 @@ const isNextButtonDisabled = computed(() => {
     return true
   }
 
+  // 3.5 检查简介正文完整性
+  const introCompleteness = checkIntroCompleteness(intro.body)
+  if (!introCompleteness.isComplete) {
+    return true
+  }
+
   // 4. 检查标准参数是否为空 (类型、媒介、视频编码、音频编码、分辨率)
   const params = torrentData.value.standardized_params
   const hasEmptyType = !params.type || params.type.trim() === ''
@@ -3814,6 +3820,16 @@ const nextButtonTooltipContent = computed(() => {
 
   if (missingFields.length > 0) {
     return `请补充必填项：${missingFields.join('、')}`
+  }
+
+  // 4.5 检查简介正文完整性
+  const introCompleteness = checkIntroCompleteness(intro.body)
+  if (!introCompleteness.isComplete) {
+    const criticalFields = ['片名', '产地', '导演', '简介']
+    const missingCriticalFields = criticalFields.filter((field) =>
+      introCompleteness.missingFields.includes(field),
+    )
+    return `简介正文缺少必填字段：${missingCriticalFields.join('、')}`
   }
 
   // 4. 检查参数格式 (红框/正则验证)
@@ -3936,6 +3952,100 @@ const _isValidBDInfo = (text: string): boolean => {
   }
 
   return true
+}
+
+// 辅助函数：检查简介正文完整性 (对应 Python check_intro_completeness)
+const checkIntroCompleteness = (bodyText: string): {
+  isComplete: boolean
+  missingFields: string[]
+  foundFields: string[]
+} => {
+  if (!bodyText || bodyText.trim() === '') {
+    return { isComplete: false, missingFields: ['所有字段'], foundFields: [] }
+  }
+
+  const requiredPatterns = {
+    片名: [
+      /[◎❁]\s*片\s*名/i,
+      /[◎❁]\s*译\s*名/i,
+      /[◎❁]\s*标\s*题/i,
+      /片名\s*[:：]/i,
+      /译名\s*[:：]/i,
+      /Title\s*[:：]/i,
+    ],
+    年代: [
+      /[◎❁]\s*年\s*代/i,
+      /[◎❁]\s*年\s*份/i,
+      /年份\s*[:：]/i,
+      /年代\s*[:：]/i,
+      /Year\s*[:：]/i,
+    ],
+    产地: [
+      /[◎❁]\s*产\s*地/i,
+      /[◎❁]\s*国\s*家/i,
+      /[◎❁]\s*地\s*区/i,
+      /制片国家\/地区\s*[:：]/i,
+      /制片国家\s*[:：]/i,
+      /国家\s*[:：]/i,
+      /产地\s*[:：]/i,
+      /Country\s*[:：]/i,
+    ],
+    类别: [
+      /[◎❁]\s*类\s*别/i,
+      /[◎❁]\s*类\s*型/i,
+      /类型\s*[:：]/i,
+      /类别\s*[:：]/i,
+      /Genre\s*[:：]/i,
+    ],
+    语言: [
+      /[◎❁]\s*语\s*言/i,
+      /语言\s*[:：]/i,
+      /Language\s*[:：]/i,
+    ],
+    导演: [
+      /[◎❁]\s*导\s*演/i,
+      /导演\s*[:：]/i,
+      /Director\s*[:：]/i,
+    ],
+    简介: [
+      /[◎❁]\s*简\s*介/i,
+      /[◎❁]\s*剧\s*情/i,
+      /[◎❁]\s*内\s*容/i,
+      /简介\s*[:：]/i,
+      /剧情\s*[:：]/i,
+      /内容简介\s*[:：]/i,
+      /Plot\s*[:：]/i,
+      /Synopsis\s*[:：]/i,
+    ],
+  }
+
+  const foundFields: string[] = []
+  const missingFields: string[] = []
+
+  for (const [fieldName, patterns] of Object.entries(requiredPatterns)) {
+    let fieldFound = false
+    for (const pattern of patterns) {
+      if (pattern.test(bodyText)) {
+        fieldFound = true
+        break
+      }
+    }
+
+    if (fieldFound) {
+      foundFields.push(fieldName)
+    } else {
+      missingFields.push(fieldName)
+    }
+  }
+
+  const criticalFields = ['片名', '产地', '导演', '简介']
+  const isComplete = criticalFields.every((field) => foundFields.includes(field))
+
+  return {
+    isComplete,
+    missingFields,
+    foundFields,
+  }
 }
 
 // 检查截图有效性

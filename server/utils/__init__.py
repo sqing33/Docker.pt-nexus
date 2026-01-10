@@ -24,7 +24,6 @@ from .title import (
 from .media_helper import (
     add_torrent_to_downloader,
     extract_origin_from_description,
-    check_intro_completeness,
     extract_tags_from_description,
     check_animation_type_from_description,
     _get_downloader_proxy_config,
@@ -59,6 +58,7 @@ from .douban import (
     upload_data_movie_info,
     _get_smart_poster_url,
     _process_poster_url,
+    check_intro_completeness,
 )
 from .log_streamer import log_streamer
 from .downloader_id_helper import (

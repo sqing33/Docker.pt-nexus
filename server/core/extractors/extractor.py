@@ -157,7 +157,6 @@ class Extractor:
         # [新增] 图片链接验证辅助函数
         from utils import (
             extract_origin_from_description,
-            check_intro_completeness,
             upload_data_movie_info,
             is_image_url_valid_robust,
             extract_audio_codec_from_mediainfo,
@@ -715,7 +714,6 @@ class Extractor:
         # Extract origin information
         from utils import (
             extract_origin_from_description,
-            check_intro_completeness,
             upload_data_movie_info,
         )
 

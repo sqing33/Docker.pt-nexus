@@ -544,6 +544,13 @@ def _call_tju_format_api(api_config: dict, douban_link: str, imdb_link: str,
         description = re.sub(r'\[img\].*?\[/img\]', '', format_data).strip()
         description = re.sub(r'\n{3,}', '\n\n', description)
 
+        # 校验简介完整性
+        if description:
+            completeness_check = check_intro_completeness(description)
+            if not completeness_check["is_complete"]:
+                print(f"  [!] 简介不完整，缺失字段: {completeness_check['missing_fields']}")
+                print(f"  [*] 已找到字段: {completeness_check['found_fields']}")
+
         return True, poster, description, extracted_imdb_link
 
     except Exception as e:
@@ -888,6 +895,13 @@ def _parse_format_content(format_data: str,
         # 提取简介内容（去除海报部分）
         description = re.sub(r'\[img\].*?\[/img\]', '', format_data).strip()
         description = re.sub(r'\n{3,}', '\n\n', description)
+
+        # 校验简介完整性
+        if description:
+            completeness_check = check_intro_completeness(description)
+            if not completeness_check["is_complete"]:
+                print(f"  [!] 简介不完整，缺失字段: {completeness_check['missing_fields']}")
+                print(f"  [*] 已找到字段: {completeness_check['found_fields']}")
 
         return True, poster, description, extracted_imdb_link
 
@@ -1316,3 +1330,99 @@ def _call_tmdb_format_api(api_config: dict, douban_link: str, imdb_link: str, tm
     except Exception as e:
         print(f"[!] TMDB 格式 API 调用异常: {type(e).__name__} - {e}")
         return False, "", f"TMDB 格式 API 调用失败: {e}", ""
+
+
+def check_intro_completeness(body_text: str) -> dict:
+    """
+    检查简介是否完整，包含必要的影片信息字段。
+
+    :param body_text: 简介正文内容
+    :return: 包含检测结果的字典 {
+        "is_complete": bool,      # 是否完整
+        "missing_fields": list,   # 缺失的字段列表
+        "found_fields": list      # 已找到的字段列表
+    }
+
+    示例:
+        >>> result = check_intro_completeness(intro_body)
+        >>> if not result["is_complete"]:
+        >>>     print(f"缺少字段: {result['missing_fields']}")
+    """
+    if not body_text:
+        return {"is_complete": False, "missing_fields": ["所有字段"], "found_fields": []}
+
+    # 定义必要字段的匹配模式
+    # 每个字段可以有多个匹配模式（正则表达式）
+    required_patterns = {
+        "片名": [
+            r"[◎❁]\s*片\s*名",
+            r"[◎❁]\s*译\s*名",
+            r"[◎❁]\s*标\s*题",
+            r"片名\s*[:：]",
+            r"译名\s*[:：]",
+            r"Title\s*[:：]",
+        ],
+        "年代": [
+            r"[◎❁]\s*年\s*代",
+            r"[◎❁]\s*年\s*份",
+            r"年份\s*[:：]",
+            r"年代\s*[:：]",
+            r"Year\s*[:：]",
+        ],
+        "产地": [
+            r"[◎❁]\s*产\s*地",
+            r"[◎❁]\s*国\s*家",
+            r"[◎❁]\s*地\s*区",
+            r"制片国家/地区\s*[:：]",
+            r"制片国家\s*[:：]",
+            r"国家\s*[:：]",
+            r"产地\s*[:：]",
+            r"Country\s*[:：]",
+        ],
+        "类别": [
+            r"[◎❁]\s*类\s*别",
+            r"[◎❁]\s*类\s*型",
+            r"类型\s*[:：]",
+            r"类别\s*[:：]",
+            r"Genre\s*[:：]",
+        ],
+        "语言": [r"[◎❁]\s*语\s*言", r"语言\s*[:：]", r"Language\s*[:：]"],
+        "导演": [r"[◎❁]\s*导\s*演", r"导演\s*[:：]", r"Director\s*[:：]"],
+        "简介": [
+            r"[◎❁]\s*简\s*介",
+            r"[◎❁]\s*剧\s*情",
+            r"[◎❁]\s*内\s*容",
+            r"简介\s*[:：]",
+            r"剧情\s*[:：]",
+            r"内容简介\s*[:：]",
+            r"Plot\s*[:：]",
+            r"Synopsis\s*[:：]",
+        ],
+    }
+
+    found_fields = []
+    missing_fields = []
+
+    # 检查每个必要字段
+    for field_name, patterns in required_patterns.items():
+        field_found = False
+        for pattern in patterns:
+            if re.search(pattern, body_text, re.IGNORECASE):
+                field_found = True
+                break
+
+        if field_found:
+            found_fields.append(field_name)
+        else:
+            missing_fields.append(field_name)
+
+    # 判断完整性：必须包含以下关键字段
+    # 片名、产地、导演、简介 这4个字段是最关键的
+    critical_fields = ["片名", "产地", "导演", "简介"]
+    is_complete = all(field in found_fields for field in critical_fields)
+
+    return {
+        "is_complete": is_complete,
+        "missing_fields": missing_fields,
+        "found_fields": found_fields,
+    }
