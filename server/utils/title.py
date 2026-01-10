@@ -127,22 +127,22 @@ def is_uhd_as_medium(title_str):
 def _find_best_matching_audio_track(source_audio: str, mediainfo_tracks: list) -> dict:
     """
     从 MediaInfo 音轨中找到与源标题音频编码最匹配的音轨
-    
+
     Args:
         source_audio: 源标题的音频编码字符串（如 "DTS-HD MA 7.1"）
         mediainfo_tracks: MediaInfo 提取的所有音轨列表
-        
+
     Returns:
         最匹配的音轨信息字典，如果没有匹配则返回第一个音轨
     """
     if not mediainfo_tracks:
         return {}
-    
+
     # 解析源标题的音频编码
     source_codec = ""
     source_channels = ""
     source_has_atmos = False
-    
+
     # 提取音频编码
     codec_match = re.search(
         r"\b(DTS-?HD\s*MA|DTS-?HD\s*HR|DTS-?HD|DTS:X|DTS:D|DTS|TrueHD|DDP|DD\+|DD|E-AC-?3|AC3|FLAC|Opus|AAC|OGG|WAV|APE|ALAC|DSD|MP3|LPCM|PCM)\b",
@@ -151,40 +151,44 @@ def _find_best_matching_audio_track(source_audio: str, mediainfo_tracks: list) -
     )
     if codec_match:
         source_codec = codec_match.group(1)
-    
+
     # 提取声道数
     channel_match = re.search(r"\b(\d{1,2}\.\d)\b", source_audio)
     if channel_match:
         source_channels = channel_match.group(1)
-    
+
     # 提取 Atmos 标记
     source_has_atmos = bool(re.search(r"\bAtmos\b", source_audio, re.IGNORECASE))
-    
+
     print(f"[音频匹配] 源标题音频: '{source_audio}'")
-    print(f"[音频匹配] 提取结果 - 编码: '{source_codec}', 声道: '{source_channels}', Atmos: {source_has_atmos}")
-    
+    print(
+        f"[音频匹配] 提取结果 - 编码: '{source_codec}', 声道: '{source_channels}', Atmos: {source_has_atmos}"
+    )
+
     # 打印所有 MediaInfo 音轨信息
     print(f"[音频匹配] MediaInfo 音轨列表 ({len(mediainfo_tracks)} 个):")
     for idx, track in enumerate(mediainfo_tracks, 1):
-        print(f"  音轨{idx}: 编码='{track.get('codec', '')}', 声道='{track.get('channels', '')}', Atmos={track.get('has_atmos', False)}, 音轨数='{track.get('audio_count', '')}'")
-    
+        print(
+            f"  音轨{idx}: 编码='{track.get('codec', '')}', 声道='{track.get('channels', '')}', Atmos={track.get('has_atmos', False)}, 音轨数='{track.get('audio_count', '')}'"
+        )
+
     # 如果没有提取到编码，返回第一个音轨
     if not source_codec:
         print(f"[音频匹配] 未提取到编码，返回第一个音轨")
         return mediainfo_tracks[0]
-    
+
     # 计算每个音轨的匹配分数
     best_track = None
     best_score = -1
-    
+
     for idx, track in enumerate(mediainfo_tracks, 1):
         track_codec = track.get("codec", "")
         track_channels = track.get("channels", "")
         track_has_atmos = track.get("has_atmos", False)
-        
+
         score = 0
         score_details = []
-        
+
         # 1. 编码类型匹配（50分）
         if track_codec == source_codec:
             score += 50
@@ -194,7 +198,7 @@ def _find_best_matching_audio_track(source_audio: str, mediainfo_tracks: list) -
             score_details.append(f"编码兼容(+30)")
         else:
             score_details.append(f"编码不匹配(0)")
-        
+
         # 2. 声道数匹配（30分）
         if source_channels and track_channels:
             if source_channels == track_channels:
@@ -206,7 +210,7 @@ def _find_best_matching_audio_track(source_audio: str, mediainfo_tracks: list) -
                 def parse_channels(ch_str):
                     # 移除小数点后拼接，如 "7.1" → 71, "5.1.2" → 512
                     return float(ch_str.replace(".", ""))
-                
+
                 source_ch_num = parse_channels(source_channels)
                 track_ch_num = parse_channels(track_channels)
                 diff = abs(source_ch_num - track_ch_num)
@@ -226,7 +230,7 @@ def _find_best_matching_audio_track(source_audio: str, mediainfo_tracks: list) -
             def parse_channels(ch_str):
                 # 移除小数点后拼接，如 "7.1" → 71, "5.1.2" → 512
                 return float(ch_str.replace(".", ""))
-            
+
             track_ch_num = parse_channels(track_channels)
             if track_ch_num >= 71:  # 7.1 或更高
                 score += 20
@@ -242,88 +246,86 @@ def _find_best_matching_audio_track(source_audio: str, mediainfo_tracks: list) -
                 score_details.append(f"声道优先级最低(+5, {track_channels})")
         elif not source_channels and not track_channels:
             score_details.append(f"无声道信息(0)")
-        
+
         # 3. Atmos 标记匹配（20分）
         if source_has_atmos == track_has_atmos:
             score += 20
             score_details.append(f"Atmos匹配(+20)")
         else:
             score_details.append(f"Atmos不匹配(0)")
-        
+
         # 打印评分详情
         print(f"  音轨{idx}评分: {score}分 - {', '.join(score_details)}")
-        
+
         # 更新最佳匹配
         if score > best_score:
             best_score = score
             best_track = track
-    
+
     # 如果没有找到匹配的音轨（分数为0），返回第一个音轨
     if best_score == 0:
         print(f"[音频匹配] 没有找到匹配的音轨（分数为0），返回第一个音轨")
         return mediainfo_tracks[0]
-    
-    print(f"[音频匹配] 最佳匹配音轨: 编码='{best_track.get('codec', '')}', 声道='{best_track.get('channels', '')}', Atmos={best_track.get('has_atmos', False)}, 音轨数='{best_track.get('audio_count', '')}', 总分={best_score}")
+
+    print(
+        f"[音频匹配] 最佳匹配音轨: 编码='{best_track.get('codec', '')}', 声道='{best_track.get('channels', '')}', Atmos={best_track.get('has_atmos', False)}, 音轨数='{best_track.get('audio_count', '')}', 总分={best_score}"
+    )
     return best_track if best_track else mediainfo_tracks[0]
 
 
 def _is_codec_compatible(codec1: str, codec2: str) -> bool:
     """
     判断两个音频编码是否兼容
-    
+
     Args:
         codec1: 第一个音频编码
         codec2: 第二个音频编码
-        
+
     Returns:
         是否兼容
     """
+
     # 标准化编码名称
     def normalize(codec):
         return re.sub(r"[-\s]", "", codec).upper()
-    
+
     norm1 = normalize(codec1)
     norm2 = normalize(codec2)
-    
+
     # DTS 系列兼容性
     dts_variants = ["DTS", "DTSHDMA", "DTSHDHR", "DTSHD", "DTSX", "DTS:D"]
     if any(dts in norm1 for dts in dts_variants) and any(dts in norm2 for dts in dts_variants):
         return True
-    
+
     # DD 系列兼容性
     dd_variants = ["DD", "DDP", "DD+", "EAC3", "AC3"]
     if any(dd in norm1 for dd in dd_variants) and any(dd in norm2 for dd in dd_variants):
         return True
-    
+
     # TrueHD 系列兼容性
     if "TRUEHD" in norm1 and "TRUEHD" in norm2:
         return True
-    
+
     return False
 
 
 def _supplement_audio_info(source_audio: str, mediainfo_track: dict) -> str:
     """
     使用 MediaInfo 音轨信息补充源标题音频编码缺失的信息
-    
+
     Args:
         source_audio: 源标题的音频编码字符串（如 "DTS-HD MA"）
         mediainfo_track: MediaInfo 匹配的音轨信息
-        
+
     Returns:
         补充后的音频编码字符串
     """
     if not mediainfo_track:
         return source_audio
-    
+
     # 解析源标题的音频编码
-    source_parts = {
-        "codec": "",
-        "channels": "",
-        "atmos": "",
-        "audio_count": ""
-    }
-    
+    source_parts = {"codec": "", "channels": "", "atmos": "", "audio_count": ""}
+
     # 提取音频编码
     codec_match = re.search(
         r"\b(DTS-?HD\s*MA|DTS-?HD\s*HR|DTS-?HD|DTS:X|DTS:D|DTS|TrueHD|DDP|DD\+|DD|E-AC-?3|AC3|FLAC|Opus|AAC|OGG|WAV|APE|ALAC|DSD|MP3|LPCM|PCM)\b",
@@ -332,42 +334,46 @@ def _supplement_audio_info(source_audio: str, mediainfo_track: dict) -> str:
     )
     if codec_match:
         source_parts["codec"] = codec_match.group(1)
-    
+
     # 提取声道数
     channel_match = re.search(r"\b(\d{1,2}\.\d)\b", source_audio)
     if channel_match:
         source_parts["channels"] = channel_match.group(1)
-    
+
     # 提取 Atmos 标记
     atmos_match = re.search(r"\b(Atmos|X)\b", source_audio, re.IGNORECASE)
     if atmos_match:
         source_parts["atmos"] = atmos_match.group(1)
-    
+
     # 提取音轨数
     audio_count_match = re.search(r"\b(\d+Audios?)\b", source_audio, re.IGNORECASE)
     if audio_count_match:
         source_parts["audio_count"] = audio_count_match.group(1)
-    
-    print(f"[音频补充] 源标题解析结果 - 编码: '{source_parts['codec']}', 声道: '{source_parts['channels']}', Atmos: '{source_parts['atmos']}', 音轨数: '{source_parts['audio_count']}'")
-    print(f"[音频补充] MediaInfo 匹配音轨 - 编码: '{mediainfo_track.get('codec', '')}', 声道: '{mediainfo_track.get('channels', '')}', Atmos: {mediainfo_track.get('has_atmos', False)}, 音轨数: '{mediainfo_track.get('audio_count', '')}'")
-    
+
+    print(
+        f"[音频补充] 源标题解析结果 - 编码: '{source_parts['codec']}', 声道: '{source_parts['channels']}', Atmos: '{source_parts['atmos']}', 音轨数: '{source_parts['audio_count']}'"
+    )
+    print(
+        f"[音频补充] MediaInfo 匹配音轨 - 编码: '{mediainfo_track.get('codec', '')}', 声道: '{mediainfo_track.get('channels', '')}', Atmos: {mediainfo_track.get('has_atmos', False)}, 音轨数: '{mediainfo_track.get('audio_count', '')}'"
+    )
+
     # 补充缺失的信息（按顺序：声道数 → Atmos → 音轨数）
-    
+
     # 1. 补充声道数
     if not source_parts["channels"] and mediainfo_track.get("channels"):
         source_parts["channels"] = mediainfo_track["channels"]
         print(f"[音频补充] ✓ 补充声道数: '{mediainfo_track['channels']}'")
-    
+
     # 2. 补充 Atmos（如果源标题没有 Atmos，但 MediaInfo 有，则补充）
     if not source_parts["atmos"] and mediainfo_track.get("has_atmos"):
         source_parts["atmos"] = "Atmos"
         print(f"[音频补充] ✓ 补充 Atmos")
-    
+
     # 3. 补充音轨数（如果源标题没有音轨数，但 MediaInfo 有，则补充）
     if not source_parts["audio_count"] and mediainfo_track.get("audio_count"):
         source_parts["audio_count"] = mediainfo_track["audio_count"]
         print(f"[音频补充] ✓ 补充音轨数: '{mediainfo_track['audio_count']}'")
-    
+
     # 构建补充后的音频编码字符串
     # 拼接顺序：编码 → 声道 → Atmos → 音轨数
     parts = []
@@ -379,7 +385,7 @@ def _supplement_audio_info(source_audio: str, mediainfo_track: dict) -> str:
         parts.append(source_parts["atmos"])
     if source_parts["audio_count"]:
         parts.append(source_parts["audio_count"])
-    
+
     result = " ".join(parts) if parts else source_audio
     print(f"[音频补充] 补充后结果: '{result}'")
     return result
@@ -412,14 +418,16 @@ def _apply_priority_override(
     if mediainfo_audio:
         # 检查是否有源标题的音频编码
         source_audio = title_dict.get("音频编码", "")
-        
+
         if source_audio and mediainfo_audio.get("all_tracks"):
             # 智能匹配：找到最接近的音轨
-            best_track = _find_best_matching_audio_track(source_audio, mediainfo_audio["all_tracks"])
-            
+            best_track = _find_best_matching_audio_track(
+                source_audio, mediainfo_audio["all_tracks"]
+            )
+
             # 补充：使用 MediaInfo 信息补充缺失的部分
             supplemented_audio = _supplement_audio_info(source_audio, best_track)
-            
+
             if supplemented_audio != source_audio:
                 title_dict["音频编码"] = supplemented_audio
                 print(f"[智能匹配和补充] 原音频: {source_audio} -> 补充后: {supplemented_audio}")
@@ -427,13 +435,13 @@ def _apply_priority_override(
             # 如果没有源标题音频编码，使用 MediaInfo 的最佳音轨
             audio_info = mediainfo_audio
             audio_parts = [audio_info["codec"]]
-            
+
             if audio_info.get("channels"):
                 audio_parts.append(audio_info["channels"])
-            
+
             if audio_info.get("has_atmos"):
                 audio_parts.append("Atmos")
-            
+
             audio_str = " ".join(audio_parts)
             title_dict["音频编码"] = audio_str
             print(f"[优先级覆盖] 使用 MediaInfo 解析的音频编码: {audio_str}")
@@ -723,8 +731,23 @@ def upload_data_title(
     params = {}
     unrecognized_parts = []
 
-    # 保持原始标题，让后续的制作组提取逻辑来处理
-    title = original_title_str
+    # 匹配范围：汉字 (\u4e00-\u9fa5) + CJK标点 (\u3000-\u303f) + 全角字符/标点 (\uff00-\uffef)
+    # 这可以覆盖 "黑客帝国"、"【测试】"、"（完）" 等包含中文的情况
+    chinese_pattern = re.compile(r"[\u4e00-\u9fa5\u3000-\u303f\uff00-\uffef]+")
+
+    # 查找所有中文片段
+    chinese_matches = chinese_pattern.findall(original_title_str)
+    if chinese_matches:
+        # 将找到的中文片段合并成字符串
+        chinese_text = " ".join([m.strip() for m in chinese_matches if m.strip()])
+        if chinese_text:
+            # 添加到未识别列表中
+            unrecognized_parts.append(chinese_text)
+            # print(f"[调试] 提取到中文标题: {chinese_text}")
+
+    # 从后续处理用的 title 变量中移除中文，防止干扰正则（例如全角数字或字符）
+    # 注意：这里我们使用替换后的 title 进行后续的技术参数解析
+    title = chinese_pattern.sub(" ", original_title_str)
 
     title = re.sub(r"[￡€]", "", title)
     title = re.sub(r"\s*剩餘時間.*$", "", title)
@@ -776,11 +799,7 @@ def upload_data_title(
             # print(f"[调试]   - release_group: {release_group}")
             # print(f"[调试] 最终制作组: {release_group}")
         else:
-            if title.upper().endswith("-NOGROUP"):
-                release_group = "NOGROUP"
-                main_part = title[:-8].strip()
-            else:
-                release_group = "N/A (无发布组)"
+            release_group = ""
 
     # 3. 季集、年份、剪辑版本提取
     season_match = SEASON_EPISODE_PATTERN.search(main_part)
@@ -898,7 +917,7 @@ def upload_data_title(
     all_found_tags = []
 
     release_group_keywords = []
-    if release_group and release_group != "N/A (无发布组)":
+    if release_group and release_group != "":
         release_group_keywords = re.split(r"[@\-\s]+", release_group)
         release_group_keywords = [kw.strip() for kw in release_group_keywords if kw.strip()]
         # print(f"[调试] 制作组关键词列表: {release_group_keywords}")
@@ -1709,16 +1728,20 @@ def upload_data_title(
             if component.get("key") == "音频编码":
                 existing_audio = component.get("value", "")
                 break
-        
+
         if existing_audio and mediainfo_audio.get("all_tracks"):
             # 智能匹配：找到最接近的音轨
-            best_track = _find_best_matching_audio_track(existing_audio, mediainfo_audio["all_tracks"])
-            
+            best_track = _find_best_matching_audio_track(
+                existing_audio, mediainfo_audio["all_tracks"]
+            )
+
             # 补充：使用 MediaInfo 信息补充缺失的部分
             supplemented_audio = _supplement_audio_info(existing_audio, best_track)
-            
+
             if supplemented_audio != existing_audio:
-                print(f"[MediaInfo 智能补充] 原音频: {existing_audio} -> 补充后: {supplemented_audio}")
+                print(
+                    f"[MediaInfo 智能补充] 原音频: {existing_audio} -> 补充后: {supplemented_audio}"
+                )
                 for component in final_components_list:
                     if component.get("key") == "音频编码":
                         component["value"] = supplemented_audio
@@ -1728,7 +1751,7 @@ def upload_data_title(
             audio_codec = mediainfo_audio.get("codec", "")
             audio_channels = mediainfo_audio.get("channels", "")
             has_atmos = mediainfo_audio.get("has_atmos", False)
-            
+
             # 从 channels 字段中分离声道数和音轨数
             channel_layout = audio_channels
             audio_count = ""
@@ -1737,7 +1760,7 @@ def upload_data_title(
                 if parts:
                     channel_layout = parts[0]  # 提取声道数，如 "7.1"
                     audio_count = " ".join(parts[1:])  # 提取音轨数，如 "4Audios"
-            
+
             # 构建完整的音频信息字符串
             audio_info = ""
             if audio_codec:
@@ -1748,7 +1771,7 @@ def upload_data_title(
                     audio_info += " Atmos"
                 if audio_count:
                     audio_info += f" {audio_count}"
-            
+
             if audio_info:
                 print(f"[MediaInfo 补充] 添加音频编码: {audio_info}")
                 for component in final_components_list:
