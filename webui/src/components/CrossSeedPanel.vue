@@ -166,7 +166,7 @@
                                 @close="handleTagClose(item.value)" style="margin: 2px">
                                 <span>{{
                                   reverseMappings.tags[item.value] || item.currentLabel
-                                  }}</span>
+                                }}</span>
                               </el-tag>
                             </template>
                             <el-option v-for="option in allTagOptions" :key="option.value" :label="option.label"
@@ -594,7 +594,7 @@
           </template>
           <div>
             检测到制作组包含禁止转载的内容，已自动禁用 UBits 站点。<br />
-            禁止转载的制作组：CMCT、CMCTV
+            禁止转载的制作组：CMCT、CMCTV、HDSky、HDSWEB、HDS、HDSTV、HDSPad
           </div>
         </el-alert>
 
@@ -1318,7 +1318,7 @@ const isTargetSiteSelectable = (siteName: string): boolean => {
     const titleComponents = torrentData.value.title_components
 
     // 检查标准化参数中的制作组
-    if (team && ['cmct', 'cmctv'].includes(team.toLowerCase())) {
+    if (team && ['cmct', 'cmctv', 'hdsky', 'hdsweb', 'hds', 'hdstv', 'hdspad'].includes(team.toLowerCase())) {
       return false
     }
 
@@ -1326,7 +1326,8 @@ const isTargetSiteSelectable = (siteName: string): boolean => {
     const teamComponent = titleComponents.find((param) => param.key === '制作组')
     if (teamComponent && teamComponent.value) {
       const teamValue = teamComponent.value.toLowerCase()
-      const forbiddenTeams = ['cmct', 'cmctv', 'telesto', 'shadow610']
+      const forbiddenTeams = ['cmct', 'cmctv', 'telesto', 'shadow610', 'hdsky', 'hdsweb', 'hds', 'hdstv', 'hdspad']
+
       for (const forbiddenTeam of forbiddenTeams) {
         if (teamValue.includes(forbiddenTeam)) {
           return false
@@ -3663,7 +3664,7 @@ const isUbitsDisabled = computed(() => {
   const titleComponents = torrentData.value.title_components
 
   // 检查标准化参数中的制作组
-  if (team && ['cmct', 'cmctv'].includes(team.toLowerCase())) {
+  if (team && ['cmct', 'cmctv', 'hdsky', 'hdsweb', 'hds', 'hdstv', 'hdspad'].includes(team.toLowerCase())) {
     return true
   }
 
@@ -3671,7 +3672,7 @@ const isUbitsDisabled = computed(() => {
   const teamComponent = titleComponents.find((param) => param.key === '制作组')
   if (teamComponent && teamComponent.value) {
     const teamValue = teamComponent.value.toLowerCase()
-    const forbiddenTeams = ['cmct', 'cmctv', 'telesto', 'shadow610']
+    const forbiddenTeams = ['cmct', 'cmctv', 'telesto', 'shadow610', 'hdsky', 'hdsweb', 'hds', 'hdstv', 'hdspad']
 
     // 检查是否包含禁止的制作组
     for (const forbiddenTeam of forbiddenTeams) {

@@ -1,6 +1,13 @@
 {
   "history": [
     {
+      "version": "v3.5.3",
+      "date": "2026.01.11",
+      "changes": [
+        "新增：禁转规则-空官组禁转至 ub"
+      ]
+    },
+    {
       "version": "v3.5.2",
       "date": "2026.01.11",
       "changes": [
