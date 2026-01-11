@@ -13,6 +13,68 @@ from config import TEMP_DIR, config_manager
 from .media_helper import _find_target_video_file, _convert_pixhost_url_to_direct
 
 
+def _get_best_chinese_subtitle_sid(video_path):
+    """
+    分析视频文件，返回最合适的中文字幕 MPV sid (相对序号)。
+    如果没有找到中文，返回 None。
+    """
+    try:
+        cmd = [
+            "ffprobe",
+            "-v", "quiet",
+            "-print_format", "json",
+            "-show_streams",
+            "-select_streams", "s",
+            video_path
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        data = json.loads(result.stdout)
+        streams = data.get("streams", [])
+
+        if not streams:
+            return None
+
+        candidates = []
+
+        for i, stream in enumerate(streams):
+            mpv_sid = i + 1
+            
+            tags = stream.get("tags", {})
+            lang = tags.get("language", "und").lower()
+            title = tags.get("title", "").lower()
+            
+            score = 0
+            
+            if lang in ["chi", "zho", "zh"]:
+                score += 10
+            
+            if "简" in title or "chs" in title or "sc" in title:
+                score += 5
+            elif "繁" in title or "cht" in title or "tc" in title:
+                score += 3
+            elif "中" in title or "chinese" in title:
+                score += 2
+            
+            if "双语" in title:
+                score += 1
+
+            if score > 0:
+                candidates.append({"sid": mpv_sid, "score": score, "title": title, "lang": lang})
+
+        if not candidates:
+            return None
+
+        candidates.sort(key=lambda x: (-x["score"], x["sid"]))
+        
+        best = candidates[0]
+        print(f"   🎯 自动选中字幕: Track {best['sid']} [{best['lang']}] {best['title']}")
+        return best["sid"]
+
+    except Exception as e:
+        print(f"   ⚠️ 字幕分析失败: {e}")
+        return None
+
+
 def _upload_to_pixhost(image_path: str):
     """
     将单个图片文件上传到 Pixhost.to，支持主备域名切换。
@@ -427,13 +489,14 @@ def _select_well_distributed_events(sorted_events, num_to_select):
 
 def upload_data_screenshot(source_info, save_path, torrent_name=None, downloader_id=None):
     """
-    智能通用截图上传：
+    智能通用截图上传 (含 HDR 处理与自动中文字幕挂载)：
     1. 自动命名为 s{序号}_{时}h{分}m{秒}s.png
     2. mpv 截取原始 Raw 图 (保留 HDR 信息)
     3. ffmpeg 自动检测 HDR/SDR 并应用对应滤镜 (zscale/format)
     4. 优化压缩参数 (level 4 + mixed) 平衡速度与体积
+    5. 自动检测并挂载中文字幕
     """
-    print("开始执行截图和上传任务 (智能 HDR/SDR 通用处理)...")
+    print("开始执行截图和上传任务 (智能 HDR/SDR + 自动中文字幕)...")
     config = config_manager.get()
     hoster = config.get("cross_seed", {}).get("image_hoster", "pixhost")
     num_screenshots = 5
@@ -554,6 +617,12 @@ def upload_data_screenshot(source_info, save_path, torrent_name=None, downloader
             print(f"错误: 获取视频时长失败: {e}")
             return ""
 
+    # 自动检测中文字幕轨道
+    print("正在分析字幕流...")
+    subtitle_sid = _get_best_chinese_subtitle_sid(target_video_file)
+    if not subtitle_sid:
+        print("   ℹ️ 未检测到明确的中文字幕，将截取无字幕画面。")
+
     auth_token = _get_agsv_auth_token() if hoster == "agsv" else None
     if hoster == "agsv" and not auth_token:
         print("❌ 无法获取 Token，任务终止。")
@@ -591,8 +660,16 @@ def upload_data_screenshot(source_info, save_path, torrent_name=None, downloader
             "--screenshot-png-compression=0",  # 关闭压缩 (速度最快)
             "--screenshot-tag-colorspace=yes",  # 写入色彩标签
             f"--o={intermediate_png_path}",
-            target_video_file,
         ]
+
+        # 关键优化：挂载字幕
+        if subtitle_sid:
+            cmd_screenshot.append(f"--sid={subtitle_sid}")
+            cmd_screenshot.append("--sub-visibility=yes")
+        else:
+            cmd_screenshot.append("--sid=no")
+
+        cmd_screenshot.append(target_video_file)
 
         try:
             subprocess.run(cmd_screenshot, check=True, capture_output=True, timeout=180)

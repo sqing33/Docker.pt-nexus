@@ -158,7 +158,10 @@ services:
 
 ### v3.5.3（2026.01.11）
 
+> **注：盒子端新增自动选择中文字幕流功能需要重新执行 curl -sL https://github.com/sqing33/PTNexus/releases/download/latest/install-pt-nexus-box-proxy.sh | sudo bash 以更新盒子端脚本。**
+
 - 新增：禁转规则-空官组禁转至 ub
+- 新增：自动选择中文字幕流，盒子端需要一同更新
 
 ### v3.5.2（2026.01.11）
 

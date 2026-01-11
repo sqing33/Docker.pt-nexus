@@ -484,6 +484,101 @@ func getVideoDuration(videoPath string) (float64, error) {
 	log.Printf("视频时长: %.2f 秒", duration)
 	return duration, nil
 }
+
+func findBestChineseSubtitleStream(videoPath string) (int, int, string, error) {
+	log.Printf("正在智能分析中文字幕流: %s", filepath.Base(videoPath))
+	args := []string{
+		"-v", "quiet",
+		"-print_format", "json",
+		"-show_streams",
+		"-select_streams", "s",
+		videoPath,
+	}
+	output, err := executeCommand("ffprobe", args...)
+	if err != nil {
+		return 0, -1, "", fmt.Errorf("ffprobe 字幕探测失败: %v", err)
+	}
+
+	var probeResult struct {
+		Streams []struct {
+			Index     int    `json:"index"`
+			CodecName string `json:"codec_name"`
+			Tags      struct {
+				Language string `json:"language"`
+				Title    string `json:"title"`
+			} `json:"tags"`
+		} `json:"streams"`
+	}
+
+	if err := json.Unmarshal([]byte(output), &probeResult); err != nil {
+		return 0, -1, "", fmt.Errorf("解析字幕JSON失败: %v", err)
+	}
+
+	if len(probeResult.Streams) == 0 {
+		return 0, -1, "", nil
+	}
+
+	type candidate struct {
+		MpvSid      int
+		GlobalIndex int
+		Codec       string
+		Score       int
+		Title       string
+		Lang        string
+	}
+
+	var candidates []candidate
+
+	for i, stream := range probeResult.Streams {
+		mpvSid := i + 1
+		score := 0
+		lang := strings.ToLower(stream.Tags.Language)
+		title := strings.ToLower(stream.Tags.Title)
+
+		if lang == "chi" || lang == "zho" || lang == "zh" {
+			score += 10
+		}
+
+		if strings.Contains(title, "简") || strings.Contains(title, "chs") || strings.Contains(title, "sc") {
+			score += 5
+		} else if strings.Contains(title, "繁") || strings.Contains(title, "cht") || strings.Contains(title, "tc") {
+			score += 3
+		} else if strings.Contains(title, "中") || strings.Contains(title, "chinese") {
+			score += 2
+		}
+
+		if strings.Contains(title, "双语") {
+			score += 1
+		}
+
+		if score > 0 {
+			candidates = append(candidates, candidate{
+				MpvSid:      mpvSid,
+				GlobalIndex: stream.Index,
+				Codec:       stream.CodecName,
+				Score:       score,
+				Title:       stream.Tags.Title,
+				Lang:        lang,
+			})
+		}
+	}
+
+	if len(candidates) > 0 {
+		sort.Slice(candidates, func(i, j int) bool {
+			if candidates[i].Score != candidates[j].Score {
+				return candidates[i].Score > candidates[j].Score
+			}
+			return candidates[i].MpvSid < candidates[j].MpvSid
+		})
+		best := candidates[0]
+		log.Printf("   🎯 自动选中字幕: Track #%d (Global %d) [%s] %s (Score: %d)", best.MpvSid, best.GlobalIndex, best.Lang, best.Title, best.Score)
+		return best.MpvSid, best.GlobalIndex, best.Codec, nil
+	}
+
+	log.Println("   ℹ️ 未检测到明确的中文字幕。")
+	return 0, -1, "", nil
+}
+
 func findFirstSubtitleStream(videoPath string) (int, string, error) {
 	log.Printf("正在为视频 '%s' 探测字幕流...", filepath.Base(videoPath))
 	args := []string{"-v", "quiet", "-print_format", "json", "-show_entries", "stream=index,codec_name,codec_type,disposition", "-select_streams", "s", videoPath}
@@ -552,7 +647,7 @@ func findFirstSubtitleStream(videoPath string) (int, string, error) {
 	return firstStream.Index, firstStream.CodecName, nil
 }
 
-func takeScreenshot(videoPath, outputPath string, timePoint float64, subtitleStreamIndex int) error {
+func takeScreenshot(videoPath, outputPath string, timePoint float64, subtitleSID int) error {
 	log.Printf("正在使用 mpv 截图 (时间点: %.2fs) -> %s", timePoint, outputPath)
 	args := []string{
 		"--no-audio",
@@ -561,12 +656,19 @@ func takeScreenshot(videoPath, outputPath string, timePoint float64, subtitleStr
 		"--screenshot-high-bit-depth=yes",
 		"--screenshot-png-compression=0",
 		"--screenshot-tag-colorspace=yes",
+	}
+	if subtitleSID > 0 {
+		args = append(args, fmt.Sprintf("--sid=%d", subtitleSID), "--sub-visibility=yes")
+	} else {
+		args = append(args, "--sid=no")
+	}
+	args = append(args,
 		"--sub-font-provider=fontconfig",
 		"--sub-font=Noto Sans CJK SC",
 		"--sub-font-size=52",
 		fmt.Sprintf("--o=%s", outputPath),
 		videoPath,
-	}
+	)
 	_, err := executeCommand("mpv", args...)
 	if err != nil {
 		log.Printf("mpv 截图失败，最终执行的命令: mpv %s", strings.Join(args, " "))
@@ -1196,13 +1298,27 @@ func screenshotHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	subtitleIndex, subtitleCodec, err := findFirstSubtitleStream(videoPath)
+	chineseSubtitleSID, subtitleGlobalIndex, subtitleCodec, err := findBestChineseSubtitleStream(videoPath)
+	var subtitleSID int = 0
+	var subtitleIndex int = -1
 	if err != nil {
-		log.Printf("警告: 探测字幕流时发生错误: %v", err)
-		subtitleIndex = -1
+		log.Printf("警告: 探测中文字幕流时发生错误: %v", err)
 	}
 
-	// 智能选择截图时间点 (逻辑不变)
+	if chineseSubtitleSID > 0 {
+		subtitleSID = chineseSubtitleSID
+		subtitleIndex = subtitleGlobalIndex
+		log.Printf("   ✅ 找到中文字幕，将挂载字幕截图并使用该字幕流扫描时间点")
+	} else {
+		log.Printf("   ℹ️ 未找到中文字幕，将尝试查找任意字幕流用于智能扫描时间点（不挂载字幕）")
+		fallbackIndex, fallbackCodec, fallbackErr := findFirstSubtitleStream(videoPath)
+		if fallbackErr == nil && fallbackIndex >= 0 {
+			subtitleIndex = fallbackIndex
+			subtitleCodec = fallbackCodec
+			log.Printf("   ✅ 找到兜底字幕流 (索引: %d, 格式: %s) 用于智能扫描", subtitleIndex, subtitleCodec)
+		}
+	}
+
 	screenshotPoints := make([]float64, 0, 5)
 	var subtitleEvents []SubtitleEvent
 	const numScreenshots = 5
@@ -1277,10 +1393,9 @@ func screenshotHandler(w http.ResponseWriter, r *http.Request) {
 		intermediatePngPath := filepath.Join(tempDir, "raw_"+fileName)
 		finalPngPath := filepath.Join(tempDir, fileName)
 
-		// 步骤1: 截图
-		if err := takeScreenshot(videoPath, intermediatePngPath, point, subtitleIndex); err != nil {
+		if err := takeScreenshot(videoPath, intermediatePngPath, point, subtitleSID); err != nil {
 			log.Printf("错误: 第 %d 张图截图失败: %v。跳过此图。", i+1, err)
-			continue // 跳到下一张图
+			continue
 		}
 
 		// 步骤2: PNG压缩
@@ -1465,8 +1580,6 @@ func countExisting(results []FileCheckResult) int {
 	}
 	return count
 }
-
-
 
 func episodeCountHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
