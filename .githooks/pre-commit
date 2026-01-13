@@ -3,6 +3,13 @@
 # ==============================================================================
 # Git pre-commit hook: 智能检测变更，按需构建并包含产物
 #
+# 配置说明:
+#   要让 Git 使用此目录中的 hooks，需要执行以下命令：
+#   git config core.hooksPath .githooks
+#
+#   这个配置会告诉 Git 从 .githooks/ 目录读取 hooks，而不是默认的 .git/hooks/
+#   这样就可以将 hooks 文件纳入版本控制，团队成员克隆仓库后只需执行上述命令即可使用。
+#
 # 工作流程:
 # 1. 在 `git commit` 时自动触发。
 # 2. 获取所有已暂存（staged）的文件列表。
@@ -13,10 +20,12 @@
 # 优点: 极大地提升了提交速度，只在必要时才执行构建。
 # ==============================================================================
 
-# 加载 NVM 环境（关键：让钩子识别 node/pnpm）
+# 加载 NVM 环境（关键：让钩子识别 node/bun）
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # 加载 nvm
 nvm use default > /dev/null 2>&1  # 静默加载默认 node 版本（避免输出干扰）
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$BUN_INSTALL/bin:$PATH"
 
 # 解决 locale 警告（可选，顺带修复）
 export LC_ALL=en_US.UTF-8
@@ -55,7 +64,7 @@ BUILDS_TRIGGERED=false
 if echo "$STAGED_FILES" | grep -q "^webui/"; then
     BUILDS_TRIGGERED=true
     echo -e "${YELLOW}📦 检测到 'webui' 目录有变更，开始构建...${NC}"
-    (cd webui && pnpm install --silent && pnpm build) || handle_error "Vue 前端构建失败"
+    (cd webui && bun install --silent && bun run build) || handle_error "Vue 前端构建失败"
     echo -e "${GREEN}✓ Vue 前端构建成功。正在暂存产物...${NC}"
     git add webui/dist/
 else

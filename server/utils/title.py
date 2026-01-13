@@ -145,12 +145,14 @@ def _find_best_matching_audio_track(source_audio: str, mediainfo_tracks: list) -
 
     # 提取音频编码
     codec_match = re.search(
-        r"\b(DTS-?HD\s*MA|DTS-?HD\s*HR|DTS-?HD|DTS:X|DTS:D|DTS|TrueHD|DDP|DD\+|DD|E-AC-?3|AC3|FLAC|Opus|AAC|OGG|WAV|APE|ALAC|DSD|MP3|LPCM|PCM)\b",
+        r"\b(DTS-?HD\s*MA|DTS-?HD\s*HR|DTS-?HD|DTS:X|DTS:D|DTS|TrueHD|DDP|E-AC-?3|AC3|FLAC|Opus|AAC|OGG|WAV|APE|ALAC|DSD|MP3|LPCM|PCM)(?!\w)|\b(DD\+)|\b(DD)(?!\w)",
         source_audio,
         re.IGNORECASE,
     )
     if codec_match:
-        source_codec = codec_match.group(1)
+        # 获取最后一个匹配的捕获组
+        if codec_match.lastindex:
+            source_codec = codec_match.group(codec_match.lastindex)
 
     # 提取声道数
     channel_match = re.search(r"\b(\d{1,2}\.\d)\b", source_audio)
@@ -328,12 +330,14 @@ def _supplement_audio_info(source_audio: str, mediainfo_track: dict) -> str:
 
     # 提取音频编码
     codec_match = re.search(
-        r"\b(DTS-?HD\s*MA|DTS-?HD\s*HR|DTS-?HD|DTS:X|DTS:D|DTS|TrueHD|DDP|DD\+|DD|E-AC-?3|AC3|FLAC|Opus|AAC|OGG|WAV|APE|ALAC|DSD|MP3|LPCM|PCM)\b",
+        r"\b(DTS-?HD\s*MA|DTS-?HD\s*HR|DTS-?HD|DTS:X|DTS:D|DTS|TrueHD|DDP|E-AC-?3|AC3|FLAC|Opus|AAC|OGG|WAV|APE|ALAC|DSD|MP3|LPCM|PCM)(?!\w)|\b(DD\+)|\b(DD)(?!\w)",
         source_audio,
         re.IGNORECASE,
     )
     if codec_match:
-        source_parts["codec"] = codec_match.group(1)
+        # 获取最后一个匹配的捕获组
+        if codec_match.lastindex:
+            source_parts["codec"] = codec_match.group(codec_match.lastindex)
 
     # 提取声道数
     channel_match = re.search(r"\b(\d{1,2}\.\d)\b", source_audio)
@@ -373,6 +377,11 @@ def _supplement_audio_info(source_audio: str, mediainfo_track: dict) -> str:
     if not source_parts["audio_count"] and mediainfo_track.get("audio_count"):
         source_parts["audio_count"] = mediainfo_track["audio_count"]
         print(f"[音频补充] ✓ 补充音轨数: '{mediainfo_track['audio_count']}'")
+
+    # 标准化音频编码：将 DD+ 转换为 DDP
+    if source_parts["codec"] and source_parts["codec"].upper() == "DD+":
+        source_parts["codec"] = "DDP"
+        print(f"[音频补充] ✓ 标准化音频编码: DD+ -> DDP")
 
     # 构建补充后的音频编码字符串
     # 拼接顺序：编码 → 声道 → Atmos → 音轨数
@@ -860,10 +869,11 @@ def upload_data_title(
         # 【修改】核心修复：
         # 1. 声道匹配逻辑升级为 \d+[\.。]\d+(?:[\.。]\d+)? 以支持 7.1.4 和 5。1
         # 2. AV3A 保持在列表内
+        # 3. DD\+ 和 DDP 单独处理，避免与 DD 冲突
         "audio": (
-            # 第一部分：音频编码
+            # 第一部分：大部分音频编码（不包括 DDP、DD+、DD）
             r"(?:DTS-?HD\s*MA|DTS-?HD\s*HR|DTS-?HD|DTS-?X|DTS\s*X|DTS|"
-            r"(?:Dolby\s*)?TrueHD|DDP|DD\+|DD|E-?AC-?3|AC3|"
+            r"(?:Dolby\s*)?TrueHD|E-?AC-?3|AC3|"
             r"FLAC|Opus|AAC|OGG|WAV|APE|ALAC|DSD|MP3|LPCM|PCM|AV3A)"
             # 第二部分：后缀（声道、Atmos/X、音轨数）
             r"(?:"
@@ -877,7 +887,14 @@ def upload_data_title(
             # 模式D: 再次允许 Atmos/X (防止顺序混乱)
             r"(?:\s*(?:Atmos|X)(?:\s*\d+[\.。]\d+(?:[\.。]\d+)?)?)?"
             r"|"
-            # 第三部分：兜底匹配
+            # 第三部分：DD\+ 单独处理（必须放在 DDP 之前，因为 DD+ 是 DDP 的前缀）
+            r"\bDD\+(?:\s*\d+[\.。]\d+(?:[\.。]\d+)?)?(?:\s*(?:Atmos|X))?(?:\s*\d+\s*Audios?)?|"
+            # 第四部分：DDP 单独处理
+            r"\bDDP(?:\s*\d+[\.。]\d+(?:[\.。]\d+)?)?(?:\s*(?:Atmos|X))?(?:\s*\d+\s*Audios?)?|"
+            # 第五部分：DD 单独处理（必须放在最后，避免与 DDP/DD+ 冲突）
+            r"\bDD(?:\s*\d+[\.。]\d+(?:[\.。]\d+)?)?(?:\s*(?:Atmos|X))?(?:\s*\d+\s*Audios?)?(?!\w)"
+            r"|"
+            # 第六部分：兜底匹配
             r"Atmos(?:\s*TrueHD)?(?:\s*\d+[\.。]\d+(?:[\.。]\d+)?)?|"
             r"\d+\s*Audios?|"
             r"MP2|"
@@ -1118,11 +1135,15 @@ def upload_data_title(
 
                 # 2. 从剩余部分提取音频编码（使用单词边界）
                 codec_match = re.search(
-                    r"\b(DTS-?HD\s*MA|DTS-?HD\s*HR|DTS-?HD|DTS:X|DTS:D|DTS|TrueHD|DDP|DD\+|DD|E-AC-?3|AC3|FLAC|Opus|AAC|OGG|WAV|APE|ALAC|DSD|MP3|LPCM|PCM)\b",
+                    r"\b(DTS-?HD\s*MA|DTS-?HD\s*HR|DTS-?HD|DTS:X|DTS:D|DTS|TrueHD|DDP|E-AC-?3|AC3|FLAC|Opus|AAC|OGG|WAV|APE|ALAC|DSD|MP3|LPCM|PCM)(?!\w)|\b(DD\+)|\b(DD)(?!\w)",
                     temp_val,
                     re.IGNORECASE,
                 )
-                codec = codec_match.group(1) if codec_match else ""
+                codec = ""
+                if codec_match:
+                    # 获取最后一个匹配的捕获组
+                    if codec_match.lastindex:
+                        codec = codec_match.group(codec_match.lastindex)
 
                 # 3. 从剩余部分提取声道数
                 channel_match = re.search(r"\b(\d{1,2}\.\d)\b", temp_val)
@@ -1162,12 +1183,17 @@ def upload_data_title(
                 re.sub(r"H\s*[\s\.]?\s*264", r"H.264", val, flags=re.I) for val in processed_values
             ]
 
-        # 3. 帧率特殊处理（统一格式化为 fps）
+        # 3. 音频编码特殊处理（标准化 DD+ 为 DDP）
+        elif key == "audio":
+            # 标准化 DD+ 为 DDP
+            processed_values = [re.sub(r"\bDD\+", "DDP", val, flags=re.I) for val in processed_values]
+
+        # 4. 帧率特殊处理（统一格式化为 fps）
         elif key == "framerate":
             # 统一格式化为 fps（三个小写字母）
             processed_values = [re.sub(r"(?i)FPS", r"fps", val) for val in processed_values]
 
-        # 4. HDR 格式特殊处理（多个格式合并为字符串）
+        # 5. HDR 格式特殊处理（多个格式合并为字符串）
         elif key == "hdr_format":
             # 如果有多个 HDR 格式，将它们合并为一个字符串，用空格分隔
             if len(processed_values) > 1:
@@ -1398,11 +1424,15 @@ def upload_data_title(
 
                         # 2. 从剩余部分提取音频编码（使用单词边界）
                         codec_match = re.search(
-                            r"\b(DTS-?HD\s*MA|DTS-?HD\s*HR|DTS-?HD|DTS:X|DTS:D|DTS|TrueHD|DDP|DD\+|DD|E-AC-?3|AC3|FLAC|Opus|AAC|OGG|WAV|APE|ALAC|DSD|MP3|LPCM|PCM)\b",
+                            r"\b(DTS-?HD\s*MA|DTS-?HD\s*HR|DTS-?HD|DTS:X|DTS:D|DTS|TrueHD|DDP|E-AC-?3|AC3|FLAC|Opus|AAC|OGG|WAV|APE|ALAC|DSD|MP3|LPCM|PCM)(?!\w)|\b(DD\+)|\b(DD)(?!\w)",
                             temp_val,
                             re.IGNORECASE,
                         )
-                        codec = codec_match.group(1) if codec_match else ""
+                        codec = ""
+                        if codec_match:
+                            # 获取最后一个匹配的捕获组
+                            if codec_match.lastindex:
+                                codec = codec_match.group(codec_match.lastindex)
 
                         # 3. 从剩余部分提取声道数
                         channel_match = re.search(r"\b(\d{1,2}\.\d)\b", temp_val)
@@ -1441,6 +1471,12 @@ def upload_data_title(
                     processed_values = [
                         re.sub(r"H\s*[\s\.]?\s*264", r"H.264", val, flags=re.I)
                         for val in processed_values
+                    ]
+
+                elif key == "audio":
+                    # 标准化 DD+ 为 DDP
+                    processed_values = [
+                        re.sub(r"\bDD\+", "DDP", val, flags=re.I) for val in processed_values
                     ]
 
                 elif key == "framerate":
