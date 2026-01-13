@@ -699,11 +699,12 @@ def upload_data_title(
     """
     from .mediainfo import validate_media_info_format
 
-    # print(f"开始从主标题解析参数: {title}")
-    # if mediainfo_hdr:
-    #     print(f"[MediaInfo HDR] {mediainfo_hdr}")
-    # if mediainfo_audio:
-    #     print(f"[MediaInfo Audio] {mediainfo_audio}")
+    print(f"[调试] ========== 开始从主标题解析参数 ==========")
+    print(f"[调试] 输入标题: {title}")
+    print(f"[调试] 种子文件名: {torrent_filename}")
+    print(f"[调试] mediaInfo: {'有' if mediaInfo and mediaInfo.strip() else '无'}")
+    print(f"[调试] mediainfo_hdr: {mediainfo_hdr}")
+    print(f"[调试] mediainfo_audio: {mediainfo_audio}")
 
     # [新增] 根据MediaInfo/BDInfo类型修正标题中的Blu-ray/BluRay格式
     if mediaInfo and mediaInfo.strip():  # 确保不是空字符串
@@ -754,7 +755,8 @@ def upload_data_title(
     title = re.sub(r"[\s\.]*(mkv|mp4)$", "", title, flags=re.IGNORECASE).strip()
     title = re.sub(r"\[.*?\]|【.*?】", "", title).strip()
     title = title.replace("（", "(").replace("）", ")")
-    title = title.replace("'", "")
+    # 【修改】移除了删除单引号的代码，保留标题中的撇号（如 Can't、It's 等）
+    # title = title.replace("'", "")
     title = re.sub(r"(\d+[pi])([A-Z])", r"\1 \2", title)
 
     # 2. 优先提取制作组信息
@@ -913,7 +915,59 @@ def upload_data_title(
     ]
 
     title_candidate = title_part
-    first_tech_tag_pos = len(title_candidate)
+
+    print(f"[调试] main_part: '{main_part}'")
+    print(f"[调试] title_part: '{title_part}'")
+    print(f"[调试] title_candidate: '{title_candidate}'")
+
+    # 【新增】定义需要位置限制的参数（容易误匹配的参数）
+    # 这些参数只在年份或分辨率之后的技术标签区域提取
+    position_restricted_params = ["source_platform"]
+
+    # 【新增】计算技术标签区域的起始点（基于 main_part）
+    # 技术标签区域从年份或分辨率之后开始
+    # 【修改】只有当存在年份时，才使用年份或分辨率作为技术标签区域的起始点
+    # 如果不存在年份，则在整个标题上提取参数
+    tech_zone_start_main = len(main_part)
+
+    # 查找年份位置（使用 end() 因为技术区域从年份之后开始）
+    year_match = re.search(r"[\s\.\(]((?:19|20)\d{2})([\s\.\)]|$)", main_part)
+
+    print(f"[调试] 年份匹配: {year_match.group(0) if year_match else '无'}")
+    print(f"[调试] 年份位置: {year_match.start() if year_match else '无'} - {year_match.end() if year_match else '无'}")
+
+    if year_match:
+        # 存在年份，使用年份或分辨率作为技术标签区域的起始点
+        tech_zone_start_main = min(tech_zone_start_main, year_match.end())
+
+        # 查找分辨率位置（使用 end() 因为技术区域从分辨率之后开始）
+        resolution_match = re.search(r"\b(\d{3,4}[pi]|4K)\b", main_part)
+        print(f"[调试] 分辨率匹配: {resolution_match.group(0) if resolution_match else '无'}")
+        print(f"[调试] 分辨率位置: {resolution_match.start() if resolution_match else '无'} - {resolution_match.end() if resolution_match else '无'}")
+
+        if resolution_match:
+            tech_zone_start_main = min(tech_zone_start_main, resolution_match.end())
+
+        # 【新增】将 main_part 中的位置转换为 title_part 中的位置
+        # 由于年份已经从 title_part 中移除，需要减去年份的长度
+        year_length = len(year_match.group(0)) if year_match else 0
+        tech_zone_start = max(0, tech_zone_start_main - year_length)
+
+        print(f"[调试] tech_zone_start_main: {tech_zone_start_main}")
+        print(f"[调试] year_length: {year_length}")
+        print(f"[调试] tech_zone_start (转换后): {tech_zone_start}")
+    else:
+        # 不存在年份，在整个标题上提取参数
+        tech_zone_start = 0
+        print(f"[调试] 未找到年份，tech_zone_start = 0（在整个标题上提取）")
+
+    # 【修改】使用 tech_zone_start 作为 first_tech_tag_pos 的初始值
+    # 如果 tech_zone_start = 0（没有年份），则将 first_tech_tag_pos 初始化为 len(title_candidate)
+    # 这样可以在后续处理中找到真正的技术标签
+    if tech_zone_start == 0:
+        first_tech_tag_pos = len(title_candidate)
+    else:
+        first_tech_tag_pos = tech_zone_start
     all_found_tags = []
 
     release_group_keywords = []
@@ -929,11 +983,34 @@ def upload_data_title(
             if r"\b" not in pattern
             else re.compile(pattern, re.IGNORECASE)
         )
-        matches = list(search_pattern.finditer(title_candidate))
+
+        # 【新增】对于需要位置限制的参数，只在技术标签区域提取
+        if key in position_restricted_params and tech_zone_start < len(title_candidate):
+            # 只在技术标签区域搜索
+            print(f"[调试] 提取参数 '{key}': 位置限制模式，搜索范围 title_candidate[{tech_zone_start}:]")
+            print(f"[调试] 提取参数 '{key}': 搜索内容 = '{title_candidate[tech_zone_start:]}'")
+            matches = list(search_pattern.finditer(title_candidate[tech_zone_start:]))
+            # 注意：不需要调整匹配位置，因为我们只需要匹配的文本内容
+            # 这些参数不会更新 first_tech_tag_pos，所以匹配位置不影响标题区域的划分
+        else:
+            # 其他参数使用原有逻辑
+            if key in position_restricted_params:
+                print(f"[调试] 提取参数 '{key}': 位置限制模式，但 tech_zone_start >= len(title_candidate)，跳过提取")
+            else:
+                print(f"[调试] 提取参数 '{key}': 正常模式，搜索整个 title_candidate")
+            matches = list(search_pattern.finditer(title_candidate))
+
         if not matches:
             continue
 
-        first_tech_tag_pos = min(first_tech_tag_pos, matches[0].start())
+        if key in position_restricted_params:
+            print(f"[调试] 提取参数 '{key}': 找到 {len(matches)} 个匹配: {[m.group() for m in matches]}")
+
+        # 【修改】对于需要位置限制的参数，不更新 first_tech_tag_pos
+        # 这样可以防止标题区域的技术参数（如 CAN）影响标题区域的划分
+        if key not in position_restricted_params:
+            first_tech_tag_pos = min(first_tech_tag_pos, matches[0].start())
+
         raw_values = [
             m.group(0).strip() if r"\b" in pattern else m.group(1).strip() for m in matches
         ]
@@ -1177,6 +1254,31 @@ def upload_data_title(
             r"(\.original)?\.torrent", "", torrent_filename, flags=re.IGNORECASE
         )
         filename_candidate = re.sub(r"[\._\[\]\(\)]", " ", filename_base)
+        
+        print(f"[调试] filename_candidate: '{filename_candidate}'")
+
+        # 【新增】计算种子文件名的技术标签区域起始点
+        # 使用与主标题解析相同的逻辑：基于年份或分辨率
+        tech_zone_start_filename = len(filename_candidate)
+
+        # 查找年份位置
+        year_match_filename = re.search(r"[\s\.\(]((?:19|20)\d{2})([\s\.\)]|$)", filename_candidate)
+        print(f"[调试] 文件名年份匹配: {year_match_filename.group(0) if year_match_filename else '无'}")
+        
+        if year_match_filename:
+            tech_zone_start_filename = min(tech_zone_start_filename, year_match_filename.end())
+            
+            # 查找分辨率位置
+            resolution_match_filename = re.search(r"\b(\d{3,4}[pi]|4K)\b", filename_candidate)
+            print(f"[调试] 文件名分辨率匹配: {resolution_match_filename.group(0) if resolution_match_filename else '无'}")
+            
+            if resolution_match_filename:
+                tech_zone_start_filename = min(tech_zone_start_filename, resolution_match_filename.end())
+            
+            print(f"[调试] 文件名 tech_zone_start: {tech_zone_start_filename}")
+        else:
+            tech_zone_start_filename = 0
+            print(f"[调试] 文件名未找到年份，tech_zone_start = 0（在整个文件名上提取）")
 
         for key in priority_order:
             if key in params and params.get(key):
@@ -1189,8 +1291,22 @@ def upload_data_title(
                 else re.compile(pattern, re.IGNORECASE)
             )
 
-            matches = list(search_pattern.finditer(filename_candidate))
+            # 【新增】对于需要位置限制的参数，只在技术标签区域提取
+            if key in position_restricted_params and tech_zone_start_filename < len(filename_candidate):
+                print(f"[调试] 文件名补充参数 '{key}': 位置限制模式，搜索范围 filename_candidate[{tech_zone_start_filename}:]")
+                print(f"[调试] 文件名补充参数 '{key}': 搜索内容 = '{filename_candidate[tech_zone_start_filename:]}'")
+                matches = list(search_pattern.finditer(filename_candidate[tech_zone_start_filename:]))
+            else:
+                if key in position_restricted_params:
+                    print(f"[调试] 文件名补充参数 '{key}': 位置限制模式，但 tech_zone_start_filename >= len(filename_candidate)，跳过提取")
+                else:
+                    print(f"[调试] 文件名补充参数 '{key}': 正常模式，搜索整个 filename_candidate")
+                matches = list(search_pattern.finditer(filename_candidate))
+            
             if matches:
+                if key in position_restricted_params:
+                    print(f"[调试] 文件名补充参数 '{key}': 找到 {len(matches)} 个匹配: {[m.group() for m in matches]}")
+                    
                 raw_values = [
                     m.group(0).strip() if r"\b" in pattern else m.group(1).strip() for m in matches
                 ]
@@ -1566,6 +1682,10 @@ def upload_data_title(
         params.pop("_uhd_in_title", None)
     else:
         title_zone = title_part[:first_tech_tag_pos].strip()
+        # 【新增】如果存在年份参数，将其添加到标题区域中
+        # 这样可以确保标题包含年份，即使年份已经从 title_part 中移除
+        if "year" in params and params["year"]:
+            title_zone = f"{title_zone} {params['year']}".strip()
         params["title"] = re.sub(r"[\s\.]+", " ", title_zone).strip()
         tech_zone = title_part[first_tech_tag_pos:].strip()
 
@@ -1798,6 +1918,14 @@ def upload_data_title(
                             component["value"] = re.sub(r"(?i)blu-?ray", "Blu-ray", value)
 
             # print(f"已根据{'MediaInfo' if is_mediainfo else 'BDInfo'}修正标题组件格式")
+
+    print(f"[调试] ========== 标题解析完成 ==========")
+    print(f"[调试] 最终 title_components:")
+    for component in final_components_list:
+        value = component.get("value", "")
+        if value:
+            print(f"[调试]   {component.get('key')}: {value}")
+    print(f"[调试] =====================================")
 
     # print(f"主标题解析成功。")
     return final_components_list
