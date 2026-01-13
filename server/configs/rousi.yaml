@@ -1,0 +1,69 @@
+# Rousi 站点配置（API v1 发种）
+#
+# 说明：
+# - 该站点走 API JSON 上传，不使用传统表单字段；这里主要用于“标准化键 -> 站点需要的值”的映射。
+# - 你可以按站点实际枚举值修改 mappings 的 value。
+# - key 既可以写标准化键（如 category.animation / resolution.r1080p / tag.国语），也可以写直观文本（如 animation / 1080p / 国语）。
+
+site_name: "Rousi"
+
+mappings:
+  # type：从标准化类型映射到站点需要的 type 值（不带前缀）
+  type:
+    "category.animation": "animation"
+    "category.movie": "movie"
+    "category.tv_series": "tv"
+    "category.tv_shows": "variety"
+    "category.music": "music"
+    "category.mv": "music"
+    "category.documentaries": "documentary"
+    "category.sports": "sports"
+    "category.software": "software"
+    "category.ebook": "ebook"
+    "category.game": "other"
+    "category.other": "other"
+    "default": "other"
+
+  # region：来源地国家/地区（按站点实际值修改）
+  # - 注意：现有数据里 region 可能来自 upload_data.region/attributes.region，
+  #   也可能来自 standardized_params.source（旧逻辑里“产地”会落到 source 字段）。
+  region:
+    "source.china": "大陆"
+    "source.hongkong": "香港"
+    "source.taiwan": "台湾"
+    "source.japan": "日本"
+    "source.korea": "韩国"
+    "source.western": "美国"
+    "source.uk": "英国"
+    "source.france": "法国"
+    "source.germany": "德国"
+    "source.italy": "意大利"
+    "source.spain": "西班牙"
+    "source.russia": "俄罗斯"
+    "source.india": "印度"
+    "source.thailand": "泰国"
+    "source.australia": "澳大利亚"
+    "default": ""
+
+  # resolution：分辨率（按站点实际值修改）
+  resolution:
+    "resolution.r2160p": "4K / 2160p"
+    "resolution.r1080p": "1080p"
+    "resolution.r1080i": "1080i"
+    "resolution.r720p": "720p"
+    "resolution.sd": "SD"
+    "resolution.other": "其他"
+    "default": "其他"
+
+  # source：片源/媒介来源（按站点实际值修改）
+  source:
+    "medium.bluray": "Blu-ray"
+    "medium.uhd_bluray": "UHD Blu-ray"
+    "medium.remux": "Remux"
+    "medium.webdl": "WEB-DL"
+    "medium.webrip": "WEBrip"
+    "medium.hdtv": "HDTV"
+    "medium.dvdr": "DVDRip"
+    "medium.encode": "Encode"
+    "medium.other": "其它"
+    "default": ""

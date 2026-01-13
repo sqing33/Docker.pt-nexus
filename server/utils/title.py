@@ -870,11 +870,12 @@ def upload_data_title(
         # 1. 声道匹配逻辑升级为 \d+[\.。]\d+(?:[\.。]\d+)? 以支持 7.1.4 和 5。1
         # 2. AV3A 保持在列表内
         # 3. DD\+ 和 DDP 单独处理，避免与 DD 冲突
+        # 4. 添加单词边界，防止匹配到单词的一部分（如 APE 匹配 apezium）
         "audio": (
             # 第一部分：大部分音频编码（不包括 DDP、DD+、DD）
-            r"(?:DTS-?HD\s*MA|DTS-?HD\s*HR|DTS-?HD|DTS-?X|DTS\s*X|DTS|"
+            r"\b(?:DTS-?HD\s*MA|DTS-?HD\s*HR|DTS-?HD|DTS-?X|DTS\s*X|DTS|"
             r"(?:Dolby\s*)?TrueHD|E-?AC-?3|AC3|"
-            r"FLAC|Opus|AAC|OGG|WAV|APE|ALAC|DSD|MP3|LPCM|PCM|AV3A)"
+            r"FLAC|Opus|AAC|OGG|WAV|APE|ALAC|DSD|MP3|LPCM|PCM|AV3A)\b"
             # 第二部分：后缀（声道、Atmos/X、音轨数）
             r"(?:"
             # 模式A: Atmos/X + 声道 (如 Atmos 7.1.4)

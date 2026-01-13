@@ -218,15 +218,18 @@ const getSiteClass = (site: SiteStatus) => {
   if (site.is_source && !site.is_target) {
     // 仅源站点，检查Cookie，hddolby和hdtime站点还需要passkey
     isConfigured =
-      site.has_cookie && ((site.name !== '杜比' && site.name !== 'HDtime') || site.has_passkey)
+      site.has_cookie &&
+      ((site.name !== '杜比' && site.name !== 'HDtime' && site.name !== '肉丝') || site.has_passkey)
   } else if (!site.is_source && site.is_target) {
     // 仅目标站点，检查Cookie，hddolby和hdtime站点还需要passkey
     isConfigured =
-      site.has_cookie && ((site.name !== '杜比' && site.name !== 'HDtime') || site.has_passkey)
+      site.has_cookie &&
+      ((site.name !== '杜比' && site.name !== 'HDtime' && site.name !== '肉丝') || site.has_passkey)
   } else if (site.is_source && site.is_target) {
     // 同时是源和目标，需要Cookie，hddolby和hdtime站点还需要passkey
     isConfigured =
-      site.has_cookie && ((site.name !== '杜比' && site.name !== 'HDtime') || site.has_passkey)
+      site.has_cookie &&
+      ((site.name !== '杜比' && site.name !== 'HDtime' && site.name !== '肉丝') || site.has_passkey)
   }
 
   return {

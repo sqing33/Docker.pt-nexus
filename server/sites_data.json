@@ -495,11 +495,11 @@
   {
     "site": "rousi",
     "nickname": "肉丝",
-    "base_url": "rousi.zip",
+    "base_url": "rousi.pro",
     "special_tracker_domain": "rousipt",
     "group": null,
-    "migration": 0,
-    "speed_limit": 5
+    "migration": 2,
+    "speed_limit": 20
   },
   {
     "site": "monikadesign",

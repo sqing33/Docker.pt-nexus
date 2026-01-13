@@ -95,7 +95,7 @@
         <el-table-column label="Passkey" width="100" align="center">
           <template #default="scope">
             <el-tag
-              v-if="['hddolby', 'm-team', 'hdtime'].includes(scope.row.site)"
+              v-if="['hddolby', 'm-team', 'hdtime', 'rousi'].includes(scope.row.site)"
               :type="scope.row.has_passkey ? 'success' : 'danger'"
             >
               {{ scope.row.has_passkey ? '已配置' : '未配置' }}
@@ -177,6 +177,13 @@
             style="color: #409eff; font-weight: bold"
           >
             杜比的passkey为种子详情页复制种子链接时downhash=后的部分
+          </div>
+          <div
+            v-else-if="siteForm.site === 'newrousi'"
+            class="form-tip"
+            style="color: #409eff; font-weight: bold"
+          >
+            肉丝的passkey为个人用户-设置-passkey
           </div>
         </el-form-item>
         <el-form-item label="上传限速 (MB/s)" prop="speed_limit">

@@ -3,11 +3,16 @@
     <!-- 1. 顶部步骤条 (固定) -->
     <header class="panel-header">
       <div class="custom-steps">
-        <div v-for="(step, index) in steps" :key="index" class="custom-step" :class="{
-          active: index === activeStep,
-          completed: index < activeStep,
-          last: index === steps.length - 1,
-        }">
+        <div
+          v-for="(step, index) in steps"
+          :key="index"
+          class="custom-step"
+          :class="{
+            active: index === activeStep,
+            completed: index < activeStep,
+            last: index === steps.length - 1,
+          }"
+        >
           <div class="step-icon">
             <el-icon v-if="index < activeStep">
               <CircleCheckFilled />
@@ -41,17 +46,38 @@
                     </el-form-item>
                     <div class="title-components-grid">
                       <template v-if="filteredTitleComponents.length > 0">
-                        <el-form-item v-for="param in filteredTitleComponents" :key="param.key" :label="param.key"
-                          :class="{ 'unrecognized-section': param.key === '制作组' && (!param.value || param.value.toUpperCase() === 'NOGROUP') }">
-                          <el-input v-model="param.value" @input="(val) => handleTeamInput(param, val)" />
+                        <el-form-item
+                          v-for="param in filteredTitleComponents"
+                          :key="param.key"
+                          :label="param.key"
+                          :class="{
+                            'unrecognized-section':
+                              param.key === '制作组' &&
+                              (!param.value || param.value.toUpperCase() === 'NOGROUP'),
+                          }"
+                        >
+                          <el-input
+                            v-model="param.value"
+                            @input="(val) => handleTeamInput(param, val)"
+                          />
                         </el-form-item>
                       </template>
                       <!-- 当没有解析出标题组件时，显示初始参数框 -->
                       <template v-else>
-                        <el-form-item v-for="(param, index) in initialTitleComponents" :key="'init-' + index"
+                        <el-form-item
+                          v-for="(param, index) in initialTitleComponents"
+                          :key="'init-' + index"
                           :label="param.key"
-                          :class="{ 'unrecognized-section': param.key === '制作组' && (!param.value || param.value.toUpperCase() === 'NOGROUP') }">
-                          <el-input v-model="param.value" @input="(val) => handleTeamInput(param, val)" />
+                          :class="{
+                            'unrecognized-section':
+                              param.key === '制作组' &&
+                              (!param.value || param.value.toUpperCase() === 'NOGROUP'),
+                          }"
+                        >
+                          <el-input
+                            v-model="param.value"
+                            @input="(val) => handleTeamInput(param, val)"
+                          />
                         </el-form-item>
                       </template>
                     </div>
@@ -66,7 +92,10 @@
                         </el-form-item>
                       </div>
                       <!-- 无法识别占1列 -->
-                      <div :class="{ 'unrecognized-section': unrecognizedValue }" style="grid-column: span 1">
+                      <div
+                        :class="{ 'unrecognized-section': unrecognizedValue }"
+                        style="grid-column: span 1"
+                      >
                         <el-form-item label="无法识别">
                           <el-input v-model="unrecognizedValue" />
                         </el-form-item>
@@ -79,57 +108,102 @@
                       <!-- 第一行：类型、媒介、视频编码、音频编码、分辨率 -->
                       <div class="standard-params-grid">
                         <el-form-item label="类型 (type)">
-                          <el-select v-model="torrentData.standardized_params.type" placeholder="请选择类型" clearable
+                          <el-select
+                            v-model="torrentData.standardized_params.type"
+                            placeholder="请选择类型"
+                            clearable
                             :class="{
                               'is-invalid': invalidStandardParams.includes('type'),
                               'is-empty': !torrentData.standardized_params.type,
-                            }" data-tag-style>
-                            <el-option v-for="(label, value) in reverseMappings.type" :key="value" :label="label"
-                              :value="value" />
+                            }"
+                            data-tag-style
+                          >
+                            <el-option
+                              v-for="(label, value) in reverseMappings.type"
+                              :key="value"
+                              :label="label"
+                              :value="value"
+                            />
                           </el-select>
                         </el-form-item>
 
                         <el-form-item label="媒介 (medium)">
-                          <el-select v-model="torrentData.standardized_params.medium" placeholder="请选择媒介" clearable
+                          <el-select
+                            v-model="torrentData.standardized_params.medium"
+                            placeholder="请选择媒介"
+                            clearable
                             :class="{
                               'is-invalid': invalidStandardParams.includes('medium'),
                               'is-empty': !torrentData.standardized_params.medium,
-                            }" data-tag-style>
-                            <el-option v-for="(label, value) in reverseMappings.medium" :key="value" :label="label"
-                              :value="value" />
+                            }"
+                            data-tag-style
+                          >
+                            <el-option
+                              v-for="(label, value) in reverseMappings.medium"
+                              :key="value"
+                              :label="label"
+                              :value="value"
+                            />
                           </el-select>
                         </el-form-item>
 
                         <el-form-item label="视频编码 (video_codec)">
-                          <el-select v-model="torrentData.standardized_params.video_codec" placeholder="请选择视频编码"
-                            clearable :class="{
+                          <el-select
+                            v-model="torrentData.standardized_params.video_codec"
+                            placeholder="请选择视频编码"
+                            clearable
+                            :class="{
                               'is-invalid': invalidStandardParams.includes('video_codec'),
                               'is-empty': !torrentData.standardized_params.video_codec,
-                            }" data-tag-style>
-                            <el-option v-for="(label, value) in reverseMappings.video_codec" :key="value" :label="label"
-                              :value="value" />
+                            }"
+                            data-tag-style
+                          >
+                            <el-option
+                              v-for="(label, value) in reverseMappings.video_codec"
+                              :key="value"
+                              :label="label"
+                              :value="value"
+                            />
                           </el-select>
                         </el-form-item>
 
                         <el-form-item label="音频编码 (audio_codec)">
-                          <el-select v-model="torrentData.standardized_params.audio_codec" placeholder="请选择音频编码"
-                            clearable :class="{
+                          <el-select
+                            v-model="torrentData.standardized_params.audio_codec"
+                            placeholder="请选择音频编码"
+                            clearable
+                            :class="{
                               'is-invalid': invalidStandardParams.includes('audio_codec'),
                               'is-empty': !torrentData.standardized_params.audio_codec,
-                            }" data-tag-style>
-                            <el-option v-for="(label, value) in reverseMappings.audio_codec" :key="value" :label="label"
-                              :value="value" />
+                            }"
+                            data-tag-style
+                          >
+                            <el-option
+                              v-for="(label, value) in reverseMappings.audio_codec"
+                              :key="value"
+                              :label="label"
+                              :value="value"
+                            />
                           </el-select>
                         </el-form-item>
 
                         <el-form-item label="分辨率 (resolution)">
-                          <el-select v-model="torrentData.standardized_params.resolution" placeholder="请选择分辨率" clearable
+                          <el-select
+                            v-model="torrentData.standardized_params.resolution"
+                            placeholder="请选择分辨率"
+                            clearable
                             :class="{
                               'is-invalid': invalidStandardParams.includes('resolution'),
                               'is-empty': !torrentData.standardized_params.resolution,
-                            }" data-tag-style>
-                            <el-option v-for="(label, value) in reverseMappings.resolution" :key="value" :label="label"
-                              :value="value" />
+                            }"
+                            data-tag-style
+                          >
+                            <el-option
+                              v-for="(label, value) in reverseMappings.resolution"
+                              :key="value"
+                              :label="label"
+                              :value="value"
+                            />
                           </el-select>
                         </el-form-item>
                       </div>
@@ -138,42 +212,82 @@
                       <div class="standard-params-grid second-row">
                         <!-- 【代码修改处】 -->
                         <el-form-item label="制作组 (team)">
-                          <el-select v-model="torrentData.standardized_params.team" placeholder="请选择制作组" clearable
-                            filterable allow-create default-first-option class="team-select" :class="{
+                          <el-select
+                            v-model="torrentData.standardized_params.team"
+                            placeholder="请选择制作组"
+                            clearable
+                            filterable
+                            allow-create
+                            default-first-option
+                            class="team-select"
+                            :class="{
                               'is-invalid': invalidStandardParams.includes('team'),
-                            }">
-                            <el-option v-for="(label, value) in reverseMappings.team" :key="value" :label="label"
-                              :value="value" />
+                            }"
+                          >
+                            <el-option
+                              v-for="(label, value) in reverseMappings.team"
+                              :key="value"
+                              :label="label"
+                              :value="value"
+                            />
                           </el-select>
                         </el-form-item>
 
                         <el-form-item label="产地 (source)">
-                          <el-select v-model="torrentData.standardized_params.source" placeholder="请选择产地" clearable
+                          <el-select
+                            v-model="torrentData.standardized_params.source"
+                            placeholder="请选择产地"
+                            clearable
                             :class="{
                               'is-invalid': invalidStandardParams.includes('source'),
-                            }" data-tag-style>
-                            <el-option v-for="(label, value) in reverseMappings.source" :key="value" :label="label"
-                              :value="value" />
+                            }"
+                            data-tag-style
+                          >
+                            <el-option
+                              v-for="(label, value) in reverseMappings.source"
+                              :key="value"
+                              :label="label"
+                              :value="value"
+                            />
                           </el-select>
                         </el-form-item>
 
                         <el-form-item label="标签 (tags)" class="tags-wide-item">
-                          <el-select v-model="torrentData.standardized_params.tags" multiple filterable allow-create
-                            default-first-option placeholder="请选择或输入标签" style="width: 100%">
+                          <el-select
+                            v-model="torrentData.standardized_params.tags"
+                            multiple
+                            filterable
+                            allow-create
+                            default-first-option
+                            placeholder="请选择或输入标签"
+                            style="width: 100%"
+                          >
                             <template #tag="{ data }">
-                              <el-tag v-for="item in data" :key="item.value" :type="getTagType(item.value)"
-                                :closable="!isRestrictedTag(item.value)" disable-transitions
-                                @close="handleTagClose(item.value)" style="margin: 2px">
+                              <el-tag
+                                v-for="item in data"
+                                :key="item.value"
+                                :type="getTagType(item.value)"
+                                :closable="!isRestrictedTag(item.value)"
+                                disable-transitions
+                                @close="handleTagClose(item.value)"
+                                style="margin: 2px"
+                              >
                                 <span>{{
                                   reverseMappings.tags[item.value] || item.currentLabel
                                 }}</span>
                               </el-tag>
                             </template>
-                            <el-option v-for="option in allTagOptions" :key="option.value" :label="option.label"
-                              :value="option.value">
-                              <span :style="{
-                                color: invalidTagsList.includes(option.value) ? '#F56C6C' : '',
-                              }">
+                            <el-option
+                              v-for="option in allTagOptions"
+                              :key="option.value"
+                              :label="option.label"
+                              :value="option.value"
+                            >
+                              <span
+                                :style="{
+                                  color: invalidTagsList.includes(option.value) ? '#F56C6C' : '',
+                                }"
+                              >
                                 {{ option.label }}
                               </span>
                             </el-option>
@@ -204,8 +318,13 @@
                       <template #label>
                         <div class="form-label-with-button">
                           <span>海报链接</span>
-                          <el-button :icon="Refresh" @click="refreshPosters" :loading="isRefreshingPosters" size="small"
-                            type="text">
+                          <el-button
+                            :icon="Refresh"
+                            @click="refreshPosters"
+                            :loading="isRefreshingPosters"
+                            size="small"
+                            type="text"
+                          >
                             重新获取
                           </el-button>
                         </div>
@@ -218,9 +337,14 @@
                       <div class="preview-header">海报预览</div>
                       <div class="image-preview-container">
                         <template v-if="posterImages.length">
-                          <img v-for="(url, index) in posterImages" :key="'poster-' + index"
-                            :src="getProxyImageUrl(url)" alt="海报预览" class="preview-image"
-                            @error="handleImageErrorWithProxy(url, 'poster', index)" />
+                          <img
+                            v-for="(url, index) in posterImages"
+                            :key="'poster-' + index"
+                            :src="getProxyImageUrl(url)"
+                            alt="海报预览"
+                            class="preview-image"
+                            @error="handleImageErrorWithProxy(url, 'poster', index)"
+                          />
                         </template>
                         <div v-else class="preview-placeholder">暂无海报预览</div>
                       </div>
@@ -239,8 +363,13 @@
                     <template #label>
                       <div class="form-label-with-button">
                         <span>截图</span>
-                        <el-button :icon="Refresh" @click="refreshScreenshots" :loading="isRefreshingScreenshots"
-                          size="small" type="text">
+                        <el-button
+                          :icon="Refresh"
+                          @click="refreshScreenshots"
+                          :loading="isRefreshingScreenshots"
+                          size="small"
+                          type="text"
+                        >
                           重新获取
                         </el-button>
                       </div>
@@ -253,10 +382,17 @@
                 <div class="carousel-container">
                   <template v-if="screenshotImages.length">
                     <el-carousel :interval="5000" height="500px" indicator-position="outside">
-                      <el-carousel-item v-for="(url, index) in screenshotImages" :key="'ss-' + index">
+                      <el-carousel-item
+                        v-for="(url, index) in screenshotImages"
+                        :key="'ss-' + index"
+                      >
                         <div class="carousel-image-wrapper">
-                          <img :src="getProxyImageUrl(url)" alt="截图预览" class="carousel-image"
-                            @error="handleImageErrorWithProxy(url, 'screenshot', index)" />
+                          <img
+                            :src="getProxyImageUrl(url)"
+                            alt="截图预览"
+                            class="carousel-image"
+                            @error="handleImageErrorWithProxy(url, 'screenshot', index)"
+                          />
                         </div>
                       </el-carousel-item>
                     </el-carousel>
@@ -272,8 +408,13 @@
                 <template #label>
                   <div class="form-label-with-button">
                     <span>正文</span>
-                    <el-button :icon="Refresh" @click="refreshIntro" :loading="isRefreshingIntro" size="small"
-                      type="text">
+                    <el-button
+                      :icon="Refresh"
+                      @click="refreshIntro"
+                      :loading="isRefreshingIntro"
+                      size="small"
+                      type="text"
+                    >
                       重新获取
                     </el-button>
                   </div>
@@ -305,8 +446,13 @@
                 <template #label>
                   <div class="form-label-with-button">
                     <span>Mediainfo</span>
-                    <el-button :icon="Refresh" @click="refreshMediainfo" :loading="isRefreshingMediainfo" size="small"
-                      type="text">
+                    <el-button
+                      :icon="Refresh"
+                      @click="refreshMediainfo"
+                      :loading="isRefreshingMediainfo"
+                      size="small"
+                      type="text"
+                    >
                       重新获取
                     </el-button>
                   </div>
@@ -321,17 +467,31 @@
                           <span>BDInfo 获取中...</span>
                           <div class="header-buttons">
                             <span class="background-hint">可在后台继续获取</span>
-                            <el-button :icon="Monitor" @click="runInBackground" size="small" text type="primary">
+                            <el-button
+                              :icon="Monitor"
+                              @click="runInBackground"
+                              size="small"
+                              text
+                              type="primary"
+                            >
                               放置后台
                             </el-button>
-                            <el-button :icon="Close" @click="stopBDInfoSSE" size="small" text type="info">
+                            <el-button
+                              :icon="Close"
+                              @click="stopBDInfoSSE"
+                              size="small"
+                              text
+                              type="info"
+                            >
                               取消获取
                             </el-button>
                           </div>
                         </div>
                       </template>
-                      <el-progress :percentage="bdinfoProgress.percent"
-                        :status="bdinfoProgress.percent === 100 ? 'success' : ''" />
+                      <el-progress
+                        :percentage="bdinfoProgress.percent"
+                        :status="bdinfoProgress.percent === 100 ? 'success' : ''"
+                      />
 
                       <div class="progress-details-inline">
                         <div class="progress-info-row">
@@ -346,14 +506,22 @@
                   </div>
 
                   <!-- Mediainfo 文本框 -->
-                  <el-input type="textarea" class="code-font" v-model="torrentData.mediainfo"
-                    :rows="bdinfoProgress.visible ? 18 : 26" />
+                  <el-input
+                    type="textarea"
+                    class="code-font"
+                    v-model="torrentData.mediainfo"
+                    :rows="bdinfoProgress.visible ? 18 : 26"
+                  />
                 </div>
               </el-form-item>
             </el-form>
           </el-tab-pane>
 
-          <el-tab-pane label="已过滤声明" name="filtered-declarations" class="filtered-declarations-pane">
+          <el-tab-pane
+            label="已过滤声明"
+            name="filtered-declarations"
+            class="filtered-declarations-pane"
+          >
             <div class="filtered-declarations-container">
               <div class="filtered-declarations-header">
                 <h3>已自动过滤的声明内容</h3>
@@ -361,7 +529,11 @@
               </div>
               <div class="filtered-declarations-content">
                 <template v-if="filteredDeclarationsCount > 0">
-                  <div v-for="(declaration, index) in filteredDeclarationsList" :key="index" class="declaration-item">
+                  <div
+                    v-for="(declaration, index) in filteredDeclarationsList"
+                    :key="index"
+                    class="declaration-item"
+                  >
                     <div class="declaration-header">
                       <span class="declaration-number">#{{ index + 1 }}</span>
                       <el-tag type="danger" size="small">已过滤</el-tag>
@@ -411,29 +583,35 @@
                   <div style="display: flex">
                     <span style="letter-spacing: 2.6px" class="param-label">豆瓣链接</span>
                     <span style="font-size: 13px">：</span>
-                    <span :class="[
-                      'param-value',
-                      { empty: !torrentData.douban_link || torrentData.douban_link === 'N/A' },
-                    ]">
+                    <span
+                      :class="[
+                        'param-value',
+                        { empty: !torrentData.douban_link || torrentData.douban_link === 'N/A' },
+                      ]"
+                    >
                       {{ torrentData.douban_link || 'N/A' }}
                     </span>
                   </div>
                   <div style="display: flex">
                     <span class="param-label">IMDb链接：</span>
-                    <span :class="[
-                      'param-value',
-                      { empty: !torrentData.imdb_link || torrentData.imdb_link === 'N/A' },
-                    ]">
+                    <span
+                      :class="[
+                        'param-value',
+                        { empty: !torrentData.imdb_link || torrentData.imdb_link === 'N/A' },
+                      ]"
+                    >
                       {{ torrentData.imdb_link || 'N/A' }}
                     </span>
                   </div>
                   <div style="display: flex">
                     <span style="letter-spacing: 0" class="param-label">TMDb链接</span>
                     <span style="font-size: 13px">：</span>
-                    <span :class="[
-                      'param-value',
-                      { empty: !torrentData.tmdb_link || torrentData.tmdb_link === 'N/A' },
-                    ]">
+                    <span
+                      :class="[
+                        'param-value',
+                        { empty: !torrentData.tmdb_link || torrentData.tmdb_link === 'N/A' },
+                      ]"
+                    >
                       {{ torrentData.tmdb_link || 'N/A' }}
                     </span>
                   </div>
@@ -441,10 +619,12 @@
                 <div class="param-item tags-item half-width">
                   <span class="param-label">标签：</span>
                   <div class="param-value-container">
-                    <span :class="[
-                      'param-value',
-                      { empty: !getMappedTags() || getMappedTags().length === 0 },
-                    ]">
+                    <span
+                      :class="[
+                        'param-value',
+                        { empty: !getMappedTags() || getMappedTags().length === 0 },
+                      ]"
+                    >
                       {{ getMappedTags().join(', ') || 'N/A' }}
                     </span>
                     <span class="param-standard-key" v-if="filteredTags && filteredTags.length > 0">
@@ -484,7 +664,10 @@
                     <span :class="['param-value', { empty: !getMappedValue('video_codec') }]">
                       {{ getMappedValue('video_codec') || 'N/A' }}
                     </span>
-                    <span class="param-standard-key" v-if="torrentData.standardized_params.video_codec">
+                    <span
+                      class="param-standard-key"
+                      v-if="torrentData.standardized_params.video_codec"
+                    >
                       {{ torrentData.standardized_params.video_codec }}
                     </span>
                   </div>
@@ -495,7 +678,10 @@
                     <span :class="['param-value', { empty: !getMappedValue('audio_codec') }]">
                       {{ getMappedValue('audio_codec') || 'N/A' }}
                     </span>
-                    <span class="param-standard-key" v-if="torrentData.standardized_params.audio_codec">
+                    <span
+                      class="param-standard-key"
+                      v-if="torrentData.standardized_params.audio_codec"
+                    >
                       {{ torrentData.standardized_params.audio_codec }}
                     </span>
                   </div>
@@ -506,7 +692,10 @@
                     <span :class="['param-value', { empty: !getMappedValue('resolution') }]">
                       {{ getMappedValue('resolution') || 'N/A' }}
                     </span>
-                    <span class="param-standard-key" v-if="torrentData.standardized_params.resolution">
+                    <span
+                      class="param-standard-key"
+                      v-if="torrentData.standardized_params.resolution"
+                    >
                       {{ torrentData.standardized_params.resolution }}
                     </span>
                   </div>
@@ -551,30 +740,47 @@
             <div class="row-content description-content">
               <!-- 声明内容 -->
               <div class="description-section">
-                <div class="section-content" v-html="parseBBCode(torrentData.intro?.statement) || '暂无声明'"></div>
+                <div
+                  class="section-content"
+                  v-html="parseBBCode(torrentData.intro?.statement) || '暂无声明'"
+                ></div>
               </div>
 
               <!-- 海报图片 -->
               <div class="description-section" v-if="posterImages.length > 0">
                 <div class="image-gallery">
-                  <img v-for="(url, index) in posterImages" :key="'poster-preview-' + index"
-                    :src="getProxyImageUrl(url)" :alt="'海报 ' + (index + 1)" class="preview-image-inline"
-                    style="width: 300px" @error="handleImageErrorWithProxy(url, 'poster', index)" />
+                  <img
+                    v-for="(url, index) in posterImages"
+                    :key="'poster-preview-' + index"
+                    :src="getProxyImageUrl(url)"
+                    :alt="'海报 ' + (index + 1)"
+                    class="preview-image-inline"
+                    style="width: 300px"
+                    @error="handleImageErrorWithProxy(url, 'poster', index)"
+                  />
                 </div>
               </div>
 
               <!-- 简介正文 -->
               <div class="description-section">
                 <br />
-                <div class="section-content" v-html="parseBBCode(torrentData.intro?.body) || '暂无正文'"></div>
+                <div
+                  class="section-content"
+                  v-html="parseBBCode(torrentData.intro?.body) || '暂无正文'"
+                ></div>
               </div>
 
               <!-- 视频截图 -->
               <div class="description-section" v-if="screenshotImages.length > 0">
                 <div class="image-gallery">
-                  <img v-for="(url, index) in screenshotImages" :key="'screenshot-preview-' + index"
-                    :src="getProxyImageUrl(url)" :alt="'截图 ' + (index + 1)" class="preview-image-inline"
-                    @error="handleImageErrorWithProxy(url, 'screenshot', index)" />
+                  <img
+                    v-for="(url, index) in screenshotImages"
+                    :key="'screenshot-preview-' + index"
+                    :src="getProxyImageUrl(url)"
+                    :alt="'截图 ' + (index + 1)"
+                    class="preview-image-inline"
+                    @error="handleImageErrorWithProxy(url, 'screenshot', index)"
+                  />
                 </div>
               </div>
             </div>
@@ -588,7 +794,12 @@
         <p class="selection-subtitle">已存在的站点已被自动禁用。红色站点表示配置不完整。</p>
 
         <!-- 禁止转载警告 -->
-        <el-alert v-if="isUbitsDisabled" type="error" :closable="false" style="width: 410px; margin: 0 auto">
+        <el-alert
+          v-if="isUbitsDisabled"
+          type="error"
+          :closable="false"
+          style="width: 410px; margin: 0 auto"
+        >
           <template #title>
             <span style="font-weight: 600">禁止转载</span>
           </template>
@@ -605,12 +816,21 @@
           </el-button-group>
         </div>
         <div class="site-buttons-group">
-          <el-button v-for="site in allSitesStatus.filter((s) => s.is_target)" :key="site.name" class="site-button"
-            :type="getButtonType(site)" :plain="!site.has_cookie" :disabled="!isTargetSiteSelectable(site.name)"
-            @click="toggleSiteSelection(site.name)">
+          <el-button
+            v-for="site in allSitesStatus.filter((s) => s.is_target)"
+            :key="site.name"
+            class="site-button"
+            :type="getButtonType(site)"
+            :plain="!site.has_cookie"
+            :disabled="!isTargetSiteSelectable(site.name)"
+            @click="toggleSiteSelection(site.name)"
+          >
             {{ site.name }}
-            <el-tooltip v-if="site.name === 'ubits' && !isTargetSiteSelectable(site.name)" content="该制作组禁止转载到 uBits 站点"
-              placement="top">
+            <el-tooltip
+              v-if="site.name === 'ubits' && !isTargetSiteSelectable(site.name)"
+              content="该制作组禁止转载到 uBits 站点"
+              placement="top"
+            >
               <el-icon style="margin-left: 4px; color: #f56c6c">
                 <InfoFilled />
               </el-icon>
@@ -625,16 +845,24 @@
         <div class="progress-section" v-if="activeStep === 3">
           <div class="progress-item" v-if="publishProgress.total > 0">
             <div class="progress-label">发布进度:</div>
-            <el-progress :percentage="Math.round((publishProgress.current / publishProgress.total) * 100)"
-              :show-text="true" :stroke-width="8" />
+            <el-progress
+              :percentage="Math.round((publishProgress.current / publishProgress.total) * 100)"
+              :show-text="true"
+              :stroke-width="8"
+            />
             <div class="progress-text">
               {{ publishProgress.current }} / {{ publishProgress.total }}
             </div>
           </div>
           <div class="progress-item" v-if="downloaderProgress.total > 0">
             <div class="progress-label">下载器添加进度:</div>
-            <el-progress :percentage="Math.round((downloaderProgress.current / downloaderProgress.total) * 100)
-              " :show-text="true" :stroke-width="8" />
+            <el-progress
+              :percentage="
+                Math.round((downloaderProgress.current / downloaderProgress.total) * 100)
+              "
+              :show-text="true"
+              :stroke-width="8"
+            />
             <div class="progress-text">
               {{ downloaderProgress.current }} / {{ downloaderProgress.total }}
             </div>
@@ -654,8 +882,12 @@
         <div class="results-rows-container">
           <div v-for="(row, rowIndex) in groupedResults" :key="rowIndex" class="results-row">
             <div class="row-sites">
-              <div v-for="result in row" :key="result.siteName" class="result-card"
-                :class="{ 'is-success': result.success, 'is-error': !result.success }">
+              <div
+                v-for="result in row"
+                :key="result.siteName"
+                class="result-card"
+                :class="{ 'is-success': result.success, 'is-error': !result.success }"
+              >
                 <div class="card-icon">
                   <el-icon v-if="result.success" color="#67C23A" :size="32">
                     <CircleCheckFilled />
@@ -679,10 +911,13 @@
                       <CircleCloseFilled />
                     </el-icon>
                   </div>
-                  <span class="status-text" :class="{
-                    success: result.downloaderStatus.success,
-                    error: !result.downloaderStatus.success,
-                  }">
+                  <span
+                    class="status-text"
+                    :class="{
+                      success: result.downloaderStatus.success,
+                      error: !result.downloaderStatus.success,
+                    }"
+                  >
                     {{
                       result.downloaderStatus.success
                         ? `种子已添加到'${result.downloaderStatus.downloaderName}'`
@@ -693,19 +928,34 @@
 
                 <!-- 操作按钮 -->
                 <div class="card-extra">
-                  <el-button type="primary" size="small" @click="showSiteLog(result.siteName, result.logs)">
+                  <el-button
+                    type="primary"
+                    size="small"
+                    @click="showSiteLog(result.siteName, result.logs)"
+                  >
                     查看日志
                   </el-button>
-                  <a v-if="result.success && result.url" :href="filterUploadedParam(result.url)" target="_blank"
-                    rel="noopener noreferrer" style="transform: translateY(-1px)">
+                  <a
+                    v-if="result.success && result.url"
+                    :href="filterUploadedParam(result.url)"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style="transform: translateY(-1px)"
+                  >
                     <el-button type="success" size="small"> 查看种子 </el-button>
                   </a>
                 </div>
               </div>
             </div>
             <div class="row-action">
-              <el-button type="warning" :icon="Refresh" size="large" @click="openAllSitesInRow(row)"
-                :disabled="!hasValidUrlsInRow(row)" class="open-all-button">
+              <el-button
+                type="warning"
+                :icon="Refresh"
+                size="large"
+                @click="openAllSitesInRow(row)"
+                :disabled="!hasValidUrlsInRow(row)"
+                class="open-all-button"
+              >
                 <div class="button-subtitle">打开{{ getValidUrlsCount(row) }}个站点</div>
               </el-button>
             </div>
@@ -743,15 +993,24 @@
       <div v-if="activeStep === 1" class="button-group">
         <el-button @click="handlePreviousStep" :disabled="isLoading">上一步</el-button>
 
-        <el-button type="primary" @click="handleCompleteClick" v-if="props.showCompleteButton"
-          :disabled="isLoading || !isScrolledToBottom" :class="{ 'scrolled-to-bottom': isScrolledToBottom }">
+        <el-button
+          type="primary"
+          @click="handleCompleteClick"
+          v-if="props.showCompleteButton"
+          :disabled="isLoading || !isScrolledToBottom"
+          :class="{ 'scrolled-to-bottom': isScrolledToBottom }"
+        >
           修改完成
         </el-button>
 
         <!-- 注意：原本这里的 hint 移到了下面 -->
 
-        <el-button type="primary" @click="goToSelectSiteStep" :disabled="isLoading || !isScrolledToBottom"
-          :class="{ 'scrolled-to-bottom': isScrolledToBottom }">
+        <el-button
+          type="primary"
+          @click="goToSelectSiteStep"
+          :disabled="isLoading || !isScrolledToBottom"
+          :class="{ 'scrolled-to-bottom': isScrolledToBottom }"
+        >
           下一步：选择发布站点
         </el-button>
 
@@ -781,8 +1040,12 @@
       <!-- 步骤 2 的按钮 -->
       <div v-if="activeStep === 2" class="button-group">
         <el-button @click="handleCancelClick" :disabled="isLoading">取消</el-button>
-        <el-button type="primary" @click="handlePublish" :loading="isLoading"
-          :disabled="selectedTargetSites.length === 0">
+        <el-button
+          type="primary"
+          @click="handlePublish"
+          :loading="isLoading"
+          :disabled="selectedTargetSites.length === 0"
+        >
           立即发布
         </el-button>
       </div>
@@ -806,14 +1069,30 @@
   </el-card>
 
   <!-- 日志进度组件 -->
-  <LogProgress :visible="showLogProgress" :taskId="logProgressTaskId" @complete="handleLogProgressComplete"
-    @close="showLogProgress = false" />
+  <LogProgress
+    :visible="showLogProgress"
+    :taskId="logProgressTaskId"
+    @complete="handleLogProgressComplete"
+    @close="showLogProgress = false"
+  />
 
   <!-- [新增] 抓取失败详情弹窗 -->
-  <el-dialog v-model="showErrorDialog" title="抓取失败 - 详细日志" width="800px" destroy-on-close append-to-body
-    class="error-log-dialog">
+  <el-dialog
+    v-model="showErrorDialog"
+    title="抓取失败 - 详细日志"
+    width="800px"
+    destroy-on-close
+    append-to-body
+    class="error-log-dialog"
+  >
     <div class="error-log-container">
-      <el-alert title="获取种子信息过程中发生错误" type="error" :closable="false" show-icon style="margin-bottom: 15px">
+      <el-alert
+        title="获取种子信息过程中发生错误"
+        type="error"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 15px"
+      >
         <template #default>
           <div>请查看下方详细日志以排查问题（如 Python 堆栈信息）。</div>
         </template>
@@ -821,11 +1100,21 @@
 
       <el-scrollbar height="500px">
         <div class="log-timeline">
-          <div v-for="log in parsedErrorLogs" :key="log.id" class="log-entry" :class="{ 'is-error': log.isError }">
+          <div
+            v-for="log in parsedErrorLogs"
+            :key="log.id"
+            class="log-entry"
+            :class="{ 'is-error': log.isError }"
+          >
             <!-- 日志头部：时间与摘要 -->
             <div class="log-entry-header">
               <span class="log-time">{{ log.time }}</span>
-              <el-tag :type="getLogLevelType(log.level)" size="small" effect="dark" class="log-level-tag">
+              <el-tag
+                :type="getLogLevelType(log.level)"
+                size="small"
+                effect="dark"
+                class="log-level-tag"
+              >
                 {{ log.level }}
               </el-tag>
               <span class="log-site" v-if="log.site">[{{ log.site }}]</span>
@@ -1303,7 +1592,10 @@ const isTargetSiteSelectable = (siteName: string): boolean => {
   }
 
   // 对于杜比(hddolby)和HDTime站点，还需要检查passkey
-  if ((siteName === '杜比' || siteName === 'HDtime') && !siteStatus.has_passkey) {
+  if (
+    (siteName === '杜比' || siteName === 'HDtime' || siteName === '肉丝') &&
+    !siteStatus.has_passkey
+  ) {
     return false
   }
 
@@ -1318,7 +1610,10 @@ const isTargetSiteSelectable = (siteName: string): boolean => {
     const titleComponents = torrentData.value.title_components
 
     // 检查标准化参数中的制作组
-    if (team && ['cmct', 'cmctv', 'hdsky', 'hdsweb', 'hds', 'hdstv', 'hdspad'].includes(team.toLowerCase())) {
+    if (
+      team &&
+      ['cmct', 'cmctv', 'hdsky', 'hdsweb', 'hds', 'hdstv', 'hdspad'].includes(team.toLowerCase())
+    ) {
       return false
     }
 
@@ -1326,7 +1621,17 @@ const isTargetSiteSelectable = (siteName: string): boolean => {
     const teamComponent = titleComponents.find((param) => param.key === '制作组')
     if (teamComponent && teamComponent.value) {
       const teamValue = teamComponent.value.toLowerCase()
-      const forbiddenTeams = ['cmct', 'cmctv', 'telesto', 'shadow610', 'hdsky', 'hdsweb', 'hds', 'hdstv', 'hdspad']
+      const forbiddenTeams = [
+        'cmct',
+        'cmctv',
+        'telesto',
+        'shadow610',
+        'hdsky',
+        'hdsweb',
+        'hds',
+        'hdstv',
+        'hdspad',
+      ]
 
       for (const forbiddenTeam of forbiddenTeams) {
         if (teamValue.includes(forbiddenTeam)) {
@@ -1351,7 +1656,10 @@ const getButtonType = (site: SiteStatus) => {
     return 'danger'
   }
   // 对于杜比站点，如果已配置Cookie但未配置Passkey，也显示为红色
-  if ((site.name === '杜比' || site.name === 'HDtime') && !site.has_passkey) {
+  if (
+    (site.name === '杜比' || site.name === 'HDtime' || site.name === '肉丝') &&
+    !site.has_passkey
+  ) {
     return 'danger'
   }
   // 其他情况（可选但未选中），显示为默认样式
@@ -3664,7 +3972,10 @@ const isUbitsDisabled = computed(() => {
   const titleComponents = torrentData.value.title_components
 
   // 检查标准化参数中的制作组
-  if (team && ['cmct', 'cmctv', 'hdsky', 'hdsweb', 'hds', 'hdstv', 'hdspad'].includes(team.toLowerCase())) {
+  if (
+    team &&
+    ['cmct', 'cmctv', 'hdsky', 'hdsweb', 'hds', 'hdstv', 'hdspad'].includes(team.toLowerCase())
+  ) {
     return true
   }
 
@@ -3672,7 +3983,17 @@ const isUbitsDisabled = computed(() => {
   const teamComponent = titleComponents.find((param) => param.key === '制作组')
   if (teamComponent && teamComponent.value) {
     const teamValue = teamComponent.value.toLowerCase()
-    const forbiddenTeams = ['cmct', 'cmctv', 'telesto', 'shadow610', 'hdsky', 'hdsweb', 'hds', 'hdstv', 'hdspad']
+    const forbiddenTeams = [
+      'cmct',
+      'cmctv',
+      'telesto',
+      'shadow610',
+      'hdsky',
+      'hdsweb',
+      'hds',
+      'hdstv',
+      'hdspad',
+    ]
 
     // 检查是否包含禁止的制作组
     for (const forbiddenTeam of forbiddenTeams) {
@@ -3956,7 +4277,9 @@ const _isValidBDInfo = (text: string): boolean => {
 }
 
 // 辅助函数：检查简介正文完整性 (对应 Python check_intro_completeness)
-const checkIntroCompleteness = (bodyText: string): {
+const checkIntroCompleteness = (
+  bodyText: string,
+): {
   isComplete: boolean
   missingFields: string[]
   foundFields: string[]
@@ -3974,13 +4297,7 @@ const checkIntroCompleteness = (bodyText: string): {
       /译名\s*[:：]/i,
       /Title\s*[:：]/i,
     ],
-    年代: [
-      /[◎❁]\s*年\s*代/i,
-      /[◎❁]\s*年\s*份/i,
-      /年份\s*[:：]/i,
-      /年代\s*[:：]/i,
-      /Year\s*[:：]/i,
-    ],
+    年代: [/[◎❁]\s*年\s*代/i, /[◎❁]\s*年\s*份/i, /年份\s*[:：]/i, /年代\s*[:：]/i, /Year\s*[:：]/i],
     产地: [
       /[◎❁]\s*产\s*地/i,
       /[◎❁]\s*国\s*家/i,
@@ -3998,16 +4315,8 @@ const checkIntroCompleteness = (bodyText: string): {
       /类别\s*[:：]/i,
       /Genre\s*[:：]/i,
     ],
-    语言: [
-      /[◎❁]\s*语\s*言/i,
-      /语言\s*[:：]/i,
-      /Language\s*[:：]/i,
-    ],
-    导演: [
-      /[◎❁]\s*导\s*演/i,
-      /导演\s*[:：]/i,
-      /Director\s*[:：]/i,
-    ],
+    语言: [/[◎❁]\s*语\s*言/i, /语言\s*[:：]/i, /Language\s*[:：]/i],
+    导演: [/[◎❁]\s*导\s*演/i, /导演\s*[:：]/i, /Director\s*[:：]/i],
     简介: [
       /[◎❁]\s*简\s*介/i,
       /[◎❁]\s*剧\s*情/i,
@@ -4160,17 +4469,25 @@ const filterUploadedParam = (url: string): string => {
   if (!url) return url
 
   try {
+    const normalizeRousiViewUrl = (urlObj: URL) => {
+      if (urlObj.hostname === 'rousi.pro' && urlObj.pathname.startsWith('/api/v1/torrents/')) {
+        urlObj.pathname = urlObj.pathname.replace('/api/v1/torrents/', '/torrent/')
+      }
+    }
+
     // 处理包含 |DIRECT_DOWNLOAD: 的复合链接
     if (url.includes('|DIRECT_DOWNLOAD:')) {
       // 分割链接，只保留前半部分的查看链接
       const viewUrl = url.split('|DIRECT_DOWNLOAD:')[0]
       const urlObj = new URL(viewUrl)
+      normalizeRousiViewUrl(urlObj)
       urlObj.searchParams.delete('uploaded')
       return urlObj.toString()
     }
 
     // 处理普通链接
     const urlObj = new URL(url)
+    normalizeRousiViewUrl(urlObj)
     urlObj.searchParams.delete('uploaded')
     return urlObj.toString()
   } catch (error) {
@@ -4388,7 +4705,7 @@ const filterUploadedParam = (url: string): string => {
   min-width: 40px;
 }
 
-.custom-step.completed+.custom-step .step-connector {
+.custom-step.completed + .custom-step .step-connector {
   background-color: #67c23a;
 }
 

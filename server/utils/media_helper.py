@@ -320,7 +320,7 @@ def add_torrent_to_downloader(
     # 1. 查找对应的站点配置
     conn = db_manager._get_connection()
     cursor = db_manager._get_cursor(conn)
-    cursor.execute("SELECT nickname, base_url, cookie, speed_limit FROM sites")
+    cursor.execute("SELECT nickname, base_url, cookie, passkey, speed_limit FROM sites")
     site_info = None
     for site in cursor.fetchall():
         # [修复] 确保 base_url 存在且不为空
@@ -329,30 +329,66 @@ def add_torrent_to_downloader(
             break
     conn.close()
 
-    if not site_info or not site_info.get("cookie"):
-        msg = f"未能找到与URL '{detail_page_url}' 匹配的站点配置或该站点缺少Cookie。"
+    if not site_info:
+        msg = f"未能找到与URL '{detail_page_url}' 匹配的站点配置。"
+        logging.error(msg)
+        return False, msg
+
+    site_base_url_raw = str(site_info.get("base_url") or "")
+    is_rousi_site = "rousi" in site_base_url_raw.lower()
+
+    if not site_info.get("cookie") and not (is_rousi_site and site_info.get("passkey")):
+        msg = f"未能找到与URL '{detail_page_url}' 匹配的站点Cookie（该站点需要Cookie）。"
         logging.error(msg)
         return False, msg
 
     try:
         # 2. 下载种子文件
         common_headers = {
-            "Cookie": site_info["cookie"],
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36",
         }
+        if site_info.get("cookie"):
+            common_headers["Cookie"] = site_info["cookie"]
         scraper = cloudscraper.create_scraper()
 
         # 站点级别的代理已不使用全局代理配置
         proxies = None
         torrent_content = None
 
+        site_base_url = ensure_scheme(site_info["base_url"])
+
+        # Rousi: 详情页是 /torrent/<uuid>，下载链接是 /api/torrent/<uuid>/download/<passkey>
+        if not direct_download_url and is_rousi_site and site_info.get("passkey"):
+            uuid_re = (
+                r"([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})"
+            )
+            uuid_match = re.search(uuid_re, detail_page_url)
+            if uuid_match:
+                torrent_uuid = uuid_match.group(1)
+                direct_download_url = (
+                    f"{site_base_url}/api/torrent/{torrent_uuid}/download/{site_info['passkey']}"
+                )
+            else:
+                raise ValueError("Rousi 站点：无法从详情页URL中提取种子UUID。")
+
         # 如果提供了直接下载链接，优先使用直接下载，避免请求详情页
         if direct_download_url:
             try:
-                logging.info(f"使用直接下载链接: {direct_download_url}")
+                display_direct_url = direct_download_url
+                if is_rousi_site and site_info.get("passkey"):
+                    display_direct_url = display_direct_url.replace(site_info["passkey"], "****")
+                logging.info(f"使用直接下载链接: {display_direct_url}")
 
                 # 使用直接下载链接下载种子文件
                 direct_headers = common_headers.copy()
+                if is_rousi_site:
+                    # 让 Referer 更像正常访问的详情页，避免部分站点校验失败
+                    uuid_re = (
+                        r"([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})"
+                    )
+                    uuid_match = re.search(uuid_re, detail_page_url)
+                    if uuid_match:
+                        direct_headers["Referer"] = f"{site_base_url}/torrent/{uuid_match.group(1)}"
                 scraper = cloudscraper.create_scraper()
 
                 # Add retry logic for direct torrent download
@@ -384,6 +420,10 @@ def add_torrent_to_downloader(
                 logging.warning(msg)
                 # 如果直接下载失败，继续走详情页逻辑
 
+        # Rousi 没有 download.php?id=... 的传统详情页下载链接，直链失败就直接报错
+        if is_rousi_site and not torrent_content:
+            raise RuntimeError("Rousi 站点：直链下载失败，无法继续通过详情页解析 download.php。")
+
         # 如果没有直接下载链接或直接下载失败，则请求详情页
         if not torrent_content:
             logging.info("未提供直接下载链接或直接下载失败，开始请求详情页")
@@ -409,7 +449,6 @@ def add_torrent_to_downloader(
             soup = BeautifulSoup(details_response.text, "html.parser")
 
             # 检查是否需要使用特殊下载器
-            site_base_url = ensure_scheme(site_info["base_url"])
             full_download_url = None  # 初始化full_download_url
 
             print(f"站点基础URL: {site_base_url}")

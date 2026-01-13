@@ -609,6 +609,24 @@ global_standard_keys:
     "马剧": "source.malaysia"
     "Malaysia": "source.malaysia"
 
+    # 意大利
+    "意大利": "source.italy"
+    "IT": "source.italy"
+    "IT/意大利": "source.italy"
+    "Italy": "source.italy"
+
+    # 西班牙
+    "西班牙": "source.spain"
+    "ES": "source.spain"
+    "ES/西班牙": "source.spain"
+    "Spain": "source.spain"
+
+    # 澳大利亚
+    "澳大利亚": "source.australia"
+    "AU": "source.australia"
+    "AU/澳大利亚": "source.australia"
+    "Australia": "source.australia"
+
     # 其他
     "其他": "source.other"
     "Other": "source.other"
