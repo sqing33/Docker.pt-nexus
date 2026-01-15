@@ -4147,7 +4147,7 @@ const nextButtonTooltipContent = computed(() => {
   // 4.5 检查简介正文完整性
   const introCompleteness = checkIntroCompleteness(intro.body)
   if (!introCompleteness.isComplete) {
-    const criticalFields = ['片名', '产地', '导演', '简介']
+    const criticalFields = ['片名', '产地', '简介']
     const missingCriticalFields = criticalFields.filter((field) =>
       introCompleteness.missingFields.includes(field),
     )
@@ -4297,7 +4297,6 @@ const checkIntroCompleteness = (
       /译名\s*[:：]/i,
       /Title\s*[:：]/i,
     ],
-    年代: [/[◎❁]\s*年\s*代/i, /[◎❁]\s*年\s*份/i, /年份\s*[:：]/i, /年代\s*[:：]/i, /Year\s*[:：]/i],
     产地: [
       /[◎❁]\s*产\s*地/i,
       /[◎❁]\s*国\s*家/i,
@@ -4308,15 +4307,6 @@ const checkIntroCompleteness = (
       /产地\s*[:：]/i,
       /Country\s*[:：]/i,
     ],
-    类别: [
-      /[◎❁]\s*类\s*别/i,
-      /[◎❁]\s*类\s*型/i,
-      /类型\s*[:：]/i,
-      /类别\s*[:：]/i,
-      /Genre\s*[:：]/i,
-    ],
-    语言: [/[◎❁]\s*语\s*言/i, /语言\s*[:：]/i, /Language\s*[:：]/i],
-    导演: [/[◎❁]\s*导\s*演/i, /导演\s*[:：]/i, /Director\s*[:：]/i],
     简介: [
       /[◎❁]\s*简\s*介/i,
       /[◎❁]\s*剧\s*情/i,
@@ -4348,7 +4338,7 @@ const checkIntroCompleteness = (
     }
   }
 
-  const criticalFields = ['片名', '产地', '导演', '简介']
+  const criticalFields = ['片名', '产地', '简介']
   const isComplete = criticalFields.every((field) => foundFields.includes(field))
 
   return {
@@ -4611,7 +4601,7 @@ const filterUploadedParam = (url: string): string => {
 
 /* 4. 底部Footer：固定高度，始终可见 */
 .panel-footer {
-  height: 50px;
+  height: 60px;
   background-color: #ffffff;
   border-top: 1px solid #e4e7ed;
   box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.05);

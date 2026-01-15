@@ -3,20 +3,20 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app/webui
 
-# 安装 pnpm 包管理器
-RUN npm install -g pnpm
+# 安装 bun
+RUN npm install -g bun
 
 # 复制依赖定义文件
-COPY ./webui/package.json ./webui/pnpm-lock.yaml ./
+COPY ./webui/package.json ./webui/bun.lock ./
 
 # 根据锁文件安装依赖
-RUN pnpm install --frozen-lockfile
+RUN bun install --frozen-lockfile
 
 # 复制前端所有源代码
 COPY ./webui .
 
 # 执行构建命令
-RUN pnpm build
+RUN bun run build
 
 # 阶段 2: 构建 Go 批量增强服务
 FROM golang:1.21-alpine AS go-builder

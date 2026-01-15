@@ -92,6 +92,39 @@ def get_current_torrent_info(db_manager, torrent_name):
         return None
 
     try:
+        def _to_timestamp(value) -> float:
+            if not value:
+                return 0
+            try:
+                ts = getattr(value, "timestamp", None)
+                if callable(ts):
+                    return float(ts())
+            except Exception:
+                pass
+            if isinstance(value, (int, float)):
+                return float(value)
+            if isinstance(value, str):
+                text = value.strip()
+                if not text:
+                    return 0
+                try:
+                    return float(text)
+                except ValueError:
+                    pass
+                # sqlite 常见：'YYYY-MM-DD HH:MM:SS' 或 ISO8601（可能带 Z）
+                normalized = text.replace("Z", "+00:00")
+                for parser in (datetime.fromisoformat,):
+                    try:
+                        return float(parser(normalized).timestamp())
+                    except Exception:
+                        pass
+                for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M:%S.%f"):
+                    try:
+                        return float(datetime.strptime(text, fmt).timestamp())
+                    except Exception:
+                        pass
+            return 0
+
         conn = db_manager._get_connection()
         cursor = db_manager._get_cursor(conn)
         ph = db_manager.get_placeholder()
@@ -120,7 +153,7 @@ def get_current_torrent_info(db_manager, torrent_name):
                     "downloader_id": row.get("downloader_id"),
                     "name": row.get("name"),
                     "state": row.get("state"),
-                    "last_seen": last_seen.timestamp() if last_seen else 0,
+                    "last_seen": _to_timestamp(last_seen),
                 })
             else:
                 last_seen = row[4]
@@ -129,7 +162,7 @@ def get_current_torrent_info(db_manager, torrent_name):
                     "downloader_id": row[1],
                     "name": row[2],
                     "state": row[3],
-                    "last_seen": last_seen.timestamp() if last_seen else 0,
+                    "last_seen": _to_timestamp(last_seen),
                 })
 
         # 获取所有下载器ID

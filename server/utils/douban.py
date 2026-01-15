@@ -1418,7 +1418,7 @@ def check_intro_completeness(body_text: str) -> dict:
 
     # 判断完整性：必须包含以下关键字段
     # 片名、产地、导演、简介 这4个字段是最关键的
-    critical_fields = ["片名", "产地", "导演", "简介"]
+    critical_fields = ["片名", "产地", "简介"]
     is_complete = all(field in found_fields for field in critical_fields)
 
     return {

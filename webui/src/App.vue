@@ -24,6 +24,14 @@
     <el-menu-item index="/settings">设置</el-menu-item>
     <div class="right-buttons-container">
       <el-link
+        href="https://ptn-wiki.sqing33.dpdns.org"
+        target="_blank"
+        :underline="false"
+        style="margin-right: 8px"
+      >
+        <el-icon><Link /></el-icon>
+        Wiki </el-link
+      ><el-link
         href="https://github.com/sqing33/PTNexus"
         target="_blank"
         :underline="false"

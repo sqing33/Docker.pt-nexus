@@ -49,6 +49,98 @@ class RousiUploader(SpecialUploader):
 
         self._temp_image_work_dirs: List[str] = []
 
+        self._genre_options_by_type = self._load_genre_options_by_type()
+
+    def _load_genre_options_by_type(self) -> Dict[str, set]:
+        raw = self.config.get("genre_options_by_type") or {}
+        if not isinstance(raw, dict):
+            return {}
+
+        mapped: Dict[str, set] = {}
+        for key, value in raw.items():
+            if not key:
+                continue
+            type_key = str(key).strip()
+            if not type_key:
+                continue
+            if isinstance(value, list):
+                options = {str(v).strip() for v in value if str(v).strip()}
+            elif isinstance(value, str):
+                # 兼容直接写成 "剧情、喜剧" 的情况
+                options = {v.strip() for v in value.split("、") if v.strip()}
+            else:
+                options = set()
+            if options:
+                mapped[type_key] = options
+        return mapped
+
+    _ALLOWED_SOURCE_VALUES = {"Blu-ray", "UHD Blu-ray", "WEB-DL", "HDTV", "DVDRip", "其它"}
+
+    @classmethod
+    def _infer_source_from_title(cls, title: Any) -> Optional[str]:
+        """
+        Rousi：站点不使用“媒介”，只需要 attributes.source。
+        从标题里推断并归一化为：Blu-ray / UHD Blu-ray / WEB-DL / HDTV / DVDRip / 其它。
+        """
+        if not title:
+            return None
+
+        text = str(title)
+        upper = text.upper()
+
+        # 1) UHD Blu-ray（最优先）
+        if re.search(r"(?i)UHD\s*(?:BLU-?RAY|BLURAY|BLURAY\s+DIY|BD\b|BD-?RIP|BDRIP)", text):
+            return "UHD Blu-ray"
+        if re.search(r"(?i)\bUHD\b", text):
+            # 简化的“UHD 是否为技术标签”判定：若在年份之后或伴随 4K/2160p，则视为 UHD Blu-ray
+            year_match = re.search(r"\b(19|20)\d{2}\b", upper)
+            uhd_pos = upper.find("UHD")
+            if re.search(r"\b(2160P|4K)\b", upper):
+                if year_match is None or uhd_pos > year_match.start():
+                    return "UHD Blu-ray"
+            if year_match is not None and uhd_pos > year_match.start():
+                return "UHD Blu-ray"
+
+        # 2) WEB-DL / WEBRip（站点仅收 WEB-DL，统一归一）
+        if re.search(r"(?i)\bWEB[\s._-]*DL\b", text) or re.search(r"(?i)\bWEB[\s._-]*RIP\b", text):
+            return "WEB-DL"
+
+        # 3) HDTV / TVRip（统一归一到 HDTV）
+        if re.search(r"(?i)\bUHDTV\b", text):
+            return "HDTV"
+        if re.search(r"(?i)\bHDTV\b", text) or re.search(r"(?i)\bTV[\s._-]*RIP\b", text):
+            return "HDTV"
+
+        # 4) DVD / DVDRip（DVD5/DVD9 等都归一为 DVDRip）
+        if re.search(r"(?i)\bDVD[\s._-]*RIP\b", text) or re.search(r"(?i)\bDVDRIP\b", text):
+            return "DVDRip"
+        if re.search(r"(?i)\bDVD(?:5|9)?\b", text):
+            return "DVDRip"
+
+        # 5) Blu-ray / BD（包含 BluRay、BDRip 等近似写法）
+        if re.search(r"(?i)\bBLU-?RAY\b", text) or re.search(r"(?i)\bBLURAY\b", text):
+            return "Blu-ray"
+        if re.search(r"(?i)\bBDRIP\b", text) or re.search(r"(?i)\bBD-?RIP\b", text):
+            return "Blu-ray"
+        if re.search(r"(?i)\bBD\b", text):
+            return "Blu-ray"
+
+        return "其它"
+
+    def _determine_source_value(self, standardized_params: Dict[str, Any]) -> Optional[str]:
+        """
+        返回站点可接受的 attributes.source 值。
+        Rousi：只从标题推断来源（不使用媒介/映射）。
+        """
+        title = self.upload_data.get("title")
+        if not title:
+            title = super()._build_title(standardized_params)
+        inferred = self._infer_source_from_title(title)
+        if inferred in self._ALLOWED_SOURCE_VALUES:
+            return inferred
+
+        return "其它"
+
     def _map_parameters(self) -> dict:
         """
         实现Rousi站点的参数映射逻辑
@@ -82,13 +174,8 @@ class RousiUploader(SpecialUploader):
             mapping_type="resolution",
         )
 
-        # source：API attributes.source 约定为“媒介/片源”（从 standardized_params.medium 来）
-        medium_key = standardized_params.get("medium") or ""
-        mapped["source"] = self._find_mapping(
-            self.mappings.get("source", {}),
-            medium_key,
-            mapping_type="medium",
-        )
+        # source：Rousi 只使用“来源”，从标题推断并归一化
+        mapped["source"] = self._determine_source_value(standardized_params) or ""
 
         # region：优先 region；兼容旧流程里“产地”落到 standardized_params.source
         region_key = standardized_params.get("region") or standardized_params.get("source") or ""
@@ -139,6 +226,79 @@ class RousiUploader(SpecialUploader):
             return "book"
 
         return value
+
+    @staticmethod
+    def _normalize_category_key_for_genre(category_value: Any) -> Optional[str]:
+        if not category_value:
+            return None
+
+        value = str(category_value).strip()
+        if not value:
+            return None
+
+        if value.startswith("category."):
+            value = value.split(".", 1)[1].strip() or None
+            if not value:
+                return None
+
+        lowered = value.lower()
+        if "movie" in lowered or "电影" in value:
+            return "movie"
+        if "tv" in lowered or "电视剧" in value or "剧集" in value:
+            return "tv"
+        if "documentary" in lowered or "纪录" in value:
+            return "documentary"
+        if "animation" in lowered or "anime" in lowered or "动漫" in value:
+            return "animation"
+        if "variety" in lowered or "综艺" in value:
+            return "variety"
+        if "sports" in lowered or "体育" in value:
+            return "sports"
+        if "music" in lowered or "音乐" in value:
+            return "music"
+        if "software" in lowered or "软件" in value:
+            return "software"
+        if "ebook" in lowered or "book" in lowered or "电子书" in value:
+            return "ebook"
+
+        return value
+
+    @staticmethod
+    def _normalize_tag_token(tag_value: Any) -> str:
+        text = str(tag_value).strip()
+        if not text:
+            return ""
+        if "." in text:
+            text = text.split(".", 1)[1].strip()
+        return text
+
+    def _derive_genre_from_tags(self, category_key: str, tags_value: Any) -> List[str]:
+        supported = self._genre_options_by_type.get(category_key)
+        if not supported or tags_value is None:
+            return []
+
+        if isinstance(tags_value, str):
+            raw_tags = [t.strip() for t in tags_value.split(",") if t.strip()]
+        elif isinstance(tags_value, list):
+            raw_tags = [str(t).strip() for t in tags_value if str(t).strip()]
+        else:
+            return []
+
+        normalized: List[str] = []
+        for tag in raw_tags:
+            token = self._normalize_tag_token(tag)
+            if token:
+                normalized.append(token)
+
+        # 去重保持顺序
+        seen = set()
+        dedup: List[str] = []
+        for t in normalized:
+            if t not in seen:
+                seen.add(t)
+                dedup.append(t)
+
+        return [t for t in dedup if t in supported]
 
     @staticmethod
     def _sanitize_markdown_no_images(text: str) -> str:
@@ -686,7 +846,8 @@ class RousiUploader(SpecialUploader):
     def _build_attributes(self) -> Optional[Dict[str, Any]]:
         attributes = self.upload_data.get("attributes")
         if isinstance(attributes, dict) and attributes:
-            return attributes
+            sanitized = dict(attributes)
+            return sanitized or None
 
         standardized_params = self.upload_data.get("standardized_params") or {}
         result: Dict[str, Any] = {}
@@ -701,19 +862,10 @@ class RousiUploader(SpecialUploader):
             )
             result["resolution"] = mapped_resolution or str(resolution).split(".", 1)[-1]
 
-        # API v1 约定：source 应放在 attributes 中；这里尽量从媒介推断
-        medium = (
-            self.upload_data.get("source")
-            or self.upload_data.get("medium")
-            or standardized_params.get("medium")
-        )
-        if medium:
-            mapped_source = self._find_mapping(
-                self.mappings.get("source", {}),
-                str(medium),
-                mapping_type="medium",
-            )
-            result["source"] = mapped_source or str(medium).split(".", 1)[-1]
+        # source：Rousi 只使用“来源”，从标题推断并归一化
+        inferred_source = self._determine_source_value(standardized_params)
+        if inferred_source:
+            result["source"] = inferred_source
 
         # region（优先走映射；兼容旧流程 region 从 standardized_params.source 来）
         region = (
@@ -728,12 +880,6 @@ class RousiUploader(SpecialUploader):
                 mapping_type="source",
             )
             result["region"] = mapped_region or str(region).split(".", 1)[-1]
-
-        genre = self.upload_data.get("genre") or standardized_params.get("genre")
-        if isinstance(genre, list) and genre:
-            result["genre"] = genre
-        elif isinstance(genre, str) and genre.strip():
-            result["genre"] = [g.strip() for g in genre.split(",") if g.strip()]
 
         return result or None
 
@@ -843,12 +989,24 @@ class RousiUploader(SpecialUploader):
         if "price" in self.upload_data:
             payload["price"] = self.upload_data.get("price")
 
-        # 本站要求：region/resolution/source/genre 仅放在 attributes 内；tmdb/imdb/douban 也放在 attributes 内
+        # 本站要求：region/resolution/source 仅放在 attributes 内；tmdb/imdb/douban 也放在 attributes 内
         attributes_data: Dict[str, Any] = {}
         if isinstance(payload.get("attributes"), dict):
             attributes_data.update(payload["attributes"])
 
-        # region/resolution/source/genre（兼容 a.json 顶层写法，但最终只写入 attributes）
+        tags_value = self.upload_data.get("tags")
+        if tags_value is None:
+            tags_value = standardized_params.get("tags")
+
+        category_key = self._normalize_category_key_for_genre(normalized_category)
+        if tags_value is not None and category_key and category_key in self._genre_options_by_type:
+            derived_genres = self._derive_genre_from_tags(category_key, tags_value)
+            if derived_genres:
+                attributes_data["genre"] = derived_genres
+            else:
+                attributes_data.pop("genre", None)
+
+        # region/resolution/source（兼容 a.json 顶层写法，但最终只写入 attributes）
         for key in ("region", "resolution", "source"):
             # 优先使用映射后的值（否则会出现“只有 type 映射生效”的现象）
             value = mapped_params.get(key)
@@ -870,46 +1028,6 @@ class RousiUploader(SpecialUploader):
                 attributes_data[key] = text
             else:
                 attributes_data[key] = value
-
-        # genre：
-        # 1) 先从 tags 构造（去掉类似 tag.xxx / 任意前缀*. 的前缀），写入 attributes.genre
-        # 2) 再合并 upload_data.genre / attributes.genre（如果有）
-        genre_list: List[str] = []
-
-        tags_value = self.upload_data.get("tags")
-        if tags_value is None:
-            tags_value = standardized_params.get("tags")
-
-        raw_tag_items: List[str] = []
-        if isinstance(tags_value, str):
-            raw_tag_items = [t.strip() for t in tags_value.split(",") if t.strip()]
-        elif isinstance(tags_value, list):
-            raw_tag_items = [str(t).strip() for t in tags_value if str(t).strip()]
-
-        for t in raw_tag_items:
-            text = t
-            if "." in text:
-                text = text.split(".", 1)[1].strip()
-            if text:
-                genre_list.append(text)
-
-        # 兼容：从 upload_data.genre / attributes.genre 获取（并入 genre_list）
-        genre_value = self.upload_data.get("genre")
-        if genre_value is None:
-            genre_value = attributes_data.get("genre")
-        if isinstance(genre_value, list):
-            genre_list.extend([str(g).split(".", 1)[-1].strip() for g in genre_value if str(g).strip()])
-        elif isinstance(genre_value, str) and genre_value.strip():
-            genre_list.extend([g.strip() for g in genre_value.split(",") if g.strip()])
-
-        if genre_list:
-            seen = set()
-            dedup_genre: List[str] = []
-            for g in genre_list:
-                if g and g not in seen:
-                    seen.add(g)
-                    dedup_genre.append(g)
-            attributes_data["genre"] = dedup_genre
 
         # 三方链接：从 *_link 或同名字段提取，但写入 attributes
         link_sources = {
