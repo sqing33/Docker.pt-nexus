@@ -53,19 +53,52 @@ class RousiUploader(SpecialUploader):
         """
         实现Rousi站点的参数映射逻辑
 
-        使用标准映射流程处理所有字段（region、resolution、source、type等）
-        """
-        # ✅ 直接使用 migrator 准备好的标准化参数
-        standardized_params = self.upload_data.get("standardized_params", {})
+        Rousi 是 API JSON 上传（非表单字段）。
+        这里需要输出“API payload 会读取的键”，而不是通用表单 uploader 的 form_fields 键。
 
-        # 降级处理：如果没有标准化参数才重新解析
+        - type -> payload.category（在 _build_api_payload 里使用）
+        - region/resolution/source -> payload.attributes（在 _build_api_payload 里写入）
+        """
+        standardized_params = self.upload_data.get("standardized_params") or {}
         if not standardized_params:
             logger.warning("未找到标准化参数，回退到重新解析")
             standardized_params = self._parse_source_data()
 
-        # 使用标准化参数进行映射
-        mapped_params = self._map_standardized_params(standardized_params)
-        return mapped_params
+        mapped: Dict[str, Any] = {}
+
+        # type：标准键 -> 站点需要的 category/type
+        content_type = standardized_params.get("type") or ""
+        mapped["type"] = self._find_mapping(
+            self.mappings.get("type", {}),
+            content_type,
+            mapping_type="type",
+        )
+
+        # resolution：标准键 -> 站点显示值
+        resolution_key = standardized_params.get("resolution") or ""
+        mapped["resolution"] = self._find_mapping(
+            self.mappings.get("resolution", {}),
+            resolution_key,
+            mapping_type="resolution",
+        )
+
+        # source：API attributes.source 约定为“媒介/片源”（从 standardized_params.medium 来）
+        medium_key = standardized_params.get("medium") or ""
+        mapped["source"] = self._find_mapping(
+            self.mappings.get("source", {}),
+            medium_key,
+            mapping_type="medium",
+        )
+
+        # region：优先 region；兼容旧流程里“产地”落到 standardized_params.source
+        region_key = standardized_params.get("region") or standardized_params.get("source") or ""
+        mapped["region"] = self._find_mapping(
+            self.mappings.get("region", {}),
+            region_key,
+            mapping_type="source",
+        )
+
+        return mapped
 
     def _read_torrent_base64(self) -> str:
         torrent_value = self.upload_data.get("torrent")
@@ -658,9 +691,15 @@ class RousiUploader(SpecialUploader):
         standardized_params = self.upload_data.get("standardized_params") or {}
         result: Dict[str, Any] = {}
 
+        # resolution（优先走映射；否则兜底去掉前缀）
         resolution = self.upload_data.get("resolution") or standardized_params.get("resolution")
         if resolution:
-            result["resolution"] = str(resolution).split(".", 1)[-1]
+            mapped_resolution = self._find_mapping(
+                self.mappings.get("resolution", {}),
+                str(resolution),
+                mapping_type="resolution",
+            )
+            result["resolution"] = mapped_resolution or str(resolution).split(".", 1)[-1]
 
         # API v1 约定：source 应放在 attributes 中；这里尽量从媒介推断
         medium = (
@@ -669,11 +708,26 @@ class RousiUploader(SpecialUploader):
             or standardized_params.get("medium")
         )
         if medium:
-            result["source"] = str(medium).split(".", 1)[-1]
+            mapped_source = self._find_mapping(
+                self.mappings.get("source", {}),
+                str(medium),
+                mapping_type="medium",
+            )
+            result["source"] = mapped_source or str(medium).split(".", 1)[-1]
 
-        region = self.upload_data.get("region") or standardized_params.get("region")
+        # region（优先走映射；兼容旧流程 region 从 standardized_params.source 来）
+        region = (
+            self.upload_data.get("region")
+            or standardized_params.get("region")
+            or standardized_params.get("source")
+        )
         if region:
-            result["region"] = str(region).split(".", 1)[-1]
+            mapped_region = self._find_mapping(
+                self.mappings.get("region", {}),
+                str(region),
+                mapping_type="source",
+            )
+            result["region"] = mapped_region or str(region).split(".", 1)[-1]
 
         genre = self.upload_data.get("genre") or standardized_params.get("genre")
         if isinstance(genre, list) and genre:
@@ -796,7 +850,10 @@ class RousiUploader(SpecialUploader):
 
         # region/resolution/source/genre（兼容 a.json 顶层写法，但最终只写入 attributes）
         for key in ("region", "resolution", "source"):
-            value = self.upload_data.get(key)
+            # 优先使用映射后的值（否则会出现“只有 type 映射生效”的现象）
+            value = mapped_params.get(key)
+            if value is None:
+                value = self.upload_data.get(key)
             if value is None:
                 value = attributes_data.get(key)
             if value is None and key == "region":
@@ -806,15 +863,40 @@ class RousiUploader(SpecialUploader):
                 continue
 
             if isinstance(value, str):
-                value = value.split(".", 1)[-1].strip()
-            attributes_data[key] = value.strip()
+                text = value.strip()
+                # 仅对标准键（如 source.china / resolution.r1080p）做去前缀兜底；映射后的中文/枚举值不处理
+                if "." in text and text.split(".", 1)[0] in {"source", "resolution", "medium"}:
+                    text = text.split(".", 1)[-1].strip()
+                attributes_data[key] = text
+            else:
+                attributes_data[key] = value
 
-        # genre：从 upload_data.genre / attributes.genre 获取（去重保序）
+        # genre：
+        # 1) 先从 tags 构造（去掉类似 tag.xxx / 任意前缀*. 的前缀），写入 attributes.genre
+        # 2) 再合并 upload_data.genre / attributes.genre（如果有）
+        genre_list: List[str] = []
+
+        tags_value = self.upload_data.get("tags")
+        if tags_value is None:
+            tags_value = standardized_params.get("tags")
+
+        raw_tag_items: List[str] = []
+        if isinstance(tags_value, str):
+            raw_tag_items = [t.strip() for t in tags_value.split(",") if t.strip()]
+        elif isinstance(tags_value, list):
+            raw_tag_items = [str(t).strip() for t in tags_value if str(t).strip()]
+
+        for t in raw_tag_items:
+            text = t
+            if "." in text:
+                text = text.split(".", 1)[1].strip()
+            if text:
+                genre_list.append(text)
+
+        # 兼容：从 upload_data.genre / attributes.genre 获取（并入 genre_list）
         genre_value = self.upload_data.get("genre")
         if genre_value is None:
             genre_value = attributes_data.get("genre")
-
-        genre_list: List[str] = []
         if isinstance(genre_value, list):
             genre_list.extend([str(g).split(".", 1)[-1].strip() for g in genre_value if str(g).strip()])
         elif isinstance(genre_value, str) and genre_value.strip():
