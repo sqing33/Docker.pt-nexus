@@ -103,7 +103,7 @@
       <el-table-column prop="name" min-width="450" sortable="custom">
         <template #header>
           <div class="name-header-container">
-            <div>种子名称</div>
+            <div>种子</div>
             <el-input
               v-model="nameSearch"
               placeholder="搜索名称..."
@@ -150,13 +150,18 @@
         </template>
       </el-table-column>
 
-      <el-table-column prop="save_path" label="保存路径" width="220" header-align="center">
+      <el-table-column
+        prop="save_path"
+        label="保存路径"
+        :width="savePathColumnWidth"
+        header-align="center"
+      >
         <template #default="scope">
           <div
             :title="scope.row.save_path"
             style="width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"
           >
-            {{ shortenPath(scope.row.save_path, 30) }}
+            {{ shortenPath(scope.row.save_path, SAVE_PATH_DISPLAY_MAX_LENGTH) }}
           </div>
         </template>
       </el-table-column>
@@ -201,7 +206,7 @@
         align="center"
         sortable="custom"
       />
-      <el-table-column label="进度" prop="progress" width="120" align="center" sortable="custom">
+      <el-table-column label="进度" prop="progress" width="90" align="center" sortable="custom">
         <template #default="scope">
           <div style="padding: 1px 0; width: 100%">
             <el-progress
@@ -698,6 +703,10 @@ const error = ref<string | null>(null)
 // --- [新增] 控制表格渲染的状态 ---
 const settingsLoaded = ref<boolean>(false)
 
+const SAVE_PATH_MAX_COLUMN_WIDTH = 220
+const SAVE_PATH_MIN_COLUMN_WIDTH = 90
+const SAVE_PATH_DISPLAY_MAX_LENGTH = 30
+
 const nameSearch = ref<string>('')
 const currentSort = ref<Sort>({ prop: 'name', order: 'ascending' })
 
@@ -780,6 +789,30 @@ const filteredSiteOptions = computed(() => {
   if (!siteSearch.value) return sorted_all_sites.value
   const kw = siteSearch.value.toLowerCase()
   return sorted_all_sites.value.filter((s) => s.toLowerCase().includes(kw))
+})
+
+const estimateSavePathDisplayWidth = (text: string) => {
+  let width = 0
+  for (const ch of text) {
+    width += ch.charCodeAt(0) > 255 ? 14 : 8
+  }
+  return width
+}
+
+const savePathColumnWidth = computed(() => {
+  const rows = allData.value || []
+  let maxWidth = 0
+  for (const row of rows) {
+    const raw = String(row?.save_path || '')
+    const display = shortenPath(raw, SAVE_PATH_DISPLAY_MAX_LENGTH) || ''
+    maxWidth = Math.max(maxWidth, estimateSavePathDisplayWidth(display))
+  }
+  // 预留单元格 padding + tooltip 空间
+  const padded = maxWidth + 40
+  return Math.min(
+    SAVE_PATH_MAX_COLUMN_WIDTH,
+    Math.max(SAVE_PATH_MIN_COLUMN_WIDTH, Math.round(padded)),
+  )
 })
 
 // 计算当前筛选条件的显示文本

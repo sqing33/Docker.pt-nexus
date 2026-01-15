@@ -22,6 +22,36 @@
       </div>
     </div>
 
+    <!-- 转种规则说明（下载器卡片上方） -->
+    <el-card class="rules-card glass-card glass-rounded">
+      <div class="rules-header">
+        <div class="rules-title">
+          <span>转种限制说明</span>
+          <el-tag type="warning" effect="dark" size="small">必读</el-tag>
+        </div>
+        <el-tag type="info" effect="plain" size="small">请自行确认后重试</el-tag>
+      </div>
+      <ul class="rules-list">
+        <li>
+          <el-tag type="danger" size="small" effect="dark">禁转</el-tag>
+          <el-tag type="danger" size="small" effect="dark">限转</el-tag>
+          <el-tag type="danger" size="small" effect="dark">分集</el-tag>
+          一律不可转。
+          <div class="rules-sub">限转：不自动检测源站是否取消限转，需自行确认后重新获取种子信息。</div>
+          <div class="rules-sub">分集：部分站点不允许转分集，且断种率较高。</div>
+        </li>
+        <li>
+          <el-tag type="warning" size="small" effect="dark">IP 网段限制</el-tag>
+          同网段下载器同时最多 <b>15</b> 个在上传种子可转；超过不可转。
+          <div class="rules-sub">不计入：添加超 <b>24h</b>、做种人数 <b>&gt; 5</b>；盒子不受限。</div>
+          <div class="rules-sub">
+            <el-tag type="warning" size="small" effect="dark">大小限制</el-tag>
+            一站多种<strong>批量</strong>转种不允许 &lt; <b>1GB</b>；一种多站<strong>单个</strong>转种不受限。
+          </div>
+        </li>
+      </ul>
+    </el-card>
+
     <!-- 下载器信息展示 -->
     <el-row :gutter="24" style="margin-top: 24px">
       <el-col :span="24">
@@ -212,6 +242,61 @@ onMounted(() => {
 
   100% {
     transform: translateX(-50%);
+  }
+}
+
+.rules-card {
+  margin-bottom: 24px;
+}
+
+.rules-card :deep(.el-card__body) {
+  padding: 12px 16px;
+}
+
+.rules-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.rules-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.rules-list {
+  margin: 0;
+  padding-left: 18px;
+  color: #303133;
+  line-height: 1.55;
+  font-size: 13px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px 14px;
+}
+
+.rules-list li {
+  margin: 0;
+}
+
+.rules-list :deep(.el-tag) {
+  margin-right: 8px;
+}
+
+.rules-sub {
+  margin-left: 4px;
+  color: #606266;
+  font-size: 12px;
+}
+
+@media (min-width: 980px) {
+  .rules-list {
+    grid-template-columns: 1fr 1fr;
   }
 }
 

@@ -1201,7 +1201,7 @@ const parseBBCode = (text: string): string => {
 
   // 处理 [color] 标签
   text = text.replace(
-    /\[color=(\w+|\#[0-9a-fA-F]{3,6})\]([\s\S]*?)\[\/color\]/gi,
+    /\[color=(\w+|#[0-9a-fA-F]{3,6})\]([\s\S]*?)\[\/color\]/gi,
     '<span style="color: $1;">$2</span>',
   )
 

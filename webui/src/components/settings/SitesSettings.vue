@@ -65,33 +65,24 @@
         height="100%"
         :row-class-name="getRowClassName"
       >
-        <el-table-column prop="nickname" label="站点昵称" width="150" sortable />
-        <el-table-column label="支持" width="90" align="center">
+        <el-table-column prop="nickname" label="站点昵称" width="100" sortable />
+        <el-table-column label="支持" width="100" align="center">
           <template #default="scope">
-            <span
-              v-if="getSiteRole(scope.row) === 'both'"
-              class="role-tag role-both"
-            >
-              源/目标
+            <span v-if="getSiteRole(scope.row) === 'both'" class="role-tag role-both">
+              源站/目标站
             </span>
-            <span
-              v-else-if="getSiteRole(scope.row) === 'source'"
-              class="role-tag role-source"
-            >
-              源
+            <span v-else-if="getSiteRole(scope.row) === 'source'" class="role-tag role-source">
+              源站
             </span>
-            <span
-              v-else-if="getSiteRole(scope.row) === 'target'"
-              class="role-tag role-target"
-            >
-              目标
+            <span v-else-if="getSiteRole(scope.row) === 'target'" class="role-tag role-target">
+              目标站
             </span>
           </template>
         </el-table-column>
-        <el-table-column prop="site" label="站点标识" width="200" show-overflow-tooltip />
-        <el-table-column prop="base_url" label="基础URL" width="225" show-overflow-tooltip />
+        <el-table-column prop="site" label="站点标识" width="100" show-overflow-tooltip />
+        <el-table-column prop="base_url" label="基础URL" width="150" show-overflow-tooltip />
         <el-table-column prop="group" label="官组" show-overflow-tooltip />
-        <el-table-column label="限速" width="200" align="center">
+        <el-table-column label="限速" width="100" align="center">
           <template #default="scope">
             <div
               style="
@@ -146,10 +137,8 @@
     <!-- 3. 底部固定区域 -->
     <div class="settings-footer glass-pagination">
       <el-radio-group v-model="siteFilter" @change="handleFilterChange">
-        <el-radio-button label="supported">支持站点</el-radio-button>
-        <el-radio-button label="source">源站点</el-radio-button>
-        <el-radio-button label="target">目标站点</el-radio-button>
-        <el-radio-button label="seeding">做种站点</el-radio-button>
+        <el-radio-button label="existing_supported">已有支持站点</el-radio-button>
+        <el-radio-button label="supported">所有支持站点</el-radio-button>
         <el-radio-button label="all">所有站点</el-radio-button>
       </el-radio-group>
       <div class="pagination-container">
@@ -251,13 +240,13 @@ const isSaving = ref(false) // 用于站点编辑对话框的保存按钮
 
 // --- 站点管理状态 ---
 const sitesList = ref([]) // 存储从后端获取的原始列表
-const seedingSitesSet = ref(new Set()) // 存储做种站点的标识集合
+const existingSitesSet = ref(new Set()) // 存储“有此站点”的标识集合（复用后端 active 规则）
 const sitesStatusList = ref([]) // 存储源/目标站点状态信息
 const isSitesLoading = ref(false)
 const isCookieActionLoading = ref(false) // [新增] 用于新的"同步Cookie"按钮的加载状态
 const cookieCloudForm = ref({ url: '', key: '', e2e_password: '' })
 const searchQuery = ref('')
-const siteFilter = ref('supported')
+const siteFilter = ref('existing_supported')
 
 // --- 分页状态 ---
 const pagination = ref({
@@ -312,41 +301,50 @@ const getSiteRole = (site) => {
 const isSiteConfigComplete = (site) => {
   const hasCookie = Boolean(site?.has_cookie)
   const hasPasskey = Boolean(site?.has_passkey)
-  const needsPasskey = ['杜比', 'HDtime', '肉丝'].includes(site?.nickname)
+  // 与 Passkey 列展示规则保持一致：大多数站点自动获取，仅少数站点需要手动配置
+  const needsPasskey = ['hddolby', 'm-team', 'hdtime', 'rousi'].includes(site?.site)
   return hasCookie && (!needsPasskey || hasPasskey)
 }
 
 const shouldHighlightIncompleteConfig = computed(() =>
-  ['supported', 'source', 'target'].includes(siteFilter.value)
+  ['existing_supported', 'supported'].includes(siteFilter.value),
 )
 
 // 1. 先根据前端搜索框进行过滤
 const filteredSites = computed(() => {
   let sites = sitesList.value || []
 
-  if (siteFilter.value === 'supported') {
+  if (siteFilter.value === 'existing_supported') {
+    sites = sites.filter((site) => {
+      const status = getSiteStatus(site)
+      const isSupported = Boolean(status?.is_source || status?.is_target)
+      return isSupported && existingSitesSet.value.has(site.site)
+    })
+  } else if (siteFilter.value === 'supported') {
     sites = sites.filter((site) => {
       const status = getSiteStatus(site)
       return Boolean(status?.is_source || status?.is_target)
     })
-  } else if (siteFilter.value === 'source') {
-    sites = sites.filter((site) => Boolean(getSiteStatus(site)?.is_source))
-  } else if (siteFilter.value === 'target') {
-    sites = sites.filter((site) => Boolean(getSiteStatus(site)?.is_target))
-  } else if (siteFilter.value === 'seeding') {
-    sites = sites.filter((site) => seedingSitesSet.value.has(site.site))
   }
 
-  if (!searchQuery.value) {
-    return sites
+  const term = searchQuery.value.trim().toLowerCase()
+  if (term) {
+    sites = sites.filter((site) => {
+      const nickname = (site.nickname || '').toLowerCase()
+      const siteIdentifier = (site.site || '').toLowerCase()
+      const group = (site.group || '').toLowerCase()
+      return nickname.includes(term) || siteIdentifier.includes(term) || group.includes(term)
+    })
   }
 
-  const term = searchQuery.value.toLowerCase()
-  return sites.filter((site) => {
-    const nickname = (site.nickname || '').toLowerCase()
-    const siteIdentifier = (site.site || '').toLowerCase()
-    const group = (site.group || '').toLowerCase()
-    return nickname.includes(term) || siteIdentifier.includes(term) || group.includes(term)
+  if (!shouldHighlightIncompleteConfig.value) return sites
+
+  // 将缺少 Cookie /（手动站点缺少 Passkey） 的站点置顶显示
+  return sites.slice().sort((a, b) => {
+    const aIncomplete = isSiteConfigComplete(a) ? 0 : 1
+    const bIncomplete = isSiteConfigComplete(b) ? 0 : 1
+    if (aIncomplete !== bIncomplete) return bIncomplete - aIncomplete
+    return String(a?.nickname || '').localeCompare(String(b?.nickname || ''))
   })
 })
 
@@ -389,14 +387,14 @@ const fetchCookieCloudSettings = async () => {
 const fetchSites = async () => {
   isSitesLoading.value = true
   try {
-    const [allSitesResponse, seedingSitesResponse, sitesStatusResponse] = await Promise.all([
+    const [allSitesResponse, existingSitesResponse, sitesStatusResponse] = await Promise.all([
       axios.get(`${API_BASE_URL}/sites`, { params: { filter_by_torrents: 'all' } }),
       axios.get(`${API_BASE_URL}/sites`, { params: { filter_by_torrents: 'active' } }),
       axios.get(`${API_BASE_URL}/sites/status`),
     ])
 
     sitesList.value = allSitesResponse.data
-    seedingSitesSet.value = new Set((seedingSitesResponse.data || []).map((s) => s.site))
+    existingSitesSet.value = new Set((existingSitesResponse.data || []).map((s) => s.site))
     sitesStatusList.value = sitesStatusResponse.data
   } catch (error) {
     ElMessage.error('获取站点列表失败！')
