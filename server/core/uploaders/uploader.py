@@ -328,8 +328,20 @@ class BaseUploader(ABC):
             tag_id = self._find_mapping(tag_mapping, tag_str, mapping_type="tag")
             if tag_id:
                 tags.append(tag_id)
-        for i, tag_id in enumerate(sorted(list(set(tags)))):
-            mapped_params[f"tags[4][{i}]"] = tag_id
+
+        # 从配置中获取标签字段名，支持多种格式
+        tag_field_config = self.config.get("form_fields", {}).get("tags[]", None)
+        if tag_field_config:
+            # 如果配置了 tags[]，使用配置的字段名
+            if isinstance(tag_field_config, str):
+                # 简单格式: tags[]: "span[]" -> 使用 span[] 作为基础
+                tag_field_base = tag_field_config.replace("[]", "")
+                for i, tag_id in enumerate(sorted(list(set(tags)))):
+                    mapped_params[f"{tag_field_base}[{i}]"] = tag_id
+        else:
+            # 如果没有配置，使用默认的 tags[4][{i}] 格式
+            for i, tag_id in enumerate(sorted(list(set(tags)))):
+                mapped_params[f"tags[4][{i}]"] = tag_id
 
         return mapped_params
 

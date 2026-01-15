@@ -1,0 +1,166 @@
+site_name: "BTSchool"
+
+form_fields:
+  medium: "medium_sel"
+  video_codec: "codec_sel"
+  audio_codec: "audiocodec_sel"
+  resolution: "standard_sel"
+  team: "team_sel"
+  category: "type"
+  tags[]: "span[]"
+
+source_parsers:
+  source_params:
+    type:
+      source_key: "类型"
+    medium:
+      source_key: "媒介"
+    video_codec:
+      source_key: "视频编码"
+    audio_codec:
+      source_key: "音频编码"
+    resolution:
+      source_key: "分辨率"
+    team:
+      source_key: "制作组"
+
+  standard_keys:
+    type:
+      "电影/Movies": "category.movie"
+      "连续剧/TV-Series": "category.tv_series"
+      "动漫/Animation": "category.animation"
+      "纪录片/Documentary": "category.documentaries"
+      "综艺/TV-Show": "category.tv_shows"
+      "软件/Software": "category.software"
+      "资料/Education": "category.study"
+      "游戏/Game": "category.game"
+      "音乐/Music": "category.music"
+      "体育/Sports": "category.sports"
+      "其他/Other": "category.other"
+
+    medium:
+      "Blu-ray": "medium.bluray"
+      "Blu-rayUHD": "medium.uhd_bluray"
+      "Encode": "medium.encode"
+      "WEB-DL": "medium.webdl"
+      "Remux": "medium.remux"
+      "HDTV": "medium.hdtv"
+      "DVDRip": "medium.dvdr"
+      "CD": "medium.cd"
+      "Other": "medium.other"
+
+    video_codec:
+      "H.264/AVC/x264": "video.h264"
+      "H.265/HEVC/x265": "video.h265"
+      "MPEG-2": "video.mpeg2"
+      "VC-1": "video.vc1"
+      "Xvid": "video.xvid"
+      "Other": "video.other"
+
+    audio_codec:
+      "TrueHD": "audio.truehd"
+      "DTS-HD/DTS": "audio.dts"
+      "AC3": "audio.ac3"
+      "LPCM": "audio.lpcm"
+      "FLAC": "audio.flac"
+      "MP3": "audio.mp3"
+      "AAC": "audio.aac"
+      "APE": "audio.ape"
+      "Other": "audio.other"
+
+    resolution:
+      "4K_UHD": "resolution.r2160p"
+      "1080p/i": "resolution.r1080p"
+      "720p/i": "resolution.r720p"
+      "SD": "resolution.sd"
+      "Other": "resolution.other"
+
+    team:
+      "BTSCHOOL": "team.btschool"
+      "Zone": "team.zone"
+      "BtsHD": "team.btshd"
+      "BtsTV": "team.btstv"
+      "BtsPAD": "team.btspad"
+      "WiKi": "team.wiki"
+      "HDChina": "team.hdchina"
+      "HDB_iNT": "team.hdb_int"
+      "M-team": "team.mteam"
+      "CMCT": "team.cmct"
+      "Ourbits": "team.ourbits"
+      "Other": "team.other"
+
+mappings:
+  type:
+    "category.movie": "405"
+    "category.tv_series": "406"
+    "category.animation": "407"
+    "category.documentaries": "408"
+    "category.tv_shows": "412"
+    "category.software": "404"
+    "category.study": "402"
+    "category.game": "411"
+    "category.music": "409"
+    "category.sports": "410"
+    "category.other": "415"
+    "default": "405"
+
+  medium:
+    "medium.bluray": "1"
+    "medium.uhd_bluray": "12"
+    "medium.encode": "7"
+    "medium.webdl": "10"
+    "medium.remux": "3"
+    "medium.hdtv": "5"
+    "medium.dvdr": "6"
+    "medium.cd": "8"
+    "medium.other": "11"
+    "default": "11"
+
+  video_codec:
+    "video.h264": "1"
+    "video.h265": "10"
+    "video.mpeg2": "4"
+    "video.vc1": "2"
+    "video.xvid": "3"
+    "video.other": "5"
+    "default": "5"
+
+  audio_codec:
+    "audio.truehd": "11"
+    "audio.dts": "3"
+    "audio.ac3": "10"
+    "audio.lpcm": "5"
+    "audio.flac": "1"
+    "audio.mp3": "4"
+    "audio.aac": "6"
+    "audio.ape": "2"
+    "audio.other": "7"
+    "default": "7"
+
+  resolution:
+    "resolution.r2160p": "5"
+    "resolution.r1080p": "1"
+    "resolution.r720p": "3"
+    "resolution.sd": "4"
+    "resolution.other": "6"
+    "default": "6"
+
+  team:
+    "team.btschool": "1"
+    "team.zone": "13"
+    "team.btshd": "2"
+    "team.btstv": "3"
+    "team.btspad": "4"
+    "team.wiki": "5"
+    "team.hdchina": "6"
+    "team.hdb_int": "7"
+    "team.mteam": "9"
+    "team.cmct": "10"
+    "team.ourbits": "11"
+    "team.other": "12"
+    "default": "12"
+
+  tag:
+    "tag.国语": 5
+    "tag.中字": 6
+    "default": null

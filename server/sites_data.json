@@ -76,8 +76,8 @@
     "special_tracker_domain": null,
     "group": "-BtsHD,-BTSCHOOL,-BtsTV",
     "description": "BTSCHOOL",
-    "migration": 0,
-    "speed_limit": 10
+    "migration": 2,
+    "speed_limit": 20
   },
   {
     "site": "ourbits",
@@ -191,7 +191,7 @@
     "special_tracker_domain": null,
     "group": "-FFansDIY,-FFans,-OPS,-FHDMv,-FFansAIeNcE,-FFansBD,-至尊宝",
     "description": "PTsbao",
-    "migration": 0,
+    "migration": 1,
     "speed_limit": 10
   },
   {
