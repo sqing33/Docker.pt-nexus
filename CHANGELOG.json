@@ -1,6 +1,13 @@
 {
   "history": [
     {
+      "version": "v3.5.4",
+      "date": "2026.01.15",
+      "changes": [
+        "修复：主标题重复解析到年份"
+      ]
+    },
+    {
       "version": "v3.5.3",
       "date": "2026.01.13",
       "note": "注：盒子端新增自动选择中文字幕流功能需要重新执行 curl -sL https://github.com/sqing33/PTNexus/releases/download/latest/install-pt-nexus-box-proxy.sh | sudo bash 以更新盒子端脚本。",

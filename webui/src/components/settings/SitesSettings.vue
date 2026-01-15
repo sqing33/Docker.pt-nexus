@@ -59,8 +59,35 @@
 
     <!-- 2. 中间可滚动内容区域 -->
     <div class="settings-view" v-loading="isSitesLoading">
-      <el-table :data="paginatedSites" class="settings-table glass-table" height="100%">
+      <el-table
+        :data="paginatedSites"
+        class="settings-table glass-table"
+        height="100%"
+        :row-class-name="getRowClassName"
+      >
         <el-table-column prop="nickname" label="站点昵称" width="150" sortable />
+        <el-table-column label="支持" width="90" align="center">
+          <template #default="scope">
+            <span
+              v-if="getSiteRole(scope.row) === 'both'"
+              class="role-tag role-both"
+            >
+              源/目标
+            </span>
+            <span
+              v-else-if="getSiteRole(scope.row) === 'source'"
+              class="role-tag role-source"
+            >
+              源
+            </span>
+            <span
+              v-else-if="getSiteRole(scope.row) === 'target'"
+              class="role-tag role-target"
+            >
+              目标
+            </span>
+          </template>
+        </el-table-column>
         <el-table-column prop="site" label="站点标识" width="200" show-overflow-tooltip />
         <el-table-column prop="base_url" label="基础URL" width="225" show-overflow-tooltip />
         <el-table-column prop="group" label="官组" show-overflow-tooltip />
@@ -119,7 +146,10 @@
     <!-- 3. 底部固定区域 -->
     <div class="settings-footer glass-pagination">
       <el-radio-group v-model="siteFilter" @change="handleFilterChange">
-        <el-radio-button label="active">现有站点</el-radio-button>
+        <el-radio-button label="supported">支持站点</el-radio-button>
+        <el-radio-button label="source">源站点</el-radio-button>
+        <el-radio-button label="target">目标站点</el-radio-button>
+        <el-radio-button label="seeding">做种站点</el-radio-button>
         <el-radio-button label="all">所有站点</el-radio-button>
       </el-radio-group>
       <div class="pagination-container">
@@ -221,11 +251,13 @@ const isSaving = ref(false) // 用于站点编辑对话框的保存按钮
 
 // --- 站点管理状态 ---
 const sitesList = ref([]) // 存储从后端获取的原始列表
+const seedingSitesSet = ref(new Set()) // 存储做种站点的标识集合
+const sitesStatusList = ref([]) // 存储源/目标站点状态信息
 const isSitesLoading = ref(false)
 const isCookieActionLoading = ref(false) // [新增] 用于新的"同步Cookie"按钮的加载状态
 const cookieCloudForm = ref({ url: '', key: '', e2e_password: '' })
 const searchQuery = ref('')
-const siteFilter = ref('active')
+const siteFilter = ref('supported')
 
 // --- 分页状态 ---
 const pagination = ref({
@@ -253,13 +285,64 @@ const API_BASE_URL = '/api'
 
 // --- 计算属性 ---
 
+const sitesStatusMap = computed(() => {
+  const map = new Map()
+  for (const status of sitesStatusList.value || []) {
+    if (status && status.site) {
+      map.set(String(status.site), status)
+    }
+  }
+  return map
+})
+
+const getSiteStatus = (site) => {
+  if (!site?.site) return null
+  return sitesStatusMap.value.get(String(site.site)) || null
+}
+
+const getSiteRole = (site) => {
+  const status = getSiteStatus(site)
+  if (!status) return 'none'
+  if (status.is_source && status.is_target) return 'both'
+  if (status.is_source) return 'source'
+  if (status.is_target) return 'target'
+  return 'none'
+}
+
+const isSiteConfigComplete = (site) => {
+  const hasCookie = Boolean(site?.has_cookie)
+  const hasPasskey = Boolean(site?.has_passkey)
+  const needsPasskey = ['杜比', 'HDtime', '肉丝'].includes(site?.nickname)
+  return hasCookie && (!needsPasskey || hasPasskey)
+}
+
+const shouldHighlightIncompleteConfig = computed(() =>
+  ['supported', 'source', 'target'].includes(siteFilter.value)
+)
+
 // 1. 先根据前端搜索框进行过滤
 const filteredSites = computed(() => {
-  if (!searchQuery.value) {
-    return sitesList.value
+  let sites = sitesList.value || []
+
+  if (siteFilter.value === 'supported') {
+    sites = sites.filter((site) => {
+      const status = getSiteStatus(site)
+      return Boolean(status?.is_source || status?.is_target)
+    })
+  } else if (siteFilter.value === 'source') {
+    sites = sites.filter((site) => Boolean(getSiteStatus(site)?.is_source))
+  } else if (siteFilter.value === 'target') {
+    sites = sites.filter((site) => Boolean(getSiteStatus(site)?.is_target))
+  } else if (siteFilter.value === 'seeding') {
+    sites = sites.filter((site) => seedingSitesSet.value.has(site.site))
   }
+
+  if (!searchQuery.value) {
+    return sites
+  }
+
   const term = searchQuery.value.toLowerCase()
-  return sitesList.value.filter((site) => {
+  return sites.filter((site) => {
     const nickname = (site.nickname || '').toLowerCase()
     const siteIdentifier = (site.site || '').toLowerCase()
     const group = (site.group || '').toLowerCase()
@@ -306,12 +389,15 @@ const fetchCookieCloudSettings = async () => {
 const fetchSites = async () => {
   isSitesLoading.value = true
   try {
-    const response = await axios.get(`${API_BASE_URL}/sites`, {
-      params: {
-        filter_by_torrents: siteFilter.value,
-      },
-    })
-    sitesList.value = response.data
+    const [allSitesResponse, seedingSitesResponse, sitesStatusResponse] = await Promise.all([
+      axios.get(`${API_BASE_URL}/sites`, { params: { filter_by_torrents: 'all' } }),
+      axios.get(`${API_BASE_URL}/sites`, { params: { filter_by_torrents: 'active' } }),
+      axios.get(`${API_BASE_URL}/sites/status`),
+    ])
+
+    sitesList.value = allSitesResponse.data
+    seedingSitesSet.value = new Set((seedingSitesResponse.data || []).map((s) => s.site))
+    sitesStatusList.value = sitesStatusResponse.data
   } catch (error) {
     ElMessage.error('获取站点列表失败！')
   } finally {
@@ -322,7 +408,11 @@ const fetchSites = async () => {
 // 当后端筛选器改变时，重置分页并重新获取数据
 const handleFilterChange = () => {
   pagination.value.currentPage = 1
-  fetchSites()
+}
+
+const getRowClassName = ({ row }) => {
+  if (!shouldHighlightIncompleteConfig.value) return ''
+  return isSiteConfigComplete(row) ? '' : 'row-config-incomplete'
 }
 
 // [新增] 合并后的保存与同步功能
@@ -504,5 +594,39 @@ const handleDelete = (site) => {
   font-size: 12px;
   line-height: 1.5;
   margin-top: 4px;
+}
+
+.settings-table :deep(tr.row-config-incomplete > td.el-table__cell) {
+  background-color: #ffecec;
+}
+
+.settings-table :deep(tr.row-config-incomplete:hover > td.el-table__cell) {
+  background-color: #ffd6d6;
+}
+
+.role-tag {
+  display: inline-block;
+  padding: 0px 3px;
+  border-radius: 2px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.role-source {
+  background-color: #ecf5ff;
+  color: #409eff;
+  border: 1px solid #b3d8ff;
+}
+
+.role-target {
+  background-color: #f0f9ff;
+  color: #67c23a;
+  border: 1px solid #b3e0ff;
+}
+
+.role-both {
+  background-color: #fdf6ec;
+  color: #e6a23c;
+  border: 1px solid #f5dab1;
 }
 </style>

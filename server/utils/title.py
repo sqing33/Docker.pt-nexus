@@ -823,7 +823,14 @@ def upload_data_title(
     year_match = re.search(r"[\s\.\(]((?:19|20)\d{2})([\s\.\)]|$)", title_part)
     if year_match:
         params["year"] = year_match.group(1)
-        title_part = title_part.replace(year_match.group(0), " ", 1).strip()
+        # 标题中可能出现重复年份；年份作为独立字段，title_part 中应移除所有同值年份
+        extracted_year = params["year"]
+        title_part = re.sub(
+            rf"[\s\.\(]{re.escape(extracted_year)}([\s\.\)]|$)",
+            " ",
+            title_part,
+        )
+        title_part = re.sub(r"\s+", " ", title_part).strip()
 
     # 4.1 提取剪辑版本并拼接到年份
     cut_version_pattern = re.compile(
@@ -1688,41 +1695,21 @@ def upload_data_title(
     # 5. 最终标题和未识别内容确定
     # 如果 UHD 在标题中，需要重新计算标题区域
     if params.get("_uhd_in_title"):
-        # 找到年份位置
-        year_match = re.search(r"\b(19|20)\d{2}\b", title_part)
-        if year_match:
-            # 标题到年份为止
-            title_zone = title_part[: year_match.end()].strip()
-            # 移除年份后的技术标签
-            title_zone = re.sub(
-                r"\s+(Blu-ray|2160p|x265|10bit|HDR|FLAC|[\d.]+|DTS|DDP|AAC|MP2|LPCM|PCM|Audios?).*$",
-                "",
-                title_zone,
-                flags=re.IGNORECASE,
-            )
-            # 技术区域从年份后开始
-            tech_zone = title_part[year_match.end() :].strip()
-        else:
-            # 如果没有年份，保持原逻辑但排除 UHD 的影响
-            # 找到第一个真正的技术标签（排除 UHD）
-            first_real_tech_pos = len(title_part)
-            for tag in all_found_tags:
-                if tag != "UHD":
-                    pos = title_part.find(tag)
-                    if pos != -1:
-                        first_real_tech_pos = min(first_real_tech_pos, pos)
-            title_zone = title_part[:first_real_tech_pos].strip()
-            tech_zone = title_part[first_real_tech_pos:].strip()
+        # 排除 UHD 对标题区域划分的影响：找到第一个真正的技术标签（不含 UHD）
+        first_real_tech_pos = len(title_part)
+        for tag in all_found_tags:
+            if tag != "UHD":
+                pos = title_part.find(tag)
+                if pos != -1:
+                    first_real_tech_pos = min(first_real_tech_pos, pos)
+        title_zone = title_part[:first_real_tech_pos].strip()
+        tech_zone = title_part[first_real_tech_pos:].strip()
 
         params["title"] = re.sub(r"[\s\.]+", " ", title_zone).strip()
         # 清理临时标记
         params.pop("_uhd_in_title", None)
     else:
         title_zone = title_part[:first_tech_tag_pos].strip()
-        # 【新增】如果存在年份参数，将其添加到标题区域中
-        # 这样可以确保标题包含年份，即使年份已经从 title_part 中移除
-        if "year" in params and params["year"]:
-            title_zone = f"{title_zone} {params['year']}".strip()
         params["title"] = re.sub(r"[\s\.]+", " ", title_zone).strip()
         tech_zone = title_part[first_tech_tag_pos:].strip()
 

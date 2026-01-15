@@ -120,6 +120,10 @@
 
 # 更新日志
 
+### v3.5.4（2026.01.15）
+
+- 修复：主标题重复解析到年份
+
 ### v3.5.3（2026.01.13）
 
 > **注：盒子端新增自动选择中文字幕流功能需要重新执行 curl -sL https://github.com/sqing33/PTNexus/releases/download/latest/install-pt-nexus-box-proxy.sh | sudo bash 以更新盒子端脚本。**

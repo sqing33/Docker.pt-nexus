@@ -22,16 +22,6 @@
     <el-menu-item index="/data">一站多种</el-menu-item>
     <el-menu-item index="/sites">做种检索</el-menu-item>
     <el-menu-item index="/settings">设置</el-menu-item>
-    <div class="page-hint-container">
-      <span v-if="activeRoute === '/torrents'" class="page-hint">
-        <span class="hint-green">做种且可跳转种子详情页</span> -
-        <span class="hint-blue">做种但无详情页</span> - <span class="hint-red">可铺种但未做种</span>
-      </span>
-      <span v-else-if="activeRoute === '/data'" class="page-hint">
-        <span class="hint-red">种子有误/不存在/禁转</span> -
-        <span class="hint-yellow">待检查信息的种子</span>
-      </span>
-    </div>
     <div class="right-buttons-container">
       <el-link
         href="https://github.com/sqing33/PTNexus"
@@ -242,43 +232,6 @@ body {
 
 .main-content.no-nav {
   height: 100%;
-}
-
-.page-hint-container {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  top: 8px;
-  display: flex;
-  align-items: center;
-}
-
-.page-hint {
-  font-size: 14px;
-  font-weight: 500;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.hint-red {
-  color: #f56c6c;
-  font-weight: bold;
-}
-
-.hint-yellow {
-  color: #00aaff;
-  font-weight: bold;
-}
-
-.hint-green {
-  color: #67c23a;
-  font-weight: bold;
-}
-
-.hint-blue {
-  color: #409eff;
-  font-weight: bold;
 }
 
 .right-buttons-container {
