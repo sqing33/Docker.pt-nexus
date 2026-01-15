@@ -50,21 +50,22 @@ class RousiUploader(SpecialUploader):
         self._temp_image_work_dirs: List[str] = []
 
     def _map_parameters(self) -> dict:
-        return {}
+        """
+        实现Rousi站点的参数映射逻辑
 
-    def _map_value(self, mapping_name: str, value: Any) -> str:
-        if value is None:
-            return ""
-        text = str(value).strip()
-        if not text:
-            return ""
+        使用标准映射流程处理所有字段（region、resolution、source、type等）
+        """
+        # ✅ 直接使用 migrator 准备好的标准化参数
+        standardized_params = self.upload_data.get("standardized_params", {})
 
-        mapping = self.mappings.get(mapping_name, {}) if isinstance(self.mappings, dict) else {}
-        if mapping:
-            mapped = self._find_mapping(mapping, text, mapping_type=mapping_name)
-            return str(mapped).strip() if mapped is not None else ""
+        # 降级处理：如果没有标准化参数才重新解析
+        if not standardized_params:
+            logger.warning("未找到标准化参数，回退到重新解析")
+            standardized_params = self._parse_source_data()
 
-        return text
+        # 使用标准化参数进行映射
+        mapped_params = self._map_standardized_params(standardized_params)
+        return mapped_params
 
     def _read_torrent_base64(self) -> str:
         torrent_value = self.upload_data.get("torrent")
@@ -720,7 +721,12 @@ class RousiUploader(SpecialUploader):
         # 按站点要求：图片必须 base64(data url) 提交，并满足 6张/5MB/20MB 限制
         return self._build_images_data_urls()
 
-    def _build_api_payload(self) -> Dict[str, Any]:
+    def _build_api_payload(self, mapped_params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        构建 API v1 上传所需的 JSON payload
+
+        :param mapped_params: 通过标准映射流程处理后的参数字典
+        """
         standardized_params = self.upload_data.get("standardized_params") or {}
 
         title = self.upload_data.get("title")
@@ -746,9 +752,10 @@ class RousiUploader(SpecialUploader):
 
         normalized_category = self._normalize_category(category_value)
         if normalized_category:
+            # 使用映射后的值（优先级：type 映射 > category 映射 > 原始值）
             payload["category"] = (
-                self._map_value("category", normalized_category)
-                or self._map_value("type", normalized_category)
+                mapped_params.get("type")
+                or mapped_params.get("category")
                 or normalized_category
             )
 
@@ -800,8 +807,7 @@ class RousiUploader(SpecialUploader):
 
             if isinstance(value, str):
                 value = value.split(".", 1)[-1].strip()
-            mapped_value = self._map_value(key, value)
-            attributes_data[key] = mapped_value or str(value).strip()
+            attributes_data[key] = value.strip()
 
         # genre：从 upload_data.genre / attributes.genre 获取（去重保序）
         genre_value = self.upload_data.get("genre")
@@ -960,7 +966,11 @@ class RousiUploader(SpecialUploader):
     def execute_upload(self):
         logger.info(f"正在向 {self.site_name} (API v1) 提交发布请求...")
         try:
-            payload = self._build_api_payload()
+            # 使用标准映射流程获取映射后的参数
+            mapped_params = self._map_parameters()
+
+            # 构建上传 payload
+            payload = self._build_api_payload(mapped_params)
 
             if os.getenv("DEV_ENV") == "true":
                 self._save_upload_parameters(payload)
