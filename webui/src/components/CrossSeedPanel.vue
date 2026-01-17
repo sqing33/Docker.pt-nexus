@@ -886,19 +886,49 @@
                 v-for="result in row"
                 :key="result.siteName"
                 class="result-card"
-                :class="{ 'is-success': result.success, 'is-error': !result.success }"
+                :class="{
+                  'is-success': result.displayStatus === 'success',
+                  'is-error': result.displayStatus === 'error',
+                  'is-waiting': result.displayStatus === 'waiting',
+                  'is-publishing': result.displayStatus === 'publishing',
+                  'is-paused': result.displayStatus === 'paused',
+                }"
               >
                 <div class="card-icon">
-                  <el-icon v-if="result.success" color="#67C23A" :size="32">
+                  <el-icon v-if="result.displayStatus === 'success'" color="#67C23A" :size="32">
                     <CircleCheckFilled />
                   </el-icon>
-                  <el-icon v-else color="#F56C6C" :size="32">
+                  <el-icon v-else-if="result.displayStatus === 'error'" color="#F56C6C" :size="32">
                     <CircleCloseFilled />
+                  </el-icon>
+                  <el-icon
+                    v-else-if="result.displayStatus === 'publishing'"
+                    color="#409EFF"
+                    :size="32"
+                    class="loading-icon"
+                  >
+                    <Loading />
+                  </el-icon>
+                  <el-icon
+                    v-else
+                    :color="result.displayStatus === 'paused' ? '#E6A23C' : '#FFB6C1'"
+                    :size="32"
+                  >
+                    <Clock />
                   </el-icon>
                 </div>
                 <h4 class="card-title">{{ result.siteName }}</h4>
                 <div v-if="result.isExisted" class="existed-tag">
                   <el-tag type="warning" size="small">已存在</el-tag>
+                </div>
+                <div v-if="result.displayStatus === 'waiting'" class="status-tag">
+                  <el-tag size="small" class="waiting-tag">等待中</el-tag>
+                </div>
+                <div v-else-if="result.displayStatus === 'publishing'" class="status-tag">
+                  <el-tag type="primary" size="small">发布中</el-tag>
+                </div>
+                <div v-else-if="result.displayStatus === 'paused'" class="status-tag">
+                  <el-tag type="warning" size="small">已暂停</el-tag>
                 </div>
 
                 <!-- 下载器添加状态 -->
@@ -1151,6 +1181,8 @@ import {
   InfoFilled,
   Warning,
   Monitor,
+  Loading,
+  Clock,
 } from '@element-plus/icons-vue'
 import { useCrossSeedStore } from '@/stores/crossSeed'
 import LogProgress from './LogProgress.vue'
@@ -1504,6 +1536,18 @@ const isLoading = ref(false)
 const torrentData = ref(getInitialTorrentData())
 const taskId = ref<string | null>(null)
 const finalResultsList = ref<any[]>([])
+const publishResultsBySite = ref<Record<string, any>>({})
+const publishingSites = ref<string[]>([])
+const publishBatchId = ref<string | null>(null)
+const publishBatchEventSource = ref<EventSource | null>(null)
+
+const stopPublishBatchSSE = () => {
+  if (publishBatchEventSource.value) {
+    publishBatchEventSource.value.close()
+    publishBatchEventSource.value = null
+  }
+  publishBatchId.value = null
+}
 const isReparsing = ref(false)
 const isRefreshingScreenshots = ref(false)
 const isRefreshingIntro = ref(false)
@@ -2190,6 +2234,7 @@ const refreshBDInfo = async () => {
 
 // 在组件卸载时清理轮询
 onUnmounted(() => {
+  stopPublishBatchSSE()
   if (bdinfoEventSource.value) {
     bdinfoEventSource.value.close()
     bdinfoEventSource.value = null
@@ -3453,7 +3498,237 @@ const clearAllTargetSites = () => {
   selectedTargetSites.value = []
 }
 
-const handlePublish = async () => {
+const normalizePublishResult = (siteName: string, raw: any) => {
+  const result: any = {
+    siteName,
+    ...raw,
+    message: getCleanMessage(raw?.logs || '发布成功'),
+  }
+
+  if (raw?.logs && raw.logs.includes('种子已存在')) {
+    result.isExisted = true
+  }
+
+  // 🚫 发布前预检查限制
+  if (raw?.pre_check && raw?.limit_reached) {
+    result.downloaderStatus = {
+      success: false,
+      message: raw.logs || '发布前预检查触发限制',
+      downloaderName: '发布前限制',
+      limit_reached: true,
+      pre_check: true,
+    }
+    return result
+  }
+
+  // 自动添加到下载器结果
+  if (raw?.auto_add_result) {
+    const addResult = raw.auto_add_result
+    let downloaderName = '自动检测'
+
+    if (addResult.limit_reached) {
+      downloaderName = '限制触发'
+    } else if (addResult.downloader_id) {
+      const downloader = downloaderList.value.find((d) => d.id === addResult.downloader_id)
+      if (downloader) downloaderName = downloader.name
+    }
+
+    result.downloaderStatus = {
+      success: addResult.success,
+      message: addResult.message,
+      downloaderName,
+      limit_reached: !!addResult.limit_reached,
+    }
+  }
+
+  return result
+}
+
+const rebuildFinalResultsList = () => {
+  finalResultsList.value = selectedTargetSites.value
+    .map((site) => publishResultsBySite.value[site])
+    .filter(Boolean)
+}
+
+const rebuildProgress = () => {
+  const results = Object.values(publishResultsBySite.value)
+  publishProgress.value.current = results.length
+  downloaderProgress.value.current = results.filter((r: any) => r?.auto_add_result?.success).length
+}
+
+const handlePublishBatch = async (): Promise<boolean> => {
+  stopPublishBatchSSE()
+
+  activeStep.value = 3
+  isLoading.value = true
+  finalResultsList.value = []
+  publishResultsBySite.value = {}
+  publishingSites.value = []
+  limitAlert.value = { visible: false, title: '', message: '' }
+  logContent.value = ''
+
+  const siteCount = selectedTargetSites.value.length
+  publishProgress.value = { current: 0, total: siteCount }
+  downloaderProgress.value = { current: 0, total: siteCount }
+
+  ElNotification({
+    title: '正在发布',
+    message: `准备向 ${siteCount} 个站点发布种子...`,
+    type: 'info',
+    duration: 0,
+  })
+
+  try {
+    const startResponse = await axios.post('/api/migrate/publish_batch/start', {
+      task_id: taskId.value,
+      upload_data: {
+        ...torrentData.value,
+        save_path: torrent.value.save_path,
+      },
+      targetSites: selectedTargetSites.value,
+      sourceSite: sourceSite.value,
+      downloaderId: torrent.value.downloaderId,
+      auto_add_to_downloader: true,
+    })
+
+    if (!startResponse.data?.success || !startResponse.data?.batch_id) {
+      throw new Error(startResponse.data?.message || '批量发布任务启动失败')
+    }
+
+    publishBatchId.value = startResponse.data.batch_id
+    publishBatchEventSource.value = new EventSource(
+      `/api/migrate/publish_batch/stream/${publishBatchId.value}`,
+    )
+
+    publishBatchEventSource.value.onmessage = async (event) => {
+      try {
+        const data = JSON.parse(event.data)
+
+        switch (data.type) {
+          case 'heartbeat':
+          case 'connected':
+          case 'complete':
+            return
+
+          case 'batch_stopped': {
+            const reason = data.reason as string
+            const message = data.message as string
+            const title =
+              reason === 'limit_reached'
+                ? '发种限制触发'
+                : reason === 'pre_check_limit'
+                  ? '发布前限制触发'
+                  : reason === 'cancelled'
+                    ? '已取消'
+                    : '批量发布已停止'
+
+            limitAlert.value = {
+              visible: true,
+              title,
+              message: message || '',
+            }
+            return
+          }
+
+          case 'site_started': {
+            const siteName = data.siteName as string
+            if (siteName && !publishingSites.value.includes(siteName)) {
+              publishingSites.value.push(siteName)
+            }
+            return
+          }
+
+          case 'site_finished': {
+            const siteName = data.siteName as string
+            if (siteName) {
+              const idx = publishingSites.value.indexOf(siteName)
+              if (idx !== -1) publishingSites.value.splice(idx, 1)
+            }
+
+            publishResultsBySite.value[siteName] = normalizePublishResult(siteName, data.result)
+            rebuildFinalResultsList()
+            rebuildProgress()
+            return
+          }
+
+          case 'batch_finished': {
+            stopPublishBatchSSE()
+            ElNotification.closeAll()
+
+            rebuildFinalResultsList()
+            rebuildProgress()
+
+            const results = finalResultsList.value
+            const successCount = results.filter((r: any) => r?.success).length
+
+            ElNotification.success({
+              title: '发布完成',
+              message: `成功发布到 ${successCount} / ${selectedTargetSites.value.length} 个站点。`,
+            })
+
+            const siteLogs = results.map((r: any) => {
+              const logs = r?.logs || 'No logs available.'
+              let logEntry = `--- Log for ${r.siteName} ---\n${logs}`
+              if (r?.downloaderStatus) {
+                logEntry += `\n\n--- Downloader Status for ${r.siteName} ---`
+                logEntry += r.downloaderStatus.success
+                  ? `\n✅ 成功: ${r.downloaderStatus.message}`
+                  : `\n❌ 失败: ${r.downloaderStatus.message}`
+              }
+              return logEntry
+            })
+            logContent.value = siteLogs.join('\n\n')
+
+            try {
+              await axios.post('/api/refresh_data')
+              ElNotification.success({
+                title: '数据刷新',
+                message: '种子数据已刷新',
+              })
+            } catch (error) {
+              console.warn('刷新种子数据失败:', error)
+            }
+
+            isLoading.value = false
+            return
+          }
+
+          case 'error':
+            throw new Error(data.message || '批量发布 SSE 错误')
+
+          default:
+            return
+        }
+      } catch (error) {
+        console.error('批量发布 SSE 消息处理失败:', error)
+      }
+    }
+
+    publishBatchEventSource.value.onerror = (error) => {
+      console.error('批量发布 SSE 连接错误:', error)
+      stopPublishBatchSSE()
+      ElNotification.closeAll()
+      ElNotification.error({
+        title: '连接错误',
+        message: '批量发布进度连接中断，请稍后重试',
+        duration: 0,
+        showClose: true,
+      })
+      isLoading.value = false
+    }
+
+    return true
+  } catch (error: any) {
+    console.error('批量发布启动失败:', error)
+    stopPublishBatchSSE()
+    ElNotification.closeAll()
+    handleApiError(error, '批量发布启动失败')
+    isLoading.value = false
+    return false
+  }
+}
+
+const handlePublishSerial = async () => {
   activeStep.value = 3
   isLoading.value = true
   finalResultsList.value = []
@@ -3703,6 +3978,13 @@ const handlePublish = async () => {
   }
 
   isLoading.value = false
+}
+
+const handlePublish = async () => {
+  const started = await handlePublishBatch()
+  if (!started) {
+    await handlePublishSerial()
+  }
 }
 
 const handlePreviousStep = () => {
@@ -4401,9 +4683,67 @@ const showSiteLog = (siteName: string, logs: string) => {
   showLogCard.value = true
 }
 
+type PublishDisplayStatus = 'waiting' | 'publishing' | 'success' | 'error' | 'paused'
+
+type PublishDisplayResult = {
+  siteName: string
+  displayStatus: PublishDisplayStatus
+  success?: boolean
+  url?: string | null
+  logs?: string
+  message?: string
+  isExisted?: boolean
+  downloaderStatus?: any
+  [key: string]: any
+}
+
+const publishDisplayResults = computed<PublishDisplayResult[]>(() => {
+  const resultsBySite = new Map<string, any>()
+  for (const result of finalResultsList.value) {
+    if (result?.siteName) {
+      resultsBySite.set(result.siteName, result)
+    }
+  }
+
+  const hasUnfinishedSites = finalResultsList.value.length < selectedTargetSites.value.length
+  const isStopped = limitAlert.value.visible && hasUnfinishedSites
+  const runningSites = new Set(publishingSites.value)
+
+  return selectedTargetSites.value.map((siteName) => {
+    const existing = resultsBySite.get(siteName)
+    if (existing) {
+      return {
+        ...existing,
+        displayStatus: existing.success ? 'success' : 'error',
+      }
+    }
+
+    let displayStatus: PublishDisplayStatus = 'waiting'
+    if (runningSites.has(siteName)) {
+      displayStatus = 'publishing'
+    } else if (isStopped) {
+      displayStatus = 'paused'
+    }
+
+    return {
+      siteName,
+      displayStatus,
+      success: false,
+      url: null,
+      logs: '',
+      message:
+        displayStatus === 'publishing'
+          ? '发布中...'
+          : displayStatus === 'paused'
+            ? '已暂停'
+            : '等待中',
+    }
+  })
+})
+
 // 分组结果，每行5个
 const groupedResults = computed(() => {
-  const results = finalResultsList.value
+  const results = publishDisplayResults.value
   const grouped = []
   for (let i = 0; i < results.length; i += 5) {
     grouped.push(results.slice(i, i + 5))
@@ -5305,7 +5645,7 @@ const filterUploadedParam = (url: string): string => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 100px;
+  width: 180px;
   flex-shrink: 0;
 }
 
@@ -5388,6 +5728,18 @@ const filterUploadedParam = (url: string): string => {
   border-top: 4px solid #f56c6c;
 }
 
+.result-card.is-waiting {
+  border-top: 4px solid #ffc0cb;
+}
+
+.result-card.is-publishing {
+  border-top: 4px solid #409eff;
+}
+
+.result-card.is-paused {
+  border-top: 4px solid #e6a23c;
+}
+
 /* .card-icon {
   margin-bottom: 8px;
 } */
@@ -5402,6 +5754,30 @@ const filterUploadedParam = (url: string): string => {
 .existed-tag {
   position: absolute;
   transform: translate(65px, 35px);
+}
+
+.status-tag {
+  position: absolute;
+  transform: translate(-65px, 35px);
+}
+
+.waiting-tag {
+  background-color: #fff0f273;
+  border-color: #ffb6c1;
+  color: #ffa5b3;
+}
+
+.loading-icon {
+  animation: cross-seed-rotate 1s linear infinite;
+}
+
+@keyframes cross-seed-rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .card-extra {

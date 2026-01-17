@@ -11,6 +11,7 @@ import time
 import bencoder
 import requests
 import urllib3
+import threading
 import traceback
 import importlib
 import yaml
@@ -45,6 +46,13 @@ from utils import log_streamer
 from core.extractors.extractor import Extractor, ParameterMapper
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+# loguru 默认会带一个 stderr sink；原实现会在每次初始化 TorrentMigrator 时 remove 全局 sinks。
+# 为了支持并发批量发布，这里统一移除默认 sink，并在每个 TorrentMigrator 实例上按线程绑定一个独立 sink。
+try:
+    logger.remove()
+except Exception:
+    pass
 
 
 class LoguruHandler(StringIO):
@@ -110,9 +118,13 @@ class TorrentMigrator:
         site_name = self.target_site["nickname"] if self.target_site else self.SOURCE_NAME
         self.log_handler = LoguruHandler(site_name=site_name)
         self.logger = logger
-        self.logger.remove()
-        self.logger.add(
-            self.log_handler, format="{time:HH:mm:ss} - {level} - {message}", level="DEBUG"
+        self._loguru_thread_id = threading.get_ident()
+        # 仅捕获当前线程的 loguru 输出，避免并发场景下不同站点日志互相串扰
+        self._loguru_sink_id = self.logger.add(
+            self.log_handler,
+            format="{time:HH:mm:ss} - {level} - {message}",
+            level="DEBUG",
+            filter=lambda record: record["thread"].id == self._loguru_thread_id,
         )
 
         self.temp_files = []
@@ -510,14 +522,26 @@ class TorrentMigrator:
             self.logger.error(f"获取 {site_name} 站点 passkey 失败: {e}")
             return ""
 
-    def cleanup(self):
-        """清理所有临时文件"""
+    def cleanup(self, remove_temp_files: bool = True):
+        """清理日志 sink 和（可选）临时文件。"""
+        sink_id = getattr(self, "_loguru_sink_id", None)
+        if sink_id is not None:
+            try:
+                self.logger.remove(sink_id)
+            except Exception:
+                pass
+            self._loguru_sink_id = None
+
+        if not remove_temp_files:
+            return
+
         for f in self.temp_files:
             try:
                 os.remove(f)
                 self.logger.info(f"已清理临时文件: {f}")
             except OSError as e:
                 self.logger.warning(f"清理临时文件 {f} 失败: {e}")
+        self.temp_files = []
 
     def _html_to_bbcode(self, tag):
         content = []

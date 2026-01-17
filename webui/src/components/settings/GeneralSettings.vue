@@ -361,50 +361,6 @@
         </div>
       </div>
 
-      <!-- 默认下载器设置卡片 -->
-      <div
-        class="settings-card glass-card glass-rounded glass-transparent-header glass-transparent-body"
-      >
-        <div class="card-header">
-          <div class="header-content">
-            <el-icon class="header-icon">
-              <Document />
-            </el-icon>
-            <h3>默认下载器设置</h3>
-          </div>
-        </div>
-
-        <div class="card-content">
-          <el-form :model="settingsForm" label-position="top" class="settings-form">
-            <el-form-item label="默认下载器" class="form-item">
-              <el-select
-                v-model="settingsForm.default_downloader"
-                placeholder="请选择默认下载器"
-                clearable
-                @change="autoSaveCrossSeedSettings"
-              >
-                <el-option label="使用源种子所在的下载器" value="" />
-                <el-option
-                  v-for="item in downloaderOptions"
-                  :key="item.id"
-                  :label="item.name"
-                  :value="item.id"
-                />
-              </el-select>
-            </el-form-item>
-
-            <div class="form-spacer"></div>
-
-            <el-text type="info" size="small" class="proxy-hint">
-              <el-icon size="12">
-                <InfoFilled />
-              </el-icon>
-              转种完成后自动将种子添加到指定的下载器。选择"使用源种子所在的下载器"或不选择任何下载器，则添加到源种子所在的下载器。
-            </el-text>
-          </el-form>
-        </div>
-      </div>
-
       <!-- 上传设置卡片 -->
       <div
         class="settings-card glass-card glass-rounded glass-transparent-header glass-transparent-body"
@@ -489,6 +445,119 @@
               财神 PTGen API 每日限量 100+ 次，上限随等级提升<br />
               使用完会自动切换内置的其他 PTGen API
             </el-text>
+          </el-form>
+        </div>
+      </div>
+
+      <!-- 发种设置卡片 -->
+      <div
+        class="settings-card glass-card glass-rounded glass-transparent-header glass-transparent-body"
+      >
+        <div class="card-header">
+          <div class="header-content">
+            <el-icon class="header-icon">
+              <Document />
+            </el-icon>
+            <h3>发种设置</h3>
+          </div>
+        </div>
+
+        <div class="card-content">
+          <el-form :model="settingsForm" label-position="top" class="settings-form">
+            <el-form-item label="默认下载器" class="form-item">
+              <el-select
+                v-model="settingsForm.default_downloader"
+                placeholder="请选择默认下载器"
+                clearable
+                @change="autoSaveCrossSeedSettings"
+              >
+                <el-option label="使用源种子所在的下载器" value="" />
+                <el-option
+                  v-for="item in downloaderOptions"
+                  :key="item.id"
+                  :label="item.name"
+                  :value="item.id"
+                />
+              </el-select>
+            </el-form-item>
+
+            <div class="form-spacer"></div>
+
+            <el-text type="info" size="small" class="proxy-hint">
+              <el-icon size="12">
+                <InfoFilled />
+              </el-icon>
+              发种完成后自动将种子添加到指定的下载器。选择"使用源种子所在的下载器"或不选择任何下载器，则添加到源种子所在的下载器。
+            </el-text>
+
+            <div class="form-spacer"></div>
+
+            <el-form-item label="批量发布并发策略" class="form-item">
+              <el-radio-group
+                v-model="settingsForm.publish_batch_concurrency_mode"
+                @change="onPublishConcurrencyModeChange"
+              >
+                <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap">
+                  <el-radio label="cpu">自动（CPU线程数×2）</el-radio>
+                  <el-radio label="all">所有站点同时发布</el-radio>
+                </div>
+
+                <div
+                  style="
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                    flex-wrap: nowrap;
+                    width: 100%;
+                    margin-top: 8px;
+                  "
+                >
+                  <el-radio label="manual" style="white-space: nowrap">手动设置并发数</el-radio>
+                  <el-input-number
+                    v-if="settingsForm.publish_batch_concurrency_mode === 'manual'"
+                    v-model="settingsForm.publish_batch_concurrency_manual"
+                    size="small"
+                    :min="1"
+                    :max="publishConcurrencyInfo?.max_concurrency || 200"
+                    style="width: 150px; height: 25px"
+                    @change="onManualConcurrencyChange"
+                  />
+                </div>
+              </el-radio-group>
+
+              <div style="margin-top: 8px" v-loading="loadingPublishConcurrencyInfo">
+                <el-text
+                  v-if="settingsForm.publish_batch_concurrency_mode === 'cpu'"
+                  type="info"
+                  size="small"
+                >
+                  当前服务器 CPU 线程数 {{ publishConcurrencyInfo?.cpu_threads ?? '-' }}，推荐并发
+                  {{ publishConcurrencyInfo?.suggested_concurrency ?? '-' }}
+                  <template
+                    v-if="
+                      publishConcurrencyInfo &&
+                      publishConcurrencyInfo.effective_suggested_concurrency !==
+                        publishConcurrencyInfo.suggested_concurrency
+                    "
+                  >
+                    （受上限 {{ publishConcurrencyInfo.max_concurrency }} 影响，实际将使用
+                    {{ publishConcurrencyInfo.effective_suggested_concurrency }}）
+                  </template>
+                </el-text>
+                <el-text
+                  v-else-if="settingsForm.publish_batch_concurrency_mode === 'all'"
+                  type="info"
+                  size="small"
+                >
+                  将并发等于“本次选择的目标站点数量”（上限
+                  {{ publishConcurrencyInfo?.max_concurrency ?? '-' }}）。
+                </el-text>
+                <el-text v-else type="info" size="small">
+                  手动并发数将在发布时生效（上限
+                  {{ publishConcurrencyInfo?.max_concurrency ?? '-' }}）。
+                </el-text>
+              </div>
+            </el-form-item>
           </el-form>
         </div>
       </div>
@@ -756,11 +825,15 @@ interface IYUULog {
 }
 
 // 转种设置相关
+type PublishBatchConcurrencyMode = 'cpu' | 'manual' | 'all'
+
 interface CrossSeedSettings {
   image_hoster: string
   agsv_email?: string
   agsv_password?: string
   default_downloader?: string
+  publish_batch_concurrency_mode?: PublishBatchConcurrencyMode
+  publish_batch_concurrency_manual?: number
 }
 
 const savingCrossSeed = ref(false)
@@ -770,12 +843,24 @@ const settingsForm = reactive<CrossSeedSettings>({
   agsv_email: '',
   agsv_password: '',
   default_downloader: '',
+  publish_batch_concurrency_mode: 'cpu',
+  publish_batch_concurrency_manual: 5,
 })
 
 const imageHosterOptions = [
   { value: 'pixhost', label: 'Pixhost (免费)' },
   { value: 'agsv', label: '末日图床 (需账号)' },
 ]
+
+// 批量发布并发策略展示信息（来自后端服务器）
+const loadingPublishConcurrencyInfo = ref(false)
+const publishConcurrencyInfo = ref<{
+  cpu_threads: number
+  suggested_concurrency: number
+  effective_suggested_concurrency: number
+  max_concurrency: number
+  default_concurrency: number
+} | null>(null)
 
 // 下载器选项
 const downloaderOptions = ref<{ id: string; name: string }[]>([])
@@ -933,6 +1018,10 @@ const autoSaveCrossSeedSettings = async () => {
       agsv_email: settingsForm.agsv_email,
       agsv_password: settingsForm.agsv_password,
       default_downloader: settingsForm.default_downloader,
+      publish_batch_concurrency_mode: settingsForm.publish_batch_concurrency_mode,
+      publish_batch_concurrency_manual: settingsForm.publish_batch_concurrency_manual,
+      // 同步带上 ptgen token，避免后端覆盖时丢失（后端已做 merge，但这里也保持完整）
+      cspt_ptgen_token: uploadForm.cspt_ptgen_token,
     }
 
     await axios.post('/api/settings/cross_seed', crossSeedSettings)
@@ -943,6 +1032,37 @@ const autoSaveCrossSeedSettings = async () => {
   } finally {
     savingCrossSeed.value = false
   }
+}
+
+const fetchPublishConcurrencyInfo = async () => {
+  loadingPublishConcurrencyInfo.value = true
+  try {
+    const res = await axios.get('/api/settings/cross_seed/publish_concurrency_info')
+    if (res.data?.success) {
+      publishConcurrencyInfo.value = res.data
+    }
+  } catch (e) {
+    // ignore: 仅用于展示，不影响主流程
+  } finally {
+    loadingPublishConcurrencyInfo.value = false
+  }
+}
+
+const onPublishConcurrencyModeChange = () => {
+  if (settingsForm.publish_batch_concurrency_mode === 'manual') {
+    const manualValue = Number(settingsForm.publish_batch_concurrency_manual || 0)
+    if (!Number.isFinite(manualValue) || manualValue < 1) {
+      settingsForm.publish_batch_concurrency_manual =
+        publishConcurrencyInfo.value?.effective_suggested_concurrency || 5
+    }
+  }
+  autoSaveCrossSeedSettings()
+}
+
+const onManualConcurrencyChange = () => {
+  const manualValue = Number(settingsForm.publish_batch_concurrency_manual || 0)
+  settingsForm.publish_batch_concurrency_manual = Math.max(1, Math.floor(manualValue || 1))
+  autoSaveCrossSeedSettings()
 }
 
 // 获取所有设置
@@ -1014,6 +1134,9 @@ const fetchSettings = async () => {
     // 获取下载器列表
     const downloaderResponse = await axios.get('/api/downloaders_list')
     downloaderOptions.value = downloaderResponse.data
+
+    // 获取服务器并发信息（用于“CPU线程数×2”模式提示）
+    await fetchPublishConcurrencyInfo()
 
     // 如果启用了路径过滤，则加载可用路径
     if (iyuuForm.path_filter_enabled) {
@@ -1215,6 +1338,9 @@ const saveCrossSeedSettings = async () => {
       agsv_email: settingsForm.agsv_email,
       agsv_password: settingsForm.agsv_password,
       default_downloader: settingsForm.default_downloader,
+      publish_batch_concurrency_mode: settingsForm.publish_batch_concurrency_mode,
+      publish_batch_concurrency_manual: settingsForm.publish_batch_concurrency_manual,
+      cspt_ptgen_token: uploadForm.cspt_ptgen_token,
     }
 
     await axios.post('/api/settings/cross_seed', crossSeedSettings)
@@ -1271,6 +1397,8 @@ const saveUploadSettings = async () => {
       agsv_password: settingsForm.agsv_password,
       default_downloader: settingsForm.default_downloader,
       cspt_ptgen_token: uploadForm.cspt_ptgen_token,
+      publish_batch_concurrency_mode: settingsForm.publish_batch_concurrency_mode,
+      publish_batch_concurrency_manual: settingsForm.publish_batch_concurrency_manual,
     }
     await axios.post('/api/settings/cross_seed', crossSeedSettings)
 

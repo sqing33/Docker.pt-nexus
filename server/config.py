@@ -50,6 +50,10 @@ class ConfigManager:
                 "seedvault_password": "",
                 # [新增] 默认下载器设置
                 "default_downloader": "",
+                # [新增] 批量发布并发设置
+                # cpu: 按服务器 CPU 线程数 * 2；manual: 使用手动并发数；all: 并发等于目标站点数量
+                "publish_batch_concurrency_mode": "cpu",
+                "publish_batch_concurrency_manual": 5,
             },
             # --- [新增] 上传设置 ---
             "upload_settings": {"anonymous_upload": True},  # 默认启用匿名上传
@@ -132,6 +136,10 @@ class ConfigManager:
                         self._config["cross_seed"]["seedvault_email"] = ""
                     if "seedvault_password" not in self._config["cross_seed"]:
                         self._config["cross_seed"]["seedvault_password"] = ""
+                    if "publish_batch_concurrency_mode" not in self._config["cross_seed"]:
+                        self._config["cross_seed"]["publish_batch_concurrency_mode"] = "cpu"
+                    if "publish_batch_concurrency_manual" not in self._config["cross_seed"]:
+                        self._config["cross_seed"]["publish_batch_concurrency_manual"] = 5
 
                 # --- [新增] 检查并添加 UI 设置的兼容性 ---
                 if "ui_settings" not in self._config:
