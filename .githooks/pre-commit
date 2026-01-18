@@ -20,16 +20,15 @@
 # 优点: 极大地提升了提交速度，只在必要时才执行构建。
 # ==============================================================================
 
-# 加载 NVM 环境（关键：让钩子识别 node/bun）
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # 加载 nvm
-nvm use default > /dev/null 2>&1  # 静默加载默认 node 版本（避免输出干扰）
-export BUN_INSTALL="$HOME/.bun"
-export PATH="$BUN_INSTALL/bin:$PATH"
-
-# 解决 locale 警告（可选，顺带修复）
+# 解决 locale 警告
 export LC_ALL=en_US.UTF-8
 export LANG=en_US.UTF-8
+
+# 加载常见 shell 环境
+[ -f /etc/profile ] && . /etc/profile >/dev/null 2>&1 || true
+[ -f "$HOME/.profile" ] && . "$HOME/.profile" >/dev/null 2>&1 || true
+[ -f "$HOME/.bashrc" ] && . "$HOME/.bashrc" >/dev/null 2>&1 || true
+[ -f "$HOME/.zshrc" ] && . "$HOME/.zshrc" >/dev/null 2>&1 || true
 
 # 颜色定义
 GREEN='\033[0;32m'
@@ -86,9 +85,19 @@ fi
 if echo "$STAGED_FILES" | grep -q "^batch/"; then
     BUILDS_TRIGGERED=true
     echo -e "${YELLOW}📦 检测到 'batch' 目录有变更，开始构建...${NC}"
-    (cd batch && go build -o batch batch.go) || handle_error "Go batch 构建失败"
+    (
+        cd batch || exit 1
+        echo -e "${CYAN}   - 构建 linux/amd64 -> batch-x86${NC}"
+        CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o batch-x86 batch.go || exit 1
+
+        echo -e "${CYAN}   - 构建 linux/arm64 -> batch-arm${NC}"
+        CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o batch-arm batch.go || exit 1
+
+        # 兼容历史路径：保留 batch/batch（默认使用 x86 版本）
+        cp -f batch-x86 batch || exit 1
+    ) || handle_error "Go batch (x86/arm) 构建失败"
     echo -e "${GREEN}✓ Go batch 构建成功。正在暂存产物...${NC}"
-    git add batch/batch
+    git add batch/batch batch/batch-x86 batch/batch-arm
 else
     echo -e "${CYAN}⏭️  'batch' 目录无变更，跳过构建。${NC}"
 fi

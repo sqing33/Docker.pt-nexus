@@ -117,6 +117,50 @@ python app.py &
 
 # 启动 Go batch
 echo "正在启动 batch 服务，端口：5276..."
-./batch &
+detect_arch() {
+    local arch
+    arch="$(uname -m 2>/dev/null || true)"
+    case "$arch" in
+        x86_64|amd64) echo "x86" ;;
+        aarch64|arm64) echo "arm" ;;
+        *) echo "unknown" ;;
+    esac
+}
+
+select_batch_bin() {
+    local arch
+    arch="$(detect_arch)"
+
+    if [ "$arch" = "arm" ] && [ -x "./batch-arm" ]; then
+        echo "./batch-arm"
+        return
+    fi
+    if [ "$arch" = "x86" ] && [ -x "./batch-x86" ]; then
+        echo "./batch-x86"
+        return
+    fi
+
+    # 兼容 Dockerfile 里的默认二进制名称
+    if [ -x "./batch" ]; then
+        echo "./batch"
+        return
+    fi
+
+    # 兜底：文件存在但不可执行，也尽量尝试启动（方便定位权限问题）
+    if [ -f "./batch-arm" ] && [ "$arch" = "arm" ]; then
+        echo "./batch-arm"
+        return
+    fi
+    if [ -f "./batch-x86" ] && [ "$arch" = "x86" ]; then
+        echo "./batch-x86"
+        return
+    fi
+
+    echo "./batch"
+}
+
+BATCH_BIN="$(select_batch_bin)"
+echo "batch 二进制: ${BATCH_BIN} (arch=$(detect_arch))"
+"$BATCH_BIN" &
 
 wait -n

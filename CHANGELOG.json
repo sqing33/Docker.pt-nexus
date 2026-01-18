@@ -452,8 +452,18 @@
       "exclude": []
     },
     {
-      "source": "batch/batch",
-      "target": "/app/batch",
+      "source": "batch/batch-x86",
+      "target": "/app/batch-x86",
+      "executable": true
+    },
+    {
+      "source": "batch/batch-arm",
+      "target": "/app/batch-arm",
+      "executable": true
+    },
+    {
+      "source": "start-services.sh",
+      "target": "/app/start-services.sh",
       "executable": true
     }
   ],
