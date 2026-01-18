@@ -1261,6 +1261,9 @@ const triggerIyuuQuery = async () => {
       // 如果后台查询失败，记录错误但不显示给用户
       console.error('IYUU 查询后台执行失败:', error)
     })
+
+    // 自动打开日志弹窗，方便观察批量查询进度
+    void showIyuuLogs()
   } catch (error: any) {
     const errorMessage = error.response?.data?.message || '触发查询失败。'
     ElMessage.error(errorMessage)

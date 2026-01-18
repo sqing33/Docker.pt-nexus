@@ -372,99 +372,220 @@ class IYUUThread(Thread):
             # 获取总种子组数
             total_torrents = len(test_torrents)
 
+            iyuu_supported_site_nicknames = {
+                site.get('nickname')
+                for site in all_sites
+                if site.get('nickname')
+            }
+            excluded_sites = {'青蛙', '柠檬不甜'}
+
+            def chunk_list(items, chunk_size):
+                for idx in range(0, len(items), chunk_size):
+                    yield items[idx:idx + chunk_size]
+
+            # 需要查询的种子组状态（仅包含支持站点的种子组）
+            group_states = {}
+            ordered_group_names = []
+            skipped_interval_count = 0
+            skipped_no_supported_count = 0
+
             for i, (name, torrents) in enumerate(test_torrents):
                 if not self._is_running:  # 检查线程是否应该停止
                     break
 
                 # 如果不是强制查询，则检查时间间隔
                 if not force_query:
-                    # 检查是否需要进行IYUU查询（距离上次查询超过设置的时间间隔或从未查询过）
-                    # 获取设置的查询间隔时间（默认为72小时）
                     config = self.config_manager.get()
                     iyuu_settings = config.get("iyuu_settings", {})
                     query_interval_hours = iyuu_settings.get(
                         "query_interval_hours", 72)
 
                     if not self._should_query_iyuu(name, query_interval_hours):
-                        skip_message = f"[{i+1}/{total_torrents}] 🔄 种子组 '{name}' 距离上次查询不足{query_interval_hours}小时，跳过查询"
-                        log_iyuu_message(skip_message, "INFO")
+                        skipped_interval_count += 1
                         continue
 
-                print(f"[{i+1}/{total_torrents}] 🔍 正在处理种子组: {name}")
+                all_torrents_for_name = all_torrents.get(name, [])
 
-                # 获取优先hash列表和过滤后的种子列表
-                priority_hashes, filtered_torrents = self._get_priority_hash_for_torrent_group(
-                    name, all_torrents.get(name, []), configured_sites)
+                # 过滤出支持的站点，并按优先级排序（IYUU支持站点优先）
+                iyuu_supported_torrents = []
+                other_torrents = []
+                for torrent in all_torrents_for_name:
+                    site_name = torrent.get('sites')
+                    if (not site_name or site_name not in configured_sites
+                            or site_name in excluded_sites):
+                        continue
+
+                    if site_name in iyuu_supported_site_nicknames:
+                        iyuu_supported_torrents.append(torrent)
+                    else:
+                        other_torrents.append(torrent)
+
+                filtered_torrents = iyuu_supported_torrents + other_torrents
+                priority_hashes = [t['hash'] for t in filtered_torrents]
 
                 # 如果没有支持的站点，则跳过
                 if not filtered_torrents:
-                    log_iyuu_message(
-                        f"[{i+1}/{total_torrents}] ⚠️ 种子组 '{name}' 没有支持的站点，跳过查询",
-                        "INFO")
-                    # 更新所有同名种子记录的iyuu_last_check时间（包括不支持IYUU的站点）
-                    self._update_iyuu_last_check(name, [],
-                                                 all_torrents.get(name, []))
+                    skipped_no_supported_count += 1
+                    self._update_iyuu_last_check(name, [], all_torrents_for_name)
                     continue
 
-                # 尝试最多3个不同的hash进行查询
-                max_attempts = 3
-                results = None
-                selected_hash = None
+                total_attempts = min(3, len(priority_hashes))
 
-                for attempt in range(min(max_attempts, len(priority_hashes))):
-                    if attempt >= len(priority_hashes):
+                group_states[name] = {
+                    'index': i,
+                    'filtered_torrents': filtered_torrents,
+                    'priority_hashes': priority_hashes,
+                    'total_attempts': total_attempts,
+                    'selected_hash': None,
+                    'selected_torrent': None,
+                    'results': [],
+                    'found': False,
+                    'resolved': False,
+                }
+                ordered_group_names.append(name)
+
+            # 批量查询：每次最多200个hash
+            max_hashes_per_request = 200
+            log_iyuu_message(
+                f"批量查询模式：每批最多 {max_hashes_per_request} 个hash，最多尝试3个hash",
+                "INFO")
+            log_iyuu_message(
+                f"待查询种子组: {len(ordered_group_names)}（跳过：间隔未到 {skipped_interval_count}，无支持站点 {skipped_no_supported_count}）",
+                "INFO")
+
+            for attempt in range(3):
+                if not self._is_running:
+                    break
+
+                hash_to_groups = defaultdict(list)
+
+                for name in ordered_group_names:
+                    state = group_states.get(name)
+                    if not state or state['resolved']:
+                        continue
+
+                    if attempt >= state['total_attempts']:
+                        # 没有更多hash可尝试
+                        state['resolved'] = True
+                        state['found'] = False
+                        continue
+
+                    selected_hash = state['priority_hashes'][attempt]
+                    state['selected_hash'] = selected_hash
+                    if state.get('filtered_torrents') and len(
+                            state['filtered_torrents']) > attempt:
+                        state['selected_torrent'] = state['filtered_torrents'][
+                            attempt]
+                    else:
+                        state['selected_torrent'] = None
+
+                    hash_to_groups[selected_hash.lower()].append(name)
+
+                if not hash_to_groups:
+                    continue
+
+                unique_hashes = list(hash_to_groups.keys())
+                total_batches = (len(unique_hashes) + max_hashes_per_request -
+                                 1) // max_hashes_per_request
+                groups_in_attempt = sum(
+                    len(group_names) for group_names in hash_to_groups.values())
+                log_iyuu_message(
+                    f"批量查询 attempt {attempt+1}/3: {groups_in_attempt} 个种子组，{len(unique_hashes)} 个hash，共 {total_batches} 批",
+                    "INFO")
+
+                combined_results = {}
+                for batch_index, batch_hashes in enumerate(
+                        chunk_list(unique_hashes, max_hashes_per_request),
+                        start=1):
+                    if not self._is_running:
                         break
+                    batch_start = time.time()
+                    batch_results = query_cross_seed_batch(
+                        iyuu_token, batch_hashes, sid_sha1)
+                    combined_results.update(batch_results or {})
+                    batch_cost = time.time() - batch_start
 
-                    selected_hash = priority_hashes[attempt]
-                    # 找到对应的种子信息用于日志记录
-                    torrent_info = next((t for t in filtered_torrents
-                                         if t['hash'] == selected_hash), None)
-                    site_name = torrent_info['sites'] if torrent_info else '未知'
+                    hit_hashes = [
+                        h for h in batch_hashes
+                        if (batch_results or {}).get(h, [])
+                    ]
+                    hit_hash_count = len(hit_hashes)
+                    miss_hash_count = len(batch_hashes) - hit_hash_count
+
+                    groups_total = sum(
+                        len(hash_to_groups.get(h, [])) for h in batch_hashes)
+                    groups_hit = sum(
+                        len(hash_to_groups.get(h, [])) for h in hit_hashes)
+                    groups_miss = groups_total - groups_hit
 
                     log_iyuu_message(
-                        f"使用的hash [{attempt+1}/{min(max_attempts, len(priority_hashes))}]: {selected_hash} (站点: {site_name})",
+                        f"批量查询 attempt {attempt+1}/3, batch {batch_index}/{total_batches}: "
+                        f"hash 命中 {hit_hash_count} 未命中 {miss_hash_count} / {len(batch_hashes)}；"
+                        f"种子组 命中 {groups_hit} 未命中 {groups_miss} / {groups_total}；"
+                        f"耗时 {batch_cost:.2f}s",
                         "INFO")
 
-                    try:
-                        # 执行搜索
-                        results = query_cross_seed(iyuu_token, selected_hash,
-                                                   sid_sha1)
-                        # 如果成功查询到结果，则跳出循环
-                        log_iyuu_message(
-                            f"[{i+1}/{total_torrents}] ✅ Hash {selected_hash[:8]}... 查询成功，停止尝试其他hash",
-                            "INFO")
-                        break
-                    except Exception as e:
-                        error_msg = str(e)
-                        # 如果是"未查询到可辅种数据"错误，则尝试下一个hash
-                        if "未查询到可辅种数据" in error_msg or "400" in error_msg:
-                            log_iyuu_message(
-                                f"[{i+1}/{total_torrents}] ⚠️  Hash {selected_hash[:8]}... 未查询到可辅种数据，尝试下一个hash...",
-                                "INFO")
+                # 根据本次结果更新每个种子组状态
+                for h_lower, group_names in hash_to_groups.items():
+                    attempt_results = combined_results.get(h_lower, []) or []
+                    for name in group_names:
+                        state = group_states.get(name)
+                        if not state or state['resolved']:
                             continue
-                        else:
-                            # 其他错误则重新抛出
-                            raise e
 
-                # 如果所有尝试都失败了
-                if results is None:
-                    log_iyuu_message(
-                        f"[{i+1}/{total_torrents}] ❌ 种子组 '{name}' 所有hash都未查询到可辅种数据",
-                        "INFO")
-                    # 更新所有同名种子记录的iyuu_last_check时间（包括不支持IYUU的站点）
-                    self._update_iyuu_last_check(name, [],
-                                                 all_torrents.get(name, []))
+                        if attempt_results:
+                            state['results'] = attempt_results
+                            state['found'] = True
+                            state['resolved'] = True
+                        else:
+                            if attempt >= state['total_attempts'] - 1:
+                                state['results'] = []
+                                state['found'] = False
+                                state['resolved'] = True
+
+                resolved_found = sum(
+                    1 for state in group_states.values()
+                    if state.get('resolved') and state.get('found'))
+                resolved_empty = sum(
+                    1 for state in group_states.values()
+                    if state.get('resolved') and not state.get('found'))
+                pending_retry = sum(
+                    1 for state in group_states.values()
+                    if not state.get('resolved'))
+                log_iyuu_message(
+                    f"attempt {attempt+1}/3 汇总：已命中 {resolved_found}，已无结果 {resolved_empty}，待重试 {pending_retry}",
+                    "INFO")
+
+                # 如果全部resolved，则提前结束
+                if group_states and all(
+                        state['resolved'] for state in group_states.values()):
+                    break
+
+            # 处理查询结果并写入数据库
+            groups_with_results = 0
+            groups_without_results = 0
+            groups_with_matched_sites = 0
+            for name in ordered_group_names:
+                if not self._is_running:
+                    break
+
+                state = group_states.get(name)
+                if not state:
                     continue
 
-                # 如果成功查询到结果，继续处理
-                # 打印搜索结果并筛选现有站点
+                i = state['index']
+                selected_hash = state.get('selected_hash') or ''
+                selected_torrent = state.get('selected_torrent') or {}
+                results = state.get('results') or []
+                filtered_torrents = state.get('filtered_torrents') or []
+
+                matched_sites = []
+
                 if not results:
-                    print(
-                        f"[{i+1}/{total_torrents}] 种子 {selected_hash[:8]}... 未在其他站点发现。"
-                    )
+                    groups_without_results += 1
                 else:
+                    groups_with_results += 1
                     # 筛选出现在数据库中的站点
-                    matched_sites = []
                     for item in results:
                         sid = item.get("sid")
                         site_info = sites_map.get(sid)
@@ -490,15 +611,13 @@ class IYUUThread(Thread):
                         if iyuu_site_field and iyuu_site_field in iyuu_site_to_db_nickname_map:
                             db_site_name = iyuu_site_to_db_nickname_map[
                                 iyuu_site_field]
-                        # 否则，直接使用 IYUU 的 nickname 作为后备 (假设它可能与 torrents.sites 匹配)
+                        # 否则，直接使用 IYUU 的 nickname 作为后备
                         elif iyuu_nickname:
                             db_site_name = iyuu_nickname
 
-                        # 检查映射到的站点名称是否在 configured_sites (来自 torrents 表) 中
+                        # 检查映射到的站点名称是否在 configured_sites 中
                         if db_site_name and db_site_name in configured_sites:
-                            # 获取原始的IYUU站点名称用于日志记录
                             iyuu_display_name = iyuu_nickname or iyuu_site_field or f"SID {sid}"
-                            # 如果站点在数据库中也有配置信息，则使用它
                             site_info_dict = existing_sites.get(
                                 db_site_name, {})
                             matched_sites.append({
@@ -508,67 +627,52 @@ class IYUUThread(Thread):
                                 'site_info': site_info_dict
                             })
 
-                    # 统计找到的站点
-                    if matched_sites:
-                        result_stats['total_found'] += len(matched_sites)
-                        result_stats['sites_found'].extend(
-                            [site['db_name'] for site in matched_sites])
+                # 统计找到的站点
+                if matched_sites:
+                    groups_with_matched_sites += 1
+                    result_stats['total_found'] += len(matched_sites)
+                    result_stats['sites_found'].extend(
+                        [site['db_name'] for site in matched_sites])
 
-                        log_iyuu_message(
-                            f"[{i+1}/{total_torrents}] 种子 {selected_hash[:8]}... 在 {len(matched_sites)} 个已存在的站点发现！",
-                            "INFO")
-                        for site in matched_sites:
-                            iyuu_site_name = site['iyuu_name']
-                            db_site_name = site['db_name']
-                            full_url = site['url']
+                # 为缺失站点添加种子记录
+                new_count = 0
+                updated_count = 0
+                if matched_sites:
+                    torrent_data = {
+                        'hash': selected_hash,
+                        'name': name,
+                        'save_path': (selected_torrent.get('save_path', '')
+                                      if isinstance(selected_torrent, dict) else
+                                      ''),
+                        'size': (selected_torrent.get('size', 0)
+                                 if isinstance(selected_torrent, dict) else 0),
+                    }
 
-                            if iyuu_site_name != db_site_name:
-                                log_iyuu_message(
-                                    f"✅ 匹配站点: {iyuu_site_name} -> {db_site_name}",
-                                    "INFO")
-                            else:
-                                log_iyuu_message(f"✅ 匹配站点: {iyuu_site_name}",
-                                                 "INFO")
-                            log_iyuu_message(f"   链接: {full_url}", "INFO")
-                    else:
-                        log_iyuu_message(
-                            f"[{i+1}/{total_torrents}] 种子 {selected_hash[:8]}... 未在任何已存在的站点发现。",
-                            "INFO")
+                    new_count, updated_count = self._add_missing_site_torrents(
+                        name, torrent_data, matched_sites, return_count=True)
+                    result_stats['new_records'] += new_count
+                    result_stats['updated_records'] += updated_count
 
+                # 更新所有同名种子记录的iyuu_last_check时间（包括不支持IYUU的站点）
+                torrent_size_for_update = None
+                if isinstance(selected_torrent, dict):
+                    torrent_size_for_update = selected_torrent.get('size')
+                updated_rows, filled_details_count = self._update_iyuu_last_check(
+                    name,
+                    matched_sites,
+                    all_torrents.get(name, []),
+                    torrent_size=torrent_size_for_update,
+                )
+
+                if new_count > 0 or filled_details_count > 0:
                     log_iyuu_message(
-                        f"在torrents表中找到 {len(matched_sites)} 个已存在的站点", "INFO")
+                        f"种子组 '{name}': 新增 {new_count}，更新 {updated_rows}（详情 {filled_details_count}）",
+                        "INFO")
 
-                    # 为缺失站点添加种子记录
-                    if matched_sites:
-                        torrent_data = {
-                            'hash': selected_hash,
-                            'name': name,
-                            'save_path':
-                            filtered_torrents[0].get('save_path', ''),
-                            'size': filtered_torrents[0].get('size', 0),
-                        }
-
-                        # 统计新增和更新的记录数
-                        new_count, updated_count = self._add_missing_site_torrents(
-                            name,
-                            torrent_data,
-                            matched_sites,
-                            return_count=True)
-                        result_stats['new_records'] += new_count
-                        result_stats['updated_records'] += updated_count
-
-                    # 更新所有同名种子记录的iyuu_last_check时间（包括不支持IYUU的站点）
-                    self._update_iyuu_last_check(name, matched_sites,
-                                                 all_torrents.get(name, []))
-
-                # 每次查询之间间隔5秒（除了最后一个）
-                if i < len(test_torrents) - 1:
-                    log_iyuu_message(
-                        f"[{i+1}/{total_torrents}] 等待5秒后进行下一次查询...", "INFO")
-                    for _ in range(5):  # 每秒检查一次是否需要停止
-                        if not self._is_running:
-                            return result_stats if return_stats else None
-                        time.sleep(1)
+            log_iyuu_message(
+                f"批量查询完成：种子组 {len(ordered_group_names)}，有结果 {groups_with_results}，无结果 {groups_without_results}，"
+                f"匹配到已存在站点 {groups_with_matched_sites}；新增记录 {result_stats['new_records']}，更新记录 {result_stats['updated_records']}",
+                "INFO")
 
             return result_stats if return_stats else None
 
@@ -632,8 +736,11 @@ class IYUUThread(Thread):
             if 'conn' in locals() and conn:
                 conn.close()
 
-    def _update_iyuu_last_check(self, torrent_name, matched_sites,
-                                all_torrents_for_name):
+    def _update_iyuu_last_check(self,
+                                torrent_name,
+                                matched_sites,
+                                all_torrents_for_name,
+                                torrent_size=None):
         """更新所有同名种子记录的iyuu_last_check时间，并为没有details内容的记录填入详情链接"""
         try:
             conn = self.db_manager._get_connection()
@@ -644,15 +751,25 @@ class IYUUThread(Thread):
             from datetime import datetime
             current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-            # 获取数据库中该种子的所有现有记录
-            if self.db_manager.db_type == "postgresql":
-                cursor.execute(
-                    f"SELECT hash, sites, details FROM torrents WHERE name = {ph}",
-                    (torrent_name, ))
+            # 获取数据库中该种子的所有现有记录（如果提供 size，则按 name + size 精确匹配）
+            if torrent_size is not None:
+                if self.db_manager.db_type == "postgresql":
+                    cursor.execute(
+                        f"SELECT hash, sites, details FROM torrents WHERE name = {ph} AND size = {ph}",
+                        (torrent_name, torrent_size))
+                else:
+                    cursor.execute(
+                        f"SELECT hash, sites, details FROM torrents WHERE name = {ph} AND size = {ph}",
+                        (torrent_name, torrent_size))
             else:
-                cursor.execute(
-                    f"SELECT hash, sites, details FROM torrents WHERE name = {ph}",
-                    (torrent_name, ))
+                if self.db_manager.db_type == "postgresql":
+                    cursor.execute(
+                        f"SELECT hash, sites, details FROM torrents WHERE name = {ph}",
+                        (torrent_name, ))
+                else:
+                    cursor.execute(
+                        f"SELECT hash, sites, details FROM torrents WHERE name = {ph}",
+                        (torrent_name, ))
             existing_records = [dict(row) for row in cursor.fetchall()]
 
             updated_count = 0
@@ -681,28 +798,40 @@ class IYUUThread(Thread):
                     filled_details_count += 1
 
                 # 添加WHERE条件参数
-                update_params.extend([hash_value, torrent_name])
+                if torrent_size is not None:
+                    update_params.extend([hash_value, torrent_name, torrent_size])
+                else:
+                    update_params.extend([hash_value, torrent_name])
 
                 # 执行更新
                 if self.db_manager.db_type == "postgresql":
-                    cursor.execute(
-                        f"UPDATE torrents SET {', '.join(update_fields)} WHERE hash = {ph} AND name = {ph}",
-                        update_params)
+                    if torrent_size is not None:
+                        cursor.execute(
+                            f"UPDATE torrents SET {', '.join(update_fields)} WHERE hash = {ph} AND name = {ph} AND size = {ph}",
+                            update_params)
+                    else:
+                        cursor.execute(
+                            f"UPDATE torrents SET {', '.join(update_fields)} WHERE hash = {ph} AND name = {ph}",
+                            update_params)
                 else:
-                    cursor.execute(
-                        f"UPDATE torrents SET {', '.join(update_fields)} WHERE hash = {ph} AND name = {ph}",
-                        update_params)
+                    if torrent_size is not None:
+                        cursor.execute(
+                            f"UPDATE torrents SET {', '.join(update_fields)} WHERE hash = {ph} AND name = {ph} AND size = {ph}",
+                            update_params)
+                    else:
+                        cursor.execute(
+                            f"UPDATE torrents SET {', '.join(update_fields)} WHERE hash = {ph} AND name = {ph}",
+                            update_params)
 
                 updated_count += cursor.rowcount
 
             conn.commit()
-            print(f"🔄 已更新 {updated_count} 条种子记录的iyuu_last_check时间")
-            if filled_details_count > 0:
-                print(f"✅ 已为 {filled_details_count} 条种子记录填入详情链接")
+            return updated_count, filled_details_count
 
         except Exception as e:
             logging.error(f"更新种子记录iyuu_last_check时间和详情链接时出错: {e}",
                           exc_info=True)
+            return 0, 0
         finally:
             if 'cursor' in locals() and cursor:
                 cursor.close()
@@ -730,15 +859,29 @@ class IYUUThread(Thread):
             cursor = self.db_manager._get_cursor(conn)
             ph = self.db_manager.get_placeholder()
 
+            torrent_size = None
+            if isinstance(torrent_data, dict):
+                torrent_size = torrent_data.get('size')
+
             # 获取数据库中该种子已存在的所有站点记录
-            if self.db_manager.db_type == "postgresql":
-                cursor.execute(
-                    f"SELECT hash, sites, save_path, size, \"group\", details, downloader_id, progress, state FROM torrents WHERE name = {ph}",
-                    (torrent_name, ))
+            if torrent_size is not None:
+                if self.db_manager.db_type == "postgresql":
+                    cursor.execute(
+                        f"SELECT hash, sites, save_path, size, \"group\", details, downloader_id, progress, state FROM torrents WHERE name = {ph} AND size = {ph}",
+                        (torrent_name, torrent_size))
+                else:
+                    cursor.execute(
+                        f"SELECT hash, sites, save_path, size, `group`, details, downloader_id, progress, state FROM torrents WHERE name = {ph} AND size = {ph}",
+                        (torrent_name, torrent_size))
             else:
-                cursor.execute(
-                    f"SELECT hash, sites, save_path, size, `group`, details, downloader_id, progress, state FROM torrents WHERE name = {ph}",
-                    (torrent_name, ))
+                if self.db_manager.db_type == "postgresql":
+                    cursor.execute(
+                        f"SELECT hash, sites, save_path, size, \"group\", details, downloader_id, progress, state FROM torrents WHERE name = {ph}",
+                        (torrent_name, ))
+                else:
+                    cursor.execute(
+                        f"SELECT hash, sites, save_path, size, `group`, details, downloader_id, progress, state FROM torrents WHERE name = {ph}",
+                        (torrent_name, ))
             existing_torrents = [dict(row) for row in cursor.fetchall()]
 
             # 提取已存在的站点列表
@@ -758,9 +901,10 @@ class IYUUThread(Thread):
 
             # 找出缺失的站点
             missing_sites = iyuu_sites - existing_sites
-
-            print(
-                f"发现 {len(missing_sites)} 个缺失的站点: {', '.join(missing_sites)}")
+            if not missing_sites:
+                if return_count:
+                    return 0, 0
+                return None
 
             # 为每个缺失的站点添加记录
             for site_name in missing_sites:
@@ -820,10 +964,8 @@ class IYUUThread(Thread):
                             current_time,  # last_seen设为当前时间
                             current_time  # iyuu_last_check设为当前时间
                         ))
-                print(f"✅ 已为站点 '{site_name}' 添加种子记录")
 
             conn.commit()
-            print(f"成功处理 {len(missing_sites)} 个缺失站点的种子记录")
 
             # 返回统计信息
             if return_count:
@@ -1487,6 +1629,92 @@ def query_cross_seed(token: str,
                 raise e
 
     return []  # 理论上不会执行到这里，但为了安全起见
+
+
+def query_cross_seed_batch(token: str,
+                           infohashes: list,
+                           sid_sha1: str,
+                           max_retries: int = 3) -> dict:
+    """批量查询多个 infohash 的辅种信息（单次请求传入 hash 数组）
+
+    Args:
+        token: IYUU Token
+        infohashes: 种子哈希列表
+        sid_sha1: 站点校验哈希值
+        max_retries: 最大重试次数，默认3次
+
+    Returns:
+        dict: {infohash_lower: torrent_list}
+    """
+    if not infohashes:
+        return {}
+
+    unique_hashes = []
+    seen = set()
+    for h in infohashes:
+        if not h:
+            continue
+        h_lower = str(h).strip().lower()
+        if not h_lower or h_lower in seen:
+            continue
+        seen.add(h_lower)
+        unique_hashes.append(h_lower)
+
+    if not unique_hashes:
+        return {}
+
+    print(f"正在批量查询 {len(unique_hashes)} 个种子辅种信息...")
+    url = f"{API_BASE}/reseed/index/index"
+
+    for attempt in range(max_retries):
+        try:
+            hashes_json_str = json.dumps(unique_hashes)
+            form_data = {
+                "hash": hashes_json_str,
+                "sha1": get_sha1_hex(hashes_json_str),
+                "sid_sha1": sid_sha1,
+                "timestamp": str(int(time.time())),
+                "version": CLIENT_VERSION
+            }
+
+            headers = {'Content-Type': 'application/x-www-form-urlencoded'}
+            response_data = make_api_request("POST",
+                                             url,
+                                             token,
+                                             data=form_data,
+                                             headers=headers)
+
+            data = response_data.get("data", {}) or {}
+            result_map = {}
+            for h in unique_hashes:
+                entry = data.get(h) or {}
+                result_map[h] = entry.get("torrent", []) or []
+            return result_map
+
+        except Exception as e:
+            error_msg = str(e)
+            # 对于“未查询到可辅种数据/400”等情况，视为全部无结果
+            if "未查询到可辅种数据" in error_msg or "400" in error_msg:
+                return {h: [] for h in unique_hashes}
+
+            # 对于API错误（如token无效等），不进行重试，直接抛出
+            if "API 错误" in error_msg or "Token" in error_msg:
+                raise e
+
+            # 对于其他错误，进行重试
+            if attempt < max_retries - 1:
+                wait_time = 5 * (attempt + 1)
+                log_iyuu_message(
+                    f"批量查询辅种信息失败 (尝试 {attempt + 1}/{max_retries}): {error_msg}",
+                    "WARNING")
+                log_iyuu_message(f"等待 {wait_time} 秒后重试...", "INFO")
+                time.sleep(wait_time)
+            else:
+                log_iyuu_message(f"批量查询辅种信息失败，已达到最大重试次数: {error_msg}",
+                                 "ERROR")
+                raise e
+
+    return {h: [] for h in unique_hashes}
 
 
 # 全局变量

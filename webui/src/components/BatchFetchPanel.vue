@@ -908,6 +908,15 @@ const handleDrop = (dropIndex: number) => {
 
 const startBatchFetch = async () => {
   try {
+    const noSourceCount = selectedRows.value.filter(
+      (row) => Object.keys(getSourceSites(row.sites)).length === 0,
+    ).length
+    if (noSourceCount > 0) {
+      ElMessage.info(
+        `选中 ${noSourceCount} 个无可用源站点的种子，将自动尝试通过 IYUU 批量补全站点信息（如已配置）`,
+      )
+    }
+
     const torrentNames = selectedRows.value.map((row) => row.name)
 
     const response = await axios.post('/api/migrate/batch_fetch_seed_data', {

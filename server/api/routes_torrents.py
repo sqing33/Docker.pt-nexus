@@ -2,6 +2,8 @@
 
 import logging
 import json
+import uuid
+from datetime import datetime
 from flask import Blueprint, jsonify, request
 from collections import defaultdict
 from functools import cmp_to_key
@@ -18,6 +20,9 @@ torrents_bp = Blueprint("torrents_api", __name__, url_prefix="/api")
 # --- 依赖注入占位符 ---
 # db_manager = None
 # config_manager = None
+
+# --- IYUU 批量查询任务（用于前端轮询进度） ---
+IYUU_BATCH_QUERY_TASKS = {}
 
 
 @torrents_bp.route("/downloaders_list")
@@ -390,27 +395,45 @@ def iyuu_query_api():
     config_manager = torrents_bp.config_manager
 
     try:
-        data = request.get_json()
-        torrent_name = data.get("name")
-        torrent_size = data.get("size")
+        data = request.get_json() or {}
 
-        if not torrent_name:
-            return jsonify({"error": "缺少种子名称参数"}), 400
+        save_path = data.get("save_path") or data.get("path")
+        if save_path:
+            # 路径批量查询模式：优先确保包含当前选中种子（anchor_name）
+            limit = data.get("limit", 200)
+            anchor_name = data.get("anchor_name") or data.get("name")
 
-        if not torrent_size:
-            return jsonify({"error": "缺少种子大小参数"}), 400
+            from core.manual_tasks import trigger_iyuu_query_by_path_sync
 
-        # 导入手动任务模块
-        from core.manual_tasks import trigger_iyuu_query_sync
+            result = trigger_iyuu_query_by_path_sync(
+                db_manager,
+                config_manager,
+                save_path,
+                limit=limit,
+                anchor_name=anchor_name,
+            )
+        else:
+            torrent_name = data.get("name")
+            torrent_size = data.get("size")
 
-        # 同步执行IYUU查询，等待完成后返回
-        result = trigger_iyuu_query_sync(db_manager, config_manager, torrent_name, torrent_size)
+            if not torrent_name:
+                return jsonify({"error": "缺少种子名称参数"}), 400
+
+            if not torrent_size:
+                return jsonify({"error": "缺少种子大小参数"}), 400
+
+            # 导入手动任务模块
+            from core.manual_tasks import trigger_iyuu_query_sync
+
+            # 同步执行IYUU查询，等待完成后返回
+            result = trigger_iyuu_query_sync(db_manager, config_manager, torrent_name, torrent_size)
 
         if result["success"]:
             return jsonify({
                 "message": result["message"],
                 "success": True,
-                "stats": result.get("stats", {})
+                "stats": result.get("stats", {}),
+                "query_info": result.get("query_info", {}),
             }), 200
         else:
             return jsonify({"error": result["message"], "success": False}), 500
@@ -418,6 +441,100 @@ def iyuu_query_api():
     except Exception as e:
         logging.error(f"iyuu_query_api 出错: {e}", exc_info=True)
         return jsonify({"error": "触发IYUU查询失败", "success": False}), 500
+
+
+@torrents_bp.route("/iyuu_query_batch", methods=["POST"])
+def iyuu_query_batch_api():
+    """批量触发 IYUU 查询（异步执行），用于前端对筛选结果批量补全站点信息。"""
+    db_manager = torrents_bp.db_manager
+    config_manager = torrents_bp.config_manager
+
+    try:
+        data = request.get_json() or {}
+        torrents = data.get("torrents") or []
+        max_groups = data.get("max_groups", 200)
+        force_query = bool(data.get("force_query", True))
+
+        if not isinstance(torrents, list) or not torrents:
+            return jsonify({"success": False, "message": "缺少种子列表参数"}), 400
+
+        try:
+            max_groups_int = int(max_groups)
+        except Exception:
+            max_groups_int = 200
+        if max_groups_int <= 0:
+            max_groups_int = 200
+
+        # 生成任务ID
+        task_id = str(uuid.uuid4())
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        IYUU_BATCH_QUERY_TASKS[task_id] = {
+            "task_id": task_id,
+            "created_at": now,
+            "finished_at": None,
+            "isRunning": True,
+            "success": None,
+            "message": "任务已启动",
+            "total": min(len(torrents), max_groups_int),
+            "processed": 0,
+            "stats": {},
+            "query_info": {},
+        }
+
+        def _run_task():
+            try:
+                from core.manual_tasks import trigger_iyuu_query_torrents_batch_sync
+
+                result = trigger_iyuu_query_torrents_batch_sync(
+                    db_manager,
+                    config_manager,
+                    torrents,
+                    max_groups=max_groups,
+                    force_query=force_query,
+                )
+
+                IYUU_BATCH_QUERY_TASKS[task_id].update({
+                    "isRunning": False,
+                    "success": bool(result.get("success")),
+                    "message": result.get("message", ""),
+                    "processed": int(result.get("query_info", {}).get("processed_groups", 0) or 0),
+                    "stats": result.get("stats", {}) or {},
+                    "query_info": result.get("query_info", {}) or {},
+                    "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                })
+            except Exception as e:
+                logging.error(f"iyuu_query_batch_api 任务执行出错: {e}", exc_info=True)
+                IYUU_BATCH_QUERY_TASKS[task_id].update({
+                    "isRunning": False,
+                    "success": False,
+                    "message": f"任务执行失败: {str(e)}",
+                    "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                })
+
+        thread = Thread(target=_run_task)
+        thread.daemon = True
+        thread.start()
+
+        return jsonify({"success": True, "task_id": task_id})
+
+    except Exception as e:
+        logging.error(f"iyuu_query_batch_api 出错: {e}", exc_info=True)
+        return jsonify({"success": False, "message": "启动批量IYUU查询失败"}), 500
+
+
+@torrents_bp.route("/iyuu_query_batch_progress", methods=["GET"])
+def iyuu_query_batch_progress_api():
+    """获取批量 IYUU 查询任务进度。"""
+    task_id = request.args.get("task_id")
+    if not task_id:
+        return jsonify({"success": False, "message": "缺少 task_id 参数"}), 400
+
+    task = IYUU_BATCH_QUERY_TASKS.get(task_id)
+    if not task:
+        return jsonify({"success": False, "message": "任务不存在或已过期"}), 404
+
+    return jsonify({"success": True, "task": task})
 
 
 @torrents_bp.route("/paths", methods=["GET"])

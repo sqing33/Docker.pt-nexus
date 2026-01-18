@@ -633,9 +633,14 @@
           </div>
         </div>
         <div class="filter-card-footer">
-          <el-button type="warning" @click="triggerIYUUQuery" :loading="iyuuQueryLoading" plain
-            >IYUU查询</el-button
+          <el-button
+            type="warning"
+            @click="triggerIYUUQueryForFiltered"
+            :loading="iyuuBatchQueryLoading"
+            plain
           >
+            IYUU查询
+          </el-button>
           <el-button type="success" @click="openSiteDataViewer(selectedTorrentForMigration)" plain
             >上盒</el-button
           >
@@ -646,12 +651,82 @@
 
     <!-- 站点数据查看器 -->
     <SiteDataViewer @refresh="handleTorrentRefresh" />
+
+    <!-- IYUU 批量查询进度弹窗（筛选结果） -->
+    <div
+      v-if="iyuuBatchDialogVisible"
+      class="filter-overlay"
+      @click.self="closeIyuuBatchDialog"
+    >
+      <el-card class="filter-card" style="max-width: 720px">
+        <template #header>
+          <div class="filter-card-header">
+            <span>IYUU 批量查询进度</span>
+            <el-button type="danger" circle @click="closeIyuuBatchDialog" plain>X</el-button>
+          </div>
+        </template>
+        <div class="filter-card-body">
+          <el-descriptions :column="2" border size="small">
+            <el-descriptions-item label="任务ID">
+              {{ iyuuBatchTask?.task_id || '-' }}
+            </el-descriptions-item>
+            <el-descriptions-item label="状态">
+              <el-tag
+                :type="iyuuBatchTask?.isRunning ? 'warning' : iyuuBatchTask?.success ? 'success' : 'danger'"
+                size="small"
+              >
+                {{
+                  iyuuBatchTask?.isRunning
+                    ? '进行中'
+                    : iyuuBatchTask?.success
+                      ? '已完成'
+                      : '失败'
+                }}
+              </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="总数">
+              {{ iyuuBatchTask?.total ?? 0 }}
+            </el-descriptions-item>
+            <el-descriptions-item label="已处理">
+              {{ iyuuBatchTask?.processed ?? 0 }}
+            </el-descriptions-item>
+            <el-descriptions-item label="开始时间">
+              {{ iyuuBatchTask?.created_at || '-' }}
+            </el-descriptions-item>
+            <el-descriptions-item label="完成时间">
+              {{ iyuuBatchTask?.finished_at || '-' }}
+            </el-descriptions-item>
+          </el-descriptions>
+
+          <el-divider content-position="left">结果</el-divider>
+          <div style="color: #606266; margin-bottom: 10px">
+            {{ iyuuBatchTask?.message || '等待任务更新...' }}
+          </div>
+
+          <el-descriptions v-if="iyuuBatchTask?.stats" :column="3" border size="small">
+            <el-descriptions-item label="找到">
+              {{ iyuuBatchTask.stats.total_found ?? 0 }}
+            </el-descriptions-item>
+            <el-descriptions-item label="新增">
+              {{ iyuuBatchTask.stats.new_records ?? 0 }}
+            </el-descriptions-item>
+            <el-descriptions-item label="更新">
+              {{ iyuuBatchTask.stats.updated_records ?? 0 }}
+            </el-descriptions-item>
+          </el-descriptions>
+        </div>
+        <div class="filter-card-footer">
+          <el-button type="primary" @click="refreshIyuuBatchProgress" plain>刷新</el-button>
+          <el-button @click="closeIyuuBatchDialog">关闭</el-button>
+        </div>
+      </el-card>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, reactive, watch, nextTick, defineEmits, computed } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ref, onMounted, onUnmounted, reactive, watch, nextTick, defineEmits, computed } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import type { TableInstance, Sort } from 'element-plus'
 import type { ElTree } from 'element-plus'
 import axios from 'axios'
@@ -756,7 +831,14 @@ const pathTreeData = ref<PathNode[]>([])
 
 const sourceSelectionDialogVisible = ref<boolean>(false)
 const allSourceSitesStatus = ref<SiteStatus[]>([])
-const iyuuQueryLoading = ref<boolean>(false)
+const iyuuBatchQueryLoading = ref<boolean>(false)
+const iyuuBatchDialogVisible = ref<boolean>(false)
+const iyuuBatchTaskId = ref<string | null>(null)
+const iyuuBatchTask = ref<any | null>(null)
+const iyuuBatchRefreshTimer = ref<ReturnType<typeof setInterval> | null>(null)
+const iyuuBatchNotified = ref<boolean>(false)
+const IYUU_BATCH_MAX_GROUPS = 200
+const IYUU_BATCH_POLL_INTERVAL_MS = 2000
 const cachedSites = ref<string[]>([]) // 存储已缓存的站点列表
 const cachedSitesLoading = ref<boolean>(false) // 查询缓存站点的加载状态
 
@@ -1125,8 +1207,8 @@ const confirmSourceSiteAndProceed = async (sourceSite: any) => {
     // 2. 如果没有链接，触发IYUU查询
     ElMessage.info(`站点 [${siteName}] 缺少详情链接，正在触发 IYUU 查询...`)
     sourceSiteQueryLoading.value[siteName] = true
-    // 调用全局的IYUU查询函数
-    await triggerIYUUQuery()
+    // 默认使用“当前筛选结果”的批量查询（确保包含当前种子）
+    await triggerIYUUQueryForFiltered()
     // 查询完成后，无论成功与否，都结束加载状态
     sourceSiteQueryLoading.value[siteName] = false
     // 停止执行，让用户在弹窗刷新后再次点击
@@ -1283,44 +1365,170 @@ const getSiteDetails = (siteName: string) => {
   return { siteName, ...siteData }
 }
 
-// IYUU 查询功能
-const triggerIYUUQuery = async () => {
-  const row = selectedTorrentForMigration.value
-  if (!row) {
-    ElMessage.error('未找到选中的种子信息')
+const stopIyuuBatchPolling = () => {
+  if (iyuuBatchRefreshTimer.value) {
+    clearInterval(iyuuBatchRefreshTimer.value)
+    iyuuBatchRefreshTimer.value = null
+  }
+}
+
+const refreshIyuuBatchProgress = async () => {
+  if (!iyuuBatchTaskId.value) return
+  try {
+    const response = await axios.get(
+      `/api/iyuu_query_batch_progress?task_id=${encodeURIComponent(iyuuBatchTaskId.value)}`,
+    )
+    if (response.data?.success) {
+      iyuuBatchTask.value = response.data.task
+      if (iyuuBatchTask.value && !iyuuBatchTask.value.isRunning) {
+        stopIyuuBatchPolling()
+        if (!iyuuBatchNotified.value) {
+          iyuuBatchNotified.value = true
+          if (iyuuBatchTask.value.success) {
+            ElMessage.success(iyuuBatchTask.value.message || 'IYUU批量查询已完成')
+            await fetchData()
+
+            // 如果当前还在源站点选择弹窗中，尝试刷新 store 中的种子信息
+            const row = selectedTorrentForMigration.value
+            if (row) {
+              const updatedRow = allData.value.find((t) => t.name === row.name && t.size === row.size)
+              if (updatedRow) {
+                crossSeedStore.setParams(updatedRow)
+              }
+            }
+          } else {
+            ElMessage.error(iyuuBatchTask.value.message || 'IYUU批量查询失败')
+          }
+        }
+      }
+    } else {
+      ElMessage.error(response.data?.message || '获取IYUU批量查询进度失败')
+    }
+  } catch (error: any) {
+    ElMessage.error(error.response?.data?.message || '获取IYUU批量查询进度时发生网络错误')
+  }
+}
+
+const startIyuuBatchPolling = () => {
+  stopIyuuBatchPolling()
+  refreshIyuuBatchProgress()
+  iyuuBatchRefreshTimer.value = setInterval(async () => {
+    await refreshIyuuBatchProgress()
+  }, IYUU_BATCH_POLL_INTERVAL_MS)
+}
+
+const closeIyuuBatchDialog = () => {
+  iyuuBatchDialogVisible.value = false
+  stopIyuuBatchPolling()
+}
+
+const triggerIYUUQueryForFiltered = async () => {
+  const anchorRow = selectedTorrentForMigration.value
+  const total = totalTorrents.value || 0
+  if (total <= 0) {
+    ElMessage.warning('当前筛选条件下无可查询的种子')
     return
   }
 
-  iyuuQueryLoading.value = true
+  const planned = Math.min(total, IYUU_BATCH_MAX_GROUPS)
 
   try {
-    const response = await axios.post('/api/iyuu_query', {
-      name: row.name,
-      size: row.size,
+    await ElMessageBox.confirm(
+      `将对当前筛选结果的前 ${planned} 个种子组执行 IYUU 查询（当前筛选共 ${total} 个）。继续？`,
+      'IYUU 批量查询',
+      {
+        confirmButtonText: '开始查询',
+        cancelButtonText: '取消',
+        type: 'warning',
+        closeOnClickModal: false,
+      },
+    )
+  } catch {
+    return
+  }
+
+  iyuuBatchQueryLoading.value = true
+  try {
+    // 拉取筛选结果前 200 个种子组（复用 /api/data 的筛选逻辑）
+    const params = new URLSearchParams({
+      page: '1',
+      pageSize: planned.toString(),
+      nameSearch: nameSearch.value,
+      sortProp: currentSort.value.prop || 'name',
+      sortOrder: currentSort.value.order || 'ascending',
+      existSiteNames: JSON.stringify(activeFilters.existSiteNames),
+      notExistSiteNames: JSON.stringify(activeFilters.notExistSiteNames),
+      path_filters: JSON.stringify(activeFilters.paths || []),
+      state_filters: JSON.stringify(activeFilters.states),
+      downloader_filters: JSON.stringify(activeFilters.downloaderIds),
     })
 
-    const result = response.data
+    const listResp = await axios.get(`/api/data?${params.toString()}`)
+    const listResult = listResp.data
+    if (listResult.error) throw new Error(listResult.error)
 
-    if (result.success) {
-      ElMessage.success(result.message || 'IYUU查询已完成')
-      // 刷新数据
-      await fetchData()
+    const candidates = (listResult.data || [])
+      .slice(0, IYUU_BATCH_MAX_GROUPS)
+      .map((t: any) => ({
+        name: t.name,
+        size: t.size,
+        save_path: t.save_path,
+      }))
+      .filter((t: any) => t.name && t.size)
 
-      // 更新 store 中的种子信息为最新数据
-      const updatedRow = allData.value.find((t) => t.name === row.name && t.size === row.size)
-      if (updatedRow) {
-        crossSeedStore.setParams(updatedRow)
+    // 确保包含当前正在处理的种子（避免筛选结果过大时不在前 200 里）
+    if (anchorRow && anchorRow.name && anchorRow.size) {
+      const hasAnchor = candidates.some((t: any) => t.name === anchorRow.name && t.size === anchorRow.size)
+      if (!hasAnchor) {
+        const anchorItem = {
+          name: anchorRow.name,
+          size: anchorRow.size,
+          save_path: anchorRow.save_path,
+        }
+        if (candidates.length >= IYUU_BATCH_MAX_GROUPS) {
+          candidates.pop()
+        }
+        candidates.unshift(anchorItem)
       }
-    } else {
-      ElMessage.error(result.error || 'IYUU查询失败')
     }
+
+    if (candidates.length === 0) {
+      ElMessage.warning('当前筛选结果中未找到可查询的种子组')
+      return
+    }
+
+    if ((listResult.total || 0) > IYUU_BATCH_MAX_GROUPS) {
+      ElMessage.info(`筛选结果共 ${listResult.total} 个，本次仅查询前 ${candidates.length} 个`)
+    }
+
+    const startResp = await axios.post('/api/iyuu_query_batch', {
+      torrents: candidates,
+      max_groups: IYUU_BATCH_MAX_GROUPS,
+      force_query: true,
+    })
+
+    const startResult = startResp.data
+    if (!startResult?.success) {
+      ElMessage.error(startResult?.message || '启动批量IYUU查询失败')
+      return
+    }
+
+    iyuuBatchTaskId.value = startResult.task_id
+    iyuuBatchTask.value = null
+    iyuuBatchNotified.value = false
+    iyuuBatchDialogVisible.value = true
+    startIyuuBatchPolling()
   } catch (error: any) {
-    console.error('触发IYUU查询时出错:', error)
-    ElMessage.error(error.response?.data?.error || '触发IYUU查询时发生网络错误')
+    console.error('触发筛选结果 IYUU 批量查询时出错:', error)
+    ElMessage.error(error.response?.data?.message || error.message || '触发IYUU批量查询失败')
   } finally {
-    iyuuQueryLoading.value = false
+    iyuuBatchQueryLoading.value = false
   }
 }
+
+onUnmounted(() => {
+  stopIyuuBatchPolling()
+})
 
 const handleSizeChange = (val: number) => {
   pageSize.value = val

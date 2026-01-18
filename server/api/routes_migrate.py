@@ -3524,7 +3524,7 @@ def batch_fetch_seed_data():
 
         thread = Thread(
             target=_process_batch_fetch,
-            args=(task_id, torrent_names, source_sites_priority, db_manager),
+            args=(task_id, torrent_names, source_sites_priority, db_manager, config_manager),
         )
         thread.daemon = True
         thread.start()
@@ -3536,9 +3536,10 @@ def batch_fetch_seed_data():
         return jsonify({"success": False, "message": f"服务器内部错误: {str(e)}"}), 500
 
 
-def _process_batch_fetch(task_id, torrent_names, source_sites_priority, db_manager):
+def _process_batch_fetch(task_id, torrent_names, source_sites_priority, db_manager, config_manager):
     """后台处理批量获取任务"""
     import time
+    import re
 
     # 记录每个站点的最后请求时间，用于控制请求间隔
     site_last_request_time = {}
@@ -3546,6 +3547,139 @@ def _process_batch_fetch(task_id, torrent_names, source_sites_priority, db_manag
     REQUEST_INTERVAL = 5
 
     try:
+        def extract_torrent_id(comment: str):
+            if not comment:
+                return None
+            id_match = re.search(r"id=(\d+)", comment)
+            if id_match:
+                return id_match.group(1)
+            stripped = comment.strip()
+            if re.fullmatch(r"\d+", stripped):
+                return stripped
+            return None
+
+        # 预处理：批量使用 IYUU 查询缺失的优先级源站点（避免逐个请求）
+        iyuu_batch_names = set()
+        iyuu_batch_done = False
+
+        config = config_manager.get() if config_manager else {}
+        iyuu_settings = config.get("iyuu_settings", {})
+        path_filter_enabled = iyuu_settings.get("path_filter_enabled", False)
+        selected_paths = set(iyuu_settings.get("selected_paths", []) or [])
+
+        torrents_for_iyuu = {}
+        for torrent_name in torrent_names:
+            if task_id not in BATCH_FETCH_TASKS:
+                logging.warning(f"任务 {task_id} 已被取消")
+                break
+
+            conn = None
+            cursor = None
+            try:
+                conn = db_manager._get_connection()
+                cursor = db_manager._get_cursor(conn)
+
+                if db_manager.db_type == "sqlite":
+                    cursor.execute(
+                        "SELECT hash, name, save_path, size, sites, details, downloader_id FROM torrents WHERE name = ? AND state != ?",
+                        (torrent_name, "不存在"),
+                    )
+                else:  # postgresql or mysql
+                    cursor.execute(
+                        "SELECT hash, name, save_path, size, sites, details, downloader_id FROM torrents WHERE name = %s AND state != %s",
+                        (torrent_name, "不存在"),
+                    )
+
+                torrents = [dict(row) for row in cursor.fetchall()]
+                if not torrents:
+                    continue
+
+                # 如果启用了路径过滤且当前种子不在选中路径内，保持与单种子查询一致：跳过 IYUU
+                if path_filter_enabled and selected_paths:
+                    save_path = torrents[0].get("save_path", "")
+                    if save_path and save_path not in selected_paths:
+                        continue
+
+                # 检查是否已经存在可用的优先级源站点
+                priority_source_found = False
+                for priority_site in source_sites_priority:
+                    source_info = db_manager.get_site_by_nickname(priority_site)
+                    if not source_info or not source_info.get("cookie"):
+                        continue
+                    if source_info.get("migration", 0) not in [1, 3]:
+                        continue
+
+                    for torrent in torrents:
+                        if torrent.get("sites") != priority_site:
+                            continue
+                        torrent_id = extract_torrent_id(torrent.get("details", ""))
+                        if torrent_id:
+                            priority_source_found = True
+                            break
+
+                    if priority_source_found:
+                        break
+
+                if priority_source_found:
+                    continue
+
+                torrent_size = torrents[0].get("size", 0) or 0
+                # 与单种子 IYUU 查询保持一致：仅对大于 200MB 的种子执行 IYUU 查询
+                if torrent_size <= 207374182:
+                    continue
+
+                iyuu_batch_names.add(torrent_name)
+                torrents_for_iyuu[torrent_name] = torrents
+
+            except Exception as e:
+                logging.error(f"预处理 {torrent_name} 的 IYUU 批量查询条件失败: {e}", exc_info=True)
+            finally:
+                if cursor:
+                    cursor.close()
+                if conn:
+                    conn.close()
+
+        if iyuu_batch_names and task_id in BATCH_FETCH_TASKS:
+            try:
+                from core.iyuu import IYUUThread, log_iyuu_message
+
+                log_iyuu_message(
+                    f"批量预查询：{len(iyuu_batch_names)} 个种子组将使用 IYUU 解析优先级源站点",
+                    "INFO",
+                )
+
+                iyuu_worker = IYUUThread(db_manager, config_manager)
+                configured_sites = iyuu_worker._get_configured_sites()
+
+                agg_torrents = {}
+                all_torrents = {}
+                for name in torrent_names:
+                    if name not in iyuu_batch_names:
+                        continue
+                    torrent_rows = torrents_for_iyuu.get(name, [])
+                    torrent_list = [
+                        {
+                            "hash": t.get("hash"),
+                            "sites": t.get("sites"),
+                            "size": t.get("size", 0),
+                            "save_path": t.get("save_path", ""),
+                        }
+                        for t in torrent_rows
+                    ]
+                    all_torrents[name] = torrent_list
+                    agg_torrents[name] = torrent_list
+
+                iyuu_worker._perform_iyuu_search(
+                    agg_torrents,
+                    configured_sites,
+                    all_torrents,
+                    force_query=False,
+                )
+                iyuu_batch_done = True
+            except Exception as e:
+                logging.error(f"批量 IYUU 查询失败: {e}", exc_info=True)
+                iyuu_batch_done = False
+
         for torrent_name in torrent_names:
             if task_id not in BATCH_FETCH_TASKS:
                 logging.warning(f"任务 {task_id} 已被取消")
@@ -3598,15 +3732,7 @@ def _process_batch_fetch(task_id, torrent_names, source_sites_priority, db_manag
                             comment = torrent.get("details", "")
                             torrent_id = None
 
-                            if comment:
-                                # 尝试从comment中提取ID
-                                import re
-
-                                id_match = re.search(r"id=(\d+)", comment)
-                                if id_match:
-                                    torrent_id = id_match.group(1)
-                                elif re.match(r"^\d+$", comment.strip()):
-                                    torrent_id = comment.strip()
+                            torrent_id = extract_torrent_id(comment)
 
                             if torrent_id:
                                 source_found = {
@@ -3620,13 +3746,18 @@ def _process_batch_fetch(task_id, torrent_names, source_sites_priority, db_manag
                     if source_found:
                         break
 
-                # 第二阶段：如果优先级站点都没有找到，使用 IYUU 查询
-                if not source_found:
+                # 第二阶段：如果优先级站点都没有找到，使用 IYUU 查询（批量预查询已覆盖多数情况）
+                if not source_found and (not iyuu_batch_done or torrent_name not in iyuu_batch_names):
                     try:
-                        # 导入 IYUU 线程
-                        from core.iyuu import iyuu_thread
+                        from core.iyuu import IYUUThread, iyuu_thread
 
+                        iyuu_worker = None
                         if iyuu_thread and iyuu_thread.is_alive():
+                            iyuu_worker = iyuu_thread
+                        else:
+                            iyuu_worker = IYUUThread(db_manager, config_manager)
+
+                        if iyuu_worker:
                             # 获取种子大小（使用第一个种子的大小，因为同名种子大小应该相同）
                             torrent_size = 0
                             if torrents:
@@ -3637,7 +3768,7 @@ def _process_batch_fetch(task_id, torrent_names, source_sites_priority, db_manag
                             )
 
                             # 执行 IYUU 查询
-                            result_stats = iyuu_thread._process_single_torrent(
+                            result_stats = iyuu_worker._process_single_torrent(
                                 torrent_name, torrent_size
                             )
 
@@ -3684,22 +3815,11 @@ def _process_batch_fetch(task_id, torrent_names, source_sites_priority, db_manag
 
                                         # 查找该站点的种子记录（在更新后的torrents中）
                                         for torrent in torrents:
-                                            if torrent.get("sites") == priority_site:
-                                                # 提取种子ID
-                                                comment = torrent.get("details", "")
-                                                torrent_id = None
-
-                                                if comment:
-                                                    # 尝试从comment中提取ID
-                                                    import re
-
-                                                    id_match = re.search(r"id=(\d+)", comment)
-                                                    if id_match:
-                                                        torrent_id = id_match.group(1)
-                                                    elif re.match(r"^\d+$", comment.strip()):
-                                                        torrent_id = comment.strip()
-
-                                                if torrent_id:
+                                            if torrent.get("sites") != priority_site:
+                                                continue
+                                            comment = torrent.get("details", "")
+                                            torrent_id = extract_torrent_id(comment)
+                                            if torrent_id:
                                                     source_found = {
                                                         "site": priority_site,
                                                         "site_info": source_info,
@@ -3715,8 +3835,6 @@ def _process_batch_fetch(task_id, torrent_names, source_sites_priority, db_manag
                                             break
                                 else:
                                     logging.info(f"IYUU 查询未找到新的种子记录")
-                        else:
-                            logging.warning("IYUU 线程未运行，跳过 IYUU 查询")
                     except Exception as e:
                         logging.error(f"IYUU 查询失败: {e}", exc_info=True)
 
