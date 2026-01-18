@@ -341,7 +341,8 @@ def upload_data_movie_info(media_type: str,
 
     # 确定要使用的资源URL（优先级：豆瓣 > TMDb > IMDb）
     if not douban_link and not tmdb_link and not imdb_link:
-        return False, "", "", "", "", "未提供豆瓣、TMDb或IMDb链接。"
+        error_msg = "未提供豆瓣、TMDb或IMDb链接。"
+        return False, error_msg, error_msg, "", "", ""
 
     # 确保返回的链接是完整的
     final_douban_link = douban_link
@@ -402,6 +403,49 @@ def upload_data_movie_info(media_type: str,
                 last_error = f"API {api_config['name']} 请求异常: {e}"
                 print(last_error)
                 continue
+
+        # 豆瓣相关 PTGen 全部失败时，切换为 TMDb 方案兜底（使用现成 TMDb 方法生成简介/海报等）
+        print("豆瓣 PTGen API 全部失败，尝试使用 TMDb 兜底获取信息...")
+        try:
+            from utils.imdb2tmdb2douban import get_tmdb_url_from_any_source
+
+            if not final_tmdb_link:
+                final_tmdb_link = get_tmdb_url_from_any_source(
+                    imdb_link=final_imdb_link,
+                    douban_link=final_douban_link,
+                    tmdb_link=final_tmdb_link,
+                )
+        except Exception as e:
+            print(f"[!] 获取 TMDb 链接失败，将继续尝试 TMDb 兜底: {e}")
+
+        success, poster, description, imdb_link_result = _call_tmdb_format_api(
+            {'name': 'tmdb_api', 'base_url': 'https://api.tmdb.org', 'type': 'tmdb_format'},
+            final_douban_link,
+            final_imdb_link,
+            final_tmdb_link,
+            media_type,
+        )
+
+        if success:
+            print("TMDb 兜底调用成功")
+            if imdb_link_result:
+                final_imdb_link = imdb_link_result
+
+            # 确保返回的 TMDb 链接尽量完整
+            if not final_tmdb_link:
+                try:
+                    from utils.imdb2tmdb2douban import get_tmdb_url_from_any_source
+
+                    final_tmdb_link = get_tmdb_url_from_any_source(imdb_link=final_imdb_link)
+                except Exception:
+                    pass
+
+            return True, poster, description, final_imdb_link, final_douban_link, final_tmdb_link
+
+        # TMDb 兜底也失败，保留错误信息
+        if description:
+            last_error = description
+        print(f"TMDb 兜底返回失败: {last_error}")
     else:
         # 没有豆瓣链接，直接使用 TMDb API
         print("没有豆瓣链接，直接使用 TMDb API 获取信息...")
@@ -419,7 +463,8 @@ def upload_data_movie_info(media_type: str,
             last_error = description
             print(f"TMDb API 返回失败: {last_error}")
     
-    return False, "", "", final_imdb_link, final_douban_link, final_tmdb_link
+    error_msg = last_error or "获取影片信息失败"
+    return False, error_msg, error_msg, final_imdb_link, final_douban_link, final_tmdb_link
 
 
 def _call_cspt_format_api(api_config: dict, douban_link: str, imdb_link: str,
