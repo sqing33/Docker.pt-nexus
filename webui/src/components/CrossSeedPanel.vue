@@ -821,7 +821,7 @@
             :key="site.name"
             class="site-button"
             :type="getButtonType(site)"
-            :plain="!site.has_cookie"
+            :plain="!site.has_cookie && site.name !== '肉丝'"
             :disabled="!isTargetSiteSelectable(site.name)"
             @click="toggleSiteSelection(site.name)"
           >
@@ -1630,8 +1630,13 @@ const isTargetSiteSelectable = (siteName: string): boolean => {
   // 步骤 1: 查找站点的状态信息
   const siteStatus = allSitesStatus.value.find((s) => s.name === siteName)
 
-  // 条件 1: 如果找不到站点信息或站点没有配置Cookie，则不可选
-  if (!siteStatus || !siteStatus.has_cookie) {
+  // 条件 1: 如果找不到站点信息，则不可选
+  if (!siteStatus) {
+    return false
+  }
+
+  // 肉丝站点不需要Cookie，其他站点需要配置Cookie
+  if (siteName !== '肉丝' && !siteStatus.has_cookie) {
     return false
   }
 
@@ -1695,11 +1700,11 @@ const getButtonType = (site: SiteStatus) => {
   if (selectedTargetSites.value.includes(site.name)) {
     return 'success'
   }
-  // 如果站点没有Cookie，显示为红色 (danger)
-  if (!site.has_cookie) {
+  // 如果站点没有Cookie（肉丝站点除外），显示为红色 (danger)
+  if (!site.has_cookie && site.name !== '肉丝') {
     return 'danger'
   }
-  // 对于杜比站点，如果已配置Cookie但未配置Passkey，也显示为红色
+  // 对于杜比、HDtime、肉丝站点，如果未配置Passkey，也显示为红色
   if (
     (site.name === '杜比' || site.name === 'HDtime' || site.name === '肉丝') &&
     !site.has_passkey

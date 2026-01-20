@@ -105,7 +105,8 @@
         </el-table-column>
         <el-table-column label="Cookie" width="100" align="center">
           <template #default="scope">
-            <el-tag :type="scope.row.has_cookie ? 'success' : 'danger'">
+            <el-tag v-if="scope.row.site === 'rousi'" type="info"> 无需配置 </el-tag>
+            <el-tag v-else :type="scope.row.has_cookie ? 'success' : 'danger'">
               {{ scope.row.has_cookie ? '已配置' : '未配置' }}
             </el-tag>
           </template>
@@ -185,7 +186,8 @@
             v-model="siteForm.cookie"
             type="textarea"
             :rows="3"
-            placeholder="从浏览器获取的Cookie字符串"
+            :placeholder="siteForm.site === 'rousi' ? '无需设置' : '从浏览器获取的Cookie字符串'"
+            :disabled="siteForm.site === 'rousi'"
           ></el-input>
         </el-form-item>
         <el-form-item label="Passkey" prop="passkey">
@@ -198,11 +200,11 @@
             杜比的passkey为种子详情页复制种子链接时downhash=后的部分
           </div>
           <div
-            v-else-if="siteForm.site === 'newrousi'"
+            v-else-if="siteForm.site === 'rousi'"
             class="form-tip"
             style="color: #409eff; font-weight: bold"
           >
-            肉丝的passkey为个人用户-设置-passkey
+            肉丝的passkey在个人用户-设置-passkey
           </div>
         </el-form-item>
         <el-form-item label="上传限速 (MB/s)" prop="speed_limit">
@@ -303,7 +305,9 @@ const isSiteConfigComplete = (site) => {
   const hasPasskey = Boolean(site?.has_passkey)
   // 与 Passkey 列展示规则保持一致：大多数站点自动获取，仅少数站点需要手动配置
   const needsPasskey = ['hddolby', 'm-team', 'hdtime', 'rousi'].includes(site?.site)
-  return hasCookie && (!needsPasskey || hasPasskey)
+  // 肉丝站点不需要cookie，其他站点需要cookie
+  const needsCookie = site?.site !== 'rousi'
+  return (!needsCookie || hasCookie) && (!needsPasskey || hasPasskey)
 }
 
 const shouldHighlightIncompleteConfig = computed(() =>

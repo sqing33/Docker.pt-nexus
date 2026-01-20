@@ -611,7 +611,8 @@
                 :type="getSiteTagType(site, isSourceSiteSelectable(site.name))"
                 :class="{ 'is-selectable': isSourceSiteSelectable(site.name) }"
                 :style="
-                  !site.has_cookie ||
+                  (!site.has_cookie &&
+                    site.name !== '肉丝') ||
                   ((site.name === '杜比' || site.name === 'HDtime' || site.name === '肉丝') &&
                     !site.has_passkey)
                     ? 'opacity: 0.5'
@@ -1258,13 +1259,13 @@ const isSourceSiteSelectable = (siteName: string): boolean => {
     return false
   }
 
-  // 然后检查站点是否已配置Cookie
+  // 然后检查站点是否已配置Cookie（肉丝站点不需要cookie）
   const siteStatus = allSourceSitesStatus.value.find((s) => s.name === siteName)
-  if (!siteStatus || !siteStatus.has_cookie) {
+  if (!siteStatus || (!siteStatus.has_cookie && siteName !== '肉丝')) {
     return false
   }
 
-  // 对于杜比(hddolby)站点，还需要检查passkey
+  // 对于杜比(hddolby)、HDtime、肉丝站点，还需要检查passkey
   if (siteName === '杜比' || siteName === 'HDtime' || siteName === '肉丝') {
     return !!siteStatus.has_passkey
   }
