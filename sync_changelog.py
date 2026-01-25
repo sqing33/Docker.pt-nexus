@@ -6,7 +6,14 @@
 
 import json
 import re
+import sys
+import io
 from pathlib import Path
+
+# 强制使用 UTF-8 编码输出（解决 Windows 控制台 GBK 编码问题）
+if sys.platform == "win32":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 
 def load_changelog():
@@ -19,11 +26,11 @@ def generate_markdown_changelog(changelog):
     """生成 Markdown 格式的更新日志"""
     lines = ["# 更新日志\n"]
 
-    for version in changelog['history']:
+    for version in changelog["history"]:
         lines.append(f"### {version['version']}（{version['date']}）\n")
         if "note" in version:
             lines.append(f"> **{version['note']}**\n")
-        for change in version['changes']:
+        for change in version["changes"]:
             lines.append(f"- {change}")
         lines.append("")
 
@@ -41,8 +48,8 @@ def update_readme(changelog_md):
 
     if match:
         # 替换更新日志部分
-        before_log = content[:match.start()]
-        after_log = content[match.end():]
+        before_log = content[: match.start()]
+        after_log = content[match.end() :]
         new_content = before_log + changelog_md + after_log
     else:
         # 如果没有找到，添加到文件末尾
@@ -63,8 +70,8 @@ def update_wiki_docs(changelog_md):
 
     if match:
         # 替换更新日志部分
-        before_log = content[:match.start()]
-        after_log = content[match.end():]
+        before_log = content[: match.start()]
+        after_log = content[match.end() :]
         new_content = before_log + changelog_md + after_log
     else:
         # 如果没有找到，添加到文件末尾

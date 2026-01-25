@@ -885,18 +885,22 @@
               <div
                 v-for="result in row"
                 :key="result.siteName"
-                class="result-card"
-                :class="{
-                  'is-success': result.displayStatus === 'success',
-                  'is-error': result.displayStatus === 'error',
-                  'is-waiting': result.displayStatus === 'waiting',
-                  'is-publishing': result.displayStatus === 'publishing',
-                  'is-paused': result.displayStatus === 'paused',
-                }"
-              >
+                  class="result-card"
+                  :class="{
+                    'is-success': result.displayStatus === 'success',
+                    'is-warning': result.displayStatus === 'warning',
+                    'is-error': result.displayStatus === 'error',
+                    'is-waiting': result.displayStatus === 'waiting',
+                    'is-publishing': result.displayStatus === 'publishing',
+                    'is-paused': result.displayStatus === 'paused',
+                  }"
+                >
                 <div class="card-icon">
                   <el-icon v-if="result.displayStatus === 'success'" color="#67C23A" :size="32">
                     <CircleCheckFilled />
+                  </el-icon>
+                  <el-icon v-else-if="result.displayStatus === 'warning'" color="#E6A23C" :size="32">
+                    <Warning />
                   </el-icon>
                   <el-icon v-else-if="result.displayStatus === 'error'" color="#F56C6C" :size="32">
                     <CircleCloseFilled />
@@ -929,6 +933,10 @@
                 </div>
                 <div v-else-if="result.displayStatus === 'paused'" class="status-tag">
                   <el-tag type="warning" size="small">已暂停</el-tag>
+                </div>
+
+                <div v-else-if="result.displayStatus === 'warning'" class="status-tag">
+                  <el-tag type="warning" size="small">添加失败</el-tag>
                 </div>
 
                 <!-- 下载器添加状态 -->
@@ -3664,11 +3672,13 @@ const handlePublishBatch = async (): Promise<boolean> => {
             rebuildProgress()
 
             const results = finalResultsList.value
-            const successCount = results.filter((r: any) => r?.success).length
+            const totalCount = selectedTargetSites.value.length
+            const publishSuccessCount = results.filter((r: any) => r?.success).length
+            const addSuccessCount = results.filter((r: any) => r?.downloaderStatus?.success).length
 
             ElNotification.success({
               title: '发布完成',
-              message: `成功发布到 ${successCount} / ${selectedTargetSites.value.length} 个站点。`,
+              message: `发布成功 ${publishSuccessCount} / ${totalCount}，下载器添加成功 ${addSuccessCount} / ${totalCount}。`,
             })
 
             const siteLogs = results.map((r: any) => {
@@ -3886,10 +3896,17 @@ const handlePublishSerial = async () => {
       finalResultsList.value = [...results]
 
       if (result.success) {
-        ElNotification.success({
-          title: `发布成功 - ${siteName}`,
-          message: '种子已成功发布到该站点',
-        })
+        if (result.downloaderStatus?.success === false) {
+          ElNotification.warning({
+            title: `发布成功但添加失败 - ${siteName}`,
+            message: result.downloaderStatus.message || '自动添加到下载器失败',
+          })
+        } else {
+          ElNotification.success({
+            title: `发布成功 - ${siteName}`,
+            message: '种子已成功发布到该站点',
+          })
+        }
       }
     } catch (error) {
       const result = {
@@ -3917,10 +3934,12 @@ const handlePublishSerial = async () => {
   }
 
   ElNotification.closeAll()
-  const successCount = results.filter((r) => r.success).length
+  const totalCount = selectedTargetSites.value.length
+  const publishSuccessCount = results.filter((r) => r.success).length
+  const addSuccessCount = results.filter((r) => r?.downloaderStatus?.success).length
   ElNotification.success({
     title: '发布完成',
-    message: `成功发布到 ${successCount} / ${selectedTargetSites.value.length} 个站点。`,
+    message: `发布成功 ${publishSuccessCount} / ${totalCount}，下载器添加成功 ${addSuccessCount} / ${totalCount}。`,
   })
 
   // 处理自动添加到下载器的结果
@@ -4688,7 +4707,7 @@ const showSiteLog = (siteName: string, logs: string) => {
   showLogCard.value = true
 }
 
-type PublishDisplayStatus = 'waiting' | 'publishing' | 'success' | 'error' | 'paused'
+type PublishDisplayStatus = 'waiting' | 'publishing' | 'success' | 'warning' | 'error' | 'paused'
 
 type PublishDisplayResult = {
   siteName: string
@@ -4717,9 +4736,13 @@ const publishDisplayResults = computed<PublishDisplayResult[]>(() => {
   return selectedTargetSites.value.map((siteName) => {
     const existing = resultsBySite.get(siteName)
     if (existing) {
+      let displayStatus: PublishDisplayStatus = existing.success ? 'success' : 'error'
+      if (existing.success && existing.downloaderStatus?.success === false) {
+        displayStatus = 'warning'
+      }
       return {
         ...existing,
-        displayStatus: existing.success ? 'success' : 'error',
+        displayStatus,
       }
     }
 
@@ -5727,6 +5750,10 @@ const filterUploadedParam = (url: string): string => {
 
 .result-card.is-success {
   border-top: 4px solid #67c23a;
+}
+
+.result-card.is-warning {
+  border-top: 4px solid #e6a23c;
 }
 
 .result-card.is-error {

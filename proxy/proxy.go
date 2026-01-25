@@ -1411,7 +1411,7 @@ func screenshotHandler(w http.ResponseWriter, r *http.Request) {
 			continue // 跳到下一张图
 		}
 
-		directURL := strings.Replace(showURL, "https://pixhost.to/show/", "https://img1.pixhost.to/images/", 1)
+		directURL := strings.Replace(showURL, "https://pixhost.to/show/", "https://img2.pixhost.to/images/", 1)
 		uploadedURLs = append(uploadedURLs, directURL)
 		log.Printf("✅ 第 %d/%d 张截图处理成功: %s", i+1, len(screenshotPoints), fileName)
 	}

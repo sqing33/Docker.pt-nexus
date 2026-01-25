@@ -241,9 +241,7 @@ def _find_target_video_file(path: str, content_name: str | None = None) -> tuple
                     selected = sorted(single_episode_files)[0]
                 else:
                     selected = sorted([video_file for video_file, _ in min_episode_files])[0]
-                print(
-                    f"未找到 S{target_season}E{target_episode:02d}，选择该季最小集: {selected}"
-                )
+                print(f"未找到 S{target_season}E{target_episode:02d}，选择该季最小集: {selected}")
                 return selected, is_bluray_disc
 
     # 如果有多个视频文件，尝试找到最匹配的文件名
@@ -291,7 +289,6 @@ def _find_target_video_file(path: str, content_name: str | None = None) -> tuple
     else:
         print("无法确定最大的文件。")
         return None, is_bluray_disc
-
 
 
 def add_torrent_to_downloader(
@@ -383,12 +380,12 @@ def add_torrent_to_downloader(
                 direct_headers = common_headers.copy()
                 if is_rousi_site:
                     # 让 Referer 更像正常访问的详情页，避免部分站点校验失败
-                    uuid_re = (
-                        r"([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})"
-                    )
+                    uuid_re = r"([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})"
                     uuid_match = re.search(uuid_re, detail_page_url)
                     if uuid_match:
-                        direct_headers["Referer"] = f"{site_base_url}/torrent/{uuid_match.group(1)}"
+                        direct_headers["Referer"] = (
+                            f"{site_base_url}/torrent/{uuid_match.group(1)}"
+                        )
                 scraper = cloudscraper.create_scraper()
 
                 # Add retry logic for direct torrent download
@@ -433,7 +430,10 @@ def add_torrent_to_downloader(
             for attempt in range(max_retries):
                 try:
                     details_response = scraper.get(
-                        detail_page_url, headers=common_headers, timeout=180, proxies=proxies
+                        detail_page_url,
+                        headers=common_headers,
+                        timeout=180,
+                        proxies=proxies,
                     )
                     break  # Success, exit retry loop
                 except Exception as e:
@@ -499,7 +499,10 @@ def add_torrent_to_downloader(
             for attempt in range(max_retries):
                 try:
                     torrent_response = scraper.get(
-                        full_download_url, headers=common_headers, timeout=180, proxies=proxies
+                        full_download_url,
+                        headers=common_headers,
+                        timeout=180,
+                        proxies=proxies,
                     )
                     torrent_response.raise_for_status()
                     break  # Success, exit retry loop
@@ -639,7 +642,11 @@ def add_torrent_to_downloader(
                     # 如果设置了分类，将分类添加到标签中（Transmission 只有标签，没有分类）
                     if tags_config.get("category", {}).get("enabled", False):
                         category_name = tags_config.get("category", {}).get("category", "")
-                        if category_name and category_name.strip() and category_name.strip() not in final_tags:
+                        if (
+                            category_name
+                            and category_name.strip()
+                            and category_name.strip() not in final_tags
+                        ):
                             final_tags.append(category_name.strip())
                             logging.info(f"将分类 '{category_name}' 添加到标签中")
 
@@ -659,7 +666,9 @@ def add_torrent_to_downloader(
                     speed_limit_kbps = int(site_info["speed_limit"]) * 1024
                     try:
                         client.change_torrent(
-                            result.id, upload_limit=speed_limit_kbps, upload_limited=True
+                            result.id,
+                            upload_limit=speed_limit_kbps,
+                            upload_limited=True,
                         )
                         logging.info(
                             f"为站点 '{site_info['nickname']}' 设置上传速度限制: {site_info['speed_limit']} MB/s ({speed_limit_kbps} KBps)"
@@ -695,8 +704,6 @@ def add_torrent_to_downloader(
                 msg = f"添加到下载器 '{downloader_config['name']}' 时失败: {e}"
                 logging.error(msg, exc_info=True)
                 return False, msg
-
-
 
 
 def _apply_tag_rules(tags: list, rules: dict) -> list:
@@ -897,20 +904,23 @@ def _convert_pixhost_url_to_direct(show_url: str) -> str:
 
         # 方案1: 直接替换域名和路径
         direct_url = show_url.replace(
-            "https://pixhost.to/show/", "https://img1.pixhost.to/images/"
-        ).replace("https://pixhost.to/th/", "https://img1.pixhost.to/images/")
+            "https://pixhost.to/show/", "https://img2.pixhost.to/images/"
+        ).replace("https://pixhost.to/th/", "https://img2.pixhost.to/images/")
 
         # 移除缩略图后缀（如 _cover.jpg -> .jpg）
         direct_url = re.sub(r"_..\.jpg$", ".jpg", direct_url)
 
         # 方案2: 如果方案1失败，使用正则提取重建URL
-        if not direct_url.startswith("https://img1.pixhost.to/images/"):
+        if not direct_url.startswith("https://img2.pixhost.to/images/"):
             match = re.search(r"(\d+)/([^/]+\.(jpg|png|gif))", show_url)
             if match:
-                direct_url = f"https://img1.pixhost.to/images/{match.group(1)}/{match.group(2)}"
+                direct_url = f"https://img2.pixhost.to/images/{match.group(1)}/{match.group(2)}"
 
         # 最终验证
-        if re.match(r"^https://img1\.pixhost\.to/images/\d+/[^/]+\.(jpg|png|gif)$", direct_url):
+        if re.match(
+            r"^https://img[12]\.pixhost\.to/images/\d+/[^/]+\.(jpg|png|gif)$",
+            direct_url,
+        ):
             return direct_url
         else:
             print(f"   URL格式验证失败: {direct_url}")

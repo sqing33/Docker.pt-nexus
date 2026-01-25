@@ -24,10 +24,10 @@ def _get_proxy_downloader_info(client_config, config_manager):
     """通过代理获取下载器信息。"""
     try:
         # 从下载器配置的host中提取IP地址作为代理服务器地址
-        host_value = client_config['host']
+        host_value = client_config["host"]
 
         # 如果host已经包含协议，直接解析；否则添加http://前缀
-        if host_value.startswith(('http://', 'https://')):
+        if host_value.startswith(("http://", "https://")):
             parsed_url = urlparse(host_value)
         else:
             parsed_url = urlparse(f"http://{host_value}")
@@ -35,28 +35,28 @@ def _get_proxy_downloader_info(client_config, config_manager):
         proxy_ip = parsed_url.hostname
         if not proxy_ip:
             # 如果无法解析，使用备用方法
-            if '://' in host_value:
-                proxy_ip = host_value.split('://')[1].split(':')[0].split('/')[0]
+            if "://" in host_value:
+                proxy_ip = host_value.split("://")[1].split(":")[0].split("/")[0]
             else:
-                proxy_ip = host_value.split(':')[0]
+                proxy_ip = host_value.split(":")[0]
 
-        proxy_port = client_config.get('proxy_port', 9090)  # 默认9090
+        proxy_port = client_config.get("proxy_port", 9090)  # 默认9090
         proxy_base_url = f"http://{proxy_ip}:{proxy_port}"
         logging.info(f"使用代理服务器: {proxy_base_url}")
 
         # 构造代理请求数据
         proxy_downloader_config = {
-            "id": client_config['id'],
-            "type": client_config['type'],
+            "id": client_config["id"],
+            "type": client_config["type"],
             "host": "http://127.0.0.1:" + str(parsed_url.port or 8080),
-            "username": client_config.get('username', ''),
-            "password": client_config.get('password', '')
+            "username": client_config.get("username", ""),
+            "password": client_config.get("password", ""),
         }
 
         # 发送请求到代理获取统计信息
-        response = requests.post(f"{proxy_base_url}/api/stats/server",
-                                 json=[proxy_downloader_config],
-                                 timeout=30)
+        response = requests.post(
+            f"{proxy_base_url}/api/stats/server", json=[proxy_downloader_config], timeout=30
+        )
         response.raise_for_status()
 
         stats_data = response.json()
@@ -81,7 +81,8 @@ def reconcile_and_start_tracker():
     """一个辅助函数，用于协调数据并启动追踪器，通常在配置更改后调用。"""
     # 检查是否在调试模式下运行
     import os
-    if os.environ.get('WERKZEUG_RUN_MAIN') != 'true':
+
+    if os.environ.get("WERKZEUG_RUN_MAIN") != "true":
         logging.info("检测到调试监控进程，跳过reconcile_and_start_tracker。")
         return
 
@@ -112,26 +113,27 @@ def get_sites_list():
 
         # --- 修改后的逻辑 ---
         # 获取源站点 (migration 为 1 或 3，且必须有 cookie)
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT nickname FROM sites
             WHERE (migration = 1 OR migration = 3)
             AND cookie IS NOT NULL AND cookie != ''
             ORDER BY nickname
-            """)
+            """
+        )
         source_sites = [row["nickname"] for row in cursor.fetchall()]
 
         # 获取目标站点 (migration 为 2 或 3)
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT nickname FROM sites
             WHERE (migration = 2 OR migration = 3)
             ORDER BY nickname
-            """)
+            """
+        )
         target_sites = [row["nickname"] for row in cursor.fetchall()]
 
-        return jsonify({
-            "source_sites": source_sites,
-            "target_sites": target_sites
-        })
+        return jsonify({"source_sites": source_sites, "target_sites": target_sites})
     except Exception as e:
         logging.error(f"get_sites_list 出错: {e}", exc_info=True)
         return jsonify({"error": "获取站点列表失败"}), 500
@@ -215,16 +217,14 @@ def update_site_details():
     if not site_data.get("id"):
         return jsonify({"success": False, "message": "必须提供站点ID。"}), 400
     if db_manager.update_site_details(site_data):
-        return jsonify({
-            "success": True,
-            "message": f"站点 '{site_data.get('nickname')}' 的信息已成功更新。"
-        })
+        return jsonify(
+            {"success": True, "message": f"站点 '{site_data.get('nickname')}' 的信息已成功更新。"}
+        )
     else:
         return (
-            jsonify({
-                "success": False,
-                "message": f"未找到站点ID '{site_data.get('id')}' 或更新失败。"
-            }),
+            jsonify(
+                {"success": False, "message": f"未找到站点ID '{site_data.get('id')}' 或更新失败。"}
+            ),
             404,
         )
 
@@ -239,10 +239,7 @@ def delete_site():
     if db_manager.delete_site(site_id):
         return jsonify({"success": True, "message": "站点已成功删除。"})
     else:
-        return jsonify({
-            "success": False,
-            "message": f"删除站点ID '{site_id}' 失败。"
-        }), 404
+        return jsonify({"success": False, "message": f"删除站点ID '{site_id}' 失败。"}), 404
 
 
 @management_bp.route("/sites/update_cookie", methods=["POST"])
@@ -260,23 +257,17 @@ def update_site_cookie():
 
     try:
         if db_manager.update_site_cookie(nickname, cookie):
-            return jsonify({
-                "success": True,
-                "message": f"站点 '{nickname}' 的 Cookie 已成功更新。"
-            })
+            return jsonify(
+                {"success": True, "message": f"站点 '{nickname}' 的 Cookie 已成功更新。"}
+            )
         else:
             return (
-                jsonify({
-                    "success": False,
-                    "message": f"未找到站点 '{nickname}' 或更新失败。"
-                }),
+                jsonify({"success": False, "message": f"未找到站点 '{nickname}' 或更新失败。"}),
                 404,
             )
     except Exception as e:
         logging.error(f"update_site_cookie 发生意外错误: {e}", exc_info=True)
         return jsonify({"success": False, "message": "服务器内部错误。"}), 500
-
-
 
 
 # --- CookieCloud ---
@@ -287,13 +278,9 @@ def cookiecloud_sync():
     """连接到 CookieCloud，获取所有 Cookies，并更新匹配站点的 Cookie。"""
     db_manager = management_bp.db_manager
     data = request.json
-    cc_url, cc_key, e2e_password = data.get("url"), data.get("key"), data.get(
-        "e2e_password")
+    cc_url, cc_key, e2e_password = data.get("url"), data.get("key"), data.get("e2e_password")
     if not cc_url or not cc_key:
-        return jsonify({
-            "success": False,
-            "message": "CookieCloud URL 和 KEY 不能为空。"
-        }), 400
+        return jsonify({"success": False, "message": "CookieCloud URL 和 KEY 不能为空。"}), 400
 
     try:
         conn = db_manager._get_connection()
@@ -312,19 +299,19 @@ def cookiecloud_sync():
     try:
         target_url = f"{cc_url.rstrip('/')}/get/{cc_key}"
         payload = {"password": e2e_password} if e2e_password else {}
-        response = cloudscraper.create_scraper().post(target_url,
-                                                      json=payload,
-                                                      timeout=20)
+        response = cloudscraper.create_scraper().post(target_url, json=payload, timeout=20)
         response.raise_for_status()
         response_data = response.json()
         cookie_data_dict = response_data.get("cookie_data")
         if not isinstance(cookie_data_dict, dict):
             if "encrypted" in response_data:
                 return (
-                    jsonify({
-                        "success": False,
-                        "message": "获取到加密数据。请确保端对端加密密码已填写并正确。",
-                    }),
+                    jsonify(
+                        {
+                            "success": False,
+                            "message": "获取到加密数据。请确保端对端加密密码已填写并正确。",
+                        }
+                    ),
                     400,
                 )
             raise ValueError("从 CookieCloud 返回的数据格式不正确或为空。")
@@ -334,10 +321,7 @@ def cookiecloud_sync():
             error_message = "连接成功，但未找到资源 (404)。请检查 KEY (UUID) 是否正确。"
         logging.error(f"CookieCloud 同步失败: {e}", exc_info=True)
         return (
-            jsonify({
-                "success": False,
-                "message": f"请求 CookieCloud 时出错: {error_message}"
-            }),
+            jsonify({"success": False, "message": f"请求 CookieCloud 时出错: {error_message}"}),
             500,
         )
 
@@ -348,38 +332,37 @@ def cookiecloud_sync():
         # 排除 qingwapt 站点
         if site_in_app["site"].lower() == "qingwapt":
             continue
-        identifiers = {
-            site_in_app["nickname"].lower(), site_in_app["site"].lower()
-        }
+        identifiers = {site_in_app["nickname"].lower(), site_in_app["site"].lower()}
         if site_in_app.get("base_url"):
             try:
-                identifiers.add(
-                    urlparse(
-                        f'http://{site_in_app["base_url"]}').hostname.lower())
+                identifiers.add(urlparse(f'http://{site_in_app["base_url"]}').hostname.lower())
             except Exception:
                 pass
         for cc_domain, cookie_value in cookie_data_dict.items():
             if cc_domain.lstrip(".").lower() in identifiers:
-                cookie_str = ("; ".join([
-                    f"{c['name']}={c['value']}" for c in cookie_value
-                ]) if isinstance(cookie_value, list) else cookie_value)
+                cookie_str = (
+                    "; ".join([f"{c['name']}={c['value']}" for c in cookie_value])
+                    if isinstance(cookie_value, list)
+                    else cookie_value
+                )
                 # 去除cookie字符串首尾的换行符和多余空白字符
                 if cookie_str:
                     cookie_str = cookie_str.strip()
-                if db_manager.update_site_cookie(site_in_app["nickname"],
-                                                 cookie_str):
+                if db_manager.update_site_cookie(site_in_app["nickname"], cookie_str):
                     updated_count += 1
                     matched_cc_domains.add(cc_domain)
                 break
 
     unmatched_count = len(cookie_data_dict) - len(matched_cc_domains)
     message = f"同步完成！成功更新 {updated_count} 个站点的 Cookie。在 CookieCloud 中另有 {unmatched_count} 个未匹配的 Cookie。"
-    return jsonify({
-        "success": True,
-        "message": message,
-        "updated_count": updated_count,
-        "unmatched_count": unmatched_count,
-    })
+    return jsonify(
+        {
+            "success": True,
+            "message": message,
+            "updated_count": updated_count,
+            "unmatched_count": unmatched_count,
+        }
+    )
 
 
 # --- 应用与下载器设置 ---
@@ -439,34 +422,38 @@ def update_settings():
         restart_needed = need_restart
 
         current_passwords = {
-            d["id"]: d.get("password", "")
-            for d in current_config.get("downloaders", [])
+            d["id"]: d.get("password", "") for d in current_config.get("downloaders", [])
         }
         for d in new_config["downloaders"]:
             old_id = d.get("id")  # 保存旧ID
-            
+
             if not d.get("id"):
                 # 新逻辑：基于host生成ID
                 try:
                     d["id"] = generate_downloader_id_from_host(d.get("host", ""))
                 except ValueError as e:
-                    return jsonify({
-                        "error": f"无法为下载器 '{d.get('name')}' 生成ID: {str(e)}"
-                    }), 400
+                    return (
+                        jsonify({"error": f"无法为下载器 '{d.get('name')}' 生成ID: {str(e)}"}),
+                        400,
+                    )
             else:
                 # 检查现有ID是否与host匹配
                 try:
                     is_valid, expected_id, message = validate_downloader_id(d)
                     if not is_valid and expected_id:
                         # 如果不匹配，说明IP被修改了，需要更新ID和迁移数据
-                        logging.warning(f"检测到下载器 '{d.get('name')}' 的host已变更，ID将从 {d['id']} 更新为 {expected_id}")
+                        logging.warning(
+                            f"检测到下载器 '{d.get('name')}' 的host已变更，ID将从 {d['id']} 更新为 {expected_id}"
+                        )
                         # 记录ID变更信息，用于后续迁移
-                        id_changes.append({
-                            "old_id": d["id"],
-                            "new_id": expected_id,
-                            "host": d.get("host"),
-                            "name": d.get("name")
-                        })
+                        id_changes.append(
+                            {
+                                "old_id": d["id"],
+                                "new_id": expected_id,
+                                "host": d.get("host"),
+                                "name": d.get("name"),
+                            }
+                        )
                         d["id"] = expected_id
                 except Exception as e:
                     logging.error(f"验证下载器 '{d.get('name')}' ID失败: {e}")
@@ -474,16 +461,19 @@ def update_settings():
                     try:
                         d["id"] = generate_downloader_id_from_host(d.get("host", ""))
                     except ValueError as ve:
-                        return jsonify({
-                            "error": f"无法为下载器 '{d.get('name')}' 生成ID: {str(ve)}"
-                        }), 400
-            
+                        return (
+                            jsonify(
+                                {"error": f"无法为下载器 '{d.get('name')}' 生成ID: {str(ve)}"}
+                            ),
+                            400,
+                        )
+
             if not d.get("password"):
                 d["password"] = current_passwords.get(d["id"], "")
                 # 如果ID发生了变化，也要尝试从旧ID获取密码
                 if old_id and old_id != d["id"] and not d["password"]:
                     d["password"] = current_passwords.get(old_id, "")
-        
+
         # 如果检测到ID变更，执行数据库迁移
         if id_changes:
             logging.info(f"检测到 {len(id_changes)} 个下载器ID变更，开始执行数据库迁移...")
@@ -492,9 +482,9 @@ def update_settings():
                     create_migration_table,
                     save_migration_mapping,
                     migrate_table_ids,
-                    migrate_batch_enhance_records
+                    migrate_batch_enhance_records,
                 )
-                
+
                 # 创建迁移表
                 if not create_migration_table(management_bp.db_manager):
                     logging.error("创建迁移表失败，但将继续保存配置")
@@ -505,16 +495,18 @@ def update_settings():
                         tables_to_migrate = [
                             ("traffic_stats", "downloader_id"),
                             ("torrents", "downloader_id"),
-                            ("torrent_upload_stats", "downloader_id")
+                            ("torrent_upload_stats", "downloader_id"),
                         ]
-                        
+
                         migration_success = True
                         for table_name, id_column in tables_to_migrate:
-                            if not migrate_table_ids(management_bp.db_manager, table_name, id_column):
+                            if not migrate_table_ids(
+                                management_bp.db_manager, table_name, id_column
+                            ):
                                 logging.error(f"迁移表 {table_name} 失败")
                                 migration_success = False
                                 break
-                        
+
                         if migration_success:
                             # 迁移 batch_enhance_records 中的JSON数据
                             if not migrate_batch_enhance_records(management_bp.db_manager):
@@ -527,15 +519,14 @@ def update_settings():
                         logging.error("保存迁移映射失败，但将继续保存配置")
             except Exception as e:
                 logging.error(f"执行数据库迁移时出错: {e}", exc_info=True)
-        
+
         current_config["downloaders"] = new_config["downloaders"]
 
     if "realtime_speed_enabled" in new_config and current_config.get(
-            "realtime_speed_enabled") != bool(
-                new_config["realtime_speed_enabled"]):
+        "realtime_speed_enabled"
+    ) != bool(new_config["realtime_speed_enabled"]):
         restart_needed = True
-        current_config["realtime_speed_enabled"] = bool(
-            new_config["realtime_speed_enabled"])
+        current_config["realtime_speed_enabled"] = bool(new_config["realtime_speed_enabled"])
 
     if "cookiecloud" in new_config:
         current_config["cookiecloud"] = new_config["cookiecloud"]
@@ -579,8 +570,11 @@ def test_connection():
     client_config = request.json
     if client_config.get("id") and not client_config.get("password"):
         current_dl = next(
-            (d for d in config_manager.get().get("downloaders", [])
-             if d["id"] == client_config["id"]),
+            (
+                d
+                for d in config_manager.get().get("downloaders", [])
+                if d["id"] == client_config["id"]
+            ),
             None,
         )
         if current_dl:
@@ -596,9 +590,19 @@ def test_connection():
                 logging.info(f"通过代理测试 '{name}' 的连接...")
                 proxy_stats = _get_proxy_downloader_info(client_config, config_manager)
                 if proxy_stats:
-                    return jsonify({"success": True, "message": f"下载器 '{name}' 代理连接测试成功"})
+                    return jsonify(
+                        {"success": True, "message": f"下载器 '{name}' 代理连接测试成功"}
+                    )
                 else:
-                    return jsonify({"success": False, "message": f"'{name}' 代理连接测试失败，请检查代理服务器和下载器配置。"}), 200
+                    return (
+                        jsonify(
+                            {
+                                "success": False,
+                                "message": f"'{name}' 代理连接测试失败，请检查代理服务器和下载器配置。",
+                            }
+                        ),
+                        200,
+                    )
             else:
                 # QB 使用直连测试
                 api_config = services._prepare_api_config(client_config)
@@ -619,10 +623,7 @@ def test_connection():
             error_msg = "认证失败，请检查用户名和密码。"
         elif "403" in error_msg:
             error_msg = "禁止访问，请检查权限设置。"
-        return jsonify({
-            "success": False,
-            "message": f"'{name}' 连接失败: {error_msg}"
-        }), 200
+        return jsonify({"success": False, "message": f"'{name}' 连接失败: {error_msg}"}), 200
 
 
 @management_bp.route("/downloader_info")
@@ -717,8 +718,7 @@ def get_downloader_info_api():
     for d_id, d_info in info.items():
         if not d_info["enabled"]:
             continue
-        client_config = next(
-            (item for item in cfg_downloaders if item["id"] == d_id), None)
+        client_config = next((item for item in cfg_downloaders if item["id"] == d_id), None)
 
         # 确保从数据库获取的值是数字类型
         today_dl = today_stats.get(d_id, {}).get("today_dl", 0)
@@ -747,8 +747,7 @@ def get_downloader_info_api():
 
             if use_proxy and d_info["type"] == "qbittorrent":
                 # 使用代理获取下载器信息
-                proxy_stats = _get_proxy_downloader_info(
-                    client_config, config_manager)
+                proxy_stats = _get_proxy_downloader_info(client_config, config_manager)
                 if proxy_stats:
                     d_info["details"]["版本"] = proxy_stats.get("version", "未知")
                     d_info["status"] = "已连接"
@@ -791,12 +790,10 @@ def get_ui_settings():
             "siteExistence": "all",
             "siteNames": [],
             "downloaderIds": [],
-        }
+        },
     }
     # 从配置中获取 torrents_view 的设置，如果不存在则使用默认值
-    settings = config_manager.get().get("ui_settings",
-                                        {}).get("torrents_view",
-                                                default_settings)
+    settings = config_manager.get().get("ui_settings", {}).get("torrents_view", default_settings)
     return jsonify(settings)
 
 
@@ -826,15 +823,10 @@ def get_cross_seed_ui_settings():
     default_settings = {
         "page_size": 20,
         "search_query": "",
-        "active_filters": {
-            "savePath": "",
-            "isDeleted": ""
-        }
+        "active_filters": {"savePath": "", "isDeleted": ""},
     }
     # 从配置中获取 cross_seed_view 的设置，如果不存在则使用默认值
-    settings = config_manager.get().get("ui_settings",
-                                        {}).get("cross_seed_view",
-                                                default_settings)
+    settings = config_manager.get().get("ui_settings", {}).get("cross_seed_view", default_settings)
     return jsonify(settings)
 
 
@@ -938,17 +930,11 @@ def trigger_iyuu_query():
         if result["success"]:
             return jsonify({"success": True, "message": result["message"]})
         else:
-            return jsonify({
-                "success": False,
-                "message": result["message"]
-            }), 500
+            return jsonify({"success": False, "message": result["message"]}), 500
 
     except Exception as e:
         logging.error(f"手动触发IYUU查询失败: {e}", exc_info=True)
-        return jsonify({
-            "success": False,
-            "message": f"触发IYUU查询失败: {str(e)}"
-        }), 500
+        return jsonify({"success": False, "message": f"触发IYUU查询失败: {str(e)}"}), 500
 
 
 @management_bp.route("/iyuu/logs", methods=["GET"])
@@ -956,38 +942,37 @@ def get_iyuu_logs():
     """获取IYUU日志。"""
     try:
         from core.iyuu import iyuu_logs
+
         return jsonify({"success": True, "logs": iyuu_logs})
     except Exception as e:
         logging.error(f"获取IYUU日志失败: {e}", exc_info=True)
-        return jsonify({
-            "success": False,
-            "message": f"获取IYUU日志失败: {str(e)}"
-        }), 500
+        return jsonify({"success": False, "message": f"获取IYUU日志失败: {str(e)}"}), 500
+
 
 # --- [新增] 下载器ID迁移接口 ---
+
 
 @management_bp.route("/migration/check", methods=["GET"])
 def check_migration_needed():
     """检查是否需要迁移下载器ID"""
     config_manager = management_bp.config_manager
     from utils import generate_migration_mapping
-    
+
     try:
         config = config_manager.get()
         migration_mapping = generate_migration_mapping(config)
-        
-        return jsonify({
-            "success": True,
-            "needs_migration": len(migration_mapping) > 0,
-            "count": len(migration_mapping),
-            "mappings": migration_mapping
-        })
+
+        return jsonify(
+            {
+                "success": True,
+                "needs_migration": len(migration_mapping) > 0,
+                "count": len(migration_mapping),
+                "mappings": migration_mapping,
+            }
+        )
     except Exception as e:
         logging.error(f"检查迁移需求失败: {e}", exc_info=True)
-        return jsonify({
-            "success": False,
-            "message": f"检查迁移需求失败: {str(e)}"
-        }), 500
+        return jsonify({"success": False, "message": f"检查迁移需求失败: {str(e)}"}), 500
 
 
 @management_bp.route("/migration/execute", methods=["POST"])
@@ -998,12 +983,14 @@ def execute_migration_api():
     data = request.json or {}
     backup = data.get("backup", True)
     auto_cleanup = data.get("auto_cleanup", True)
-    
+
     try:
         from core.migrations.migrate_downloader_ids import execute_migration
-        
-        result = execute_migration(db_manager, config_manager, backup=backup, auto_cleanup=auto_cleanup)
-        
+
+        result = execute_migration(
+            db_manager, config_manager, backup=backup, auto_cleanup=auto_cleanup
+        )
+
         if result["success"]:
             # 迁移成功后重启服务
             logging.info("迁移完成，重启数据追踪服务...")
@@ -1017,14 +1004,11 @@ def execute_migration_api():
 
             db_manager.init_db()
             reconcile_and_start_tracker()
-        
+
         return jsonify(result)
     except Exception as e:
         logging.error(f"执行迁移失败: {e}", exc_info=True)
-        return jsonify({
-            "success": False,
-            "message": f"执行迁移失败: {str(e)}"
-        }), 500
+        return jsonify({"success": False, "message": f"执行迁移失败: {str(e)}"}), 500
 
 
 @management_bp.route("/migration/history", methods=["GET"])
@@ -1033,25 +1017,21 @@ def get_migration_history():
     db_manager = management_bp.db_manager
     conn = db_manager._get_connection()
     cursor = db_manager._get_cursor(conn)
-    
+
     try:
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT old_id, new_id, host, name, migrated_at 
             FROM downloader_id_migration 
             ORDER BY migrated_at DESC
-        """)
+        """
+        )
         records = [dict(row) for row in cursor.fetchall()]
-        
-        return jsonify({
-            "success": True,
-            "records": records
-        })
+
+        return jsonify({"success": True, "records": records})
     except Exception as e:
         logging.error(f"获取迁移历史失败: {e}", exc_info=True)
-        return jsonify({
-            "success": False,
-            "message": f"获取迁移历史失败: {str(e)}"
-        }), 500
+        return jsonify({"success": False, "message": f"获取迁移历史失败: {str(e)}"}), 500
     finally:
         cursor.close()
         conn.close()
@@ -1064,39 +1044,42 @@ import os
 import tempfile
 from utils import _upload_to_pixhost
 
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif"}
+
 
 def allowed_file(filename):
-    return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
-@management_bp.route('/upload_image', methods=['POST'])
+
+@management_bp.route("/upload_image", methods=["POST"])
 def upload_image():
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file part'}), 400
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'error': 'No selected file'}), 400
+    if "file" not in request.files:
+        return jsonify({"error": "No file part"}), 400
+    file = request.files["file"]
+    if file.filename == "":
+        return jsonify({"error": "No selected file"}), 400
     if file and allowed_file(file.filename):
         filename = secure_filename(file.filename)
         temp_dir = tempfile.gettempdir()
         temp_path = os.path.join(temp_dir, filename)
-        
+
         try:
             file.save(temp_path)
             image_url = _upload_to_pixhost(temp_path)
-            
+
             if image_url:
                 # 将 Pixhost 展示链接转换为图片直链
-                if 'pixhost.to/show/' in image_url:
-                    direct_image_url = image_url.replace('https://pixhost.to/show/', 'https://img1.pixhost.to/images/')
+                if "pixhost.to/show/" in image_url:
+                    direct_image_url = image_url.replace(
+                        "https://pixhost.to/show/", "https://img2.pixhost.to/images/"
+                    )
                 else:
                     direct_image_url = image_url
-                return jsonify({'url': direct_image_url})
+                return jsonify({"url": direct_image_url})
             else:
-                return jsonify({'error': 'Failed to upload to image host'}), 500
+                return jsonify({"error": "Failed to upload to image host"}), 500
         finally:
             if os.path.exists(temp_path):
                 os.remove(temp_path)
-                
-    return jsonify({'error': 'File type not allowed'}), 400
+
+    return jsonify({"error": "File type not allowed"}), 400
