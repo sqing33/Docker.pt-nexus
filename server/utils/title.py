@@ -708,6 +708,14 @@ def upload_data_title(
     """
     from .mediainfo import validate_media_info_format
 
+    def _mask_audio_ma_for_source_platform(text: str) -> str:
+        """
+        片源平台中的 "MA"（Movies Anywhere）与音频编码中的 "DTS-HD MA" 容易混淆。
+        在提取 source_platform 前，对已知的音频 "…HD MA" 片段做掩码，避免把音频的 MA 当作片源平台。
+        """
+        # 仅掩码音频里的 MA：例如 "DTS-HD MA" / "DTS HD MA" / "DTSHDMA" / "DTS-HD.MA"
+        return re.sub(r"\bDTS[-\s\.]*HD[-\s\.]*MA\b", "DTSHDMA", text, flags=re.IGNORECASE)
+
     print(f"[调试] ========== 开始从主标题解析参数 ==========")
     print(f"[调试] 输入标题: {title}")
     print(f"[调试] 种子文件名: {torrent_filename}")
@@ -913,7 +921,7 @@ def upload_data_title(
         # 【修改】添加 AVS2
         "video_codec": r"HEVC|AVC|x265|H\s*[\s\.]?\s*265|x264|H\s*[\s\.]?\s*264|VC-1|AV1|VP9|AVS2|MPEG-2",
         # 【修改】添加 Amazon, HULU, AppleTV+(无空格), AMC+, Crunchyroll, HMAX, TVING
-        "source_platform": r"Apple\s?TV\+|ViuTV|MyTVSuper|MyTVS|DNSP|iT|NowE|MyVideo|TWN|LiTV|TVBAnywhere|DMM|iPad|TX|iQIYI|MUBI|TVB|YOUKU|NowPlay|AMZN|Amazon|Netflix|NF|DSNP|MAX|HMAX|HULU|ATVP|iTunes|friDay|USA|EUR|JPN|CEE|FRA|LINETV|PCOK|Hami|GBR|NowPlayer|CR|Crunchyroll|SEEZN|GER|CAN|CHN|Viu|WeTV|meWATCH|CATCHPLAY|AMC\+|TVING|Baha|KKTV|IQ|HKG|ITA|ESP|Disney\+|Disney",
+        "source_platform": r"MA|Apple\s?TV\+|ViuTV|MyTVSuper|MyTVS|DNSP|iT|NowE|MyVideo|TWN|LiTV|TVBAnywhere|DMM|iPad|TX|iQIYI|MUBI|TVB|YOUKU|NowPlay|AMZN|Amazon|Netflix|NF|DSNP|MAX|HMAX|HULU|ATVP|iTunes|friDay|USA|EUR|JPN|CEE|FRA|LINETV|PCOK|Hami|GBR|NowPlayer|CR|Crunchyroll|SEEZN|GER|CAN|CHN|Viu|WeTV|meWATCH|CATCHPLAY|AMC\+|TVING|Baha|KKTV|IQ|HKG|ITA|ESP|Disney\+|Disney",
         "bit_depth": r"\b(?:8|10|12|16|24)bit\b",
         "framerate": r"\d{2,3}fps",
         "completion_status": r"Complete|COMPLETE",
@@ -934,8 +942,8 @@ def upload_data_title(
         "hdr_format",
         "video_format",
         "framerate",
-        "source_platform",
         "audio",
+        "source_platform",
         "quality_modifier",
     ]
 
@@ -1013,8 +1021,11 @@ def upload_data_title(
         if key in position_restricted_params and tech_zone_start < len(title_candidate):
             # 只在技术标签区域搜索
             print(f"[调试] 提取参数 '{key}': 位置限制模式，搜索范围 title_candidate[{tech_zone_start}:]")
-            print(f"[调试] 提取参数 '{key}': 搜索内容 = '{title_candidate[tech_zone_start:]}'")
-            matches = list(search_pattern.finditer(title_candidate[tech_zone_start:]))
+            search_text = title_candidate[tech_zone_start:]
+            if key == "source_platform":
+                search_text = _mask_audio_ma_for_source_platform(search_text)
+            print(f"[调试] 提取参数 '{key}': 搜索内容 = '{search_text}'")
+            matches = list(search_pattern.finditer(search_text))
             # 注意：不需要调整匹配位置，因为我们只需要匹配的文本内容
             # 这些参数不会更新 first_tech_tag_pos，所以匹配位置不影响标题区域的划分
         else:
@@ -1023,7 +1034,10 @@ def upload_data_title(
                 print(f"[调试] 提取参数 '{key}': 位置限制模式，但 tech_zone_start >= len(title_candidate)，跳过提取")
             else:
                 print(f"[调试] 提取参数 '{key}': 正常模式，搜索整个 title_candidate")
-            matches = list(search_pattern.finditer(title_candidate))
+            search_text = title_candidate
+            if key == "source_platform":
+                search_text = _mask_audio_ma_for_source_platform(search_text)
+            matches = list(search_pattern.finditer(search_text))
 
         if not matches:
             continue
@@ -1328,8 +1342,11 @@ def upload_data_title(
             # 【新增】对于需要位置限制的参数，只在技术标签区域提取
             if key in position_restricted_params and tech_zone_start_filename < len(filename_candidate):
                 print(f"[调试] 文件名补充参数 '{key}': 位置限制模式，搜索范围 filename_candidate[{tech_zone_start_filename}:]")
-                print(f"[调试] 文件名补充参数 '{key}': 搜索内容 = '{filename_candidate[tech_zone_start_filename:]}'")
-                matches = list(search_pattern.finditer(filename_candidate[tech_zone_start_filename:]))
+                search_text = filename_candidate[tech_zone_start_filename:]
+                if key == "source_platform":
+                    search_text = _mask_audio_ma_for_source_platform(search_text)
+                print(f"[调试] 文件名补充参数 '{key}': 搜索内容 = '{search_text}'")
+                matches = list(search_pattern.finditer(search_text))
             else:
                 if key in position_restricted_params:
                     print(f"[调试] 文件名补充参数 '{key}': 位置限制模式，但 tech_zone_start_filename >= len(filename_candidate)，跳过提取")
@@ -1775,14 +1792,11 @@ def upload_data_title(
             else:
                 english_params[key] = params[key]
 
-    if "source_platform" in english_params and "audio" in english_params:
+    if "source_platform" in english_params:
         sp_value = english_params["source_platform"]
         if isinstance(sp_value, list):
             sp_value = sp_value[0] if sp_value else ""
-        if sp_value == "MA" and "MA" in str(english_params["audio"]):
-            del english_params["source_platform"]
-        else:
-            english_params["source_platform"] = sp_value
+        english_params["source_platform"] = sp_value
 
     # 6. 有效性质检
     is_valid = bool(english_params.get("title"))
