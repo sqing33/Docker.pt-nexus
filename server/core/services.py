@@ -35,13 +35,9 @@ def load_site_maps_from_db(db_manager):
         cursor = db_manager._get_cursor(conn)
         # 根据数据库类型使用正确的引号
         if db_manager.db_type == "postgresql":
-            cursor.execute(
-                "SELECT nickname, base_url, special_tracker_domain, \"group\" FROM sites"
-            )
+            cursor.execute('SELECT nickname, base_url, special_tracker_domain, "group" FROM sites')
         else:
-            cursor.execute(
-                "SELECT nickname, base_url, special_tracker_domain, `group` FROM sites"
-            )
+            cursor.execute("SELECT nickname, base_url, special_tracker_domain, `group` FROM sites")
         for row in cursor.fetchall():
             nickname, base_url, special_tracker, groups_str = (
                 row["nickname"],
@@ -55,23 +51,19 @@ def load_site_maps_from_db(db_manager):
                     for group_name in groups_str.split(","):
                         clean_group_name = group_name.strip()
                         if clean_group_name:
-                            group_to_site_map_lower[
-                                clean_group_name.lower()] = {
-                                    "original_case": clean_group_name,
-                                    "site": nickname,
-                                }
+                            group_to_site_map_lower[clean_group_name.lower()] = {
+                                "original_case": clean_group_name,
+                                "site": nickname,
+                            }
 
                 base_hostname = _parse_hostname_from_url(f"http://{base_url}")
                 if base_hostname:
-                    core_domain_map[_extract_core_domain(
-                        base_hostname)] = nickname
+                    core_domain_map[_extract_core_domain(base_hostname)] = nickname
 
                 if special_tracker:
-                    special_hostname = _parse_hostname_from_url(
-                        f"http://{special_tracker}")
+                    special_hostname = _parse_hostname_from_url(f"http://{special_tracker}")
                     if special_hostname:
-                        core_domain_map[_extract_core_domain(
-                            special_hostname)] = nickname
+                        core_domain_map[_extract_core_domain(special_hostname)] = nickname
     except Exception as e:
         logging.error(f"无法从数据库加载站点信息: {e}", exc_info=True)
     finally:
@@ -95,10 +87,7 @@ def _prepare_api_config(downloader_config):
         allowed_keys = ["host", "username", "password"]
 
     # 只提取需要的字段
-    api_config = {
-        k: v
-        for k, v in downloader_config.items() if k in allowed_keys
-    }
+    api_config = {k: v for k, v in downloader_config.items() if k in allowed_keys}
 
     # Transmission 特殊处理：智能解析 host 和 port
     if downloader_config["type"] == "transmission":
@@ -128,14 +117,12 @@ class DataTracker(Thread):
         )
         self._is_running = True
         TARGET_WRITE_PERIOD_SECONDS = 60
-        self.TRAFFIC_BATCH_WRITE_SIZE = max(
-            1, TARGET_WRITE_PERIOD_SECONDS // self.interval)
+        self.TRAFFIC_BATCH_WRITE_SIZE = max(1, TARGET_WRITE_PERIOD_SECONDS // self.interval)
         logging.info(f"数据库批量写入大小设置为 {self.TRAFFIC_BATCH_WRITE_SIZE} 条记录。")
         self.traffic_buffer = []
         self.traffic_buffer_lock = Lock()
         self.latest_speeds = {}
-        self.recent_speeds_buffer = collections.deque(
-            maxlen=self.TRAFFIC_BATCH_WRITE_SIZE)
+        self.recent_speeds_buffer = collections.deque(maxlen=self.TRAFFIC_BATCH_WRITE_SIZE)
         self.torrent_update_counter = 0
         self.TORRENT_UPDATE_INTERVAL = 3600
         self.clients = {}
@@ -148,7 +135,7 @@ class DataTracker(Thread):
 
     def _get_client(self, downloader_config):
         """智能获取或创建并缓存客户端实例，支持自动重连。"""
-        client_id = downloader_config['id']
+        client_id = downloader_config["id"]
         if client_id in self.clients:
             return self.clients[client_id]
 
@@ -156,10 +143,10 @@ class DataTracker(Thread):
             logging.info(f"正在为 '{downloader_config['name']}' 创建新的客户端连接...")
             api_config = _prepare_api_config(downloader_config)
 
-            if downloader_config['type'] == 'qbittorrent':
+            if downloader_config["type"] == "qbittorrent":
                 client = Client(**api_config)
                 client.auth_log_in()
-            elif downloader_config['type'] == 'transmission':
+            elif downloader_config["type"] == "transmission":
                 client = TrClient(**api_config)
                 client.get_session()
 
@@ -176,10 +163,10 @@ class DataTracker(Thread):
         """通过代理获取下载器的统计信息。"""
         try:
             # 从下载器配置的host中提取IP地址作为代理服务器地址
-            host_value = downloader_config['host']
+            host_value = downloader_config["host"]
 
             # 如果host已经包含协议，直接解析；否则添加http://前缀
-            if host_value.startswith(('http://', 'https://')):
+            if host_value.startswith(("http://", "https://")):
                 parsed_url = urlparse(host_value)
             else:
                 parsed_url = urlparse(f"http://{host_value}")
@@ -187,36 +174,34 @@ class DataTracker(Thread):
             proxy_ip = parsed_url.hostname
             if not proxy_ip:
                 # 如果无法解析，使用备用方法
-                if '://' in host_value:
-                    proxy_ip = host_value.split('://')[1].split(':')[0].split(
-                        '/')[0]
+                if "://" in host_value:
+                    proxy_ip = host_value.split("://")[1].split(":")[0].split("/")[0]
                 else:
-                    proxy_ip = host_value.split(':')[0]
+                    proxy_ip = host_value.split(":")[0]
 
-            proxy_port = downloader_config.get('proxy_port', 9090)  # 默认9090
+            proxy_port = downloader_config.get("proxy_port", 9090)  # 默认9090
             proxy_base_url = f"http://{proxy_ip}:{proxy_port}"
 
             # 构造代理请求数据
             proxy_downloader_config = {
-                "id": downloader_config['id'],
-                "type": downloader_config['type'],
+                "id": downloader_config["id"],
+                "type": downloader_config["type"],
                 "host": "http://127.0.0.1:" + str(parsed_url.port or 8080),
-                "username": downloader_config.get('username', ''),
-                "password": downloader_config.get('password', '')
+                "username": downloader_config.get("username", ""),
+                "password": downloader_config.get("password", ""),
             }
 
             # 发送请求到代理获取统计信息
-            response = requests.post(f"{proxy_base_url}/api/stats/server",
-                                     json=[proxy_downloader_config],
-                                     timeout=30)
+            response = requests.post(
+                f"{proxy_base_url}/api/stats/server", json=[proxy_downloader_config], timeout=30
+            )
             response.raise_for_status()
 
             stats_data = response.json()
             if stats_data and len(stats_data) > 0:
                 return stats_data[0]  # 返回第一个下载器的统计信息
             else:
-                logging.warning(
-                    f"代理返回空的统计信息 for '{downloader_config['name']}'")
+                logging.warning(f"代理返回空的统计信息 for '{downloader_config['name']}'")
                 return None
 
         except Exception as e:
@@ -240,10 +225,10 @@ class DataTracker(Thread):
         """通过代理获取下载器的完整种子信息。"""
         try:
             # 从下载器配置的host中提取IP地址作为代理服务器地址
-            host_value = downloader_config['host']
+            host_value = downloader_config["host"]
 
             # 如果host已经包含协议，直接解析；否则添加http://前缀
-            if host_value.startswith(('http://', 'https://')):
+            if host_value.startswith(("http://", "https://")):
                 parsed_url = urlparse(host_value)
             else:
                 parsed_url = urlparse(f"http://{host_value}")
@@ -251,36 +236,35 @@ class DataTracker(Thread):
             proxy_ip = parsed_url.hostname
             if not proxy_ip:
                 # 如果无法解析，使用备用方法
-                if '://' in host_value:
-                    proxy_ip = host_value.split('://')[1].split(':')[0].split(
-                        '/')[0]
+                if "://" in host_value:
+                    proxy_ip = host_value.split("://")[1].split(":")[0].split("/")[0]
                 else:
-                    proxy_ip = host_value.split(':')[0]
+                    proxy_ip = host_value.split(":")[0]
 
-            proxy_port = downloader_config.get('proxy_port', 9090)  # 默认9090
+            proxy_port = downloader_config.get("proxy_port", 9090)  # 默认9090
             proxy_base_url = f"http://{proxy_ip}:{proxy_port}"
 
             # 构造代理请求数据
             proxy_downloader_config = {
-                "id": downloader_config['id'],
-                "type": downloader_config['type'],
+                "id": downloader_config["id"],
+                "type": downloader_config["type"],
                 "host": "http://127.0.0.1:" + str(parsed_url.port or 8080),
-                "username": downloader_config.get('username', ''),
-                "password": downloader_config.get('password', '')
+                "username": downloader_config.get("username", ""),
+                "password": downloader_config.get("password", ""),
             }
 
             # 构造请求数据，包含comment和trackers
             request_data = {
                 "downloaders": [proxy_downloader_config],
                 "include_comment": True,
-                "include_trackers": True
+                "include_trackers": True,
             }
 
             # 发送请求到代理获取种子信息
             response = requests.post(
                 f"{proxy_base_url}/api/torrents/all",
                 json=request_data,
-                timeout=180  # 种子信息可能需要更长的时间
+                timeout=180,  # 种子信息可能需要更长的时间
             )
             response.raise_for_status()
 
@@ -342,9 +326,7 @@ class DataTracker(Thread):
 
     def _fetch_and_buffer_stats(self):
         config = self.config_manager.get()
-        enabled_downloaders = [
-            d for d in config.get("downloaders", []) if d.get("enabled")
-        ]
+        enabled_downloaders = [d for d in config.get("downloaders", []) if d.get("enabled")]
         if not enabled_downloaders:
             time.sleep(self.interval)
             return
@@ -359,7 +341,7 @@ class DataTracker(Thread):
                 "total_dl": 0,
                 "total_ul": 0,
                 "dl_speed": 0,
-                "ul_speed": 0
+                "ul_speed": 0,
             }
             try:
                 # 检查是否需要使用代理
@@ -372,31 +354,27 @@ class DataTracker(Thread):
 
                     if proxy_stats:
                         # 代理返回的数据格式与直连不同，需要适配
-                        if 'server_state' in proxy_stats:
+                        if "server_state" in proxy_stats:
                             # 如果代理返回的是标准格式
-                            server_state = proxy_stats.get('server_state', {})
-                            data_point.update({
-                                'dl_speed':
-                                int(server_state.get('dl_info_speed', 0)),
-                                'ul_speed':
-                                int(server_state.get('up_info_speed', 0)),
-                                'total_dl':
-                                int(server_state.get('alltime_dl', 0)),
-                                'total_ul':
-                                int(server_state.get('alltime_ul', 0))
-                            })
+                            server_state = proxy_stats.get("server_state", {})
+                            data_point.update(
+                                {
+                                    "dl_speed": int(server_state.get("dl_info_speed", 0)),
+                                    "ul_speed": int(server_state.get("up_info_speed", 0)),
+                                    "total_dl": int(server_state.get("alltime_dl", 0)),
+                                    "total_ul": int(server_state.get("alltime_ul", 0)),
+                                }
+                            )
                         else:
                             # 新的代理数据格式，直接从根级别获取数据
-                            data_point.update({
-                                'dl_speed':
-                                int(proxy_stats.get('download_speed', 0)),
-                                'ul_speed':
-                                int(proxy_stats.get('upload_speed', 0)),
-                                'total_dl':
-                                int(proxy_stats.get('total_download', 0)),
-                                'total_ul':
-                                int(proxy_stats.get('total_upload', 0))
-                            })
+                            data_point.update(
+                                {
+                                    "dl_speed": int(proxy_stats.get("download_speed", 0)),
+                                    "ul_speed": int(proxy_stats.get("upload_speed", 0)),
+                                    "total_dl": int(proxy_stats.get("total_download", 0)),
+                                    "total_ul": int(proxy_stats.get("total_upload", 0)),
+                                }
+                            )
                             logging.info(
                                 f"代理数据: 上传速度={data_point['ul_speed']:,}, 下载速度={data_point['dl_speed']:,}, 总上传={data_point['total_ul']:,}, 总下载={data_point['total_dl']:,}"
                             )
@@ -407,75 +385,73 @@ class DataTracker(Thread):
                             "type": downloader["type"],
                             "enabled": True,
                             "upload_speed": data_point["ul_speed"],
-                            "download_speed": data_point["dl_speed"]
+                            "download_speed": data_point["dl_speed"],
                         }
                         # 过滤掉累计上传量和下载量都为0的数据
                         if data_point["total_ul"] > 0 or data_point["total_dl"] > 0:
                             data_points.append(data_point)
                     else:
                         # 代理获取失败，跳过此下载器
-                        logging.warning(
-                            f"通过代理获取 '{downloader['name']}' 统计信息失败")
+                        logging.warning(f"通过代理获取 '{downloader['name']}' 统计信息失败")
                         continue
                 else:
                     # 使用常规方式获取统计数据
                     client = self._get_client(downloader)
-                    if not client: continue
+                    if not client:
+                        continue
 
                     if downloader["type"] == "qbittorrent":
                         try:
                             main_data = client.sync_maindata()
                         except qb_exceptions.APIConnectionError:
                             logging.warning(
-                                f"与 '{downloader['name']}' 的连接丢失，正在尝试重新连接...")
-                            del self.clients[downloader['id']]
+                                f"与 '{downloader['name']}' 的连接丢失，正在尝试重新连接..."
+                            )
+                            del self.clients[downloader["id"]]
                             client = self._get_client(downloader)
-                            if not client: continue
+                            if not client:
+                                continue
                             main_data = client.sync_maindata()
 
-                        server_state = main_data.get('server_state', {})
-                        data_point.update({
-                            'dl_speed':
-                            int(server_state.get('dl_info_speed', 0)),
-                            'ul_speed':
-                            int(server_state.get('up_info_speed', 0)),
-                            'total_dl':
-                            int(server_state.get('alltime_dl', 0)),
-                            'total_ul':
-                            int(server_state.get('alltime_ul', 0))
-                        })
+                        server_state = main_data.get("server_state", {})
+                        data_point.update(
+                            {
+                                "dl_speed": int(server_state.get("dl_info_speed", 0)),
+                                "ul_speed": int(server_state.get("up_info_speed", 0)),
+                                "total_dl": int(server_state.get("alltime_dl", 0)),
+                                "total_ul": int(server_state.get("alltime_ul", 0)),
+                            }
+                        )
                     elif downloader["type"] == "transmission":
                         stats = client.session_stats()
-                        data_point.update({
-                            "dl_speed":
-                            int(getattr(stats, "download_speed", 0)),
-                            "ul_speed":
-                            int(getattr(stats, "upload_speed", 0)),
-                            "total_dl":
-                            int(stats.cumulative_stats.downloaded_bytes),
-                            "total_ul":
-                            int(stats.cumulative_stats.uploaded_bytes),
-                        })
+                        data_point.update(
+                            {
+                                "dl_speed": int(getattr(stats, "download_speed", 0)),
+                                "ul_speed": int(getattr(stats, "upload_speed", 0)),
+                                "total_dl": int(stats.cumulative_stats.downloaded_bytes),
+                                "total_ul": int(stats.cumulative_stats.uploaded_bytes),
+                            }
+                        )
                 latest_speeds_update[downloader["id"]] = {
                     "name": downloader["name"],
                     "type": downloader["type"],
                     "enabled": True,
                     "upload_speed": data_point["ul_speed"],
-                    "download_speed": data_point["dl_speed"]
+                    "download_speed": data_point["dl_speed"],
                 }
                 # 过滤掉累计上传量和下载量都为0的数据
                 if data_point["total_ul"] > 0 or data_point["total_dl"] > 0:
                     data_points.append(data_point)
             except Exception as e:
                 logging.warning(f"无法从客户端 '{downloader['name']}' 获取统计信息: {e}")
-                if downloader['id'] in self.clients:
-                    del self.clients[downloader['id']]
+                if downloader["id"] in self.clients:
+                    del self.clients[downloader["id"]]
                 latest_speeds_update[downloader["id"]] = {
                     "name": downloader["name"],
                     "type": downloader["type"],
                     "enabled": True,
                     "upload_speed": 0,
-                    "download_speed": 0
+                    "download_speed": 0,
                 }
 
         with CACHE_LOCK:
@@ -483,26 +459,23 @@ class DataTracker(Thread):
             speeds_for_buffer = {
                 downloader_id: {
                     "upload_speed": data.get("upload_speed", 0),
-                    "download_speed": data.get("download_speed", 0)
+                    "download_speed": data.get("download_speed", 0),
                 }
                 for downloader_id, data in latest_speeds_update.items()
             }
-            self.recent_speeds_buffer.append({
-                "timestamp": current_timestamp,
-                "speeds": speeds_for_buffer
-            })
+            self.recent_speeds_buffer.append(
+                {"timestamp": current_timestamp, "speeds": speeds_for_buffer}
+            )
 
         with self.traffic_buffer_lock:
-            self.traffic_buffer.append({
-                "timestamp": current_timestamp,
-                "points": data_points
-            })
+            self.traffic_buffer.append({"timestamp": current_timestamp, "points": data_points})
             if len(self.traffic_buffer) >= self.TRAFFIC_BATCH_WRITE_SIZE:
                 self._flush_traffic_buffer_to_db(self.traffic_buffer)
                 self.traffic_buffer = []
 
     def _flush_traffic_buffer_to_db(self, buffer):
-        if not buffer: return
+        if not buffer:
+            return
 
         # 过滤掉累计上传量和下载量都为0的数据
         filtered_buffer = []
@@ -526,9 +499,7 @@ class DataTracker(Thread):
             cursor = self.db_manager._get_cursor(conn)
 
             # 根据数据库类型设置占位符
-            placeholder = "%s" if self.db_manager.db_type in [
-                "mysql", "postgresql"
-            ] else "?"
+            placeholder = "%s" if self.db_manager.db_type in ["mysql", "postgresql"] else "?"
 
             # 第一步：获取每个下载器的最后一条记录
             downloader_ids = set()
@@ -556,17 +527,15 @@ class DataTracker(Thread):
                     if downloader_id not in last_records:
                         last_records[downloader_id] = {
                             "cumulative_uploaded": row["cumulative_uploaded"],
-                            "cumulative_downloaded":
-                            row["cumulative_downloaded"],
-                            "stat_datetime": row["stat_datetime"]
+                            "cumulative_downloaded": row["cumulative_downloaded"],
+                            "stat_datetime": row["stat_datetime"],
                         }
 
             # 第二步：验证并准备插入数据
             params_to_insert = []
 
             for entry in filtered_buffer:
-                timestamp_str = entry["timestamp"].strftime(
-                    "%Y-%m-%d %H:%M:%S")
+                timestamp_str = entry["timestamp"].strftime("%Y-%m-%d %H:%M:%S")
                 for data_point in entry["points"]:
                     client_id = data_point["downloader_id"]
                     current_dl = data_point["total_dl"]
@@ -576,16 +545,16 @@ class DataTracker(Thread):
                     should_insert = True
 
                     if client_id in last_records:
-                        last_ul = last_records[client_id][
-                            "cumulative_uploaded"]
-                        last_dl = last_records[client_id][
-                            "cumulative_downloaded"]
+                        last_ul = last_records[client_id]["cumulative_uploaded"]
+                        last_dl = last_records[client_id]["cumulative_downloaded"]
 
                         # 检测异常情况：累计值降低或变为0
-                        if (current_ul > 0 and current_ul < last_ul) or \
-                           (current_dl > 0 and current_dl < last_dl) or \
-                           (current_ul == 0 and last_ul > 0) or \
-                           (current_dl == 0 and last_dl > 0):
+                        if (
+                            (current_ul > 0 and current_ul < last_ul)
+                            or (current_dl > 0 and current_dl < last_dl)
+                            or (current_ul == 0 and last_ul > 0)
+                            or (current_dl == 0 and last_dl > 0)
+                        ):
                             should_insert = False
                             logging.warning(
                                 f"检测到下载器 {client_id} 的累计流量降低或归零，"
@@ -595,15 +564,23 @@ class DataTracker(Thread):
 
                     if should_insert:
                         params_to_insert.append(
-                            (timestamp_str, client_id, 0, 0,
-                             data_point["ul_speed"], data_point["dl_speed"],
-                             current_ul, current_dl))
+                            (
+                                timestamp_str,
+                                client_id,
+                                0,
+                                0,
+                                data_point["ul_speed"],
+                                data_point["dl_speed"],
+                                current_ul,
+                                current_dl,
+                            )
+                        )
 
                         # 更新本地缓存的最后记录，用于批次内的后续数据验证
                         last_records[client_id] = {
                             "cumulative_uploaded": current_ul,
                             "cumulative_downloaded": current_dl,
-                            "stat_datetime": timestamp_str
+                            "stat_datetime": timestamp_str,
                         }
 
             if params_to_insert:
@@ -620,7 +597,8 @@ class DataTracker(Thread):
             conn.commit()
         except Exception as e:
             logging.error(f"将流量缓冲刷新到数据库失败: {e}", exc_info=True)
-            if conn: conn.rollback()
+            if conn:
+                conn.rollback()
         finally:
             if conn:
                 cursor.close()
@@ -629,13 +607,12 @@ class DataTracker(Thread):
     def update_torrents_in_db(self):
         """优化版本：使用增量同步策略，只处理变化的种子"""
         from datetime import datetime
+
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         logging.info("=== 开始增量更新数据库中的种子 ===")
         print(f"【刷新线程】[{current_time}] 开始增量更新数据库中的种子...")
         config = self.config_manager.get()
-        enabled_downloaders = [
-            d for d in config.get("downloaders", []) if d.get("enabled")
-        ]
+        enabled_downloaders = [d for d in config.get("downloaders", []) if d.get("enabled")]
         print(f"【刷新线程】找到 {len(enabled_downloaders)} 个启用的下载器")
         logging.info(f"找到 {len(enabled_downloaders)} 个启用的下载器")
         if not enabled_downloaders:
@@ -643,8 +620,7 @@ class DataTracker(Thread):
             print("【刷新线程】没有启用的下载器，跳过种子更新。")
             return
 
-        core_domain_map, _, group_to_site_map_lower = load_site_maps_from_db(
-            self.db_manager)
+        core_domain_map, _, group_to_site_map_lower = load_site_maps_from_db(self.db_manager)
 
         # 增量同步：按下载器单独处理，减少内存占用
         total_new = 0
@@ -652,12 +628,12 @@ class DataTracker(Thread):
         total_deleted = 0
 
         for downloader in enabled_downloaders:
-            print(
-                f"【刷新线程】正在处理下载器: {downloader['name']} (类型: {downloader['type']})"
-            )
+            print(f"【刷新线程】正在处理下载器: {downloader['name']} (类型: {downloader['type']})")
             try:
-                new_count, updated_count, deleted_count = self._update_downloader_torrents_incremental(
-                    downloader, core_domain_map, group_to_site_map_lower
+                new_count, updated_count, deleted_count = (
+                    self._update_downloader_torrents_incremental(
+                        downloader, core_domain_map, group_to_site_map_lower
+                    )
                 )
                 total_new += new_count
                 total_updated += updated_count
@@ -682,9 +658,12 @@ class DataTracker(Thread):
             f"增量更新完成: 总新增 {total_new}, 总更新 {total_updated}, 总删除 {total_deleted}"
         )
 
-    def _update_downloader_torrents_incremental(self, downloader, core_domain_map, group_to_site_map_lower):
+    def _update_downloader_torrents_incremental(
+        self, downloader, core_domain_map, group_to_site_map_lower
+    ):
         """增量同步单个下载器的种子数据"""
         from datetime import datetime
+
         new_count = 0
         updated_count = 0
         deleted_count = 0
@@ -722,10 +701,21 @@ class DataTracker(Thread):
                     torrents_list = client_instance.torrents_info(status_filter="all")
                 elif downloader["type"] == "transmission":
                     fields = [
-                        "id", "name", "hashString", "downloadDir",
-                        "totalSize", "status", "comment", "trackers",
-                        "percentDone", "uploadedEver", "peersGettingFromUs",
-                        "trackerStats", "peers", "peersConnected"
+                        "id",
+                        "name",
+                        "hashString",
+                        "downloadDir",
+                        "totalSize",
+                        "status",
+                        "comment",
+                        "trackers",
+                        "percentDone",
+                        "uploadedEver",
+                        "peersGettingFromUs",
+                        "trackerStats",
+                        "peers",
+                        "peersConnected",
+                        "sizeWhenDone" # 添加 sizeWhenDone 字段
                     ]
                     torrents_list = client_instance.get_torrents(arguments=fields)
 
@@ -782,7 +772,7 @@ class DataTracker(Thread):
                 f"SELECT hash, name, save_path, size, progress, state, sites, details, "
                 f"{group_field}, downloader_id, last_seen, seeders FROM torrents "
                 f"WHERE downloader_id = {placeholder}",
-                (downloader_id,)
+                (downloader_id,),
             )
 
             db_torrents = {}
@@ -804,7 +794,7 @@ class DataTracker(Thread):
                     "group": row_dict.get(group_key),  # 处理可能的字段名差异
                     "downloader_id": row_dict["downloader_id"],
                     "last_seen": row_dict["last_seen"],
-                    "seeders": row_dict["seeders"]
+                    "seeders": row_dict["seeders"],
                 }
 
             return db_torrents
@@ -816,8 +806,9 @@ class DataTracker(Thread):
                 cursor.close()
                 conn.close()
 
-    def _compare_torrent_changes(self, current_torrents, db_torrents, downloader,
-                                core_domain_map, group_to_site_map_lower):
+    def _compare_torrent_changes(
+        self, current_torrents, db_torrents, downloader, core_domain_map, group_to_site_map_lower
+    ):
         """对比当前种子和数据库种子，找出变化的部分"""
         new_torrents = {}
         updated_torrents = {}
@@ -884,9 +875,12 @@ class DataTracker(Thread):
 
         return False
 
-    def _process_torrent_changes(self, downloader_id, new_torrents, updated_torrents, deleted_hashes, current_torrents):
+    def _process_torrent_changes(
+        self, downloader_id, new_torrents, updated_torrents, deleted_hashes, current_torrents
+    ):
         """处理种子的增删改操作"""
         from datetime import datetime
+
         new_count = 0
         updated_count = 0
         deleted_count = 0
@@ -901,7 +895,9 @@ class DataTracker(Thread):
 
             # 1. 处理删除的种子
             if deleted_hashes:
-                deleted_count = self._delete_torrents_batch(cursor, downloader_id, deleted_hashes, placeholder)
+                deleted_count = self._delete_torrents_batch(
+                    cursor, downloader_id, deleted_hashes, placeholder
+                )
                 print(f"【刷新线程】批量删除了 {deleted_count} 个种子")
 
             # 2. 处理新增和更新的种子
@@ -951,7 +947,7 @@ class DataTracker(Thread):
         total_count = 0
 
         for i in range(0, len(upload_stats), batch_size):
-            batch_stats = upload_stats[i:i + batch_size]
+            batch_stats = upload_stats[i : i + batch_size]
 
             # 根据数据库类型使用正确的语法
             if self.db_manager.db_type == "mysql":
@@ -982,7 +978,7 @@ class DataTracker(Thread):
         placeholders = ",".join([placeholder] * len(deleted_hashes))
         cursor.execute(
             f"SELECT hash, name, state FROM torrents WHERE hash IN ({placeholders}) AND downloader_id = {placeholder}",
-            tuple(list(deleted_hashes) + [downloader_id])
+            tuple(list(deleted_hashes) + [downloader_id]),
         )
         torrents_to_check = cursor.fetchall()
 
@@ -1007,13 +1003,15 @@ class DataTracker(Thread):
             delete_placeholders = ",".join([placeholder] * len(hashes_to_delete))
             cursor.execute(
                 f"DELETE FROM torrents WHERE hash IN ({delete_placeholders}) AND downloader_id = {placeholder}",
-                tuple(hashes_to_delete + [downloader_id])
+                tuple(hashes_to_delete + [downloader_id]),
             )
             return cursor.rowcount
 
         return 0
 
-    def _upsert_torrents_batch(self, cursor, torrents_to_process, new_hashes, now_str, placeholder):
+    def _upsert_torrents_batch(
+        self, cursor, torrents_to_process, new_hashes, now_str, placeholder
+    ):
         """批量新增或更新种子"""
         if not torrents_to_process:
             return 0, 0
@@ -1036,14 +1034,14 @@ class DataTracker(Thread):
                 torrent_info.get("group", ""),
                 torrent_info["downloader_id"],
                 now_str,
-                torrent_info.get("seeders", 0)
+                torrent_info.get("seeders", 0),
             )
             params.append(param)
 
         # 分批处理，每批500条
         batch_size = 500
         for i in range(0, len(params), batch_size):
-            batch_params = params[i:i + batch_size]
+            batch_params = params[i : i + batch_size]
 
             # 根据数据库类型使用正确的语法
             if self.db_manager.db_type == "mysql":
@@ -1103,17 +1101,13 @@ class DataTracker(Thread):
             placeholder = "%s" if self.db_manager.db_type in ["mysql", "postgresql"] else "?"
 
             # 获取配置中所有下载器的ID（包括启用和禁用的）
-            all_configured_downloaders = {
-                d["id"] for d in config.get("downloaders", [])
-            }
+            all_configured_downloaders = {d["id"] for d in config.get("downloaders", [])}
 
             # 获取当前数据库中存在的所有下载器ID
             cursor.execute(
                 "SELECT DISTINCT downloader_id FROM torrents WHERE downloader_id IS NOT NULL"
             )
-            existing_downloader_ids = {
-                row["downloader_id"] for row in cursor.fetchall()
-            }
+            existing_downloader_ids = {row["downloader_id"] for row in cursor.fetchall()}
 
             # 计算应该删除种子数据的下载器ID（已从配置中删除的下载器）
             deleted_downloader_ids = existing_downloader_ids - all_configured_downloaders
@@ -1121,7 +1115,9 @@ class DataTracker(Thread):
             # 只删除已从配置中删除的下载器的种子数据
             if deleted_downloader_ids:
                 downloader_placeholders = ",".join([placeholder] * len(deleted_downloader_ids))
-                delete_query = f"DELETE FROM torrents WHERE downloader_id IN ({downloader_placeholders})"
+                delete_query = (
+                    f"DELETE FROM torrents WHERE downloader_id IN ({downloader_placeholders})"
+                )
                 cursor.execute(delete_query, tuple(deleted_downloader_ids))
                 deleted_count = cursor.rowcount
                 print(f"【刷新线程】从 torrents 表中移除了 {deleted_count} 个已删除下载器的种子。")
@@ -1140,13 +1136,12 @@ class DataTracker(Thread):
     def _update_torrents_in_db_original(self):
         """原始版本：保留作为备份"""
         from datetime import datetime
+
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         logging.info("=== 开始更新数据库中的种子 ===")
         print(f"【刷新线程】[{current_time}] 开始更新数据库中的种子...")
         config = self.config_manager.get()
-        enabled_downloaders = [
-            d for d in config.get("downloaders", []) if d.get("enabled")
-        ]
+        enabled_downloaders = [d for d in config.get("downloaders", []) if d.get("enabled")]
         print(f"【刷新线程】找到 {len(enabled_downloaders)} 个启用的下载器")
         logging.info(f"找到 {len(enabled_downloaders)} 个启用的下载器")
         if not enabled_downloaders:
@@ -1154,16 +1149,13 @@ class DataTracker(Thread):
             print("【刷新线程】没有启用的下载器，跳过种子更新。")
             return
 
-        core_domain_map, _, group_to_site_map_lower = load_site_maps_from_db(
-            self.db_manager)
+        core_domain_map, _, group_to_site_map_lower = load_site_maps_from_db(self.db_manager)
         all_current_hashes = set()
         torrents_to_upsert, upload_stats_to_upsert = {}, []
         is_mysql = self.db_manager.db_type == "mysql"
 
         for downloader in enabled_downloaders:
-            print(
-                f"【刷新线程】正在处理下载器: {downloader['name']} (类型: {downloader['type']})"
-            )
+            print(f"【刷新线程】正在处理下载器: {downloader['name']} (类型: {downloader['type']})")
             torrents_list = []
             client_instance = None
             try:
@@ -1186,8 +1178,7 @@ class DataTracker(Thread):
                     else:
                         # 代理获取失败，跳过此下载器
                         print(f"【刷新线程】通过代理获取 '{downloader['name']}' 种子信息失败")
-                        logging.warning(
-                            f"通过代理获取 '{downloader['name']}' 种子信息失败")
+                        logging.warning(f"通过代理获取 '{downloader['name']}' 种子信息失败")
                         continue
                 else:
                     # 使用常规方式获取种子信息
@@ -1198,17 +1189,25 @@ class DataTracker(Thread):
 
                     print(f"【刷新线程】正在从 {downloader['name']} 获取种子列表...")
                     if downloader["type"] == "qbittorrent":
-                        torrents_list = client_instance.torrents_info(
-                            status_filter="all")
+                        torrents_list = client_instance.torrents_info(status_filter="all")
                     elif downloader["type"] == "transmission":
                         fields = [
-                            "id", "name", "hashString", "downloadDir",
-                            "totalSize", "status", "comment", "trackers",
-                            "percentDone", "uploadedEver", "peersGettingFromUs",
-                            "trackerStats", "peers", "peersConnected"
+                            "id",
+                            "name",
+                            "hashString",
+                            "downloadDir",
+                            "totalSize",
+                            "status",
+                            "comment",
+                            "trackers",
+                            "percentDone",
+                            "uploadedEver",
+                            "peersGettingFromUs",
+                            "trackerStats",
+                            "peers",
+                            "peersConnected",
                         ]
-                        torrents_list = client_instance.get_torrents(
-                            arguments=fields)
+                        torrents_list = client_instance.get_torrents(arguments=fields)
                     print(
                         f"【刷新线程】从 '{downloader['name']}' 成功获取到 {len(torrents_list)} 个种子。"
                     )
@@ -1222,45 +1221,35 @@ class DataTracker(Thread):
 
             print(f"【刷新线程】开始处理 {len(torrents_list)} 个种子...")
             for t in torrents_list:
-                t_info = self._normalize_torrent_info(t, downloader["type"],
-                                                      client_instance)
+                t_info = self._normalize_torrent_info(t, downloader["type"], client_instance)
                 all_current_hashes.add(t_info["hash"])
 
                 # 使用复合主键 (hash, downloader_id) 作为唯一标识
                 composite_key = f"{t_info['hash']}_{downloader['id']}"
-                if (composite_key not in torrents_to_upsert
-                        or t_info["progress"]
-                        > torrents_to_upsert[composite_key]["progress"]):
+                if (
+                    composite_key not in torrents_to_upsert
+                    or t_info["progress"] > torrents_to_upsert[composite_key]["progress"]
+                ):
                     site_name = self._find_site_nickname(
-                        t_info["trackers"], core_domain_map, t_info["comment"])
+                        t_info["trackers"], core_domain_map, t_info["comment"]
+                    )
                     torrents_to_upsert[composite_key] = {
-                        "hash":
-                        t_info["hash"],
-                        "name":
-                        t_info["name"],
-                        "save_path":
-                        t_info["save_path"],
-                        "size":
-                        t_info["size"],
-                        "progress":
-                        round(t_info["progress"] * 100, 1),
-                        "state":
-                        format_state(t_info["state"]),
-                        "sites":
-                        site_name,
-                        "details":
-                        _extract_url_from_comment(t_info["comment"]),
-                        "group":
-                        self._find_torrent_group(t_info["name"],
-                                                 group_to_site_map_lower),
-                        "downloader_id":
-                        downloader["id"],
-                        "seeders":
-                        t_info.get("seeders", 0),
+                        "hash": t_info["hash"],
+                        "name": t_info["name"],
+                        "save_path": t_info["save_path"],
+                        "size": t_info["size"],
+                        "progress": round(t_info["progress"] * 100, 1),
+                        "state": format_state(t_info["state"]),
+                        "sites": site_name,
+                        "details": _extract_url_from_comment(t_info["comment"]),
+                        "group": self._find_torrent_group(t_info["name"], group_to_site_map_lower),
+                        "downloader_id": downloader["id"],
+                        "seeders": t_info.get("seeders", 0),
                     }
                 if t_info["uploaded"] > 0:
                     upload_stats_to_upsert.append(
-                        (t_info["hash"], downloader["id"], t_info["uploaded"]))
+                        (t_info["hash"], downloader["id"], t_info["uploaded"])
+                    )
             print(
                 f"【刷新线程】完成处理下载器 {downloader['name']} 的种子，共收集到 {len(torrents_to_upsert)} 个唯一种子"
             )
@@ -1293,23 +1282,18 @@ class DataTracker(Thread):
                 downloader_current_hashes = downloader_to_hashes.get(downloader_id, set())
 
                 # 获取数据库中该下载器的历史种子哈希
-                placeholder = "%s" if self.db_manager.db_type in [
-                    "mysql", "postgresql"
-                ] else "?"
+                placeholder = "%s" if self.db_manager.db_type in ["mysql", "postgresql"] else "?"
                 cursor.execute(
                     f"SELECT hash, name, state FROM torrents WHERE downloader_id = {placeholder}",
-                    (downloader_id, ))
+                    (downloader_id,),
+                )
                 db_torrents = {
-                    row["hash"]: {
-                        "name": row["name"],
-                        "state": row["state"]
-                    }
+                    row["hash"]: {"name": row["name"], "state": row["state"]}
                     for row in cursor.fetchall()
                 }
 
                 # 找出需要删除的种子（在数据库中但不在当前下载器中）
-                hashes_to_delete = db_torrents.keys(
-                ) - downloader_current_hashes
+                hashes_to_delete = db_torrents.keys() - downloader_current_hashes
 
                 if hashes_to_delete:
                     print(
@@ -1322,28 +1306,32 @@ class DataTracker(Thread):
                     # 添加当前正在处理的种子中正在做种的名称
                     for torrent_data in torrents_to_upsert.values():
                         if torrent_data["state"] not in [
-                                "未做种", "已暂停", "已停止", "错误", "等待", "队列"
+                            "未做种",
+                            "已暂停",
+                            "已停止",
+                            "错误",
+                            "等待",
+                            "队列",
                         ]:
                             current_seeding_names.add(torrent_data["name"])
 
                     # 添加数据库中其他下载器的正在做种的种子名称
                     other_downloaders_placeholders = ",".join(
-                        [placeholder] *
-                        len(enabled_downloader_ids - {downloader_id}))
+                        [placeholder] * len(enabled_downloader_ids - {downloader_id})
+                    )
                     if enabled_downloader_ids - {downloader_id}:  # 如果还有其他下载器
                         cursor.execute(
                             f"SELECT DISTINCT name FROM torrents WHERE downloader_id IN ({other_downloaders_placeholders}) AND state NOT IN ('未做种', '已暂停', '已停止', '错误', '等待', '队列')",
-                            tuple(enabled_downloader_ids - {downloader_id}))
-                        other_seeding_names = {
-                            row["name"]
-                            for row in cursor.fetchall()
-                        }
+                            tuple(enabled_downloader_ids - {downloader_id}),
+                        )
+                        other_seeding_names = {row["name"] for row in cursor.fetchall()}
                         current_seeding_names.update(other_seeding_names)
 
                     # 分类要删除的种子
                     hashes_to_delete_normal = []  # 状态不是'未做种'的，直接删除
-                    hashes_to_delete_inactive_seed = [
-                    ]  # 状态是'未做种'但没有其他同名种子在做种的，也要删除
+                    hashes_to_delete_inactive_seed = (
+                        []
+                    )  # 状态是'未做种'但没有其他同名种子在做种的，也要删除
 
                     for hash_value in hashes_to_delete:
                         torrent_info = db_torrents[hash_value]
@@ -1352,11 +1340,9 @@ class DataTracker(Thread):
                             hashes_to_delete_normal.append(hash_value)
                         else:
                             # 状态是'未做种'，检查是否有其他同名种子在做种
-                            if torrent_info[
-                                    "name"] not in current_seeding_names:
+                            if torrent_info["name"] not in current_seeding_names:
                                 # 没有其他同名种子在做种，删除这个'未做种'的种子
-                                hashes_to_delete_inactive_seed.append(
-                                    hash_value)
+                                hashes_to_delete_inactive_seed.append(hash_value)
 
                     # 初始化删除计数器
                     deleted_count_normal = 0
@@ -1365,11 +1351,12 @@ class DataTracker(Thread):
                     # 删除状态不是'未做种'的种子
                     if hashes_to_delete_normal:
                         delete_placeholders = ",".join(
-                            [placeholder] * len(hashes_to_delete_normal))
+                            [placeholder] * len(hashes_to_delete_normal)
+                        )
                         delete_query = f"DELETE FROM torrents WHERE hash IN ({delete_placeholders}) AND downloader_id = {placeholder}"
                         cursor.execute(
-                            delete_query,
-                            tuple(hashes_to_delete_normal) + (downloader_id, ))
+                            delete_query, tuple(hashes_to_delete_normal) + (downloader_id,)
+                        )
                         deleted_count_normal = cursor.rowcount
                         print(
                             f"【刷新线程】已删除下载器 {downloader_id} 中的 {deleted_count_normal} 个已移除的非未做种种子"
@@ -1378,13 +1365,12 @@ class DataTracker(Thread):
                     # 删除状态是'未做种'但没有其他同名种子在做种的种子
                     if hashes_to_delete_inactive_seed:
                         delete_placeholders = ",".join(
-                            [placeholder] *
-                            len(hashes_to_delete_inactive_seed))
+                            [placeholder] * len(hashes_to_delete_inactive_seed)
+                        )
                         delete_query = f"DELETE FROM torrents WHERE hash IN ({delete_placeholders}) AND downloader_id = {placeholder}"
                         cursor.execute(
-                            delete_query,
-                            tuple(hashes_to_delete_inactive_seed) +
-                            (downloader_id, ))
+                            delete_query, tuple(hashes_to_delete_inactive_seed) + (downloader_id,)
+                        )
                         deleted_count_inactive = cursor.rowcount
                         print(
                             f"【刷新线程】已删除下载器 {downloader_id} 中的 {deleted_count_inactive} 个已移除的未做种种子（没有其他同名种子在做种）"
@@ -1395,15 +1381,25 @@ class DataTracker(Thread):
                         f"【刷新线程】已删除下载器 {downloader_id} 中的 {total_deleted} 个已移除的种子记录"
                     )
                     logging.info(
-                        f"已删除下载器 {downloader_id} 中的 {total_deleted} 个已移除的种子记录")
+                        f"已删除下载器 {downloader_id} 中的 {total_deleted} 个已移除的种子记录"
+                    )
 
             if torrents_to_upsert:
                 # 确保参数顺序与 SQL 语句完全匹配
                 params = [
                     (
-                        d["hash"], d["name"], d["save_path"], d["size"],
-                        d["progress"], d["state"], d["sites"], d["details"],
-                        d["group"], d["downloader_id"], now_str, d["seeders"]
+                        d["hash"],
+                        d["name"],
+                        d["save_path"],
+                        d["size"],
+                        d["progress"],
+                        d["state"],
+                        d["sites"],
+                        d["details"],
+                        d["group"],
+                        d["downloader_id"],
+                        now_str,
+                        d["seeders"],
                     )
                     for d in torrents_to_upsert.values()
                 ]
@@ -1433,26 +1429,18 @@ class DataTracker(Thread):
                 print(f"【刷新线程】已批量处理 {len(upload_stats_to_upsert)} 条种子上传数据。")
                 logging.info(f"已批量处理 {len(upload_stats_to_upsert)} 条种子上传数据。")
             # 根据数据库类型使用正确的占位符
-            placeholder = "%s" if self.db_manager.db_type in [
-                "mysql", "postgresql"
-            ] else "?"
+            placeholder = "%s" if self.db_manager.db_type in ["mysql", "postgresql"] else "?"
 
             print(f"【刷新线程】检查是否需要删除已移除下载器的种子数据...")
             # 修改删除逻辑：只删除已从配置中删除的下载器的种子数据，保留已禁用下载器的种子数据
             # 获取配置中所有下载器的ID（包括启用和禁用的）
-            all_configured_downloaders = {
-                d["id"]
-                for d in config.get("downloaders", [])
-            }
+            all_configured_downloaders = {d["id"] for d in config.get("downloaders", [])}
 
             # 获取当前数据库中存在的所有下载器ID
             cursor.execute(
                 "SELECT DISTINCT downloader_id FROM torrents WHERE downloader_id IS NOT NULL"
             )
-            existing_downloader_ids = {
-                row["downloader_id"]
-                for row in cursor.fetchall()
-            }
+            existing_downloader_ids = {row["downloader_id"] for row in cursor.fetchall()}
 
             # 计算应该删除种子数据的下载器ID（已从配置中删除的下载器）
             deleted_downloader_ids = existing_downloader_ids - all_configured_downloaders
@@ -1463,9 +1451,10 @@ class DataTracker(Thread):
                     f"【刷新线程】发现 {len(deleted_downloader_ids)} 个已删除的下载器，将移除其种子数据"
                 )
                 # 构建 WHERE 子句
-                downloader_placeholders = ",".join([placeholder] *
-                                                   len(deleted_downloader_ids))
-                delete_query = f"DELETE FROM torrents WHERE downloader_id IN ({downloader_placeholders})"
+                downloader_placeholders = ",".join([placeholder] * len(deleted_downloader_ids))
+                delete_query = (
+                    f"DELETE FROM torrents WHERE downloader_id IN ({downloader_placeholders})"
+                )
                 cursor.execute(delete_query, tuple(deleted_downloader_ids))
                 deleted_count = cursor.rowcount
                 print(f"【刷新线程】从 torrents 表中移除了 {deleted_count} 个已删除下载器的种子。")
@@ -1479,7 +1468,8 @@ class DataTracker(Thread):
             logging.info("种子数据库更新周期成功完成。")
         except Exception as e:
             logging.error(f"更新数据库中的种子失败: {e}", exc_info=True)
-            if conn: conn.rollback()
+            if conn:
+                conn.rollback()
         finally:
             if conn:
                 cursor.close()
@@ -1487,6 +1477,23 @@ class DataTracker(Thread):
 
     def _normalize_torrent_info(self, t, client_type, client_instance=None):
         if client_type == "qbittorrent":
+            # --- DEBUG START ---
+            try:
+                # Handle both dict and object access for hash
+                t_hash = t.get("hash") if isinstance(t, dict) else getattr(t, "hash", "")
+                if t_hash and t_hash.lower() == "d68a9eefd16e335714afd59d85af8b532024de3d":
+                    print(f"[DEBUG] _normalize_torrent_info hit for target hash: {t_hash}")
+                    print(f"[DEBUG] type(t): {type(t)}")
+
+                    val_total_size = t.get("total_size") if isinstance(t, dict) else getattr(t, "total_size", "N/A")
+                    val_size = t.get("size") if isinstance(t, dict) else getattr(t, "size", "N/A")
+
+                    print(f"[DEBUG] total_size: {val_total_size}")
+                    print(f"[DEBUG] size: {val_size}")
+            except Exception as e:
+                print(f"[DEBUG] Exception in debug block: {e}")
+            # --- DEBUG END ---
+
             # 检查数据是从代理获取的还是从客户端获取的
             if isinstance(t, dict):
                 # 从代理获取的数据是字典格式
@@ -1499,50 +1506,48 @@ class DataTracker(Thread):
                     # 如果只有 tracker 字段（单数），将其转换为列表格式
                     trackers_list = [{"url": t["tracker"]}]
 
-                info = {
-                    "name": t.get("name", ""),
-                    "hash": t.get("hash", ""),
-                    "save_path": t.get("save_path", ""),
-                    "size": t.get("size", 0),
-                    "progress": t.get("progress", 0),
-                    "state": t.get("state", ""),
-                    "comment": t.get("comment", ""),
-                    "trackers": trackers_list,
-                    "uploaded": t.get("uploaded", 0),
-                    "seeders": t.get("num_complete", 0),  # 完成下载的总客户端数，即我们作为种子的上传对象
-                }
-            else:
-                # 从客户端获取的数据是对象格式
-                # 获取 trackers 信息
-                trackers_data = []
+                # 计算真实的完成百分比
+                # 如果是部分下载，t.progress可能显示1.0（100%），但实际上只下载了部分文件
+                # 我们希望显示的是占整个种子大小的比例
                 try:
-                    # 尝试获取 trackers 属性
-                    if hasattr(t, 'trackers'):
-                        trackers_data = t.trackers
-                    # 如果 trackers 为空，尝试通过 API 获取
-                    if not trackers_data and client_instance:
-                        try:
-                            torrent_trackers = client_instance.torrents_trackers(
-                                t.hash)
-                            trackers_data = torrent_trackers if torrent_trackers else []
-                        except Exception as e:
-                            logging.warning(
-                                f"无法通过API获取种子 {t.hash} 的trackers: {e}")
+                    total_size = t.get("total_size", 0) if isinstance(t, dict) else getattr(t, "total_size", 0)
+                    size_selected = t.get("size", 0) if isinstance(t, dict) else getattr(t, "size", 0)
+                    progress_raw = t.get("progress", 0) if isinstance(t, dict) else getattr(t, "progress", 0)
+
+                    # 只有当勾选大小小于总大小时，才需要重新计算进度
+                    if total_size > 0 and size_selected > 0 and size_selected < total_size:
+                        # 计算当前已下载的大小
+                        downloaded_size = size_selected * progress_raw
+                        # 计算相对于总大小的进度
+                        calculated_progress = downloaded_size / total_size
+                        # print(f"[DEBUG] Recalculating progress for {t.get('name', 'unknown')}: {progress_raw:.4f} -> {calculated_progress:.4f} (selected: {size_selected}, total: {total_size})")
+                        progress = calculated_progress
+                    else:
+                        progress = progress_raw
                 except Exception as e:
-                    logging.warning(f"获取种子 {t.hash} 的trackers时出错: {e}")
+                    logging.warning(f"Error calculating progress: {e}")
+                    progress = t.get("progress", 0) if isinstance(t, dict) else getattr(t, "progress", 0)
 
                 info = {
-                    "name": t.name,
-                    "hash": t.hash,
-                    "save_path": t.save_path,
-                    "size": t.size,
-                    "progress": t.progress,
-                    "state": t.state,
-                    "comment": t.get("comment", ""),
-                    "trackers": trackers_data,
-                    "uploaded": t.uploaded,
-                    "seeders": getattr(t, 'num_complete', 0),  # 完成下载的总客户端数，即我们作为种子的上传对象
+                    "name": t.get("name", "") if isinstance(t, dict) else getattr(t, "name", ""),
+                    "hash": t.get("hash", "") if isinstance(t, dict) else getattr(t, "hash", ""),
+                    "save_path": t.get("save_path", "") if isinstance(t, dict) else getattr(t, "save_path", ""),
+                    "size": t.get("total_size", 0) if isinstance(t, dict) else getattr(t, "total_size", 0), # 使用 total_size 作为种子总大小
+                    "progress": progress,
+                    "state": t.get("state", "") if isinstance(t, dict) else getattr(t, "state", ""),
+                    "comment": t.get("comment", "") if isinstance(t, dict) else t.get("comment", ""), # 对于对象，get("comment", "") 可能不适用，稍后处理
+                    "trackers": trackers_list if isinstance(t, dict) else trackers_data,
+                    "uploaded": t.get("uploaded", 0) if isinstance(t, dict) else getattr(t, "uploaded", 0),
+                    "seeders": t.get("num_complete", 0) if isinstance(t, dict) else getattr(t, "num_complete", 0),
                 }
+
+                # 对于非字典类型，单独处理comment
+                if not isinstance(t, dict):
+                     info["comment"] = t.get("comment", "")
+
+                # 移除之前的调试代码
+                # ...
+
 
                 # --- [核心修正] ---
                 # 基于成功的测试脚本，实现可靠的备用方案
@@ -1550,33 +1555,33 @@ class DataTracker(Thread):
                     logging.debug(f"种子 '{t.name[:30]}...' 的注释为空，尝试备用接口获取。")
                     try:
                         # 1. 从客户端实例中提取 SID cookie
-                        sid_cookie = client_instance._session.cookies.get(
-                            'SID')
+                        sid_cookie = client_instance._session.cookies.get("SID")
                         if sid_cookie:
-                            cookies_for_request = {'SID': sid_cookie}
+                            cookies_for_request = {"SID": sid_cookie}
 
                             # 2. 构造请求
                             # 使用 client.host 属性，这是库提供的公共接口，比_host更稳定
                             base_url = client_instance.host
                             properties_url = f"{base_url}/api/v2/torrents/properties"
-                            params = {'hash': t.hash}
+                            params = {"hash": t.hash}
 
                             # 3. 发送手动请求
                             response = requests.get(
                                 properties_url,
                                 params=params,
                                 cookies=cookies_for_request,
-                                timeout=10)
+                                timeout=10,
+                            )
                             response.raise_for_status()
 
                             # 4. 解析并更新 comment
                             properties_data = response.json()
-                            fallback_comment = properties_data.get(
-                                "comment", "")
+                            fallback_comment = properties_data.get("comment", "")
 
                             if fallback_comment:
                                 logging.info(
-                                    f"成功通过备用接口为种子 '{t.name[:30]}...' 获取到注释。")
+                                    f"成功通过备用接口为种子 '{t.name[:30]}...' 获取到注释。"
+                                )
                                 info["comment"] = fallback_comment
                         else:
                             logging.warning(f"无法为备用请求提取 SID cookie，跳过。")
@@ -1594,8 +1599,11 @@ class DataTracker(Thread):
                 seeders = 0
                 if t.get("trackerStats"):
                     # 从tracker统计中获取种子数，使用最大的有效值
-                    valid_seeds = [tracker.get("seederCount", 0) for tracker in t.get("trackerStats", [])
-                                 if tracker.get("seederCount", 0) > 0]
+                    valid_seeds = [
+                        tracker.get("seederCount", 0)
+                        for tracker in t.get("trackerStats", [])
+                        if tracker.get("seederCount", 0) > 0
+                    ]
                     if valid_seeds:
                         seeders = max(valid_seeds)  # 使用最大的有效种子数
 
@@ -1617,39 +1625,61 @@ class DataTracker(Thread):
                 seeders = 0
                 try:
                     # 从 tracker_stats 获取种子数
-                    if hasattr(t, 'fields') and 'trackerStats' in t.fields:
-                        tracker_stats = t.fields.get('trackerStats', [])
+                    if hasattr(t, "fields") and "trackerStats" in t.fields:
+                        tracker_stats = t.fields.get("trackerStats", [])
                         if tracker_stats:
                             # 获取所有有效的种子数，使用最大的有效值
-                            valid_seeds = [tracker.get('seederCount', 0) for tracker in tracker_stats
-                                         if tracker.get('seederCount', 0) > 0]
+                            valid_seeds = [
+                                tracker.get("seederCount", 0)
+                                for tracker in tracker_stats
+                                if tracker.get("seederCount", 0) > 0
+                            ]
                             if valid_seeds:
                                 seeders = max(valid_seeds)
                 except Exception as e:
                     logging.debug(f"Failed to get tracker_stats: {e}")
 
+                # 计算真实的完成百分比
+                try:
+                    total_size = getattr(t, "total_size", 0)
+                    # 从fields中获取sizeWhenDone，或者直接获取
+                    size_when_done = 0
+                    if hasattr(t, "fields"):
+                        size_when_done = t.fields.get("sizeWhenDone", 0)
+                    elif hasattr(t, "size_when_done"):
+                        size_when_done = t.size_when_done
+
+                    progress_raw = t.get("percentDone", 0) if isinstance(t, dict) else getattr(t, "percent_done", 0)
+
+                    # 只有当欲下载大小小于总大小时，才需要重新计算进度
+                    # 注意：Transmission的progress通常已经是相对于sizeWhenDone的了，但如果我们要显示相对于总大小的进度：
+                    # 下载进度 = 已下载大小 / 总大小
+                    # 已下载大小 = sizeWhenDone * progress_raw (假设progress_raw是相对于sizeWhenDone的)
+                    # 但实际上，如果只下载一部分，我们希望看到的进度是已完成部分占总大小的比例
+
+                    if total_size > 0 and size_when_done > 0 and size_when_done < total_size:
+                        # 计算当前已下载的大小 (Transmission的percentDone通常是针对sizeWhenDone的)
+                        downloaded_size = size_when_done * progress_raw
+                        # 计算相对于总大小的进度
+                        calculated_progress = downloaded_size / total_size
+                        progress = calculated_progress
+                    else:
+                        progress = progress_raw
+                except Exception as e:
+                    logging.warning(f"Error calculating transmission progress: {e}")
+                    progress = t.get("percentDone", 0) if isinstance(t, dict) else getattr(t, "percent_done", 0)
+
                 return {
-                    "name":
-                    t.name,
-                    "hash":
-                    t.hash_string,
-                    "save_path":
-                    t.download_dir,
-                    "size":
-                    t.total_size,
-                    "progress":
-                    t.percent_done,
-                    "state":
-                    t.status,
-                    "comment":
-                    getattr(t, "comment", ""),
-                    "trackers": [{
-                        "url": tracker.get("announce")
-                    } for tracker in t.trackers],
-                    "uploaded":
-                    t.uploaded_ever,
-                    "seeders":
-                    seeders,
+                    "name": t.name,
+                    "hash": t.hash_string,
+                    "save_path": t.download_dir,
+                    "size": t.total_size, # 使用 total_size 作为种子总大小
+                    "progress": progress,
+                    "state": t.status,
+                    "comment": getattr(t, "comment", ""),
+                    "trackers": [{"url": tracker.get("announce")} for tracker in t.trackers],
+                    "uploaded": t.uploaded_ever,
+                    "seeders": seeders,
                 }
         return {}
 
@@ -1682,7 +1712,7 @@ class DataTracker(Thread):
 
     def _find_torrent_group(self, name, group_to_site_map_lower):
         """查找种子的发布组名称，支持@符号前后匹配。
-        
+
         对于包含@符号的种子名称，会分别检查@前后的部分是否匹配官组名称。
         支持多种格式：
         - FFans@leon -> 检查"FFans"和"leon"
@@ -1695,9 +1725,9 @@ class DataTracker(Thread):
         partial_matches = []  # 部分匹配结果
 
         # 检查是否包含@符号
-        if '@' in name_lower:
+        if "@" in name_lower:
             # 分割@符号前后的部分
-            parts = name_lower.split('@')
+            parts = name_lower.split("@")
             logging.debug(f"种子名称包含@符号，分割为: {parts}")
 
             for part in parts:
@@ -1705,40 +1735,34 @@ class DataTracker(Thread):
                 # 1. 去除首尾空格
                 # 2. 去除前导的-符号
                 # 3. 去除方括号[]内的内容（处理[BDrip]这种格式）
-                clean_part = part.strip().lstrip('-').strip()
+                clean_part = part.strip().lstrip("-").strip()
 
                 # 处理方括号：去除[xxx]格式，保留括号外的内容
                 import re
-                clean_part = re.sub(r'\[.*?\]', '', clean_part).strip()
+
+                clean_part = re.sub(r"\[.*?\]", "", clean_part).strip()
 
                 if clean_part:
                     logging.debug(f"检查部分: '{clean_part}'")
 
                     # 先检查精确匹配
-                    for group_lower, group_info in group_to_site_map_lower.items(
-                    ):
+                    for group_lower, group_info in group_to_site_map_lower.items():
                         # 去除官组名称前面的-（如果有）
-                        group_lower_clean = group_lower.lstrip('-')
+                        group_lower_clean = group_lower.lstrip("-")
 
                         # 精确匹配（优先级最高）
                         if group_lower_clean == clean_part:
-                            if group_info[
-                                    "original_case"] not in exact_matches:
-                                exact_matches.append(
-                                    group_info["original_case"])
-                                logging.debug(
-                                    f"精确匹配到官组: '{group_info['original_case']}'"
-                                )
+                            if group_info["original_case"] not in exact_matches:
+                                exact_matches.append(group_info["original_case"])
+                                logging.debug(f"精确匹配到官组: '{group_info['original_case']}'")
                         # 包含匹配（次优先级）
                         elif group_lower_clean in clean_part or clean_part in group_lower_clean:
-                            if group_info[
-                                    "original_case"] not in partial_matches and group_info[
-                                        "original_case"] not in exact_matches:
-                                partial_matches.append(
-                                    group_info["original_case"])
-                                logging.debug(
-                                    f"部分匹配到官组: '{group_info['original_case']}'"
-                                )
+                            if (
+                                group_info["original_case"] not in partial_matches
+                                and group_info["original_case"] not in exact_matches
+                            ):
+                                partial_matches.append(group_info["original_case"])
+                                logging.debug(f"部分匹配到官组: '{group_info['original_case']}'")
 
         # 合并结果：精确匹配优先
         found_matches = exact_matches + partial_matches
@@ -1751,7 +1775,8 @@ class DataTracker(Thread):
                     if group_info["original_case"] not in found_matches:
                         found_matches.append(group_info["original_case"])
                         logging.debug(
-                            f"匹配到官组: '{group_info['original_case']}' (通过全名匹配)")
+                            f"匹配到官组: '{group_info['original_case']}' (通过全名匹配)"
+                        )
 
         if found_matches:
             # 如果有精确匹配，优先返回最短的精确匹配（最准确）
@@ -1760,8 +1785,7 @@ class DataTracker(Thread):
                 result = sorted(exact_matches, key=len)[0]  # 最短的精确匹配
                 logging.info(f"种子 '{name[:50]}...' 精确匹配到官组: {result}")
             else:
-                result = sorted(found_matches, key=len,
-                                reverse=True)[0]  # 最长的匹配
+                result = sorted(found_matches, key=len, reverse=True)[0]  # 最长的匹配
                 logging.info(f"种子 '{name[:50]}...' 匹配到官组: {result}")
             return result
 
@@ -1783,7 +1807,8 @@ def start_data_tracker(db_manager, config_manager):
     global data_tracker_thread
     # 检查是否在调试模式下运行，避免重复启动
     import os
-    if os.environ.get('WERKZEUG_RUN_MAIN') != 'true':
+
+    if os.environ.get("WERKZEUG_RUN_MAIN") != "true":
         # 在调试模式下，这是监控进程，不需要启动线程
         logging.info("检测到调试监控进程，跳过DataTracker线程启动。")
         return data_tracker_thread

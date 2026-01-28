@@ -233,8 +233,8 @@
               height: 100%;
             "
           >
-            <el-tag :type="getStateTagType(scope.row.state)" size="large">{{
-              scope.row.state
+            <el-tag :type="getStateTagType(scope.row.state, scope.row)" size="large">{{
+              getDisplayState(scope.row)
             }}</el-tag>
           </div>
         </template>
@@ -611,8 +611,7 @@
                 :type="getSiteTagType(site, isSourceSiteSelectable(site.name))"
                 :class="{ 'is-selectable': isSourceSiteSelectable(site.name) }"
                 :style="
-                  (!site.has_cookie &&
-                    site.name !== '肉丝') ||
+                  (!site.has_cookie && site.name !== '肉丝') ||
                   ((site.name === '杜比' || site.name === 'HDtime' || site.name === '肉丝') &&
                     !site.has_passkey)
                     ? 'opacity: 0.5'
@@ -654,11 +653,7 @@
     <SiteDataViewer @refresh="handleTorrentRefresh" />
 
     <!-- IYUU 批量查询进度弹窗（筛选结果） -->
-    <div
-      v-if="iyuuBatchDialogVisible"
-      class="filter-overlay"
-      @click.self="closeIyuuBatchDialog"
-    >
+    <div v-if="iyuuBatchDialogVisible" class="filter-overlay" @click.self="closeIyuuBatchDialog">
       <el-card class="filter-card" style="max-width: 720px">
         <template #header>
           <div class="filter-card-header">
@@ -673,15 +668,17 @@
             </el-descriptions-item>
             <el-descriptions-item label="状态">
               <el-tag
-                :type="iyuuBatchTask?.isRunning ? 'warning' : iyuuBatchTask?.success ? 'success' : 'danger'"
+                :type="
+                  iyuuBatchTask?.isRunning
+                    ? 'warning'
+                    : iyuuBatchTask?.success
+                      ? 'success'
+                      : 'danger'
+                "
                 size="small"
               >
                 {{
-                  iyuuBatchTask?.isRunning
-                    ? '进行中'
-                    : iyuuBatchTask?.success
-                      ? '已完成'
-                      : '失败'
+                  iyuuBatchTask?.isRunning ? '进行中' : iyuuBatchTask?.success ? '已完成' : '失败'
                 }}
               </el-tag>
             </el-descriptions-item>
@@ -1392,7 +1389,9 @@ const refreshIyuuBatchProgress = async () => {
             // 如果当前还在源站点选择弹窗中，尝试刷新 store 中的种子信息
             const row = selectedTorrentForMigration.value
             if (row) {
-              const updatedRow = allData.value.find((t) => t.name === row.name && t.size === row.size)
+              const updatedRow = allData.value.find(
+                (t) => t.name === row.name && t.size === row.size,
+              )
               if (updatedRow) {
                 crossSeedStore.setParams(updatedRow)
               }
@@ -1479,7 +1478,9 @@ const triggerIYUUQueryForFiltered = async () => {
 
     // 确保包含当前正在处理的种子（避免筛选结果过大时不在前 200 里）
     if (anchorRow && anchorRow.name && anchorRow.size) {
-      const hasAnchor = candidates.some((t: any) => t.name === anchorRow.name && t.size === anchorRow.size)
+      const hasAnchor = candidates.some(
+        (t: any) => t.name === anchorRow.name && t.size === anchorRow.size,
+      )
       if (!hasAnchor) {
         const anchorItem = {
           name: anchorRow.name,
@@ -1783,7 +1784,16 @@ const getSiteTagType = (site: SiteStatus, isSelectable: boolean) => {
   // 如果站点存在于种子中但没有comment，显示为蓝色（不可点击，可尝试IYUU）
   return 'primary'
 }
-const getStateTagType = (state: string) => {
+
+const getDisplayState = (row: Torrent) => {
+  if (row.state === '做种中' && row.progress < 100) {
+    return '部分做种'
+  }
+  return row.state
+}
+
+const getStateTagType = (state: string, row?: Torrent) => {
+  if (row && row.state === '做种中' && row.progress < 100) return 'warning'
   if (state.includes('下载')) return 'primary'
   if (state.includes('做种')) return 'success'
   if (state.includes('暂停')) return 'warning'
