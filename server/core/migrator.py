@@ -437,7 +437,7 @@ class TorrentMigrator:
                     "Cookie": self.SOURCE_COOKIE,
                     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
                 },
-                timeout=180,
+                timeout=600,
             )
             torrent_response.raise_for_status()
 
@@ -683,7 +683,7 @@ class TorrentMigrator:
                         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
                     },
                     params={"id": torrent_id, "hit": "1"},
-                    timeout=180,
+                    timeout=600,
                 )
                 response.raise_for_status()
                 response.encoding = "utf-8"
@@ -749,7 +749,7 @@ class TorrentMigrator:
                         "Cookie": self.SOURCE_COOKIE,
                         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
                     },
-                    timeout=180,
+                    timeout=600,
                 )
                 torrent_response.raise_for_status()
 

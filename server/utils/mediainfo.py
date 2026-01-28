@@ -297,7 +297,7 @@ def _extract_bdinfo(bluray_path: str) -> str:
                 bdinfo_cmd,
                 capture_output=True,
                 text=True,
-                timeout=600,  # 10分钟超时（BDInfo可能需要较长时间）
+                timeout=7200,  # 2小时超时（BDInfo可能需要较长时间）
             )
 
             print(f"BDInfo执行完成，返回码: {result.returncode}")

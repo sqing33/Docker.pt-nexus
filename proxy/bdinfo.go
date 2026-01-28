@@ -283,7 +283,7 @@ func executeBDInfoWithProgressMonitoring(bdinfoPath string, args []string, taskI
 	}()
 
 	select {
-	case <-time.After(10 * time.Minute):
+	case <-time.After(60 * time.Minute):
 		cmd.Process.Kill()
 		return fmt.Errorf("BDInfo执行超时")
 	case err := <-done:
@@ -327,7 +327,7 @@ func sendProgressCallback(callbackURL, taskID string, progressPercent float64, c
 	
 	// 创建带超时的HTTP客户端
 	client := &http.Client{
-		Timeout: 5 * time.Second, // 5秒超时
+		Timeout: 180 * time.Second, // 180秒超时
 	}
 	
 	resp, err := client.Post(progressURL, "application/json", strings.NewReader(string(jsonData)))
@@ -362,7 +362,7 @@ func sendCompletionCallback(callbackURL, taskID string, success bool, bdinfoCont
 	
 	// 创建带超时的HTTP客户端
 	client := &http.Client{
-		Timeout: 10 * time.Second, // 10秒超时，完成回调可能数据较大
+		Timeout: 180 * time.Second, // 180秒超时，完成回调可能数据较大
 	}
 	
 	resp, err := client.Post(completionURL, "application/json", strings.NewReader(string(jsonData)))

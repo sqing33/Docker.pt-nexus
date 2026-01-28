@@ -268,7 +268,7 @@ class DataTracker(Thread):
             response = requests.post(
                 f"{proxy_base_url}/api/torrents/all",
                 json=request_data,
-                timeout=180,  # 种子信息可能需要更长的时间
+                timeout=600,  # 种子信息可能需要更长的时间
             )
             response.raise_for_status()
 

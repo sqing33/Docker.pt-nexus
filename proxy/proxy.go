@@ -153,7 +153,7 @@ func newQBHTTPClient(baseURL string) (*qbHTTPClient, error) {
 		return nil, err
 	}
 	return &qbHTTPClient{
-		Client:  &http.Client{Jar: jar, Timeout: 30 * time.Second},
+		Client:  &http.Client{Jar: jar, Timeout: 180 * time.Second},
 		BaseURL: baseURL,
 	}, nil
 }
@@ -455,6 +455,39 @@ func executeCommandWithTimeout(timeout time.Duration, name string, args ...strin
 		return "", fmt.Errorf("命令 '%s' 执行超时 (%.0f秒)", name, timeout.Seconds())
 	}
 }
+
+func executeCommandWithTimeoutAndStderr(timeout time.Duration, name string, args ...string) (string, string, error) {
+	cmd := exec.Command(name, args...)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	// 启动命令
+	if err := cmd.Start(); err != nil {
+		return "", "", fmt.Errorf("启动命令 '%s' 失败: %v", name, err)
+	}
+
+	// 使用channel等待命令完成
+	done := make(chan error, 1)
+	go func() {
+		done <- cmd.Wait()
+	}()
+
+	// 等待命令完成或超时
+	select {
+	case err := <-done:
+		if err != nil {
+			return "", stderr.String(), fmt.Errorf("命令 '%s' 执行失败: %v, 错误输出: %s", name, err, stderr.String())
+		}
+		return stdout.String(), stderr.String(), nil
+	case <-time.After(timeout):
+		// 超时，杀死进程
+		if err := cmd.Process.Kill(); err != nil {
+			log.Printf("警告: 无法杀死超时的进程 '%s': %v", name, err)
+		}
+		return "", "", fmt.Errorf("命令 '%s' 执行超时 (%.0f秒)", name, timeout.Seconds())
+	}
+}
 func buildReadIntervals(duration float64) string {
 	probePoints := []float64{0.2, 0.4, 0.6, 0.8}
 	probeDuration := 60.0
@@ -669,7 +702,7 @@ func takeScreenshot(videoPath, outputPath string, timePoint float64, subtitleSID
 		fmt.Sprintf("--o=%s", outputPath),
 		videoPath,
 	)
-	_, err := executeCommand("mpv", args...)
+	_, err := executeCommandWithTimeout(600*time.Second, "mpv", args...)
 	if err != nil {
 		log.Printf("mpv 截图失败，最终执行的命令: mpv %s", strings.Join(args, " "))
 		return fmt.Errorf("mpv 截图失败: %v", err)
@@ -708,12 +741,10 @@ func convertPngToOptimizedPng(sourcePath, destPath string) error {
 		"-pred", "mixed",
 		destPath,
 	}
-	cmd := exec.Command("ffmpeg", args...)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
 	start := time.Now()
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("ffmpeg 初次优化失败: %v, 错误: %s", err, stderr.String())
+	_, stderrStr, err := executeCommandWithTimeoutAndStderr(600*time.Second, "ffmpeg", args...)
+	if err != nil {
+		return fmt.Errorf("ffmpeg 初次优化失败: %v, 错误: %s", err, stderrStr)
 	}
 
 	// 检查文件大小
@@ -734,12 +765,10 @@ func convertPngToOptimizedPng(sourcePath, destPath string) error {
 			"-compression_level", "100", // 使用最大压缩级别
 			tempRecompressPath,
 		}
-		recompressCmd := exec.Command("ffmpeg", recompressArgs...)
-		var recompressStderr bytes.Buffer
-		recompressCmd.Stderr = &recompressStderr
 		recompressStart := time.Now()
-		if err := recompressCmd.Run(); err != nil {
-			return fmt.Errorf("ffmpeg 二次压缩失败: %v, 错误: %s", err, recompressStderr.String())
+		_, recompressStderrStr, err := executeCommandWithTimeoutAndStderr(600*time.Second, "ffmpeg", recompressArgs...)
+		if err != nil {
+			return fmt.Errorf("ffmpeg 二次压缩失败: %v, 错误: %s", err, recompressStderrStr)
 		}
 
 		// 替换原文件
@@ -788,7 +817,7 @@ func uploadToPixhost(imagePath string) (string, error) {
 		req, _ := http.NewRequest("POST", "https://api.pixhost.to/images", body)
 		req.Header.Set("Content-Type", writer.FormDataContentType())
 		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36")
-		client := &http.Client{Timeout: 60 * time.Second}
+		client := &http.Client{Timeout: 180 * time.Second}
 		resp, err := client.Do(req)
 		if err != nil {
 			lastErr = fmt.Errorf("上传请求失败: %w", err)
@@ -1468,7 +1497,7 @@ func mediainfoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("正在获取 MediaInfo: %s", videoPath)
-	mediaInfoText, err := executeCommandWithTimeout(5*time.Minute, "mediainfo", "--Output=text", videoPath)
+	mediaInfoText, err := executeCommandWithTimeout(10*time.Minute, "mediainfo", "--Output=text", videoPath)
 	if err != nil {
 		log.Printf("MediaInfo请求: mediainfo命令执行失败: %v", err)
 		writeJSONResponse(w, r, http.StatusInternalServerError, MediaInfoResponse{Success: false, Message: "获取 MediaInfo 失败: " + err.Error()})

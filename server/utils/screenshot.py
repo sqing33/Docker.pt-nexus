@@ -123,7 +123,7 @@ def _upload_to_pixhost_direct(image_path: str, api_url: str, params: dict, heade
             files = {"img": f}
             print("正在发送上传请求到 Pixhost...")
             response = requests.post(
-                api_url, data=params, files=files, headers=headers, timeout=30
+                api_url, data=params, files=files, headers=headers, timeout=180
             )
 
             if response.status_code == 200:
@@ -168,7 +168,7 @@ def _get_agsv_auth_token():
     headers = {"Accept": "application/json"}
     print("正在为 末日图床 获取授权 Token...")
     try:
-        response = requests.post(token_url, headers=headers, json=payload, timeout=30)
+        response = requests.post(token_url, headers=headers, json=payload, timeout=180)
         if response.status_code == 200 and response.json().get("status"):
             token = response.json().get("data", {}).get("token")
             if token:
@@ -558,7 +558,7 @@ def upload_data_screenshot(source_info, save_path, torrent_name=None, downloader
             response = requests.post(
                 f"{proxy_config['proxy_base_url']}/api/media/screenshot",
                 json={"remote_path": full_video_path, "content_name": content_name},
-                timeout=300,
+                timeout=600,
             )
             response.raise_for_status()
             result = response.json()
@@ -672,7 +672,7 @@ def upload_data_screenshot(source_info, save_path, torrent_name=None, downloader
         cmd_screenshot.append(target_video_file)
 
         try:
-            subprocess.run(cmd_screenshot, check=True, capture_output=True, timeout=180)
+            subprocess.run(cmd_screenshot, check=True, capture_output=True, timeout=600)
 
             if not os.path.exists(intermediate_png_path):
                 print(f"❌ mpv 未生成文件: {intermediate_png_path}")
@@ -718,7 +718,7 @@ def upload_data_screenshot(source_info, save_path, torrent_name=None, downloader
             ]
 
             start_compress = time.time()
-            subprocess.run(cmd_compress, check=True, capture_output=True, timeout=60)
+            subprocess.run(cmd_compress, check=True, capture_output=True, timeout=600)
             compress_time = time.time() - start_compress
 
             # 统计信息
