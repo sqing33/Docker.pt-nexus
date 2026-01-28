@@ -277,7 +277,12 @@
               height: 100%;
             "
           >
-            <el-button type="primary" size="small" @click.stop="startCrossSeed(scope.row)">
+            <el-button
+              type="primary"
+              size="small"
+              @click.stop="startCrossSeed(scope.row)"
+              :disabled="!isDevEnv && scope.row.progress < 100"
+            >
               转种
             </el-button>
           </div>
@@ -775,6 +780,7 @@ const error = ref<string | null>(null)
 
 // --- [新增] 控制表格渲染的状态 ---
 const settingsLoaded = ref<boolean>(false)
+const isDevEnv = ref<boolean>(false)
 
 const SAVE_PATH_MAX_COLUMN_WIDTH = 220
 const SAVE_PATH_MIN_COLUMN_WIDTH = 90
@@ -1845,7 +1851,14 @@ onMounted(async () => {
   fetchDownloadersList()
   fetchAllSitesStatus()
   emits('ready', fetchData)
+
+  // 检查开发环境
+  checkDevEnv()
 })
+
+const checkDevEnv = () => {
+  isDevEnv.value = import.meta.env.DEV
+}
 
 watch(nameSearch, () => {
   currentPage.value = 1

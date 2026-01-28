@@ -31,10 +31,9 @@ def get_downloaders_list():
     config_manager = torrents_bp.config_manager
     try:
         downloaders = config_manager.get().get("downloaders", [])
-        downloader_list = [{
-            "id": d["id"],
-            "name": d["name"]
-        } for d in downloaders if d.get("enabled")]
+        downloader_list = [
+            {"id": d["id"], "name": d["name"]} for d in downloaders if d.get("enabled")
+        ]
         return jsonify(downloader_list)
     except Exception as e:
         logging.error(f"get_downloaders_list 出错: {e}", exc_info=True)
@@ -47,11 +46,10 @@ def get_all_downloaders():
     config_manager = torrents_bp.config_manager
     try:
         downloaders = config_manager.get().get("downloaders", [])
-        downloader_list = [{
-            "id": d["id"],
-            "name": d["name"],
-            "enabled": d.get("enabled", True)
-        } for d in downloaders]
+        downloader_list = [
+            {"id": d["id"], "name": d["name"], "enabled": d.get("enabled", True)}
+            for d in downloaders
+        ]
         return jsonify(downloader_list)
     except Exception as e:
         logging.error(f"get_all_downloaders 出错: {e}", exc_info=True)
@@ -67,18 +65,19 @@ def get_data_api():
         page_size = int(request.args.get("pageSize", 50))
         path_filters = json.loads(request.args.get("path_filters", "[]"))
         state_filters = json.loads(request.args.get("state_filters", "[]"))
-        downloader_filters = json.loads(
-            request.args.get("downloader_filters", "[]"))
+        downloader_filters = json.loads(request.args.get("downloader_filters", "[]"))
         source_availability_filters = json.loads(
-            request.args.get("source_availability_filters") or "[]")
+            request.args.get("source_availability_filters") or "[]"
+        )
         exist_site_names = json.loads(request.args.get("existSiteNames", "[]"))
-        not_exist_site_names = json.loads(
-            request.args.get("notExistSiteNames", "[]"))
+        not_exist_site_names = json.loads(request.args.get("notExistSiteNames", "[]"))
         name_search = request.args.get("nameSearch", "").lower()
         sort_prop = request.args.get("sortProp")
         sort_order = request.args.get("sortOrder")
         # 新增：获取 exclude_existing 参数
         exclude_existing = request.args.get("exclude_existing", "false").lower() == "true"
+        # 新增：获取 only_completed 参数，只返回下载进度达到100%的种子
+        only_completed = request.args.get("only_completed", "false").lower() == "true"
     except (ValueError, json.JSONDecodeError):
         return jsonify({"error": "无效的查询参数"}), 400
 
@@ -90,17 +89,12 @@ def get_data_api():
         # --- [新增] 开始: 一次性获取所有站点配置信息 ---
         cursor.execute("SELECT nickname, migration, cookie FROM sites")
         # [修复] 将 sqlite3.Row 对象转换为标准的 dict，以支持 .get() 方法
-        site_configs = {
-            row["nickname"]: dict(row)
-            for row in cursor.fetchall()
-        }
+        site_configs = {row["nickname"]: dict(row) for row in cursor.fetchall()}
         # --- [新增] 结束 ---
 
         # 获取所有目标站点（migration 为 2 或 3 的站点）
         target_sites = {
-            name
-            for name, config in site_configs.items()
-            if config.get("migration", 0) in [2, 3]
+            name for name, config in site_configs.items() if config.get("migration", 0) in [2, 3]
         }
 
         # 修改后的逻辑：all_discovered_sites = 数据库中有做种记录的站点 + 配置了cookie的站点
@@ -108,34 +102,53 @@ def get_data_api():
             "SELECT DISTINCT sites FROM torrents WHERE sites IS NOT NULL AND sites != ''"
         )
         sites_from_torrents = {row["sites"] for row in cursor.fetchall()}
-        
+
         # 获取配置了cookie的站点
-        cursor.execute(
-            "SELECT nickname FROM sites WHERE cookie IS NOT NULL AND cookie != ''"
-        )
+        cursor.execute("SELECT nickname FROM sites WHERE cookie IS NOT NULL AND cookie != ''")
         sites_with_cookie = {row["nickname"] for row in cursor.fetchall()}
-        
+
         # 合并两个集合并排序
         all_discovered_sites = sorted(sites_from_torrents | sites_with_cookie)
 
         # 明确指定查询列，确保包含新添加的列，并排除状态为"不存在"的记录
         placeholder = "%s" if db_manager.db_type in ["mysql", "postgresql"] else "?"
         if db_manager.db_type == "postgresql":
-            cursor.execute(
-                "SELECT hash, name, save_path, size, progress, state, sites, \"group\", details, downloader_id, last_seen, iyuu_last_check, seeders FROM torrents WHERE state != " + placeholder,
-                ("不存在", ))
+            if only_completed:
+                # 只返回下载进度达到100%的种子
+                cursor.execute(
+                    'SELECT hash, name, save_path, size, progress, state, sites, "group", details, downloader_id, last_seen, iyuu_last_check, seeders FROM torrents WHERE state != '
+                    + placeholder
+                    + " AND progress >= 100",
+                    ("不存在",),
+                )
+            else:
+                cursor.execute(
+                    'SELECT hash, name, save_path, size, progress, state, sites, "group", details, downloader_id, last_seen, iyuu_last_check, seeders FROM torrents WHERE state != '
+                    + placeholder,
+                    ("不存在",),
+                )
         else:
-            cursor.execute(
-                "SELECT hash, name, save_path, size, progress, state, sites, `group`, details, downloader_id, last_seen, iyuu_last_check, seeders FROM torrents WHERE state != " + placeholder,
-                ("不存在", ))
+            if only_completed:
+                # 只返回下载进度达到100%的种子
+                cursor.execute(
+                    "SELECT hash, name, save_path, size, progress, state, sites, `group`, details, downloader_id, last_seen, iyuu_last_check, seeders FROM torrents WHERE state != "
+                    + placeholder
+                    + " AND progress >= 100",
+                    ("不存在",),
+                )
+            else:
+                cursor.execute(
+                    "SELECT hash, name, save_path, size, progress, state, sites, `group`, details, downloader_id, last_seen, iyuu_last_check, seeders FROM torrents WHERE state != "
+                    + placeholder,
+                    ("不存在",),
+                )
         torrents_raw = [dict(row) for row in cursor.fetchall()]
 
         cursor.execute(
             "SELECT hash, SUM(uploaded) as total_uploaded FROM torrent_upload_stats GROUP BY hash"
         )
         uploads_by_hash = {
-            row["hash"]: int(row["total_uploaded"] or 0)
-            for row in cursor.fetchall()
+            row["hash"]: int(row["total_uploaded"] or 0) for row in cursor.fetchall()
         }
 
         agg_torrents = defaultdict(
@@ -145,21 +158,32 @@ def get_data_api():
                 "size": 0,
                 "progress": 0,
                 "state": set(),
-                "sites": defaultdict(lambda: {"uploaded": 0, "comment": "", "migration": 0, "state": "N/A", "seeders": 0}),
+                "sites": defaultdict(
+                    lambda: {
+                        "uploaded": 0,
+                        "comment": "",
+                        "migration": 0,
+                        "state": "N/A",
+                        "seeders": 0,
+                    }
+                ),
                 "total_uploaded": 0,
                 "seeders": 0,  # 添加做种人数字段
                 "downloader_ids": [],  # 修改为数组以支持多个下载器
-            })
+            }
+        )
         for t in torrents_raw:
             # 使用种子名称和大小作为唯一标识，以区分同名但不同大小的种子
-            torrent_key = (t['name'], t.get('size', 0))
+            torrent_key = (t["name"], t.get("size", 0))
             agg = agg_torrents[torrent_key]
             if not agg["name"]:
-                agg.update({
-                    "name": t["name"],
-                    "save_path": t.get("save_path", ""),
-                    "size": t.get("size", 0),
-                })
+                agg.update(
+                    {
+                        "name": t["name"],
+                        "save_path": t.get("save_path", ""),
+                        "size": t.get("size", 0),
+                    }
+                )
             # 如果当前save_path为空，但新记录有非空的save_path，则更新它
             elif not agg["save_path"] and t.get("save_path"):
                 agg["save_path"] = t.get("save_path", "")
@@ -176,21 +200,22 @@ def get_data_api():
             if t.get("sites"):
                 site_name = t.get("sites")
                 agg["sites"][site_name]["uploaded"] = (
-                    agg["sites"][site_name].get("uploaded", 0) +
-                    upload_for_this_hash)
+                    agg["sites"][site_name].get("uploaded", 0) + upload_for_this_hash
+                )
                 agg["sites"][site_name]["comment"] = t.get("details")
                 # 添加站点状态
                 agg["sites"][site_name]["state"] = t.get("state", "N/A")
                 # 添加做种人数
                 agg["sites"][site_name]["seeders"] = max(
-                    agg["sites"][site_name].get("seeders", 0),
-                    t.get("seeders", 0))
+                    agg["sites"][site_name].get("seeders", 0), t.get("seeders", 0)
+                )
 
                 # --- [修改] 开始: 附加 migration 状态 ---
                 # 从预加载的配置中获取 migration 值，如果站点不存在则默认为 0
                 # 此处现在可以安全地使用 .get()
-                agg["sites"][site_name]["migration"] = site_configs.get(
-                    site_name, {}).get("migration", 0)
+                agg["sites"][site_name]["migration"] = site_configs.get(site_name, {}).get(
+                    "migration", 0
+                )
                 # --- [修改] 结束 ---
 
         final_torrent_list = []
@@ -201,157 +226,161 @@ def get_data_api():
             existing_sites = set(data.get("sites", {}).keys())
             target_sites_count = len(target_sites - existing_sites)
 
-            data.update({
-                "unique_id": f"{name}_{size}",
-                "state":
-                ", ".join(sorted(list(data["state"]))),
-                "size_formatted":
-                format_bytes(data["size"]),
-                "total_uploaded_formatted":
-                format_bytes(data["total_uploaded"]),
-                "site_count":
-                len(data.get("sites", {})),
-                "total_site_count":
-                len(all_discovered_sites),
-                "target_sites_count":
-                target_sites_count,
-                "seeders": data.get("seeders", 0),  # 添加做种人数
-                "downloaderIds":
-                data.get("downloader_ids", []),
-                "downloaderId":
-                select_best_downloader(
-                    downloader_ids=data.get("downloader_ids", []),
-                    config_manager=torrents_bp.config_manager
-                )
-            })
+            data.update(
+                {
+                    "unique_id": f"{name}_{size}",
+                    "state": ", ".join(sorted(list(data["state"]))),
+                    "size_formatted": format_bytes(data["size"]),
+                    "total_uploaded_formatted": format_bytes(data["total_uploaded"]),
+                    "site_count": len(data.get("sites", {})),
+                    "total_site_count": len(all_discovered_sites),
+                    "target_sites_count": target_sites_count,
+                    "seeders": data.get("seeders", 0),  # 添加做种人数
+                    "downloaderIds": data.get("downloader_ids", []),
+                    "downloaderId": select_best_downloader(
+                        downloader_ids=data.get("downloader_ids", []),
+                        config_manager=torrents_bp.config_manager,
+                    ),
+                }
+            )
             final_torrent_list.append(data)
 
         # Filtering logic
         filtered_list = final_torrent_list
         if name_search:
-            filtered_list = [
-                t for t in filtered_list if name_search in t["name"].lower()
-            ]
+            filtered_list = [t for t in filtered_list if name_search in t["name"].lower()]
         if path_filters:
             filtered_list = [
-                t for t in filtered_list 
-                if any(
-                    t.get("save_path", "") == path
-                    for path in path_filters
-                )
+                t
+                for t in filtered_list
+                if any(t.get("save_path", "") == path for path in path_filters)
             ]
         if state_filters:
             filtered_list = [
-                t for t in filtered_list if any(
-                    s in state_filters for s in t.get("state", "").split(", "))
+                t
+                for t in filtered_list
+                if any(s in state_filters for s in t.get("state", "").split(", "))
             ]
         if downloader_filters:
             filtered_list = [
-                t for t in filtered_list
-                if any(downloader_id in downloader_filters
-                       for downloader_id in t.get("downloaderIds", []))
+                t
+                for t in filtered_list
+                if any(
+                    downloader_id in downloader_filters
+                    for downloader_id in t.get("downloaderIds", [])
+                )
             ]
         # 源站点可用性筛选（只计算有cookie的源站点）
-        if "存在源站点" in source_availability_filters and "无可用源站点" in source_availability_filters:
+        if (
+            "存在源站点" in source_availability_filters
+            and "无可用源站点" in source_availability_filters
+        ):
             # 包含所有（默认）
             pass
         elif "存在源站点" in source_availability_filters:
             filtered_list = [
-                t for t in filtered_list
-                if len([site_name for site_name, site_data in t.get("sites", {}).items()
-                        if site_data.get("migration", 0) in [1, 3] and
-                           site_configs.get(site_name, {}).get("cookie", "") != ""]) > 0
+                t
+                for t in filtered_list
+                if len(
+                    [
+                        site_name
+                        for site_name, site_data in t.get("sites", {}).items()
+                        if site_data.get("migration", 0) in [1, 3]
+                        and site_configs.get(site_name, {}).get("cookie", "") != ""
+                    ]
+                )
+                > 0
             ]
         elif "无可用源站点" in source_availability_filters:
             filtered_list = [
-                t for t in filtered_list
-                if len([site_name for site_name, site_data in t.get("sites", {}).items()
-                        if site_data.get("migration", 0) in [1, 3] and
-                           site_configs.get(site_name, {}).get("cookie", "") != ""]) == 0
+                t
+                for t in filtered_list
+                if len(
+                    [
+                        site_name
+                        for site_name, site_data in t.get("sites", {}).items()
+                        if site_data.get("migration", 0) in [1, 3]
+                        and site_configs.get(site_name, {}).get("cookie", "") != ""
+                    ]
+                )
+                == 0
             ]
         # 站点筛选逻辑：同时支持存在于和不存在于的筛选
         # 种子必须存在于exist_site_names中的所有站点
         if exist_site_names:
             exist_site_set = set(exist_site_names)
             filtered_list = [
-                t for t in filtered_list
-                if exist_site_set.issubset(set(t.get("sites", {}).keys()))
+                t for t in filtered_list if exist_site_set.issubset(set(t.get("sites", {}).keys()))
             ]
 
         # 种子必须不存在于not_exist_site_names中的任何站点
         if not_exist_site_names:
             not_exist_site_set = set(not_exist_site_names)
             filtered_list = [
-                t for t in filtered_list
-                if not not_exist_site_set.intersection(
-                    set(t.get("sites", {}).keys()))
+                t
+                for t in filtered_list
+                if not not_exist_site_set.intersection(set(t.get("sites", {}).keys()))
             ]
-        
+
         # 新增：如果 exclude_existing 为 True，则排除已存在于 seed_parameters 表中的种子
         if exclude_existing:
             try:
                 # 查询 seed_parameters 表中所有唯一的种子名称
                 cursor.execute("SELECT DISTINCT name FROM seed_parameters")
                 existing_seed_names = {row["name"] for row in cursor.fetchall()}
-                
+
                 # 过滤掉已存在的种子
-                filtered_list = [
-                    t for t in filtered_list
-                    if t["name"] not in existing_seed_names
-                ]
+                filtered_list = [t for t in filtered_list if t["name"] not in existing_seed_names]
             except Exception as e:
                 logging.error(f"查询 seed_parameters 表失败: {e}", exc_info=True)
                 # 如果查询失败，可以选择返回错误或继续执行而不进行排除
                 # 这里我们选择继续执行，以保证接口的可用性
                 pass
 
-
         # Sorting logic
         if sort_prop and sort_order:
             reverse = sort_order == "descending"
-            sort_key_map = {
-                "size_formatted": "size",
-                "total_uploaded_formatted": "total_uploaded"
-            }
+            sort_key_map = {"size_formatted": "size", "total_uploaded_formatted": "total_uploaded"}
             sort_key = sort_key_map.get(sort_prop, sort_prop)
             if sort_key in [
-                    "size", "progress", "total_uploaded", "site_count",
-                    "target_sites_count"
+                "size",
+                "progress",
+                "total_uploaded",
+                "site_count",
+                "target_sites_count",
             ]:
-                filtered_list.sort(key=lambda x: x.get(sort_key, 0),
-                                   reverse=reverse)
+                filtered_list.sort(key=lambda x: x.get(sort_key, 0), reverse=reverse)
             else:
                 filtered_list.sort(
-                    key=cmp_to_key(lambda a, b: custom_sort_compare(a, b)),
-                    reverse=reverse)
+                    key=cmp_to_key(lambda a, b: custom_sort_compare(a, b)), reverse=reverse
+                )
         else:
             filtered_list.sort(key=cmp_to_key(custom_sort_compare))
 
         # Pagination
         total_items = len(filtered_list)
-        paginated_data = filtered_list[(page - 1) * page_size:page * page_size]
+        paginated_data = filtered_list[(page - 1) * page_size : page * page_size]
 
         unique_paths = sorted(
-            list(
-                set(
-                    r.get("save_path") for r in torrents_raw
-                    if r.get("save_path"))))
-        unique_states = sorted(
-            list(set(r.get("state") for r in torrents_raw if r.get("state"))))
+            list(set(r.get("save_path") for r in torrents_raw if r.get("save_path")))
+        )
+        unique_states = sorted(list(set(r.get("state") for r in torrents_raw if r.get("state"))))
 
         _, site_link_rules, _ = services.load_site_maps_from_db(db_manager)
 
-        return jsonify({
-            "data": paginated_data,
-            "total": total_items,
-            "page": page,
-            "pageSize": page_size,
-            "unique_paths": unique_paths,
-            "unique_states": unique_states,
-            "all_discovered_sites": all_discovered_sites,
-            "site_link_rules": site_link_rules,
-            "active_path_filters": path_filters,
-        })
+        return jsonify(
+            {
+                "data": paginated_data,
+                "total": total_items,
+                "page": page,
+                "pageSize": page_size,
+                "unique_paths": unique_paths,
+                "unique_states": unique_states,
+                "all_discovered_sites": all_discovered_sites,
+                "site_link_rules": site_link_rules,
+                "active_path_filters": path_filters,
+            }
+        )
     except Exception as e:
         logging.error(f"get_data_api 出错: {e}", exc_info=True)
         return jsonify({"error": "从数据库检索种子数据失败"}), 500
@@ -369,6 +398,7 @@ def refresh_data_api():
     try:
         # 导入手动任务模块
         from core.manual_tasks import update_torrents_data
+
         db_manager = torrents_bp.db_manager
         config_manager = torrents_bp.config_manager
 
@@ -426,15 +456,22 @@ def iyuu_query_api():
             from core.manual_tasks import trigger_iyuu_query_sync
 
             # 同步执行IYUU查询，等待完成后返回
-            result = trigger_iyuu_query_sync(db_manager, config_manager, torrent_name, torrent_size)
+            result = trigger_iyuu_query_sync(
+                db_manager, config_manager, torrent_name, torrent_size
+            )
 
         if result["success"]:
-            return jsonify({
-                "message": result["message"],
-                "success": True,
-                "stats": result.get("stats", {}),
-                "query_info": result.get("query_info", {}),
-            }), 200
+            return (
+                jsonify(
+                    {
+                        "message": result["message"],
+                        "success": True,
+                        "stats": result.get("stats", {}),
+                        "query_info": result.get("query_info", {}),
+                    }
+                ),
+                200,
+            )
         else:
             return jsonify({"error": result["message"], "success": False}), 500
 
@@ -494,23 +531,29 @@ def iyuu_query_batch_api():
                     force_query=force_query,
                 )
 
-                IYUU_BATCH_QUERY_TASKS[task_id].update({
-                    "isRunning": False,
-                    "success": bool(result.get("success")),
-                    "message": result.get("message", ""),
-                    "processed": int(result.get("query_info", {}).get("processed_groups", 0) or 0),
-                    "stats": result.get("stats", {}) or {},
-                    "query_info": result.get("query_info", {}) or {},
-                    "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                })
+                IYUU_BATCH_QUERY_TASKS[task_id].update(
+                    {
+                        "isRunning": False,
+                        "success": bool(result.get("success")),
+                        "message": result.get("message", ""),
+                        "processed": int(
+                            result.get("query_info", {}).get("processed_groups", 0) or 0
+                        ),
+                        "stats": result.get("stats", {}) or {},
+                        "query_info": result.get("query_info", {}) or {},
+                        "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    }
+                )
             except Exception as e:
                 logging.error(f"iyuu_query_batch_api 任务执行出错: {e}", exc_info=True)
-                IYUU_BATCH_QUERY_TASKS[task_id].update({
-                    "isRunning": False,
-                    "success": False,
-                    "message": f"任务执行失败: {str(e)}",
-                    "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                })
+                IYUU_BATCH_QUERY_TASKS[task_id].update(
+                    {
+                        "isRunning": False,
+                        "success": False,
+                        "message": f"任务执行失败: {str(e)}",
+                        "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    }
+                )
 
         thread = Thread(target=_run_task)
         thread.daemon = True
@@ -549,22 +592,19 @@ def get_all_paths_api():
         # 查询所有非空的保存路径
         if db_manager.db_type == "postgresql":
             cursor.execute(
-                'SELECT DISTINCT save_path FROM torrents WHERE save_path IS NOT NULL AND save_path != \'\' ORDER BY save_path'
+                "SELECT DISTINCT save_path FROM torrents WHERE save_path IS NOT NULL AND save_path != '' ORDER BY save_path"
             )
         else:
             cursor.execute(
                 "SELECT DISTINCT save_path FROM torrents WHERE save_path IS NOT NULL AND save_path != '' ORDER BY save_path"
             )
 
-        paths = [row['save_path'] for row in cursor.fetchall()]
+        paths = [row["save_path"] for row in cursor.fetchall()]
 
         cursor.close()
         conn.close()
 
-        return jsonify({
-            "success": True,
-            "paths": paths
-        })
+        return jsonify({"success": True, "paths": paths})
 
     except Exception as e:
         logging.error(f"get_all_paths_api 出错: {e}", exc_info=True)
@@ -575,94 +615,88 @@ def get_all_paths_api():
 def get_cached_sites_api():
     """查询指定种子在seed_parameters表中的缓存站点（使用name+size精确匹配）"""
     db_manager = torrents_bp.db_manager
-    
+
     try:
         # 获取查询参数：种子名称和大小
         torrent_name = request.args.get("name", "").strip()
         torrent_size = request.args.get("size", "").strip()
-        
+
         if not torrent_name:
             return jsonify({"error": "缺少必要参数：name"}), 400
-        
+
         if not torrent_size:
             return jsonify({"error": "缺少必要参数：size"}), 400
-        
+
         try:
             torrent_size = int(torrent_size)
         except ValueError:
             return jsonify({"error": "size参数必须是整数"}), 400
-        
+
         conn = db_manager._get_connection()
         cursor = db_manager._get_cursor(conn)
-        
+
         # 1. 先从seed_parameters表中根据name查询所有相同名称的记录的hash
         placeholder = "%s" if db_manager.db_type in ["mysql", "postgresql"] else "?"
         cursor.execute(
             f"SELECT DISTINCT hash FROM seed_parameters WHERE name = {placeholder}",
-            (torrent_name,)
+            (torrent_name,),
         )
-        
+
         seed_hashes = [row["hash"] for row in cursor.fetchall()]
-        
+
         if not seed_hashes:
             cursor.close()
             conn.close()
-            return jsonify({
-                "success": True,
-                "cached_sites": [],
-                "message": "未找到该种子的缓存信息"
-            })
-        
+            return jsonify(
+                {"success": True, "cached_sites": [], "message": "未找到该种子的缓存信息"}
+            )
+
         # 2. 用这些hash去torrents表中查询，找出size匹配的hash
         if db_manager.db_type == "postgresql":
-            placeholders = ', '.join(['%s'] * len(seed_hashes))
+            placeholders = ", ".join(["%s"] * len(seed_hashes))
             cursor.execute(
                 f"SELECT DISTINCT hash FROM torrents WHERE hash = ANY(ARRAY[{placeholders}]) AND size = %s",
-                (*seed_hashes, torrent_size)
+                (*seed_hashes, torrent_size),
             )
         else:
-            placeholders = ', '.join([placeholder] * len(seed_hashes))
+            placeholders = ", ".join([placeholder] * len(seed_hashes))
             cursor.execute(
                 f"SELECT DISTINCT hash FROM torrents WHERE hash IN ({placeholders}) AND size = {placeholder}",
-                (*seed_hashes, torrent_size)
+                (*seed_hashes, torrent_size),
             )
-        
+
         matched_hashes = [row["hash"] for row in cursor.fetchall()]
-        
+
         if not matched_hashes:
             cursor.close()
             conn.close()
-            return jsonify({
-                "success": True,
-                "cached_sites": [],
-                "message": "未找到匹配大小的种子缓存"
-            })
-        
+            return jsonify(
+                {"success": True, "cached_sites": [], "message": "未找到匹配大小的种子缓存"}
+            )
+
         # 3. 查询这些匹配的hash对应的所有缓存站点
         if db_manager.db_type == "postgresql":
-            placeholders = ', '.join(['%s'] * len(matched_hashes))
+            placeholders = ", ".join(["%s"] * len(matched_hashes))
             cursor.execute(
                 f"SELECT DISTINCT nickname FROM seed_parameters WHERE hash = ANY(ARRAY[{placeholders}])",
-                tuple(matched_hashes)
+                tuple(matched_hashes),
             )
         else:
-            placeholders = ', '.join([placeholder] * len(matched_hashes))
+            placeholders = ", ".join([placeholder] * len(matched_hashes))
             cursor.execute(
                 f"SELECT DISTINCT nickname FROM seed_parameters WHERE hash IN ({placeholders})",
-                tuple(matched_hashes)
+                tuple(matched_hashes),
             )
-        
+
         cached_sites = [row["nickname"] for row in cursor.fetchall()]
-        
+
         cursor.close()
         conn.close()
-        
-        return jsonify({
-            "success": True,
-            "cached_sites": cached_sites,
-            "matched_hashes": matched_hashes
-        })
-        
+
+        return jsonify(
+            {"success": True, "cached_sites": cached_sites, "matched_hashes": matched_hashes}
+        )
+
     except Exception as e:
         logging.error(f"get_cached_sites_api 出错: {e}", exc_info=True)
         return jsonify({"error": "查询缓存站点失败", "success": False}), 500

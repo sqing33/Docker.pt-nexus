@@ -2,6 +2,7 @@
 
 import collections
 import logging
+import os
 import time
 from datetime import datetime
 from threading import Thread, Lock, Event
@@ -132,6 +133,9 @@ class DataTracker(Thread):
         # 数据聚合任务相关变量
         self.aggregation_counter = 0  # 用于计时的计数器
         self.AGGREGATION_INTERVAL = 21600  # 聚合任务的执行间隔（秒），这里是6小时
+        # 仅在后端启动后的“第一次刷新”完成后执行一次的清理/重建
+        self._startup_agg_rebuild_done = False
+        self._startup_agg_rebuild_lock = Lock()
 
     def _get_client(self, downloader_config):
         """智能获取或创建并缓存客户端实例，支持自动重连。"""
@@ -280,6 +284,30 @@ class DataTracker(Thread):
             f"DataTracker 线程已启动。流量更新间隔: {self.interval}秒, 种子列表更新间隔: {self.TORRENT_UPDATE_INTERVAL}秒。"
         )
         time.sleep(5)
+
+        # --- 启动后仅执行一次：刷新并按聚合逻辑重建清理 ---
+        try:
+            # 仅避免 debug reloader 的父进程重复执行
+            if os.environ.get("WERKZEUG_RUN_MAIN") != "true" and os.environ.get("WERKZEUG_RUN_MAIN") is not None:
+                raise RuntimeError("Werkzeug reloader parent process: skip startup rebuild")
+
+            config = self.config_manager.get()
+            enabled_downloaders = [d for d in config.get("downloaders", []) if d.get("enabled")]
+            if enabled_downloaders and not self._startup_agg_rebuild_done:
+                logging.info("启动后首次：开始自动刷新种子并执行聚合重建清理（仅执行一次）...")
+                active_hashes, enabled_downloaders = self.update_torrents_in_db()
+                if active_hashes:
+                    rebuilt = self._startup_rebuild_aggregated_groups_once(
+                        active_hashes=active_hashes,
+                        enabled_downloaders=enabled_downloaders,
+                    )
+                    logging.info(f"启动后聚合重建清理完成：处理了 {rebuilt} 个种子组。")
+                self._startup_agg_rebuild_done = True
+        except Exception as e:
+            # 不影响主循环
+            logging.info(f"启动后聚合重建清理跳过/失败: {e}")
+        # --------------------
+
         # 注释掉初始化时的种子更新，改为手动触发
         try:
             config = self.config_manager.get()
@@ -604,6 +632,367 @@ class DataTracker(Thread):
                 cursor.close()
                 conn.close()
 
+    def _cleanup_duplicate_torrents(self):
+        """[已废弃] 旧的启动清理逻辑，保留为空函数以防调用"""
+        pass
+
+    def _deduplicate_based_on_active(self, active_hashes):
+        """基于活跃种子列表进行智能去重
+
+        策略：
+        1. 按 5 参数 (name, save_path, size, sites, group) 分组
+        2. 只处理 “同组但 downloader_id 不同” 的重复（同一下载器内重复不处理）
+        3. 在一个重复组里只保留一个 downloader（优先保留活跃且 last_seen 最新的那一份）
+        2. 对于有重复的组：
+           - 检查哪些种子在 active_hashes 中（即当前下载器中存在的）
+           - 如果有活跃种子，则保留活跃种子，删除非活跃种子（解决ghost问题）
+           - 如果没有活跃种子（都是离线或历史数据），则回退到保留 last_seen 最新的逻辑
+        """
+        conn = None
+        deleted_total = 0
+        try:
+            conn = self.db_manager._get_connection()
+            cursor = self.db_manager._get_cursor(conn)
+
+            # 根据数据库类型使用正确的引号包围group字段
+            if self.db_manager.db_type == "postgresql":
+                group_field = '"group"'
+            else:
+                group_field = "`group`"
+
+            query = (
+                f"SELECT hash, downloader_id, name, save_path, size, sites, {group_field}, last_seen "
+                f"FROM torrents"
+            )
+            cursor.execute(query)
+
+            groups = {}
+            for row in cursor.fetchall():
+                row_dict = dict(row)
+                group_val = row_dict.get("group") or ""
+
+                # 统一做轻量规范化，避免 None/大小写/空白导致“看起来一样但键不相等”
+                name_val = (row_dict.get("name") or "").strip()
+                save_path_val = (row_dict.get("save_path") or "").strip()
+                try:
+                    size_val = int(row_dict.get("size") or 0)
+                except Exception:
+                    size_val = 0
+                sites_val = (row_dict.get("sites") or "").strip().lower()
+                group_val_norm = (group_val or "").strip().lower()
+
+                attr_key = ("attrs", name_val, save_path_val, size_val, sites_val, group_val_norm)
+
+                if attr_key not in groups:
+                    groups[attr_key] = []
+                groups[attr_key].append(row_dict)
+
+            to_delete = []
+            duplicate_groups = 0
+            skipped_same_downloader_groups = 0
+
+            for key, records in groups.items():
+                if len(records) < 2:
+                    continue
+
+                downloader_ids = {r.get("downloader_id") for r in records if r.get("downloader_id") is not None}
+                if len(downloader_ids) < 2:
+                    skipped_same_downloader_groups += 1
+                    continue
+
+                duplicate_groups += 1
+
+                keep_downloader_id = self._choose_keep_downloader_id_for_dedup(records, active_hashes)
+                for r in records:
+                    if r.get("downloader_id") != keep_downloader_id:
+                        to_delete.append((r["hash"], r["downloader_id"]))
+                        logging.info(
+                            f"智能去重-跨下载器去重: 保留下载器 {keep_downloader_id}, "
+                            f"删除 {r.get('downloader_id')} 的记录 (Hash: {r.get('hash')})"
+                        )
+
+            if to_delete:
+                placeholder = "%s" if self.db_manager.db_type in ["mysql", "postgresql"] else "?"
+                del_sql = f"DELETE FROM torrents WHERE hash={placeholder} AND downloader_id={placeholder}"
+                cursor.executemany(del_sql, to_delete)
+
+                stats_del_sql = f"DELETE FROM torrent_upload_stats WHERE hash={placeholder} AND downloader_id={placeholder}"
+                cursor.executemany(stats_del_sql, to_delete)
+
+                conn.commit()
+                deleted_total = len(to_delete)
+
+            print(
+                f"【刷新线程】智能去重统计: 重复组 {duplicate_groups}, "
+                f"删除 {deleted_total}, 同下载器重复而跳过 {skipped_same_downloader_groups}"
+            )
+            return deleted_total
+
+        except Exception as e:
+            logging.error(f"智能去重失败: {e}", exc_info=True)
+            if conn:
+                conn.rollback()
+            return 0
+        finally:
+            if conn:
+                cursor.close()
+                conn.close()
+
+    def _choose_keep_downloader_id_for_dedup(self, records, active_hashes):
+        """为跨下载器去重选择要保留的 downloader_id。
+
+        规则：
+        - 优先在 active_hashes 里的记录中选择（对应“当前启用下载器里实际存在的种子”）
+        - 其次选择 last_seen 最新的
+        - 再用 downloader_id/hash 做稳定排序避免随机性
+        """
+        if not records:
+            return None
+
+        active_records = [r for r in records if r.get("hash") in active_hashes]
+        candidates = active_records or records
+
+        def sort_key(r):
+            return (
+                str(r.get("last_seen") or ""),
+                str(r.get("downloader_id") or ""),
+                str(r.get("hash") or ""),
+            )
+
+        keep = max(candidates, key=sort_key)
+        return keep.get("downloader_id")
+
+    def _normalize_attr_key(self, name, save_path, size, sites, group):
+        name_val = (name or "").strip()
+        save_path_val = (save_path or "").strip()
+        try:
+            size_val = int(size or 0)
+        except Exception:
+            size_val = 0
+        sites_val = (sites or "").strip().lower()
+        group_val = (group or "").strip().lower()
+        return (name_val, save_path_val, size_val, sites_val, group_val)
+
+    def _build_torrents_attribute_index_from_db(self):
+        """构建全库的 5 参数索引，用于跨下载器/跨 hash 寻找同一条目。
+
+        key: (name, save_path, size, sites(lower), group(lower))
+        value: list[(hash, downloader_id, last_seen)]
+        """
+        conn = None
+        try:
+            conn = self.db_manager._get_connection()
+            cursor = self.db_manager._get_cursor(conn)
+
+            group_field = '"group"' if self.db_manager.db_type == "postgresql" else "`group`"
+            cursor.execute(
+                f"SELECT hash, downloader_id, name, save_path, size, sites, {group_field}, last_seen FROM torrents"
+            )
+
+            index = collections.defaultdict(list)
+            for row in cursor.fetchall():
+                row_dict = dict(row)
+                group_val = row_dict.get("group") or ""
+                key = self._normalize_attr_key(
+                    row_dict.get("name"),
+                    row_dict.get("save_path"),
+                    row_dict.get("size"),
+                    row_dict.get("sites"),
+                    group_val,
+                )
+                index[key].append(
+                    (
+                        row_dict.get("hash"),
+                        row_dict.get("downloader_id"),
+                        row_dict.get("last_seen"),
+                    )
+                )
+
+            return index
+        except Exception as e:
+            logging.error(f"构建种子属性索引失败: {e}", exc_info=True)
+            return collections.defaultdict(list)
+        finally:
+            if conn:
+                cursor.close()
+                conn.close()
+
+    def _startup_rebuild_aggregated_groups_once(self, active_hashes, enabled_downloaders):
+        """启动后首次刷新时执行一次的“聚合重建清理”。
+
+        目标：对那些在数据库里残留了旧条目的“聚合种子组”（与前端 /api/data 的聚合一致：name+size），
+        执行“整组清空 → 仅回填本次刷新得到的新数据（含上传统计）”。
+        """
+        enabled_downloader_ids = {d.get("id") for d in enabled_downloaders if d.get("id")}
+        if not enabled_downloader_ids:
+            return 0
+        if not active_hashes:
+            return 0
+
+        conn = None
+        try:
+            conn = self.db_manager._get_connection()
+            cursor = self.db_manager._get_cursor(conn)
+            placeholder = "%s" if self.db_manager.db_type in ["mysql", "postgresql"] else "?"
+            group_field = '"group"' if self.db_manager.db_type == "postgresql" else "`group`"
+
+            # 1) 读取全表最小字段，找出“当前活跃的聚合组”（name+size）
+            cursor.execute("SELECT hash, downloader_id, name, size FROM torrents")
+            rows_min = [dict(r) for r in cursor.fetchall()]
+
+            active_groups = set()
+            for r in rows_min:
+                if r.get("hash") in active_hashes:
+                    try:
+                        size_val = int(r.get("size") or 0)
+                    except Exception:
+                        size_val = 0
+                    active_groups.add((r.get("name") or "", size_val))
+
+            if not active_groups:
+                return 0
+
+            # 2) 找出需要重建的组：只要该组里存在“非活跃hash”或“非启用下载器”的行
+            group_has_stale = {}
+            for r in rows_min:
+                try:
+                    size_val = int(r.get("size") or 0)
+                except Exception:
+                    size_val = 0
+                key = (r.get("name") or "", size_val)
+                if key not in active_groups:
+                    continue
+                if (r.get("hash") not in active_hashes) or (
+                    r.get("downloader_id") not in enabled_downloader_ids
+                ):
+                    group_has_stale[key] = True
+
+            rebuild_groups = set(group_has_stale.keys())
+            if not rebuild_groups:
+                return 0
+
+            # 3) 拉取这些组的完整 torrents 行（用于回填）并收集要删除的 (hash, downloader_id)
+            cursor.execute(
+                f"SELECT hash, downloader_id, name, save_path, size, progress, state, sites, details, "
+                f"{group_field} AS group_value, last_seen, seeders "
+                f"FROM torrents"
+            )
+            rows_full = [dict(r) for r in cursor.fetchall()]
+
+            delete_pairs = []
+            keep_torrent_params = []
+            keep_pairs = set()
+            for r in rows_full:
+                try:
+                    size_val = int(r.get("size") or 0)
+                except Exception:
+                    size_val = 0
+                key = (r.get("name") or "", size_val)
+                if key not in rebuild_groups:
+                    continue
+
+                pair = (r.get("hash"), r.get("downloader_id"))
+                if pair[0] is None or pair[1] is None:
+                    continue
+                delete_pairs.append(pair)
+
+                if pair[0] in active_hashes and pair[1] in enabled_downloader_ids:
+                    keep_pairs.add(pair)
+                    keep_torrent_params.append(
+                        (
+                            r.get("hash"),
+                            r.get("name"),
+                            r.get("save_path"),
+                            r.get("size"),
+                            r.get("progress"),
+                            r.get("state"),
+                            r.get("sites") or "",
+                            r.get("details") or "",
+                            r.get("group_value") or "",
+                            r.get("downloader_id"),
+                            r.get("last_seen"),
+                            r.get("seeders") or 0,
+                        )
+                    )
+
+            # 4) 备份要回填的上传统计（按 keep_pairs）
+            cursor.execute("SELECT hash, downloader_id, uploaded FROM torrent_upload_stats")
+            stats_rows = [dict(r) for r in cursor.fetchall()]
+            keep_stats_params = []
+            for r in stats_rows:
+                pair = (r.get("hash"), r.get("downloader_id"))
+                if pair in keep_pairs:
+                    keep_stats_params.append((r.get("hash"), r.get("downloader_id"), r.get("uploaded") or 0))
+
+            # 5) 删除整组（torrents + upload_stats）
+            del_sql = f"DELETE FROM torrents WHERE hash={placeholder} AND downloader_id={placeholder}"
+            del_stats_sql = (
+                f"DELETE FROM torrent_upload_stats WHERE hash={placeholder} AND downloader_id={placeholder}"
+            )
+            batch_size = 500
+            for i in range(0, len(delete_pairs), batch_size):
+                batch = delete_pairs[i : i + batch_size]
+                cursor.executemany(del_sql, batch)
+                cursor.executemany(del_stats_sql, batch)
+
+            # 6) 回填 torrents
+            if self.db_manager.db_type == "mysql":
+                insert_sql = (
+                    "INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, `group`, downloader_id, last_seen, seeders) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+                )
+            elif self.db_manager.db_type == "postgresql":
+                insert_sql = (
+                    'INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, "group", downloader_id, last_seen, seeders) '
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+                )
+            else:
+                insert_sql = (
+                    'INSERT INTO torrents (hash, name, save_path, size, progress, state, sites, details, "group", downloader_id, last_seen, seeders) '
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                )
+
+            for i in range(0, len(keep_torrent_params), batch_size):
+                cursor.executemany(insert_sql, keep_torrent_params[i : i + batch_size])
+
+            # 7) 回填上传统计
+            if keep_stats_params:
+                if self.db_manager.db_type == "mysql":
+                    stats_upsert = (
+                        "INSERT INTO torrent_upload_stats (hash, downloader_id, uploaded) VALUES (%s, %s, %s) "
+                        "ON DUPLICATE KEY UPDATE uploaded=VALUES(uploaded)"
+                    )
+                elif self.db_manager.db_type == "postgresql":
+                    stats_upsert = (
+                        "INSERT INTO torrent_upload_stats (hash, downloader_id, uploaded) VALUES (%s, %s, %s) "
+                        "ON CONFLICT(hash, downloader_id) DO UPDATE SET uploaded=EXCLUDED.uploaded"
+                    )
+                else:
+                    stats_upsert = (
+                        "INSERT INTO torrent_upload_stats (hash, downloader_id, uploaded) VALUES (?, ?, ?) "
+                        "ON CONFLICT(hash, downloader_id) DO UPDATE SET uploaded=excluded.uploaded"
+                    )
+                for i in range(0, len(keep_stats_params), batch_size):
+                    cursor.executemany(stats_upsert, keep_stats_params[i : i + batch_size])
+
+            conn.commit()
+
+            print(
+                f"【刷新线程】聚合重建统计: 需要重建组 {len(rebuild_groups)}, "
+                f"删除行 {len(delete_pairs)}, 回填行 {len(keep_torrent_params)}, 回填上传统计 {len(keep_stats_params)}"
+            )
+            return len(rebuild_groups)
+
+        except Exception as e:
+            logging.error(f"聚合重建清理失败: {e}", exc_info=True)
+            if conn:
+                conn.rollback()
+            return 0
+        finally:
+            if conn:
+                cursor.close()
+                conn.close()
+
     def update_torrents_in_db(self):
         """优化版本：使用增量同步策略，只处理变化的种子"""
         from datetime import datetime
@@ -618,26 +1007,32 @@ class DataTracker(Thread):
         if not enabled_downloaders:
             logging.info("没有启用的下载器，跳过种子更新。")
             print("【刷新线程】没有启用的下载器，跳过种子更新。")
-            return
+            return set(), []
 
         core_domain_map, _, group_to_site_map_lower = load_site_maps_from_db(self.db_manager)
+        all_db_attribute_index = self._build_torrents_attribute_index_from_db()
 
         # 增量同步：按下载器单独处理，减少内存占用
         total_new = 0
         total_updated = 0
         total_deleted = 0
+        all_active_hashes = set()
 
         for downloader in enabled_downloaders:
             print(f"【刷新线程】正在处理下载器: {downloader['name']} (类型: {downloader['type']})")
             try:
-                new_count, updated_count, deleted_count = (
+                new_count, updated_count, deleted_count, current_hashes = (
                     self._update_downloader_torrents_incremental(
-                        downloader, core_domain_map, group_to_site_map_lower
+                        downloader,
+                        core_domain_map,
+                        group_to_site_map_lower,
+                        all_db_attribute_index,
                     )
                 )
                 total_new += new_count
                 total_updated += updated_count
                 total_deleted += deleted_count
+                all_active_hashes.update(current_hashes)
 
                 print(
                     f"【刷新线程】下载器 {downloader['name']} 处理完成: "
@@ -657,9 +1052,10 @@ class DataTracker(Thread):
         logging.info(
             f"增量更新完成: 总新增 {total_new}, 总更新 {total_updated}, 总删除 {total_deleted}"
         )
+        return all_active_hashes, enabled_downloaders
 
     def _update_downloader_torrents_incremental(
-        self, downloader, core_domain_map, group_to_site_map_lower
+        self, downloader, core_domain_map, group_to_site_map_lower, all_db_attribute_index
     ):
         """增量同步单个下载器的种子数据"""
         from datetime import datetime
@@ -688,13 +1084,13 @@ class DataTracker(Thread):
                     )
                 else:
                     print(f"【刷新线程】通过代理获取 '{downloader['name']} 种子信息失败")
-                    return 0, 0, 0
+                    return 0, 0, 0, set()
             else:
                 # 使用常规方式获取种子信息
                 client_instance = self._get_client(downloader)
                 if not client_instance:
                     print(f"【刷新线程】无法连接到下载器 {downloader['name']}")
-                    return 0, 0, 0
+                    return 0, 0, 0, set()
 
                 print(f"【刷新线程】正在从 {downloader['name']} 获取种子列表...")
                 if downloader["type"] == "qbittorrent":
@@ -725,7 +1121,7 @@ class DataTracker(Thread):
         except Exception as e:
             print(f"【刷新线程】未能从 '{downloader['name']}' 获取数据: {e}")
             logging.error(f"未能从 '{downloader['name']}' 获取数据: {e}")
-            return 0, 0, 0
+            return 0, 0, 0, set()
 
         # 2. 构建当前种子的内存快照
         current_torrents = {}
@@ -738,7 +1134,12 @@ class DataTracker(Thread):
 
         # 4. 对比找出变化的种子
         new_torrents, updated_torrents, deleted_hashes = self._compare_torrent_changes(
-            current_torrents, db_torrents, downloader, core_domain_map, group_to_site_map_lower
+            current_torrents,
+            db_torrents,
+            downloader,
+            core_domain_map,
+            group_to_site_map_lower,
+            all_db_attribute_index,
         )
 
         print(
@@ -752,7 +1153,7 @@ class DataTracker(Thread):
                 downloader["id"], new_torrents, updated_torrents, deleted_hashes, current_torrents
             )
 
-        return new_count, updated_count, deleted_count
+        return new_count, updated_count, deleted_count, set(current_torrents.keys())
 
     def _get_downloader_torrents_from_db(self, downloader_id):
         """从数据库获取指定下载器的所有种子信息"""
@@ -807,33 +1208,21 @@ class DataTracker(Thread):
                 conn.close()
 
     def _compare_torrent_changes(
-        self, current_torrents, db_torrents, downloader, core_domain_map, group_to_site_map_lower
+        self,
+        current_torrents,
+        db_torrents,
+        downloader,
+        core_domain_map,
+        group_to_site_map_lower,
+        all_db_attribute_index,
     ):
-        """对比当前种子和数据库种子，找出变化的部分"""
+        """对比当前种子和数据库种子，找出变化的部分（支持基于属性的匹配）"""
         new_torrents = {}
         updated_torrents = {}
         deleted_hashes = set()
 
-        current_hashes = set(current_torrents.keys())
-        db_hashes = set(db_torrents.keys())
-
-        # 找出新增和需要更新的种子
-        for hash_value, current_info in current_torrents.items():
-            if hash_value not in db_hashes:
-                # 新增的种子
-                new_torrents[hash_value] = current_info
-            else:
-                # 检查是否需要更新
-                db_info = db_torrents[hash_value]
-                if self._should_update_torrent(current_info, db_info):
-                    updated_torrents[hash_value] = current_info
-
-        # 找出删除的种子
-        deleted_hashes = db_hashes - current_hashes
-
-        # 为种子添加站点和发布组信息
-        all_to_process = {**new_torrents, **updated_torrents}
-        for hash_value, torrent_info in all_to_process.items():
+        # 预先为所有当前种子计算站点和发布组信息，以确保 fallback 比较逻辑正确
+        for hash_value, torrent_info in current_torrents.items():
             site_name = self._find_site_nickname(
                 torrent_info["trackers"], core_domain_map, torrent_info["comment"]
             )
@@ -844,7 +1233,86 @@ class DataTracker(Thread):
             )
             torrent_info["downloader_id"] = downloader["id"]
 
+        current_hashes = set(current_torrents.keys())
+        db_hashes = set(db_torrents.keys())
+
+        # 构建当前下载器内基于属性的映射，用于处理“同下载器内 hash 变化”的情况
+        # key: (name, save_path, size, sites, group), value: hash
+        db_attribute_to_hash = {}
+        for hash_value, db_info in db_torrents.items():
+            attr_key = self._generate_attribute_key(db_info)
+            db_attribute_to_hash[attr_key] = hash_value
+
+        # 找出新增和需要更新的种子
+        for hash_value, current_info in current_torrents.items():
+            if hash_value not in db_hashes:
+                # 哈希不在数据库中，尝试用“6 参数”（hash + 5属性）来识别同一条目：
+                # - 同下载器内：按 5 属性匹配，视为 hash 变化 -> 替换旧 hash
+                # - 跨下载器：按 5 属性匹配，视为迁移覆盖 -> 删除旧 downloader 的记录，保留当前 downloader
+                attr_key_raw = self._generate_attribute_key(current_info)
+                norm_key = self._normalize_attr_key(
+                    current_info.get("name"),
+                    current_info.get("save_path"),
+                    current_info.get("size"),
+                    current_info.get("sites"),
+                    current_info.get("group"),
+                )
+
+                old_rows_for_replacement = []
+                old_hash_for_replacement = None
+
+                # 同下载器内 hash 替换
+                if attr_key_raw in db_attribute_to_hash:
+                    matched_hash = db_attribute_to_hash[attr_key_raw]
+                    old_hash_for_replacement = matched_hash
+                    if matched_hash in deleted_hashes:
+                        deleted_hashes.remove(matched_hash)
+
+                # 跨下载器覆盖：删除其他 downloader_id 的旧记录（避免 A->B 迁移后产生重复）
+                global_matches = (all_db_attribute_index or {}).get(norm_key, [])
+                for old_hash, old_downloader_id, _last_seen in global_matches:
+                    if old_downloader_id and old_downloader_id != downloader["id"]:
+                        old_rows_for_replacement.append((old_hash, old_downloader_id))
+
+                if old_rows_for_replacement or old_hash_for_replacement:
+                    updated_torrents[hash_value] = current_info
+                    if old_rows_for_replacement:
+                        updated_torrents[hash_value]["old_rows_for_replacement"] = old_rows_for_replacement
+                    if old_hash_for_replacement:
+                        updated_torrents[hash_value]["old_hash_for_replacement"] = old_hash_for_replacement
+                else:
+                    new_torrents[hash_value] = current_info
+            else:
+                # 哈希在数据库中，检查是否需要更新
+                db_info = db_torrents[hash_value]
+                if self._should_update_torrent(current_info, db_info):
+                    updated_torrents[hash_value] = current_info
+
+        # 找出删除的种子（排除那些已经被新hash更新的种子）
+        deleted_hashes = db_hashes - current_hashes - {
+            t.get("old_hash_for_replacement") for t in updated_torrents.values() if "old_hash_for_replacement" in t
+        }
+
         return new_torrents, updated_torrents, deleted_hashes
+
+    def _generate_attribute_key(self, torrent_info):
+        """
+        生成基于种子属性的唯一键（不包括hash）
+        用于处理hash变化的情况
+        
+        Args:
+            torrent_info: 种子信息字典，包含 name, save_path, size, sites, group 等字段
+            
+        Returns:
+            元组: (name, save_path, size, sites, group)
+        """
+        return (
+            torrent_info.get("name", ""),
+            torrent_info.get("save_path", ""),
+            torrent_info.get("size", 0),
+            torrent_info.get("sites", ""),
+            torrent_info.get("group", ""),
+        )
 
     def _should_update_torrent(self, current_info, db_info):
         """判断种子是否需要更新"""
@@ -1012,9 +1480,33 @@ class DataTracker(Thread):
     def _upsert_torrents_batch(
         self, cursor, torrents_to_process, new_hashes, now_str, placeholder
     ):
-        """批量新增或更新种子"""
+        """批量新增或更新种子（支持hash替换）"""
         if not torrents_to_process:
             return 0, 0
+
+        # 先处理 hash / downloader 覆盖替换的情况
+        for hash_value, torrent_info in list(torrents_to_process.items()):
+            old_rows = []
+            if "old_rows_for_replacement" in torrent_info:
+                old_rows.extend(list(torrent_info["old_rows_for_replacement"]))
+            if "old_hash_for_replacement" in torrent_info:
+                old_rows.append((torrent_info["old_hash_for_replacement"], torrent_info["downloader_id"]))
+
+            if old_rows:
+                delete_sql = f"DELETE FROM torrents WHERE hash = {placeholder} AND downloader_id = {placeholder}"
+                delete_upload_sql = (
+                    f"DELETE FROM torrent_upload_stats WHERE hash = {placeholder} AND downloader_id = {placeholder}"
+                )
+                for old_hash, old_downloader_id in old_rows:
+                    cursor.execute(delete_sql, (old_hash, old_downloader_id))
+                    cursor.execute(delete_upload_sql, (old_hash, old_downloader_id))
+
+                torrent_info.pop("old_rows_for_replacement", None)
+                torrent_info.pop("old_hash_for_replacement", None)
+
+                logging.info(
+                    f"种子 '{torrent_info.get('name', 'unknown')[:50]}...' 覆盖旧记录 {len(old_rows)} 条 -> 新 (Hash: {hash_value}, DL: {torrent_info.get('downloader_id')})"
+                )
 
         # 准备数据
         params = []

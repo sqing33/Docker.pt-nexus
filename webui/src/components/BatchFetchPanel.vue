@@ -615,6 +615,7 @@ const fetchData = async () => {
       downloader_filters: JSON.stringify(activeFilters.value.downloaderIds),
       source_availability_filters: JSON.stringify(activeFilters.value.sourceSiteAvailability),
       exclude_existing: 'true', // 排除已存在于 seed_parameters 表的种子
+      only_completed: 'true', // 只返回下载进度达到100%的种子
     })
 
     const response = await axios.get(`/api/data?${params.toString()}`)
