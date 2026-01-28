@@ -26,3 +26,8 @@ dependencies = [
     "dotenv>=0.9.9",
     "pysocks>=1.7.1",
 ]
+
+[[tool.uv.index]]
+name = "tuna"
+url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+default = true
