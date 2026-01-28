@@ -1,6 +1,19 @@
 {
   "history": [
     {
+      "version": "v3.6.0",
+      "date": "2026.01.29",
+      "note": "注：(可选)盒子端修改获取截图和 MediaInfo 和 BDInfo 的超时时间需要重新执行 curl -sL https://github.com/sqing33/PTNexus/releases/download/latest/install-pt-nexus-box-proxy.sh | sudo bash 以更新盒子端脚本。",
+      "changes": [
+        "新增：修改了下载进度的计算逻辑，对于拆包下载作种的种子添加了一个‘部分做种’的状态",
+        "新增：基于媒介（medium）规范视频编码 AVC / HEVC、H.264 / H.265、x264/x265",
+        "优化：种子数据处理逻辑，包括增量同步、跨下载器去重和聚合重建清理",
+        "修改：后端获取截图和 MediaInfo 和 BDInfo 的超时时间",
+        "修复：杜比作为源站点时参数的提取",
+        "修复：MA 无法识别为片源平台"
+      ]
+    },
+    {
       "version": "v3.5.9",
       "date": "2026.01.27",
       "note": "注：盒子端修复截图上传功能需要重新执行 curl -sL https://github.com/sqing33/PTNexus/releases/download/latest/install-pt-nexus-box-proxy.sh | sudo bash 以更新盒子端脚本。",

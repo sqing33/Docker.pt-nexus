@@ -2584,7 +2584,7 @@ const fetchTorrentInfo = async () => {
         site_name: englishSiteName,
         task_id: tempTaskId, // 传递task_id给后端
       },
-      timeout: 120000, // 120秒超时
+      timeout: 600000, // 10分钟超时
     })
 
     // 检查是否需要继续抓取（202状态码）
@@ -2606,7 +2606,7 @@ const fetchTorrentInfo = async () => {
             task_id: continuedTaskId, // 传递相同的task_id以继续使用同一日志流
           },
           {
-            timeout: 120000,
+            timeout: 600000,
           },
         )
 
@@ -2633,7 +2633,7 @@ const fetchTorrentInfo = async () => {
             torrent_id: torrentId,
             site_name: englishSiteName,
           },
-          timeout: 120000,
+          timeout: 600000,
         })
 
         if (!finalDbResponse.data.success) {
@@ -2921,7 +2921,7 @@ const fetchTorrentInfo = async () => {
           (torrent.value.downloaderIds?.length > 0 ? torrent.value.downloaderIds[0] : null),
       },
       {
-        timeout: 120000, // 120秒超时，用于抓取和存储
+        timeout: 600000, // 10分钟超时，用于抓取和存储
       },
     )
 
@@ -2945,7 +2945,7 @@ const fetchTorrentInfo = async () => {
               torrent_id: torrentId,
               site_name: retryEnglishSiteName,
             },
-            timeout: 120000, // 120秒超时
+            timeout: 600000, // 10分钟超时
           })
 
           if (dbResponseAfterStore.data.success) {

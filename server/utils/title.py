@@ -54,6 +54,107 @@ def extract_season_episode(text: str) -> str | None:
     return None
 
 
+def _detect_video_codec_family(*candidates: str) -> str | None:
+    """
+    从多个候选文本中判断视频编码族：h264 / h265。
+    支持：AVC/HEVC、x264/x265、H264/H265、H.264/H.265 等。
+    """
+    combined = " ".join([c for c in candidates if c and isinstance(c, str)])
+    if not combined:
+        return None
+
+    has_h265 = bool(re.search(r"\b(HEVC|x265|H\s*\.?\s*265)\b", combined, re.IGNORECASE))
+    has_h264 = bool(re.search(r"\b(AVC|x264|H\s*\.?\s*264)\b", combined, re.IGNORECASE))
+
+    if has_h265 and not has_h264:
+        return "h265"
+    if has_h264 and not has_h265:
+        return "h264"
+    return None
+
+
+def _classify_source_from_medium(medium: str) -> str | None:
+    """
+    根据媒介字段推断来源类型：
+    - webdl: WEB-DL（未重编码源流）
+    - disc: Blu-ray/UHD Blu-ray/Remux（盘源/Remux）
+    - rip: 各类 Rip（压制）
+
+    说明：这里按用户约定将带有 rip 的媒介统一视作压制。
+    """
+    if not medium or not isinstance(medium, str):
+        return None
+
+    m = medium
+
+    # WEB-DL 直接说明来源（优先级最高）
+    if re.search(r"\bWEB[-\s]?DL\b", m, re.IGNORECASE):
+        return "webdl"
+
+    # HDTV / UHDTV：按 Web 源处理（用户约定）
+    if re.search(r"\b(?:UHDTV|HDTV)\b", m, re.IGNORECASE):
+        return "webdl"
+
+    # Remux 直接说明来源（优先级次高）
+    if re.search(r"\bRemux\b", m, re.IGNORECASE):
+        return "disc"
+
+    # 压制：BluRay（约定）
+    if re.search(r"\bBluRay\b", m, re.IGNORECASE):
+        return "rip"
+
+    # 压制：任何包含 rip 的媒介（如 BDrip/BD-rip/WEBrip/TVrip/DVDRip 等）
+    if re.search(r"rip", m, re.IGNORECASE):
+        return "rip"
+
+    # 盘源（Blu-ray / UHD Blu-ray 等）
+    # 注意：这里要求 Blu[-\\s]ray，避免把 BluRay（压制约定）误判为盘源。
+    if re.search(r"\b(UHD\s*Blu[-\s]ray|Blu[-\s]ray)\b", m, re.IGNORECASE):
+        return "disc"
+
+    return None
+
+
+def normalize_video_codec_by_medium(params: dict, mediaInfo: str = "") -> None:
+    """
+    基于媒介（medium）与编码族（H.264/H.265）将 video_codec 规范化为：
+    - 盘源/Remux: AVC / HEVC
+    - WEB-DL: H.264 / H.265
+    - Rip（压制）: x264 / x265
+
+    仅修改 params["video_codec"]（如果可判定），不新增字段。
+    """
+    if not isinstance(params, dict):
+        return
+
+    medium_value = params.get("medium", "")
+    if isinstance(medium_value, list):
+        medium_str = " ".join(str(v) for v in medium_value if v)
+    else:
+        medium_str = str(medium_value) if medium_value else ""
+
+    source_type = _classify_source_from_medium(medium_str)
+    if not source_type:
+        return
+
+    current_codec = params.get("video_codec", "")
+    current_codec_str = str(current_codec) if current_codec else ""
+
+    family = _detect_video_codec_family(current_codec_str, mediaInfo or "")
+    if not family:
+        return
+
+    target_map = {
+        "disc": {"h264": "AVC", "h265": "HEVC"},
+        "webdl": {"h264": "H.264", "h265": "H.265"},
+        "rip": {"h264": "x264", "h265": "x265"},
+    }
+
+    target_codec = target_map.get(source_type, {}).get(family)
+    if target_codec:
+        params["video_codec"] = target_codec
+
+
 def get_title_components_order():
     """
     从 global_mappings.yaml 读取标题组件顺序
@@ -1747,6 +1848,9 @@ def upload_data_title(
     unrecognized_parts.extend([part for part in remains if part])
     if unrecognized_parts:
         params["unrecognized"] = " ".join(sorted(list(set(unrecognized_parts))))
+
+    # --- [新增] 基于媒介规范化视频编码（AVC/HEVC/H.264/H.265/x264/x265） ---
+    normalize_video_codec_by_medium(params, mediaInfo)
 
     english_params = {}
     key_order = [
