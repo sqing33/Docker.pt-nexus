@@ -533,6 +533,27 @@ func (r *AutoSeedRepository) UpdateItemDownloaderHash(id int64, downloaderID, do
 	return r.store.DB.Table("auto_seed_items").Where("id = ?", id).Updates(updates).Error
 }
 
+// MarkSeedParameterReviewed 将指定 (torrent_id, site_name) 的 seed_parameters 标记为已整理。
+// 自动发种发布成功后调用，让种子列表里"源站数据状态"显示为绿色（已整理）。
+func (r *AutoSeedRepository) MarkSeedParameterReviewed(torrentID, siteName string) (int64, error) {
+	if r == nil || r.store == nil || r.store.DB == nil {
+		return 0, errors.New("auto seed repo is nil")
+	}
+	torrentID = strings.TrimSpace(torrentID)
+	siteName = strings.TrimSpace(siteName)
+	if torrentID == "" || siteName == "" {
+		return 0, nil
+	}
+	result := r.store.DB.Exec(
+		"UPDATE seed_parameters SET is_reviewed = 1, updated_at = ? WHERE torrent_id = ? AND site_name = ?",
+		time.Now().Format(PublishQueueTimeLayout), torrentID, siteName,
+	)
+	if result.Error != nil {
+		return 0, result.Error
+	}
+	return result.RowsAffected, nil
+}
+
 // FindTorrentByDownloaderHash 按自动发种记录中的下载器 ID 和 hash 匹配 torrents 表路径。
 func (r *AutoSeedRepository) FindTorrentByDownloaderHash(downloaderID, hash string) (AutoSeedTorrentRecord, error) {
 	if r == nil || r.store == nil || r.store.DB == nil {

@@ -71,7 +71,9 @@ func NewStore(paths config.RuntimePaths) (*Store, error) {
 		} else if value := strings.TrimSpace(desktopCfg.SQLitePath); value != "" {
 			dbPath = value
 		}
-		db, err = gorm.Open(sqlite.Open(dbPath), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+		// SQLite DSN：开启 WAL 模式（读写不互斥）+ busy_timeout 5s（锁冲突时等待而非立即失败）+ synchronous=NORMAL（WAL 下安全且更快）
+		dsn := dbPath + "?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=synchronous(NORMAL)"
+		db, err = gorm.Open(sqlite.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	}
 
 	if err != nil {
@@ -82,8 +84,15 @@ func NewStore(paths config.RuntimePaths) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("get sql.DB failed: %w", err)
 	}
-	sqlDB.SetMaxOpenConns(20)
-	sqlDB.SetMaxIdleConns(10)
+	if dbType == "sqlite" {
+		// SQLite 只支持单写入者，MaxOpenConns=1 序列化所有 DB 访问，
+		// 避免连接池复用已在事务中的连接导致 "cannot start a transaction within a transaction"
+		sqlDB.SetMaxOpenConns(1)
+		sqlDB.SetMaxIdleConns(1)
+	} else {
+		sqlDB.SetMaxOpenConns(20)
+		sqlDB.SetMaxIdleConns(10)
+	}
 
 	return &Store{DB: db, DBType: dbType}, nil
 }

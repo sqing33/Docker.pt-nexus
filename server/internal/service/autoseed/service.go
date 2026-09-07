@@ -857,6 +857,12 @@ func (s *Service) PublishItems(ids []int64, targetSites []string) (map[string]an
 			queuedItems++
 			// 发布成功后确保下载器 hash 已回写 DB，否则保种清理查不到记录
 			s.ensureItemDownloaderInfo(item)
+			// 标记源站 seed_parameters 为已整理，让种子列表"源站数据状态"显示为绿色
+			if rows, err := s.repo.MarkSeedParameterReviewed(torrentID, siteName); err != nil {
+				logx.Warnf(moduleAutoSeed, "标记种子已整理失败 item_id=%d torrent_id=%s site=%s err=%v", id, torrentID, siteName, err)
+			} else if rows > 0 {
+				logx.Infof(moduleAutoSeed, "已标记种子为已整理 item_id=%d torrent_id=%s site=%s", id, torrentID, siteName)
+			}
 			_ = s.repo.MarkItemPublished(id, string(encoded))
 			continue
 		}
