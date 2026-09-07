@@ -513,6 +513,26 @@ func (r *AutoSeedRepository) UpdateItemProgress(id int64, progress float64, down
 	return r.store.DB.Table("auto_seed_items").Where("id = ?", id).Updates(updates).Error
 }
 
+// UpdateItemDownloaderHash 回填下载器任务 hash，用于推送时未拿到 hash 的记录在发布前补全。
+func (r *AutoSeedRepository) UpdateItemDownloaderHash(id int64, downloaderID, downloaderHash string) error {
+	if r == nil || r.store == nil || r.store.DB == nil {
+		return errors.New("auto seed repo is nil")
+	}
+	updates := map[string]any{
+		"updated_at": time.Now().Format(PublishQueueTimeLayout),
+	}
+	if value := strings.TrimSpace(downloaderID); value != "" {
+		updates["downloader_id"] = value
+	}
+	if value := strings.TrimSpace(downloaderHash); value != "" {
+		updates["downloader_hash"] = value
+	}
+	if len(updates) <= 1 {
+		return nil
+	}
+	return r.store.DB.Table("auto_seed_items").Where("id = ?", id).Updates(updates).Error
+}
+
 // FindTorrentByDownloaderHash 按自动发种记录中的下载器 ID 和 hash 匹配 torrents 表路径。
 func (r *AutoSeedRepository) FindTorrentByDownloaderHash(downloaderID, hash string) (AutoSeedTorrentRecord, error) {
 	if r == nil || r.store == nil || r.store.DB == nil {
@@ -665,7 +685,7 @@ func (r *AutoSeedRepository) ListRetentionCandidates(limit int) ([]AutoSeedReten
 			GROUP BY hash
 		) AS sp ON LOWER(TRIM(sp.hash)) = LOWER(TRIM(i.downloader_hash))`).
 		Where("i.status = ? AND r.seed_retention_minutes > 0", AutoSeedItemStatusPublished).
-		Where("i.downloader_id <> '' AND i.downloader_hash <> ''").
+		Where("i.downloader_id <> ''").
 		Order("COALESCE(sp.last_publish_at, i.published_at) ASC, i.id ASC").
 		Limit(limit).
 		Scan(&rows).Error

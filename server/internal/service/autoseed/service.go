@@ -286,6 +286,10 @@ func (s *Service) SyncProgressAndAutoPublish(downloaderID string) {
 		for _, item := range rows {
 			if strings.TrimSpace(item.DownloaderHash) == "" {
 				item.DownloaderHash = s.findItemInfoHash(item)
+				// 内存补全后立即回写 DB，避免后续保种清理因 downloader_hash 为空查不到记录
+				if strings.TrimSpace(item.DownloaderHash) != "" {
+					_ = s.repo.UpdateItemDownloaderHash(item.ID, item.DownloaderID, item.DownloaderHash)
+				}
 			}
 			if snapshot, ok := matchSnapshot(item, snapshots); ok {
 				downloaded := snapshot.Progress >= 99.9
@@ -851,6 +855,8 @@ func (s *Service) PublishItems(ids []int64, targetSites []string) (map[string]an
 		encoded, _ := json.Marshal(mergeAutoSeedPublishResults(item.PublishResultsJSON, itemResults))
 		if queuedTargets > 0 {
 			queuedItems++
+			// 发布成功后确保下载器 hash 已回写 DB，否则保种清理查不到记录
+			s.ensureItemDownloaderInfo(item)
 			_ = s.repo.MarkItemPublished(id, string(encoded))
 			continue
 		}
@@ -926,18 +932,29 @@ func (s *Service) cleanupExpiredRetainedSeeds() {
 
 	now := time.Now()
 	cleaned := 0
+	skipped := 0
 	for _, candidate := range candidates {
 		retention := candidate.SeedRetentionMinutes
 		if retention <= 0 {
 			continue
 		}
 		lastPublishedAt, ok := latestAutoSeedPublishTime(candidate, latestByTorrent)
+		if !ok {
+			// 找不到发布时间时回退到 updated_at，避免永久跳过导致种子永不清理
+			if value, parsed := parseAutoSeedStoredTime(candidate.UpdatedAt); parsed {
+				lastPublishedAt = value
+				ok = true
+			}
+		}
 		if !ok || now.Sub(lastPublishedAt) < time.Duration(retention)*time.Minute {
+			skipped++
 			continue
 		}
-		deleted, err := s.DeleteItems([]int64{candidate.ID}, true)
+		// 保种清理：先删下载器任务和文件，成功后再删 DB 记录；
+		// 下载器删除失败时不删 DB，下一轮重试，避免"DB 删了但文件还在"。
+		deleted, err := s.deleteRetainedSeed(candidate.AutoSeedItem)
 		if err != nil {
-			logx.Warnf(moduleAutoSeed, "保种到期清理失败 item_id=%d rule_id=%d retention_minutes=%d err=%v", candidate.ID, candidate.RuleID, retention, err)
+			logx.Warnf(moduleAutoSeed, "保种到期清理失败(下载器未删除,下轮重试) item_id=%d rule_id=%d retention_minutes=%d err=%v", candidate.ID, candidate.RuleID, retention, err)
 			continue
 		}
 		if deleted > 0 {
@@ -945,9 +962,47 @@ func (s *Service) cleanupExpiredRetainedSeeds() {
 			logx.Infof(moduleAutoSeed, "保种到期已删除种子和文件 item_id=%d rule_id=%d retention_minutes=%d last_publish_at=%s", candidate.ID, candidate.RuleID, retention, lastPublishedAt.Format(repository.PublishQueueTimeLayout))
 		}
 	}
-	if cleaned > 0 {
-		logx.Infof(moduleAutoSeed, "保种到期清理完成 count=%d", cleaned)
+	if cleaned > 0 || skipped > 0 {
+		logx.Infof(moduleAutoSeed, "保种到期清理完成 deleted=%d skipped=%d", cleaned, skipped)
 	}
+}
+
+// deleteRetainedSeed 删除保种到期的种子：先删下载器任务和文件，成功后再删 DB 记录。
+// 下载器删除失败时返回 error，不删 DB 记录，由调用方决定下一轮重试。
+// hash 为空时先尝试从下载器按 name 匹配补全，补全失败则直接删 DB（下载器里可能已无此任务）。
+func (s *Service) deleteRetainedSeed(item repository.AutoSeedItem) (int64, error) {
+	if s == nil || s.repo == nil {
+		return 0, errors.New("service is nil")
+	}
+	downloaderID := strings.TrimSpace(item.DownloaderID)
+	downloaderHash := strings.TrimSpace(item.DownloaderHash)
+	if downloaderID == "" {
+		// 无下载器信息，直接删 DB 记录
+		return s.repo.DeleteItems([]int64{item.ID})
+	}
+	// hash 为空时先尝试从下载器按 name 匹配补全
+	if downloaderHash == "" {
+		root := s.rootConfig()
+		if d, err := downloaderclient.FromConfig(root, downloaderID); err == nil {
+			downloaderHash = s.findDownloaderHash(d, firstNonEmpty(item.Name, item.Subtitle))
+		}
+		if downloaderHash != "" {
+			_ = s.repo.UpdateItemDownloaderHash(item.ID, downloaderID, downloaderHash)
+		} else {
+			// 仍无法获取 hash，直接删 DB 记录（下载器里可能已无此任务）
+			logx.Warnf(moduleAutoSeed, "保种清理 hash 为空且无法补全，仅删 DB 记录 item_id=%d downloader_id=%s", item.ID, downloaderID)
+			return s.repo.DeleteItems([]int64{item.ID})
+		}
+	}
+	root := s.rootConfig()
+	d, err := downloaderclient.FromConfig(root, downloaderID)
+	if err != nil {
+		return 0, fmt.Errorf("下载器配置读取失败: %w", err)
+	}
+	if err := d.DeleteTorrents([]string{downloaderHash}, true); err != nil {
+		return 0, fmt.Errorf("删除下载器任务失败: %w", err)
+	}
+	return s.repo.DeleteItems([]int64{item.ID})
 }
 
 // Progress 返回下载器进度页数据。
@@ -1031,6 +1086,39 @@ func (s *Service) findDownloaderHash(d downloaderclient.Downloader, title string
 		return snapshot.Hash
 	}
 	return ""
+}
+
+// ensureItemDownloaderInfo 发布成功后确保下载器信息（hash）已回写 DB。
+// 推送下载器时可能未拿到 hash（findDownloaderHash 未匹配到），导致 DB 里 downloader_hash 为空，
+// 保种清理的 ListRetentionCandidates 查询条件 downloader_hash <> '' 会过滤掉这些记录。
+// 此方法在发布成功后补全：先从 seed_parameters 查 hash，再从下载器按 name 匹配查 hash，回写 DB。
+func (s *Service) ensureItemDownloaderInfo(item *repository.AutoSeedItem) {
+	if s == nil || s.repo == nil || item == nil {
+		return
+	}
+	downloaderID := strings.TrimSpace(item.DownloaderID)
+	downloaderHash := strings.TrimSpace(item.DownloaderHash)
+	if downloaderID != "" && downloaderHash != "" {
+		return
+	}
+	// 优先从 seed_parameters 查 hash
+	if downloaderHash == "" {
+		downloaderHash = s.findItemInfoHash(*item)
+	}
+	// 再从下载器按 name 匹配查 hash
+	if downloaderHash == "" && downloaderID != "" {
+		root := s.rootConfig()
+		if d, err := downloaderclient.FromConfig(root, downloaderID); err == nil {
+			downloaderHash = s.findDownloaderHash(d, firstNonEmpty(item.Name, item.Subtitle))
+		}
+	}
+	if downloaderID != "" || downloaderHash != "" {
+		if err := s.repo.UpdateItemDownloaderHash(item.ID, downloaderID, downloaderHash); err != nil {
+			logx.Warnf(moduleAutoSeed, "回填下载器 hash 失败 item_id=%d err=%v", item.ID, err)
+		} else {
+			logx.Infof(moduleAutoSeed, "回填下载器 hash 成功 item_id=%d downloader_id=%s hash=%s", item.ID, downloaderID, downloaderHash)
+		}
+	}
 }
 
 func (s *Service) resolveItemCurrentSavePath(item repository.AutoSeedItem) string {
