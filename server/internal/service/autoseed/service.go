@@ -808,7 +808,7 @@ func (s *Service) PublishItems(ids []int64, targetSites []string) (map[string]an
 			results = append(results, map[string]any{"id": id, "success": false, "message": "缺少 torrent_id 或源站"})
 			continue
 		}
-		currentSavePath := s.resolveItemCurrentSavePath(*item)
+		currentSavePath := s.resolveItemSavePath(item)
 		interval, concurrency := s.resolveDownloaderPublishSettings(item.DownloaderID)
 		downloadURL := s.resolveItemDownloadURL(item)
 		now := time.Now()
@@ -1039,6 +1039,22 @@ func (s *Service) resolveItemCurrentSavePath(item repository.AutoSeedItem) strin
 		return ""
 	}
 	return strings.TrimSpace(record.SavePath)
+}
+
+// resolveItemSavePath 解析自动发种记录发布时使用的保存路径。
+// 优先使用规则配置的 save_path，留空则回退到下载器中种子的实际保存路径。
+func (s *Service) resolveItemSavePath(item *repository.AutoSeedItem) string {
+	if item == nil {
+		return s.resolveItemCurrentSavePath(repository.AutoSeedItem{})
+	}
+	if item.RuleID > 0 && s != nil && s.repo != nil {
+		if rule, err := s.repo.GetRule(item.RuleID); err == nil && rule != nil {
+			if path := strings.TrimSpace(rule.SavePath); path != "" {
+				return path
+			}
+		}
+	}
+	return s.resolveItemCurrentSavePath(*item)
 }
 
 // resolveItemDownloadURL 解析自动发种记录发布时使用的种子下载地址。

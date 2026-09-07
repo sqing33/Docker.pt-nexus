@@ -324,10 +324,10 @@
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="下载地址">
+        <el-form-item label="保存路径">
           <el-input
-            v-model="editingRule.download_url"
-            placeholder="自定义种子下载地址，留空则使用 RSS 中的地址"
+            v-model="editingRule.save_path"
+            placeholder="留空则使用下载器实际路径，填写则发布时用此路径"
           />
         </el-form-item>
         <el-form-item label="大小 GB">
@@ -793,7 +793,6 @@ const openRuleDialog = (rule?: Rule) => {
 const saveRule = async () => {
   const payload = {
     ...editingRule.value,
-    save_path: '',
     publish_interval_minutes: 0,
     publish_concurrency: 1,
     types_json: '[]',
