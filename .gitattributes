@@ -5,3 +5,7 @@ updater/updater -text -diff merge=ours
 proxy/pt-nexus-box-proxy -text -diff merge=ours
 proxy/pt-nexus-box-proxy-amd64 -text -diff merge=ours
 proxy/pt-nexus-box-proxy-arm64 -text -diff merge=ours
+
+# Shell 脚本会被 curl | bash 直接在 Linux 上执行，必须是 LF；
+# 否则 bash 报 $'\r': command not found。覆盖 core.autocrlf=true 的检出转换。
+*.sh text eol=lf
