@@ -85,16 +85,17 @@ create_install_dir() {
 download_proxy() {
     log "正在下载 PT Nexus Proxy ($OS/$ARCH)..."
 
+    # 优先从 GitHub Release 拉预编译二进制，失败再回退到仓库分支的原始文件
     local proxy_candidates=(
-        "proxy/pt-nexus-box-proxy-$ARCH"
+        "https://github.com/$REPO_OWNER/$REPO_NAME/releases/latest/download/pt-nexus-box-proxy-$ARCH"
+        "https://raw.githubusercontent.com/$REPO_OWNER/$REPO_NAME/$REPO_REF/proxy/pt-nexus-box-proxy-$ARCH"
     )
 
     local downloaded=false
 
-    # 依次尝试仓库中的常见命名（优先使用按架构区分的二进制）
-    for proxy_path in "${proxy_candidates[@]}"; do
-        local PROXY_URL="https://raw.githubusercontent.com/$REPO_OWNER/$REPO_NAME/$REPO_REF/$proxy_path"
-        log "尝试下载: $proxy_path"
+    # 依次尝试候选地址（优先使用按架构区分的二进制）
+    for PROXY_URL in "${proxy_candidates[@]}"; do
+        log "尝试下载: $PROXY_URL"
 
         # 尝试使用curl下载
         if command -v curl >/dev/null 2>&1; then
