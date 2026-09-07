@@ -865,6 +865,7 @@ func (m *SchemaManager) columnSpecs() map[string][]schemaColumnSpec {
 		},
 		"auto_seed_rules": {
 			{name: "seed_retention_minutes", definition: map[string]string{"sqlite": "INTEGER NOT NULL DEFAULT 0", "mysql": "INT NOT NULL DEFAULT 0", "postgresql": "INTEGER NOT NULL DEFAULT 0"}},
+			{name: "download_url", definition: map[string]string{"sqlite": "TEXT", "mysql": "LONGTEXT", "postgresql": "TEXT"}},
 		},
 		"auto_seed_items": {
 			{name: "rule_id", definition: map[string]string{"sqlite": "INTEGER NOT NULL DEFAULT 0", "mysql": "BIGINT NOT NULL DEFAULT 0", "postgresql": "BIGINT NOT NULL DEFAULT 0"}},
@@ -1242,6 +1243,7 @@ func (m *SchemaManager) createAutoSeedMySQLTables() error {
 			rss_url LONGTEXT,
 			downloader_id VARCHAR(64),
 			save_path VARCHAR(1024),
+			download_url LONGTEXT,
 			auto_pause TINYINT(1) NOT NULL DEFAULT 0,
 			auto_organize TINYINT(1) NOT NULL DEFAULT 1,
 			min_size_gb DOUBLE DEFAULT 0,

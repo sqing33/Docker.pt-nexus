@@ -34,10 +34,11 @@ type AutoSeedRule struct {
 	SourceSite string `json:"source_site" gorm:"column:source_site"`
 	RSSURL     string `json:"rss_url" gorm:"column:rss_url"`
 
-	DownloaderID string `json:"downloader_id" gorm:"column:downloader_id"`
-	SavePath     string `json:"save_path" gorm:"column:save_path"`
-	AutoPause    bool   `json:"auto_pause" gorm:"column:auto_pause"`
-	AutoOrganize bool   `json:"auto_organize" gorm:"column:auto_organize"`
+	DownloaderID   string `json:"downloader_id" gorm:"column:downloader_id"`
+	SavePath       string `json:"save_path" gorm:"column:save_path"`
+	DownloadURL    string `json:"download_url" gorm:"column:download_url"`
+	AutoPause      bool   `json:"auto_pause" gorm:"column:auto_pause"`
+	AutoOrganize   bool   `json:"auto_organize" gorm:"column:auto_organize"`
 
 	MinSizeGB       float64 `json:"min_size_gb" gorm:"column:min_size_gb"`
 	MaxSizeGB       float64 `json:"max_size_gb" gorm:"column:max_size_gb"`
@@ -183,6 +184,7 @@ func (r *AutoSeedRepository) UpdateRule(rule *AutoSeedRule) error {
 		"rss_url":                  rule.RSSURL,
 		"downloader_id":            rule.DownloaderID,
 		"save_path":                rule.SavePath,
+		"download_url":             rule.DownloadURL,
 		"auto_pause":               rule.AutoPause,
 		"auto_organize":            rule.AutoOrganize,
 		"min_size_gb":              rule.MinSizeGB,
@@ -687,6 +689,28 @@ func (r *AutoSeedRepository) ListProgressItems(downloaderID string) ([]AutoSeedI
 		return nil, err
 	}
 	return rows, nil
+}
+
+// GetSiteSpeedLimit 按站点昵称查询 sites 表中的 speed_limit（MB/s），未找到返回 0。
+func (r *AutoSeedRepository) GetSiteSpeedLimit(nickname string) int {
+	if r == nil || r.store == nil || r.store.DB == nil {
+		return 0
+	}
+	nickname = strings.TrimSpace(nickname)
+	if nickname == "" {
+		return 0
+	}
+	var limit int
+	err := r.store.DB.Table("sites").
+		Select("speed_limit").
+		Where("nickname = ? OR site = ?", nickname, nickname).
+		Order("id DESC").
+		Limit(1).
+		Scan(&limit).Error
+	if err != nil {
+		return 0
+	}
+	return limit
 }
 
 // FindPublishLogsForItems 查询指定种子集合的最新发布日志，用于聚合发布结果。

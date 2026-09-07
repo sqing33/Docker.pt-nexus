@@ -398,6 +398,7 @@ func (s *MigrateService) EnqueuePublishQueueBatch(payload map[string]any) (map[s
 		sourceSite := strings.TrimSpace(processingshared.ToString(seed["nickname"], siteName))
 		downloaderID := strings.TrimSpace(processingshared.ToString(seed["downloader_id"], ""))
 		seedSavePath := strings.TrimSpace(processingshared.ToString(seed["save_path"], processingshared.ToString(seed["savePath"], "")))
+		seedTorrentURL := strings.TrimSpace(processingshared.ToString(seed["torrent_url"], ""))
 
 		if torrentID == "" || siteName == "" {
 			skipped++
@@ -469,6 +470,9 @@ func (s *MigrateService) EnqueuePublishQueueBatch(payload map[string]any) (map[s
 		}
 		if strings.TrimSpace(processingshared.ToString(uploadData["save_path"], "")) == "" && seedSavePath != "" {
 			uploadData["save_path"] = seedSavePath
+		}
+		if seedTorrentURL != "" {
+			uploadData["torrent_url"] = seedTorrentURL
 		}
 
 		if strings.TrimSpace(sourceSite) == "" {

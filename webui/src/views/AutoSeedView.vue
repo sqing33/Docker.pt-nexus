@@ -192,11 +192,15 @@
               {{ row.seed_retention_minutes > 0 ? `${row.seed_retention_minutes} 分钟` : '不清理' }}
             </template>
           </el-table-column>
-          <el-table-column label="状态" width="130">
+          <el-table-column label="状态" width="100">
             <template #default="{ row }">
-              <el-tag :type="row.enabled ? 'success' : 'warning'" size="small">
-                {{ row.enabled ? '开启' : '暂停' }}
-              </el-tag>
+              <el-switch
+                :model-value="row.enabled"
+                active-text="开启"
+                inactive-text="暂停"
+                inline-prompt
+                @change="(val: boolean) => toggleRuleEnabled(row, val)"
+              />
             </template>
           </el-table-column>
           <el-table-column
@@ -319,6 +323,12 @@
               :value="item.id"
             />
           </el-select>
+        </el-form-item>
+        <el-form-item label="下载地址">
+          <el-input
+            v-model="editingRule.download_url"
+            placeholder="自定义种子下载地址，留空则使用 RSS 中的地址"
+          />
         </el-form-item>
         <el-form-item label="大小 GB">
           <div class="inline-fields">
@@ -526,6 +536,7 @@ type Rule = {
   rss_url: string
   downloader_id: string
   save_path: string
+  download_url: string
   auto_pause: boolean
   auto_organize: boolean
   min_size_gb: number
@@ -650,6 +661,7 @@ function emptyRule(): Rule {
     rss_url: '',
     downloader_id: '',
     save_path: '',
+    download_url: '',
     auto_pause: false,
     auto_organize: true,
     min_size_gb: 0,
@@ -794,6 +806,18 @@ const saveRule = async () => {
   ElMessage.success('规则已保存')
   ruleDialogVisible.value = false
   await fetchRules()
+}
+
+const toggleRuleEnabled = async (row: Rule, val: boolean) => {
+  const prev = row.enabled
+  row.enabled = val
+  try {
+    await axios.put(`/api/auto-seed/rules/${row.id}`, { ...row, enabled: val })
+    ElMessage.success(val ? '规则已开启' : '规则已暂停')
+  } catch {
+    row.enabled = prev
+    ElMessage.error('切换失败')
+  }
 }
 
 const triggerRule = async (rule: Rule) => {

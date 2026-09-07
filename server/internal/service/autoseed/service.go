@@ -233,10 +233,12 @@ func (s *Service) processRule(rule *repository.AutoSeedRule) {
 			continue
 		}
 		skipChecking := false
+		siteSpeedLimit := s.repo.GetSiteSpeedLimit(rule.SourceSite)
 		options := downloaderclient.AddTorrentOptions{
-			Paused:       rule.AutoPause,
-			Tags:         parseJSONStrings(rule.TagsJSON),
-			SkipChecking: &skipChecking,
+			Paused:          rule.AutoPause,
+			Tags:            parseJSONStrings(rule.TagsJSON),
+			UploadLimitMBps: siteSpeedLimit,
+			SkipChecking:    &skipChecking,
 		}
 		torrentPath := strings.TrimSpace(toString(fetchResult["torrent_path"], ""))
 		var addErr error
@@ -577,12 +579,12 @@ func (s *Service) AddManualURL(torrentURL, downloaderID, sourceSite string) erro
 		return nil
 	}
 	addErr := error(nil)
-	skipChecking := false
+	manualOptions := newAutoSeedAddTorrentOptions(false, []string{"PT Nexus", "自动发种"}, 0)
 	torrentPath := toString(fetchResult["torrent_path"], "")
 	if torrentPath != "" {
-		addErr = d.AddTorrentFileWithOptions(torrentPath, "", downloaderclient.AddTorrentOptions{Paused: false, Tags: []string{"PT Nexus", "自动发种"}, SkipChecking: &skipChecking})
+		addErr = d.AddTorrentFileWithOptions(torrentPath, "", manualOptions)
 	} else {
-		addErr = d.AddTorrentURLWithOptions(torrentURL, "", downloaderclient.AddTorrentOptions{Paused: false, Tags: []string{"PT Nexus", "自动发种"}, SkipChecking: &skipChecking})
+		addErr = d.AddTorrentURLWithOptions(torrentURL, "", manualOptions)
 	}
 	if addErr != nil {
 		_ = s.repo.MarkItemRejected(item.ID, "推送下载器失败: "+addErr.Error())
@@ -682,7 +684,7 @@ func (s *Service) PushItems(ids []int64) (map[string]any, error) {
 // 失败场景：记录未配置下载器且无法从规则回填时返回错误。
 // 副作用：必要时读取对应自动发种规则，但不会写库。
 func (s *Service) resolveAutoSeedPushSettings(item *repository.AutoSeedItem) (string, downloaderclient.AddTorrentOptions, error) {
-	options := newAutoSeedAddTorrentOptions(false, []string{"PT Nexus", "自动发种"})
+	options := newAutoSeedAddTorrentOptions(false, []string{"PT Nexus", "自动发种"}, 0)
 	if item == nil {
 		return "", options, errors.New("种子记录为空")
 	}
@@ -708,7 +710,11 @@ func (s *Service) resolveAutoSeedPushSettings(item *repository.AutoSeedItem) (st
 	if strings.TrimSpace(downloaderID) == "" {
 		return "", options, errors.New("未获取到下载器")
 	}
-	return downloaderID, newAutoSeedAddTorrentOptions(paused, tags), nil
+	uploadLimit := 0
+	if s != nil && s.repo != nil {
+		uploadLimit = s.repo.GetSiteSpeedLimit(firstNonEmpty(item.SiteName, item.SourceSite))
+	}
+	return downloaderID, newAutoSeedAddTorrentOptions(paused, tags, uploadLimit), nil
 }
 
 // pushFetchedItemToDownloader 将已经抓取到详情页信息的自动发种记录推送到下载器。
@@ -734,15 +740,16 @@ func (s *Service) pushFetchedItemToDownloader(item *repository.AutoSeedItem, fet
 }
 
 // newAutoSeedAddTorrentOptions 构造自动发种推送到下载器时使用的附加参数。
-// 参数/返回：paused 控制是否暂停加入，tags 为下载器标签；返回可直接用于 AddTorrent 调用的参数。
+// 参数/返回：paused 控制是否暂停加入，tags 为下载器标签，uploadLimitMBps 为上传限速(MB/s,0=不限)；返回可直接用于 AddTorrent 调用的参数。
 // 失败场景：无。
 // 副作用：无。
-func newAutoSeedAddTorrentOptions(paused bool, tags []string) downloaderclient.AddTorrentOptions {
+func newAutoSeedAddTorrentOptions(paused bool, tags []string, uploadLimitMBps int) downloaderclient.AddTorrentOptions {
 	skipChecking := false
 	return downloaderclient.AddTorrentOptions{
-		Paused:       paused,
-		Tags:         compactStrings(tags),
-		SkipChecking: &skipChecking,
+		Paused:          paused,
+		Tags:            compactStrings(tags),
+		UploadLimitMBps: uploadLimitMBps,
+		SkipChecking:    &skipChecking,
 	}
 }
 func (s *Service) OrganizeItem(id int64, patch map[string]any) error {
@@ -803,6 +810,7 @@ func (s *Service) PublishItems(ids []int64, targetSites []string) (map[string]an
 		}
 		currentSavePath := s.resolveItemCurrentSavePath(*item)
 		interval, concurrency := s.resolveDownloaderPublishSettings(item.DownloaderID)
+		downloadURL := s.resolveItemDownloadURL(item)
 		now := time.Now()
 		itemResults := make([]map[string]any, 0, len(targetSites))
 		queuedTargets := 0
@@ -813,6 +821,9 @@ func (s *Service) PublishItems(ids []int64, targetSites []string) (map[string]an
 				"site_name":     siteName,
 				"nickname":      item.SourceSite,
 				"downloader_id": item.DownloaderID,
+			}
+			if downloadURL != "" {
+				seed["torrent_url"] = downloadURL
 			}
 			if currentSavePath != "" {
 				seed["save_path"] = currentSavePath
@@ -1028,6 +1039,22 @@ func (s *Service) resolveItemCurrentSavePath(item repository.AutoSeedItem) strin
 		return ""
 	}
 	return strings.TrimSpace(record.SavePath)
+}
+
+// resolveItemDownloadURL 解析自动发种记录发布时使用的种子下载地址。
+// 优先使用规则配置的 download_url，其次使用 RSS 拉取时保存的 torrent_url。
+func (s *Service) resolveItemDownloadURL(item *repository.AutoSeedItem) string {
+	if item == nil {
+		return ""
+	}
+	if item.RuleID > 0 && s != nil && s.repo != nil {
+		if rule, err := s.repo.GetRule(item.RuleID); err == nil && rule != nil {
+			if url := strings.TrimSpace(rule.DownloadURL); url != "" {
+				return url
+			}
+		}
+	}
+	return strings.TrimSpace(item.TorrentURL)
 }
 
 func (s *Service) resolveItemCurrentTorrentRecord(item repository.AutoSeedItem) (repository.AutoSeedTorrentRecord, bool, error) {
