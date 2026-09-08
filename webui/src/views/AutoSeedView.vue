@@ -527,6 +527,17 @@ import type { WorkingTorrent } from '@/components/cross-seed/panel/types'
 
 type Downloader = { id: string; name: string }
 type SiteItem = { name: string; can_publish: boolean }
+// 与转种「选择要发布的目标站点」所用的 /api/sites/status 数据结构一致
+// （参考 @/components/cross-seed/crossSeedPanelContext.ts 的 SiteStatus）
+type SiteStatus = {
+  name: string
+  site: string
+  has_cookie: boolean
+  has_passkey: boolean
+  is_source: boolean
+  is_target: boolean
+  can_publish: boolean
+}
 type Rule = {
   id: number
   name: string
@@ -582,8 +593,8 @@ const items = ref<Item[]>([])
 const rules = ref<Rule[]>([])
 const progressRows = ref<Item[]>([])
 const downloaders = ref<Downloader[]>([])
-const sourceSiteOptions = ref<SiteItem[]>([])
-const targetSiteOptions = ref<SiteItem[]>([])
+const sourceSiteOptions = ref<SiteStatus[]>([])
+const targetSiteOptions = ref<SiteStatus[]>([])
 const sitesLoading = ref(false)
 const selectedRows = ref<Item[]>([])
 const page = ref(1)
@@ -707,35 +718,27 @@ const fetchDownloaders = async () => {
 const fetchSiteOptions = async () => {
   sitesLoading.value = true
   try {
-    const [listRes, statusRes] = await Promise.all([
-      axios.get('/api/sites_list'),
-      axios.get('/api/sites/status'),
-    ])
-    const canPublishMap = new Map<string, boolean>()
-    if (Array.isArray(statusRes.data)) {
-      for (const site of statusRes.data) {
-        const name = normalizeSiteName(site)
-        if (name) canPublishMap.set(name, (site as Record<string, unknown>).can_publish !== false)
+    // 源站与发布站点共用同一份数据源：/api/sites/status，与转种流程保持一致
+    const statusRes = await axios.get('/api/sites/status')
+
+    const buildFromStatus = (filterField: 'is_source' | 'is_target') => {
+      const result: SiteStatus[] = []
+      if (!Array.isArray(statusRes.data)) return result
+      for (const raw of statusRes.data) {
+        const site = raw as SiteStatus
+        if (!site || !site.name) continue
+        if (site[filterField] !== true) continue
+        // 仅展示在站点设置里配置了 Cookie 的站点，未配置则不出现
+        if (site.has_cookie !== true) continue
+        result.push(site)
       }
+      return result
     }
-    const buildSites = (raw: unknown, defaultCanPublish: boolean) => {
-      const rows = Array.isArray(raw) ? raw : []
-      return rows
-        .map((site) => {
-          const name = normalizeSiteName(site)
-          return name ? { name, can_publish: canPublishMap.get(name) ?? defaultCanPublish } : null
-        })
-        .filter((site): site is SiteItem => Boolean(site))
-    }
-    const listData = listRes.data
-    if (Array.isArray(listData)) {
-      const sites = buildSites(listData, true)
-      sourceSiteOptions.value = sites
-      targetSiteOptions.value = sites
-    } else {
-      sourceSiteOptions.value = buildSites(listData?.source_sites, true)
-      targetSiteOptions.value = buildSites(listData?.target_sites, true)
-    }
+
+    // 源站（拉取种子）：is_source 且 has_cookie
+    sourceSiteOptions.value = buildFromStatus('is_source')
+    // 发布站点：is_target 且 has_cookie，保留完整 SiteStatus 字段
+    targetSiteOptions.value = buildFromStatus('is_target')
   } catch (error) {
     console.error('获取站点列表失败:', error)
   } finally {
