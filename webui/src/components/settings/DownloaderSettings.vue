@@ -316,7 +316,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const settings = ref<SettingsState>({
   downloaders: [],
-  realtime_speed_enabled: true,
+  realtime_speed_enabled: false,
 })
 const isLoading = ref(true)
 const isSaving = ref(false)
@@ -459,7 +459,7 @@ const fetchSettings = async () => {
       ...raw,
       downloaders,
       realtime_speed_enabled:
-        typeof raw.realtime_speed_enabled === 'boolean' ? raw.realtime_speed_enabled : true,
+        typeof raw.realtime_speed_enabled === 'boolean' ? raw.realtime_speed_enabled : false,
     }
   } catch (error) {
     ElMessage.error('加载设置失败！')

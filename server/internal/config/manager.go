@@ -187,7 +187,7 @@ func (m *Manager) ensureAuthBootstrapLocked() {
 func defaultConfig() map[string]any {
 	return map[string]any{
 		"downloaders":            []any{},
-		"realtime_speed_enabled": true,
+		"realtime_speed_enabled": false,
 		"downloader_queue": map[string]any{
 			"enabled":                         true,
 			"max_queue_size":                  1000,

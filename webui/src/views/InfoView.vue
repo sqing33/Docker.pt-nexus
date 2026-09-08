@@ -251,7 +251,7 @@ const speedChartDownloaders = ref<DownloaderMeta[]>([])
 const speedChartLegendItems = ref<SpeedLegendItem[]>([])
 const trafficChartLegendItems = ref<TrafficLegendItem[]>([])
 
-const isRealtimeSpeedEnabled = ref(true)
+const isRealtimeSpeedEnabled = ref(false)
 const areSettingsLoading = ref(true)
 
 const speedDisplayModeButtonText = computed(() => `(${displayModeTextMap[speedDisplayMode.value]})`)
@@ -374,11 +374,11 @@ const syncChartViewportOptions = () => {
 const fetchAppSettings = async () => {
   try {
     const { data } = await axios.get<{ realtime_speed_enabled?: boolean }>('/api/settings')
-    isRealtimeSpeedEnabled.value = data.realtime_speed_enabled !== false
+    isRealtimeSpeedEnabled.value = data.realtime_speed_enabled === true
   } catch (caught: unknown) {
     console.error('获取应用设置失败:', caught)
     ElMessage.error('获取应用设置失败，部分功能可能不正常。')
-    isRealtimeSpeedEnabled.value = true
+    isRealtimeSpeedEnabled.value = false
   }
 }
 

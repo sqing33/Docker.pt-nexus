@@ -173,7 +173,7 @@ func (s *Service) run() {
 
 func (s *Service) resolveIntervalSeconds() int {
 	settings := s.cfg.Get()
-	realtimeEnabled := toBool(settings["realtime_speed_enabled"], true)
+	realtimeEnabled := toBool(settings["realtime_speed_enabled"], false)
 	if realtimeEnabled {
 		return 1
 	}
