@@ -1597,6 +1597,8 @@ func (s *Service) enrichItemSavePaths(items []repository.AutoSeedItem) {
 		return
 	}
 	if s.repo != nil {
+		// 按下载器分组缓存快照，避免同一下载器重复拉取。
+		snapshotCache := map[string][]downloaderclient.TorrentSnapshot{}
 		for idx := range items {
 			downloaderID := strings.TrimSpace(items[idx].DownloaderID)
 			downloaderHash := strings.TrimSpace(items[idx].DownloaderHash)
@@ -1604,14 +1606,42 @@ func (s *Service) enrichItemSavePaths(items []repository.AutoSeedItem) {
 				continue
 			}
 			record, err := s.repo.FindTorrentByDownloaderHash(downloaderID, downloaderHash)
-			if err != nil {
-				if !errors.Is(err, gorm.ErrRecordNotFound) {
-					logx.Warnf(moduleAutoSeed, "回填自动发种列表保存路径失败 downloader_id=%s hash=%s err=%v", downloaderID, downloaderHash, err)
+			if err == nil {
+				if strings.TrimSpace(record.SavePath) != "" {
+					items[idx].SavePath = strings.TrimSpace(record.SavePath)
 				}
 				continue
 			}
-			if strings.TrimSpace(record.SavePath) != "" {
-				items[idx].SavePath = strings.TrimSpace(record.SavePath)
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
+				logx.Warnf(moduleAutoSeed, "回填自动发种列表保存路径失败 downloader_id=%s hash=%s err=%v", downloaderID, downloaderHash, err)
+				continue
+			}
+			// torrents 表无记录，回退查下载器任务列表，确认种子是否已被删除。
+			snapshots, ok := snapshotCache[downloaderID]
+			if !ok {
+				downloader, dErr := downloaderclient.FromConfig(s.rootConfig(), downloaderID)
+				if dErr != nil {
+					continue
+				}
+				fetched, fErr := downloader.FetchTorrents()
+				if fErr != nil {
+					logx.Warnf(moduleAutoSeed, "回填下载器保存路径失败 downloader_id=%s err=%v", downloaderID, fErr)
+					snapshotCache[downloaderID] = []downloaderclient.TorrentSnapshot{}
+				} else {
+					snapshotCache[downloaderID] = fetched
+					snapshots = fetched
+				}
+			}
+			matched := false
+			if len(snapshots) > 0 {
+				if snapshot, found := matchSnapshotByHash(downloaderHash, snapshots); found {
+					items[idx].SavePath = bestSnapshotMediaPath(snapshot)
+					matched = true
+				}
+			}
+			// torrents 表与下载器任务列表均无此种子，标记为已从下载器删除。
+			if !matched {
+				items[idx].DeletedFromDownloader = true
 			}
 		}
 		return
@@ -1638,6 +1668,9 @@ func (s *Service) enrichItemSavePaths(items []repository.AutoSeedItem) {
 		for _, idx := range indexes {
 			if snapshot, ok := matchSnapshotByHash(items[idx].DownloaderHash, snapshots); ok {
 				items[idx].SavePath = bestSnapshotMediaPath(snapshot)
+			} else if strings.TrimSpace(items[idx].DownloaderHash) != "" {
+				// 下载器任务列表中无此 hash 的种子，标记为已删除。
+				items[idx].DeletedFromDownloader = true
 			}
 		}
 	}

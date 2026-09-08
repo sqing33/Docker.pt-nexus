@@ -89,6 +89,10 @@ type AutoSeedItem struct {
 	Progress       float64 `json:"progress" gorm:"column:progress"`
 	Downloaded     bool    `json:"downloaded" gorm:"column:downloaded"`
 
+	// DeletedFromDownloader 运行时标记：种子已从下载器删除（不在 torrents 表也不在下载器任务列表）。
+	// 不持久化，仅由列表查询时 enrichItemSavePaths 回填，供前端显示"已删除"状态。
+	DeletedFromDownloader bool `json:"deleted_from_downloader,omitempty" gorm:"-"`
+
 	TorrentID string `json:"torrent_id" gorm:"column:torrent_id"`
 	SiteName  string `json:"site_name" gorm:"column:site_name"`
 

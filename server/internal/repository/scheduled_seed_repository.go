@@ -19,6 +19,32 @@ const (
 	ScheduledSeedStatusCompleted = "completed"
 )
 
+// normalizeNextRunAt 将任意常见时间字符串（ISO 8601 带 Z 后缀、带毫秒、
+// 空格分隔等）统一归一化为 MySQL DATETIME 兼容格式 "2006-01-02 15:04:05"。
+// 解析失败或为空时回退到当前时间，确保写入 next_run_at 不会触发
+// MySQL Error 1292 (Incorrect datetime value)。
+func normalizeNextRunAt(value string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return time.Now().Format(scheduledSeedTimeLayout)
+	}
+	layouts := []string{
+		scheduledSeedTimeLayout, // 2006-01-02 15:04:05（空格分隔）
+		"2006-01-02T15:04:05",   // T 分隔、无时区
+		time.RFC3339Nano,        // 2006-01-02T15:04:05.999999999Z07:00（兼容带/不带毫秒）
+		time.RFC3339,            // 2006-01-02T15:04:05Z07:00
+		"2006-01-02T15:04:05Z07:00",
+		"2006-01-02",
+	}
+	for _, layout := range layouts {
+		if t, err := time.Parse(layout, trimmed); err == nil {
+			return t.Format(scheduledSeedTimeLayout)
+		}
+	}
+	// 所有格式均无法解析，回退当前时间避免写入非法值
+	return time.Now().Format(scheduledSeedTimeLayout)
+}
+
 // ScheduledSeedTask 表示一个定时发种任务定义，包含种子列表、目标站点与调度状态。
 type ScheduledSeedTask struct {
 	ID int64 `json:"id" gorm:"column:id;primaryKey"`
@@ -94,6 +120,9 @@ func (r *ScheduledSeedRepository) Create(task *ScheduledSeedTask) error {
 	if task.Status == "" {
 		task.Status = ScheduledSeedStatusActive
 	}
+	// 归一化 next_run_at，兼容 ISO 8601 / 带时区 / 空格分隔等多种格式，
+	// 避免 MySQL Error 1292 (Incorrect datetime value)。
+	task.NextRunAt = normalizeNextRunAt(task.NextRunAt)
 
 	if err := r.store.DB.Table("scheduled_seed_tasks").Create(task).Error; err != nil {
 		return fmt.Errorf("创建定时发种任务失败: %w", err)
@@ -160,6 +189,9 @@ func (r *ScheduledSeedRepository) Update(task *ScheduledSeedTask) error {
 	}
 
 	task.UpdatedAt = time.Now().Format(scheduledSeedTimeLayout)
+	// 归一化 next_run_at，兼容前端或历史数据可能传入的 ISO 8601 / 带时区格式，
+	// 避免 MySQL Error 1292 (Incorrect datetime value)。
+	task.NextRunAt = normalizeNextRunAt(task.NextRunAt)
 	if err := r.store.DB.Table("scheduled_seed_tasks").
 		Where("id = ?", task.ID).
 		Updates(map[string]any{

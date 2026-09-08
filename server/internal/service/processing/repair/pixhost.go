@@ -19,12 +19,12 @@ import (
 )
 
 const maxPosterBytes = 25 * 1024 * 1024
-const posterTransferLogModule = "杩佺Щ-娴锋姤杞瓨"
+const posterTransferLogModule = "迁移-海报转存"
 const posterTransferDownloadRetry = 2
 const pixhostOutputDirectHost = "img2.pixhost.cc"
 const pixhostUploadAPIURL = "https://api.pixhost.cc/images"
 
-// PixhostUploadConfig 鎻忚堪 Pixhost 涓婁紶 API 涓庢渶缁堢洿閾惧煙鍚嶃€?
+// PixhostUploadConfig 描述 Pixhost 上传 API 与最终直链域名。
 type PixhostUploadConfig struct {
 	DirectHost   string
 	UploadAPIURL string
@@ -42,12 +42,12 @@ var (
 	}
 )
 
-// NormalizePosterBBCode 瑙勮寖鍖栨捣鎶ュ瓧娈碉紝缁熶竴杈撳嚭涓哄崟涓?[img]...[/img]銆?
+// NormalizePosterBBCode 规范化海报字段，统一输出为单个 [img]...[/img]。
 func NormalizePosterBBCode(raw string) string {
 	return NormalizePosterBBCodeWithConfig(raw, nil)
 }
 
-// NormalizePosterBBCodeWithConfig 鎸?rootConfig 涓殑 image_hoster 瑙勮寖鍖栨捣鎶ュ瓧娈点€?
+// NormalizePosterBBCodeWithConfig 按 rootConfig 中的 image_hoster 规范化海报字段。
 func NormalizePosterBBCodeWithConfig(raw string, rootConfig map[string]any) string {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
@@ -70,12 +70,12 @@ func NormalizePosterBBCodeWithConfig(raw string, rootConfig map[string]any) stri
 	return "[img]" + normalized + "[/img]"
 }
 
-// NormalizePosterURL 瀵规捣鎶?URL 鍋氱洿閾句慨澶嶏紝骞跺敖閲忚浆瀛樺埌 Pixhost銆?
+// NormalizePosterURL 对海报 URL 做直链修复，并尽量转存到 Pixhost。
 func NormalizePosterURL(raw string) string {
 	return NormalizePosterURLWithConfig(raw, nil)
 }
 
-// NormalizePosterURLWithConfig 鎸?rootConfig 涓殑 image_hoster 瀵规捣鎶?URL 鍋氱洿閾句慨澶嶅苟杞瓨銆?
+// NormalizePosterURLWithConfig 按 rootConfig 中的 image_hoster 对海报 URL 做直链修复并转存。
 func NormalizePosterURLWithConfig(raw string, rootConfig map[string]any) string {
 	url := strings.TrimSpace(raw)
 	if url == "" {
@@ -91,27 +91,27 @@ func NormalizePosterURLWithConfig(raw string, rootConfig map[string]any) string 
 
 func normalizePosterURLForChevereto(url string, cfg CheveretoUploadConfig) string {
 	if cfg.BaseURL == "" {
-		// 娌℃湁閰嶇疆鍩熷悕锛屽洖閫€鍒板師濮?URL
-		logx.Warnf(posterTransferLogModule, "鏈棩鍥惧簥鍩熷悕鏈厤缃紝鍥為€€鍘熷URL source=%s", CompactLogText(url, 160))
+		// 没有配置域名，回退到原始 URL
+		logx.Warnf(posterTransferLogModule, "末日图床域名未配置，回退原始URL source=%s", CompactLogText(url, 160))
 		return url
 	}
 
 	token, err := CheveretoLogin(cfg)
 	if err != nil {
-		logx.Warnf(posterTransferLogModule, "鏈棩鍥惧簥鐧诲綍澶辫触锛屽洖閫€鍘熷URL source=%s err=%v", CompactLogText(url, 160), err)
+		logx.Warnf(posterTransferLogModule, "末日图床登录失败，回退原始URL source=%s err=%v", CompactLogText(url, 160), err)
 		return url
 	}
 
 	transferred, err := TransferRemoteImageToChevereto(url, cfg, token)
 	if err != nil || strings.TrimSpace(transferred) == "" {
 		if err != nil {
-			logx.Warnf(posterTransferLogModule, "娴锋姤杞瓨鏈棩鍥惧簥澶辫触锛屽洖閫€鍘熷URL source=%s err=%v", CompactLogText(url, 160), err)
+			logx.Warnf(posterTransferLogModule, "海报转存末日图床失败，回退原始URL source=%s err=%v", CompactLogText(url, 160), err)
 		} else {
-			logx.Warnf(posterTransferLogModule, "娴锋姤杞瓨鏈棩鍥惧簥澶辫触锛屽洖閫€鍘熷URL source=%s err=empty transfer result", CompactLogText(url, 160))
+			logx.Warnf(posterTransferLogModule, "海报转存末日图床失败，回退原始URL source=%s err=empty transfer result", CompactLogText(url, 160))
 		}
 		return url
 	}
-	logx.Infof(posterTransferLogModule, "娴锋姤杞瓨鏈棩鍥惧簥鎴愬姛 source=%s target=%s", CompactLogText(url, 160), CompactLogText(transferred, 160))
+	logx.Infof(posterTransferLogModule, "海报转存末日图床成功 source=%s target=%s", CompactLogText(url, 160), CompactLogText(transferred, 160))
 	return strings.TrimSpace(transferred)
 }
 
@@ -119,38 +119,41 @@ func normalizePosterURLForPixhost(url string, cfg PixhostUploadConfig) string {
 	lower := strings.ToLower(url)
 	if strings.Contains(lower, "pixhost.to") || strings.Contains(lower, "pixhost.cc") {
 		if resolved, err := ResolvePixhostImageURLWithConfig(url, cfg); err == nil && strings.TrimSpace(resolved) != "" {
-			logx.Infof(posterTransferLogModule, "娴锋姤URL宸叉槸Pixhost锛岀洿閾捐В鏋愭垚鍔?source=%s resolved=%s", CompactLogText(url, 160), CompactLogText(resolved, 160))
+			logx.Infof(posterTransferLogModule, "海报URL已是Pixhost，直链解析成功 source=%s resolved=%s", CompactLogText(url, 160), CompactLogText(resolved, 160))
 			return strings.TrimSpace(resolved)
 		} else if err != nil {
-			logx.Warnf(posterTransferLogModule, "娴锋姤URL宸叉槸Pixhost浣嗙洿閾捐В鏋愬け璐?source=%s err=%v", CompactLogText(url, 160), err)
+			logx.Warnf(posterTransferLogModule, "海报URL已是Pixhost但直链解析失败 source=%s err=%v", CompactLogText(url, 160), err)
 		}
 		if direct := NormalizePixhostDirectHostWithConfig(url, cfg); direct != "" {
-			logx.Infof(posterTransferLogModule, "娴锋姤URL宸叉槸Pixhost锛屽煙鍚嶈鑼冨寲瀹屾垚 source=%s normalized=%s", CompactLogText(url, 160), CompactLogText(direct, 160))
+			logx.Infof(posterTransferLogModule, "海报URL已是Pixhost，域名规范化完成 source=%s normalized=%s", CompactLogText(url, 160), CompactLogText(direct, 160))
 			return direct
 		}
-		logx.Warnf(posterTransferLogModule, "娴锋姤URL宸叉槸Pixhost浣嗘棤娉曡鑼冨寲锛屼繚鐣欏師濮婾RL source=%s", CompactLogText(url, 160))
+		logx.Warnf(posterTransferLogModule, "海报URL已是Pixhost但无法规范化，保留原始URL source=%s", CompactLogText(url, 160))
 		return url
 	}
 
 	transferred, err := TransferRemoteImageToPixhostWithConfig(url, cfg)
 	if err != nil || strings.TrimSpace(transferred) == "" {
 		if err != nil {
-			logx.Warnf(posterTransferLogModule, "娴锋姤杞瓨Pixhost澶辫触锛屽洖閫€鍘熷URL source=%s err=%v", CompactLogText(url, 160), err)
+			logx.Warnf(posterTransferLogModule, "海报转存Pixhost失败，回退原始URL source=%s err=%v", CompactLogText(url, 160), err)
 		} else {
-			logx.Warnf(posterTransferLogModule, "娴锋姤杞瓨Pixhost澶辫触锛屽洖閫€鍘熷URL source=%s err=empty transfer result", CompactLogText(url, 160))
+			logx.Warnf(posterTransferLogModule, "海报转存Pixhost失败，回退原始URL source=%s err=empty transfer result", CompactLogText(url, 160))
 		}
 		return url
 	}
-	logx.Infof(posterTransferLogModule, "娴锋姤杞瓨Pixhost鎴愬姛 source=%s target=%s", CompactLogText(url, 160), CompactLogText(transferred, 160))
+	logx.Infof(posterTransferLogModule, "海报转存Pixhost成功 source=%s target=%s", CompactLogText(url, 160), CompactLogText(transferred, 160))
 	return strings.TrimSpace(transferred)
 }
 
-// TransferRemoteImageToPixhost 灏嗚繙绋嬪浘鐗囦笅杞藉悗涓婁紶鍒?Pixhost锛屽啀杩斿洖鍙敤鐩撮摼銆?
+// TransferRemoteImageToPixhost 将远程图片下载后上传到 Pixhost，再返回可用直链。
 func TransferRemoteImageToPixhost(imageURL string) (string, error) {
 	return TransferRemoteImageToPixhostWithConfig(imageURL, DefaultPixhostUploadConfig())
 }
 
-// TransferRemoteImageToPixhostWithConfig 灏嗚繙绋嬪浘鐗囦笅杞藉悗涓婁紶鍒?Pixhost锛屽苟鎸夐厤缃煙鍚嶈繑鍥炵洿閾俱€?// 鍙傛暟/杩斿洖锛歩mageURL 涓鸿繙绋嬪浘鐗囧湴鍧€锛沜fg 鎸囧畾涓婁紶 API 涓庣洿閾惧煙鍚嶏紱鎴愬姛杩斿洖鍥剧墖鐩撮摼銆?// 澶辫触鍦烘櫙锛氫笅杞藉け璐ャ€佷复鏃舵枃浠跺啓鍏ュけ璐ャ€丳ixhost 涓婁紶澶辫触鎴栬繑鍥炵┖閾炬帴銆?// 鍓綔鐢細鍙戣捣 HTTP 璇锋眰銆佸啓鍏ュ苟鍒犻櫎涓存椂鏂囦欢锛屽苟杈撳嚭杞瓨鏃ュ織銆?
+// TransferRemoteImageToPixhostWithConfig 将远程图片下载后上传到 Pixhost，并按配置域名返回直链。
+// 参数/返回：imageURL 为远程图片地址；cfg 指定上传 API 与直链域名；成功返回图片直链。
+// 失败场景：下载失败、临时文件写入失败、Pixhost 上传失败或返回空链接。
+// 副作用：发起 HTTP 请求、写入并删除临时文件，并输出转存日志。
 func TransferRemoteImageToPixhostWithConfig(imageURL string, cfg PixhostUploadConfig) (string, error) {
 	cfg = normalizePixhostUploadConfig(cfg)
 	trimmed := strings.TrimSpace(imageURL)
@@ -159,7 +162,7 @@ func TransferRemoteImageToPixhostWithConfig(imageURL string, cfg PixhostUploadCo
 	}
 
 	candidates := buildPosterDownloadCandidates(trimmed)
-	logx.Infof(posterTransferLogModule, "寮€濮嬫捣鎶ヨ浆瀛?source=%s candidates=%d", CompactLogText(trimmed, 160), len(candidates))
+	logx.Infof(posterTransferLogModule, "开始海报转存 source=%s candidates=%d", CompactLogText(trimmed, 160), len(candidates))
 	errMsgs := make([]string, 0, len(candidates)*posterTransferDownloadRetry)
 
 	for _, candidate := range candidates {
@@ -170,8 +173,8 @@ func TransferRemoteImageToPixhostWithConfig(imageURL string, cfg PixhostUploadCo
 		for attempt := 1; attempt <= posterTransferDownloadRetry; attempt++ {
 			data, contentType, downloadErr := downloadPosterImage(candidate)
 			if downloadErr != nil {
-				errMsgs = append(errMsgs, fmt.Sprintf("涓嬭浇澶辫触 candidate=%s attempt=%d err=%v", CompactLogText(candidate, 120), attempt, downloadErr))
-				logx.Warnf(posterTransferLogModule, "涓嬭浇娴锋姤澶辫触 candidate=%s attempt=%d/%d err=%v", CompactLogText(candidate, 160), attempt, posterTransferDownloadRetry, downloadErr)
+				errMsgs = append(errMsgs, fmt.Sprintf("下载失败 candidate=%s attempt=%d err=%v", CompactLogText(candidate, 120), attempt, downloadErr))
+				logx.Warnf(posterTransferLogModule, "下载海报失败 candidate=%s attempt=%d/%d err=%v", CompactLogText(candidate, 160), attempt, posterTransferDownloadRetry, downloadErr)
 				if attempt < posterTransferDownloadRetry {
 					time.Sleep(time.Duration(attempt) * 300 * time.Millisecond)
 				}
@@ -180,7 +183,7 @@ func TransferRemoteImageToPixhostWithConfig(imageURL string, cfg PixhostUploadCo
 
 			logx.Infof(
 				posterTransferLogModule,
-				"涓嬭浇娴锋姤鎴愬姛 candidate=%s attempt=%d bytes=%d content_type=%s",
+				"下载海报成功 candidate=%s attempt=%d bytes=%d content_type=%s",
 				CompactLogText(candidate, 160),
 				attempt,
 				len(data),
@@ -189,16 +192,16 @@ func TransferRemoteImageToPixhostWithConfig(imageURL string, cfg PixhostUploadCo
 
 			tmpPath, tmpErr := writePosterTempFile(data, contentType)
 			if tmpErr != nil {
-				errMsgs = append(errMsgs, fmt.Sprintf("钀界洏澶辫触 candidate=%s err=%v", CompactLogText(candidate, 120), tmpErr))
-				logx.Warnf(posterTransferLogModule, "娴锋姤涓存椂鏂囦欢鍐欏叆澶辫触 candidate=%s err=%v", CompactLogText(candidate, 160), tmpErr)
+				errMsgs = append(errMsgs, fmt.Sprintf("落盘失败 candidate=%s err=%v", CompactLogText(candidate, 120), tmpErr))
+				logx.Warnf(posterTransferLogModule, "海报临时文件写入失败 candidate=%s err=%v", CompactLogText(candidate, 160), tmpErr)
 				continue
 			}
 
 			showURL, uploadErr := UploadImageToPixhostWithConfig(tmpPath, cfg)
 			_ = os.Remove(tmpPath)
 			if uploadErr != nil {
-				errMsgs = append(errMsgs, fmt.Sprintf("涓婁紶澶辫触 candidate=%s attempt=%d err=%v", CompactLogText(candidate, 120), attempt, uploadErr))
-				logx.Warnf(posterTransferLogModule, "涓婁紶娴锋姤鍒癙ixhost澶辫触 candidate=%s attempt=%d/%d err=%v", CompactLogText(candidate, 160), attempt, posterTransferDownloadRetry, uploadErr)
+				errMsgs = append(errMsgs, fmt.Sprintf("上传失败 candidate=%s attempt=%d err=%v", CompactLogText(candidate, 120), attempt, uploadErr))
+				logx.Warnf(posterTransferLogModule, "上传海报到Pixhost失败 candidate=%s attempt=%d/%d err=%v", CompactLogText(candidate, 160), attempt, posterTransferDownloadRetry, uploadErr)
 				if attempt < posterTransferDownloadRetry {
 					time.Sleep(time.Duration(attempt) * 300 * time.Millisecond)
 				}
@@ -206,26 +209,26 @@ func TransferRemoteImageToPixhostWithConfig(imageURL string, cfg PixhostUploadCo
 			}
 
 			if resolved, resolveErr := ResolvePixhostImageURLWithConfig(showURL, cfg); resolveErr == nil && strings.TrimSpace(resolved) != "" {
-				logx.Infof(posterTransferLogModule, "Pixhost鐩撮摼瑙ｆ瀽鎴愬姛 show_url=%s resolved=%s", CompactLogText(showURL, 160), CompactLogText(resolved, 160))
+				logx.Infof(posterTransferLogModule, "Pixhost直链解析成功 show_url=%s resolved=%s", CompactLogText(showURL, 160), CompactLogText(resolved, 160))
 				return strings.TrimSpace(resolved), nil
 			} else if resolveErr != nil {
-				logx.Warnf(posterTransferLogModule, "Pixhost鐩撮摼瑙ｆ瀽澶辫触 show_url=%s err=%v", CompactLogText(showURL, 160), resolveErr)
+				logx.Warnf(posterTransferLogModule, "Pixhost直链解析失败 show_url=%s err=%v", CompactLogText(showURL, 160), resolveErr)
 			}
 
 			if direct := NormalizePixhostDirectHostWithConfig(showURL, cfg); direct != "" {
-				logx.Infof(posterTransferLogModule, "Pixhost鐩撮摼瑙ｆ瀽鍥為€€鎴愬姛 show_url=%s direct=%s", CompactLogText(showURL, 160), CompactLogText(direct, 160))
+				logx.Infof(posterTransferLogModule, "Pixhost直链解析回退成功 show_url=%s direct=%s", CompactLogText(showURL, 160), CompactLogText(direct, 160))
 				return direct, nil
 			}
 			base := strings.TrimSpace(showURL)
 			if base == "" {
-				errMsgs = append(errMsgs, fmt.Sprintf("Pixhost杩斿洖绌篣RL candidate=%s", CompactLogText(candidate, 120)))
-				logx.Warnf(posterTransferLogModule, "Pixhost涓婁紶杩斿洖绌篣RL candidate=%s", CompactLogText(candidate, 160))
+				errMsgs = append(errMsgs, fmt.Sprintf("Pixhost返回空URL candidate=%s", CompactLogText(candidate, 120)))
+				logx.Warnf(posterTransferLogModule, "Pixhost上传返回空URL candidate=%s", CompactLogText(candidate, 160))
 				if attempt < posterTransferDownloadRetry {
 					time.Sleep(time.Duration(attempt) * 300 * time.Millisecond)
 				}
 				continue
 			}
-			logx.Warnf(posterTransferLogModule, "Pixhost杩斿洖show_url浣嗘湭瑙ｆ瀽涓虹洿閾撅紝鍥為€€show_url show_url=%s", CompactLogText(base, 160))
+			logx.Warnf(posterTransferLogModule, "Pixhost返回show_url但未解析为直链，回退show_url show_url=%s", CompactLogText(base, 160))
 			return base, nil
 		}
 	}
@@ -377,32 +380,39 @@ func writePosterTempFile(data []byte, contentType string) (string, error) {
 	return tmpPath, nil
 }
 
-// UploadImageToPixhost 涓婁紶鏈湴鍥剧墖鍒?Pixhost锛岃繑鍥?show_url銆?
+// UploadImageToPixhost 上传本地图片到 Pixhost，返回 show_url。
 func UploadImageToPixhost(imagePath string) (string, error) {
 	return UploadImageToPixhostWithConfig(imagePath, DefaultPixhostUploadConfig())
 }
 
-// UploadImageToPixhostWithConfig 涓婁紶鏈湴鍥剧墖鍒?Pixhost锛屾敮鎸佷娇鐢ㄩ厤缃殑 API 鍩熷悕銆?// 鍙傛暟/杩斿洖锛歩magePath 涓烘湰鍦板浘鐗囪矾寰勶紱cfg 鎸囧畾 Pixhost 涓婁紶 API锛涙垚鍔熻繑鍥?show_url銆?// 澶辫触鍦烘櫙锛氭枃浠朵笉瀛樺湪銆佺綉缁滃け璐ャ€丳ixhost 杩斿洖闈?200 鎴栧搷搴旂己灏?show_url銆?// 鍓綔鐢細璇诲彇鏈湴鏂囦欢骞跺彂璧?HTTP 涓婁紶璇锋眰銆?
+// UploadImageToPixhostWithConfig 上传本地图片到 Pixhost，支持使用配置的 API 域名。
+// 参数/返回：imagePath 为本地图片路径；cfg 指定 Pixhost 上传 API；成功返回 show_url。
+// 失败场景：文件不存在、网络失败、Pixhost 返回非 200 或响应缺失 show_url。
+// 副作用：读取本地文件并发起 HTTP 上传请求。
 func UploadImageToPixhostWithConfig(imagePath string, cfg PixhostUploadConfig) (string, error) {
 	cfg = normalizePixhostUploadConfig(cfg)
 	showURL, _, err := uploadToPixhostDirectStream(imagePath, cfg.UploadAPIURL, func(string, ...any) {})
 	return showURL, err
 }
 
-// UploadImageToPixhostNarrative 鎸?Python 鐗堟棩蹇楅鏍间笂浼犲浘鐗囧埌 Pixhost锛屾敮鎸佷富澶囧煙鍚嶅垏鎹€?
-// 鍙傛暟/杩斿洖锛歩magePath 涓烘湰鍦板浘鐗囪矾寰勶紱鎴愬姛杩斿洖 show_url锛涘け璐ヨ繑鍥為敊璇€?
-// 澶辫触鍦烘櫙锛氭枃浠朵笉瀛樺湪銆佺綉缁滈敊璇€丳ixhost 闈?200銆佸搷搴?JSON 涓嶅悎娉曘€?
-// 鍓綔鐢細璇诲彇鏈湴鏂囦欢骞跺彂璧?HTTP 璇锋眰锛涗細杈撳嚭鍙欎簨寮忕函鏂囨湰鏃ュ織銆?
+// UploadImageToPixhostNarrative 按 Python 版日志风格上传图片到 Pixhost，支持主备域名切换。
+// 参数/返回：imagePath 为本地图片路径；成功返回 show_url；失败返回错误。
+// 失败场景：文件不存在、网络错误、Pixhost 非 200、响应 JSON 不合法。
+// 副作用：读取本地文件并发起 HTTP 请求；会输出叙事式纯文本日志。
 func UploadImageToPixhostNarrative(imagePath string) (string, error) {
 	return UploadImageToPixhostNarrativeWithLogger(imagePath, logx.PlainInfof)
 }
 
-// UploadImageToPixhostNarrativeWithLogger 鎸?Python 鐗堟棩蹇楅鏍间笂浼犲浘鐗囧埌 Pixhost锛屾敮鎸佷富澶囧煙鍚嶅垏鎹€?// 鍙傛暟/杩斿洖锛歭ogLine 鐢ㄤ簬杈撳嚭鍗曡鏃ュ織锛堝彲鐢ㄤ簬骞跺彂鍦烘櫙涓嬬殑鏃ュ織缂撳啿锛夈€?
+// UploadImageToPixhostNarrativeWithLogger 按 Python 版日志风格上传图片到 Pixhost，支持主备域名切换。
+// 参数/返回：logLine 用于输出单行日志（可用于并发场景下的日志缓冲）。
 func UploadImageToPixhostNarrativeWithLogger(imagePath string, logLine func(string, ...any)) (string, error) {
 	return UploadImageToPixhostNarrativeWithConfigAndLogger(imagePath, DefaultPixhostUploadConfig(), logLine)
 }
 
-// UploadImageToPixhostNarrativeWithConfigAndLogger 鎸夐厤缃煙鍚嶄笂浼犲浘鐗囧埌 Pixhost锛屽苟杈撳嚭鍙欎簨寮忔棩蹇椼€?// 鍙傛暟/杩斿洖锛歝fg 鎸囧畾涓讳笂浼?API锛沴ogLine 鐢ㄤ簬杈撳嚭涓婁紶杩囩▼锛涙垚鍔熻繑鍥?show_url銆?// 澶辫触鍦烘櫙锛氭湰鍦版枃浠朵笉鍙銆佸叏閮?API 鍩熷悕璇锋眰澶辫触鎴?Pixhost 鍝嶅簲闈炴硶銆?// 鍓綔鐢細璇诲彇鏈湴鍥剧墖骞跺涓诲 API 鍙戣捣 HTTP 璇锋眰銆?
+// UploadImageToPixhostNarrativeWithConfigAndLogger 按配置域名上传图片到 Pixhost，并输出叙事式日志。
+// 参数/返回：cfg 指定主备上传 API；logLine 用于输出上传过程；成功返回 show_url。
+// 失败场景：本地文件不可读、全部 API 域名请求失败或 Pixhost 响应非法。
+// 副作用：读取本地图片并对主备 API 发起 HTTP 请求。
 func UploadImageToPixhostNarrativeWithConfigAndLogger(imagePath string, cfg PixhostUploadConfig, logLine func(string, ...any)) (string, error) {
 	cfg = normalizePixhostUploadConfig(cfg)
 	apiURLs := []string{
@@ -411,9 +421,9 @@ func UploadImageToPixhostNarrativeWithConfigAndLogger(imagePath string, cfg Pixh
 		"http://pt-nexus-proxy.1395251710.workers.dev/" + cfg.UploadAPIURL,
 	}
 
-	logLine("鍑嗗涓婁紶鍥剧墖: %s", imagePath)
+	logLine("准备上传图片: %s", imagePath)
 	if _, err := os.Stat(imagePath); err != nil {
-		logLine("閿欒锛氭枃浠朵笉瀛樺湪 %s", imagePath)
+		logLine("错误：文件不存在 %s", imagePath)
 		return "", err
 	}
 
@@ -425,19 +435,19 @@ func UploadImageToPixhostNarrativeWithConfigAndLogger(imagePath string, cfg Pixh
 			if i != 0 {
 				domainName = "备用域名"
 			}
-			logLine("灏濊瘯浣跨敤%s: %s", domainName, apiURL)
+			logLine("尝试使用%s: %s", domainName, apiURL)
 			showURL, statusCode, err := uploadToPixhostDirectStream(imagePath, apiURL, logLine)
 			if err == nil && strings.TrimSpace(showURL) != "" {
-				logLine("%s涓婁紶鎴愬姛", domainName)
+				logLine("%s上传成功", domainName)
 				return showURL, nil
 			}
 			lastErr = err
 			if statusCode > 0 {
-				logLine("   鉂?鐩存帴涓婁紶澶辫触 (鐘舵€佺爜: %d)", statusCode)
+				logLine("   ❌直接上传失败 (状态码: %d)", statusCode)
 			} else if err != nil {
-				logLine("   鉂?鐩存帴涓婁紶澶辫触: %s", classifyPixhostUploadError(err))
+				logLine("   ❌直接上传失败: %s", classifyPixhostUploadError(err))
 			} else {
-				logLine("   鉂?鐩存帴涓婁紶澶辫触")
+				logLine("   ❌直接上传失败")
 			}
 			logLine("%s上传失败，尝试下一个", domainName)
 		}
@@ -450,7 +460,7 @@ func UploadImageToPixhostNarrativeWithConfigAndLogger(imagePath string, cfg Pixh
 	if lastErr != nil {
 		return "", lastErr
 	}
-	return "", fmt.Errorf("Pixhost 涓婁紶澶辫触")
+	return "", fmt.Errorf("Pixhost 上传失败")
 }
 
 func uploadToPixhostDirectStream(imagePath string, apiURL string, logLine func(string, ...any)) (string, int, error) {
@@ -498,7 +508,7 @@ func uploadToPixhostDirectStream(imagePath string, apiURL string, logLine func(s
 		}
 	}()
 
-	logLine("姝ｅ湪鍙戦€佷笂浼犺姹傚埌 Pixhost...")
+	logLine("正在发送上传请求到 Pixhost...")
 	req, err := http.NewRequest(http.MethodPost, apiURL, pr)
 	if err != nil {
 		_ = pr.Close()
@@ -528,7 +538,7 @@ func uploadToPixhostDirectStream(imagePath string, apiURL string, logLine func(s
 
 	parsed := map[string]any{}
 	if err := json.Unmarshal(respBody, &parsed); err != nil {
-		return "", resp.StatusCode, fmt.Errorf("Pixhost 鍝嶅簲瑙ｆ瀽澶辫触: %w body=%s", err, CompactLogText(string(respBody), 240))
+		return "", resp.StatusCode, fmt.Errorf("Pixhost 响应解析失败: %w body=%s", err, CompactLogText(string(respBody), 240))
 	}
 	showURL := strings.TrimSpace(toStringAny(parsed["show_url"], ""))
 	if showURL == "" {
@@ -537,10 +547,10 @@ func uploadToPixhostDirectStream(imagePath string, apiURL string, logLine func(s
 		}
 	}
 	if showURL == "" {
-		return "", resp.StatusCode, fmt.Errorf("Pixhost 鏈繑鍥?show_url")
+		return "", resp.StatusCode, fmt.Errorf("Pixhost 未返回 show_url")
 	}
 
-	logLine("鐩存帴涓婁紶鎴愬姛锛佸浘鐗囬摼鎺? %s", showURL)
+	logLine("直接上传成功！图片链接: %s", showURL)
 	return showURL, resp.StatusCode, nil
 }
 
@@ -551,22 +561,23 @@ func classifyPixhostUploadError(err error) string {
 	text := strings.ToLower(strings.TrimSpace(err.Error()))
 	switch {
 	case strings.Contains(text, "x509") || strings.Contains(text, "tls") || strings.Contains(text, "certificate"):
-		return "SSL杩炴帴閿欒"
+		return "SSL连接错误"
 	case strings.Contains(text, "timeout") || strings.Contains(text, "i/o timeout") || strings.Contains(text, "context deadline"):
-		return "璇锋眰瓒呮椂"
+		return "请求超时"
 	case strings.Contains(text, "connection reset") || strings.Contains(text, "broken pipe") || strings.Contains(text, "connection refused"):
 		return "网络连接被重置"
 	default:
-		return "缃戠粶璇锋眰澶辫触"
+		return "网络请求失败"
 	}
 }
 
-// ResolvePixhostImageURL 灏?show_url 瑙ｆ瀽涓哄彲璁块棶鐨勭洿閾?URL銆?
+// ResolvePixhostImageURL 将 show_url 解析为可访问的直链 URL。
 func ResolvePixhostImageURL(showURL string) (string, error) {
 	return ResolvePixhostImageURLWithConfig(showURL, DefaultPixhostUploadConfig())
 }
 
-// ResolvePixhostImageURLWithConfig 灏?show_url 瑙ｆ瀽涓洪厤缃煙鍚嶄笅鐨勫彲璁块棶鐩撮摼 URL銆?// 鍙傛暟/杩斿洖锛歴howURL 涓?Pixhost show/th 鎴栫洿閾惧湴鍧€锛沜fg 鎸囧畾杈撳嚭鐩撮摼鍩熷悕銆?// 澶辫触鍦烘櫙锛氱┖ URL銆侀〉闈㈡姄鍙栧け璐ユ垨鎺ㄥ鐩撮摼涓嶅彲璁块棶銆?// 鍓綔鐢細鍙兘鍙戣捣 HEAD/GET 璇锋眰鏍￠獙鍥剧墖鍙闂€с€?
+// ResolvePixhostImageURLWithConfig 将 show_url 解析为配置域名下的可访问直链 URL。
+// 参数/返回：showURL 为 Pixhost show 页地址；cfg 指定直链域名；成功返回直链，失败返回错误。
 func ResolvePixhostImageURLWithConfig(showURL string, cfg PixhostUploadConfig) (string, error) {
 	cfg = normalizePixhostUploadConfig(cfg)
 	trimmed := strings.TrimSpace(showURL)
@@ -601,17 +612,17 @@ func ResolvePixhostImageURLWithConfig(showURL string, cfg PixhostUploadConfig) (
 	}
 
 	if direct != "" {
-		return direct, fmt.Errorf("鐩撮摼鍙敤鎬ф牎楠屽け璐ワ紝杩斿洖鎺ㄥ鐩撮摼")
+		return direct, fmt.Errorf("直链可用性校验失败，返回推算直链")
 	}
-	return trimmed, fmt.Errorf("鏃犳硶瑙ｆ瀽 pixhost 鐩撮摼锛岃繑鍥?show_url")
+	return trimmed, fmt.Errorf("无法解析 pixhost 直链，返回 show_url")
 }
 
-// PixhostShowToDirectURL 灏濊瘯灏?pixhost show/th 椤甸潰鍦板潃杞崲涓哄浘鐗囩洿閾俱€?
+// PixhostShowToDirectURL 尝试将 pixhost show/th 页面地址转换为图片直链。
 func PixhostShowToDirectURL(showURL string) string {
 	return PixhostShowToDirectURLWithConfig(showURL, DefaultPixhostUploadConfig())
 }
 
-// PixhostShowToDirectURLWithConfig 灏濊瘯灏?pixhost show/th 鍦板潃杞崲涓洪厤缃煙鍚嶄笅鐨勫浘鐗囩洿閾俱€?// 鍙傛暟/杩斿洖锛歴howURL 涓?Pixhost 椤甸潰鎴栫洿閾撅紱cfg 鎸囧畾杈撳嚭鐩撮摼鍩熷悕锛涙棤娉曡В鏋愭椂杩斿洖绌哄瓧绗︿覆銆?// 澶辫触鍦烘櫙锛氱┖ URL銆乁RL 缁撴瀯涓嶆槸 Pixhost 鍥剧墖鍦板潃鎴栨棤娉曟彁鍙栧浘鐗囪矾寰勩€?// 鍓綔鐢細鏃犮€?
+// PixhostShowToDirectURLWithConfig 尝试将 pixhost show/th 地址转换为配置域名下的图片直链。
 func PixhostShowToDirectURLWithConfig(showURL string, cfg PixhostUploadConfig) string {
 	cfg = normalizePixhostUploadConfig(cfg)
 	trimmed := strings.TrimSpace(showURL)
@@ -655,12 +666,12 @@ func PixhostShowToDirectURLWithConfig(showURL string, cfg PixhostUploadConfig) s
 	return ""
 }
 
-// NormalizePixhostDirectHost 瑙勮寖鍖?Pixhost 鐩撮摼鍩熷悕鍒?img*.pixhost.to銆?
+// NormalizePixhostDirectHost 规范化 Pixhost 直链域名到 img*.pixhost.to。
 func NormalizePixhostDirectHost(value string) string {
 	return NormalizePixhostDirectHostWithConfig(value, DefaultPixhostUploadConfig())
 }
 
-// NormalizePixhostDirectHostWithConfig 瑙勮寖鍖?Pixhost 鐩撮摼鍩熷悕鍒伴厤缃殑 img*.pixhost.* 鍩熷悕銆?// 鍙傛暟/杩斿洖锛歷alue 涓哄緟淇 URL锛沜fg 鎸囧畾杈撳嚭鐩撮摼鍩熷悕锛涙棤娉曡瘑鍒椂杩斿洖绌哄瓧绗︿覆銆?// 澶辫触鍦烘櫙锛歎RL 涓虹┖銆佹棤娉曡В鏋愭垨涓嶅寘鍚?Pixhost 鍥剧墖璺緞銆?// 鍓綔鐢細鏃犮€?
+// NormalizePixhostDirectHostWithConfig 规范化 Pixhost 直链域名到配置的 img*.pixhost.* 主机。
 func NormalizePixhostDirectHostWithConfig(value string, cfg PixhostUploadConfig) string {
 	cfg = normalizePixhostUploadConfig(cfg)
 	trimmed := strings.TrimSpace(value)
@@ -691,7 +702,7 @@ func NormalizePixhostDirectHostWithConfig(value string, cfg PixhostUploadConfig)
 	return ""
 }
 
-// DefaultPixhostUploadConfig 杩斿洖鍏煎鏃ч厤缃殑 Pixhost 榛樿涓婁紶閰嶇疆銆?
+// DefaultPixhostUploadConfig 返回兼容旧配置的 Pixhost 默认上传配置。
 func DefaultPixhostUploadConfig() PixhostUploadConfig {
 	return PixhostUploadConfig{
 		DirectHost:   pixhostOutputDirectHost,
@@ -699,7 +710,7 @@ func DefaultPixhostUploadConfig() PixhostUploadConfig {
 	}
 }
 
-// GetPixhostUploadConfigFromRootConfig 浠?rootConfig 鐨?cross_seed 鑺傛彁鍙?Pixhost 鍩熷悕閰嶇疆銆?
+// GetPixhostUploadConfigFromRootConfig 从 rootConfig 的 cross_seed 节提取 Pixhost 域名配置。
 func GetPixhostUploadConfigFromRootConfig(rootConfig map[string]any) PixhostUploadConfig {
 	if rootConfig == nil {
 		return DefaultPixhostUploadConfig()
@@ -711,7 +722,7 @@ func GetPixhostUploadConfigFromRootConfig(rootConfig map[string]any) PixhostUplo
 	return NewPixhostUploadConfig(toStringAny(cs["pixhost_domain"], ""))
 }
 
-// NewPixhostUploadConfig 鏍规嵁鐢ㄦ埛濉啓鐨?Pixhost 鍩熷悕鐢熸垚涓婁紶 API 涓庣洿閾惧煙鍚嶃€?
+// NewPixhostUploadConfig 根据用户填写的 Pixhost 域名生成上传 API 与直链域名。
 func NewPixhostUploadConfig(domain string) PixhostUploadConfig {
 	directHost := normalizePixhostDirectDomain(domain)
 	return PixhostUploadConfig{
@@ -784,7 +795,7 @@ func isPixhostShowOrThumbURL(value string) bool {
 		strings.Contains(lower, "pixhost.cc/th/")
 }
 
-// IsImageURLReachable 閫氳繃 HEAD/GET 鎺㈡祴 URL 鏄惁鍙闂笖鍐呭绫诲瀷涓哄浘鐗囥€?
+// IsImageURLReachable 通过 HEAD/GET 探测 URL 是否可访问且内容类型为图片。
 func IsImageURLReachable(target string) bool {
 	trimmed := strings.TrimSpace(target)
 	if trimmed == "" {

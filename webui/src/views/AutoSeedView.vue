@@ -108,8 +108,8 @@
           </el-table-column>
           <el-table-column label="状态" width="100">
             <template #default="{ row }">
-              <el-tag :type="statusType(row.status)" size="small">{{
-                statusText(row.status)
+              <el-tag :type="statusType(row)" size="small">{{
+                statusText(row)
               }}</el-tag>
             </template>
           </el-table-column>
@@ -580,6 +580,7 @@ type Item = {
   downloader_hash: string
   progress: number
   downloaded: boolean
+  deleted_from_downloader?: boolean
   pushed_at?: string
   torrent_id: string
   site_name: string
@@ -979,23 +980,34 @@ const subtitlePreview = (value: string) => {
   const chars = Array.from(text)
   return chars.length > 20 ? `${chars.slice(0, 20).join('')}...` : text
 }
-const statusText = (status: string) =>
-  ({
-    pending: '未推送',
-    pushed: '已推送',
-    organized: '已整理',
-    published: '已发布',
-    rejected: '未推送',
-  })[status] || status
-const statusType = (status: string) =>
-  ({
-    pending: 'info',
-    pushed: 'primary',
-    organized: 'warning',
-    published: 'success',
-    rejected: 'danger',
-  })[status] || 'info'
+const statusText = (row: Item) => {
+  if (row.deleted_from_downloader) return '已删除'
+  const status = row.status
+  return (
+    ({
+      pending: '未推送',
+      pushed: '已推送',
+      organized: '已整理',
+      published: '已发布',
+      rejected: '未推送',
+    })[status] || status
+  )
+}
+const statusType = (row: Item) => {
+  if (row.deleted_from_downloader) return 'danger'
+  const status = row.status
+  return (
+    ({
+      pending: 'info',
+      pushed: 'primary',
+      organized: 'warning',
+      published: 'success',
+      rejected: 'danger',
+    })[status] || 'info'
+  )
+}
 const progressGroup = (row: Item) => {
+  if (row.deleted_from_downloader) return '已删除'
   if (row.status === 'published') return '已发布'
   if (row.downloaded || Number(row.progress) >= 99.9) return '待发布'
   return '已下载'
