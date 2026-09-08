@@ -71,6 +71,7 @@ func NewApp() (*App, error) {
 	torrentDataService.SetIYUULogger(func(level string, message string) {
 		settingsService.AppendIYUULog(level, message)
 	})
+	torrentDataService.StartAutoRefresh()
 	localQueryService := service.NewLocalQueryService(repository.NewLocalQueryRepository(store), cfgManager, paths.DataDir)
 	crossSeedService := service.NewCrossSeedService(repository.NewCrossSeedRepository(store), cfgManager)
 

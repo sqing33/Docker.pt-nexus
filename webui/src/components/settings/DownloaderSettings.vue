@@ -24,6 +24,34 @@
         </el-form-item>
       </el-tooltip>
     </div>
+    <div class="realtime-switch-container">
+      <el-tooltip
+        content="开启后按设定间隔自动调用“刷新种子信息”，从下载器同步最新种子状态；关闭后需手动刷新。"
+        placement="bottom"
+        :hide-after="0"
+      >
+        <el-form-item label="定时刷新种子" class="switch-form-item">
+          <el-switch
+            v-model="settings.torrent_refresh_enabled"
+            size="large"
+            inline-prompt
+            active-text="是"
+            inactive-text="否"
+          />
+        </el-form-item>
+      </el-tooltip>
+      <el-form-item label="间隔(分钟)" class="switch-form-item">
+        <el-input-number
+          v-model="settings.torrent_refresh_interval_minutes"
+          :min="5"
+          :max="1440"
+          :step="5"
+          :disabled="!settings.torrent_refresh_enabled"
+          size="large"
+          controls-position="right"
+        />
+      </el-form-item>
+    </div>
   </div>
   <div class="settings-view" v-loading="isLoading">
     <div class="downloader-grid">
@@ -308,6 +336,8 @@ type DownloaderConfig = {
 type SettingsState = {
   downloaders: DownloaderConfig[]
   realtime_speed_enabled: boolean
+  torrent_refresh_enabled: boolean
+  torrent_refresh_interval_minutes: number
   [key: string]: unknown
 }
 
@@ -317,6 +347,8 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const settings = ref<SettingsState>({
   downloaders: [],
   realtime_speed_enabled: false,
+  torrent_refresh_enabled: true,
+  torrent_refresh_interval_minutes: 30,
 })
 const isLoading = ref(true)
 const isSaving = ref(false)
@@ -460,6 +492,13 @@ const fetchSettings = async () => {
       downloaders,
       realtime_speed_enabled:
         typeof raw.realtime_speed_enabled === 'boolean' ? raw.realtime_speed_enabled : false,
+      torrent_refresh_enabled:
+        typeof raw.torrent_refresh_enabled === 'boolean' ? raw.torrent_refresh_enabled : true,
+      torrent_refresh_interval_minutes:
+        typeof raw.torrent_refresh_interval_minutes === 'number' &&
+        raw.torrent_refresh_interval_minutes > 0
+          ? raw.torrent_refresh_interval_minutes
+          : 30,
     }
   } catch (error) {
     ElMessage.error('加载设置失败！')

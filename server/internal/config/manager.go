@@ -188,6 +188,8 @@ func defaultConfig() map[string]any {
 	return map[string]any{
 		"downloaders":            []any{},
 		"realtime_speed_enabled": false,
+		"torrent_refresh_enabled":          true,
+		"torrent_refresh_interval_minutes": 30,
 		"downloader_queue": map[string]any{
 			"enabled":                         true,
 			"max_queue_size":                  1000,

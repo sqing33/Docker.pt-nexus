@@ -56,6 +56,10 @@ type TorrentDataService struct {
 	refreshMu      sync.Mutex
 	refreshRunning bool
 
+	refreshStopCh chan struct{}
+	refreshDoneCh chan struct{}
+	refreshOnce   sync.Once
+
 	iyuuMu      sync.Mutex
 	iyuuRunning atomic.Bool
 
@@ -63,7 +67,13 @@ type TorrentDataService struct {
 }
 
 func NewTorrentDataService(repo *repository.TorrentDataRepository, cfg *config.Manager) *TorrentDataService {
-	return &TorrentDataService{repo: repo, cfg: cfg, iyuuTasks: NewIYUUTaskService()}
+	return &TorrentDataService{
+		repo:          repo,
+		cfg:           cfg,
+		iyuuTasks:     NewIYUUTaskService(),
+		refreshStopCh: make(chan struct{}),
+		refreshDoneCh: make(chan struct{}),
+	}
 }
 
 // SetIYUULogger 设置 IYUU 查询过程的日志回调，便于在设置页展示进度信息。
