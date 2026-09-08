@@ -8,6 +8,7 @@ import (
 	"hash/fnv"
 	"io"
 	"net/http"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -19,6 +20,7 @@ import (
 	"github.com/pt-nexus/server/internal/config"
 	"github.com/pt-nexus/server/internal/platform/logx"
 	"github.com/pt-nexus/server/internal/repository"
+	"github.com/pt-nexus/server/internal/service/acquire/fetch"
 	"github.com/pt-nexus/server/internal/service/downloaderclient"
 	processingrepair "github.com/pt-nexus/server/internal/service/processing/repair"
 	processingshared "github.com/pt-nexus/server/internal/service/processing/shared"
@@ -31,6 +33,37 @@ const (
 )
 
 var autoSeedEpisodePattern = regexp.MustCompile(`(?i)(?:\bs\d{1,3}e\d{1,4}\b|\bep\d{1,4}\b|第\s*\d{1,4}\s*集)`)
+
+// rewriteTorrentCommentIfNeeded 在本地 .torrent 文件存在时，把详情页地址写入其 comment 字段，
+// 以便后续下载器同步时能通过 extractDetailFromComment 解析出 details。保持 infohash 不变。
+// torrentPath 为 fetchItemDetails 下载到本地的种子文件路径；detailURL 为站点详情页地址。
+// 失败静默（仅记录日志），不影响后续添加下载器流程。
+func rewriteTorrentCommentIfNeeded(torrentPath, detailURL string) {
+	torrentPath = strings.TrimSpace(torrentPath)
+	detailURL = strings.TrimSpace(detailURL)
+	if torrentPath == "" || detailURL == "" {
+		return
+	}
+	content, err := os.ReadFile(torrentPath)
+	if err != nil {
+		logx.Warnf(moduleAutoSeed, "写入种子 comment 前读取文件失败 path=%s err=%v", torrentPath, err)
+		return
+	}
+	if len(content) == 0 {
+		return
+	}
+	rewritten, err := fetch.RewriteTorrentComment(content, detailURL)
+	if err != nil {
+		logx.Warnf(moduleAutoSeed, "重写种子 comment 失败 path=%s detail=%s err=%v", torrentPath, detailURL, err)
+		return
+	}
+	if len(rewritten) == 0 {
+		return
+	}
+	if err := os.WriteFile(torrentPath, rewritten, 0o644); err != nil {
+		logx.Warnf(moduleAutoSeed, "写回种子 comment 失败 path=%s err=%v", torrentPath, err)
+	}
+}
 
 // EnqueueFn 定义自动发种向现有发布队列投递任务的函数签名。
 type EnqueueFn func(payload map[string]any) (map[string]any, int)
@@ -243,6 +276,7 @@ func (s *Service) processRule(rule *repository.AutoSeedRule) {
 		torrentPath := strings.TrimSpace(toString(fetchResult["torrent_path"], ""))
 		var addErr error
 		if torrentPath != "" {
+			rewriteTorrentCommentIfNeeded(torrentPath, toString(fetchResult["detail_url"], ""))
 			addErr = downloader.AddTorrentFileWithOptions(torrentPath, "", options)
 		} else {
 			addErr = downloader.AddTorrentURLWithOptions(created.TorrentURL, "", options)
@@ -586,6 +620,7 @@ func (s *Service) AddManualURL(torrentURL, downloaderID, sourceSite string) erro
 	manualOptions := newAutoSeedAddTorrentOptions(false, []string{"PT Nexus", "自动发种"}, 0)
 	torrentPath := toString(fetchResult["torrent_path"], "")
 	if torrentPath != "" {
+		rewriteTorrentCommentIfNeeded(torrentPath, toString(fetchResult["detail_url"], ""))
 		addErr = d.AddTorrentFileWithOptions(torrentPath, "", manualOptions)
 	} else {
 		addErr = d.AddTorrentURLWithOptions(torrentURL, "", manualOptions)
@@ -732,6 +767,7 @@ func (s *Service) pushFetchedItemToDownloader(item *repository.AutoSeedItem, fet
 	torrentPath := strings.TrimSpace(toString(fetchResult["torrent_path"], ""))
 	var addErr error
 	if torrentPath != "" {
+		rewriteTorrentCommentIfNeeded(torrentPath, toString(fetchResult["detail_url"], ""))
 		addErr = downloader.AddTorrentFileWithOptions(torrentPath, "", options)
 	} else {
 		addErr = downloader.AddTorrentURLWithOptions(item.TorrentURL, "", options)

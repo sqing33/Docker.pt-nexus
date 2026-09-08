@@ -336,6 +336,7 @@ func ExecutePublish(input PublishExecutionInput, deps PublishExecutionDeps) (map
 				"savePath":     resolvedSavePath,
 				"targetSite":   targetSite,
 				"siteNickname": targetNickname,
+				"publishURL":   publishURL,
 			}
 			if resolvedDownloaderID != "" {
 				addPayload["downloaderId"] = resolvedDownloaderID

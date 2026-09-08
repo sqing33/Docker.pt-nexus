@@ -123,10 +123,17 @@ func AddToDownloader(payload map[string]any, rootConfig map[string]any, repo Add
 		addedByData := false
 		downloadByDataErr := error(nil)
 		if len(detailSite) > 0 {
-			if _, _, torrentBytes, dlErr := acquirefetch.DownloadTorrentForSource(detailSite, rawURL); dlErr == nil && len(torrentBytes) > 0 {
-				addedTorrentHash = parseTorrentInfoHash(torrentBytes)
-				fileName := fmt.Sprintf("auto-%d.torrent", time.Now().UnixNano())
-				if err := downloader.AddTorrentDataWithOptions(torrentBytes, fileName, savePath, addOptions); err == nil {
+		if _, _, torrentBytes, dlErr := acquirefetch.DownloadTorrentForSource(detailSite, rawURL); dlErr == nil && len(torrentBytes) > 0 {
+			if pubURL := strings.TrimSpace(processingshared.ToString(payload["publishURL"], "")); pubURL != "" {
+				if rewritten, rErr := acquirefetch.RewriteTorrentComment(torrentBytes, pubURL); rErr == nil && len(rewritten) > 0 {
+					torrentBytes = rewritten
+				} else if rErr != nil {
+					logx.Warnf(downloaderTagLogModule, "发布种子重写 comment 失败 url=%s publishURL=%s err=%v", rawURL, pubURL, rErr)
+				}
+			}
+			addedTorrentHash = parseTorrentInfoHash(torrentBytes)
+			fileName := fmt.Sprintf("auto-%d.torrent", time.Now().UnixNano())
+			if err := downloader.AddTorrentDataWithOptions(torrentBytes, fileName, savePath, addOptions); err == nil {
 					addedByData = true
 					addMessage = "已从详情页下载种子并添加到下载器"
 				} else {
