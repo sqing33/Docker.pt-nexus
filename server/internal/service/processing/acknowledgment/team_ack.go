@@ -293,19 +293,23 @@ func pickTeamDisplayName(teamKey string, sites []SiteRow) string {
 		return ""
 	}
 	for _, row := range sites {
-		desc := strings.TrimSpace(row.Description)
 		groupField := strings.TrimSpace(row.Group)
-		if desc == "" || groupField == "" {
+		if groupField == "" {
 			continue
 		}
 		for _, token := range strings.Split(groupField, ",") {
 			item := strings.ToLower(cleanGroupToken(token))
 			if item != "" && item == target {
-				return desc
+				// 返回制作组自身的显示名（来自 team.* 标准化映射），而非站点 description。
+				// 合并站点（如 DS 把 DStudio/DS/DepWeb 塞进同一 group 且 description 为空）下，
+				// 用 description 会导致非主组拿不到名字甚至整行被跳过。
+				return original
 			}
 		}
 	}
-	return ""
+	// 兜底：站点表里找不到匹配行时，直接用制作组自身显示名作为致谢名，
+	// 避免出现「未找到制作组显示名」而放弃写入申明。
+	return original
 }
 
 func cleanGroupToken(value string) string {

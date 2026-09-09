@@ -806,6 +806,14 @@ func normalizeVideoCodecByMedium(values map[string]string, mediaInfo string) {
 // 副作用：无。
 func PreferExplicitTitleMedium(currentMedium, title, mediaInfo string) string {
 	current := strings.TrimSpace(currentMedium)
+
+	// 标题显式声明 WEB-DL/WEBDL 时，媒介强制为 WEB-DL。
+	// 即便来源站点把媒介判成 Encode（例如 WEB-DL 源被 x264 重新编码，mediainfo 出现 x264 编码参数），
+	// 也以标题声明的源为准，避免媒介被误判为压制。此规则优先级高于 weak 判断，可覆盖 medium.encode / medium.encode_1080p 等非空媒介。
+	if titleDeclaresWebDL(title) {
+		return "medium.webdl"
+	}
+
 	if !isWeakMediumValue(current) {
 		return current
 	}
@@ -815,6 +823,12 @@ func PreferExplicitTitleMedium(currentMedium, title, mediaInfo string) string {
 		return medium
 	}
 	return current
+}
+
+// titleDeclaresWebDL 判断标题是否显式声明了 WEB-DL 源（兼容 WEB-DL / WEBDL 写法，与 extractMediumPythonish 保持一致）。
+func titleDeclaresWebDL(title string) bool {
+	upper := strings.ToUpper(strings.TrimSpace(title))
+	return strings.Contains(upper, "WEB-DL") || strings.Contains(upper, "WEBDL")
 }
 
 func isWeakMediumValue(medium string) bool {
