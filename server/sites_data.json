@@ -16,7 +16,7 @@
     "special_tracker_domain": null,
     "group": "-PTHome,-PTH,-PTHtv",
     "description": "PTHome",
-    "migration": 0,
+    "migration": 2,
     "speed_limit": 50
   },
   {
@@ -220,7 +220,7 @@
     "base_url": "1ptba.com",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 0,
+    "migration": 2,
     "speed_limit": 50
   },
   {
@@ -279,7 +279,7 @@
     "base_url": "www.oshen.win",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 0,
+    "migration": 2,
     "speed_limit": 50
   },
   {
@@ -355,7 +355,7 @@
     "special_tracker_domain": null,
     "group": "-HDFans",
     "description": "HDFans",
-    "migration": 0,
+    "migration": 2,
     "speed_limit": 50
   },
   {

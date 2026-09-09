@@ -1,0 +1,203 @@
+site_name: "oshen"
+
+# oshen (www.oshen.win / 奥申) 发种映射配置
+# 抓取来源: https://www.oshen.win/upload.php (2026-09-09)
+# 表单: action=takeupload.php method=post enctype=multipart/form-data
+# 文件字段: file
+# 关键差异: type 字段名裸名(type, 不带 [4] 后缀), 其余 select 带 [4] 后缀;
+#          无 audiocodec_sel / 无 source_sel (同 mypt/lemon); 有 url(IMDb) 但无 pt_gen;
+#          无 douban_id; tags[4][] 7 项; 无 uplver 匿名(不可匿名发种); 页面无隐藏字段
+# 分类: 401=电影 402=连续剧 403=综艺 404=纪录片 405=动漫 406=MV 407=体育 408=高清音乐 409=音乐 410=游戏
+# medium/codec/standard/team 的 ID 与 1ptba 高度相似但略有差异(见下方注释)
+# 匿名: 站点不支持(uplver 字段不存在), 引擎 anonymous.go 默认兜底在 anonymous=false 时不发包, 无害
+
+upload_file_field: "file"
+
+form_fields:
+  category: "type"                 # 裸名, 不带 [4] 后缀
+  medium: "medium_sel[4]"
+  video_codec: "codec_sel[4]"
+  resolution: "standard_sel[4]"
+  team: "team_sel[4]"
+  name: "name"
+  small_descr: "small_descr"
+  description: "descr"
+  imdb_url: "url"                   # IMDb 链接文本框(无独立 dburl/pt_gen)
+  "tags[4][]": "tags[4][]"
+
+source_parsers:
+  source_params:
+    type:
+      source_key: "类型"
+    medium:
+      source_key: "媒介"
+    video_codec:
+      source_key: "编码"
+    resolution:
+      source_key: "分辨率"
+    team:
+      source_key: "制作组"
+
+  standard_keys:
+    type:
+      "Movies": "category.movie"
+      "Movies-3D": "category.movie"
+      "电影": "category.movie"
+      "TV-Episode": "category.tv_series"
+      "TV-Pack": "category.tv_series"
+      "TV-Show": "category.tv_series"
+      "电视剧": "category.tv_series"
+      "Documentary": "category.documentaries"
+      "纪录片": "category.documentaries"
+      "Animation": "category.animation"
+      "动画": "category.animation"
+      "Concert": "category.movie"
+      "Music-Video": "category.movie"
+      "Music": "category.movie"
+      "Sports": "category.movie"
+      "E-Books": "category.movie"
+      "Games": "category.movie"
+      "Others": "category.movie"
+
+    medium:
+      "UHD Blu-ray": "medium.uhd_bluray"
+      "UHD原盘": "medium.uhd_bluray"
+      "UHD DIY": "medium.uhd_diy"
+      "FHD Blu-ray": "medium.bluray"
+      "BD原盘": "medium.bluray"
+      "Blu-ray": "medium.bluray"
+      "BD DIY": "medium.bluray_diy"
+      "Blu-ray DIY": "medium.bluray_diy"
+      "MiniBD": "medium.minibd"
+      "Remux": "medium.remux"
+      "Encode": "medium.encode"
+      "WEB-DL": "medium.webdl"
+      "HDTV": "medium.hdtv"
+      "TV": "medium.hdtv"
+      "DVD": "medium.dvd"
+      "DVDR": "medium.dvd"
+      "CD": "medium.cd"
+      "Track": "medium.track"
+      "Other": "medium.other"
+
+    video_codec:
+      "H.264": "video.h264"
+      "H.265": "video.h265"
+      "HEVC": "video.h265"
+      "AV1": "video.av1"
+      "MPEG-2": "video.mpeg2"
+      "VC-1": "video.vc1"
+      "Xvid": "video.other"
+      "Other": "video.other"
+
+    resolution:
+      "8K": "resolution.r4320p"
+      "4K": "resolution.r2160p"
+      "2160p": "resolution.r2160p"
+      "1080p": "resolution.r1080p"
+      "1080i": "resolution.r1080p"
+      "720p": "resolution.r720p"
+      "SD": "resolution.sd"
+
+    team:
+      "HDS": "team.hds"
+      "CHD": "team.chd"
+      "MySiLu": "team.mysilu"
+      "WiKi": "team.wiki"
+      "Other": "team.other"
+      "CMCT": "team.cmct"
+      "SCSG": "team.scsg"
+      "HDTIME": "team.hdtime"
+      "PTHOME": "team.pthome"
+      "OshenPT": "team.oshenpt"
+      "52pt": "team.52pt"
+
+mappings:
+  # type 分类(裸名 type): 401=电影 402=连续剧 403=综艺 404=纪录片 405=动漫
+  #   406=MV 407=体育 408=高清音乐 409=音乐 410=游戏
+  type:
+    "category.movie": "401"
+    "category.movie_3d": "401"
+    "category.tv_series": "402"
+    "category.tv_pack": "402"
+    "category.tv_shows": "403"
+    "category.documentaries": "404"
+    "category.animation": "405"
+    "category.mv": "406"
+    "category.sports": "407"
+    "category.music": "409"
+    "category.music_hifi": "408"
+    "category.other": "410"
+    "default": "401"
+
+  # medium_sel[4] 媒介: 1=Blu-ray 2=HD DVD 3=Remux 4=MiniBD 5=HDTV 6=DVDR 7=Encode 8=CD 9=Track
+  #   (无 UHD/UHD DIY/BD DIY 选项, 故不映射 16/17/19)
+  medium:
+    "medium.bluray": "1"
+    "medium.hd_dvd": "2"
+    "medium.remux": "3"
+    "medium.minibd": "4"
+    "medium.hdtv": "5"
+    "medium.dvd": "6"
+    "medium.encode": "7"
+    "medium.cd": "8"
+    "medium.track": "9"
+    "medium.webdl": "7"
+    "medium.bluray_diy": "7"
+    "medium.uhd_bluray": "7"
+    "medium.other": "7"
+    "default": "7"
+
+  # codec_sel[4] 视频编码: 1=H.264 2=VC-1 3=Xvid 4=MPEG-2 5=Other 10=H.265/HEVC
+  #   (H.265 在 oshen 是 10, 不同于 1ptba 的 18)
+  video_codec:
+    "video.h264": "1"
+    "video.x264": "1"
+    "video.vc1": "2"
+    "video.xvid": "3"
+    "video.mpeg2": "4"
+    "video.mpeg4": "4"
+    "video.h265": "10"
+    "video.x265": "10"
+    "video.hevc": "10"
+    "video.av1": "5"
+    "video.other": "5"
+    "default": "5"
+
+  # standard_sel[4] 分辨率: 1=1080p 2=1080i 3=720p 4=SD 5=4K/UHD (无 8K)
+  #   (4K/UHD 在 oshen 是 5, 不同于 1ptba 的 16)
+  resolution:
+    "resolution.r1080p": "1"
+    "resolution.r1080i": "2"
+    "resolution.r720p": "3"
+    "resolution.sd": "4"
+    "resolution.r2160p": "5"
+    "resolution.other": "4"
+    "default": "4"
+
+  # team_sel[4] 制作组: 1=HDS 2=CHD 3=MySiLu 4=WiKi 5=Other 6=CMCT 7=SCSG 8=HDTIME 9=PTHOME 10=OshenPT 11=52pt
+  team:
+    "team.hds": "1"
+    "team.chd": "2"
+    "team.mysilu": "3"
+    "team.wiki": "4"
+    "team.other": "5"
+    "team.cmct": "6"
+    "team.scsg": "7"
+    "team.hdtime": "8"
+    "team.pthome": "9"
+    "team.oshenpt": "10"
+    "team.52pt": "11"
+    "default": "5"
+
+  # tags[4][] 标签: 1=禁转 2=首发 3=官方 4=DIY 5=国语 6=中字 7=HDR
+  tag:
+    "tag.禁转": "1"
+    "tag.限转": "1"
+    "tag.首发": "2"
+    "tag.官方": "3"
+    "tag.DIY": "4"
+    "tag.国语": "5"
+    "tag.中字": "6"
+    "tag.HDR": "7"
+    "default": null
