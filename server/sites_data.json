@@ -7,7 +7,7 @@
     "group": "-FRDS",
     "description": "FRDS",
     "migration": 1,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "pthome",
@@ -17,7 +17,7 @@
     "group": "-PTHome,-PTH,-PTHtv",
     "description": "PTHome",
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "m-team",
@@ -67,7 +67,7 @@
     "group": "-HDHome,-HDH,-HDHTV,-HDHPad,-HDHWEB,-SHMA",
     "description": "HDHome",
     "migration": 3,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "btschool",
@@ -97,7 +97,7 @@
     "group": "-BMDru",
     "description": "TCCF",
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "ttg",
@@ -116,7 +116,7 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "hdcity",
@@ -125,7 +125,7 @@
     "special_tracker_domain": "leniter",
     "group": "-NoVA",
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "nicept",
@@ -134,7 +134,7 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "52pt",
@@ -144,7 +144,7 @@
     "group": "-52pt",
     "description": "52pt",
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "eastgame",
@@ -153,7 +153,7 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "ssd",
@@ -172,7 +172,7 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "chdbits",
@@ -192,7 +192,7 @@
     "group": "-FFansDIY,-FFans,-OPS,-FHDMv,-FFansAIeNcE,-FFansBD,-至尊宝",
     "description": "PTsbao",
     "migration": 3,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "hdarea",
@@ -202,7 +202,7 @@
     "group": "-HDArea,-EPiC,-HDATV,-HDApad",
     "description": "HDArea",
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "hdtime",
@@ -212,7 +212,7 @@
     "group": "-HDtime",
     "description": "HDTime",
     "migration": 2,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "1ptba",
@@ -221,7 +221,7 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "hd4fans",
@@ -231,7 +231,7 @@
     "group": "-beAst",
     "description": "HD4FANS",
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "opencd",
@@ -241,7 +241,7 @@
     "group": "-OpenCD",
     "description": "OpenCD",
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "joyhd",
@@ -251,7 +251,7 @@
     "group": "-JoyHD",
     "description": "JoyHD",
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "dmhy",
@@ -271,7 +271,7 @@
     "group": "-HDU",
     "description": "HDU",
     "migration": 2,
-    "speed_limit": 100
+    "speed_limit": 500
   },
   {
     "site": "oshen",
@@ -280,7 +280,7 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "discfan",
@@ -290,7 +290,7 @@
     "group": "-discfan,-DiscFan",
     "description": "DiscFan",
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "byr",
@@ -300,7 +300,7 @@
     "group": "-BYRHD",
     "description": "BYR",
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "dicmusic",
@@ -309,7 +309,7 @@
     "special_tracker_domain": "52dic",
     "group": null,
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "skyeysnow",
@@ -318,7 +318,7 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "pt",
@@ -327,7 +327,7 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "hdroute",
@@ -336,7 +336,7 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "haidan",
@@ -346,7 +346,7 @@
     "group": "-HAIDAN,-HaiDanWEB",
     "description": "HAIDAN",
     "migration": 2,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "hdfans",
@@ -356,7 +356,7 @@
     "group": "-HDFans",
     "description": "HDFans",
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "dragonhd",
@@ -366,7 +366,7 @@
     "group": "-DragonHD,-DragonHDWEB",
     "description": "龙之家",
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "hitpt",
@@ -375,7 +375,7 @@
     "special_tracker_domain": null,
     "group": "-BCWEB",
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "greatposterwall",
@@ -384,7 +384,7 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "hdpost",
@@ -393,7 +393,7 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "hudbt",
@@ -402,7 +402,7 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "audiences",
@@ -422,7 +422,7 @@
     "group": "-PigoWeb,-PigoHD",
     "description": "PigGo",
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "wintersakura",
@@ -432,7 +432,7 @@
     "group": "-SakuraWEB,-WScode",
     "description": "WinterSakura",
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "hhanclub",
@@ -442,7 +442,7 @@
     "group": "HHWEB",
     "description": "HHClub",
     "migration": 1,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "pt0ffcc",
@@ -451,7 +451,7 @@
     "special_tracker_domain": null,
     "group": "FFweb",
     "migration": 3,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "redleaves",
@@ -461,7 +461,7 @@
     "group": "-RL,-RLWEB",
     "description": "红叶",
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "ptchina",
@@ -470,7 +470,7 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "zhuque",
@@ -508,7 +508,7 @@
     "special_tracker_domain": "anime-no-index",
     "group": null,
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "cyanbug",
@@ -517,7 +517,7 @@
     "special_tracker_domain": null,
     "group": "BUG",
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "ubits",
@@ -527,7 +527,7 @@
     "group": "-UBits,-UBWEB,-UBTV",
     "description": "UBits",
     "migration": 3,
-    "speed_limit": 100
+    "speed_limit": 500
   },
   {
     "site": "pandapt",
@@ -546,7 +546,7 @@
     "special_tracker_domain": null,
     "group": "CarPT",
     "migration": 2,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "dajiao",
@@ -555,7 +555,7 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "shadowflow",
@@ -565,7 +565,7 @@
     "group": "-YingWEB",
     "description": "影",
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "agsv",
@@ -604,7 +604,7 @@
     "special_tracker_domain": null,
     "group": "-XingTan",
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "hdkyl",
@@ -623,7 +623,7 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 2,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "gtkpw",
@@ -632,7 +632,7 @@
     "special_tracker_domain": "gtkpw",
     "group": null,
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "wukongwendao",
@@ -641,7 +641,7 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "okpt",
@@ -650,7 +650,7 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "crabpt",
@@ -660,7 +660,7 @@
     "group": "-Crab",
     "description": "蟹黄堡",
     "migration": 3,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "icc2022",
@@ -669,7 +669,7 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "hddolby",
@@ -688,7 +688,7 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "ptcafe",
@@ -706,7 +706,7 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "yemapt",
@@ -715,7 +715,7 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "ptlgs",
@@ -735,7 +735,7 @@
     "group": "-LHD,-LeagueWEB",
     "description": "LemonHD",
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "njtupt",
@@ -744,7 +744,7 @@
     "special_tracker_domain": null,
     "group": "-NJTUPT",
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "ptzone",
@@ -753,7 +753,7 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 2,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "hdclone",
@@ -762,7 +762,7 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 2,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "kufei",
@@ -771,7 +771,7 @@
     "special_tracker_domain": null,
     "group": "-Kufei",
     "migration": 2,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "ptlover",
@@ -789,7 +789,7 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "sanpro",
@@ -798,7 +798,7 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "htpt",
@@ -807,7 +807,7 @@
     "special_tracker_domain": null,
     "group": "-HTPT",
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "sewerpt",
@@ -817,7 +817,7 @@
     "group": "-SewageWeb",
     "description": "Sewage",
     "migration": 2,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "bilibili",
@@ -826,7 +826,7 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "gamegamept",
@@ -835,7 +835,7 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "raingfh",
@@ -845,7 +845,7 @@
     "group": "-rainweb,-rain",
     "description": "雨站",
     "migration": 2,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "xingyunge",
@@ -855,7 +855,7 @@
     "group": "-StarfallWeb",
     "description": "星陨阁",
     "migration": 3,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "cspt",
@@ -865,7 +865,7 @@
     "group": "-CSWEB,-CSPT,-HSWEB,-HSPT",
     "description": "财神",
     "migration": 3,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "fnp",
@@ -874,7 +874,7 @@
     "special_tracker_domain": null,
     "group": "-FnP",
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "tmpt",
@@ -883,7 +883,7 @@
     "special_tracker_domain": null,
     "group": "-TangPT,-Tangweb",
     "migration": 2,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "mypt",
@@ -892,7 +892,7 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 2,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "pttime",
@@ -901,7 +901,7 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "lemon",
@@ -909,8 +909,8 @@
     "base_url": "lemonhd.net",
     "special_tracker_domain": null,
     "group": null,
-    "migration": 0,
-    "speed_limit": 10
+    "migration": 2,
+    "speed_limit": 50
   },
   {
     "site": "13city",
@@ -920,7 +920,7 @@
     "group": "-13City",
     "description": "13City",
     "migration": 2,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "luckpt",
@@ -930,7 +930,7 @@
     "group": "-LuckDIY,-LuckAni,-LuckWeb,-LuckMusic,-LuckDocu",
     "description": "LuckPT",
     "migration": 3,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "siqi",
@@ -939,7 +939,7 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "hxpt",
@@ -949,7 +949,7 @@
     "group": "-HXWEB,-HX",
     "description": "好学",
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "ptskit",
@@ -958,7 +958,7 @@
     "special_tracker_domain": "kqbhek",
     "group": "[PTS]",
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "cbg",
@@ -968,7 +968,7 @@
     "group": "-CBGWT",
     "description": "CBG",
     "migration": 2,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "tokyo",
@@ -978,7 +978,7 @@
     "group": "-EastWeb",
     "description": "Tokyo",
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "lajidui",
@@ -996,7 +996,7 @@
     "special_tracker_domain": null,
     "group": "VCB-Studio",
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "beitai",
@@ -1006,7 +1006,7 @@
     "group": "-BeiTai",
     "description": "BeiTai",
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "azusa",
@@ -1015,7 +1015,7 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "jpop",
@@ -1025,7 +1025,7 @@
     "group": "-jpopsuki",
     "description": "Jpopsuki",
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "playletpt",
@@ -1034,7 +1034,7 @@
     "special_tracker_domain": null,
     "group": "-GodDramas",
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "march",
@@ -1044,7 +1044,7 @@
     "group": "-3MWEB",
     "description": "March",
     "migration": 2,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "hdbao",
@@ -1053,7 +1053,7 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 2,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "longpt",
@@ -1063,7 +1063,7 @@
     "group": "-LongPT,-LongWeb",
     "description": "LongPT",
     "migration": 3,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "aling",
@@ -1072,7 +1072,7 @@
     "special_tracker_domain": null,
     "group": "-alingWEB",
     "migration": 2,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "cdfile",
@@ -1082,7 +1082,7 @@
     "group": "-cdfile",
     "description": "CDFile",
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "tu88",
@@ -1091,7 +1091,7 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "ultrahd",
@@ -1101,7 +1101,7 @@
     "group": "-UltraHD,-AHDBits,-UltraTV",
     "description": "UltraHD",
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "52movie",
@@ -1110,7 +1110,7 @@
     "special_tracker_domain": null,
     "group": "-52movieba",
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "ptfans",
@@ -1119,7 +1119,7 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "tey",
@@ -1128,7 +1128,7 @@
     "special_tracker_domain": null,
     "group": "-Tey",
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "itzmx",
@@ -1137,7 +1137,7 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "sunny",
@@ -1147,7 +1147,7 @@
     "group": "-Sunny",
     "description": "Sunny",
     "migration": 1,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "ying",
@@ -1156,7 +1156,7 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "novahd",
@@ -1175,7 +1175,7 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "jivon",
@@ -1184,7 +1184,7 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "yhpp",
@@ -1193,7 +1193,7 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 2,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "asmr",
@@ -1202,7 +1202,7 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "torrenthub",
@@ -1211,7 +1211,7 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "muxuege",
@@ -1220,7 +1220,7 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 2,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "dubhe",
@@ -1229,7 +1229,7 @@
     "special_tracker_domain": null,
     "group": "-Dubhe,-DubheWeb",
     "migration": 2,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "zrpt",
@@ -1238,7 +1238,7 @@
     "special_tracker_domain": null,
     "group": "-Nature,-NatureWeb",
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "momentpt",
@@ -1247,7 +1247,7 @@
     "special_tracker_domain": null,
     "group": "-Moment",
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "tangpt",
@@ -1256,7 +1256,7 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 2,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "hdvideo",
@@ -1266,7 +1266,7 @@
     "group": "-HDVWEB,-HDV,-HDVTV",
     "description": "HDvideo",
     "migration": 3,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "mooko",
@@ -1275,7 +1275,7 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 0,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "baozi",
@@ -1284,7 +1284,7 @@
     "special_tracker_domain": null,
     "group": null,
     "migration": 2,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "DS",
@@ -1294,7 +1294,7 @@
     "group": "-DStudio,-DS,-DepWeb",
     "description": "DStudio",
     "migration": 1,
-    "speed_limit": 10
+    "speed_limit": 50
   },
   {
     "site": "xdypt",

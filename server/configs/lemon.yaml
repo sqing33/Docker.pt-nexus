@@ -1,0 +1,243 @@
+site_name: "柠檬不甜"
+
+# 柠檬不甜 (lemonhd.net) 发种映射配置
+# 抓取来源: https://lemonhd.net/upload.php (2026-09-09)
+# 表单: action=takeupload.php method=post enctype=multipart/form-data
+# 文件字段: file
+# 关键差异: select 字段名带 [4] 后缀(同 aling/mypt); 有 audiocodec_sel[4](同 lemonhd酸);
+#          team_sel[4] 是发布组(LemonHD/HDS/CHD/MySiLU/WiKi),非地区; 无 source_sel(同 mypt);
+#          有 url(IMDb 链接)+pt_gen(豆瓣生成); 标签 tags[4][] 8 项(禁转/首发/DIY/国语/中字/4K/HDR/原盘)
+# 匿名: NexusPHP 标准 uplver (由 anonymous.go 默认兜底, 无需配置)
+# 注意: 与柠檬不酸(lemonhd.yaml)虽同属 LemonHD 系统但字段名/分类ID/标签完全不同,不可复用
+
+upload_file_field: "file"
+
+form_fields:
+  category: "type"
+  medium: "medium_sel[4]"
+  video_codec: "codec_sel[4]"
+  audio_codec: "audiocodec_sel[4]"
+  resolution: "standard_sel[4]"
+  team: "team_sel[4]"
+  name: "name"
+  small_descr: "small_descr"
+  description: "descr"
+  imdb_url: "url"
+  pt_gen: "pt_gen"
+  "tags[4][]": "tags[4][]"
+
+source_parsers:
+  source_params:
+    type:
+      source_key: "类型"
+    medium:
+      source_key: "媒介"
+    video_codec:
+      source_key: "编码"
+    audio_codec:
+      source_key: "音频编码"
+    resolution:
+      source_key: "分辨率"
+    team:
+      source_key: "发布组"
+
+  standard_keys:
+    type:
+      "Movies": "category.movie"
+      "Movies-3D": "category.movie"
+      "电影": "category.movie"
+      "TV-Episode": "category.tv_series"
+      "TV-Pack": "category.tv_series"
+      "TV-Show": "category.tv_shows"
+      "电视剧": "category.tv_series"
+      "Documentary": "category.documentaries"
+      "纪录片": "category.documentaries"
+      "Animation": "category.animation"
+      "动画": "category.animation"
+      "Concert": "category.mv"
+      "Music-Video": "category.mv"
+      "Music": "category.music"
+      "Sports": "category.other"
+      "E-Books": "category.other"
+      "Games": "category.other"
+      "Others": "category.other"
+
+    medium:
+      "UHD Blu-ray": "medium.uhd_bluray"
+      "UHD原盘": "medium.uhd_bluray"
+      "UHD DIY": "medium.uhd_diy"
+      "FHD Blu-ray": "medium.bluray"
+      "BD原盘": "medium.bluray"
+      "Blu-ray": "medium.bluray"
+      "BD DIY": "medium.bluray_diy"
+      "Blu-ray DIY": "medium.bluray_diy"
+      "Remux": "medium.remux"
+      "Encode": "medium.encode"
+      "WEB-DL": "medium.webdl"
+      "HDTV": "medium.hdtv"
+      "TV": "medium.hdtv"
+      "DVD": "medium.dvd"
+      "CD": "medium.cd"
+      "Other": "medium.other"
+
+    video_codec:
+      "H.264": "video.h264"
+      "H.265": "video.h265"
+      "HEVC": "video.h265"
+      "AV1": "video.av1"
+      "MPEG-2": "video.mpeg2"
+      "MPEG-4": "video.mpeg4"
+      "VC-1": "video.vc1"
+      "Xvid": "video.xvid"
+      "Other": "video.other"
+
+    audio_codec:
+      "Atmos TrueHD": "audio.truehd_atmos"
+      "TrueHD": "audio.truehd"
+      "DTS-HD MA": "audio.dts_hd_ma"
+      "DTS X": "audio.dtsx"
+      "DTS": "audio.dts"
+      "AC3/DD": "audio.ac3"
+      "EAC3/DDP": "audio.ddp"
+      "AAC": "audio.aac"
+      "LPCM": "audio.lpcm"
+      "FLAC": "audio.flac"
+      "WAV": "audio.wav"
+      "APE": "audio.ape"
+      "Other": "audio.other"
+
+    resolution:
+      "8K": "resolution.r4320p"
+      "4K": "resolution.r2160p"
+      "2160p": "resolution.r2160p"
+      "1080p": "resolution.r1080p"
+      "1080i": "resolution.r1080i"
+      "720p": "resolution.r720p"
+      "SD": "resolution.sd"
+
+    team:
+      "LemonHD": "team.lemonhd"
+      "HDS": "team.hds"
+      "CHD": "team.chd"
+      "MySiLU": "team.mysilu"
+      "WiKi": "team.wiki"
+      "Other": "team.other"
+
+    tag:
+      "禁转": "tag.禁转"
+      "限转": "tag.禁转"
+      "首发": "tag.首发"
+      "DIY": "tag.DIY"
+      "国语": "tag.国语"
+      "中字": "tag.中字"
+      "4K": "tag.4K"
+      "HDR": "tag.HDR"
+      "原盘": "tag.原盘"
+
+mappings:
+  # type 分类: 401=电影 402=音乐 403=动漫 404=音乐视频 405=纪录片 406=电视剧 407=综艺 408=3D 409=其它
+  type:
+    "category.movie": "401"
+    "category.movie_3d": "408"
+    "category.tv_series": "406"
+    "category.tv_pack": "406"
+    "category.tv_shows": "407"
+    "category.documentaries": "405"
+    "category.animation": "403"
+    "category.mv": "404"
+    "category.music": "402"
+    "category.other": "409"
+    "default": "401"
+
+  # medium_sel[4] 媒介: 1=Blu-ray 2=Encode 3=Remux 4=WEB-DL 5=HDTV 6=4K-UltraHD 7=8K-UltraHD 8=DVD 9=CD 10=Other
+  medium:
+    "medium.bluray": "1"
+    "medium.uhd_bluray": "6"
+    "medium.uhd_diy": "6"
+    "medium.bluray_diy": "1"
+    "medium.remux": "3"
+    "medium.encode": "2"
+    "medium.encode_2160p": "2"
+    "medium.encode_1080p": "2"
+    "medium.encode_720p": "2"
+    "medium.webdl": "4"
+    "medium.hdtv": "5"
+    "medium.dvd": "8"
+    "medium.cd": "9"
+    "medium.other": "10"
+    "default": "10"
+
+  # codec_sel[4] 视频编码: 1=H.264/AVC 2=H.265/HEVC 3=VC-1 4=MPEG-2 5=Other
+  video_codec:
+    "video.h264": "1"
+    "video.x264": "1"
+    "video.h265": "2"
+    "video.x265": "2"
+    "video.hevc": "2"
+    "video.vc1": "3"
+    "video.mpeg2": "4"
+    "video.mpeg4": "5"
+    "video.av1": "5"
+    "video.xvid": "5"
+    "video.other": "5"
+    "default": "5"
+
+  # audiocodec_sel[4] 音频编码: 1=Atmos TrueHD 2=TrueHD 3=DTS-HD MA 4=DTS X 5=DTS 6=AC3/DD
+  #   7=EAC3/DDP 8=AAC 9=LPCM 10=FLAC 11=WAV 12=APE 13=Other
+  audio_codec:
+    "audio.truehd_atmos": "1"
+    "audio.truehd": "2"
+    "audio.dts_hd_ma": "3"
+    "audio.dtsx": "4"
+    "audio.dts": "5"
+    "audio.ac3": "6"
+    "audio.ddp": "7"
+    "audio.eac3": "7"
+    "audio.aac": "8"
+    "audio.lpcm": "9"
+    "audio.flac": "10"
+    "audio.wav": "11"
+    "audio.ape": "12"
+    "audio.other": "13"
+    "default": "13"
+
+  # standard_sel[4] 分辨率: 1=4K_UHD 2=1080p/i 3=720p/i 4=SD 5=Other
+  resolution:
+    "resolution.r4320p": "1"
+    "resolution.r2160p": "1"
+    "resolution.r1080p": "2"
+    "resolution.r1080i": "2"
+    "resolution.r720p": "3"
+    "resolution.sd": "4"
+    "resolution.r480p": "4"
+    "resolution.other": "5"
+    "default": "5"
+
+  # team_sel[4] 发布组: 6=LemonHD 1=HDS 2=CHD 3=MySiLU 4=WiKi 5=Other
+  team:
+    "team.lemonhd": "6"
+    "team.hds": "1"
+    "team.chd": "2"
+    "team.mysilu": "3"
+    "team.wiki": "4"
+    "team.other": "5"
+    "default": "5"
+
+  # tags[4][] 标签: 1=禁转 2=首发 4=DIY 5=国语 6=中字 7=HDR 8=4K 9=原盘
+  tag:
+    "tag.禁转": "1"
+    "tag.限转": "1"
+    "tag.首发": "2"
+    "tag.DIY": "4"
+    "tag.国语": "5"
+    "tag.中字": "6"
+    "tag.4K": "8"
+    "tag.2160p": "8"
+    "tag.HDR": "7"
+    "tag.HDR10": "7"
+    "tag.HDR10+": "7"
+    "tag.原盘": "9"
+    "tag.杜比": null
+    "tag.杜比视界": null
+    "tag.其他中国方言": null
+    "default": null
