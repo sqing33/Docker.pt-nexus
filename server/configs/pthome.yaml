@@ -1,0 +1,242 @@
+site_name: "PTHOME"
+
+# PTHOME (铂金家, www.pthome.net) 发种映射配置
+# 抓取来源: https://www.pthome.net/upload.php (2026-09-09)
+# 表单: action=takeupload.php method=post enctype=multipart/form-data
+# 文件字段: file
+# 关键差异:
+#   - select 字段名【不带】[4] 后缀 (同 lemonhd, 不同于 aling/mypt/lemon/1ptba)
+#   - 标签字段是裸名 tags[] (不是 tags[4][])，值为短代码(yc/gy/yy/zz/db/hdr10 等)
+#   - 有 douban_id 文本框(直接填豆瓣数字 ID) 与 url(IMDb 链接)；无 pt_gen、无 dburl
+#   - 无 source_sel；无 uplver 匿名字段(PTHOME 不支持匿名发种)
+# 匿名: 无 (PTHOME 表单无 uplver 字段, 引擎默认兜底的 uplver 提交会被服务端忽略, 不影响发种)
+
+upload_file_field: "file"
+
+form_fields:
+  category: "type"
+  medium: "medium_sel"
+  video_codec: "codec_sel"
+  audio_codec: "audiocodec_sel"
+  resolution: "standard_sel"
+  team: "team_sel"
+  name: "name"
+  small_descr: "small_descr"
+  description: "descr"
+  imdb_url: "url"                 # IMDb 链接文本框(无独立 dburl/pt_gen)
+  # 注意: 标签字段名键必须是 "tags[]" (basic_fields.go resolveTagFieldBase 专门查此键)
+  "tags[]": "tags[]"
+  # 注: douban_id 期望纯数字豆瓣 ID, 引擎无自动链接→数字提取(仅 TTG 有专属 adapter),
+  #     故不配置, 发种时该字段留空, 用户可手动在 webui 补; 配了会把完整 URL 填入导致异常
+
+source_parsers:
+  source_params:
+    type:
+      source_key: "类型"
+    medium:
+      source_key: "媒介"
+    video_codec:
+      source_key: "编码"
+    audio_codec:
+      source_key: "音频编码"
+    resolution:
+      source_key: "分辨率"
+    team:
+      source_key: "制作组"
+
+  standard_keys:
+    type:
+      "Movies": "category.movie"
+      "电影": "category.movie"
+      "TV-Episode": "category.tv_series"
+      "TV-Pack": "category.tv_series"
+      "TV-Show": "category.tv_series"
+      "电视剧": "category.tv_series"
+      "Documentary": "category.documentaries"
+      "纪录片": "category.documentaries"
+      "Animation": "category.animation"
+      "动漫": "category.animation"
+      "Concert": "category.movie"
+      "Music": "category.music"
+      "Sports": "category.sports"
+      "Games": "category.game"
+      "Software": "category.software"
+      "Study": "category.study"
+      "Others": "category.other"
+
+    medium:
+      "UHD Blu-ray": "medium.uhd_bluray"
+      "UHD原盘": "medium.uhd_bluray"
+      "UHD Blu-ray/DIY": "medium.uhd_diy"
+      "Blu-ray": "medium.bluray"
+      "BD原盘": "medium.bluray"
+      "Blu-ray/DIY": "medium.bluray_diy"
+      "Remux": "medium.remux"
+      "Encode": "medium.encode"
+      "WEB-DL": "medium.webdl"
+      "HDTV": "medium.hdtv"
+      "DVD": "medium.dvd"
+      "DVD原盘": "medium.dvd"
+      "CD": "medium.cd"
+      "Track": "medium.track"
+      "Other": "medium.other"
+
+    video_codec:
+      "H.264": "video.h264"
+      "H.265": "video.h265"
+      "HEVC": "video.h265"
+      "AV1": "video.av1"
+      "MPEG-2": "video.mpeg2"
+      "VC-1": "video.vc1"
+      "Xvid": "video.other"
+      "Other": "video.other"
+
+    audio_codec:
+      "FLAC": "audio.flac"
+      "APE": "audio.ape"
+      "DTS": "audio.dts"
+      "DTS-HD MA": "audio.dts_hd_ma"
+      "TrueHD": "audio.truehd"
+      "LPCM": "audio.lpcm"
+      "AC3": "audio.ac3"
+      "DD/AC3": "audio.ac3"
+      "AAC": "audio.aac"
+      "WAV": "audio.wav"
+      "MP3": "audio.mp3"
+      "M4A": "audio.m4a"
+      "Other": "audio.other"
+
+    resolution:
+      "8K": "resolution.r4320p"
+      "4K": "resolution.r2160p"
+      "2160p": "resolution.r2160p"
+      "1080p": "resolution.r1080p"
+      "1080i": "resolution.r1080i"
+      "720p": "resolution.r720p"
+      "SD": "resolution.sd"
+      "None": "resolution.other"
+
+    team:
+      "PTHome": "team.pthome"
+      "PTH": "team.pth"
+      "PTHweb": "team.pthweb"
+      "PTHtv": "team.pthtv"
+      "PTHAudio": "team.pthaudio"
+      "PTHeBook": "team.pthbook"
+      "PTHmusic": "team.pthmusic"
+      "Other": "team.other"
+
+mappings:
+  # type 分类: 401=电影 402=电视剧 403=综艺 404=纪录片 405=动漫 407=体育 408=音乐 409=其他 410=游戏 411=软件 412=学习
+  #   (另有两个 type select: 507=有声书 508=电子书, 引擎仅发普通类, 图书类罕见用 default 兜底)
+  type:
+    "category.movie": "401"
+    "category.tv_series": "402"
+    "category.tv_pack": "402"
+    "category.tv_shows": "403"
+    "category.documentaries": "404"
+    "category.animation": "405"
+    "category.anime": "405"
+    "category.mv": "408"
+    "category.music": "408"
+    "category.sports": "407"
+    "category.stage": "409"
+    "category.game": "410"
+    "category.software": "411"
+    "category.study": "412"
+    "category.other": "409"
+    "default": "401"
+
+  # medium_sel 媒介: 1=Blu-ray 2=DVD原盘 3=REMUX 5=HDTV 8=CD 9=Track 10=WEB-DL 11=Other 12=UHD Blu-ray 13=UHD Blu-ray/DIY 14=Blu-ray/DIY 15=encode
+  medium:
+    "medium.bluray": "1"
+    "medium.dvd": "2"
+    "medium.remux": "3"
+    "medium.hdtv": "5"
+    "medium.cd": "8"
+    "medium.track": "9"
+    "medium.webdl": "10"
+    "medium.other": "11"
+    "medium.uhd_bluray": "12"
+    "medium.uhd_diy": "13"
+    "medium.bluray_diy": "14"
+    "medium.encode": "15"
+    "medium.minibd": "11"
+    "medium.hd_dvd": "2"
+    "default": "11"
+
+  # codec_sel 视频编码: 1=H.264 2=VC-1 4=MPEG-2 5=Other 6=H.265
+  video_codec:
+    "video.h264": "1"
+    "video.x264": "1"
+    "video.vc1": "2"
+    "video.mpeg2": "4"
+    "video.mpeg4": "4"
+    "video.h265": "6"
+    "video.x265": "6"
+    "video.hevc": "6"
+    "video.av1": "5"
+    "video.other": "5"
+    "default": "5"
+
+  # audiocodec_sel 音频编码: 1=FLAC 2=APE 3=DTS 6=AAC 7=Other 18=DD/AC3 19=DTS-HD MA 20=TrueHD 21=LPCM 22=WAV 23=MP3 24=M4A
+  audio_codec:
+    "audio.flac": "1"
+    "audio.ape": "2"
+    "audio.dts": "3"
+    "audio.dts_hd_ma": "19"
+    "audio.dts_hd": "19"
+    "audio.ac3": "18"
+    "audio.aac": "6"
+    "audio.truehd": "20"
+    "audio.lpcm": "21"
+    "audio.wav": "22"
+    "audio.mp3": "23"
+    "audio.m4a": "24"
+    "audio.ddp": "7"
+    "audio.other": "7"
+    "default": "7"
+
+  # standard_sel 分辨率: 1=1080p 2=1080i 3=720p 4=SD 5=4K 10=8K 11=None
+  resolution:
+    "resolution.r1080p": "1"
+    "resolution.r1080i": "2"
+    "resolution.r720p": "3"
+    "resolution.sd": "4"
+    "resolution.r2160p": "5"
+    "resolution.r4320p": "10"
+    "resolution.other": "11"
+    "default": "4"
+
+  # team_sel 制作组: 5=Other 19=PTHome 20=PTHweb 21=PTH 22=PTHtv 23=PTHAudio 24=PTHeBook 25=PTHmusic
+  team:
+    "team.pthome": "19"
+    "team.pth": "21"
+    "team.pthweb": "20"
+    "team.pthtv": "22"
+    "team.pthaudio": "23"
+    "team.pthbook": "24"
+    "team.pthmusic": "25"
+    "team.other": "5"
+    "default": "5"
+
+  # tags[] 标签短代码: yc=原创 gy=国语 yy=粤语 gz=官字组 zz=中字 db=DOLBY VISION hdr10=HDR10 hdrm=HDR10+
+  #   jz=禁转 xz=限转 diy=DIY sf=首发 yq=应求 mv=MV ok=卡拉OK live=现场live concert=演唱会 yzj=音乐专辑
+  tag:
+    "tag.原创": "yc"
+    "tag.国语": "gy"
+    "tag.粤语": "yy"
+    "tag.官字组": "gz"
+    "tag.中字": "zz"
+    "tag.DV": "db"
+    "tag.Dolby Vision": "db"
+    "tag.HDR": "hdr10"
+    "tag.HDR10": "hdr10"
+    "tag.HDR10+": "hdrm"
+    "tag.禁转": "jz"
+    "tag.限转": "xz"
+    "tag.DIY": "diy"
+    "tag.首发": "sf"
+    "tag.应求": "yq"
+    "tag.音乐专辑": "yzj"
+    "default": null
