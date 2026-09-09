@@ -29,6 +29,7 @@ type existingSiteRow struct {
 	Site           string  `gorm:"column:site"`
 	Nickname       string  `gorm:"column:nickname"`
 	BaseURL        string  `gorm:"column:base_url"`
+	Description    string  `gorm:"column:description"`
 	SpeedLimit     int     `gorm:"column:speed_limit"`
 	Passkey        string  `gorm:"column:passkey"`
 	RatioThreshold float64 `gorm:"column:ratio_threshold"`
@@ -38,7 +39,7 @@ type existingSiteRow struct {
 // SyncSitesFromJSON 将 sites_data.json 的站点元数据同步到 sites 表。
 // 参数/返回：jsonPath 为站点 JSON 文件路径；成功返回 nil。
 // 失败场景：文件不可读、JSON 格式错误、数据库读写失败。
-// 副作用：会对 sites 表执行 INSERT/UPDATE，但会保护用户手动配置（如 cookie/passkey）。
+// 副作用：会对 sites 表执行 INSERT/UPDATE，但会保护用户手动配置（如 cookie/passkey、description）。
 func (m *SchemaManager) SyncSitesFromJSON(jsonPath string) error {
 	if m.store == nil || m.store.DB == nil {
 		return fmt.Errorf("数据库连接未初始化")
@@ -65,7 +66,7 @@ func (m *SchemaManager) SyncSitesFromJSON(jsonPath string) error {
 
 	return m.store.DB.Transaction(func(tx *gorm.DB) error {
 		existing := make([]existingSiteRow, 0)
-		if err := tx.Raw("SELECT id, site, nickname, base_url, speed_limit, passkey, ratio_threshold, seed_speed_limit FROM sites").Scan(&existing).Error; err != nil {
+		if err := tx.Raw("SELECT id, site, nickname, base_url, description, speed_limit, passkey, ratio_threshold, seed_speed_limit FROM sites").Scan(&existing).Error; err != nil {
 			return fmt.Errorf("读取现有站点失败: %w", err)
 		}
 
@@ -136,6 +137,13 @@ func (m *SchemaManager) SyncSitesFromJSON(jsonPath string) error {
 					}
 				}
 
+				// description 防覆盖：仅当 JSON 提供值才覆盖，否则保留库里现有值。
+				// 避免 JSON 未配置 description 的站点在重同步时把手动维护的值清成 NULL。
+				finalDescription := matched.Description
+				if jsonDesc != "" {
+					finalDescription = jsonDesc
+				}
+
 				groupColumn := m.store.GroupColumn()
 				updateSQL := fmt.Sprintf(`
 					UPDATE sites
@@ -160,7 +168,7 @@ func (m *SchemaManager) SyncSitesFromJSON(jsonPath string) error {
 					baseURL,
 					nullIfEmpty(jsonSpecial),
 					nullIfEmpty(jsonGroup),
-					nullIfEmpty(jsonDesc),
+					nullIfEmpty(finalDescription),
 					nullIfEmpty(finalPasskey),
 					jsonMigration,
 					finalSpeedLimit,
@@ -173,6 +181,7 @@ func (m *SchemaManager) SyncSitesFromJSON(jsonPath string) error {
 				matched.Site = site
 				matched.Nickname = nickname
 				matched.BaseURL = baseURL
+				matched.Description = finalDescription
 				matched.SpeedLimit = finalSpeedLimit
 				matched.Passkey = finalPasskey
 				matched.RatioThreshold = finalRatio
