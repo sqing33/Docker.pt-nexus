@@ -532,11 +532,6 @@ func (r *MigrateRepository) UpdateTorrentDetailsAfterPublish(hashes []string, na
 		}); err != nil || affected > 0 {
 			return affected, err
 		}
-		if affected, err := updateBy(false, func(db *gorm.DB) *gorm.DB {
-			return db.Where("LOWER(TRIM(hash)) IN ?", cleanedHashes)
-		}); err != nil || affected > 0 {
-			return affected, err
-		}
 	}
 	if name == "" || siteNickname == "" {
 		return 0, nil

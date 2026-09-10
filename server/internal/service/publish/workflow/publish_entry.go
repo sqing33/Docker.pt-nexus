@@ -318,7 +318,10 @@ func ExecutePublish(input PublishExecutionInput, deps PublishExecutionDeps) (map
 	}
 	useDefaultDownloader := boolFromAny(payload["useDefaultDownloader"]) || boolFromAny(payload["use_default_downloader"])
 	autoAddResult := map[string]any{"success": false, "message": "未启用自动添加到下载器"}
-	publishedHashCandidates := collectPublishedTorrentHashes(input.SourceTorrentHash)
+	// 只收录「发布后实际加入下载器的目标种子 hash」。
+	// 注意：不要默认把源站 hash 塞进来——否则下面的 torrents.details 回写会按源站 hash
+	// 命中源站那一行，把它的详情链接覆盖成目标站地址（即“源站种子地址变了”的根因）。
+	publishedHashCandidates := []string{}
 	if autoAdd {
 		if isExistingTorrent && !autoAddExistingToDownloader {
 			autoAddResult = map[string]any{"success": false, "message": "检测到目标站点种子已存在，按设置跳过自动添加"}
@@ -433,23 +436,6 @@ func copyStringMap(input map[string]string) map[string]string {
 		out[key] = value
 	}
 	return out
-}
-
-func collectPublishedTorrentHashes(values ...string) []string {
-	seen := map[string]struct{}{}
-	result := make([]string, 0, len(values))
-	for _, value := range values {
-		trimmed := strings.ToLower(strings.TrimSpace(value))
-		if trimmed == "" {
-			continue
-		}
-		if _, exists := seen[trimmed]; exists {
-			continue
-		}
-		seen[trimmed] = struct{}{}
-		result = append(result, trimmed)
-	}
-	return result
 }
 
 func appendUniqueStrings(values []string, candidate string) []string {
